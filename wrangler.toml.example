@@ -11,6 +11,7 @@ DEVIN_MODEL = "swe-1-7-medium"
 binding = "D1"
 database_name = "issuetracker-global"
 database_id = "<your-d1-database-id>"
+migrations_dir = "migrations"
 
 [[durable_objects.bindings]]
 name = "WORKSPACE_DURABLE_OBJECT"
