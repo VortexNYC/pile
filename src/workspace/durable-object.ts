@@ -1,7 +1,12 @@
 import type { DurableObject, DurableObjectState } from "@cloudflare/workers-types";
 import { z } from "zod";
 import { execOne, execAll } from "./sql.js";
-import type { IssueInput, Issue, IssueStatus, IssuePriority } from "./types.js";
+import type {
+  IssueInput,
+  Issue,
+  IssueStatus,
+  IssuePriority,
+} from "./types.js";
 import type { AppEnv } from "../platform/env.js";
 
 const issueSchema = z.object({
@@ -15,6 +20,10 @@ const issueSchema = z.object({
   project_id: z.string().nullable(),
   cycle_id: z.string().nullable(),
   label_ids: z.string().nullable(),
+  repo: z.string().nullable(),
+  branch: z.string().nullable(),
+  pr_url: z.string().nullable(),
+  pr_state: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -50,6 +59,10 @@ export class WorkspaceDO implements DurableObject {
         project_id TEXT,
         cycle_id TEXT,
         label_ids TEXT,
+        repo TEXT,
+        branch TEXT,
+        pr_url TEXT,
+        pr_state TEXT,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
       )
@@ -58,6 +71,11 @@ export class WorkspaceDO implements DurableObject {
     this.sql.exec(`
       CREATE INDEX IF NOT EXISTS idx_issues_workspace_status
       ON issues (status, created_at DESC)
+    `);
+
+    this.sql.exec(`
+      CREATE INDEX IF NOT EXISTS idx_issues_repo_branch
+      ON issues (repo, branch)
     `);
   }
 
@@ -69,9 +87,9 @@ export class WorkspaceDO implements DurableObject {
 
     const cursor = this.sql.exec(
       `INSERT INTO issues
-        (id, workspace_id, title, description, status, priority, assignee_id, project_id, cycle_id, label_ids, created_at, updated_at)
+        (id, workspace_id, title, description, status, priority, assignee_id, project_id, cycle_id, label_ids, repo, branch, pr_url, pr_state, created_at, updated_at)
        VALUES
-        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        RETURNING *`,
       id,
       this.workspaceId,
@@ -83,6 +101,10 @@ export class WorkspaceDO implements DurableObject {
       input.projectId ?? null,
       input.cycleId ?? null,
       input.labelIds ?? null,
+      input.repo ?? null,
+      input.branch ?? null,
+      null,
+      null,
       now,
       now
     );
@@ -97,7 +119,23 @@ export class WorkspaceDO implements DurableObject {
   }
 
   getIssue(id: string): Issue | undefined {
-    const row = execOne(this.sql, issueSchema, "SELECT * FROM issues WHERE id = ?", id);
+    const row = execOne(
+      this.sql,
+      issueSchema,
+      "SELECT * FROM issues WHERE id = ?",
+      id
+    );
+    return row ? toIssue(row) : undefined;
+  }
+
+  getIssueByBranch(repo: string, branch: string): Issue | undefined {
+    const row = execOne(
+      this.sql,
+      issueSchema,
+      "SELECT * FROM issues WHERE repo = ? AND branch = ?",
+      repo,
+      branch
+    );
     return row ? toIssue(row) : undefined;
   }
 
@@ -123,6 +161,8 @@ export class WorkspaceDO implements DurableObject {
       { key: "projectId", column: "project_id" },
       { key: "cycleId", column: "cycle_id" },
       { key: "labelIds", column: "label_ids" },
+      { key: "repo", column: "repo" },
+      { key: "branch", column: "branch" },
     ];
 
     const sets: string[] = [];
@@ -140,8 +180,30 @@ export class WorkspaceDO implements DurableObject {
     }
 
     values.push(new Date().toISOString(), id);
-    const query = `UPDATE issues SET ${sets.join(", ")}, updated_at = ? WHERE id = ? RETURNING *`;
+    const query = `UPDATE issues SET ${sets.join(
+      ", "
+    )}, updated_at = ? WHERE id = ? RETURNING *`;
     const row = execOne(this.sql, issueSchema, query, ...values);
+    return row ? toIssue(row) : undefined;
+  }
+
+  updatePrState(
+    repo: string,
+    branch: string,
+    prUrl: string,
+    prState: string
+  ): Issue | undefined {
+    const query = `UPDATE issues SET pr_url = ?, pr_state = ?, updated_at = ? WHERE repo = ? AND branch = ? RETURNING *`;
+    const row = execOne(
+      this.sql,
+      issueSchema,
+      query,
+      prUrl,
+      prState,
+      new Date().toISOString(),
+      repo,
+      branch
+    );
     return row ? toIssue(row) : undefined;
   }
 }
@@ -158,6 +220,10 @@ function toIssue(row: z.infer<typeof issueSchema>): Issue {
     projectId: row.project_id,
     cycleId: row.cycle_id,
     labelIds: row.label_ids,
+    repo: row.repo,
+    branch: row.branch,
+    prUrl: row.pr_url,
+    prState: row.pr_state,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

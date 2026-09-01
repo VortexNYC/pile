@@ -29,6 +29,21 @@ export const workspaceTokens = sqliteTable("workspace_tokens", {
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const repoBranches = sqliteTable(
+  "repo_branches",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    repo: text("repo").notNull(),
+    branch: text("branch").notNull(),
+    issueId: text("issue_id").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [index("repo_branches_repo_branch_idx").on(table.repo, table.branch)]
+);
+
 export const user = sqliteTable("user", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),

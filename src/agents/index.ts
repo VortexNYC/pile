@@ -42,6 +42,10 @@ export async function dispatchAgent(
     projectId: null,
     cycleId: null,
     labelIds: null,
+    repo: null,
+    branch: null,
+    prUrl: null,
+    prState: null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
