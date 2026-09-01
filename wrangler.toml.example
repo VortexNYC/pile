@@ -1,6 +1,6 @@
 name = "issuetracker"
 main = "src/index.ts"
-compatibility_date = "2026-08-31"
+compatibility_date = "2025-08-16"
 
 [vars]
 BETTER_AUTH_URL = "https://your-domain.com"
