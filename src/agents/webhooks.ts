@@ -24,11 +24,15 @@ export async function deliverWebhooks(
   if (subscriptions.length === 0) return;
 
   const body = JSON.stringify(event);
+  const deliveryId = crypto.randomUUID();
+  const timestamp = Date.now().toString();
   const signature = `sha256=${await hmacSha256Hex(env.WEBHOOK_SECRET, body)}`;
   const headers = {
     "Content-Type": "application/json",
     "X-Webhook-Signature": signature,
     "X-Webhook-Event": event.type,
+    "X-Webhook-Delivery": deliveryId,
+    "X-Webhook-Timestamp": timestamp,
   };
 
   for (const sub of subscriptions) {

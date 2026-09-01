@@ -151,7 +151,9 @@ export class WorkspaceDO implements DurableObject, Rpc.DurableObjectBranded {
         // socket may be closing
       }
     }
-    await deliverWebhooks(this.env, this.workspaceId, event);
+    this.state.waitUntil(
+      deliverWebhooks(this.env, this.workspaceId, event)
+    );
   }
 
   async createIssue(input: IssueInput): Promise<Issue> {

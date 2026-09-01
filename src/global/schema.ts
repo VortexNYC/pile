@@ -77,6 +77,18 @@ export const webhookSubscriptions = sqliteTable(
   (table) => [index("webhook_subscriptions_workspace_idx").on(table.workspaceId)]
 );
 
+export const webhookDeliveries = sqliteTable(
+  "webhook_deliveries",
+  {
+    deliveryId: text("delivery_id").primaryKey(),
+    source: text("source").notNull(),
+    event: text("event").notNull(),
+    workspaceId: text("workspace_id").references(() => workspaces.id),
+    processedAt: text("processed_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [index("webhook_deliveries_workspace_idx").on(table.workspaceId)]
+);
+
 export const user = sqliteTable("user", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),

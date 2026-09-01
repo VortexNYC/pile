@@ -1,6 +1,6 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
-import { createD1 } from "../global/db.js";
+import { createD1, type D1Client } from "../global/db.js";
 import { findRepoBranch } from "../global/repo-branches.js";
 import {
   createRepoIssue,
@@ -8,6 +8,10 @@ import {
   findRepoIssue,
   findRepoWorkspace,
 } from "../global/repo-issues.js";
+import {
+  findWebhookDelivery,
+  recordWebhookDelivery,
+} from "../global/webhook-deliveries.js";
 import { hmacSha256Hex, timingSafeEqualHex } from "../platform/crypto.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../api/middleware.js";
@@ -101,17 +105,30 @@ export async function processGithubWebhook(
   }
 
   const event = c.req.header("x-github-event");
+  const deliveryId = c.req.header("x-github-delivery");
+  const db = createD1(c.env.D1);
+
+  if (deliveryId) {
+    const existing = await findWebhookDelivery(db, deliveryId);
+    if (existing) {
+      return { ok: true };
+    }
+  }
+
   if (event === "pull_request") {
-    return processPullRequest(c, rawBody);
+    return processPullRequest(c, db, deliveryId, event, rawBody);
   }
   if (event === "issues") {
-    return processGitHubIssue(c, rawBody);
+    return processGitHubIssue(c, db, deliveryId, event, rawBody);
   }
   return { ok: true };
 }
 
 async function processPullRequest(
   c: Context<AppContext>,
+  db: D1Client,
+  deliveryId: string | undefined,
+  event: string,
   rawBody: string
 ): Promise<{ ok: true }> {
   let parsedBody: unknown;
@@ -141,7 +158,6 @@ async function processPullRequest(
   const prUrl = pull_request.html_url;
   const prState = pull_request.state;
 
-  const db = createD1(c.env.D1);
   const record = await findRepoBranch(db, repo, branch);
   if (!record) {
     return { ok: true };
@@ -151,11 +167,18 @@ async function processPullRequest(
   const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(doId);
   await stub.updatePrState(repo, branch, prUrl, prState);
 
+  if (deliveryId) {
+    await recordWebhookDelivery(db, deliveryId, "github", event, record.workspaceId);
+  }
+
   return { ok: true };
 }
 
 async function processGitHubIssue(
   c: Context<AppContext>,
+  db: D1Client,
+  deliveryId: string | undefined,
+  event: string,
   rawBody: string
 ): Promise<{ ok: true }> {
   let parsedBody: unknown;
@@ -181,7 +204,6 @@ async function processGitHubIssue(
 
   const { action, issue, repository } = payload.data;
   const repo = repository.full_name;
-  const db = createD1(c.env.D1);
 
   let workspaceId = extractWorkspaceIdFromLabels(issue.labels);
   if (!workspaceId) {
@@ -213,47 +235,54 @@ async function processGitHubIssue(
           message: "Mapped issue not found in workspace",
         });
       }
-      return { ok: true };
+    } else {
+      const created = await stub.createIssue({
+        title: issue.title,
+        description: issue.body ?? undefined,
+        repo,
+      });
+      await createRepoIssue(db, workspaceId, repo, issue.number, created.id);
     }
-    const created = await stub.createIssue({
-      title: issue.title,
-      description: issue.body ?? undefined,
-      repo,
-    });
-    await createRepoIssue(db, workspaceId, repo, issue.number, created.id);
+    if (deliveryId) {
+      await recordWebhookDelivery(db, deliveryId, "github", event, workspaceId);
+    }
     return { ok: true };
   }
 
   if (action === "edited") {
-    if (!mapping) {
-      return { ok: true };
-    }
-    const updated = await stub.updateIssue(mapping.issueId, {
-      title: issue.title,
-      description: issue.body ?? undefined,
-      repo,
-    });
-    if (!updated) {
-      throw new VortexError({
-        code: "NOT_FOUND",
-        status: 404,
-        message: "Mapped issue not found in workspace",
+    if (mapping) {
+      const updated = await stub.updateIssue(mapping.issueId, {
+        title: issue.title,
+        description: issue.body ?? undefined,
+        repo,
       });
+      if (!updated) {
+        throw new VortexError({
+          code: "NOT_FOUND",
+          status: 404,
+          message: "Mapped issue not found in workspace",
+        });
+      }
+    }
+    if (deliveryId) {
+      await recordWebhookDelivery(db, deliveryId, "github", event, workspaceId);
     }
     return { ok: true };
   }
 
   if (action === "closed") {
-    if (!mapping) {
-      return { ok: true };
+    if (mapping) {
+      const updated = await stub.updateIssue(mapping.issueId, { status: "done" });
+      if (!updated) {
+        throw new VortexError({
+          code: "NOT_FOUND",
+          status: 404,
+          message: "Mapped issue not found in workspace",
+        });
+      }
     }
-    const updated = await stub.updateIssue(mapping.issueId, { status: "done" });
-    if (!updated) {
-      throw new VortexError({
-        code: "NOT_FOUND",
-        status: 404,
-        message: "Mapped issue not found in workspace",
-      });
+    if (deliveryId) {
+      await recordWebhookDelivery(db, deliveryId, "github", event, workspaceId);
     }
     return { ok: true };
   }
@@ -263,8 +292,14 @@ async function processGitHubIssue(
       await stub.updateIssue(mapping.issueId, { status: "canceled" });
       await deleteRepoIssue(db, repo, issue.number);
     }
+    if (deliveryId) {
+      await recordWebhookDelivery(db, deliveryId, "github", event, workspaceId);
+    }
     return { ok: true };
   }
 
+  if (deliveryId) {
+    await recordWebhookDelivery(db, deliveryId, "github", event, workspaceId);
+  }
   return { ok: true };
 }
