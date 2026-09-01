@@ -30,6 +30,7 @@
     "wrangler": "^3.78.0"
   },
   "dependencies": {
+    "better-auth": "^1.7.2",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.13.5",
     "zod": "^4.5.4"
