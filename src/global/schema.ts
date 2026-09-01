@@ -44,6 +44,24 @@ export const repoBranches = sqliteTable(
   (table) => [index("repo_branches_repo_branch_idx").on(table.repo, table.branch)]
 );
 
+export const repoIssues = sqliteTable(
+  "repo_issues",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    repo: text("repo").notNull(),
+    issueNumber: integer("issue_number").notNull(),
+    issueId: text("issue_id").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("repo_issues_repo_number_idx").on(table.repo, table.issueNumber),
+    index("repo_issues_workspace_idx").on(table.workspaceId),
+  ]
+);
+
 export const webhookSubscriptions = sqliteTable(
   "webhook_subscriptions",
   {

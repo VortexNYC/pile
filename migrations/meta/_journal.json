@@ -15,6 +15,13 @@
       "when": 1788288265083,
       "tag": "0001_simple_captain_stacy",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1788295769798,
+      "tag": "0002_boring_screwball",
+      "breakpoints": true
     }
   ]
 }
