@@ -3,7 +3,6 @@ import { createD1 } from "../global/db.js";
 import { findWorkspaceToken } from "../global/tokens.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppEnv } from "../platform/env.js";
-import { canAccess } from "../platform/permissions.js";
 import {
   toWorkspaceIdentity,
   type WorkspaceIdentity,
@@ -15,8 +14,6 @@ export type AppContext = {
   Bindings: AppEnv;
   Variables: { workspaceIdentity: WorkspaceIdentity };
 };
-
-const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 export const workspaceTokenMiddleware = createMiddleware<{
   Bindings: AppEnv;
@@ -50,15 +47,6 @@ export const workspaceTokenMiddleware = createMiddleware<{
       code: "FORBIDDEN",
       status: 403,
       message: "Token does not belong to this workspace",
-    });
-  }
-
-  const action = READ_METHODS.has(c.req.method) ? "read" : "write";
-  if (!canAccess(found.permissions, action)) {
-    throw new VortexError({
-      code: "FORBIDDEN",
-      status: 403,
-      message: `Token lacks ${action} permission`,
     });
   }
 

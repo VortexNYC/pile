@@ -6,6 +6,7 @@ import { VortexError } from "../platform/errors.js";
 import { getAgentProvider } from "../agents/index.js";
 import { createD1 } from "../global/db.js";
 import { createRepoBranch } from "../global/repo-branches.js";
+import { rls } from "../platform/rls.js";
 import {
   listIssuesQuerySchema,
   toListArgs,
@@ -61,6 +62,7 @@ const listIssuesRoute = createRoute({
   method: "get",
   path: "/workspaces/{workspaceId}/issues",
   tags: ["issues"],
+  middleware: [rls("read")],
   request: {
     params: z.object({ workspaceId: z.string() }),
     query: listIssuesQuerySchema,
@@ -84,6 +86,7 @@ const createIssueRoute = createRoute({
   method: "post",
   path: "/workspaces/{workspaceId}/issues",
   tags: ["issues"],
+  middleware: [rls("write")],
   request: {
     params: z.object({ workspaceId: z.string() }),
     body: {
@@ -106,6 +109,7 @@ const getIssueRoute = createRoute({
   method: "get",
   path: "/workspaces/{workspaceId}/issues/{id}",
   tags: ["issues"],
+  middleware: [rls("read")],
   request: {
     params: z.object({ workspaceId: z.string(), id: z.string() }),
   },
@@ -123,6 +127,7 @@ const updateIssueRoute = createRoute({
   method: "patch",
   path: "/workspaces/{workspaceId}/issues/{id}",
   tags: ["issues"],
+  middleware: [rls("write")],
   request: {
     params: z.object({ workspaceId: z.string(), id: z.string() }),
     body: {
@@ -145,6 +150,7 @@ const dispatchRoute = createRoute({
   method: "post",
   path: "/workspaces/{workspaceId}/issues/{id}/dispatch",
   tags: ["agents"],
+  middleware: [rls("write")],
   request: {
     params: z.object({ workspaceId: z.string(), id: z.string() }),
     body: {
