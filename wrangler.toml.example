@@ -1,0 +1,14 @@
+name = "notion-engineering-queue"
+main = "src/index.ts"
+compatibility_date = "2026-08-31"
+
+[vars]
+DEVIN_ORG_ID = "<your-devin-org-id>"
+DEVIN_OUTPOST = "user:daytona-linux"
+DAYTONA_LABEL_ID = "<optional-linear-label-id-for-legacy-support>"
+LINEAR_DEVIN_USER_ID = "<optional-linear-user-id-for-legacy-support>"
+NOTION_DATA_SOURCE_ID = "<your-notion-data-source-id>"
+DEVIN_MODEL = "swe-1-7-medium"
+
+[triggers]
+crons = ["* * * * *"]
