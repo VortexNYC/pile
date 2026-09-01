@@ -122,7 +122,7 @@ class LinearClient {
     const data = await this.request<{
       issueLabels: { nodes: LinearLabel[] } | null;
     }>(
-      `query GetLabels($teamId: String!) {
+      `query GetLabels($teamId: ID!) {
         issueLabels(filter: { team: { id: { eq: $teamId } } }) {
           nodes {
             id
