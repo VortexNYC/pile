@@ -4,13 +4,17 @@ A Notion-backed engineering work queue that dispatches to [Devin](https://devin.
 
 ## Features
 
-- **Linear-style issue tracking in Notion**: Team, Project, Cycle, Milestone, Initiative, Priority, Labels, Assignee, Due, Estimate, SLA, Parent/Sub-issues, Related issues, Subscribers, Triage, Release, and `VOR-` style auto-numbered Issue IDs.
+- **Linear-style issue tracking in Notion**: Team, Project, Cycle, Milestone, Initiative, Priority, Labels, Assignee, Due, Estimate, SLA, Parent/Sub-issues, Related issues, Subscribers, Triage, Release, Attachments, Customer Request, Requester, and `VOR-` style auto-numbered Issue IDs.
 - **One-click Devin dispatch**: check the `Devin` checkbox or set `Status = Ready` to start a session on a Daytona outpost.
 - **Webhook + cron fallback**: Notion `page.properties_updated` events trigger dispatch in real time; a one-minute cron polls `Running` sessions and writes back the terminal state.
+- **Auto-generated branch names**: `vor-45-fix-the-bug` from `Issue ID` + title.
+- **Activity + comments**: posts Notion comments and `Devin Result` blocks on dispatch, completion, and SLA breach.
+- **SLA breach automation**: sets `SLA Breached` and posts a comment when the `Started` timestamp exceeds `SLA (hours)`.
 - **Result write-back**: appends a `Devin Result` block to the page with status, session link, and PR link.
 - **Duplicate protection**: searches Devin sessions by Notion page ID tag and reuses an existing session instead of starting a second one.
 - **Priority sorting**: `Ready` queue is ordered by `Priority` descending.
 - **Views**: Board, Project Board, Priority Board, Backlog, Done, High Priority.
+- **HTTP API for any frontend**: `POST /dispatch` and `GET /status/:id` let any system (Linear, GitHub, Jira, CLI) create and check Devin sessions.
 
 ## Why `select` for `Status` instead of Notion's native `Status` type
 
@@ -58,8 +62,14 @@ Notion's API currently cannot update values that live in the `in_progress` group
 | Completed | date | When work finished |
 | Estimate | number | Estimate |
 | SLA (hours) | number | SLA target |
+| SLA Breached | checkbox | Set automatically when SLA is exceeded |
 | Customer Ticket Count | number | Support ticket count |
 | Release | select | Release name |
+| Attachments | files | Linked files |
+| Requester | email | Customer / intake requester |
+| Customer Request | checkbox | Intake flag |
+| Cycle Start | date | Cycle start |
+| Cycle End | date | Cycle end |
 | Parent | relation (self) | Sub-issue parent |
 | Related | relation (self) | Related issues |
 | Triage | checkbox | Triage flag |
@@ -72,6 +82,29 @@ Notion's API currently cannot update values that live in the `in_progress` group
 - **Devin** checkbox: set `Devin = true` on a `Backlog` / `Archived` row to promote it to `Ready`, then a second webhook fires and creates the Devin session.
 - **Status = Ready** (manually or from the checkbox above): the Worker creates the Devin session and flips `Status` to `Running`.
 - When the session terminates, the Worker writes `Status = Done` or `Failed` and sets `PR` if a PR was opened.
+
+## API
+
+The Worker is source-agnostic. Any frontend can call:
+
+- `GET /health` — liveness.
+- `POST /dispatch` — create a Devin session from JSON:
+  ```json
+  {
+    "name": "Fix login",
+    "repo": "org/repo",
+    "description": "...",
+    "reference": "optional-task-id",
+    "platform": "user:daytona-linux",
+    "model": "swe-1-7-medium"
+  }
+  ```
+  Returns `{ "id": "...", "url": "..." }`.
+- `GET /status/:sessionId` — get current Devin session status.
+- `POST /notion-webhook` — Notion realtime webhook.
+- `POST /notion` — manual Notion payload.
+- `GET /notion-run?pageId=...` — manual dispatch one page.
+- `POST /linear` — legacy Linear webhook.
 
 ## Tests
 

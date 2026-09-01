@@ -9,6 +9,7 @@ import {
   buildNotionPrompt,
   hmacSha256Hex,
   timingSafeEqualHex,
+  generateBranchName,
 } from "./index";
 
 describe("extract helpers", () => {
@@ -50,6 +51,16 @@ describe("session lifecycle", () => {
 
   it("sessionIsTerminal returns false for running", () => {
     expect(sessionIsTerminal({ status: "running", status_detail: null, is_archived: false } as any)).toBe(false);
+  });
+});
+
+describe("branch names", () => {
+  it("generateBranchName uses issue id and slug", () => {
+    expect(generateBranchName("VOR-45", "Fix the bug!")).toBe("vor-45-fix-the-bug");
+  });
+
+  it("generateBranchName falls back when no issue id", () => {
+    expect(generateBranchName(undefined, "Update docs")).toBe("vor-update-docs");
   });
 });
 

@@ -56,14 +56,33 @@ type QueueRecord = {
   platform: string;
   linear?: string;
   pr?: string;
+  issueId?: string;
+  started?: string;
+  due?: string;
+  slaHours?: number;
+  requester?: string;
+  customerRequest?: boolean;
+  slaBreached?: boolean;
 };
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
+    if (url.pathname === "/health" && request.method === "GET") {
+      return new Response("ok");
+    }
+
+    if (url.pathname.startsWith("/status/") && request.method === "GET") {
+      return handleStatus(request, env);
+    }
+
     if (url.pathname === "/notion-run" && request.method === "GET") {
       return handleNotionRunGet(request, env);
+    }
+
+    if (url.pathname === "/dispatch" && request.method === "POST") {
+      return handleDispatch(request, env);
     }
 
     if (request.method !== "POST") {
@@ -87,6 +106,66 @@ export default {
     await pollFromNotionQueue(env);
   },
 };
+
+export async function handleDispatch(request: Request, env: Env): Promise<Response> {
+  let body: Record<string, unknown>;
+  try {
+    body = await request.json() as Record<string, unknown>;
+  } catch {
+    return new Response("invalid json", { status: 400 });
+  }
+
+  const repo = typeof body.repo === "string" ? body.repo : "";
+  const description = typeof body.description === "string" ? body.description : "";
+  const name = typeof body.name === "string" ? body.name : "devin-dispatch";
+  const reference = typeof body.reference === "string" ? body.reference : crypto.randomUUID();
+
+  if (!repo || !description) {
+    return new Response("missing repo or description", { status: 400 });
+  }
+
+  const model = (typeof body.model === "string" ? body.model : env.DEVIN_MODEL || "swe-1-7-medium").toLowerCase();
+  if (model.includes("lite") || model.includes("lightning")) {
+    return new Response("forbidden model", { status: 400 });
+  }
+
+  const prompt = `# ${name}\n\n${description}`;
+
+  try {
+    const session = await createDevinSession({
+      token: env.DEVIN_TOKEN,
+      orgId: env.DEVIN_ORG_ID,
+      platform: typeof body.platform === "string" ? body.platform : env.DEVIN_OUTPOST,
+      model,
+      title: name,
+      prompt,
+      pageId: reference,
+    });
+    return new Response(JSON.stringify({ id: session.id, url: session.url }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (err) {
+    console.error("dispatch failed", { err });
+    return new Response("failed to create session", { status: 500 });
+  }
+}
+
+export async function handleStatus(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  const sessionId = url.pathname.split("/").pop();
+  if (!sessionId) {
+    return new Response("missing session id", { status: 400 });
+  }
+  try {
+    const session = await getDevinSession(sessionId, env.DEVIN_TOKEN, env.DEVIN_ORG_ID);
+    return new Response(JSON.stringify(session), {
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (err) {
+    console.error("status check failed", { err });
+    return new Response("failed to get session", { status: 500 });
+  }
+}
 
 export async function handleLinearWebhook(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const rawBody = await request.text();
@@ -324,6 +403,14 @@ export async function pollFromNotionQueue(env: Env): Promise<void> {
   }
 }
 
+export function checkSlaBreach(data: QueueRecord): boolean {
+  if (!data.slaHours || !data.started) return false;
+  const started = new Date(data.started).getTime();
+  if (Number.isNaN(started)) return false;
+  const deadline = started + data.slaHours * 60 * 60 * 1000;
+  return Date.now() > deadline;
+}
+
 export async function pollNotionRow(pageId: string, env: Env): Promise<void> {
   const page = await getNotionPage(pageId, env.NOTION_TOKEN);
   const props = (page.properties as Record<string, NotionProp>) || {};
@@ -339,7 +426,15 @@ export async function pollNotionRow(pageId: string, env: Env): Promise<void> {
     return;
   }
 
+  const data = parseQueuePage(page);
+
   try {
+    if (checkSlaBreach(data) && !data.slaBreached) {
+      await updateNotionPage(pageId, env.NOTION_TOKEN, { "SLA Breached": { checkbox: true } });
+      await postNotionComment(pageId, env.NOTION_TOKEN, `SLA breached for ${data.name}`).catch(() => {});
+      await addActivityBlock(pageId, env.NOTION_TOKEN, `SLA breached — ${new Date().toISOString()}`).catch(() => {});
+    }
+
     const session = await getDevinSession(sessionId, env.DEVIN_TOKEN, env.DEVIN_ORG_ID);
     const terminal = sessionIsTerminal(session);
     if (!terminal) {
@@ -354,10 +449,14 @@ export async function pollNotionRow(pageId: string, env: Env): Promise<void> {
     const firstPr = session.pull_requests?.[0];
     const prUrl = firstPr?.url ?? firstPr?.pr_url;
 
+    const now = new Date().toISOString();
     await updateNotionPage(pageId, env.NOTION_TOKEN, {
       Status: { select: { name: newStatus } },
+      Completed: { date: { start: now } },
       ...(prUrl ? { PR: { url: prUrl } } : {}),
     });
+
+    await postNotionComment(pageId, env.NOTION_TOKEN, `Devin session ${newStatus.toLowerCase()}: ${sessionUrl}`).catch(() => {});
 
     const resultBlocks = [
       { heading_2: { rich_text: [{ type: "text", text: { content: "Devin Result" } }] } },
@@ -473,6 +572,15 @@ export async function queryNotionQueue(dataSourceId: string, token: string, sing
   return rows;
 }
 
+export function generateBranchName(issueId: string | undefined, title: string): string {
+  const slug = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 40);
+  return issueId ? `${issueId.toLowerCase()}-${slug}` : `vor-${slug || "fix"}`;
+}
+
 export async function dispatchNotionRow(pageId: string, env: Env): Promise<void> {
   const page = await getNotionPage(pageId, env.NOTION_TOKEN);
   const data = parseQueuePage(page);
@@ -496,11 +604,16 @@ export async function dispatchNotionRow(pageId: string, env: Env): Promise<void>
     return;
   }
 
-  const prompt = buildNotionPrompt(pageId, data);
+  data.branch = data.branch || generateBranchName(data.issueId, data.name);
+  const now = new Date().toISOString();
 
   await updateNotionPage(pageId, env.NOTION_TOKEN, {
     Status: { select: { name: "Running" } },
+    Branch: { rich_text: [{ text: { content: data.branch } }] },
+    Started: { date: { start: now } },
   });
+
+  const prompt = buildNotionPrompt(pageId, data);
 
   const existing = await findNotionSession(pageId, env);
   if (existing) {
@@ -509,6 +622,7 @@ export async function dispatchNotionRow(pageId: string, env: Env): Promise<void>
       Status: { select: { name: "Running" } },
       "Devin Session": { url: existing.url },
     });
+    await addActivityBlock(pageId, env.NOTION_TOKEN, `Reused existing Devin session — ${existing.url}`).catch(() => {});
     return;
   }
 
@@ -527,6 +641,9 @@ export async function dispatchNotionRow(pageId: string, env: Env): Promise<void>
       Status: { select: { name: "Running" } },
       "Devin Session": { url: session.url },
     });
+
+    await postNotionComment(pageId, env.NOTION_TOKEN, `Devin session started: ${session.url}`).catch(() => {});
+    await addActivityBlock(pageId, env.NOTION_TOKEN, `Dispatched to Devin — ${session.url}`).catch(() => {});
 
     console.log("created Devin session for Notion page", { pageId, session_id: session.id, url: session.url });
   } catch (err) {
@@ -584,6 +701,34 @@ export async function appendNotionPageBlocks(
   }
 }
 
+export async function postNotionComment(pageId: string, token: string, text: string): Promise<void> {
+  const res = await fetch("https://api.notion.com/v1/comments", {
+    method: "POST",
+    headers: notionHeaders(token),
+    body: JSON.stringify({
+      parent: { page_id: pageId },
+      rich_text: [{ type: "text", text: { content: text } }],
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    console.error("failed to post Notion comment", { pageId, text, status: res.status, err });
+  }
+}
+
+export async function addActivityBlock(pageId: string, token: string, text: string): Promise<void> {
+  await appendNotionPageBlocks(pageId, token, [
+    {
+      object: "block",
+      type: "callout",
+      callout: {
+        rich_text: [{ type: "text", text: { content: text } }],
+        icon: { type: "emoji", emoji: "⚡" },
+      },
+    },
+  ]);
+}
+
 export function parseQueuePage(page: Record<string, unknown>): QueueRecord {
   const props = (page.properties as Record<string, NotionProp>) || {};
   return {
@@ -595,6 +740,13 @@ export function parseQueuePage(page: Record<string, unknown>): QueueRecord {
     platform: extractSelect(props.Platform) || "user:daytona-linux",
     linear: extractUrl(props.Linear),
     pr: extractUrl(props.PR),
+    issueId: extractUniqueId(props["Issue ID"]),
+    started: extractDate(props.Started),
+    due: extractDate(props.Due),
+    slaHours: extractNumber(props["SLA (hours)"]),
+    requester: extractEmail(props.Requester),
+    customerRequest: extractCheckbox(props["Customer Request"]),
+    slaBreached: extractCheckbox(props["SLA Breached"]),
   };
 }
 
@@ -633,6 +785,36 @@ export function extractCheckbox(prop: NotionProp): boolean {
   return p.checkbox === true;
 }
 
+export function extractUniqueId(prop: NotionProp): string | undefined {
+  if (!prop || typeof prop !== "object") return undefined;
+  const p = prop as Record<string, unknown>;
+  if (p.type !== "unique_id") return undefined;
+  const uid = p.unique_id as Record<string, unknown> | undefined;
+  return typeof uid?.plain_text === "string" ? uid.plain_text : undefined;
+}
+
+export function extractDate(prop: NotionProp): string | undefined {
+  if (!prop || typeof prop !== "object") return undefined;
+  const p = prop as Record<string, unknown>;
+  if (p.type !== "date") return undefined;
+  const d = p.date as Record<string, unknown> | undefined;
+  return typeof d?.start === "string" ? d.start : undefined;
+}
+
+export function extractNumber(prop: NotionProp): number | undefined {
+  if (!prop || typeof prop !== "object") return undefined;
+  const p = prop as Record<string, unknown>;
+  if (p.type !== "number") return undefined;
+  return typeof p.number === "number" ? p.number : undefined;
+}
+
+export function extractEmail(prop: NotionProp): string | undefined {
+  if (!prop || typeof prop !== "object") return undefined;
+  const p = prop as Record<string, unknown>;
+  if (p.type !== "email") return undefined;
+  return typeof p.email === "string" ? p.email : undefined;
+}
+
 export function buildNotionPrompt(pageId: string, data: QueueRecord): string {
   const parts: string[] = [`# ${data.name}`];
   if (data.description) parts.push(data.description);
@@ -640,6 +822,8 @@ export function buildNotionPrompt(pageId: string, data: QueueRecord): string {
   if (data.branch) parts.push(`Branch: ${data.branch}`);
   if (data.linear) parts.push(`Linear reference: ${data.linear}`);
   if (data.pr) parts.push(`Existing PR: ${data.pr}`);
+  if (data.customerRequest && data.requester) parts.push(`Customer request from: ${data.requester}`);
+  if (data.customerRequest && !data.requester) parts.push(`Customer request`);
   parts.push(
     "\nWork through this task end-to-end. Explore the codebase, implement the requested change, run relevant tests, and open a pull request if code changes are needed.",
   );
