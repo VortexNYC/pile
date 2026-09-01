@@ -4,21 +4,23 @@ import { findWorkspaceToken } from "../global/tokens.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppEnv } from "../platform/env.js";
 import { canAccess } from "../platform/permissions.js";
-import type { workspaceTokens } from "../global/schema.js";
-import type { InferSelectModel } from "drizzle-orm";
+import {
+  toWorkspaceIdentity,
+  type WorkspaceIdentity,
+} from "../platform/identity.js";
 
-export type WorkspaceToken = InferSelectModel<typeof workspaceTokens>;
+export type { WorkspaceToken } from "../platform/identity.js";
 
 export type AppContext = {
   Bindings: AppEnv;
-  Variables: { workspaceToken: WorkspaceToken };
+  Variables: { workspaceIdentity: WorkspaceIdentity };
 };
 
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 export const workspaceTokenMiddleware = createMiddleware<{
   Bindings: AppEnv;
-  Variables: { workspaceToken: WorkspaceToken };
+  Variables: { workspaceIdentity: WorkspaceIdentity };
 }>(async (c, next) => {
   const header = c.req.header("Authorization") ?? "";
   const token = header.replace(/^Bearer\s+/i, "").trim();
@@ -60,6 +62,6 @@ export const workspaceTokenMiddleware = createMiddleware<{
     });
   }
 
-  c.set("workspaceToken", found);
+  c.set("workspaceIdentity", toWorkspaceIdentity(found));
   await next();
 });
