@@ -6,6 +6,7 @@ import type {
   Issue,
   IssueStatus,
   IssuePriority,
+  RealtimeEvent,
 } from "./types.js";
 import type { AppEnv } from "../platform/env.js";
 
@@ -42,8 +43,46 @@ export class WorkspaceDO implements DurableObject {
     this.initSchema();
   }
 
-  async fetch(_request: Request): Promise<Response> {
-    return new Response("WorkspaceDO");
+  async fetch(request: Request): Promise<Response> {
+    const upgrade = request.headers.get("Upgrade");
+    if (upgrade !== "websocket") {
+      return new Response("WorkspaceDO");
+    }
+
+    const pair = new WebSocketPair();
+    const [client, server] = [pair[0], pair[1]];
+    this.state.acceptWebSocket(client);
+
+    this.broadcast({
+      type: "connected",
+      workspaceId: this.workspaceId,
+    });
+
+    return new Response(null, {
+      status: 101,
+      webSocket: server,
+    });
+  }
+
+  async webSocketMessage(
+    ws: WebSocket,
+    message: string | ArrayBuffer
+  ): Promise<void> {
+    if (typeof message !== "string") return;
+    try {
+      const data = JSON.parse(message) as {
+        type: string;
+      };
+      if (data.type === "ping") {
+        ws.send(JSON.stringify({ type: "pong" }));
+      }
+    } catch {
+      // ignore malformed messages
+    }
+  }
+
+  async webSocketClose(ws: WebSocket): Promise<void> {
+    ws.close();
   }
 
   private initSchema() {
@@ -77,6 +116,16 @@ export class WorkspaceDO implements DurableObject {
       CREATE INDEX IF NOT EXISTS idx_issues_repo_branch
       ON issues (repo, branch)
     `);
+  }
+
+  private broadcast(event: RealtimeEvent) {
+    for (const ws of this.state.getWebSockets()) {
+      try {
+        ws.send(JSON.stringify(event));
+      } catch {
+        // socket may be closing
+      }
+    }
   }
 
   createIssue(input: IssueInput): Issue {
@@ -115,7 +164,13 @@ export class WorkspaceDO implements DurableObject {
       throw new Error("Failed to create issue: invalid row shape");
     }
 
-    return toIssue(parsed.data);
+    const issue = toIssue(parsed.data);
+    this.broadcast({
+      type: "issue.created",
+      workspaceId: this.workspaceId,
+      issue,
+    });
+    return issue;
   }
 
   getIssue(id: string): Issue | undefined {
@@ -184,7 +239,14 @@ export class WorkspaceDO implements DurableObject {
       ", "
     )}, updated_at = ? WHERE id = ? RETURNING *`;
     const row = execOne(this.sql, issueSchema, query, ...values);
-    return row ? toIssue(row) : undefined;
+    if (!row) return undefined;
+    const issue = toIssue(row);
+    this.broadcast({
+      type: "issue.updated",
+      workspaceId: this.workspaceId,
+      issue,
+    });
+    return issue;
   }
 
   updatePrState(
@@ -204,7 +266,14 @@ export class WorkspaceDO implements DurableObject {
       repo,
       branch
     );
-    return row ? toIssue(row) : undefined;
+    if (!row) return undefined;
+    const issue = toIssue(row);
+    this.broadcast({
+      type: "pr.updated",
+      workspaceId: this.workspaceId,
+      issue,
+    });
+    return issue;
   }
 }
 

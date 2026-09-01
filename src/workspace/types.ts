@@ -40,6 +40,27 @@ export interface Issue {
   updatedAt: string;
 }
 
+export type RealtimeEvent =
+  | {
+      type: "connected";
+      workspaceId: string;
+    }
+  | {
+      type: "issue.created";
+      workspaceId: string;
+      issue: Issue;
+    }
+  | {
+      type: "issue.updated";
+      workspaceId: string;
+      issue: Issue;
+    }
+  | {
+      type: "pr.updated";
+      workspaceId: string;
+      issue: Issue;
+    };
+
 export interface WorkspaceDurableObjectStub extends DurableObjectStub {
   createIssue(input: IssueInput): Promise<Issue>;
   getIssue(id: string): Promise<Issue | undefined>;
