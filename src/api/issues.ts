@@ -8,6 +8,9 @@ import type {
   WorkspaceDurableObjectStub,
 } from "../workspace/types.js";
 import { VortexError } from "../platform/errors.js";
+import { getAgentProvider } from "../agents/index.js";
+import { createD1 } from "../global/db.js";
+import { createRepoBranch } from "../global/repo-branches.js";
 
 const createIssueSchema = z.object({
   title: z.string().min(1),
@@ -129,6 +132,34 @@ app.patch("/:id", async (c) => {
     });
   }
   return c.json(issue);
+});
+
+app.post("/:id/dispatch", async (c) => {
+  const body = await c.req.json();
+  const agentId = typeof body?.agentId === "string" ? body.agentId : "devin";
+  const model = typeof body?.model === "string" ? body.model : undefined;
+
+  const workspaceId = getWorkspaceId(c);
+  const id = getIssueId(c);
+  const doStub = getWorkspaceDO(c.env, workspaceId);
+  const issue = await doStub.getIssue(id);
+  if (!issue) {
+    throw new VortexError({
+      code: "NOT_FOUND",
+      status: 404,
+      message: "Issue not found",
+    });
+  }
+
+  const provider = getAgentProvider(agentId, c.env);
+  const session = await provider.dispatch(workspaceId, issue, model);
+
+  if (issue.repo && issue.branch) {
+    const db = createD1(c.env.D1);
+    await createRepoBranch(db, workspaceId, issue.repo, issue.branch, issue.id);
+  }
+
+  return c.json(session, 201);
 });
 
 export { app as issueRoutes };
