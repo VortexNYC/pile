@@ -138,22 +138,24 @@ class LinearClient {
 
   async getProjects(teamId: string): Promise<LinearProject[]> {
     const data = await this.request<{
-      projects: { nodes: LinearProject[] } | null;
+      team: { projects: { nodes: LinearProject[] } | null } | null;
     }>(
       `query GetProjects($teamId: String!) {
-        projects(filter: { team: { id: { eq: $teamId } } }) {
-          nodes {
-            id
-            name
-            state
-            startDate
-            targetDate
+        team(id: $teamId) {
+          projects {
+            nodes {
+              id
+              name
+              state
+              startDate
+              targetDate
+            }
           }
         }
       }`,
       { teamId }
     );
-    return data.projects?.nodes ?? [];
+    return data.team?.projects?.nodes ?? [];
   }
 
   async getCycles(teamId: string): Promise<LinearCycle[]> {
