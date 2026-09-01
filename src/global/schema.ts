@@ -62,6 +62,58 @@ export const repoIssues = sqliteTable(
   ]
 );
 
+export const projects = sqliteTable(
+  "projects",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    name: text("name").notNull(),
+    description: text("description"),
+    status: text("status").notNull().default("active"),
+    startDate: text("start_date"),
+    endDate: text("end_date"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [index("projects_workspace_idx").on(table.workspaceId)]
+);
+
+export const cycles = sqliteTable(
+  "cycles",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    projectId: text("project_id").references(() => projects.id),
+    name: text("name").notNull(),
+    startDate: text("start_date"),
+    endDate: text("end_date"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("cycles_workspace_idx").on(table.workspaceId),
+    index("cycles_project_idx").on(table.projectId),
+  ]
+);
+
+export const labels = sqliteTable(
+  "labels",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    name: text("name").notNull(),
+    color: text("color"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [index("labels_workspace_idx").on(table.workspaceId)]
+);
+
 export const webhookSubscriptions = sqliteTable(
   "webhook_subscriptions",
   {

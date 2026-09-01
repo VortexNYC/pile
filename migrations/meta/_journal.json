@@ -29,6 +29,13 @@
       "when": 1788296059589,
       "tag": "0003_shocking_thor",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1788301799382,
+      "tag": "0004_living_rattler",
+      "breakpoints": true
     }
   ]
 }
