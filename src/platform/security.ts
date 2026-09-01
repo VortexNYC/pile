@@ -34,7 +34,12 @@ function normalizeOrigin(value: string | undefined): string {
 }
 
 function isPublicPath(pathname: string): boolean {
-  return pathname === "/health" || pathname === "/github" || pathname.startsWith("/api/auth");
+  return (
+    pathname === "/health" ||
+    pathname === "/github" ||
+    pathname.startsWith("/api/auth") ||
+    pathname.includes("/migrate/")
+  );
 }
 
 function isAllowedOrigin(origin: string, env: AppEnv, pathname: string): boolean {

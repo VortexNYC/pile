@@ -7,6 +7,7 @@ export type IssueStatus =
 export type IssuePriority = "low" | "medium" | "high" | "urgent";
 
 export interface IssueInput {
+  id?: string;
   title: string;
   description?: string;
   status?: IssueStatus;
@@ -17,6 +18,8 @@ export interface IssueInput {
   labelIds?: string;
   repo?: string;
   branch?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface IssueCursor {

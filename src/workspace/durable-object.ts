@@ -158,8 +158,8 @@ export class WorkspaceDO implements DurableObject, Rpc.DurableObjectBranded {
 
   async createIssue(input: IssueInput): Promise<Issue> {
     await this.ready;
-    const id = crypto.randomUUID();
     const now = new Date().toISOString();
+    const id = input.id ?? crypto.randomUUID();
     const status = input.status ?? "backlog";
     const priority = input.priority ?? "medium";
 
@@ -183,8 +183,8 @@ export class WorkspaceDO implements DurableObject, Rpc.DurableObjectBranded {
       input.branch ?? null,
       null,
       null,
-      now,
-      now
+      input.createdAt ?? now,
+      input.updatedAt ?? now
     );
 
     const rows = Array.from(cursor);

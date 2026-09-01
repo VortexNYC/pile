@@ -1,0 +1,371 @@
+import { createD1 } from "../global/db.js";
+import {
+  createLabel,
+  createProject,
+  createCycle,
+} from "../global/workspace-entities.js";
+import { VortexError } from "../platform/errors.js";
+import type { AppEnv } from "../platform/env.js";
+import type { IssueInput, IssuePriority, IssueStatus } from "../workspace/types.js";
+
+interface LinearState {
+  id: string;
+  name: string;
+  type: string;
+}
+
+interface LinearLabel {
+  id: string;
+  name: string;
+  color?: string;
+}
+
+interface LinearProject {
+  id: string;
+  name: string;
+  state?: string;
+  startDate?: string;
+  targetDate?: string;
+}
+
+interface LinearCycle {
+  id: string;
+  name: string;
+  startsAt?: string;
+  endsAt?: string;
+}
+
+interface LinearIssue {
+  id: string;
+  title: string;
+  description?: string | null;
+  state: { id: string; name: string; type: string } | null;
+  priority?: number | null;
+  assignee?: { id: string } | null;
+  project?: { id: string } | null;
+  cycle?: { id: string } | null;
+  labels: { nodes: Array<{ id: string }> };
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface MigrationCounts {
+  issues: number;
+  labels: number;
+  projects: number;
+  cycles: number;
+}
+
+class LinearClient {
+  constructor(private token: string) {}
+
+  private async request<T>(
+    query: string,
+    variables?: Record<string, unknown>
+  ): Promise<T> {
+    const res = await fetch("https://api.linear.app/graphql", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: this.token,
+      },
+      body: JSON.stringify({ query, variables }),
+    });
+
+    if (!res.ok) {
+      throw new VortexError({
+        code: "AGENT_ERROR",
+        status: 502,
+        message: `Linear request failed: ${res.status}`,
+      });
+    }
+
+    const body = (await res.json()) as { data?: T; errors?: unknown[] };
+    if (body.errors && body.errors.length > 0) {
+      throw new VortexError({
+        code: "AGENT_ERROR",
+        status: 502,
+        message: `Linear GraphQL error: ${JSON.stringify(body.errors)}`,
+      });
+    }
+    if (body.data === undefined) {
+      throw new VortexError({
+        code: "AGENT_ERROR",
+        status: 502,
+        message: "Linear returned no data",
+      });
+    }
+    return body.data;
+  }
+
+  async getStates(teamId: string): Promise<LinearState[]> {
+    const data = await this.request<{
+      team: { states: { nodes: LinearState[] } } | null;
+    }>(
+      `query GetStates($teamId: String!) {
+        team(id: $teamId) {
+          states {
+            nodes {
+              id
+              name
+              type
+            }
+          }
+        }
+      }`,
+      { teamId }
+    );
+    return data.team?.states.nodes ?? [];
+  }
+
+  async getLabels(teamId: string): Promise<LinearLabel[]> {
+    const data = await this.request<{
+      issueLabels: { nodes: LinearLabel[] } | null;
+    }>(
+      `query GetLabels($teamId: String!) {
+        issueLabels(filter: { team: { id: { eq: $teamId } } }) {
+          nodes {
+            id
+            name
+            color
+          }
+        }
+      }`,
+      { teamId }
+    );
+    return data.issueLabels?.nodes ?? [];
+  }
+
+  async getProjects(teamId: string): Promise<LinearProject[]> {
+    const data = await this.request<{
+      projects: { nodes: LinearProject[] } | null;
+    }>(
+      `query GetProjects($teamId: String!) {
+        projects(filter: { team: { id: { eq: $teamId } } }) {
+          nodes {
+            id
+            name
+            state
+            startDate
+            targetDate
+          }
+        }
+      }`,
+      { teamId }
+    );
+    return data.projects?.nodes ?? [];
+  }
+
+  async getCycles(teamId: string): Promise<LinearCycle[]> {
+    const data = await this.request<{
+      team: { cycles: { nodes: LinearCycle[] } | null } | null;
+    }>(
+      `query GetCycles($teamId: String!) {
+        team(id: $teamId) {
+          cycles {
+            nodes {
+              id
+              name
+              startsAt
+              endsAt
+            }
+          }
+        }
+      }`,
+      { teamId }
+    );
+    return data.team?.cycles?.nodes ?? [];
+  }
+
+  async getIssuesPage(
+    teamId: string,
+    cursor?: string
+  ): Promise<{
+    issues: LinearIssue[];
+    pageInfo: { hasNextPage: boolean; endCursor?: string };
+  }> {
+    const data = await this.request<{
+      team: {
+        issues: {
+          nodes: LinearIssue[];
+          pageInfo: { hasNextPage: boolean; endCursor?: string };
+        } | null;
+      } | null;
+    }>(
+      `query GetIssues($teamId: String!, $after: String) {
+        team(id: $teamId) {
+          issues(first: 100, after: $after) {
+            nodes {
+              id
+              title
+              description
+              state {
+                id
+                name
+                type
+              }
+              priority
+              assignee {
+                id
+              }
+              project {
+                id
+              }
+              cycle {
+                id
+              }
+              labels {
+                nodes {
+                  id
+                }
+              }
+              createdAt
+              updatedAt
+            }
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
+          }
+        }
+      }`,
+      { teamId, after: cursor ?? null }
+    );
+    return {
+      issues: data.team?.issues?.nodes ?? [],
+      pageInfo: data.team?.issues?.pageInfo ?? {
+        hasNextPage: false,
+      },
+    };
+  }
+}
+
+function mapStatus(state: LinearState | null): IssueStatus | undefined {
+  if (!state) return undefined;
+
+  const typeMap: Record<string, IssueStatus> = {
+    backlog: "backlog",
+    unstarted: "todo",
+    started: "in_progress",
+    completed: "done",
+    canceled: "canceled",
+  };
+
+  const byType = typeMap[state.type.toLowerCase()];
+  if (byType) return byType;
+
+  const name = state.name.toLowerCase();
+  if (name in typeMap) return typeMap[name];
+
+  return undefined;
+}
+
+function mapPriority(priority: number | null | undefined): IssuePriority | undefined {
+  if (priority == null) return undefined;
+  if (priority === 1) return "urgent";
+  if (priority === 2) return "high";
+  if (priority === 3) return "medium";
+  if (priority === 4) return "low";
+  return undefined;
+}
+
+export async function migrateLinear(
+  env: AppEnv,
+  workspaceId: string,
+  linearToken: string,
+  teamId: string
+): Promise<MigrationCounts> {
+  const client = new LinearClient(linearToken);
+  const db = createD1(env.D1);
+
+  const [states, labels, projects, cycles] = await Promise.all([
+    client.getStates(teamId),
+    client.getLabels(teamId),
+    client.getProjects(teamId),
+    client.getCycles(teamId),
+  ]);
+
+  const stateMap = new Map(states.map((s) => [s.id, s]));
+
+  const labelMap = new Map<string, string>();
+  for (const label of labels) {
+    const created = await createLabel(db, workspaceId, {
+      name: label.name,
+      color: label.color,
+    });
+    if (created) {
+      labelMap.set(label.id, created.id);
+    }
+  }
+
+  const projectMap = new Map<string, string>();
+  for (const project of projects) {
+    const created = await createProject(db, workspaceId, {
+      name: project.name,
+      status: project.state ?? "active",
+      startDate: project.startDate,
+      endDate: project.targetDate,
+    });
+    if (created) {
+      projectMap.set(project.id, created.id);
+    }
+  }
+
+  const cycleMap = new Map<string, string>();
+  for (const cycle of cycles) {
+    const created = await createCycle(db, workspaceId, {
+      name: cycle.name,
+      startDate: cycle.startsAt,
+      endDate: cycle.endsAt,
+    });
+    if (created) {
+      cycleMap.set(cycle.id, created.id);
+    }
+  }
+
+  const doId = env.WORKSPACE_DURABLE_OBJECT.idFromName(workspaceId);
+  const stub = env.WORKSPACE_DURABLE_OBJECT.get(doId);
+
+  let issueCount = 0;
+  let cursor: string | undefined;
+  let hasNextPage = true;
+
+  while (hasNextPage) {
+    const page = await client.getIssuesPage(teamId, cursor);
+    for (const li of page.issues) {
+      const labelIds = li.labels.nodes
+        .map((n) => labelMap.get(n.id))
+        .filter((id): id is string => typeof id === "string")
+        .join(",");
+
+      const input: IssueInput = {
+        id: li.id,
+        title: li.title,
+        description: li.description || undefined,
+        status: mapStatus(li.state ? stateMap.get(li.state.id) ?? null : null),
+        priority: mapPriority(li.priority),
+        assigneeId: li.assignee?.id ?? undefined,
+        projectId: li.project?.id
+          ? projectMap.get(li.project.id)
+          : undefined,
+        cycleId: li.cycle?.id ? cycleMap.get(li.cycle.id) : undefined,
+        labelIds: labelIds || undefined,
+        createdAt: li.createdAt,
+        updatedAt: li.updatedAt,
+      };
+
+      await stub.createIssue(input);
+      issueCount++;
+    }
+
+    hasNextPage = page.pageInfo.hasNextPage;
+    cursor = page.pageInfo.endCursor;
+  }
+
+  return {
+    issues: issueCount,
+    labels: labels.length,
+    projects: projects.length,
+    cycles: cycles.length,
+  };
+}
