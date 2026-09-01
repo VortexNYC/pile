@@ -1,20 +1,18 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { toErrorResponse, VortexError } from "../platform/errors.js";
 import type { AppEnv } from "../platform/env.js";
-import { workspaceTokenMiddleware } from "./middleware.js";
+import {
+  workspaceTokenMiddleware,
+  type AppContext,
+} from "./middleware.js";
 import { registerIssueRoutes } from "./issues.js";
 import { createAuth } from "../platform/auth.js";
-import {
-  githubWebhookRoute,
-  processGithubWebhook,
-} from "../agents/github.js";
-import type { WorkspaceToken } from "./middleware.js";
+import { githubWebhookRoute, processGithubWebhook } from "../agents/github.js";
+import { observabilityMiddleware } from "../platform/observability.js";
+import { securityMiddleware } from "../platform/security.js";
+import { registerHealthRoutes } from "../platform/health.js";
 
-type Variables = {
-  workspaceToken: WorkspaceToken;
-};
-
-const app = new OpenAPIHono<{ Bindings: AppEnv; Variables: Variables }>({
+const app = new OpenAPIHono<AppContext>({
   defaultHook: (result) => {
     if (!result.success) {
       throw new VortexError({
@@ -31,27 +29,12 @@ app.onError((err) => {
   return toErrorResponse(err);
 });
 
+app.use("*", observabilityMiddleware);
+app.use("*", ...securityMiddleware);
+
 app.use("/workspaces/:workspaceId/*", workspaceTokenMiddleware);
 registerIssueRoutes(app);
-
-app.openapi(
-  createRoute({
-    method: "get",
-    path: "/health",
-    tags: ["platform"],
-    responses: {
-      200: {
-        description: "OK",
-        content: {
-          "application/json": {
-            schema: z.object({ ok: z.boolean() }),
-          },
-        },
-      },
-    },
-  }),
-  (c) => c.json({ ok: true })
-);
+registerHealthRoutes(app);
 
 app.openapi(
   createRoute({

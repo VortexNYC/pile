@@ -19,6 +19,18 @@ export interface IssueInput {
   branch?: string;
 }
 
+export interface IssueCursor {
+  createdAt: string;
+  id: string;
+}
+
+export interface ListIssuesArgs {
+  limit?: number;
+  cursor?: IssueCursor;
+  status?: IssueStatus;
+  priority?: IssuePriority;
+}
+
 export interface Issue {
   id: string;
   workspaceId: string;

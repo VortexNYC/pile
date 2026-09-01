@@ -1,12 +1,16 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import type { OpenAPIHono } from "@hono/zod-openapi";
-import type { AppEnv } from "../platform/env.js";
-import type { WorkspaceToken } from "./middleware.js";
+import type { AppContext } from "./middleware.js";
 import type { Issue, IssueInput } from "../workspace/types.js";
 import { VortexError } from "../platform/errors.js";
 import { getAgentProvider } from "../agents/index.js";
 import { createD1 } from "../global/db.js";
 import { createRepoBranch } from "../global/repo-branches.js";
+import {
+  listIssuesQuerySchema,
+  toListArgs,
+  encodeCursor,
+} from "./list-args.js";
 
 const createIssueSchema = z.object({
   title: z.string().min(1),
@@ -53,23 +57,23 @@ const agentSessionSchema = z.object({
   url: z.string().optional(),
 });
 
-type Variables = {
-  workspaceToken: WorkspaceToken;
-};
-
 const listIssuesRoute = createRoute({
   method: "get",
   path: "/workspaces/{workspaceId}/issues",
   tags: ["issues"],
   request: {
     params: z.object({ workspaceId: z.string() }),
+    query: listIssuesQuerySchema,
   },
   responses: {
     200: {
       description: "Issues list",
       content: {
         "application/json": {
-          schema: z.object({ issues: z.array(issueApiSchema) }),
+          schema: z.object({
+            issues: z.array(issueApiSchema),
+            nextCursor: z.string().optional(),
+          }),
         },
       },
     },
@@ -164,16 +168,23 @@ const dispatchRoute = createRoute({
   },
 });
 
-export function registerIssueRoutes(
-  app: OpenAPIHono<{ Bindings: AppEnv; Variables: Variables }>
-) {
+export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listIssuesRoute, async (c) => {
     const { workspaceId } = c.req.valid("param");
+    const query = c.req.valid("query");
+    const args = toListArgs(query);
     const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(
       c.env.WORKSPACE_DURABLE_OBJECT.idFromName(workspaceId)
     );
-    const issues = await stub.listIssues();
-    return c.json({ issues });
+    const issues = await stub.listIssues(args);
+    const nextCursor =
+      issues.length === query.limit && issues.length > 0
+        ? encodeCursor({
+            createdAt: issues[issues.length - 1].createdAt,
+            id: issues[issues.length - 1].id,
+          })
+        : undefined;
+    return c.json({ issues, nextCursor });
   });
 
   app.openapi(createIssueRoute, async (c) => {

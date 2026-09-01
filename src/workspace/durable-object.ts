@@ -7,6 +7,7 @@ import type {
   IssueStatus,
   IssuePriority,
   RealtimeEvent,
+  ListIssuesArgs,
 } from "./types.js";
 import type { AppEnv } from "../platform/env.js";
 import { deliverWebhooks } from "../agents/webhooks.js";
@@ -56,6 +57,15 @@ const MIGRATIONS = [
        ON issues (status, created_at DESC)`,
       `CREATE INDEX IF NOT EXISTS idx_issues_repo_branch
        ON issues (repo, branch)`,
+    ],
+  },
+  {
+    version: 2,
+    statements: [
+      `CREATE INDEX IF NOT EXISTS idx_issues_created_at_id
+       ON issues (created_at DESC, id DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_issues_priority
+       ON issues (priority, created_at DESC)`,
     ],
   },
 ];
@@ -216,13 +226,34 @@ export class WorkspaceDO implements DurableObject, Rpc.DurableObjectBranded {
     return row ? toIssue(row) : undefined;
   }
 
-  async listIssues(): Promise<Issue[]> {
+  async listIssues(args: ListIssuesArgs = {}): Promise<Issue[]> {
     await this.ready;
-    const rows = execAll(
-      this.sql,
-      issueSchema,
-      "SELECT * FROM issues ORDER BY created_at DESC"
-    );
+    const conditions: string[] = [];
+    const params: unknown[] = [];
+
+    if (args.status) {
+      conditions.push("status = ?");
+      params.push(args.status);
+    }
+    if (args.priority) {
+      conditions.push("priority = ?");
+      params.push(args.priority);
+    }
+    if (args.cursor) {
+      conditions.push(
+        "(created_at < ? OR (created_at = ? AND id < ?))"
+      );
+      params.push(args.cursor.createdAt, args.cursor.createdAt, args.cursor.id);
+    }
+
+    const where = conditions.length
+      ? `WHERE ${conditions.join(" AND ")}`
+      : "";
+    const limit = args.limit ?? 1_000_000;
+    const query = `SELECT * FROM issues ${where} ORDER BY created_at DESC, id DESC LIMIT ?`;
+    params.push(limit);
+
+    const rows = execAll(this.sql, issueSchema, query, ...params);
     return rows.map(toIssue);
   }
 
