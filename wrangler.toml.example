@@ -12,3 +12,16 @@ DEVIN_MODEL = "swe-1-7-medium"
 
 [triggers]
 crons = ["* * * * *"]
+
+[[d1_databases]]
+binding = "D1"
+database_name = "vortex-linear-global"
+database_id = "<your-d1-database-id>"
+
+[[durable_objects.bindings]]
+name = "WORKSPACE_DURABLE_OBJECT"
+class_name = "WorkspaceDO"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["WorkspaceDO"]
