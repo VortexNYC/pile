@@ -1,3 +1,5 @@
+import type { DurableObjectStub } from "@cloudflare/workers-types";
+
 export type IssueStatus = "backlog" | "todo" | "in_progress" | "done" | "canceled";
 export type IssuePriority = "low" | "medium" | "high" | "urgent";
 
@@ -25,4 +27,14 @@ export interface Issue {
   labelIds: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface WorkspaceDurableObjectStub extends DurableObjectStub {
+  createIssue(input: IssueInput): Promise<Issue>;
+  getIssue(id: string): Promise<Issue | undefined>;
+  listIssues(): Promise<Issue[]>;
+  updateIssue(
+    id: string,
+    patch: Partial<IssueInput>
+  ): Promise<Issue | undefined>;
 }
