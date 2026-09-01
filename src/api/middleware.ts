@@ -3,6 +3,7 @@ import { createD1 } from "../global/db.js";
 import { findWorkspaceToken } from "../global/tokens.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppEnv } from "../platform/env.js";
+import type { WorkspaceDO } from "../workspace/durable-object.js";
 import {
   toWorkspaceIdentity,
   type WorkspaceIdentity,
@@ -10,13 +11,17 @@ import {
 
 export type { WorkspaceToken } from "../platform/identity.js";
 
+export interface WorkerEnv extends AppEnv {
+  WORKSPACE_DURABLE_OBJECT: DurableObjectNamespace<WorkspaceDO>;
+}
+
 export type AppContext = {
-  Bindings: AppEnv;
+  Bindings: WorkerEnv;
   Variables: { workspaceIdentity: WorkspaceIdentity };
 };
 
 export const workspaceTokenMiddleware = createMiddleware<{
-  Bindings: AppEnv;
+  Bindings: WorkerEnv;
   Variables: { workspaceIdentity: WorkspaceIdentity };
 }>(async (c, next) => {
   const header = c.req.header("Authorization") ?? "";

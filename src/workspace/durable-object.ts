@@ -1,4 +1,5 @@
-import type { DurableObject, DurableObjectState } from "@cloudflare/workers-types";
+import { DurableObject } from "cloudflare:workers";
+import type { DurableObjectState } from "@cloudflare/workers-types";
 import { z } from "zod";
 import { execOne, execAll } from "./sql.js";
 import type {
@@ -72,19 +73,15 @@ const MIGRATIONS = [
 
 const LATEST_SCHEMA_VERSION = MIGRATIONS.length;
 
-export class WorkspaceDO implements DurableObject, Rpc.DurableObjectBranded {
-  declare [Rpc.__DURABLE_OBJECT_BRAND]: never;
-  private readonly state: DurableObjectState;
-  private readonly env: AppEnv;
-  private readonly sql: import("@cloudflare/workers-types").SqlStorage;
+export class WorkspaceDO extends DurableObject<AppEnv> {
+  private readonly sql: SqlStorage;
   private readonly workspaceId: string;
   private readonly ready: Promise<void>;
 
-  constructor(state: DurableObjectState, env: AppEnv) {
-    this.state = state;
-    this.env = env;
-    this.sql = state.storage.sql;
-    this.workspaceId = state.id.toString();
+  constructor(ctx: DurableObjectState, env: AppEnv) {
+    super(ctx, env);
+    this.sql = ctx.storage.sql;
+    this.workspaceId = ctx.id.toString();
     this.ready = this.runMigrations();
   }
 
@@ -97,7 +94,7 @@ export class WorkspaceDO implements DurableObject, Rpc.DurableObjectBranded {
 
     const pair = new WebSocketPair();
     const [client, server] = [pair[0], pair[1]];
-    this.state.acceptWebSocket(client);
+    this.ctx.acceptWebSocket(client);
 
     await this.emit({
       type: "connected",
@@ -132,7 +129,7 @@ export class WorkspaceDO implements DurableObject, Rpc.DurableObjectBranded {
   }
 
   private async runMigrations() {
-    const current = (await this.state.storage.get<number>("schemaVersion")) ?? 0;
+    const current = (await this.ctx.storage.get<number>("schemaVersion")) ?? 0;
     for (const migration of MIGRATIONS) {
       if (migration.version > current) {
         for (const statement of migration.statements) {
@@ -140,18 +137,18 @@ export class WorkspaceDO implements DurableObject, Rpc.DurableObjectBranded {
         }
       }
     }
-    await this.state.storage.put("schemaVersion", LATEST_SCHEMA_VERSION);
+    await this.ctx.storage.put("schemaVersion", LATEST_SCHEMA_VERSION);
   }
 
   private async emit(event: RealtimeEvent) {
-    for (const ws of this.state.getWebSockets()) {
+    for (const ws of this.ctx.getWebSockets()) {
       try {
         ws.send(JSON.stringify(event));
       } catch {
         // socket may be closing
       }
     }
-    this.state.waitUntil(
+    this.ctx.waitUntil(
       deliverWebhooks(this.env, this.workspaceId, event)
     );
   }

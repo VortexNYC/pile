@@ -1,6 +1,7 @@
 name = "issuetracker"
 main = "src/index.ts"
 compatibility_date = "2025-08-16"
+compatibility_flags = ["nodejs_compat"]
 
 [vars]
 BETTER_AUTH_URL = "https://your-domain.com"

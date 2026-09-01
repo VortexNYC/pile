@@ -5,7 +5,7 @@ import {
   createCycle,
 } from "../global/workspace-entities.js";
 import { VortexError } from "../platform/errors.js";
-import type { AppEnv } from "../platform/env.js";
+import type { WorkerEnv } from "../api/middleware.js";
 import type { IssueInput, IssuePriority, IssueStatus } from "../workspace/types.js";
 
 interface LinearState {
@@ -272,7 +272,7 @@ function mapPriority(priority: number | null | undefined): IssuePriority | undef
 }
 
 export async function migrateLinear(
-  env: AppEnv,
+  env: WorkerEnv,
   workspaceId: string,
   linearToken: string,
   teamId: string

@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { env, runInDurableObject } from "cloudflare:test";
-import type { AppEnv } from "../platform/env.js";
+import type { WorkerEnv } from "../api/middleware.js";
 
 declare module "cloudflare:test" {
-  interface ProvidedEnv extends AppEnv {}
+  interface ProvidedEnv extends WorkerEnv {}
 }
 
 describe("WorkspaceDO", () => {
