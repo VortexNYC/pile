@@ -1,4 +1,4 @@
-# Vortex Linear
+# Vortex Issue Tracker
 
 An open-source, agent-native issue tracker built on Cloudflare Workers, D1, and Durable Objects.
 

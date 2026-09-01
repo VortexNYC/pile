@@ -1,4 +1,4 @@
-name = "vortex-linear"
+name = "issuetracker"
 main = "src/index.ts"
 compatibility_date = "2026-08-31"
 
@@ -9,7 +9,7 @@ DEVIN_MODEL = "swe-1-7-medium"
 
 [[d1_databases]]
 binding = "D1"
-database_name = "vortex-linear-global"
+database_name = "issuetracker-global"
 database_id = "<your-d1-database-id>"
 
 [[durable_objects.bindings]]

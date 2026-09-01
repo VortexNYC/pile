@@ -1,7 +1,7 @@
 {
-  "name": "vortex-linear",
+  "name": "issuetracker",
   "version": "0.1.0",
-  "description": "Vortex Linear — an open-source, agent-native issue tracker on Cloudflare Workers.",
+  "description": "Vortex Issue Tracker — an open-source, agent-native issue tracker on Cloudflare Workers.",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
