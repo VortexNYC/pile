@@ -29,21 +29,55 @@ const issueSchema = z.object({
   updated_at: z.string(),
 });
 
+const MIGRATIONS = [
+  {
+    version: 1,
+    statements: [
+      `CREATE TABLE IF NOT EXISTS issues (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        description TEXT,
+        status TEXT NOT NULL,
+        priority TEXT NOT NULL,
+        assignee_id TEXT,
+        project_id TEXT,
+        cycle_id TEXT,
+        label_ids TEXT,
+        repo TEXT,
+        branch TEXT,
+        pr_url TEXT,
+        pr_state TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_issues_workspace_status
+       ON issues (status, created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_issues_repo_branch
+       ON issues (repo, branch)`,
+    ],
+  },
+];
+
+const LATEST_SCHEMA_VERSION = MIGRATIONS.length;
+
 export class WorkspaceDO implements DurableObject {
   private readonly state: DurableObjectState;
   private readonly env: AppEnv;
   private readonly sql: import("@cloudflare/workers-types").SqlStorage;
   private readonly workspaceId: string;
+  private readonly ready: Promise<void>;
 
   constructor(state: DurableObjectState, env: AppEnv) {
     this.state = state;
     this.env = env;
     this.sql = state.storage.sql;
     this.workspaceId = state.id.toString();
-    this.initSchema();
+    this.ready = this.runMigrations();
   }
 
   async fetch(request: Request): Promise<Response> {
+    await this.ready;
     const upgrade = request.headers.get("Upgrade");
     if (upgrade !== "websocket") {
       return new Response("WorkspaceDO");
@@ -85,37 +119,19 @@ export class WorkspaceDO implements DurableObject {
     ws.close();
   }
 
-  private initSchema() {
-    this.sql.exec(`
-      CREATE TABLE IF NOT EXISTS issues (
-        id TEXT PRIMARY KEY,
-        workspace_id TEXT NOT NULL,
-        title TEXT NOT NULL,
-        description TEXT,
-        status TEXT NOT NULL,
-        priority TEXT NOT NULL,
-        assignee_id TEXT,
-        project_id TEXT,
-        cycle_id TEXT,
-        label_ids TEXT,
-        repo TEXT,
-        branch TEXT,
-        pr_url TEXT,
-        pr_state TEXT,
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    this.sql.exec(`
-      CREATE INDEX IF NOT EXISTS idx_issues_workspace_status
-      ON issues (status, created_at DESC)
-    `);
-
-    this.sql.exec(`
-      CREATE INDEX IF NOT EXISTS idx_issues_repo_branch
-      ON issues (repo, branch)
-    `);
+  private async runMigrations() {
+    const current =
+      ((await this.state.storage.get<number>("schemaVersion")) as
+        | number
+        | undefined) ?? 0;
+    for (const migration of MIGRATIONS) {
+      if (migration.version > current) {
+        for (const statement of migration.statements) {
+          this.sql.exec(statement);
+        }
+      }
+    }
+    await this.state.storage.put("schemaVersion", LATEST_SCHEMA_VERSION);
   }
 
   private broadcast(event: RealtimeEvent) {
@@ -128,7 +144,8 @@ export class WorkspaceDO implements DurableObject {
     }
   }
 
-  createIssue(input: IssueInput): Issue {
+  async createIssue(input: IssueInput): Promise<Issue> {
+    await this.ready;
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     const status = input.status ?? "backlog";
@@ -173,7 +190,8 @@ export class WorkspaceDO implements DurableObject {
     return issue;
   }
 
-  getIssue(id: string): Issue | undefined {
+  async getIssue(id: string): Promise<Issue | undefined> {
+    await this.ready;
     const row = execOne(
       this.sql,
       issueSchema,
@@ -183,7 +201,11 @@ export class WorkspaceDO implements DurableObject {
     return row ? toIssue(row) : undefined;
   }
 
-  getIssueByBranch(repo: string, branch: string): Issue | undefined {
+  async getIssueByBranch(
+    repo: string,
+    branch: string
+  ): Promise<Issue | undefined> {
+    await this.ready;
     const row = execOne(
       this.sql,
       issueSchema,
@@ -194,7 +216,8 @@ export class WorkspaceDO implements DurableObject {
     return row ? toIssue(row) : undefined;
   }
 
-  listIssues(): Issue[] {
+  async listIssues(): Promise<Issue[]> {
+    await this.ready;
     const rows = execAll(
       this.sql,
       issueSchema,
@@ -203,7 +226,11 @@ export class WorkspaceDO implements DurableObject {
     return rows.map(toIssue);
   }
 
-  updateIssue(id: string, patch: Partial<IssueInput>): Issue | undefined {
+  async updateIssue(
+    id: string,
+    patch: Partial<IssueInput>
+  ): Promise<Issue | undefined> {
+    await this.ready;
     const allowed: Array<{
       key: keyof IssueInput;
       column: string;
@@ -249,12 +276,13 @@ export class WorkspaceDO implements DurableObject {
     return issue;
   }
 
-  updatePrState(
+  async updatePrState(
     repo: string,
     branch: string,
     prUrl: string,
     prState: string
-  ): Issue | undefined {
+  ): Promise<Issue | undefined> {
+    await this.ready;
     const query = `UPDATE issues SET pr_url = ?, pr_state = ?, updated_at = ? WHERE repo = ? AND branch = ? RETURNING *`;
     const row = execOne(
       this.sql,
