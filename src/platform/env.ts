@@ -5,6 +5,7 @@ export interface AppEnv {
   BETTER_AUTH_URL: string;
   DEVIN_TOKEN: string;
   GITHUB_WEBHOOK_SECRET?: string;
+  WEBHOOK_SECRET?: string;
   DISPATCH_SECRET?: string;
   DEVIN_ORG_ID?: string;
   DEVIN_OUTPOST?: string;

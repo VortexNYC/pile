@@ -9,6 +9,7 @@ import type {
   RealtimeEvent,
 } from "./types.js";
 import type { AppEnv } from "../platform/env.js";
+import { deliverWebhooks } from "../agents/webhooks.js";
 
 const issueSchema = z.object({
   id: z.string(),
@@ -87,7 +88,7 @@ export class WorkspaceDO implements DurableObject {
     const [client, server] = [pair[0], pair[1]];
     this.state.acceptWebSocket(client);
 
-    this.broadcast({
+    await this.emit({
       type: "connected",
       workspaceId: this.workspaceId,
     });
@@ -134,7 +135,7 @@ export class WorkspaceDO implements DurableObject {
     await this.state.storage.put("schemaVersion", LATEST_SCHEMA_VERSION);
   }
 
-  private broadcast(event: RealtimeEvent) {
+  private async emit(event: RealtimeEvent) {
     for (const ws of this.state.getWebSockets()) {
       try {
         ws.send(JSON.stringify(event));
@@ -142,6 +143,7 @@ export class WorkspaceDO implements DurableObject {
         // socket may be closing
       }
     }
+    await deliverWebhooks(this.env, this.workspaceId, event);
   }
 
   async createIssue(input: IssueInput): Promise<Issue> {
@@ -182,7 +184,7 @@ export class WorkspaceDO implements DurableObject {
     }
 
     const issue = toIssue(parsed.data);
-    this.broadcast({
+    await this.emit({
       type: "issue.created",
       workspaceId: this.workspaceId,
       issue,
@@ -268,7 +270,7 @@ export class WorkspaceDO implements DurableObject {
     const row = execOne(this.sql, issueSchema, query, ...values);
     if (!row) return undefined;
     const issue = toIssue(row);
-    this.broadcast({
+    await this.emit({
       type: "issue.updated",
       workspaceId: this.workspaceId,
       issue,
@@ -296,7 +298,7 @@ export class WorkspaceDO implements DurableObject {
     );
     if (!row) return undefined;
     const issue = toIssue(row);
-    this.broadcast({
+    await this.emit({
       type: "pr.updated",
       workspaceId: this.workspaceId,
       issue,
