@@ -1,7 +1,7 @@
 {
-  "name": "notion-engineering-queue",
+  "name": "vortex-linear",
   "version": "0.1.0",
-  "description": "A Notion-backed engineering queue that dispatches work to Devin (or any SWE agent) and writes results back. Linear-style issue tracking inside Notion.",
+  "description": "Vortex Linear — an open-source, agent-native issue tracker on Cloudflare Workers.",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
@@ -12,11 +12,11 @@
     "types": "wrangler types"
   },
   "keywords": [
-    "notion",
-    "devin",
+    "vortex",
     "linear",
-    "engineering",
-    "queue",
+    "agent",
+    "issue-tracker",
+    "devin",
     "worker",
     "cloudflare"
   ],
