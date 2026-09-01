@@ -1,0 +1,115 @@
+name: Devin Dispatch
+
+on:
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: "Repo (owner/repo)"
+        required: true
+      name:
+        description: "Task name"
+        required: true
+      description:
+        description: "Task description"
+        required: true
+      reference:
+        description: "Reference ID"
+        required: false
+      branch:
+        description: "Branch name"
+        required: false
+      model:
+        description: "Devin model"
+        required: false
+        default: "swe-1-7-medium"
+      platform:
+        description: "Devin outpost"
+        required: false
+        default: "user:daytona-linux"
+  issues:
+    types: [opened, labeled]
+
+jobs:
+  dispatch:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.issue.labels.*.name, 'devin')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build dispatch payload
+        id: build
+        env:
+          ISSUE_TITLE: ${{ github.event.issue.title || '' }}
+          ISSUE_BODY: ${{ github.event.issue.body || '' }}
+          INPUT_NAME: ${{ github.event.inputs.name || '' }}
+          INPUT_DESCRIPTION: ${{ github.event.inputs.description || '' }}
+          INPUT_REPO: ${{ github.event.inputs.repo || '' }}
+          INPUT_REFERENCE: ${{ github.event.inputs.reference || '' }}
+          INPUT_BRANCH: ${{ github.event.inputs.branch || '' }}
+          INPUT_MODEL: ${{ github.event.inputs.model || 'swe-1-7-medium' }}
+          INPUT_PLATFORM: ${{ github.event.inputs.platform || 'user:daytona-linux' }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number || '' }}
+        run: |
+          if [ "${{ github.event_name }}" = "issues" ]; then
+            name="$ISSUE_TITLE"
+            description="$ISSUE_BODY"
+            repo="$REPO"
+            reference="issue-${ISSUE_NUMBER}"
+            model="swe-1-7-medium"
+            platform="user:daytona-linux"
+            branch=""
+          else
+            name="$INPUT_NAME"
+            description="$INPUT_DESCRIPTION"
+            repo="$INPUT_REPO"
+            reference="$INPUT_REFERENCE"
+            branch="$INPUT_BRANCH"
+            model="$INPUT_MODEL"
+            platform="$INPUT_PLATFORM"
+          fi
+
+          payload=$(jq -n \
+            --arg name "$name" \
+            --arg description "$description" \
+            --arg repo "$repo" \
+            --arg reference "$reference" \
+            --arg model "$model" \
+            --arg platform "$platform" \
+            --arg branch "$branch" \
+            '{
+              name: $name,
+              description: $description,
+              repo: $repo,
+              reference: $reference,
+              model: $model,
+              platform: $platform
+            } + (if $branch != "" then { branch: $branch } else {} end)')
+
+          echo "payload=$payload" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch to worker
+        id: dispatch
+        run: |
+          response=$(curl -sS -X POST \
+            -H "Authorization: Bearer ${{ secrets.DEVIN_DISPATCH_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d '${{ steps.build.outputs.payload }}' \
+            "${{ vars.DEVIN_DISPATCH_URL }}/dispatch")
+          echo "response=$response" >> "$GITHUB_OUTPUT"
+          echo "$response"
+
+      - name: Comment session URL on issue
+        if: github.event_name == 'issues'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const response = JSON.parse(process.env.RESPONSE || '{}');
+            if (response.url) {
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: `Devin session: ${response.url}`,
+              });
+            }
+          env:
+            RESPONSE: ${{ steps.dispatch.outputs.response }}

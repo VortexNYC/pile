@@ -32,6 +32,7 @@ Notion's API currently cannot update values that live in the `in_progress` group
    wrangler secret put NOTION_TOKEN
    # optional: NOTION_VERIFICATION_TOKEN if you want signed webhooks
    # optional: GITHUB_WEBHOOK_SECRET for GitHub PR webhooks
+   # optional: DISPATCH_SECRET to require auth on POST /dispatch
    ```
 4. In Notion, create a `Vortex Engineering Queue` data source with the properties documented below, or duplicate the template and connect the integration.
 5. Subscribe the Worker URL `https://<worker>.workers.dev/notion-webhook` to the `page.properties_updated` and `page.created` events.
@@ -112,6 +113,13 @@ The Worker is source-agnostic. Any frontend can call:
 - `POST /notion` — manual Notion payload.
 - `GET /notion-run?pageId=...` — manual dispatch one page.
 - `POST /linear` — legacy Linear webhook.
+
+## GitHub Action
+
+`.github/workflows/dispatch.yml` dispatches a Devin session from a GitHub issue or `workflow_dispatch`. Add a `devin` label to any issue to trigger it. Configure two repository-level values after pushing to GitHub:
+
+- `vars.DEVIN_DISPATCH_URL` — your Worker URL (e.g. `https://<worker>.workers.dev`)
+- `secrets.DEVIN_DISPATCH_SECRET` — must match `DISPATCH_SECRET` in the Worker
 
 ## Tests
 

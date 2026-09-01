@@ -11,6 +11,7 @@ export interface Env {
   NOTION_TOKEN_PAGE_ID?: string;
   DEVIN_MODEL?: string;
   GITHUB_WEBHOOK_SECRET?: string;
+  DISPATCH_SECRET?: string;
 }
 
 interface LinearLabel {
@@ -113,6 +114,14 @@ export default {
 };
 
 export async function handleDispatch(request: Request, env: Env): Promise<Response> {
+  if (env.DISPATCH_SECRET) {
+    const auth = request.headers.get("Authorization") || "";
+    const token = auth.replace(/^Bearer\s+/i, "");
+    if (!timingSafeEqualHex(token, env.DISPATCH_SECRET)) {
+      return new Response("unauthorized", { status: 401 });
+    }
+  }
+
   let body: Record<string, unknown>;
   try {
     body = await request.json() as Record<string, unknown>;
