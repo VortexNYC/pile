@@ -1,43 +1,93 @@
-import { Hono } from "hono";
-import { VortexError, toErrorResponse } from "../platform/errors.js";
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { toErrorResponse, VortexError } from "../platform/errors.js";
 import type { AppEnv } from "../platform/env.js";
 import { workspaceTokenMiddleware } from "./middleware.js";
-import { issueRoutes } from "./issues.js";
-import { githubRoutes } from "../agents/github.js";
+import { registerIssueRoutes } from "./issues.js";
 import { createAuth } from "../platform/auth.js";
-import { openapiRoutes } from "./openapi.js";
+import {
+  githubWebhookRoute,
+  processGithubWebhook,
+} from "../agents/github.js";
+import type { WorkspaceToken } from "./middleware.js";
 
-const app = new Hono<{ Bindings: AppEnv }>();
+type Variables = {
+  workspaceToken: WorkspaceToken;
+};
+
+const app = new OpenAPIHono<{ Bindings: AppEnv; Variables: Variables }>({
+  defaultHook: (result) => {
+    if (!result.success) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: "Invalid request",
+        hint: result.error.message,
+      });
+    }
+  },
+});
 
 app.onError((err) => {
   return toErrorResponse(err);
 });
 
 app.use("/workspaces/:workspaceId/*", workspaceTokenMiddleware);
-app.route("/workspaces/:workspaceId/issues", issueRoutes);
+registerIssueRoutes(app);
 
-app.get("/workspaces/:workspaceId/ws", async (c) => {
-  const workspaceId = c.req.param("workspaceId");
-  if (!workspaceId) {
-    throw new VortexError({
-      code: "BAD_REQUEST",
-      status: 400,
-      message: "workspaceId is required",
-    });
+app.openapi(
+  createRoute({
+    method: "get",
+    path: "/health",
+    tags: ["platform"],
+    responses: {
+      200: {
+        description: "OK",
+        content: {
+          "application/json": {
+            schema: z.object({ ok: z.boolean() }),
+          },
+        },
+      },
+    },
+  }),
+  (c) => c.json({ ok: true })
+);
+
+app.openapi(
+  createRoute({
+    method: "get",
+    path: "/workspaces/{workspaceId}/ws",
+    tags: ["realtime"],
+    request: {
+      params: z.object({ workspaceId: z.string() }),
+    },
+    responses: {
+      101: {
+        description: "WebSocket upgraded",
+      },
+    },
+  }),
+  async (c) => {
+    const { workspaceId } = c.req.valid("param");
+    const id = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(workspaceId);
+    const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(id);
+    return await stub.fetch(c.req.raw);
   }
-  const id = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(workspaceId);
-  const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(id);
-  return await stub.fetch(c.req.raw);
-});
+);
 
-app.route("/github", githubRoutes);
+app.openapi(githubWebhookRoute, async (c) => c.json(await processGithubWebhook(c)));
 
 app.all("/api/auth/*", (c) => {
   return createAuth(c.env).handler(c.req.raw);
 });
 
-app.route("/openapi.json", openapiRoutes);
-
-app.get("/health", (c) => c.json({ ok: true }));
+app.doc("/openapi.json", {
+  openapi: "3.0.0",
+  info: {
+    title: "Vortex Issue Tracker",
+    version: "0.1.0",
+    description: "Agent-native issue tracker on Cloudflare Workers.",
+  },
+});
 
 export default app;

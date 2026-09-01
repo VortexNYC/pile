@@ -19,4 +19,4 @@ class_name = "WorkspaceDO"
 
 [[migrations]]
 tag = "v1"
-new_classes = ["WorkspaceDO"]
+new_sqlite_classes = ["WorkspaceDO"]

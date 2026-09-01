@@ -1,5 +1,3 @@
-import type { DurableObjectStub } from "@cloudflare/workers-types";
-
 export type IssueStatus =
   | "backlog"
   | "todo"
@@ -60,20 +58,3 @@ export type RealtimeEvent =
       workspaceId: string;
       issue: Issue;
     };
-
-export interface WorkspaceDurableObjectStub extends DurableObjectStub {
-  createIssue(input: IssueInput): Promise<Issue>;
-  getIssue(id: string): Promise<Issue | undefined>;
-  getIssueByBranch(repo: string, branch: string): Promise<Issue | undefined>;
-  listIssues(): Promise<Issue[]>;
-  updateIssue(
-    id: string,
-    patch: Partial<IssueInput>
-  ): Promise<Issue | undefined>;
-  updatePrState(
-    repo: string,
-    branch: string,
-    prUrl: string,
-    prState: string
-  ): Promise<Issue | undefined>;
-}

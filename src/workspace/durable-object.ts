@@ -62,7 +62,8 @@ const MIGRATIONS = [
 
 const LATEST_SCHEMA_VERSION = MIGRATIONS.length;
 
-export class WorkspaceDO implements DurableObject {
+export class WorkspaceDO implements DurableObject, Rpc.DurableObjectBranded {
+  declare [Rpc.__DURABLE_OBJECT_BRAND]: never;
   private readonly state: DurableObjectState;
   private readonly env: AppEnv;
   private readonly sql: import("@cloudflare/workers-types").SqlStorage;
@@ -105,10 +106,10 @@ export class WorkspaceDO implements DurableObject {
   ): Promise<void> {
     if (typeof message !== "string") return;
     try {
-      const data = JSON.parse(message) as {
-        type: string;
-      };
-      if (data.type === "ping") {
+      const parsed = z
+        .object({ type: z.string() })
+        .safeParse(JSON.parse(message));
+      if (parsed.success && parsed.data.type === "ping") {
         ws.send(JSON.stringify({ type: "pong" }));
       }
     } catch {
@@ -121,10 +122,7 @@ export class WorkspaceDO implements DurableObject {
   }
 
   private async runMigrations() {
-    const current =
-      ((await this.state.storage.get<number>("schemaVersion")) as
-        | number
-        | undefined) ?? 0;
+    const current = (await this.state.storage.get<number>("schemaVersion")) ?? 0;
     for (const migration of MIGRATIONS) {
       if (migration.version > current) {
         for (const statement of migration.statements) {
@@ -313,8 +311,8 @@ function toIssue(row: z.infer<typeof issueSchema>): Issue {
     workspaceId: row.workspace_id,
     title: row.title,
     description: row.description,
-    status: row.status as IssueStatus,
-    priority: row.priority as IssuePriority,
+    status: row.status,
+    priority: row.priority,
     assigneeId: row.assignee_id,
     projectId: row.project_id,
     cycleId: row.cycle_id,

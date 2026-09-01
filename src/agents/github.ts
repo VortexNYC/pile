@@ -1,11 +1,11 @@
-import { Hono } from "hono";
-import { z } from "zod";
+import { createRoute, z } from "@hono/zod-openapi";
+import type { Context } from "hono";
 import { createD1 } from "../global/db.js";
 import { findRepoBranch } from "../global/repo-branches.js";
 import { hmacSha256Hex, timingSafeEqualHex } from "../platform/crypto.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppEnv } from "../platform/env.js";
-import type { WorkspaceDurableObjectStub } from "../workspace/types.js";
+import type { WorkspaceToken } from "../api/middleware.js";
 
 const pullRequestPayloadSchema = z.object({
   action: z.string(),
@@ -21,9 +21,25 @@ const pullRequestPayloadSchema = z.object({
   }),
 });
 
-const app = new Hono<{ Bindings: AppEnv }>();
+export const githubWebhookRoute = createRoute({
+  method: "post",
+  path: "/github",
+  tags: ["github"],
+  responses: {
+    200: {
+      description: "Webhook processed",
+      content: {
+        "application/json": {
+          schema: z.object({ ok: z.boolean() }),
+        },
+      },
+    },
+  },
+});
 
-app.post("/", async (c) => {
+export async function processGithubWebhook(
+  c: Context<{ Bindings: AppEnv; Variables: { workspaceToken: WorkspaceToken } }>
+): Promise<{ ok: true }> {
   const signature = c.req.header("x-hub-signature-256") ?? "";
   const rawBody = await c.req.text();
 
@@ -43,7 +59,7 @@ app.post("/", async (c) => {
 
   const event = c.req.header("x-github-event");
   if (event !== "pull_request") {
-    return c.json({ ok: true });
+    return { ok: true };
   }
 
   let parsedBody: unknown;
@@ -76,16 +92,12 @@ app.post("/", async (c) => {
   const db = createD1(c.env.D1);
   const record = await findRepoBranch(db, repo, branch);
   if (!record) {
-    return c.json({ ok: true });
+    return { ok: true };
   }
 
   const doId = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(record.workspaceId);
-  const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(
-    doId
-  ) as unknown as WorkspaceDurableObjectStub;
+  const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(doId);
   await stub.updatePrState(repo, branch, prUrl, prState);
 
-  return c.json({ ok: true });
-});
-
-export { app as githubRoutes };
+  return { ok: true };
+}
