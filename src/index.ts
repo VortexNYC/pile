@@ -10,6 +10,7 @@ export interface Env {
   NOTION_VERIFICATION_TOKEN?: string;
   NOTION_TOKEN_PAGE_ID?: string;
   DEVIN_MODEL?: string;
+  GITHUB_WEBHOOK_SECRET?: string;
 }
 
 interface LinearLabel {
@@ -56,6 +57,7 @@ type QueueRecord = {
   platform: string;
   linear?: string;
   pr?: string;
+  prState?: string;
   issueId?: string;
   started?: string;
   due?: string;
@@ -97,6 +99,9 @@ export default {
     }
     if (url.pathname === "/notion-webhook") {
       return handleNotionRealtimeWebhook(request, env);
+    }
+    if (url.pathname === "/github") {
+      return handleGithubWebhook(request, env);
     }
     return new Response("not found", { status: 404 });
   },
@@ -165,6 +170,87 @@ export async function handleStatus(request: Request, env: Env): Promise<Response
     console.error("status check failed", { err });
     return new Response("failed to get session", { status: 500 });
   }
+}
+
+function githubPrState(pr: Record<string, unknown>): string | undefined {
+  if (pr.merged === true) return "Merged";
+  if (pr.draft === true) return "Draft";
+  const state = typeof pr.state === "string" ? pr.state.toLowerCase() : "";
+  if (state === "open") return "Open";
+  if (state === "closed") return "Closed";
+  return undefined;
+}
+
+async function findNotionPageByBranch(env: Env, repo: string, branch: string): Promise<string | undefined> {
+  const rows = await queryNotionDataSource(env.NOTION_DATA_SOURCE_ID, env.NOTION_TOKEN, {
+    and: [
+      { property: "Repo", rich_text: { equals: repo } },
+      { property: "Branch", rich_text: { equals: branch } },
+    ],
+  });
+  if (rows[0]?.id) return rows[0].id;
+  const loose = await queryNotionDataSource(env.NOTION_DATA_SOURCE_ID, env.NOTION_TOKEN, {
+    property: "Branch",
+    rich_text: { equals: branch },
+  });
+  return loose[0]?.id;
+}
+
+export async function handleGithubWebhook(request: Request, env: Env): Promise<Response> {
+  const rawBody = await request.text();
+  const signature = request.headers.get("x-hub-signature-256") || "";
+
+  if (env.GITHUB_WEBHOOK_SECRET) {
+    const expected = `sha256=${await hmacSha256Hex(env.GITHUB_WEBHOOK_SECRET, rawBody)}`;
+    if (!timingSafeEqualHex(signature, expected)) {
+      return new Response("invalid signature", { status: 400 });
+    }
+  }
+
+  let payload: Record<string, unknown>;
+  try {
+    payload = JSON.parse(rawBody) as Record<string, unknown>;
+  } catch {
+    return new Response("invalid json", { status: 400 });
+  }
+
+  const event = request.headers.get("x-github-event") || "";
+  if (event !== "pull_request") {
+    return new Response("ok");
+  }
+
+  const pr = (payload.pull_request as Record<string, unknown>) || {};
+  const repoFullName =
+    (typeof (payload.repository as Record<string, unknown>)?.full_name === "string"
+      ? (payload.repository as Record<string, unknown>).full_name
+      : "") as string;
+  const head = (pr.head as Record<string, unknown>) || {};
+  const branch = typeof head.ref === "string" ? head.ref : "";
+  const prUrl = typeof pr.html_url === "string" ? pr.html_url : "";
+
+  if (!branch || !repoFullName) {
+    return new Response("missing branch or repo", { status: 400 });
+  }
+
+  const prState = githubPrState(pr);
+  if (!prState) {
+    return new Response("unknown pr state", { status: 400 });
+  }
+
+  const pageId = await findNotionPageByBranch(env, repoFullName, branch);
+  if (!pageId) {
+    console.log("no Notion page for branch", { repo: repoFullName, branch });
+    return new Response("ok");
+  }
+
+  const update: Record<string, unknown> = {
+    "PR State": { select: { name: prState } },
+  };
+  if (prUrl) update.PR = { url: prUrl };
+
+  await updateNotionPage(pageId, env.NOTION_TOKEN, update);
+  await postNotionComment(pageId, env.NOTION_TOKEN, `GitHub PR ${prState.toLowerCase()}: ${prUrl || branch}`).catch(() => {});
+  return new Response("ok");
 }
 
 export async function handleLinearWebhook(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -448,13 +534,16 @@ export async function pollNotionRow(pageId: string, env: Env): Promise<void> {
 
     const firstPr = session.pull_requests?.[0];
     const prUrl = firstPr?.url ?? firstPr?.pr_url;
+    const prState = mapPrState(firstPr?.pr_state);
 
     const now = new Date().toISOString();
-    await updateNotionPage(pageId, env.NOTION_TOKEN, {
+    const updateProps: Record<string, unknown> = {
       Status: { select: { name: newStatus } },
       Completed: { date: { start: now } },
-      ...(prUrl ? { PR: { url: prUrl } } : {}),
-    });
+    };
+    if (prUrl) updateProps.PR = { url: prUrl };
+    if (prState) updateProps["PR State"] = { select: { name: prState } };
+    await updateNotionPage(pageId, env.NOTION_TOKEN, updateProps);
 
     await postNotionComment(pageId, env.NOTION_TOKEN, `Devin session ${newStatus.toLowerCase()}: ${sessionUrl}`).catch(() => {});
 
@@ -570,6 +659,24 @@ export async function queryNotionQueue(dataSourceId: string, token: string, sing
     return rows.filter((r) => r.id === singlePageId);
   }
   return rows;
+}
+
+export async function queryNotionDataSource(
+  dataSourceId: string,
+  token: string,
+  filter: Record<string, unknown>
+): Promise<Array<{ id: string }>> {
+  const res = await fetch(`https://api.notion.com/v1/data_sources/${dataSourceId}/query`, {
+    method: "POST",
+    headers: notionHeaders(token),
+    body: JSON.stringify({ page_size: 10, filter }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Notion data source query failed: ${res.status} ${text}`);
+  }
+  const data = (await res.json()) as { results?: Array<{ id: string }> };
+  return data.results || [];
 }
 
 export function generateBranchName(issueId: string | undefined, title: string): string {
@@ -740,6 +847,7 @@ export function parseQueuePage(page: Record<string, unknown>): QueueRecord {
     platform: extractSelect(props.Platform) || "user:daytona-linux",
     linear: extractUrl(props.Linear),
     pr: extractUrl(props.PR),
+    prState: extractSelect(props["PR State"]),
     issueId: extractUniqueId(props["Issue ID"]),
     started: extractDate(props.Started),
     due: extractDate(props.Due),
@@ -813,6 +921,19 @@ export function extractEmail(prop: NotionProp): string | undefined {
   const p = prop as Record<string, unknown>;
   if (p.type !== "email") return undefined;
   return typeof p.email === "string" ? p.email : undefined;
+}
+
+export function mapPrState(raw?: string): string | undefined {
+  if (!raw) return undefined;
+  const normalized = raw.toLowerCase().trim();
+  const map: Record<string, string> = {
+    open: "Open",
+    closed: "Closed",
+    merged: "Merged",
+    draft: "Draft",
+    opened: "Open",
+  };
+  return map[normalized];
 }
 
 export function buildNotionPrompt(pageId: string, data: QueueRecord): string {

@@ -4,7 +4,7 @@ A Notion-backed engineering work queue that dispatches to [Devin](https://devin.
 
 ## Features
 
-- **Linear-style issue tracking in Notion**: Team, Project, Cycle, Milestone, Initiative, Priority, Labels, Assignee, Due, Estimate, SLA, Parent/Sub-issues, Related issues, Subscribers, Triage, Release, Attachments, Customer Request, Requester, and `VOR-` style auto-numbered Issue IDs.
+- **Linear-style issue tracking in Notion**: Team, Project, Cycle, Milestone, Initiative, Priority, Labels, Assignee, Due, Estimate, SLA, Parent/Sub-issues, Related issues, Subscribers, Triage, Release, Attachments, Customer Request, Requester, `PR State`, and `VOR-` style auto-numbered Issue IDs.
 - **One-click Devin dispatch**: check the `Devin` checkbox or set `Status = Ready` to start a session on a Daytona outpost.
 - **Webhook + cron fallback**: Notion `page.properties_updated` events trigger dispatch in real time; a one-minute cron polls `Running` sessions and writes back the terminal state.
 - **Auto-generated branch names**: `vor-45-fix-the-bug` from `Issue ID` + title.
@@ -14,6 +14,8 @@ A Notion-backed engineering work queue that dispatches to [Devin](https://devin.
 - **Duplicate protection**: searches Devin sessions by Notion page ID tag and reuses an existing session instead of starting a second one.
 - **Priority sorting**: `Ready` queue is ordered by `Priority` descending.
 - **Views**: Board, Project Board, Priority Board, Backlog, Done, High Priority.
+- **PR state sync**: extracts `PR State` from Devin and updates it from GitHub `pull_request` webhooks.
+- **Two-way `Sub-issues`**: `Parent` relation now mirrors a `Sub-issues` property on the parent.
 - **HTTP API for any frontend**: `POST /dispatch` and `GET /status/:id` let any system (Linear, GitHub, Jira, CLI) create and check Devin sessions.
 
 ## Why `select` for `Status` instead of Notion's native `Status` type
@@ -29,9 +31,11 @@ Notion's API currently cannot update values that live in the `in_progress` group
    wrangler secret put DEVIN_TOKEN
    wrangler secret put NOTION_TOKEN
    # optional: NOTION_VERIFICATION_TOKEN if you want signed webhooks
+   # optional: GITHUB_WEBHOOK_SECRET for GitHub PR webhooks
    ```
 4. In Notion, create a `Vortex Engineering Queue` data source with the properties documented below, or duplicate the template and connect the integration.
 5. Subscribe the Worker URL `https://<worker>.workers.dev/notion-webhook` to the `page.properties_updated` and `page.created` events.
+6. Optionally subscribe GitHub repository `pull_request` events to `https://<worker>.workers.dev/github` for PR state sync.
 
 ## Notion data source properties
 
@@ -71,7 +75,9 @@ Notion's API currently cannot update values that live in the `in_progress` group
 | Cycle Start | date | Cycle start |
 | Cycle End | date | Cycle end |
 | Parent | relation (self) | Sub-issue parent |
+| Sub-issues | relation (self) | Two-way mirror of Parent |
 | Related | relation (self) | Related issues |
+| PR State | select | Open / Closed / Merged / Draft |
 | Triage | checkbox | Triage flag |
 | Platform | select | `user:daytona-linux` |
 | Model | select | `swe-1-7-medium` / `swe-1-7` |
@@ -101,6 +107,7 @@ The Worker is source-agnostic. Any frontend can call:
   ```
   Returns `{ "id": "...", "url": "..." }`.
 - `GET /status/:sessionId` — get current Devin session status.
+- `POST /github` — GitHub `pull_request` webhook for `PR` and `PR State` sync.
 - `POST /notion-webhook` — Notion realtime webhook.
 - `POST /notion` — manual Notion payload.
 - `GET /notion-run?pageId=...` — manual dispatch one page.

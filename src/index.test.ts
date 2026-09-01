@@ -14,43 +14,43 @@ import {
 
 describe("extract helpers", () => {
   it("extractSelect returns the selected name", () => {
-    expect(extractSelect({ type: "select", select: { name: "Ready" } } as any)).toBe("Ready");
+    expect(extractSelect({ type: "select", select: { name: "Ready" } } as unknown as Record<string, unknown>)).toBe("Ready");
   });
 
   it("extractSelect returns undefined when empty", () => {
-    expect(extractSelect(undefined as any)).toBeUndefined();
-    expect(extractSelect({ type: "select", select: null } as any)).toBeUndefined();
+    expect(extractSelect(undefined as unknown as Record<string, unknown>)).toBeUndefined();
+    expect(extractSelect({ type: "select", select: null } as unknown as Record<string, unknown>)).toBeUndefined();
   });
 
   it("extractText joins plain text", () => {
-    expect(extractText({ type: "title", title: [{ plain_text: "Hello ", text: { content: "Hello " } }, { plain_text: "World", text: { content: "World" } }] } as any)).toBe("Hello World");
+    expect(extractText({ type: "title", title: [{ plain_text: "Hello ", text: { content: "Hello " } }, { plain_text: "World", text: { content: "World" } }] } as unknown as Record<string, unknown>)).toBe("Hello World");
   });
 
   it("extractUrl returns the url", () => {
-    expect(extractUrl({ type: "url", url: "https://example.com" } as any)).toBe("https://example.com");
-    expect(extractUrl({ type: "url", url: null } as any)).toBeUndefined();
+    expect(extractUrl({ type: "url", url: "https://example.com" } as unknown as Record<string, unknown>)).toBe("https://example.com");
+    expect(extractUrl({ type: "url", url: null } as unknown as Record<string, unknown>)).toBeUndefined();
   });
 
   it("extractCheckbox returns the checked state", () => {
-    expect(extractCheckbox({ type: "checkbox", checkbox: true } as any)).toBe(true);
-    expect(extractCheckbox({ type: "checkbox", checkbox: false } as any)).toBe(false);
-    expect(extractCheckbox(undefined as any)).toBe(false);
+    expect(extractCheckbox({ type: "checkbox", checkbox: true } as unknown as Record<string, unknown>)).toBe(true);
+    expect(extractCheckbox({ type: "checkbox", checkbox: false } as unknown as Record<string, unknown>)).toBe(false);
+    expect(extractCheckbox(undefined as unknown as Record<string, unknown>)).toBe(false);
   });
 });
 
 describe("session lifecycle", () => {
   it("sessionIsTerminal returns true for archived", () => {
-    expect(sessionIsTerminal({ status: "running", status_detail: null, is_archived: true } as any)).toBe(true);
+    expect(sessionIsTerminal({ status: "running", status_detail: null, is_archived: true })).toBe(true);
   });
 
   it("sessionIsTerminal returns true for terminal statuses", () => {
     for (const s of ["completed", "done", "failed", "cancelled", "exit", "error", "suspended"]) {
-      expect(sessionIsTerminal({ status: s, status_detail: null, is_archived: false } as any)).toBe(true);
+      expect(sessionIsTerminal({ status: s, status_detail: null, is_archived: false })).toBe(true);
     }
   });
 
   it("sessionIsTerminal returns false for running", () => {
-    expect(sessionIsTerminal({ status: "running", status_detail: null, is_archived: false } as any)).toBe(false);
+    expect(sessionIsTerminal({ status: "running", status_detail: null, is_archived: false })).toBe(false);
   });
 });
 
