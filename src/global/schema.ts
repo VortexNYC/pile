@@ -170,6 +170,27 @@ export const issueRelations = sqliteTable(
   ]
 );
 
+export const attachments = sqliteTable(
+  "attachments",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    issueId: text("issue_id").notNull(),
+    linearId: text("linear_id").notNull(),
+    url: text("url").notNull(),
+    title: text("title"),
+    subtitle: text("subtitle"),
+    r2Key: text("r2_key"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("attachments_issue_idx").on(table.workspaceId, table.issueId),
+    index("attachments_linear_idx").on(table.workspaceId, table.linearId),
+  ]
+);
+
 export const webhookSubscriptions = sqliteTable(
   "webhook_subscriptions",
   {

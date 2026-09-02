@@ -14,6 +14,10 @@ database_name = "issuetracker-global"
 database_id = "<your-d1-database-id>"
 migrations_dir = "migrations"
 
+[[r2_buckets]]
+binding = "ATTACHMENTS_BUCKET"
+bucket_name = "issuetracker-attachments"
+
 [[durable_objects.bindings]]
 name = "WORKSPACE_DURABLE_OBJECT"
 class_name = "WorkspaceDO"

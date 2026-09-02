@@ -7,6 +7,7 @@ import {
 import { createComment } from "../global/comments.js";
 import { createLinearUser } from "../global/linear-users.js";
 import { createIssueRelation } from "../global/issue-relations.js";
+import { createAttachment, setAttachmentR2Key } from "../global/attachments.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkerEnv } from "../api/middleware.js";
 import type { IssueInput, IssuePriority, IssueStatus } from "../workspace/types.js";
@@ -44,6 +45,14 @@ interface LinearUser {
   email?: string;
 }
 
+interface LinearAttachment {
+  id: string;
+  url: string;
+  title?: string | null;
+  subtitle?: string | null;
+  createdAt: string;
+}
+
 interface LinearComment {
   id: string;
   body: string;
@@ -63,6 +72,7 @@ interface LinearIssue {
   cycle?: { id: string } | null;
   labels: { nodes: Array<{ id: string }> };
   comments: { nodes: LinearComment[] };
+  attachments: { nodes: LinearAttachment[] };
   parent?: { id: string } | null;
   children: { nodes: Array<{ id: string }> };
   createdAt: string;
@@ -77,6 +87,7 @@ interface MigrationCounts {
   users: number;
   comments: number;
   relations: number;
+  attachments: number;
 }
 
 class LinearClient {
@@ -287,6 +298,15 @@ class LinearClient {
                   id
                 }
               }
+              attachments(first: 20) {
+                nodes {
+                  id
+                  url
+                  title
+                  subtitle
+                  createdAt
+                }
+              }
               createdAt
               updatedAt
             }
@@ -406,6 +426,7 @@ export async function migrateLinear(
   let issueCount = 0;
   let commentCount = 0;
   let relationCount = 0;
+  let attachmentCount = 0;
   let cursor: string | undefined;
   let hasNextPage = true;
 
@@ -459,6 +480,33 @@ export async function migrateLinear(
         });
         relationCount++;
       }
+
+      for (const la of li.attachments.nodes) {
+        const created = await createAttachment(db, workspaceId, {
+          issueId: li.id,
+          linearId: la.id,
+          url: la.url,
+          title: la.title,
+          subtitle: la.subtitle,
+          createdAt: la.createdAt,
+        });
+        if (!created) {
+          continue;
+        }
+        attachmentCount++;
+
+        if (env.ATTACHMENTS_BUCKET) {
+          const dl = await fetch(la.url, { method: "GET" });
+          const ct = dl.headers.get("Content-Type") ?? "";
+          if (dl.body && ct && !ct.includes("text/html")) {
+            const r2Key = `attachments/${workspaceId}/${li.id}/${created.id}`;
+            await env.ATTACHMENTS_BUCKET.put(r2Key, dl.body, {
+              httpMetadata: { contentType: ct },
+            });
+            await setAttachmentR2Key(db, workspaceId, created.id, r2Key);
+          }
+        }
+      }
     }
 
     hasNextPage = page.pageInfo.hasNextPage;
@@ -473,5 +521,6 @@ export async function migrateLinear(
     users: linearUsers.length,
     comments: commentCount,
     relations: relationCount,
+    attachments: attachmentCount,
   };
 }
