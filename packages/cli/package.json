@@ -10,9 +10,6 @@
   "scripts": {
     "cli": "tsx src/index.ts"
   },
-  "dependencies": {
-    "issuetracker-client": "workspace:*"
-  },
   "devDependencies": {
     "tsx": "4.23.13"
   }
