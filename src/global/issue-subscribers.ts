@@ -3,6 +3,23 @@ import { and, eq } from "drizzle-orm";
 import type { D1Client } from "./db.js";
 import { issueSubscribers } from "./schema.js";
 
+export function listIssueSubscribers(
+  db: D1Client,
+  workspaceId: string,
+  issueId: string
+) {
+  return db
+    .select()
+    .from(issueSubscribers)
+    .where(
+      and(
+        eq(issueSubscribers.workspaceId, workspaceId),
+        eq(issueSubscribers.issueId, issueId)
+      )
+    )
+    .all();
+}
+
 export async function createIssueSubscriber(
   db: D1Client,
   workspaceId: string,

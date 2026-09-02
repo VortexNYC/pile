@@ -10,6 +10,8 @@ import {
 } from "../platform/identity.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
 
+export type { WorkspaceToken } from "../platform/identity.js";
+
 export interface WorkerEnv extends AppEnv {
   WORKSPACE_DURABLE_OBJECT: DurableObjectNamespace<WorkspaceDO>;
 }

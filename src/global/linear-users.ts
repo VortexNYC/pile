@@ -3,6 +3,31 @@ import { and, eq } from "drizzle-orm";
 import type { D1Client } from "./db.js";
 import { linearUsers } from "./schema.js";
 
+export function listLinearUsers(db: D1Client, workspaceId: string) {
+  return db
+    .select()
+    .from(linearUsers)
+    .where(eq(linearUsers.workspaceId, workspaceId))
+    .all();
+}
+
+export function getLinearUser(
+  db: D1Client,
+  workspaceId: string,
+  linearId: string
+) {
+  return db
+    .select()
+    .from(linearUsers)
+    .where(
+      and(
+        eq(linearUsers.workspaceId, workspaceId),
+        eq(linearUsers.linearId, linearId)
+      )
+    )
+    .get();
+}
+
 export async function createLinearUser(
   db: D1Client,
   workspaceId: string,
