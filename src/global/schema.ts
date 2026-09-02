@@ -249,6 +249,24 @@ export const issueSubscribers = sqliteTable(
   ]
 );
 
+export const templates = sqliteTable(
+  "templates",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    linearId: text("linear_id").notNull(),
+    name: text("name").notNull(),
+    templateData: text("template_data"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("templates_workspace_idx").on(table.workspaceId),
+    index("templates_linear_idx").on(table.workspaceId, table.linearId),
+  ]
+);
+
 export const webhookSubscriptions = sqliteTable(
   "webhook_subscriptions",
   {

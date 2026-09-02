@@ -11,6 +11,7 @@ import { createIssueRelation } from "../global/issue-relations.js";
 import { createAttachment, setAttachmentR2Key } from "../global/attachments.js";
 import { createIssueHistory } from "../global/issue-history.js";
 import { createIssueSubscriber } from "../global/issue-subscribers.js";
+import { createTemplate } from "../global/templates.js";
 import { findUserByEmail, createUser } from "../global/users.js";
 import { createMembership } from "../global/workspace-entities.js";
 import { VortexError } from "../platform/errors.js";
@@ -50,6 +51,12 @@ interface LinearUser {
   id: string;
   name?: string;
   email?: string;
+}
+
+interface LinearTemplate {
+  id: string;
+  name: string;
+  templateData?: string | null;
 }
 
 interface LinearAttachment {
@@ -121,6 +128,7 @@ interface MigrationCounts {
   history: number;
   subscribers: number;
   memberships: number;
+  templates: number;
 }
 
 class LinearClient {
@@ -270,6 +278,26 @@ class LinearClient {
       { teamId }
     );
     return data.team?.members?.nodes ?? [];
+  }
+
+  async getTemplates(teamId: string): Promise<LinearTemplate[]> {
+    const data = await this.request<{
+      team: { templates: { nodes: LinearTemplate[] } | null } | null;
+    }>(
+      `query GetTemplates($teamId: String!) {
+        team(id: $teamId) {
+          templates(first: 50) {
+            nodes {
+              id
+              name
+              templateData
+            }
+          }
+        }
+      }`,
+      { teamId }
+    );
+    return data.team?.templates?.nodes ?? [];
   }
 
   async getIssuesPage(
@@ -449,13 +477,15 @@ export async function migrateLinear(
   const client = new LinearClient(linearToken);
   const db = createD1(env.D1);
 
-  const [states, labels, projects, cycles, linearUsers] = await Promise.all([
-    client.getStates(teamId),
-    client.getLabels(teamId),
-    client.getProjects(teamId),
-    client.getCycles(teamId),
-    client.getUsers(teamId),
-  ]);
+  const [states, labels, projects, cycles, linearUsers, templates] =
+    await Promise.all([
+      client.getStates(teamId),
+      client.getLabels(teamId),
+      client.getProjects(teamId),
+      client.getCycles(teamId),
+      client.getUsers(teamId),
+      client.getTemplates(teamId),
+    ]);
 
   let membershipCount = 0;
 
@@ -502,6 +532,14 @@ export async function migrateLinear(
       type: state.type,
       color: state.color,
       position: state.position === undefined || state.position === null ? null : String(state.position),
+    });
+  }
+
+  for (const tmpl of templates) {
+    await createTemplate(db, workspaceId, {
+      linearId: tmpl.id,
+      name: tmpl.name,
+      templateData: tmpl.templateData,
     });
   }
 
@@ -712,5 +750,6 @@ export async function migrateLinear(
     history: historyCount,
     subscribers: subscriberCount,
     memberships: membershipCount,
+    templates: templates.length,
   };
 }
