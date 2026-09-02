@@ -14,7 +14,9 @@
     "openapi:generate": "tsx scripts/generate-openapi.ts",
     "mcp:generate": "tsx scripts/generate-openapi.ts && tsx scripts/generate-mcp-tools.ts",
     "client:generate": "openapi-typescript src/mcp/openapi.json -o src/client/types.ts",
-    "cli": "tsx src/cli/index.ts"
+    "cli": "tsx src/cli/index.ts",
+    "contract:check": "tsx scripts/contract-check.ts",
+    "check": "pnpm run contract:check && pnpm run typecheck && pnpm test"
   },
   "keywords": [
     "vortex",

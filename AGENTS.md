@@ -2,15 +2,14 @@
 
 ## Proof commands
 
-Run from the repo root:
+Run from the repo root before committing:
 
 ```bash
 pnpm install
-pnpm run typecheck
-pnpm test
-pnpm run dev
-pnpm run deploy
+pnpm run check
 ```
+
+`pnpm run check` runs `contract:check`, `typecheck`, and `test`. `contract:check` regenerates `src/mcp/openapi.json`, `src/mcp/mcp-tools.ts`, and `src/client/types.ts` and fails if they drift from the source of truth.
 
 ## Stack
 
