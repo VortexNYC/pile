@@ -202,9 +202,7 @@ class LinearClient {
     const data = await this.request<{
       team: {
         members: {
-          nodes: Array<{
-            user: LinearUser;
-          }>;
+          nodes: LinearUser[];
         } | null;
       } | null;
     }>(
@@ -212,18 +210,16 @@ class LinearClient {
         team(id: $teamId) {
           members {
             nodes {
-              user {
-                id
-                name
-                email
-              }
+              id
+              name
+              email
             }
           }
         }
       }`,
       { teamId }
     );
-    return data.team?.members?.nodes.map((m) => m.user) ?? [];
+    return data.team?.members?.nodes ?? [];
   }
 
   async getIssuesPage(
