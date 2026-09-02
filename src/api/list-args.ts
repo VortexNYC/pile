@@ -16,6 +16,11 @@ export const listIssuesQuerySchema = z.object({
     .enum(["backlog", "todo", "in_progress", "done", "canceled"])
     .optional(),
   priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
+  assigneeId: z.string().optional(),
+  projectId: z.string().optional(),
+  cycleId: z.string().optional(),
+  labelId: z.string().optional(),
+  search: z.string().optional(),
 });
 
 export type ListIssuesQuery = z.infer<typeof listIssuesQuerySchema>;
@@ -57,6 +62,21 @@ export function toListArgs(query: ListIssuesQuery): ListIssuesArgs {
   }
   if (query.priority) {
     args.priority = query.priority;
+  }
+  if (query.assigneeId) {
+    args.assigneeId = query.assigneeId;
+  }
+  if (query.projectId) {
+    args.projectId = query.projectId;
+  }
+  if (query.cycleId) {
+    args.cycleId = query.cycleId;
+  }
+  if (query.labelId) {
+    args.labelId = query.labelId;
+  }
+  if (query.search) {
+    args.search = query.search;
   }
   return args;
 }

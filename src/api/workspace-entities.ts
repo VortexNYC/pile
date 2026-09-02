@@ -440,9 +440,9 @@ export function registerWorkspaceEntityRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(getProjectRoute, async (c) => {
-    const { id } = c.req.valid("param");
+    const { workspaceId, id } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    const item = await getProject(db, id);
+    const item = await getProject(db, workspaceId, id);
     if (!item) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -454,10 +454,10 @@ export function registerWorkspaceEntityRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(updateProjectRoute, async (c) => {
-    const { id } = c.req.valid("param");
+    const { workspaceId, id } = c.req.valid("param");
     const input = c.req.valid("json");
     const db = createD1(c.env.D1);
-    const item = await updateProject(db, id, input);
+    const item = await updateProject(db, workspaceId, id, input);
     if (!item) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -469,9 +469,9 @@ export function registerWorkspaceEntityRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(deleteProjectRoute, async (c) => {
-    const { id } = c.req.valid("param");
+    const { workspaceId, id } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    await deleteProject(db, id);
+    await deleteProject(db, workspaceId, id);
     return c.body(null, 204);
   });
 
@@ -491,9 +491,9 @@ export function registerWorkspaceEntityRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(getCycleRoute, async (c) => {
-    const { id } = c.req.valid("param");
+    const { workspaceId, id } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    const item = await getCycle(db, id);
+    const item = await getCycle(db, workspaceId, id);
     if (!item) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -505,10 +505,10 @@ export function registerWorkspaceEntityRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(updateCycleRoute, async (c) => {
-    const { id } = c.req.valid("param");
+    const { workspaceId, id } = c.req.valid("param");
     const input = c.req.valid("json");
     const db = createD1(c.env.D1);
-    const item = await updateCycle(db, id, input);
+    const item = await updateCycle(db, workspaceId, id, input);
     if (!item) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -520,9 +520,9 @@ export function registerWorkspaceEntityRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(deleteCycleRoute, async (c) => {
-    const { id } = c.req.valid("param");
+    const { workspaceId, id } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    await deleteCycle(db, id);
+    await deleteCycle(db, workspaceId, id);
     return c.body(null, 204);
   });
 
@@ -542,9 +542,9 @@ export function registerWorkspaceEntityRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(getLabelRoute, async (c) => {
-    const { id } = c.req.valid("param");
+    const { workspaceId, id } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    const item = await getLabel(db, id);
+    const item = await getLabel(db, workspaceId, id);
     if (!item) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -556,10 +556,10 @@ export function registerWorkspaceEntityRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(updateLabelRoute, async (c) => {
-    const { id } = c.req.valid("param");
+    const { workspaceId, id } = c.req.valid("param");
     const input = c.req.valid("json");
     const db = createD1(c.env.D1);
-    const item = await updateLabel(db, id, input);
+    const item = await updateLabel(db, workspaceId, id, input);
     if (!item) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -571,9 +571,9 @@ export function registerWorkspaceEntityRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(deleteLabelRoute, async (c) => {
-    const { id } = c.req.valid("param");
+    const { workspaceId, id } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    await deleteLabel(db, id);
+    await deleteLabel(db, workspaceId, id);
     return c.body(null, 204);
   });
 

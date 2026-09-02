@@ -3,6 +3,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 
 import { getAgentProvider } from "../agents/index.js";
 import { createD1 } from "../global/db.js";
+import { deleteIssueReferences } from "../global/issue-data.js";
 import { createRepoBranch } from "../global/repo-branches.js";
 import { VortexError } from "../platform/errors.js";
 import { rls } from "../platform/rls.js";
@@ -155,6 +156,19 @@ const updateIssueRoute = createRoute({
   },
 });
 
+const deleteIssueRoute = createRoute({
+  method: "delete",
+  path: "/workspaces/{workspaceId}/issues/{id}",
+  tags: ["issues"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ workspaceId: z.string(), id: z.string() }),
+  },
+  responses: {
+    204: { description: "Issue deleted" },
+  },
+});
+
 const dispatchRoute = createRoute({
   method: "post",
   path: "/workspaces/{workspaceId}/issues/{id}/dispatch",
@@ -235,6 +249,22 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
     return c.json(issue);
+  });
+
+  app.openapi(deleteIssueRoute, async (c) => {
+    const { workspaceId, id } = c.req.valid("param");
+    const stub = await getStub(c.env, workspaceId);
+    const deleted = await stub.deleteIssue(id);
+    if (!deleted) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Issue not found",
+      });
+    }
+    const db = createD1(c.env.D1);
+    await deleteIssueReferences(db, workspaceId, id);
+    return c.body(null, 204);
   });
 
   app.openapi(dispatchRoute, async (c) => {

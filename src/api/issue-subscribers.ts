@@ -4,8 +4,11 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { createD1 } from "../global/db.js";
 import {
   createIssueSubscriber,
+  deleteIssueSubscriber,
+  getIssueSubscriber,
   listIssueSubscribers,
 } from "../global/issue-subscribers.js";
+import { VortexError } from "../platform/errors.js";
 import { rls } from "../platform/rls.js";
 import type { AppContext } from "./middleware.js";
 
@@ -64,6 +67,23 @@ const createIssueSubscriberRoute = createRoute({
   },
 });
 
+const deleteIssueSubscriberRoute = createRoute({
+  method: "delete",
+  path: "/workspaces/{workspaceId}/issues/{issueId}/subscribers/{id}",
+  tags: ["issue-subscribers"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({
+      workspaceId: z.string(),
+      issueId: z.string(),
+      id: z.string(),
+    }),
+  },
+  responses: {
+    204: { description: "Subscriber removed" },
+  },
+});
+
 export function registerIssueSubscriberRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listIssueSubscribersRoute, async (c) => {
     const { workspaceId, issueId } = c.req.valid("param");
@@ -81,5 +101,20 @@ export function registerIssueSubscriberRoutes(app: OpenAPIHono<AppContext>) {
       linearUserId: input.linearUserId,
     });
     return c.json(item, 201);
+  });
+
+  app.openapi(deleteIssueSubscriberRoute, async (c) => {
+    const { workspaceId, id } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const existing = await getIssueSubscriber(db, workspaceId, id);
+    if (!existing) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Subscriber not found",
+      });
+    }
+    await deleteIssueSubscriber(db, workspaceId, id);
+    return c.body(null, 204);
   });
 }

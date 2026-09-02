@@ -114,9 +114,9 @@ export function registerIssueRelationRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(deleteRelationRoute, async (c) => {
-    const { id } = c.req.valid("param");
+    const { workspaceId, id } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    const existing = await getIssueRelation(db, id);
+    const existing = await getIssueRelation(db, workspaceId, id);
     if (!existing) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -124,7 +124,7 @@ export function registerIssueRelationRoutes(app: OpenAPIHono<AppContext>) {
         message: "Relation not found",
       });
     }
-    await deleteIssueRelation(db, id);
+    await deleteIssueRelation(db, workspaceId, id);
     return c.body(null, 204);
   });
 }

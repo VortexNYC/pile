@@ -32,6 +32,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesWorkspaceIdIssuesId",
+    "description": "(DELETE /workspaces/{workspaceId}/issues/{id})",
+    "method": "DELETE",
+    "path": "/workspaces/{workspaceId}/issues/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "workspaceId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesWorkspaceIdIssuesIssueIdCommentsId",
     "description": "(DELETE /workspaces/{workspaceId}/issues/{issueId}/comments/{id})",
     "method": "DELETE",
@@ -61,6 +82,31 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "description": "(DELETE /workspaces/{workspaceId}/issues/{issueId}/relations/{id})",
     "method": "DELETE",
     "path": "/workspaces/{workspaceId}/issues/{issueId}/relations/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        },
+        "issueId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "issueId",
+        "workspaceId"
+      ]
+    }
+  },
+  {
+    "name": "deleteWorkspacesWorkspaceIdIssuesIssueIdSubscribersId",
+    "description": "(DELETE /workspaces/{workspaceId}/issues/{issueId}/subscribers/{id})",
+    "method": "DELETE",
+    "path": "/workspaces/{workspaceId}/issues/{issueId}/subscribers/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -285,6 +331,21 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "high",
             "urgent"
           ]
+        },
+        "assigneeId": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "cycleId": {
+          "type": "string"
+        },
+        "labelId": {
+          "type": "string"
+        },
+        "search": {
+          "type": "string"
         }
       },
       "required": [
@@ -625,6 +686,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
+        "workspaceId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesWorkspaceIdTemplatesId",
+    "description": "(GET /workspaces/{workspaceId}/templates/{id})",
+    "method": "GET",
+    "path": "/workspaces/{workspaceId}/templates/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
         "workspaceId"
       ]
     }
@@ -1360,6 +1442,43 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "linearId",
             "name",
             "type"
+          ]
+        }
+      },
+      "required": [
+        "workspaceId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesWorkspaceIdTemplates",
+    "description": "(POST /workspaces/{workspaceId}/templates)",
+    "method": "POST",
+    "path": "/workspaces/{workspaceId}/templates",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "linearId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "templateData": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "linearId",
+            "name"
           ]
         }
       },

@@ -11,6 +11,14 @@ export function listTemplates(db: D1Client, workspaceId: string) {
     .all();
 }
 
+export function getTemplate(db: D1Client, workspaceId: string, id: string) {
+  return db
+    .select()
+    .from(templates)
+    .where(and(eq(templates.workspaceId, workspaceId), eq(templates.id, id)))
+    .get();
+}
+
 export async function createTemplate(
   db: D1Client,
   workspaceId: string,

@@ -21,8 +21,12 @@ export function listProjects(db: D1Client, workspaceId: string) {
     .all();
 }
 
-export function getProject(db: D1Client, id: string) {
-  return db.select().from(projects).where(eq(projects.id, id)).get();
+export function getProject(db: D1Client, workspaceId: string, id: string) {
+  return db
+    .select()
+    .from(projects)
+    .where(and(eq(projects.workspaceId, workspaceId), eq(projects.id, id)))
+    .get();
 }
 
 export async function createProject(
@@ -54,6 +58,7 @@ export async function createProject(
 
 export async function updateProject(
   db: D1Client,
+  workspaceId: string,
   id: string,
   values: Partial<{
     name: string;
@@ -66,12 +71,22 @@ export async function updateProject(
   await db
     .update(projects)
     .set({ ...values, updatedAt: now() })
-    .where(eq(projects.id, id));
-  return db.select().from(projects).where(eq(projects.id, id)).get();
+    .where(and(eq(projects.workspaceId, workspaceId), eq(projects.id, id)));
+  return db
+    .select()
+    .from(projects)
+    .where(and(eq(projects.workspaceId, workspaceId), eq(projects.id, id)))
+    .get();
 }
 
-export async function deleteProject(db: D1Client, id: string) {
-  await db.delete(projects).where(eq(projects.id, id));
+export async function deleteProject(
+  db: D1Client,
+  workspaceId: string,
+  id: string
+) {
+  await db
+    .delete(projects)
+    .where(and(eq(projects.workspaceId, workspaceId), eq(projects.id, id)));
 }
 
 // Cycles
@@ -84,8 +99,12 @@ export function listCycles(db: D1Client, workspaceId: string) {
     .all();
 }
 
-export function getCycle(db: D1Client, id: string) {
-  return db.select().from(cycles).where(eq(cycles.id, id)).get();
+export function getCycle(db: D1Client, workspaceId: string, id: string) {
+  return db
+    .select()
+    .from(cycles)
+    .where(and(eq(cycles.workspaceId, workspaceId), eq(cycles.id, id)))
+    .get();
 }
 
 export async function createCycle(
@@ -115,6 +134,7 @@ export async function createCycle(
 
 export async function updateCycle(
   db: D1Client,
+  workspaceId: string,
   id: string,
   values: Partial<{
     projectId: string | null;
@@ -126,12 +146,22 @@ export async function updateCycle(
   await db
     .update(cycles)
     .set({ ...values, updatedAt: now() })
-    .where(eq(cycles.id, id));
-  return db.select().from(cycles).where(eq(cycles.id, id)).get();
+    .where(and(eq(cycles.workspaceId, workspaceId), eq(cycles.id, id)));
+  return db
+    .select()
+    .from(cycles)
+    .where(and(eq(cycles.workspaceId, workspaceId), eq(cycles.id, id)))
+    .get();
 }
 
-export async function deleteCycle(db: D1Client, id: string) {
-  await db.delete(cycles).where(eq(cycles.id, id));
+export async function deleteCycle(
+  db: D1Client,
+  workspaceId: string,
+  id: string
+) {
+  await db
+    .delete(cycles)
+    .where(and(eq(cycles.workspaceId, workspaceId), eq(cycles.id, id)));
 }
 
 // Labels
@@ -144,8 +174,12 @@ export function listLabels(db: D1Client, workspaceId: string) {
     .all();
 }
 
-export function getLabel(db: D1Client, id: string) {
-  return db.select().from(labels).where(eq(labels.id, id)).get();
+export function getLabel(db: D1Client, workspaceId: string, id: string) {
+  return db
+    .select()
+    .from(labels)
+    .where(and(eq(labels.workspaceId, workspaceId), eq(labels.id, id)))
+    .get();
 }
 
 export async function createLabel(
@@ -170,18 +204,32 @@ export async function createLabel(
 
 export async function updateLabel(
   db: D1Client,
+  workspaceId: string,
   id: string,
   values: Partial<{
     name: string;
     color: string | null;
   }>
 ) {
-  await db.update(labels).set(values).where(eq(labels.id, id));
-  return db.select().from(labels).where(eq(labels.id, id)).get();
+  await db
+    .update(labels)
+    .set(values)
+    .where(and(eq(labels.workspaceId, workspaceId), eq(labels.id, id)));
+  return db
+    .select()
+    .from(labels)
+    .where(and(eq(labels.workspaceId, workspaceId), eq(labels.id, id)))
+    .get();
 }
 
-export async function deleteLabel(db: D1Client, id: string) {
-  await db.delete(labels).where(eq(labels.id, id));
+export async function deleteLabel(
+  db: D1Client,
+  workspaceId: string,
+  id: string
+) {
+  await db
+    .delete(labels)
+    .where(and(eq(labels.workspaceId, workspaceId), eq(labels.id, id)));
 }
 
 // States

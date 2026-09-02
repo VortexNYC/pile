@@ -239,6 +239,29 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       conditions.push("priority = ?");
       params.push(args.priority);
     }
+    if (args.assigneeId) {
+      conditions.push("assignee_id = ?");
+      params.push(args.assigneeId);
+    }
+    if (args.projectId) {
+      conditions.push("project_id = ?");
+      params.push(args.projectId);
+    }
+    if (args.cycleId) {
+      conditions.push("cycle_id = ?");
+      params.push(args.cycleId);
+    }
+    if (args.labelId) {
+      conditions.push(
+        "',' || COALESCE(label_ids, '') || ',' LIKE '%,' || ? || ',%'"
+      );
+      params.push(args.labelId);
+    }
+    if (args.search) {
+      conditions.push("(title LIKE ? OR COALESCE(description, '') LIKE ?)");
+      const pattern = `%${args.search}%`;
+      params.push(pattern, pattern);
+    }
     if (args.cursor) {
       conditions.push("(created_at < ? OR (created_at = ? AND id < ?))");
       params.push(args.cursor.createdAt, args.cursor.createdAt, args.cursor.id);
@@ -301,6 +324,21 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       issue,
     });
     return issue;
+  }
+
+  async deleteIssue(id: string): Promise<boolean> {
+    await this.ready;
+    Array.from(this.sql.exec("DELETE FROM issues WHERE id = ?", id));
+    const cursor = this.sql.exec("SELECT changes() AS changes");
+    const rows = Array.from(cursor) as Array<{ changes: number }>;
+    const deleted = rows.length > 0 && rows[0].changes > 0;
+    if (!deleted) return false;
+    await this.emit({
+      type: "issue.deleted",
+      workspaceId: this.workspaceId,
+      issueId: id,
+    });
+    return true;
   }
 
   async updatePrState(

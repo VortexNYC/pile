@@ -34,6 +34,11 @@ export interface ListIssuesArgs {
   cursor?: IssueCursor;
   status?: IssueStatus;
   priority?: IssuePriority;
+  assigneeId?: string;
+  projectId?: string;
+  cycleId?: string;
+  labelId?: string;
+  search?: string;
 }
 
 export interface Issue {
@@ -74,4 +79,9 @@ export type RealtimeEvent =
       type: "pr.updated";
       workspaceId: string;
       issue: Issue;
+    }
+  | {
+      type: "issue.deleted";
+      workspaceId: string;
+      issueId: Id;
     };

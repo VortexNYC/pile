@@ -20,6 +20,38 @@ export function listIssueSubscribers(
     .all();
 }
 
+export function getIssueSubscriber(
+  db: D1Client,
+  workspaceId: string,
+  id: string
+) {
+  return db
+    .select()
+    .from(issueSubscribers)
+    .where(
+      and(
+        eq(issueSubscribers.workspaceId, workspaceId),
+        eq(issueSubscribers.id, id)
+      )
+    )
+    .get();
+}
+
+export async function deleteIssueSubscriber(
+  db: D1Client,
+  workspaceId: string,
+  id: string
+) {
+  await db
+    .delete(issueSubscribers)
+    .where(
+      and(
+        eq(issueSubscribers.workspaceId, workspaceId),
+        eq(issueSubscribers.id, id)
+      )
+    );
+}
+
 export async function createIssueSubscriber(
   db: D1Client,
   workspaceId: string,

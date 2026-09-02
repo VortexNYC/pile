@@ -33,11 +33,20 @@ export function listIssueRelations(
     .all();
 }
 
-export function getIssueRelation(db: D1Client, id: string) {
+export function getIssueRelation(
+  db: D1Client,
+  workspaceId: string,
+  id: string
+) {
   return db
     .select()
     .from(issueRelations)
-    .where(eq(issueRelations.id, id))
+    .where(
+      and(
+        eq(issueRelations.workspaceId, workspaceId),
+        eq(issueRelations.id, id)
+      )
+    )
     .get();
 }
 
@@ -68,6 +77,17 @@ export async function createIssueRelation(
     .get();
 }
 
-export async function deleteIssueRelation(db: D1Client, id: string) {
-  await db.delete(issueRelations).where(eq(issueRelations.id, id));
+export async function deleteIssueRelation(
+  db: D1Client,
+  workspaceId: string,
+  id: string
+) {
+  await db
+    .delete(issueRelations)
+    .where(
+      and(
+        eq(issueRelations.workspaceId, workspaceId),
+        eq(issueRelations.id, id)
+      )
+    );
 }
