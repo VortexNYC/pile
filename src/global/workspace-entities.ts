@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { D1Client } from "./db.js";
 import { projects, cycles, labels, states } from "./schema.js";
 
@@ -195,7 +195,7 @@ export async function createState(
   db: D1Client,
   workspaceId: string,
   values: {
-    id: string;
+    linearId: string;
     name: string;
     type: string;
     color?: string | null;
@@ -205,22 +205,29 @@ export async function createState(
   const existing = await db
     .select()
     .from(states)
-    .where(eq(states.id, values.id))
+    .where(
+      and(
+        eq(states.workspaceId, workspaceId),
+        eq(states.linearId, values.linearId)
+      )
+    )
     .get();
   if (existing) {
     return existing;
   }
+  const id = crypto.randomUUID();
   const ts = now();
   await db.insert(states).values({
-    id: values.id,
+    id,
     workspaceId,
+    linearId: values.linearId,
     name: values.name,
     type: values.type,
     color: values.color ?? null,
     position: values.position ?? null,
     createdAt: ts,
   });
-  return db.select().from(states).where(eq(states.id, values.id)).get();
+  return db.select().from(states).where(eq(states.id, id)).get();
 }
 
 export async function updateState(

@@ -8,6 +8,7 @@ import { listStates } from "../global/workspace-entities.js";
 const stateSchema = z.object({
   id: z.string(),
   workspaceId: z.string(),
+  linearId: z.string(),
   name: z.string(),
   type: z.string(),
   color: z.string().nullable(),

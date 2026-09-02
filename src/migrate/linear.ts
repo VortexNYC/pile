@@ -170,6 +170,8 @@ class LinearClient {
               id
               name
               type
+              color
+              position
             }
           }
         }
@@ -467,7 +469,7 @@ export async function migrateLinear(
 
   for (const state of states) {
     await createState(db, workspaceId, {
-      id: state.id,
+      linearId: state.id,
       name: state.name,
       type: state.type,
       color: state.color,

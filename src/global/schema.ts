@@ -121,13 +121,17 @@ export const states = sqliteTable(
     workspaceId: text("workspace_id")
       .notNull()
       .references(() => workspaces.id),
+    linearId: text("linear_id").notNull(),
     name: text("name").notNull(),
     type: text("type").notNull(),
     color: text("color"),
     position: text("position"),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
-  (table) => [index("states_workspace_idx").on(table.workspaceId)]
+  (table) => [
+    index("states_workspace_idx").on(table.workspaceId),
+    index("states_linear_idx").on(table.workspaceId, table.linearId),
+  ]
 );
 
 export const linearUsers = sqliteTable(

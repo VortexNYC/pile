@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "b756670c-ade1-4fd3-a405-55df7fee068a",
+  "id": "6bafc2a8-4313-4742-a28c-67eb617d83c6",
   "prevId": "b8c96f71-0ec8-4dc7-b5a0-8949a96c68fe",
   "tables": {
     "account": {
@@ -1162,6 +1162,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "linear_id": {
+          "name": "linear_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
         "name": {
           "name": "name",
           "type": "text",
@@ -1204,6 +1211,14 @@
           "name": "states_workspace_idx",
           "columns": [
             "workspace_id"
+          ],
+          "isUnique": false
+        },
+        "states_linear_idx": {
+          "name": "states_linear_idx",
+          "columns": [
+            "workspace_id",
+            "linear_id"
           ],
           "isUnique": false
         }
