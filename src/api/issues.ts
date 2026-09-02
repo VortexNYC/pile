@@ -1,22 +1,21 @@
-import { createRoute, z } from "@hono/zod-openapi";
 import type { OpenAPIHono } from "@hono/zod-openapi";
-import type { AppContext } from "./middleware.js";
-import type { Issue, IssueInput } from "../workspace/types.js";
-import { VortexError } from "../platform/errors.js";
+import { createRoute, z } from "@hono/zod-openapi";
 import { getAgentProvider } from "../agents/index.js";
 import { createD1 } from "../global/db.js";
 import { createRepoBranch } from "../global/repo-branches.js";
+import { VortexError } from "../platform/errors.js";
 import { rls } from "../platform/rls.js";
+import type { Issue, IssueInput } from "../workspace/types.js";
 import {
+  encodeCursor,
   listIssuesQuerySchema,
   toListArgs,
-  encodeCursor,
 } from "./list-args.js";
-import type { WorkerEnv } from "./middleware.js";
+import type { AppContext, WorkerEnv } from "./middleware.js";
 
 async function getStub(env: WorkerEnv, workspaceId: string) {
   const stub = env.WORKSPACE_DURABLE_OBJECT.get(
-    env.WORKSPACE_DURABLE_OBJECT.idFromName(workspaceId)
+    env.WORKSPACE_DURABLE_OBJECT.idFromName(workspaceId),
   );
   await stub.setWorkspaceId(workspaceId);
   return stub;
@@ -255,7 +254,13 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
 
     if (issue.repo && issue.branch) {
       const db = createD1(c.env.D1);
-      await createRepoBranch(db, workspaceId, issue.repo, issue.branch, issue.id);
+      await createRepoBranch(
+        db,
+        workspaceId,
+        issue.repo,
+        issue.branch,
+        issue.id,
+      );
     }
 
     return c.json(session, 201);

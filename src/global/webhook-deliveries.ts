@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { D1Client } from "./db.js";
+import type { D1Client } from "./db.js";
 import { webhookDeliveries } from "./schema.js";
 
 export function findWebhookDelivery(db: D1Client, deliveryId: string) {
@@ -15,7 +15,7 @@ export async function recordWebhookDelivery(
   deliveryId: string,
   source: string,
   event: string,
-  workspaceId?: string
+  workspaceId?: string,
 ): Promise<void> {
   await db
     .insert(webhookDeliveries)

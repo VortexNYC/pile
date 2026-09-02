@@ -6,7 +6,7 @@ export function rls(...allowed: string[]) {
   return createMiddleware<AppContext>(async (c, next) => {
     const identity = c.var.workspaceIdentity;
     const has = ["admin", ...allowed].some((p) =>
-      identity.permissions.includes(p)
+      identity.permissions.includes(p),
     );
     if (!has) {
       throw new VortexError({

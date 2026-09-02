@@ -19,5 +19,5 @@ export const observabilityMiddleware = createMiddleware<AppContext>(
       };
       console.log(JSON.stringify(log));
     }
-  }
+  },
 );

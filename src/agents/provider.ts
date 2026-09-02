@@ -1,4 +1,4 @@
-import { Issue } from "../workspace/types.js";
+import type { Issue } from "../workspace/types.js";
 
 export interface AgentSession {
   id: string;
@@ -11,6 +11,10 @@ export interface AgentSession {
 
 export interface AgentProvider {
   id: string;
-  dispatch(workspaceId: string, issue: Issue, model?: string): Promise<AgentSession>;
+  dispatch(
+    workspaceId: string,
+    issue: Issue,
+    model?: string,
+  ): Promise<AgentSession>;
   poll(sessionId: string): Promise<AgentSession>;
 }

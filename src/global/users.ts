@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { D1Client } from "./db.js";
+import type { D1Client } from "./db.js";
 import { user } from "./schema.js";
 
 export function findUserByEmail(db: D1Client, email: string) {
@@ -13,7 +13,7 @@ export async function createUser(
     email: string;
     emailVerified?: boolean;
     image?: string | null;
-  }
+  },
 ) {
   const id = crypto.randomUUID();
   const ts = new Date();

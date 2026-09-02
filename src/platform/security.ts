@@ -1,8 +1,8 @@
 import { createMiddleware } from "hono/factory";
 import { secureHeaders } from "hono/secure-headers";
-import { VortexError } from "./errors.js";
 import type { AppContext } from "../api/middleware.js";
 import type { AppEnv } from "./env.js";
+import { VortexError } from "./errors.js";
 
 const UNSAFE_METHODS = new Set(["POST", "PATCH", "PUT", "DELETE"]);
 
@@ -43,7 +43,11 @@ function isPublicPath(pathname: string): boolean {
   );
 }
 
-function isAllowedOrigin(origin: string, env: AppEnv, pathname: string): boolean {
+function isAllowedOrigin(
+  origin: string,
+  env: AppEnv,
+  pathname: string,
+): boolean {
   if (isPublicPath(pathname)) {
     return true;
   }
@@ -54,53 +58,48 @@ function isAllowedOrigin(origin: string, env: AppEnv, pathname: string): boolean
   return allowed.has(origin) || allowed.has(normalizeOrigin(origin));
 }
 
-export const corsMiddleware = createMiddleware<AppContext>(
-  async (c, next) => {
-    const origin = c.req.header("origin") ?? "";
-    if (isAllowedOrigin(origin, c.env, c.req.path) && origin) {
-      c.header("Access-Control-Allow-Origin", origin);
-      c.header(
-        "Access-Control-Allow-Methods",
-        "GET, POST, PATCH, PUT, DELETE, OPTIONS"
-      );
-      c.header(
-        "Access-Control-Allow-Headers",
-        "Authorization, Content-Type, X-Requested-With"
-      );
-      c.header("Access-Control-Allow-Credentials", "true");
-      c.header("Access-Control-Max-Age", "86400");
-    }
-
-    if (c.req.method === "OPTIONS") {
-      return c.body(null, 204);
-    }
-
-    await next();
+export const corsMiddleware = createMiddleware<AppContext>(async (c, next) => {
+  const origin = c.req.header("origin") ?? "";
+  if (isAllowedOrigin(origin, c.env, c.req.path) && origin) {
+    c.header("Access-Control-Allow-Origin", origin);
+    c.header(
+      "Access-Control-Allow-Methods",
+      "GET, POST, PATCH, PUT, DELETE, OPTIONS",
+    );
+    c.header(
+      "Access-Control-Allow-Headers",
+      "Authorization, Content-Type, X-Requested-With",
+    );
+    c.header("Access-Control-Allow-Credentials", "true");
+    c.header("Access-Control-Max-Age", "86400");
   }
-);
 
-export const csrfMiddleware = createMiddleware<AppContext>(
-  async (c, next) => {
-    if (isPublicPath(c.req.path)) {
-      await next();
-      return;
-    }
-
-    if (UNSAFE_METHODS.has(c.req.method)) {
-      const origin =
-        c.req.header("origin") ?? c.req.header("referer") ?? "";
-      if (!isAllowedOrigin(origin, c.env, c.req.path)) {
-        throw new VortexError({
-          code: "FORBIDDEN",
-          status: 403,
-          message: "Origin not allowed",
-        });
-      }
-    }
-
-    await next();
+  if (c.req.method === "OPTIONS") {
+    return c.body(null, 204);
   }
-);
+
+  await next();
+});
+
+export const csrfMiddleware = createMiddleware<AppContext>(async (c, next) => {
+  if (isPublicPath(c.req.path)) {
+    await next();
+    return;
+  }
+
+  if (UNSAFE_METHODS.has(c.req.method)) {
+    const origin = c.req.header("origin") ?? c.req.header("referer") ?? "";
+    if (!isAllowedOrigin(origin, c.env, c.req.path)) {
+      throw new VortexError({
+        code: "FORBIDDEN",
+        status: 403,
+        message: "Origin not allowed",
+      });
+    }
+  }
+
+  await next();
+});
 
 export const securityMiddleware = [
   secureHeaders(),

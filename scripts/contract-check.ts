@@ -22,14 +22,14 @@ try {
   });
   if (diff.length > 0) {
     console.error(
-      "[contract-check] generated artifacts are out of sync. Run pnpm run mcp:generate and pnpm run client:generate, then commit the changes."
+      "[contract-check] generated artifacts are out of sync. Run pnpm run mcp:generate and pnpm run client:generate, then commit the changes.",
     );
     console.error(diff);
     process.exit(1);
   }
 
   console.log(
-    JSON.stringify({ ok: true, proof: "contract-check", files: generated })
+    JSON.stringify({ ok: true, proof: "contract-check", files: generated }),
   );
 } catch (error) {
   console.error(error);

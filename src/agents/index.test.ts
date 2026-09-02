@@ -1,12 +1,16 @@
-import { describe, it, expect } from "vitest";
-import { getAgentProvider, registerAgentProvider, dispatchAgent } from "./index.js";
-import { MockAgentProvider } from "./harness.js";
+import { describe, expect, it } from "vitest";
 import type { AppEnv } from "../platform/env.js";
+import { MockAgentProvider } from "./harness.js";
+import {
+  dispatchAgent,
+  getAgentProvider,
+  registerAgentProvider,
+} from "./index.js";
 
 describe("agent providers", () => {
   it("throws for unknown provider", () => {
     expect(() => getAgentProvider("unknown", {} as AppEnv)).toThrow(
-      "Unknown agent provider: unknown"
+      "Unknown agent provider: unknown",
     );
   });
 
@@ -21,16 +25,11 @@ describe("agent providers", () => {
     });
     registerAgentProvider("mock", () => provider);
 
-    const session = await dispatchAgent(
-      {} as AppEnv,
-      "mock",
-      "ws-1",
-      {
-        id: "issue-1",
-        title: "Test",
-        description: null,
-      }
-    );
+    const session = await dispatchAgent({} as AppEnv, "mock", "ws-1", {
+      id: "issue-1",
+      title: "Test",
+      description: null,
+    });
 
     expect(session.id).toBe("test-1");
     expect(session.agentId).toBe("mock");

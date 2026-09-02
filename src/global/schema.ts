@@ -1,5 +1,5 @@
-import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
-import { sql, relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
+import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 export const workspaces = sqliteTable("workspaces", {
   id: text("id").primaryKey(),
@@ -12,7 +12,9 @@ export const workspaces = sqliteTable("workspaces", {
 
 export const workspaceMemberships = sqliteTable("workspace_memberships", {
   id: text("id").primaryKey(),
-  workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+  workspaceId: text("workspace_id")
+    .notNull()
+    .references(() => workspaces.id),
   userId: text("user_id").notNull(),
   role: text("role", { enum: ["owner", "admin", "member"] }).notNull(),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
@@ -41,7 +43,9 @@ export const repoBranches = sqliteTable(
     issueId: text("issue_id").notNull(),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
-  (table) => [index("repo_branches_repo_branch_idx").on(table.repo, table.branch)]
+  (table) => [
+    index("repo_branches_repo_branch_idx").on(table.repo, table.branch),
+  ],
 );
 
 export const repoIssues = sqliteTable(
@@ -59,7 +63,7 @@ export const repoIssues = sqliteTable(
   (table) => [
     index("repo_issues_repo_number_idx").on(table.repo, table.issueNumber),
     index("repo_issues_workspace_idx").on(table.workspaceId),
-  ]
+  ],
 );
 
 export const projects = sqliteTable(
@@ -77,7 +81,7 @@ export const projects = sqliteTable(
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
-  (table) => [index("projects_workspace_idx").on(table.workspaceId)]
+  (table) => [index("projects_workspace_idx").on(table.workspaceId)],
 );
 
 export const cycles = sqliteTable(
@@ -97,7 +101,7 @@ export const cycles = sqliteTable(
   (table) => [
     index("cycles_workspace_idx").on(table.workspaceId),
     index("cycles_project_idx").on(table.projectId),
-  ]
+  ],
 );
 
 export const labels = sqliteTable(
@@ -111,7 +115,7 @@ export const labels = sqliteTable(
     color: text("color"),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
-  (table) => [index("labels_workspace_idx").on(table.workspaceId)]
+  (table) => [index("labels_workspace_idx").on(table.workspaceId)],
 );
 
 export const states = sqliteTable(
@@ -131,7 +135,7 @@ export const states = sqliteTable(
   (table) => [
     index("states_workspace_idx").on(table.workspaceId),
     index("states_linear_idx").on(table.workspaceId, table.linearId),
-  ]
+  ],
 );
 
 export const linearUsers = sqliteTable(
@@ -150,7 +154,7 @@ export const linearUsers = sqliteTable(
     index("linear_users_workspace_idx").on(table.workspaceId),
     index("linear_users_linear_idx").on(table.workspaceId, table.linearId),
     index("linear_users_email_idx").on(table.email),
-  ]
+  ],
 );
 
 export const comments = sqliteTable(
@@ -169,7 +173,7 @@ export const comments = sqliteTable(
   (table) => [
     index("comments_issue_idx").on(table.workspaceId, table.issueId),
     index("comments_author_idx").on(table.workspaceId, table.authorId),
-  ]
+  ],
 );
 
 export const issueRelations = sqliteTable(
@@ -187,7 +191,7 @@ export const issueRelations = sqliteTable(
   (table) => [
     index("issue_relations_from_idx").on(table.workspaceId, table.fromIssueId),
     index("issue_relations_to_idx").on(table.workspaceId, table.toIssueId),
-  ]
+  ],
 );
 
 export const attachments = sqliteTable(
@@ -208,7 +212,7 @@ export const attachments = sqliteTable(
   (table) => [
     index("attachments_issue_idx").on(table.workspaceId, table.issueId),
     index("attachments_linear_idx").on(table.workspaceId, table.linearId),
-  ]
+  ],
 );
 
 export const issueHistory = sqliteTable(
@@ -229,7 +233,7 @@ export const issueHistory = sqliteTable(
   (table) => [
     index("issue_history_issue_idx").on(table.workspaceId, table.issueId),
     index("issue_history_created_idx").on(table.workspaceId, table.createdAt),
-  ]
+  ],
 );
 
 export const issueSubscribers = sqliteTable(
@@ -245,8 +249,11 @@ export const issueSubscribers = sqliteTable(
   },
   (table) => [
     index("issue_subscribers_issue_idx").on(table.workspaceId, table.issueId),
-    index("issue_subscribers_user_idx").on(table.workspaceId, table.linearUserId),
-  ]
+    index("issue_subscribers_user_idx").on(
+      table.workspaceId,
+      table.linearUserId,
+    ),
+  ],
 );
 
 export const templates = sqliteTable(
@@ -264,7 +271,7 @@ export const templates = sqliteTable(
   (table) => [
     index("templates_workspace_idx").on(table.workspaceId),
     index("templates_linear_idx").on(table.workspaceId, table.linearId),
-  ]
+  ],
 );
 
 export const webhookSubscriptions = sqliteTable(
@@ -279,7 +286,9 @@ export const webhookSubscriptions = sqliteTable(
     secret: text("secret").notNull().default(""),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
-  (table) => [index("webhook_subscriptions_workspace_idx").on(table.workspaceId)]
+  (table) => [
+    index("webhook_subscriptions_workspace_idx").on(table.workspaceId),
+  ],
 );
 
 export const webhookDeliveries = sqliteTable(
@@ -291,7 +300,7 @@ export const webhookDeliveries = sqliteTable(
     workspaceId: text("workspace_id").references(() => workspaces.id),
     processedAt: text("processed_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
-  (table) => [index("webhook_deliveries_workspace_idx").on(table.workspaceId)]
+  (table) => [index("webhook_deliveries_workspace_idx").on(table.workspaceId)],
 );
 
 export const user = sqliteTable("user", {
@@ -330,7 +339,7 @@ export const session = sqliteTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
   },
-  (table) => [index("session_userId_idx").on(table.userId)]
+  (table) => [index("session_userId_idx").on(table.userId)],
 );
 
 export const account = sqliteTable(
@@ -364,7 +373,7 @@ export const account = sqliteTable(
   (table) => [
     index("account_userId_idx").on(table.userId),
     index("account_provider_idx").on(table.providerId, table.accountId),
-  ]
+  ],
 );
 
 export const verification = sqliteTable("verification", {

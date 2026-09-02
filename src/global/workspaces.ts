@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { D1Client } from "./db.js";
+import type { D1Client } from "./db.js";
 import { workspaces } from "./schema.js";
 
 export function listWorkspaces(db: D1Client) {

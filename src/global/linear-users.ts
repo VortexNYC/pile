@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { D1Client } from "./db.js";
+import type { D1Client } from "./db.js";
 import { linearUsers } from "./schema.js";
 
 export function listLinearUsers(db: D1Client, workspaceId: string) {
@@ -10,15 +10,19 @@ export function listLinearUsers(db: D1Client, workspaceId: string) {
     .all();
 }
 
-export function getLinearUser(db: D1Client, workspaceId: string, linearId: string) {
+export function getLinearUser(
+  db: D1Client,
+  workspaceId: string,
+  linearId: string,
+) {
   return db
     .select()
     .from(linearUsers)
     .where(
       and(
         eq(linearUsers.workspaceId, workspaceId),
-        eq(linearUsers.linearId, linearId)
-      )
+        eq(linearUsers.linearId, linearId),
+      ),
     )
     .get();
 }
@@ -30,7 +34,7 @@ export async function createLinearUser(
     linearId: string;
     name?: string;
     email?: string;
-  }
+  },
 ) {
   const existing = await db
     .select()
@@ -38,8 +42,8 @@ export async function createLinearUser(
     .where(
       and(
         eq(linearUsers.workspaceId, workspaceId),
-        eq(linearUsers.linearId, values.linearId)
-      )
+        eq(linearUsers.linearId, values.linearId),
+      ),
     )
     .get();
   if (existing) {
@@ -59,8 +63,8 @@ export async function createLinearUser(
     .where(
       and(
         eq(linearUsers.workspaceId, workspaceId),
-        eq(linearUsers.linearId, values.linearId)
-      )
+        eq(linearUsers.linearId, values.linearId),
+      ),
     )
     .get();
 }

@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { VortexError } from "../platform/errors.js";
 import type { AppEnv } from "../platform/env.js";
+import { VortexError } from "../platform/errors.js";
 import type { Issue } from "../workspace/types.js";
 import type { AgentProvider, AgentSession } from "./provider.js";
 
@@ -36,7 +36,7 @@ export class DevinAgentProvider implements AgentProvider {
   async dispatch(
     workspaceId: string,
     issue: Issue,
-    model = "swe-1-7-medium"
+    model = "swe-1-7-medium",
   ): Promise<AgentSession> {
     const orgId = this.env.DEVIN_ORG_ID;
     if (!orgId) {
@@ -62,7 +62,7 @@ export class DevinAgentProvider implements AgentProvider {
           title: issue.title,
           tags: [`vortex:${workspaceId}`, `issue:${issue.id}`],
         }),
-      }
+      },
     );
 
     if (!res.ok) {
@@ -107,7 +107,7 @@ export class DevinAgentProvider implements AgentProvider {
       `https://api.devin.ai/v3/organizations/${orgId}/sessions/${sessionId}`,
       {
         headers: { Authorization: `Bearer ${this.env.DEVIN_TOKEN}` },
-      }
+      },
     );
 
     if (!res.ok) {

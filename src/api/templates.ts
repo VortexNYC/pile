@@ -1,9 +1,9 @@
-import { createRoute, z } from "@hono/zod-openapi";
 import type { OpenAPIHono } from "@hono/zod-openapi";
-import type { AppContext } from "./middleware.js";
-import { rls } from "../platform/rls.js";
+import { createRoute, z } from "@hono/zod-openapi";
 import { createD1 } from "../global/db.js";
 import { listTemplates } from "../global/templates.js";
+import { rls } from "../platform/rls.js";
+import type { AppContext } from "./middleware.js";
 
 const templateSchema = z.object({
   id: z.string(),

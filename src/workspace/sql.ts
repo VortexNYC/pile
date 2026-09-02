@@ -1,5 +1,5 @@
-import { SqlStorage } from "@cloudflare/workers-types";
-import { z, ZodTypeAny } from "zod";
+import type { SqlStorage } from "@cloudflare/workers-types";
+import type { ZodTypeAny, z } from "zod";
 
 export function execOne<T extends ZodTypeAny>(
   sql: SqlStorage,

@@ -1,4 +1,4 @@
-import { AgentSession } from "./provider.js";
+import type { AgentSession } from "./provider.js";
 
 export interface AgentSessionRecord extends AgentSession {
   workspaceId: string;

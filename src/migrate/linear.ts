@@ -1,22 +1,26 @@
+import type { WorkerEnv } from "../api/middleware.js";
+import { createAttachment, setAttachmentR2Key } from "../global/attachments.js";
+import { createComment } from "../global/comments.js";
 import { createD1 } from "../global/db.js";
+import { createIssueHistory } from "../global/issue-history.js";
+import { createIssueRelation } from "../global/issue-relations.js";
+import { createIssueSubscriber } from "../global/issue-subscribers.js";
+import { createLinearUser } from "../global/linear-users.js";
+import { createTemplate } from "../global/templates.js";
+import { createUser, findUserByEmail } from "../global/users.js";
 import {
-  createLabel,
-  createProject,
   createCycle,
+  createLabel,
+  createMembership,
+  createProject,
   createState,
 } from "../global/workspace-entities.js";
-import { createComment } from "../global/comments.js";
-import { createLinearUser } from "../global/linear-users.js";
-import { createIssueRelation } from "../global/issue-relations.js";
-import { createAttachment, setAttachmentR2Key } from "../global/attachments.js";
-import { createIssueHistory } from "../global/issue-history.js";
-import { createIssueSubscriber } from "../global/issue-subscribers.js";
-import { createTemplate } from "../global/templates.js";
-import { findUserByEmail, createUser } from "../global/users.js";
-import { createMembership } from "../global/workspace-entities.js";
 import { VortexError } from "../platform/errors.js";
-import type { WorkerEnv } from "../api/middleware.js";
-import type { IssueInput, IssuePriority, IssueStatus } from "../workspace/types.js";
+import type {
+  IssueInput,
+  IssuePriority,
+  IssueStatus,
+} from "../workspace/types.js";
 
 interface LinearState {
   id: string;
@@ -136,7 +140,7 @@ class LinearClient {
 
   private async request<T>(
     query: string,
-    variables?: Record<string, unknown>
+    variables?: Record<string, unknown>,
   ): Promise<T> {
     const res = await fetch("https://api.linear.app/graphql", {
       method: "POST",
@@ -190,7 +194,7 @@ class LinearClient {
           }
         }
       }`,
-      { teamId }
+      { teamId },
     );
     return data.team?.states.nodes ?? [];
   }
@@ -208,7 +212,7 @@ class LinearClient {
           }
         }
       }`,
-      { teamId }
+      { teamId },
     );
     return data.issueLabels?.nodes ?? [];
   }
@@ -230,7 +234,7 @@ class LinearClient {
           }
         }
       }`,
-      { teamId }
+      { teamId },
     );
     return data.team?.projects?.nodes ?? [];
   }
@@ -251,7 +255,7 @@ class LinearClient {
           }
         }
       }`,
-      { teamId }
+      { teamId },
     );
     return data.team?.cycles?.nodes ?? [];
   }
@@ -275,7 +279,7 @@ class LinearClient {
           }
         }
       }`,
-      { teamId }
+      { teamId },
     );
     return data.team?.members?.nodes ?? [];
   }
@@ -295,14 +299,14 @@ class LinearClient {
           }
         }
       }`,
-      { teamId }
+      { teamId },
     );
     return data.team?.templates?.nodes ?? [];
   }
 
   async getIssuesPage(
     teamId: string,
-    cursor?: string
+    cursor?: string,
   ): Promise<{
     issues: LinearIssue[];
     pageInfo: { hasNextPage: boolean; endCursor?: string };
@@ -428,7 +432,7 @@ class LinearClient {
           }
         }
       }`,
-      { teamId, after: cursor ?? null }
+      { teamId, after: cursor ?? null },
     );
     return {
       issues: data.team?.issues?.nodes ?? [],
@@ -459,7 +463,9 @@ function mapStatus(state: LinearState | null): IssueStatus | undefined {
   return undefined;
 }
 
-function mapPriority(priority: number | null | undefined): IssuePriority | undefined {
+function mapPriority(
+  priority: number | null | undefined,
+): IssuePriority | undefined {
   if (priority == null) return undefined;
   if (priority === 1) return "urgent";
   if (priority === 2) return "high";
@@ -472,7 +478,7 @@ export async function migrateLinear(
   env: WorkerEnv,
   workspaceId: string,
   linearToken: string,
-  teamId: string
+  teamId: string,
 ): Promise<MigrationCounts> {
   const client = new LinearClient(linearToken);
   const db = createD1(env.D1);
@@ -531,7 +537,10 @@ export async function migrateLinear(
       name: state.name,
       type: state.type,
       color: state.color,
-      position: state.position === undefined || state.position === null ? null : String(state.position),
+      position:
+        state.position === undefined || state.position === null
+          ? null
+          : String(state.position),
     });
   }
 
@@ -593,12 +602,12 @@ export async function migrateLinear(
         id: li.id,
         title: li.title,
         description: li.description || undefined,
-        status: mapStatus(li.state ? stateMap.get(li.state.id) ?? null : null),
+        status: mapStatus(
+          li.state ? (stateMap.get(li.state.id) ?? null) : null,
+        ),
         priority: mapPriority(li.priority),
         assigneeId: li.assignee?.id ?? undefined,
-        projectId: li.project?.id
-          ? projectMap.get(li.project.id)
-          : undefined,
+        projectId: li.project?.id ? projectMap.get(li.project.id) : undefined,
         cycleId: li.cycle?.id ? cycleMap.get(li.cycle.id) : undefined,
         labelIds: labelIds || undefined,
         createdAt: li.createdAt,

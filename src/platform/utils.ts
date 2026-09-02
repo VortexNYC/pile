@@ -1,6 +1,6 @@
 export function generateBranchName(
   issueId: string | undefined,
-  title: string
+  title: string,
 ): string {
   const id = issueId?.toLowerCase().replace(/\s+/g, "-") ?? "vor";
   const slug = title
@@ -11,9 +11,7 @@ export function generateBranchName(
   return `${id}-${slug}`;
 }
 
-export function parseSessionIdFromUrl(
-  sessionUrl: string
-): string | undefined {
+export function parseSessionIdFromUrl(sessionUrl: string): string | undefined {
   const match = sessionUrl.match(/sessions\/([a-f0-9-]+)(?:\/|$)/);
   return match?.[1];
 }
@@ -25,14 +23,20 @@ export function sessionIsTerminal(session: {
 }): boolean {
   if (session.is_archived) return true;
   if (
-    ["completed", "done", "failed", "cancelled", "exit", "error", "suspended"].includes(
-      session.status
-    )
+    [
+      "completed",
+      "done",
+      "failed",
+      "cancelled",
+      "exit",
+      "error",
+      "suspended",
+    ].includes(session.status)
   )
     return true;
   if (
     ["completed", "error", "failed", "cancelled", "timeout", "exit"].includes(
-      session.status_detail || ""
+      session.status_detail || "",
     )
   )
     return true;

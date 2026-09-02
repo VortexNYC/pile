@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { D1Client } from "./db.js";
+import type { D1Client } from "./db.js";
 import { templates } from "./schema.js";
 
 export function listTemplates(db: D1Client, workspaceId: string) {
@@ -17,7 +17,7 @@ export async function createTemplate(
     linearId: string;
     name: string;
     templateData?: string | null;
-  }
+  },
 ) {
   const existing = await db
     .select()
@@ -25,8 +25,8 @@ export async function createTemplate(
     .where(
       and(
         eq(templates.workspaceId, workspaceId),
-        eq(templates.linearId, values.linearId)
-      )
+        eq(templates.linearId, values.linearId),
+      ),
     )
     .get();
   if (existing) {

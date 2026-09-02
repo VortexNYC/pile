@@ -1,5 +1,6 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
+import type { AppContext } from "../api/middleware.js";
 import { createD1, type D1Client } from "../global/db.js";
 import { findRepoBranch } from "../global/repo-branches.js";
 import {
@@ -14,7 +15,6 @@ import {
 } from "../global/webhook-deliveries.js";
 import { hmacSha256Hex, timingSafeEqualHex } from "../platform/crypto.js";
 import { VortexError } from "../platform/errors.js";
-import type { AppContext } from "../api/middleware.js";
 
 const pullRequestPayloadSchema = z.object({
   action: z.string(),
@@ -52,7 +52,7 @@ const issuePayloadSchema = z.object({
       .array(
         z.object({
           name: z.string(),
-        })
+        }),
       )
       .default([]),
   }),
@@ -78,14 +78,14 @@ export const githubWebhookRoute = createRoute({
 });
 
 function extractWorkspaceIdFromLabels(
-  labels: Array<{ name: string }>
+  labels: Array<{ name: string }>,
 ): string | undefined {
   const label = labels.find((l) => l.name.startsWith("vortex:"));
   return label?.name.split(":")[1]?.trim();
 }
 
 export async function processGithubWebhook(
-  c: Context<AppContext>
+  c: Context<AppContext>,
 ): Promise<{ ok: true }> {
   const signature = c.req.header("x-hub-signature-256") ?? "";
   const rawBody = await c.req.text();
@@ -93,7 +93,7 @@ export async function processGithubWebhook(
   if (c.env.GITHUB_WEBHOOK_SECRET) {
     const expected = `sha256=${await hmacSha256Hex(
       c.env.GITHUB_WEBHOOK_SECRET,
-      rawBody
+      rawBody,
     )}`;
     if (!timingSafeEqualHex(signature, expected)) {
       throw new VortexError({
@@ -129,7 +129,7 @@ async function processPullRequest(
   db: D1Client,
   deliveryId: string | undefined,
   event: string,
-  rawBody: string
+  rawBody: string,
 ): Promise<{ ok: true }> {
   let parsedBody: unknown;
   try {
@@ -168,7 +168,13 @@ async function processPullRequest(
   await stub.updatePrState(repo, branch, prUrl, prState);
 
   if (deliveryId) {
-    await recordWebhookDelivery(db, deliveryId, "github", event, record.workspaceId);
+    await recordWebhookDelivery(
+      db,
+      deliveryId,
+      "github",
+      event,
+      record.workspaceId,
+    );
   }
 
   return { ok: true };
@@ -179,7 +185,7 @@ async function processGitHubIssue(
   db: D1Client,
   deliveryId: string | undefined,
   event: string,
-  rawBody: string
+  rawBody: string,
 ): Promise<{ ok: true }> {
   let parsedBody: unknown;
   try {
@@ -272,7 +278,9 @@ async function processGitHubIssue(
 
   if (action === "closed") {
     if (mapping) {
-      const updated = await stub.updateIssue(mapping.issueId, { status: "done" });
+      const updated = await stub.updateIssue(mapping.issueId, {
+        status: "done",
+      });
       if (!updated) {
         throw new VortexError({
           code: "NOT_FOUND",

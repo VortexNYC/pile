@@ -69,7 +69,7 @@ function parseArgs(args: readonly string[]): ParsedArgs {
     const equalsIndex = withoutPrefix.indexOf("=");
     if (equalsIndex >= 0) {
       flags[withoutPrefix.slice(0, equalsIndex)] = withoutPrefix.slice(
-        equalsIndex + 1
+        equalsIndex + 1,
       );
       continue;
     }
@@ -86,15 +86,15 @@ function parseArgs(args: readonly string[]): ParsedArgs {
 
 function flagString(
   flags: Readonly<Record<string, string | boolean>>,
-  key: string
+  key: string,
 ): string | undefined {
   const value = flags[key];
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
-function requiredFlag(
+function _requiredFlag(
   flags: Readonly<Record<string, string | boolean>>,
-  key: string
+  key: string,
 ): string {
   const value = flagString(flags, key);
   if (value === undefined) {
@@ -105,7 +105,7 @@ function requiredFlag(
 
 function parseJsonObjectFlag(
   flags: Readonly<Record<string, string | boolean>>,
-  key: string
+  key: string,
 ): JsonObject | undefined {
   const raw = flagString(flags, key);
   if (raw === undefined) return undefined;
@@ -158,22 +158,26 @@ function writeStoredConfig(config: CliConfig): void {
 
 async function requestCommand(
   positionals: readonly string[],
-  flags: Readonly<Record<string, string | boolean>>
+  flags: Readonly<Record<string, string | boolean>>,
 ): Promise<number> {
   const methodRaw = (positionals[1] ?? "").toUpperCase();
   if (!isHttpMethod(methodRaw)) {
-    throw new Error("Usage: issuetracker request METHOD PATH [--body-json ...]");
+    throw new Error(
+      "Usage: issuetracker request METHOD PATH [--body-json ...]",
+    );
   }
   const method = methodRaw;
   const path = positionals[2];
   if (path === undefined) {
-    throw new Error("Usage: issuetracker request METHOD PATH [--body-json ...]");
+    throw new Error(
+      "Usage: issuetracker request METHOD PATH [--body-json ...]",
+    );
   }
 
   const config = resolveConfig();
   if (config.apiKey === undefined || config.apiKey.length === 0) {
     throw new Error(
-      "Missing API key. Set ISSUETRACKER_API_KEY or run `issuetracker config set --api-key <key>`."
+      "Missing API key. Set ISSUETRACKER_API_KEY or run `issuetracker config set --api-key <key>`.",
     );
   }
 
@@ -211,7 +215,7 @@ async function requestCommand(
 }
 
 async function configSetCommand(
-  flags: Readonly<Record<string, string | boolean>>
+  flags: Readonly<Record<string, string | boolean>>,
 ): Promise<number> {
   const baseUrl = flagString(flags, "base-url");
   const apiKey = flagString(flags, "api-key");
@@ -224,7 +228,7 @@ async function configSetCommand(
 }
 
 export async function runCli(
-  args: readonly string[] = process.argv.slice(2)
+  args: readonly string[] = process.argv.slice(2),
 ): Promise<number> {
   try {
     const { positionals, flags } = parseArgs(args);

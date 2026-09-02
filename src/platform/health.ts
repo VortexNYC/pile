@@ -1,8 +1,8 @@
-import { createRoute, z } from "@hono/zod-openapi";
 import type { OpenAPIHono } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
 import { sql } from "drizzle-orm";
-import { createD1 } from "../global/db.js";
 import type { AppContext } from "../api/middleware.js";
+import { createD1 } from "../global/db.js";
 
 const healthBodySchema = z.object({
   ok: z.boolean(),
@@ -13,13 +13,11 @@ const healthBodySchema = z.object({
       name: z.string(),
       healthy: z.boolean(),
       message: z.string().optional(),
-    })
+    }),
   ),
 });
 
-export function registerHealthRoutes(
-  app: OpenAPIHono<AppContext>
-) {
+export function registerHealthRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(
     createRoute({
       method: "get",
@@ -75,9 +73,7 @@ export function registerHealthRoutes(
       }
 
       const healthy = checks.every((check) => check.healthy);
-      const status: "healthy" | "unhealthy" = healthy
-        ? "healthy"
-        : "unhealthy";
+      const status: "healthy" | "unhealthy" = healthy ? "healthy" : "unhealthy";
       const statusCode = healthy ? 200 : 503;
 
       return c.json(
@@ -87,8 +83,8 @@ export function registerHealthRoutes(
           version,
           checks,
         },
-        statusCode
+        statusCode,
       );
-    }
+    },
   );
 }

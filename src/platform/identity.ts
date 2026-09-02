@@ -1,5 +1,5 @@
-import { z } from "zod";
 import type { InferSelectModel } from "drizzle-orm";
+import { z } from "zod";
 import type { workspaceTokens } from "../global/schema.js";
 import { parsePermissionSet } from "./permissions.js";
 

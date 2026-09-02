@@ -1,5 +1,5 @@
-import { eq, and } from "drizzle-orm";
-import { D1Client } from "./db.js";
+import { and, eq } from "drizzle-orm";
+import type { D1Client } from "./db.js";
 import { repoBranches } from "./schema.js";
 
 export function findRepoBranch(db: D1Client, repo: string, branch: string) {
@@ -15,9 +15,11 @@ export async function createRepoBranch(
   workspaceId: string,
   repo: string,
   branch: string,
-  issueId: string
+  issueId: string,
 ) {
   const id = crypto.randomUUID();
-  await db.insert(repoBranches).values({ id, workspaceId, repo, branch, issueId });
+  await db
+    .insert(repoBranches)
+    .values({ id, workspaceId, repo, branch, issueId });
   return { id, workspaceId, repo, branch, issueId };
 }

@@ -1,26 +1,26 @@
-import { createRoute, z } from "@hono/zod-openapi";
 import type { OpenAPIHono } from "@hono/zod-openapi";
-import type { AppContext } from "./middleware.js";
-import { VortexError } from "../platform/errors.js";
-import { rls } from "../platform/rls.js";
+import { createRoute, z } from "@hono/zod-openapi";
 import { createD1 } from "../global/db.js";
 import {
-  listProjects,
-  getProject,
-  createProject,
-  updateProject,
-  deleteProject,
-  listCycles,
-  getCycle,
   createCycle,
-  updateCycle,
-  deleteCycle,
-  listLabels,
-  getLabel,
   createLabel,
-  updateLabel,
+  createProject,
+  deleteCycle,
   deleteLabel,
+  deleteProject,
+  getCycle,
+  getLabel,
+  getProject,
+  listCycles,
+  listLabels,
+  listProjects,
+  updateCycle,
+  updateLabel,
+  updateProject,
 } from "../global/workspace-entities.js";
+import { VortexError } from "../platform/errors.js";
+import { rls } from "../platform/rls.js";
+import type { AppContext } from "./middleware.js";
 
 const projectSchema = z.object({
   id: z.string(),
@@ -364,9 +364,7 @@ const deleteLabelRoute = createRoute({
   },
 });
 
-export function registerWorkspaceEntityRoutes(
-  app: OpenAPIHono<AppContext>
-) {
+export function registerWorkspaceEntityRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listProjectsRoute, async (c) => {
     const { workspaceId } = c.req.valid("param");
     const db = createD1(c.env.D1);

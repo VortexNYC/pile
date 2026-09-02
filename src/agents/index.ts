@@ -21,7 +21,7 @@ export function getAgentProvider(agentId: string, env: AppEnv): AgentProvider {
 
 export function registerAgentProvider(
   agentId: string,
-  factory: (env: AppEnv) => AgentProvider
+  factory: (env: AppEnv) => AgentProvider,
 ) {
   providers[agentId] = factory;
 }
@@ -30,7 +30,7 @@ export async function dispatchAgent(
   env: AppEnv,
   agentId: string,
   workspaceId: string,
-  issue: { id: string; title: string; description: string | null }
+  issue: { id: string; title: string; description: string | null },
 ): Promise<AgentSession> {
   const provider = getAgentProvider(agentId, env);
   const issueInput = {

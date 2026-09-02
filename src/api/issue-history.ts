@@ -1,9 +1,9 @@
-import { createRoute, z } from "@hono/zod-openapi";
 import type { OpenAPIHono } from "@hono/zod-openapi";
-import type { AppContext } from "./middleware.js";
-import { rls } from "../platform/rls.js";
+import { createRoute, z } from "@hono/zod-openapi";
 import { createD1 } from "../global/db.js";
 import { listIssueHistory } from "../global/issue-history.js";
+import { rls } from "../platform/rls.js";
+import type { AppContext } from "./middleware.js";
 
 const historySchema = z.object({
   id: z.string(),

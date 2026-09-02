@@ -1,5 +1,5 @@
-import createClient from "openapi-fetch";
 import type { Client } from "openapi-fetch";
+import createClient from "openapi-fetch";
 import type { paths } from "./types.js";
 
 export type { paths };

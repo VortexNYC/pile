@@ -1,15 +1,15 @@
-import { createRoute, z } from "@hono/zod-openapi";
 import type { OpenAPIHono } from "@hono/zod-openapi";
-import type { AppContext } from "./middleware.js";
-import { VortexError } from "../platform/errors.js";
-import { rls } from "../platform/rls.js";
+import { createRoute, z } from "@hono/zod-openapi";
 import { createD1 } from "../global/db.js";
 import {
-  listIssueRelations,
   createIssueRelation,
-  getIssueRelation,
   deleteIssueRelation,
+  getIssueRelation,
+  listIssueRelations,
 } from "../global/issue-relations.js";
+import { VortexError } from "../platform/errors.js";
+import { rls } from "../platform/rls.js";
+import type { AppContext } from "./middleware.js";
 
 const relationSchema = z.object({
   id: z.string(),

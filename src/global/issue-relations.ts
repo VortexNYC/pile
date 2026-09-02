@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { D1Client } from "./db.js";
+import type { D1Client } from "./db.js";
 import { issueRelations } from "./schema.js";
 
 const relationTypes = new Set([
@@ -18,7 +18,7 @@ export function isValidRelationType(type: string): boolean {
 export function listIssueRelations(
   db: D1Client,
   workspaceId: string,
-  fromIssueId: string
+  fromIssueId: string,
 ) {
   return db
     .select()
@@ -26,8 +26,8 @@ export function listIssueRelations(
     .where(
       and(
         eq(issueRelations.workspaceId, workspaceId),
-        eq(issueRelations.fromIssueId, fromIssueId)
-      )
+        eq(issueRelations.fromIssueId, fromIssueId),
+      ),
     )
     .all();
 }
@@ -47,7 +47,7 @@ export async function createIssueRelation(
     fromIssueId: string;
     toIssueId: string;
     type: string;
-  }
+  },
 ) {
   if (!isValidRelationType(values.type)) {
     throw new Error(`Invalid relation type: ${values.type}`);

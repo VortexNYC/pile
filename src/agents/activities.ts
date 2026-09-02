@@ -1,4 +1,8 @@
-export type AgentActivityType = "thought" | "response" | "error" | "elicitation";
+export type AgentActivityType =
+  | "thought"
+  | "response"
+  | "error"
+  | "elicitation";
 
 export interface AgentActivity {
   sessionId: string;

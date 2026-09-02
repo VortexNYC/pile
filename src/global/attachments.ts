@@ -1,11 +1,11 @@
 import { and, eq } from "drizzle-orm";
-import { D1Client } from "./db.js";
+import type { D1Client } from "./db.js";
 import { attachments } from "./schema.js";
 
 export function listAttachments(
   db: D1Client,
   workspaceId: string,
-  issueId: string
+  issueId: string,
 ) {
   return db
     .select()
@@ -13,8 +13,8 @@ export function listAttachments(
     .where(
       and(
         eq(attachments.workspaceId, workspaceId),
-        eq(attachments.issueId, issueId)
-      )
+        eq(attachments.issueId, issueId),
+      ),
     )
     .all();
 }
@@ -24,7 +24,7 @@ export function getAttachment(db: D1Client, workspaceId: string, id: string) {
     .select()
     .from(attachments)
     .where(
-      and(eq(attachments.workspaceId, workspaceId), eq(attachments.id, id))
+      and(eq(attachments.workspaceId, workspaceId), eq(attachments.id, id)),
     )
     .get();
 }
@@ -40,7 +40,7 @@ export async function createAttachment(
     subtitle?: string | null;
     r2Key?: string | null;
     createdAt?: string;
-  }
+  },
 ) {
   const id = crypto.randomUUID();
   const ts = new Date().toISOString();
@@ -62,10 +62,12 @@ export async function setAttachmentR2Key(
   db: D1Client,
   workspaceId: string,
   id: string,
-  r2Key: string
+  r2Key: string,
 ) {
   await db
     .update(attachments)
     .set({ r2Key })
-    .where(and(eq(attachments.workspaceId, workspaceId), eq(attachments.id, id)));
+    .where(
+      and(eq(attachments.workspaceId, workspaceId), eq(attachments.id, id)),
+    );
 }
