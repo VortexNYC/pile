@@ -33,6 +33,7 @@
   },
   "dependencies": {
     "@hono/zod-openapi": "1.5.0",
+    "@modelcontextprotocol/server": "^2.0.0",
     "better-auth": "^1.7.2",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.13.5",

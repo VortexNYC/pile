@@ -14,6 +14,7 @@ import { registerIssueHistoryRoutes } from "./issue-history.js";
 import { registerStateRoutes } from "./states.js";
 import { registerTemplateRoutes } from "./templates.js";
 import { registerMigrateRoutes } from "./migrate.js";
+import { handleMcpRequest } from "../mcp/server.js";
 import { createAuth } from "../platform/auth.js";
 import { githubWebhookRoute, processGithubWebhook } from "../agents/github.js";
 import { observabilityMiddleware } from "../platform/observability.js";
@@ -87,6 +88,10 @@ app.doc("/openapi.json", {
     version: "0.1.0",
     description: "Agent-native issue tracker on Cloudflare Workers.",
   },
+});
+
+app.all("/mcp", async (c) => {
+  return handleMcpRequest(c.req.raw, c.env);
 });
 
 export default app;
