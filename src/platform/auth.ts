@@ -5,7 +5,11 @@ import { createD1 } from "../global/db.js";
 import * as schema from "../global/schema.js";
 import type { AppEnv } from "./env.js";
 
-export function createAuth(env: AppEnv) {
+export interface AuthService {
+  handler: (request: Request) => Promise<Response>;
+}
+
+export function createAuth(env: AppEnv): AuthService {
   const db = createD1(env.D1);
 
   return betterAuth({
@@ -13,5 +17,5 @@ export function createAuth(env: AppEnv) {
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.BETTER_AUTH_URL,
     emailAndPassword: { enabled: true },
-  });
+  }) as AuthService;
 }
