@@ -11,6 +11,7 @@
     "cli": "tsx src/index.ts"
   },
   "devDependencies": {
+    "@issuetracker/tsconfig": "workspace:*",
     "tsx": "4.23.13"
   }
 }

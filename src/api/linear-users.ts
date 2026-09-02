@@ -2,7 +2,11 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
 import { createD1 } from "../global/db.js";
-import { getLinearUser, listLinearUsers } from "../global/linear-users.js";
+import {
+  createLinearUser,
+  getLinearUser,
+  listLinearUsers,
+} from "../global/linear-users.js";
 import { VortexError } from "../platform/errors.js";
 import { rls } from "../platform/rls.js";
 import type { AppContext } from "./middleware.js";
@@ -14,6 +18,35 @@ const linearUserSchema = z.object({
   name: z.string().nullable(),
   email: z.string().nullable(),
   createdAt: z.string(),
+});
+
+const createLinearUserBodySchema = z.object({
+  linearId: z.string().min(1),
+  name: z.string().optional(),
+  email: z.string().optional(),
+});
+
+const createLinearUserRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{workspaceId}/linear-users",
+  tags: ["linear-users"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ workspaceId: z.string() }),
+    body: {
+      content: {
+        "application/json": { schema: createLinearUserBodySchema },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "Linear user created",
+      content: {
+        "application/json": { schema: linearUserSchema },
+      },
+    },
+  },
 });
 
 const listLinearUsersRoute = createRoute({
@@ -55,6 +88,14 @@ const getLinearUserRoute = createRoute({
 });
 
 export function registerLinearUserRoutes(app: OpenAPIHono<AppContext>) {
+  app.openapi(createLinearUserRoute, async (c) => {
+    const { workspaceId } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const db = createD1(c.env.D1);
+    const item = await createLinearUser(db, workspaceId, input);
+    return c.json(item, 201);
+  });
+
   app.openapi(listLinearUsersRoute, async (c) => {
     const { workspaceId } = c.req.valid("param");
     const db = createD1(c.env.D1);

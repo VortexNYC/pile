@@ -1,14 +1,17 @@
-export function parsePermissionSet(permissions: string): Set<string> {
-  return new Set(
-    permissions
-      .split(",")
-      .map((p) => p.trim().toLowerCase())
-      .filter(Boolean)
-  );
+export function parsePermissionSet(
+  permissions: string | string[]
+): Set<string> {
+  const list = Array.isArray(permissions)
+    ? permissions
+    : permissions
+        .split(",")
+        .map((p) => p.trim().toLowerCase())
+        .filter(Boolean);
+  return new Set(list);
 }
 
 export function canAccess(
-  permissions: string,
+  permissions: string | string[],
   action: "read" | "write" | "admin"
 ): boolean {
   const set = parsePermissionSet(permissions);

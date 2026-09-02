@@ -1,21 +1,5 @@
 {
-  "compilerOptions": {
-    "target": "ES2022",
-    "lib": ["ES2022"],
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "types": [
-      "@cloudflare/workers-types",
-      "@cloudflare/vitest-pool-workers",
-      "vitest",
-      "node"
-    ],
-    "strict": true,
-    "noEmit": true,
-    "skipLibCheck": true,
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
-    "forceConsistentCasingInFileNames": true
-  },
-  "include": ["src/**/*.ts", "packages/*/src/**/*.ts"]
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "@issuetracker/tsconfig/worker.json",
+  "include": ["src/**/*.ts", "packages/*/src/**/*.ts", "scripts/**/*.ts"]
 }

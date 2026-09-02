@@ -1645,7 +1645,47 @@ export interface paths {
             };
         };
         put?: never;
-        post?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    workspaceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        linearId: string;
+                        name: string;
+                        type: string;
+                        color?: string;
+                        position?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description State created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            workspaceId: string;
+                            linearId: string;
+                            name: string;
+                            type: string;
+                            color: string | null;
+                            position: string | null;
+                            createdAt: string;
+                        };
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -1798,7 +1838,43 @@ export interface paths {
             };
         };
         put?: never;
-        post?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    workspaceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        linearId: string;
+                        name?: string;
+                        email?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Linear user created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            workspaceId: string;
+                            linearId: string;
+                            name: string | null;
+                            email: string | null;
+                            createdAt: string;
+                        };
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;

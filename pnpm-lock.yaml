@@ -36,6 +36,9 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^4.20241230.0
         version: 4.20241230.0
+      '@issuetracker/tsconfig':
+        specifier: workspace:*
+        version: link:packages/tsconfig
       '@types/node':
         specifier: ^26.4.0
         version: 26.4.0
@@ -66,6 +69,9 @@ importers:
 
   packages/cli:
     devDependencies:
+      '@issuetracker/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
       tsx:
         specifier: 4.23.13
         version: 4.23.13
@@ -75,6 +81,12 @@ importers:
       openapi-fetch:
         specifier: 0.17.0
         version: 0.17.0
+    devDependencies:
+      '@issuetracker/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
+
+  packages/tsconfig: {}
 
 packages:
 

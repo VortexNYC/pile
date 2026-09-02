@@ -3,6 +3,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 
 import { createD1 } from "../global/db.js";
 import {
+  createState,
   deleteState,
   getState,
   listStates,
@@ -28,6 +29,37 @@ const stateBodySchema = z.object({
   type: z.string().optional(),
   color: z.string().optional(),
   position: z.string().optional(),
+});
+
+const createStateBodySchema = z.object({
+  linearId: z.string().min(1),
+  name: z.string().min(1),
+  type: z.string().min(1),
+  color: z.string().optional(),
+  position: z.string().optional(),
+});
+
+const createStateRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{workspaceId}/states",
+  tags: ["states"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ workspaceId: z.string() }),
+    body: {
+      content: {
+        "application/json": { schema: createStateBodySchema },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "State created",
+      content: {
+        "application/json": { schema: stateSchema },
+      },
+    },
+  },
 });
 
 const listStatesRoute = createRoute({
@@ -105,6 +137,14 @@ const deleteStateRoute = createRoute({
 });
 
 export function registerStateRoutes(app: OpenAPIHono<AppContext>) {
+  app.openapi(createStateRoute, async (c) => {
+    const { workspaceId } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const db = createD1(c.env.D1);
+    const item = await createState(db, workspaceId, input);
+    return c.json(item, 201);
+  });
+
   app.openapi(listStatesRoute, async (c) => {
     const { workspaceId } = c.req.valid("param");
     const db = createD1(c.env.D1);

@@ -44,6 +44,7 @@
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "0.8.66",
     "@cloudflare/workers-types": "^4.20241230.0",
+    "@issuetracker/tsconfig": "workspace:*",
     "@types/node": "^26.4.0",
     "drizzle-kit": "^0.31.10",
     "knip": "^6.34.0",

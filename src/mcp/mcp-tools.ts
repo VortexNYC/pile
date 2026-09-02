@@ -1177,6 +1177,41 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesWorkspaceIdLinearusers",
+    "description": "(POST /workspaces/{workspaceId}/linear-users)",
+    "method": "POST",
+    "path": "/workspaces/{workspaceId}/linear-users",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "linearId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "type": "string"
+            },
+            "email": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "linearId"
+          ]
+        }
+      },
+      "required": [
+        "workspaceId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesWorkspaceIdMemberships",
     "description": "(POST /workspaces/{workspaceId}/memberships)",
     "method": "POST",
@@ -1280,6 +1315,51 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           },
           "required": [
             "name"
+          ]
+        }
+      },
+      "required": [
+        "workspaceId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesWorkspaceIdStates",
+    "description": "(POST /workspaces/{workspaceId}/states)",
+    "method": "POST",
+    "path": "/workspaces/{workspaceId}/states",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "linearId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "type": {
+              "type": "string",
+              "minLength": 1
+            },
+            "color": {
+              "type": "string"
+            },
+            "position": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "linearId",
+            "name",
+            "type"
           ]
         }
       },

@@ -1,0 +1,13 @@
+{
+  "name": "@issuetracker/tsconfig",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "files": [
+    "*.json"
+  ],
+  "exports": {
+    "./base.json": "./base.json",
+    "./worker.json": "./worker.json"
+  }
+}
