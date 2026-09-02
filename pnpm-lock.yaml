@@ -23,9 +23,6 @@ importers:
       hono:
         specifier: ^4.13.5
         version: 4.13.5
-      openapi-fetch:
-        specifier: ^0.17.0
-        version: 0.17.0
       zod:
         specifier: ^4.5.4
         version: 4.5.4
@@ -57,6 +54,22 @@ importers:
       wrangler:
         specifier: ^3.78.0
         version: 3.114.17(@cloudflare/workers-types@4.20241230.0)
+
+  packages/cli:
+    dependencies:
+      issuetracker-client:
+        specifier: workspace:*
+        version: link:../client
+    devDependencies:
+      tsx:
+        specifier: 4.23.13
+        version: 4.23.13
+
+  packages/client:
+    dependencies:
+      openapi-fetch:
+        specifier: 0.17.0
+        version: 0.17.0
 
 packages:
 

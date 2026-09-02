@@ -1,0 +1,19 @@
+{
+  "name": "issuetracker-cli",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "CLI for the Vortex issue tracker.",
+  "bin": {
+    "issuetracker": "./src/index.ts"
+  },
+  "scripts": {
+    "cli": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "issuetracker-client": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "4.23.13"
+  },
+  "license": "MIT"
+}

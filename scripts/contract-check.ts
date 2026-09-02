@@ -4,7 +4,7 @@ import { execSync } from "node:child_process";
 const generated = [
   "src/mcp/openapi.json",
   "src/mcp/mcp-tools.ts",
-  "src/client/types.ts",
+  "packages/client/src/types.ts",
 ];
 
 function run(label: string, command: string): void {
