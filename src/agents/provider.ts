@@ -14,7 +14,7 @@ export interface AgentProvider {
   dispatch(
     workspaceId: string,
     issue: Issue,
-    model?: string,
+    model?: string
   ): Promise<AgentSession>;
   poll(sessionId: string): Promise<AgentSession>;
 }

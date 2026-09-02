@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+
 import { createD1 } from "../global/db.js";
 import { webhookSubscriptions } from "../global/schema.js";
 import { hmacSha256Hex } from "../platform/crypto.js";
@@ -8,7 +9,7 @@ import type { RealtimeEvent } from "../workspace/types.js";
 export async function deliverWebhooks(
   env: AppEnv,
   workspaceId: string,
-  event: RealtimeEvent,
+  event: RealtimeEvent
 ): Promise<void> {
   if (!env.WEBHOOK_SECRET) {
     return;

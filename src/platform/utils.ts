@@ -1,6 +1,6 @@
 export function generateBranchName(
   issueId: string | undefined,
-  title: string,
+  title: string
 ): string {
   const id = issueId?.toLowerCase().replace(/\s+/g, "-") ?? "vor";
   const slug = title
@@ -36,7 +36,7 @@ export function sessionIsTerminal(session: {
     return true;
   if (
     ["completed", "error", "failed", "cancelled", "timeout", "exit"].includes(
-      session.status_detail || "",
+      session.status_detail || ""
     )
   )
     return true;

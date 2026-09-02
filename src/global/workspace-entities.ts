@@ -1,4 +1,5 @@
 import { and, eq } from "drizzle-orm";
+
 import type { D1Client } from "./db.js";
 import {
   cycles,
@@ -33,7 +34,7 @@ export async function createProject(
     status?: string | null;
     startDate?: string | null;
     endDate?: string | null;
-  },
+  }
 ) {
   const id = crypto.randomUUID();
   const ts = now();
@@ -60,7 +61,7 @@ export async function updateProject(
     status: string;
     startDate: string | null;
     endDate: string | null;
-  }>,
+  }>
 ) {
   await db
     .update(projects)
@@ -95,7 +96,7 @@ export async function createCycle(
     name: string;
     startDate?: string | null;
     endDate?: string | null;
-  },
+  }
 ) {
   const id = crypto.randomUUID();
   const ts = now();
@@ -120,7 +121,7 @@ export async function updateCycle(
     name: string;
     startDate: string | null;
     endDate: string | null;
-  }>,
+  }>
 ) {
   await db
     .update(cycles)
@@ -153,7 +154,7 @@ export async function createLabel(
   values: {
     name: string;
     color?: string | null;
-  },
+  }
 ) {
   const id = crypto.randomUUID();
   const ts = now();
@@ -173,7 +174,7 @@ export async function updateLabel(
   values: Partial<{
     name: string;
     color: string | null;
-  }>,
+  }>
 ) {
   await db.update(labels).set(values).where(eq(labels.id, id));
   return db.select().from(labels).where(eq(labels.id, id)).get();
@@ -206,7 +207,7 @@ export async function createState(
     type: string;
     color?: string | null;
     position?: string | null;
-  },
+  }
 ) {
   const existing = await db
     .select()
@@ -214,8 +215,8 @@ export async function createState(
     .where(
       and(
         eq(states.workspaceId, workspaceId),
-        eq(states.linearId, values.linearId),
-      ),
+        eq(states.linearId, values.linearId)
+      )
     )
     .get();
   if (existing) {
@@ -244,7 +245,7 @@ export async function updateState(
     type: string;
     color: string | null;
     position: string | null;
-  }>,
+  }>
 ) {
   await db.update(states).set(values).where(eq(states.id, id));
   return db.select().from(states).where(eq(states.id, id)).get();
@@ -268,7 +269,7 @@ export async function createMembership(
   db: D1Client,
   workspaceId: string,
   userId: string,
-  role: "owner" | "admin" | "member" = "member",
+  role: "owner" | "admin" | "member" = "member"
 ) {
   const existing = await db
     .select()
@@ -276,8 +277,8 @@ export async function createMembership(
     .where(
       and(
         eq(workspaceMemberships.workspaceId, workspaceId),
-        eq(workspaceMemberships.userId, userId),
-      ),
+        eq(workspaceMemberships.userId, userId)
+      )
     )
     .get();
   if (existing) {

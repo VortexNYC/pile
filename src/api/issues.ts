@@ -1,5 +1,6 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
+
 import { getAgentProvider } from "../agents/index.js";
 import { createD1 } from "../global/db.js";
 import { createRepoBranch } from "../global/repo-branches.js";
@@ -15,7 +16,7 @@ import type { AppContext, WorkerEnv } from "./middleware.js";
 
 async function getStub(env: WorkerEnv, workspaceId: string) {
   const stub = env.WORKSPACE_DURABLE_OBJECT.get(
-    env.WORKSPACE_DURABLE_OBJECT.idFromName(workspaceId),
+    env.WORKSPACE_DURABLE_OBJECT.idFromName(workspaceId)
   );
   await stub.setWorkspaceId(workspaceId);
   return stub;
@@ -259,7 +260,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         workspaceId,
         issue.repo,
         issue.branch,
-        issue.id,
+        issue.id
       );
     }
 

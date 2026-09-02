@@ -5,7 +5,7 @@ export interface MockAgentProviderOptions {
   dispatch?: (
     workspaceId: string,
     issue: Issue,
-    model?: string,
+    model?: string
   ) => AgentSession | Promise<AgentSession>;
   poll?: (sessionId: string) => AgentSession | Promise<AgentSession>;
 }
@@ -22,7 +22,7 @@ export class MockAgentProvider implements AgentProvider {
   async dispatch(
     workspaceId: string,
     issue: Issue,
-    model?: string,
+    model?: string
   ): Promise<AgentSession> {
     if (this.options.dispatch) {
       return await this.options.dispatch(workspaceId, issue, model);

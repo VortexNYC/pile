@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+
 import type { D1Client } from "./db.js";
 import { workspaceTokens } from "./schema.js";
 
@@ -6,7 +7,7 @@ export async function createWorkspaceToken(
   db: D1Client,
   workspaceId: string,
   name: string,
-  permissions = "read,write",
+  permissions = "read,write"
 ) {
   const id = crypto.randomUUID();
   const token = crypto.randomUUID();

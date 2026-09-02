@@ -1,5 +1,6 @@
 import { createMiddleware } from "hono/factory";
 import { secureHeaders } from "hono/secure-headers";
+
 import type { AppContext } from "../api/middleware.js";
 import type { AppEnv } from "./env.js";
 import { VortexError } from "./errors.js";
@@ -46,7 +47,7 @@ function isPublicPath(pathname: string): boolean {
 function isAllowedOrigin(
   origin: string,
   env: AppEnv,
-  pathname: string,
+  pathname: string
 ): boolean {
   if (isPublicPath(pathname)) {
     return true;
@@ -64,11 +65,11 @@ export const corsMiddleware = createMiddleware<AppContext>(async (c, next) => {
     c.header("Access-Control-Allow-Origin", origin);
     c.header(
       "Access-Control-Allow-Methods",
-      "GET, POST, PATCH, PUT, DELETE, OPTIONS",
+      "GET, POST, PATCH, PUT, DELETE, OPTIONS"
     );
     c.header(
       "Access-Control-Allow-Headers",
-      "Authorization, Content-Type, X-Requested-With",
+      "Authorization, Content-Type, X-Requested-With"
     );
     c.header("Access-Control-Allow-Credentials", "true");
     c.header("Access-Control-Max-Age", "86400");

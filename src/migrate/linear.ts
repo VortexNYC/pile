@@ -140,7 +140,7 @@ class LinearClient {
 
   private async request<T>(
     query: string,
-    variables?: Record<string, unknown>,
+    variables?: Record<string, unknown>
   ): Promise<T> {
     const res = await fetch("https://api.linear.app/graphql", {
       method: "POST",
@@ -194,7 +194,7 @@ class LinearClient {
           }
         }
       }`,
-      { teamId },
+      { teamId }
     );
     return data.team?.states.nodes ?? [];
   }
@@ -212,7 +212,7 @@ class LinearClient {
           }
         }
       }`,
-      { teamId },
+      { teamId }
     );
     return data.issueLabels?.nodes ?? [];
   }
@@ -234,7 +234,7 @@ class LinearClient {
           }
         }
       }`,
-      { teamId },
+      { teamId }
     );
     return data.team?.projects?.nodes ?? [];
   }
@@ -255,7 +255,7 @@ class LinearClient {
           }
         }
       }`,
-      { teamId },
+      { teamId }
     );
     return data.team?.cycles?.nodes ?? [];
   }
@@ -279,7 +279,7 @@ class LinearClient {
           }
         }
       }`,
-      { teamId },
+      { teamId }
     );
     return data.team?.members?.nodes ?? [];
   }
@@ -299,14 +299,14 @@ class LinearClient {
           }
         }
       }`,
-      { teamId },
+      { teamId }
     );
     return data.team?.templates?.nodes ?? [];
   }
 
   async getIssuesPage(
     teamId: string,
-    cursor?: string,
+    cursor?: string
   ): Promise<{
     issues: LinearIssue[];
     pageInfo: { hasNextPage: boolean; endCursor?: string };
@@ -432,7 +432,7 @@ class LinearClient {
           }
         }
       }`,
-      { teamId, after: cursor ?? null },
+      { teamId, after: cursor ?? null }
     );
     return {
       issues: data.team?.issues?.nodes ?? [],
@@ -464,7 +464,7 @@ function mapStatus(state: LinearState | null): IssueStatus | undefined {
 }
 
 function mapPriority(
-  priority: number | null | undefined,
+  priority: number | null | undefined
 ): IssuePriority | undefined {
   if (priority == null) return undefined;
   if (priority === 1) return "urgent";
@@ -478,7 +478,7 @@ export async function migrateLinear(
   env: WorkerEnv,
   workspaceId: string,
   linearToken: string,
-  teamId: string,
+  teamId: string
 ): Promise<MigrationCounts> {
   const client = new LinearClient(linearToken);
   const db = createD1(env.D1);
@@ -603,7 +603,7 @@ export async function migrateLinear(
         title: li.title,
         description: li.description || undefined,
         status: mapStatus(
-          li.state ? (stateMap.get(li.state.id) ?? null) : null,
+          li.state ? (stateMap.get(li.state.id) ?? null) : null
         ),
         priority: mapPriority(li.priority),
         assigneeId: li.assignee?.id ?? undefined,

@@ -1,11 +1,12 @@
 import { and, eq } from "drizzle-orm";
+
 import type { D1Client } from "./db.js";
 import { issueSubscribers } from "./schema.js";
 
 export function listIssueSubscribers(
   db: D1Client,
   workspaceId: string,
-  issueId: string,
+  issueId: string
 ) {
   return db
     .select()
@@ -13,8 +14,8 @@ export function listIssueSubscribers(
     .where(
       and(
         eq(issueSubscribers.workspaceId, workspaceId),
-        eq(issueSubscribers.issueId, issueId),
-      ),
+        eq(issueSubscribers.issueId, issueId)
+      )
     )
     .all();
 }
@@ -25,7 +26,7 @@ export async function createIssueSubscriber(
   values: {
     issueId: string;
     linearUserId: string;
-  },
+  }
 ) {
   const existing = await db
     .select()
@@ -34,8 +35,8 @@ export async function createIssueSubscriber(
       and(
         eq(issueSubscribers.workspaceId, workspaceId),
         eq(issueSubscribers.issueId, values.issueId),
-        eq(issueSubscribers.linearUserId, values.linearUserId),
-      ),
+        eq(issueSubscribers.linearUserId, values.linearUserId)
+      )
     )
     .get();
   if (existing) {

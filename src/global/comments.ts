@@ -1,17 +1,18 @@
 import { and, eq } from "drizzle-orm";
+
 import type { D1Client } from "./db.js";
 import { comments } from "./schema.js";
 
 export function listComments(
   db: D1Client,
   workspaceId: string,
-  issueId: string,
+  issueId: string
 ) {
   return db
     .select()
     .from(comments)
     .where(
-      and(eq(comments.workspaceId, workspaceId), eq(comments.issueId, issueId)),
+      and(eq(comments.workspaceId, workspaceId), eq(comments.issueId, issueId))
     )
     .all();
 }
@@ -33,7 +34,7 @@ export async function createComment(
     body: string;
     createdAt?: string;
     updatedAt?: string;
-  },
+  }
 ) {
   const id = crypto.randomUUID();
   const ts = new Date().toISOString();
@@ -53,7 +54,7 @@ export async function updateComment(
   db: D1Client,
   workspaceId: string,
   id: string,
-  values: { body: string },
+  values: { body: string }
 ) {
   const ts = new Date().toISOString();
   await db
@@ -66,7 +67,7 @@ export async function updateComment(
 export async function deleteComment(
   db: D1Client,
   workspaceId: string,
-  id: string,
+  id: string
 ) {
   await db
     .delete(comments)

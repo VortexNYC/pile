@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { hmacSha256Hex, timingSafeEqualHex } from "./crypto.js";
 
 describe("crypto", () => {

@@ -104,10 +104,10 @@ Build the modules in dependency order: `platform` → `global` → `workspace-do
 
 ## Risks and Mitigations
 
-| Risk | Mitigation |
-|---|---|
+| Risk                                                      | Mitigation                                                                              |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------- |
 | Durable Object storage or CPU limits for a busy workspace | Shard by `workspaceId` already; if one workspace grows, split to per-project DOs later. |
-| better-auth on D1 adapter not stable | Fallback to a custom token auth in `src/platform/auth.ts`. |
-| Drizzle on D1 migration friction | Use `drizzle-kit` and local `wrangler d1 migrations` for dev and prod. |
-| Real-time too complex for v1 | Defer WebSockets to a v2 slice; build the core first. |
-| Long migration breaks existing tests | Migrate in the module order above; keep tests green per module. |
+| better-auth on D1 adapter not stable                      | Fallback to a custom token auth in `src/platform/auth.ts`.                              |
+| Drizzle on D1 migration friction                          | Use `drizzle-kit` and local `wrangler d1 migrations` for dev and prod.                  |
+| Real-time too complex for v1                              | Defer WebSockets to a v2 slice; build the core first.                                   |
+| Long migration breaks existing tests                      | Migrate in the module order above; keep tests green per module.                         |

@@ -2,6 +2,16 @@
   "name": "issuetracker",
   "version": "0.1.0",
   "description": "Vortex Issue Tracker — an open-source, agent-native issue tracker on Cloudflare Workers.",
+  "keywords": [
+    "agent",
+    "cloudflare",
+    "devin",
+    "issue-tracker",
+    "linear",
+    "vortex",
+    "worker"
+  ],
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
@@ -16,32 +26,11 @@
     "client:generate": "openapi-typescript src/mcp/openapi.json -o packages/client/src/types.ts",
     "cli": "pnpm -C packages/cli run cli",
     "contract:check": "tsx scripts/contract-check.ts",
-    "lint": "biome check .",
-    "lint:fix": "biome check . --write",
-    "format": "biome format . --write",
-    "check": "pnpm run contract:check && pnpm run lint && pnpm run typecheck && pnpm test"
-  },
-  "keywords": [
-    "vortex",
-    "linear",
-    "agent",
-    "issue-tracker",
-    "devin",
-    "worker",
-    "cloudflare"
-  ],
-  "license": "MIT",
-  "devDependencies": {
-    "@biomejs/biome": "^2.5.11",
-    "@cloudflare/vitest-pool-workers": "0.8.66",
-    "@cloudflare/workers-types": "^4.20241230.0",
-    "@types/node": "^26.4.0",
-    "drizzle-kit": "^0.31.10",
-    "openapi-typescript": "^7.13.0",
-    "tsx": "^4.23.13",
-    "typescript": "^5.6.0",
-    "vitest": "^2.1.0",
-    "wrangler": "^3.78.0"
+    "lint": "vp lint",
+    "lint:fix": "vp lint --fix",
+    "format": "vp fmt",
+    "format:check": "vp fmt --check",
+    "check": "pnpm run contract:check && vp check && pnpm test"
   },
   "dependencies": {
     "@hono/zod-openapi": "1.5.0",
@@ -50,5 +39,22 @@
     "drizzle-orm": "^0.45.2",
     "hono": "^4.13.5",
     "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "0.8.66",
+    "@cloudflare/workers-types": "^4.20241230.0",
+    "@types/node": "^26.4.0",
+    "drizzle-kit": "^0.31.10",
+    "openapi-typescript": "^7.13.0",
+    "tsx": "^4.23.13",
+    "typescript": "^5.6.0",
+    "vite-plus": "0.2.4",
+    "vitest": "^2.1.0",
+    "wrangler": "^3.78.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "vitest": "^2.1.0"
+    }
   }
 }

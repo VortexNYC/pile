@@ -9,7 +9,7 @@ pnpm install
 pnpm run check
 ```
 
-`pnpm run check` runs `contract:check`, `typecheck`, and `test`. `contract:check` regenerates `src/mcp/openapi.json`, `src/mcp/mcp-tools.ts`, and `src/client/types.ts` and fails if they drift from the source of truth.
+`pnpm run check` runs `contract:check` (generated artifacts), `vp check` (format, lint, type), and `pnpm test`.
 
 ## Stack
 

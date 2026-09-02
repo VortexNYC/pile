@@ -1,4 +1,5 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
+
 import { githubWebhookRoute, processGithubWebhook } from "../agents/github.js";
 import { handleMcpRequest } from "../mcp/server.js";
 import { createAuth } from "../platform/auth.js";
@@ -68,11 +69,11 @@ app.openapi(
     const id = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(workspaceId);
     const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(id);
     return await stub.fetch(c.req.raw);
-  },
+  }
 );
 
 app.openapi(githubWebhookRoute, async (c) =>
-  c.json(await processGithubWebhook(c)),
+  c.json(await processGithubWebhook(c))
 );
 
 app.all("/api/auth/*", (c) => {

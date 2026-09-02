@@ -1,4 +1,5 @@
 import { and, eq } from "drizzle-orm";
+
 import type { D1Client } from "./db.js";
 import { repoBranches, repoIssues } from "./schema.js";
 
@@ -7,7 +8,7 @@ export function findRepoIssue(db: D1Client, repo: string, issueNumber: number) {
     .select()
     .from(repoIssues)
     .where(
-      and(eq(repoIssues.repo, repo), eq(repoIssues.issueNumber, issueNumber)),
+      and(eq(repoIssues.repo, repo), eq(repoIssues.issueNumber, issueNumber))
     )
     .get();
 }
@@ -17,7 +18,7 @@ export async function createRepoIssue(
   workspaceId: string,
   repo: string,
   issueNumber: number,
-  issueId: string,
+  issueId: string
 ) {
   const id = crypto.randomUUID();
   await db
@@ -29,12 +30,12 @@ export async function createRepoIssue(
 export async function deleteRepoIssue(
   db: D1Client,
   repo: string,
-  issueNumber: number,
+  issueNumber: number
 ) {
   await db
     .delete(repoIssues)
     .where(
-      and(eq(repoIssues.repo, repo), eq(repoIssues.issueNumber, issueNumber)),
+      and(eq(repoIssues.repo, repo), eq(repoIssues.issueNumber, issueNumber))
     );
 }
 

@@ -22,16 +22,16 @@ Migrate `notion-engineering-queue` from a Notion-backed Cloudflare Worker to a *
 
 ## Capability Map
 
-| Module id | Responsibility | Depends on |
-|---|---|---|
-| `platform` | Worker boot, env parsing, routing, middleware, errors | — |
-| `global` | D1 tables: workspaces, users, billing, identity, auth | `platform` |
-| `workspace-do` | Durable Object: issues, comments, history, projects, cycles, real-time | `platform`, `global` |
-| `api` | HTTP endpoints for issues, dispatch, github, webhooks | `platform`, `global`, `workspace-do` |
-| `realtime` | WebSocket/Server-Sent Event handlers | `workspace-do` |
-| `agents` | Agent identity, sessions, multi-provider dispatch, GitHub webhook handler | `api`, `workspace-do` |
-| `github` | Full GitHub App integration (install, issue/PR/comment sync, outbound API) (v2) | `agents` |
-| `sync` | Migrations from Linear, Jira, GitHub; optional Notion/Linear/Slack/GitHub adapters (deferred) | `workspace-do` |
+| Module id      | Responsibility                                                                                | Depends on                           |
+| -------------- | --------------------------------------------------------------------------------------------- | ------------------------------------ |
+| `platform`     | Worker boot, env parsing, routing, middleware, errors                                         | —                                    |
+| `global`       | D1 tables: workspaces, users, billing, identity, auth                                         | `platform`                           |
+| `workspace-do` | Durable Object: issues, comments, history, projects, cycles, real-time                        | `platform`, `global`                 |
+| `api`          | HTTP endpoints for issues, dispatch, github, webhooks                                         | `platform`, `global`, `workspace-do` |
+| `realtime`     | WebSocket/Server-Sent Event handlers                                                          | `workspace-do`                       |
+| `agents`       | Agent identity, sessions, multi-provider dispatch, GitHub webhook handler                     | `api`, `workspace-do`                |
+| `github`       | Full GitHub App integration (install, issue/PR/comment sync, outbound API) (v2)               | `agents`                             |
+| `sync`         | Migrations from Linear, Jira, GitHub; optional Notion/Linear/Slack/GitHub adapters (deferred) | `workspace-do`                       |
 
 Build order: `platform` → `global` → `workspace-do` → `api` → `realtime` → `agents` → `sync`
 
@@ -61,18 +61,18 @@ This is not a Devin integration. It is a generic agent-native issue tracker. The
 
 ## Tech Stack
 
-| Layer | Choice |
-|---|---|
-| Runtime | Cloudflare Workers |
-| Router | Hono |
-| Validation | Zod |
-| Global DB | Cloudflare D1 (SQLite) with Drizzle |
-| Workspace DB | Durable Object SQLite |
-| Attachments | Cloudflare R2 (v2) |
-| Real-time | Durable Object hibernated WebSockets |
-| Auth | better-auth on D1 + workspace-scoped API tokens |
-| Testing | Vitest + Miniflare + `@cloudflare/vitest-pool-workers` |
-| Package manager | pnpm |
+| Layer           | Choice                                                 |
+| --------------- | ------------------------------------------------------ |
+| Runtime         | Cloudflare Workers                                     |
+| Router          | Hono                                                   |
+| Validation      | Zod                                                    |
+| Global DB       | Cloudflare D1 (SQLite) with Drizzle                    |
+| Workspace DB    | Durable Object SQLite                                  |
+| Attachments     | Cloudflare R2 (v2)                                     |
+| Real-time       | Durable Object hibernated WebSockets                   |
+| Auth            | better-auth on D1 + workspace-scoped API tokens        |
+| Testing         | Vitest + Miniflare + `@cloudflare/vitest-pool-workers` |
+| Package manager | pnpm                                                   |
 
 ## Commands
 

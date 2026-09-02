@@ -1,4 +1,5 @@
 import { createMiddleware } from "hono/factory";
+
 import type { AppContext } from "../api/middleware.js";
 
 export const observabilityMiddleware = createMiddleware<AppContext>(
@@ -19,5 +20,5 @@ export const observabilityMiddleware = createMiddleware<AppContext>(
       };
       console.log(JSON.stringify(log));
     }
-  },
+  }
 );

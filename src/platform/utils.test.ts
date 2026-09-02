@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import {
   generateBranchName,
   parseSessionIdFromUrl,
@@ -8,22 +9,22 @@ import {
 describe("utils", () => {
   it("generateBranchName uses issue id and slug", () => {
     expect(generateBranchName("VOR-45", "Fix the bug!")).toBe(
-      "vor-45-fix-the-bug",
+      "vor-45-fix-the-bug"
     );
   });
 
   it("generateBranchName falls back when no issue id", () => {
     expect(generateBranchName(undefined, "Update docs")).toBe(
-      "vor-update-docs",
+      "vor-update-docs"
     );
   });
 
   it("parseSessionIdFromUrl extracts the session id", () => {
     expect(parseSessionIdFromUrl("https://app.devin.ai/sessions/abc123")).toBe(
-      "abc123",
+      "abc123"
     );
     expect(
-      parseSessionIdFromUrl("https://app.devin.ai/sessions/abc123/settings"),
+      parseSessionIdFromUrl("https://app.devin.ai/sessions/abc123/settings")
     ).toBe("abc123");
     expect(parseSessionIdFromUrl("not-a-url")).toBeUndefined();
   });
@@ -34,7 +35,7 @@ describe("utils", () => {
         status: "running",
         status_detail: null,
         is_archived: true,
-      }),
+      })
     ).toBe(true);
   });
 
@@ -53,7 +54,7 @@ describe("utils", () => {
           status: s,
           status_detail: null,
           is_archived: false,
-        }),
+        })
       ).toBe(true);
     }
   });
@@ -64,7 +65,7 @@ describe("utils", () => {
         status: "running",
         status_detail: null,
         is_archived: false,
-      }),
+      })
     ).toBe(false);
   });
 });

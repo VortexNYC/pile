@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+
 import { createD1 } from "../global/db.js";
 import * as schema from "../global/schema.js";
 import type { AppEnv } from "./env.js";

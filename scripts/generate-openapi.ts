@@ -1,5 +1,6 @@
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+
 import app from "../src/api/index.js";
 
 const repoRoot = resolve(import.meta.dirname, "..");

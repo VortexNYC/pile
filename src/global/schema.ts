@@ -6,8 +6,12 @@ export const workspaces = sqliteTable("workspaces", {
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
   ownerId: text("owner_id").notNull(),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const workspaceMemberships = sqliteTable("workspace_memberships", {
@@ -17,7 +21,9 @@ export const workspaceMemberships = sqliteTable("workspace_memberships", {
     .references(() => workspaces.id),
   userId: text("user_id").notNull(),
   role: text("role", { enum: ["owner", "admin", "member"] }).notNull(),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const workspaceTokens = sqliteTable("workspace_tokens", {
@@ -28,7 +34,9 @@ export const workspaceTokens = sqliteTable("workspace_tokens", {
   name: text("name").notNull(),
   tokenHash: text("token_hash").notNull().unique(),
   permissions: text("permissions").notNull().default("read,write"),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const repoBranches = sqliteTable(
@@ -41,11 +49,13 @@ export const repoBranches = sqliteTable(
     repo: text("repo").notNull(),
     branch: text("branch").notNull(),
     issueId: text("issue_id").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
     index("repo_branches_repo_branch_idx").on(table.repo, table.branch),
-  ],
+  ]
 );
 
 export const repoIssues = sqliteTable(
@@ -58,12 +68,14 @@ export const repoIssues = sqliteTable(
     repo: text("repo").notNull(),
     issueNumber: integer("issue_number").notNull(),
     issueId: text("issue_id").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
     index("repo_issues_repo_number_idx").on(table.repo, table.issueNumber),
     index("repo_issues_workspace_idx").on(table.workspaceId),
-  ],
+  ]
 );
 
 export const projects = sqliteTable(
@@ -78,10 +90,14 @@ export const projects = sqliteTable(
     status: text("status").notNull().default("active"),
     startDate: text("start_date"),
     endDate: text("end_date"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
   },
-  (table) => [index("projects_workspace_idx").on(table.workspaceId)],
+  (table) => [index("projects_workspace_idx").on(table.workspaceId)]
 );
 
 export const cycles = sqliteTable(
@@ -95,13 +111,17 @@ export const cycles = sqliteTable(
     name: text("name").notNull(),
     startDate: text("start_date"),
     endDate: text("end_date"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
     index("cycles_workspace_idx").on(table.workspaceId),
     index("cycles_project_idx").on(table.projectId),
-  ],
+  ]
 );
 
 export const labels = sqliteTable(
@@ -113,9 +133,11 @@ export const labels = sqliteTable(
       .references(() => workspaces.id),
     name: text("name").notNull(),
     color: text("color"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
   },
-  (table) => [index("labels_workspace_idx").on(table.workspaceId)],
+  (table) => [index("labels_workspace_idx").on(table.workspaceId)]
 );
 
 export const states = sqliteTable(
@@ -130,12 +152,14 @@ export const states = sqliteTable(
     type: text("type").notNull(),
     color: text("color"),
     position: text("position"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
     index("states_workspace_idx").on(table.workspaceId),
     index("states_linear_idx").on(table.workspaceId, table.linearId),
-  ],
+  ]
 );
 
 export const linearUsers = sqliteTable(
@@ -148,13 +172,15 @@ export const linearUsers = sqliteTable(
     linearId: text("linear_id").notNull(),
     name: text("name"),
     email: text("email"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
     index("linear_users_workspace_idx").on(table.workspaceId),
     index("linear_users_linear_idx").on(table.workspaceId, table.linearId),
     index("linear_users_email_idx").on(table.email),
-  ],
+  ]
 );
 
 export const comments = sqliteTable(
@@ -167,13 +193,17 @@ export const comments = sqliteTable(
     issueId: text("issue_id").notNull(),
     authorId: text("author_id").notNull(),
     body: text("body").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
     index("comments_issue_idx").on(table.workspaceId, table.issueId),
     index("comments_author_idx").on(table.workspaceId, table.authorId),
-  ],
+  ]
 );
 
 export const issueRelations = sqliteTable(
@@ -186,12 +216,14 @@ export const issueRelations = sqliteTable(
     fromIssueId: text("from_issue_id").notNull(),
     toIssueId: text("to_issue_id").notNull(),
     type: text("type").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
     index("issue_relations_from_idx").on(table.workspaceId, table.fromIssueId),
     index("issue_relations_to_idx").on(table.workspaceId, table.toIssueId),
-  ],
+  ]
 );
 
 export const attachments = sqliteTable(
@@ -207,12 +239,14 @@ export const attachments = sqliteTable(
     title: text("title"),
     subtitle: text("subtitle"),
     r2Key: text("r2_key"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
     index("attachments_issue_idx").on(table.workspaceId, table.issueId),
     index("attachments_linear_idx").on(table.workspaceId, table.linearId),
-  ],
+  ]
 );
 
 export const issueHistory = sqliteTable(
@@ -228,12 +262,14 @@ export const issueHistory = sqliteTable(
     fromValue: text("from_value"),
     toValue: text("to_value"),
     actorId: text("actor_id"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
     index("issue_history_issue_idx").on(table.workspaceId, table.issueId),
     index("issue_history_created_idx").on(table.workspaceId, table.createdAt),
-  ],
+  ]
 );
 
 export const issueSubscribers = sqliteTable(
@@ -245,15 +281,17 @@ export const issueSubscribers = sqliteTable(
       .references(() => workspaces.id),
     issueId: text("issue_id").notNull(),
     linearUserId: text("linear_user_id").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
     index("issue_subscribers_issue_idx").on(table.workspaceId, table.issueId),
     index("issue_subscribers_user_idx").on(
       table.workspaceId,
-      table.linearUserId,
+      table.linearUserId
     ),
-  ],
+  ]
 );
 
 export const templates = sqliteTable(
@@ -266,12 +304,14 @@ export const templates = sqliteTable(
     linearId: text("linear_id").notNull(),
     name: text("name").notNull(),
     templateData: text("template_data"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
     index("templates_workspace_idx").on(table.workspaceId),
     index("templates_linear_idx").on(table.workspaceId, table.linearId),
-  ],
+  ]
 );
 
 export const webhookSubscriptions = sqliteTable(
@@ -284,11 +324,13 @@ export const webhookSubscriptions = sqliteTable(
     url: text("url").notNull(),
     events: text("events").notNull().default("*"),
     secret: text("secret").notNull().default(""),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
     index("webhook_subscriptions_workspace_idx").on(table.workspaceId),
-  ],
+  ]
 );
 
 export const webhookDeliveries = sqliteTable(
@@ -298,9 +340,11 @@ export const webhookDeliveries = sqliteTable(
     source: text("source").notNull(),
     event: text("event").notNull(),
     workspaceId: text("workspace_id").references(() => workspaces.id),
-    processedAt: text("processed_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    processedAt: text("processed_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
   },
-  (table) => [index("webhook_deliveries_workspace_idx").on(table.workspaceId)],
+  (table) => [index("webhook_deliveries_workspace_idx").on(table.workspaceId)]
 );
 
 export const user = sqliteTable("user", {
@@ -339,7 +383,7 @@ export const session = sqliteTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
   },
-  (table) => [index("session_userId_idx").on(table.userId)],
+  (table) => [index("session_userId_idx").on(table.userId)]
 );
 
 export const account = sqliteTable(
@@ -373,7 +417,7 @@ export const account = sqliteTable(
   (table) => [
     index("account_userId_idx").on(table.userId),
     index("account_provider_idx").on(table.providerId, table.accountId),
-  ],
+  ]
 );
 
 export const verification = sqliteTable("verification", {

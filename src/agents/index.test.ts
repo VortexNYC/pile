@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import type { AppEnv } from "../platform/env.js";
 import { MockAgentProvider } from "./harness.js";
 import {
@@ -10,7 +11,7 @@ import {
 describe("agent providers", () => {
   it("throws for unknown provider", () => {
     expect(() => getAgentProvider("unknown", {} as AppEnv)).toThrow(
-      "Unknown agent provider: unknown",
+      "Unknown agent provider: unknown"
     );
   });
 

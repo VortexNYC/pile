@@ -4,6 +4,7 @@ import {
   WebStandardStreamableHTTPServerTransport,
 } from "@modelcontextprotocol/server";
 import { CfWorkerJsonSchemaValidator } from "@modelcontextprotocol/server/validators/cf-worker";
+
 import type { WorkerEnv } from "../api/middleware.js";
 import { MCP_TOOLS } from "./mcp-tools.js";
 
@@ -11,7 +12,7 @@ type HonoApp = {
   fetch(
     request: Request,
     env?: WorkerEnv,
-    executionCtx?: unknown,
+    executionCtx?: unknown
   ): Response | Promise<Response>;
 };
 
@@ -37,7 +38,7 @@ function fillPath(path: string, input: Record<string, unknown>): string {
 export async function handleMcpRequest(
   request: Request,
   env: WorkerEnv,
-  app: HonoApp,
+  app: HonoApp
 ) {
   const server = new McpServer({
     name: "issuetracker",
@@ -57,7 +58,7 @@ export async function handleMcpRequest(
 
         const query = new URLSearchParams();
         const pathParamNames = new Set(
-          [...tool.path.matchAll(/\{([^}]+)\}/gu)].map((m) => m[1]),
+          [...tool.path.matchAll(/\{([^}]+)\}/gu)].map((m) => m[1])
         );
         for (const [key, value] of Object.entries(input)) {
           if (key === "body" || pathParamNames.has(key)) continue;
@@ -98,7 +99,7 @@ export async function handleMcpRequest(
           ],
           isError: !response.ok,
         };
-      },
+      }
     );
   }
 

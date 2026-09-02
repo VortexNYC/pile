@@ -1,6 +1,7 @@
-import { DurableObject } from "cloudflare:workers";
 import type { DurableObjectState } from "@cloudflare/workers-types";
+import { DurableObject } from "cloudflare:workers";
 import { z } from "zod";
+
 import { deliverWebhooks } from "../agents/webhooks.js";
 import type { AppEnv } from "../platform/env.js";
 import { execAll, execOne } from "./sql.js";
@@ -111,7 +112,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   async webSocketMessage(
     ws: WebSocket,
-    message: string | ArrayBuffer,
+    message: string | ArrayBuffer
   ): Promise<void> {
     if (typeof message !== "string") return;
     try {
@@ -181,7 +182,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       null,
       null,
       input.createdAt ?? now,
-      input.updatedAt ?? now,
+      input.updatedAt ?? now
     );
 
     const rows = Array.from(cursor);
@@ -205,14 +206,14 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       this.sql,
       issueSchema,
       "SELECT * FROM issues WHERE id = ?",
-      id,
+      id
     );
     return row ? toIssue(row) : undefined;
   }
 
   async getIssueByBranch(
     repo: string,
-    branch: string,
+    branch: string
   ): Promise<Issue | undefined> {
     await this.ready;
     const row = execOne(
@@ -220,7 +221,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       issueSchema,
       "SELECT * FROM issues WHERE repo = ? AND branch = ?",
       repo,
-      branch,
+      branch
     );
     return row ? toIssue(row) : undefined;
   }
@@ -254,7 +255,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   async updateIssue(
     id: string,
-    patch: Partial<IssueInput>,
+    patch: Partial<IssueInput>
   ): Promise<Issue | undefined> {
     await this.ready;
     const allowed: Array<{
@@ -289,7 +290,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
     values.push(new Date().toISOString(), id);
     const query = `UPDATE issues SET ${sets.join(
-      ", ",
+      ", "
     )}, updated_at = ? WHERE id = ? RETURNING *`;
     const row = execOne(this.sql, issueSchema, query, ...values);
     if (!row) return undefined;
@@ -306,7 +307,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     repo: string,
     branch: string,
     prUrl: string,
-    prState: string,
+    prState: string
   ): Promise<Issue | undefined> {
     await this.ready;
     const query = `UPDATE issues SET pr_url = ?, pr_state = ?, updated_at = ? WHERE repo = ? AND branch = ? RETURNING *`;
@@ -318,7 +319,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       prState,
       new Date().toISOString(),
       repo,
-      branch,
+      branch
     );
     if (!row) return undefined;
     const issue = toIssue(row);
