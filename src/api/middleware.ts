@@ -35,7 +35,7 @@ export const workspaceTokenMiddleware = createMiddleware<{
   }
 
   const db = createD1(c.env.D1);
-  const found = await findWorkspaceToken(db, token);
+  const found = await findWorkspaceToken(db, token, c.env.TOKEN_HASH_SECRET);
 
   if (!found) {
     throw new VortexError({

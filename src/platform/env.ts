@@ -11,4 +11,5 @@ export interface AppEnv {
   DEVIN_ORG_ID?: string;
   DEVIN_OUTPOST?: string;
   DAYTONA_LABEL_ID?: string;
+  TOKEN_HASH_SECRET?: string;
 }

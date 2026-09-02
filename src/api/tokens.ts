@@ -104,7 +104,8 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
       db,
       workspaceId,
       input.name,
-      input.permissions
+      input.permissions,
+      c.env.TOKEN_HASH_SECRET
     );
     return c.json(item, 201);
   });

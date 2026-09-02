@@ -14,7 +14,10 @@ export default defineWorkersConfig({
       workers: {
         wrangler: { configPath: "./wrangler.toml" },
         miniflare: {
-          bindings: { TEST_MIGRATIONS: migrations },
+          bindings: {
+            TEST_MIGRATIONS: migrations,
+            TOKEN_HASH_SECRET: "test-token-hash-secret-do-not-use-in-prod",
+          },
         },
       },
     },

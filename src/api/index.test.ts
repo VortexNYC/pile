@@ -29,7 +29,8 @@ async function adminToken(workspaceId: string) {
     db,
     workspaceId,
     "test-admin",
-    "admin"
+    "admin",
+    env.TOKEN_HASH_SECRET
   );
   return token.token;
 }
