@@ -10,6 +10,9 @@ import { createLinearUser } from "../global/linear-users.js";
 import { createIssueRelation } from "../global/issue-relations.js";
 import { createAttachment, setAttachmentR2Key } from "../global/attachments.js";
 import { createIssueHistory } from "../global/issue-history.js";
+import { createIssueSubscriber } from "../global/issue-subscribers.js";
+import { findUserByEmail, createUser } from "../global/users.js";
+import { createMembership } from "../global/workspace-entities.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkerEnv } from "../api/middleware.js";
 import type { IssueInput, IssuePriority, IssueStatus } from "../workspace/types.js";
@@ -98,6 +101,7 @@ interface LinearIssue {
   comments: { nodes: LinearComment[] };
   attachments: { nodes: LinearAttachment[] };
   history: { nodes: LinearHistory[] };
+  subscribers: { nodes: Array<{ id: string }> };
   parent?: { id: string } | null;
   children: { nodes: Array<{ id: string }> };
   createdAt: string;
@@ -115,6 +119,8 @@ interface MigrationCounts {
   relations: number;
   attachments: number;
   history: number;
+  subscribers: number;
+  memberships: number;
 }
 
 class LinearClient {
@@ -379,6 +385,11 @@ class LinearClient {
                   }
                 }
               }
+              subscribers(first: 10) {
+                nodes {
+                  id
+                }
+              }
               createdAt
               updatedAt
             }
@@ -446,12 +457,29 @@ export async function migrateLinear(
     client.getUsers(teamId),
   ]);
 
+  let membershipCount = 0;
+
   for (const lu of linearUsers) {
     await createLinearUser(db, workspaceId, {
       linearId: lu.id,
       name: lu.name,
       email: lu.email,
     });
+
+    if (lu.email) {
+      const existing = await findUserByEmail(db, lu.email);
+      const localUser =
+        existing ??
+        (await createUser(db, {
+          name: lu.name ?? "",
+          email: lu.email,
+          emailVerified: true,
+        }));
+      if (localUser) {
+        await createMembership(db, workspaceId, localUser.id, "member");
+        membershipCount++;
+      }
+    }
   }
 
   const stateMap = new Map(states.map((s) => [s.id, s]));
@@ -511,6 +539,7 @@ export async function migrateLinear(
   let relationCount = 0;
   let attachmentCount = 0;
   let historyCount = 0;
+  let subscriberCount = 0;
   let cursor: string | undefined;
   let hasNextPage = true;
 
@@ -656,6 +685,14 @@ export async function migrateLinear(
           }
         }
       }
+
+      for (const sub of li.subscribers.nodes) {
+        await createIssueSubscriber(db, workspaceId, {
+          issueId: li.id,
+          linearUserId: sub.id,
+        });
+        subscriberCount++;
+      }
     }
 
     hasNextPage = page.pageInfo.hasNextPage;
@@ -673,5 +710,7 @@ export async function migrateLinear(
     relations: relationCount,
     attachments: attachmentCount,
     history: historyCount,
+    subscribers: subscriberCount,
+    memberships: membershipCount,
   };
 }

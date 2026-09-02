@@ -232,6 +232,23 @@ export const issueHistory = sqliteTable(
   ]
 );
 
+export const issueSubscribers = sqliteTable(
+  "issue_subscribers",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    issueId: text("issue_id").notNull(),
+    linearUserId: text("linear_user_id").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("issue_subscribers_issue_idx").on(table.workspaceId, table.issueId),
+    index("issue_subscribers_user_idx").on(table.workspaceId, table.linearUserId),
+  ]
+);
+
 export const webhookSubscriptions = sqliteTable(
   "webhook_subscriptions",
   {

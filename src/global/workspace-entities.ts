@@ -1,6 +1,12 @@
 import { and, eq } from "drizzle-orm";
 import { D1Client } from "./db.js";
-import { projects, cycles, labels, states } from "./schema.js";
+import {
+  projects,
+  cycles,
+  labels,
+  states,
+  workspaceMemberships,
+} from "./schema.js";
 
 const now = () => new Date().toISOString();
 
@@ -246,4 +252,49 @@ export async function updateState(
 
 export async function deleteState(db: D1Client, id: string) {
   await db.delete(states).where(eq(states.id, id));
+}
+
+// Memberships
+
+export function listMemberships(db: D1Client, workspaceId: string) {
+  return db
+    .select()
+    .from(workspaceMemberships)
+    .where(eq(workspaceMemberships.workspaceId, workspaceId))
+    .all();
+}
+
+export async function createMembership(
+  db: D1Client,
+  workspaceId: string,
+  userId: string,
+  role: "owner" | "admin" | "member" = "member"
+) {
+  const existing = await db
+    .select()
+    .from(workspaceMemberships)
+    .where(
+      and(
+        eq(workspaceMemberships.workspaceId, workspaceId),
+        eq(workspaceMemberships.userId, userId)
+      )
+    )
+    .get();
+  if (existing) {
+    return existing;
+  }
+  const id = crypto.randomUUID();
+  const ts = now();
+  await db.insert(workspaceMemberships).values({
+    id,
+    workspaceId,
+    userId,
+    role,
+    createdAt: ts,
+  });
+  return db
+    .select()
+    .from(workspaceMemberships)
+    .where(eq(workspaceMemberships.id, id))
+    .get();
 }
