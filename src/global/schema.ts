@@ -114,6 +114,42 @@ export const labels = sqliteTable(
   (table) => [index("labels_workspace_idx").on(table.workspaceId)]
 );
 
+export const linearUsers = sqliteTable(
+  "linear_users",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    name: text("name"),
+    email: text("email"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("linear_users_workspace_idx").on(table.workspaceId),
+    index("linear_users_email_idx").on(table.email),
+  ]
+);
+
+export const comments = sqliteTable(
+  "comments",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    issueId: text("issue_id").notNull(),
+    authorId: text("author_id").notNull(),
+    body: text("body").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("comments_issue_idx").on(table.workspaceId, table.issueId),
+    index("comments_author_idx").on(table.authorId),
+  ]
+);
+
 export const webhookSubscriptions = sqliteTable(
   "webhook_subscriptions",
   {

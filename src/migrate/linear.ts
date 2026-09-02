@@ -4,6 +4,8 @@ import {
   createProject,
   createCycle,
 } from "../global/workspace-entities.js";
+import { createComment } from "../global/comments.js";
+import { createLinearUser } from "../global/linear-users.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkerEnv } from "../api/middleware.js";
 import type { IssueInput, IssuePriority, IssueStatus } from "../workspace/types.js";
@@ -35,6 +37,20 @@ interface LinearCycle {
   endsAt?: string;
 }
 
+interface LinearUser {
+  id: string;
+  name?: string;
+  email?: string;
+}
+
+interface LinearComment {
+  id: string;
+  body: string;
+  user?: { id: string } | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface LinearIssue {
   id: string;
   title: string;
@@ -45,6 +61,7 @@ interface LinearIssue {
   project?: { id: string } | null;
   cycle?: { id: string } | null;
   labels: { nodes: Array<{ id: string }> };
+  comments: { nodes: LinearComment[] };
   createdAt: string;
   updatedAt: string;
 }
@@ -54,6 +71,8 @@ interface MigrationCounts {
   labels: number;
   projects: number;
   cycles: number;
+  users: number;
+  comments: number;
 }
 
 class LinearClient {
@@ -179,6 +198,34 @@ class LinearClient {
     return data.team?.cycles?.nodes ?? [];
   }
 
+  async getUsers(teamId: string): Promise<LinearUser[]> {
+    const data = await this.request<{
+      team: {
+        members: {
+          nodes: Array<{
+            user: LinearUser;
+          }>;
+        } | null;
+      } | null;
+    }>(
+      `query GetUsers($teamId: String!) {
+        team(id: $teamId) {
+          members {
+            nodes {
+              user {
+                id
+                name
+                email
+              }
+            }
+          }
+        }
+      }`,
+      { teamId }
+    );
+    return data.team?.members?.nodes.map((m) => m.user) ?? [];
+  }
+
   async getIssuesPage(
     teamId: string,
     cursor?: string
@@ -219,6 +266,17 @@ class LinearClient {
               labels {
                 nodes {
                   id
+                }
+              }
+              comments(first: 50) {
+                nodes {
+                  id
+                  body
+                  user {
+                    id
+                  }
+                  createdAt
+                  updatedAt
                 }
               }
               createdAt
@@ -280,12 +338,21 @@ export async function migrateLinear(
   const client = new LinearClient(linearToken);
   const db = createD1(env.D1);
 
-  const [states, labels, projects, cycles] = await Promise.all([
+  const [states, labels, projects, cycles, linearUsers] = await Promise.all([
     client.getStates(teamId),
     client.getLabels(teamId),
     client.getProjects(teamId),
     client.getCycles(teamId),
+    client.getUsers(teamId),
   ]);
+
+  for (const lu of linearUsers) {
+    await createLinearUser(db, workspaceId, {
+      id: lu.id,
+      name: lu.name,
+      email: lu.email,
+    });
+  }
 
   const stateMap = new Map(states.map((s) => [s.id, s]));
 
@@ -329,6 +396,7 @@ export async function migrateLinear(
   const stub = env.WORKSPACE_DURABLE_OBJECT.get(doId);
 
   let issueCount = 0;
+  let commentCount = 0;
   let cursor: string | undefined;
   let hasNextPage = true;
 
@@ -358,6 +426,18 @@ export async function migrateLinear(
 
       await stub.createIssue(input);
       issueCount++;
+
+      for (const lc of li.comments.nodes) {
+        await createComment(db, workspaceId, {
+          id: lc.id,
+          issueId: li.id,
+          authorId: lc.user?.id ?? "unknown",
+          body: lc.body,
+          createdAt: lc.createdAt,
+          updatedAt: lc.updatedAt,
+        });
+        commentCount++;
+      }
     }
 
     hasNextPage = page.pageInfo.hasNextPage;
@@ -369,5 +449,7 @@ export async function migrateLinear(
     labels: labels.length,
     projects: projects.length,
     cycles: cycles.length,
+    users: linearUsers.length,
+    comments: commentCount,
   };
 }

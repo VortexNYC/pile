@@ -1,0 +1,63 @@
+import { and, eq } from "drizzle-orm";
+import { D1Client } from "./db.js";
+import { comments } from "./schema.js";
+
+export function listComments(db: D1Client, workspaceId: string, issueId: string) {
+  return db
+    .select()
+    .from(comments)
+    .where(
+      and(
+        eq(comments.workspaceId, workspaceId),
+        eq(comments.issueId, issueId)
+      )
+    )
+    .all();
+}
+
+export function getComment(db: D1Client, id: string) {
+  return db.select().from(comments).where(eq(comments.id, id)).get();
+}
+
+export async function createComment(
+  db: D1Client,
+  workspaceId: string,
+  values: {
+    id?: string;
+    issueId: string;
+    authorId: string;
+    body: string;
+    createdAt?: string;
+    updatedAt?: string;
+  }
+) {
+  const id = values.id ?? crypto.randomUUID();
+  const ts = new Date().toISOString();
+  await db.insert(comments).values({
+    id,
+    workspaceId,
+    issueId: values.issueId,
+    authorId: values.authorId,
+    body: values.body,
+    createdAt: values.createdAt ?? ts,
+    updatedAt: values.updatedAt ?? ts,
+  });
+  return db.select().from(comments).where(eq(comments.id, id)).get();
+}
+
+export async function updateComment(
+  db: D1Client,
+  id: string,
+  values: { body: string }
+) {
+  const ts = new Date().toISOString();
+  await db
+    .update(comments)
+    .set({ body: values.body, updatedAt: ts })
+    .where(eq(comments.id, id));
+  return db.select().from(comments).where(eq(comments.id, id)).get();
+}
+
+export async function deleteComment(db: D1Client, id: string) {
+  await db.delete(comments).where(eq(comments.id, id));
+}

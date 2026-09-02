@@ -7,6 +7,7 @@ import {
 } from "./middleware.js";
 import { registerIssueRoutes } from "./issues.js";
 import { registerWorkspaceEntityRoutes } from "./workspace-entities.js";
+import { registerCommentRoutes } from "./comments.js";
 import { registerMigrateRoutes } from "./migrate.js";
 import { createAuth } from "../platform/auth.js";
 import { githubWebhookRoute, processGithubWebhook } from "../agents/github.js";
@@ -37,6 +38,7 @@ app.use("*", ...securityMiddleware);
 app.use("/workspaces/:workspaceId/*", workspaceTokenMiddleware);
 registerIssueRoutes(app);
 registerWorkspaceEntityRoutes(app);
+registerCommentRoutes(app);
 registerMigrateRoutes(app);
 registerHealthRoutes(app);
 
