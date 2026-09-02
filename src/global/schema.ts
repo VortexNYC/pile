@@ -257,7 +257,7 @@ export const issueHistory = sqliteTable(
       .notNull()
       .references(() => workspaces.id),
     issueId: text("issue_id").notNull(),
-    linearId: text("linear_id").notNull(),
+    linearId: text("linear_id"),
     field: text("field").notNull(),
     fromValue: text("from_value"),
     toValue: text("to_value"),

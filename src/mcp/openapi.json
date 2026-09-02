@@ -3014,7 +3014,8 @@
                             "type": "string"
                           },
                           "linearId": {
-                            "type": "string"
+                            "type": "string",
+                            "nullable": true
                           },
                           "field": {
                             "type": "string"

@@ -217,8 +217,9 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(createIssueRoute, async (c) => {
     const input = c.req.valid("json");
     const { workspaceId } = c.req.valid("param");
+    const identity = c.get("workspaceIdentity");
     const stub = await getStub(c.env, workspaceId);
-    const issue = await stub.createIssue(input);
+    const issue = await stub.createIssue(input, identity.id);
     return c.json(issue, 201);
   });
 
@@ -239,8 +240,9 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(updateIssueRoute, async (c) => {
     const input = c.req.valid("json");
     const { workspaceId, id } = c.req.valid("param");
+    const identity = c.get("workspaceIdentity");
     const stub = await getStub(c.env, workspaceId);
-    const issue = await stub.updateIssue(id, input);
+    const issue = await stub.updateIssue(id, input, identity.id);
     if (!issue) {
       throw new VortexError({
         code: "NOT_FOUND",

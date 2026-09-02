@@ -36,7 +36,7 @@ export async function createIssueHistory(
   workspaceId: string,
   values: {
     issueId: string;
-    linearId: string;
+    linearId: string | null;
     field: string;
     fromValue?: string | null;
     toValue?: string | null;

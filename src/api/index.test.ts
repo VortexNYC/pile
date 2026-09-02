@@ -238,4 +238,48 @@ describe("API integration", () => {
     const body = await list.json();
     expect(body.subscribers).toHaveLength(1);
   });
+
+  it("records issue history on create and update", async () => {
+    const workspaceId = await seedWorkspace();
+    const token = await adminToken(workspaceId);
+
+    const create = await app.fetch(
+      request("/workspaces/" + workspaceId + "/issues", {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          title: "History test",
+          status: "backlog",
+          priority: "medium",
+        }),
+      }),
+      env
+    );
+    expect(create.status).toBe(201);
+    const issue = await create.json();
+
+    const update = await app.fetch(
+      request("/workspaces/" + workspaceId + "/issues/" + issue.id, {
+        method: "PATCH",
+        token,
+        body: JSON.stringify({
+          title: "History test updated",
+          status: "in_progress",
+        }),
+      }),
+      env
+    );
+    expect(update.status).toBe(200);
+
+    const historyRes = await app.fetch(
+      request(
+        "/workspaces/" + workspaceId + "/issues/" + issue.id + "/history",
+        { token }
+      ),
+      env
+    );
+    expect(historyRes.status).toBe(200);
+    const historyBody = await historyRes.json();
+    expect(historyBody.history.length).toBeGreaterThanOrEqual(1);
+  });
 });

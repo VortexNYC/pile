@@ -1646,7 +1646,7 @@ export interface paths {
                                 id: string;
                                 workspaceId: string;
                                 issueId: string;
-                                linearId: string;
+                                linearId: string | null;
                                 field: string;
                                 fromValue: string | null;
                                 toValue: string | null;

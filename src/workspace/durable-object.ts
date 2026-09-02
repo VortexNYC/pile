@@ -3,6 +3,8 @@ import { DurableObject } from "cloudflare:workers";
 import { z } from "zod";
 
 import { deliverWebhooks } from "../agents/webhooks.js";
+import { createD1, type D1Client } from "../global/db.js";
+import { createIssueHistory } from "../global/issue-history.js";
 import type { AppEnv } from "../platform/env.js";
 import { execAll, execOne } from "./sql.js";
 import type {
@@ -74,12 +76,14 @@ const LATEST_SCHEMA_VERSION = MIGRATIONS.length;
 
 export class WorkspaceDO extends DurableObject<AppEnv> {
   private readonly sql: SqlStorage;
+  private readonly db: D1Client;
   private workspaceId: string;
   private readonly ready: Promise<void>;
 
   constructor(ctx: DurableObjectState, env: AppEnv) {
     super(ctx, env);
     this.sql = ctx.storage.sql;
+    this.db = createD1(env.D1);
     this.workspaceId = ctx.id.toString();
     this.ready = this.runMigrations();
   }
@@ -154,7 +158,28 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     this.ctx.waitUntil(deliverWebhooks(this.env, this.workspaceId, event));
   }
 
-  async createIssue(input: IssueInput): Promise<Issue> {
+  private async recordIssueHistory(
+    issueId: string,
+    entries: ReadonlyArray<{
+      field: string;
+      fromValue: string | null;
+      toValue: string | null;
+    }>,
+    actorId?: string
+  ) {
+    await Promise.all(
+      entries.map((entry) =>
+        createIssueHistory(this.db, this.workspaceId, {
+          issueId,
+          linearId: null,
+          actorId: actorId ?? null,
+          ...entry,
+        })
+      )
+    );
+  }
+
+  async createIssue(input: IssueInput, actorId?: string): Promise<Issue> {
     await this.ready;
     const now = new Date().toISOString();
     const id = input.id ?? crypto.randomUUID();
@@ -197,6 +222,11 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       workspaceId: this.workspaceId,
       issue,
     });
+    await this.recordIssueHistory(
+      issue.id,
+      [{ field: "created", fromValue: null, toValue: issue.title }],
+      actorId
+    );
     return issue;
   }
 
@@ -278,9 +308,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   async updateIssue(
     id: string,
-    patch: Partial<IssueInput>
+    patch: Partial<IssueInput>,
+    actorId?: string
   ): Promise<Issue | undefined> {
     await this.ready;
+    const old = await this.getIssue(id);
+    if (!old) return undefined;
+
     const allowed: Array<{
       key: keyof IssueInput;
       column: string;
@@ -308,7 +342,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     }
 
     if (sets.length === 0) {
-      return this.getIssue(id);
+      return old;
     }
 
     values.push(new Date().toISOString(), id);
@@ -318,6 +352,32 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const row = execOne(this.sql, issueSchema, query, ...values);
     if (!row) return undefined;
     const issue = toIssue(row);
+
+    const historyEntries = allowed
+      .filter(({ key }) => key in patch)
+      .map(({ key, column }) => {
+        const before = old[key];
+        const after = issue[key as keyof Issue];
+        const fromValue = before === null ? null : String(before);
+        const toValue = after === null ? null : String(after);
+        return fromValue === toValue
+          ? undefined
+          : { field: column, fromValue, toValue };
+      })
+      .filter(
+        (
+          entry
+        ): entry is {
+          field: string;
+          fromValue: string | null;
+          toValue: string | null;
+        } => entry !== undefined
+      );
+
+    if (historyEntries.length > 0) {
+      await this.recordIssueHistory(issue.id, historyEntries, actorId);
+    }
+
     await this.emit({
       type: "issue.updated",
       workspaceId: this.workspaceId,
@@ -345,9 +405,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     repo: string,
     branch: string,
     prUrl: string,
-    prState: string
+    prState: string,
+    actorId?: string
   ): Promise<Issue | undefined> {
     await this.ready;
+    const old = await this.getIssueByBranch(repo, branch);
+    if (!old) return undefined;
+
     const query = `UPDATE issues SET pr_url = ?, pr_state = ?, updated_at = ? WHERE repo = ? AND branch = ? RETURNING *`;
     const row = execOne(
       this.sql,
@@ -361,6 +425,30 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     );
     if (!row) return undefined;
     const issue = toIssue(row);
+
+    const historyEntries: Array<{
+      field: string;
+      fromValue: string | null;
+      toValue: string | null;
+    }> = [];
+    if (old.prUrl !== issue.prUrl) {
+      historyEntries.push({
+        field: "pr_url",
+        fromValue: old.prUrl,
+        toValue: issue.prUrl,
+      });
+    }
+    if (old.prState !== issue.prState) {
+      historyEntries.push({
+        field: "pr_state",
+        fromValue: old.prState,
+        toValue: issue.prState,
+      });
+    }
+    if (historyEntries.length > 0) {
+      await this.recordIssueHistory(issue.id, historyEntries, actorId);
+    }
+
     await this.emit({
       type: "pr.updated",
       workspaceId: this.workspaceId,

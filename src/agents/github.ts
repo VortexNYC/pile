@@ -166,7 +166,7 @@ async function processPullRequest(
 
   const doId = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(record.workspaceId);
   const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(doId);
-  await stub.updatePrState(repo, branch, prUrl, prState);
+  await stub.updatePrState(repo, branch, prUrl, prState, "github");
 
   if (deliveryId) {
     await recordWebhookDelivery(
@@ -229,12 +229,16 @@ async function processGitHubIssue(
   if (action === "opened" || action === "reopened") {
     const status = action === "reopened" ? "todo" : "backlog";
     if (mapping) {
-      const updated = await stub.updateIssue(mapping.issueId, {
-        title: issue.title,
-        description: issue.body ?? undefined,
-        status,
-        repo,
-      });
+      const updated = await stub.updateIssue(
+        mapping.issueId,
+        {
+          title: issue.title,
+          description: issue.body ?? undefined,
+          status,
+          repo,
+        },
+        "github"
+      );
       if (!updated) {
         throw new VortexError({
           code: "NOT_FOUND",
@@ -243,11 +247,14 @@ async function processGitHubIssue(
         });
       }
     } else {
-      const created = await stub.createIssue({
-        title: issue.title,
-        description: issue.body ?? undefined,
-        repo,
-      });
+      const created = await stub.createIssue(
+        {
+          title: issue.title,
+          description: issue.body ?? undefined,
+          repo,
+        },
+        "github"
+      );
       await createRepoIssue(db, workspaceId, repo, issue.number, created.id);
     }
     if (deliveryId) {
@@ -258,11 +265,15 @@ async function processGitHubIssue(
 
   if (action === "edited") {
     if (mapping) {
-      const updated = await stub.updateIssue(mapping.issueId, {
-        title: issue.title,
-        description: issue.body ?? undefined,
-        repo,
-      });
+      const updated = await stub.updateIssue(
+        mapping.issueId,
+        {
+          title: issue.title,
+          description: issue.body ?? undefined,
+          repo,
+        },
+        "github"
+      );
       if (!updated) {
         throw new VortexError({
           code: "NOT_FOUND",
@@ -279,9 +290,11 @@ async function processGitHubIssue(
 
   if (action === "closed") {
     if (mapping) {
-      const updated = await stub.updateIssue(mapping.issueId, {
-        status: "done",
-      });
+      const updated = await stub.updateIssue(
+        mapping.issueId,
+        { status: "done" },
+        "github"
+      );
       if (!updated) {
         throw new VortexError({
           code: "NOT_FOUND",
@@ -298,7 +311,7 @@ async function processGitHubIssue(
 
   if (action === "deleted") {
     if (mapping) {
-      await stub.updateIssue(mapping.issueId, { status: "canceled" });
+      await stub.updateIssue(mapping.issueId, { status: "canceled" }, "github");
       await deleteRepoIssue(db, repo, issue.number);
     }
     if (deliveryId) {

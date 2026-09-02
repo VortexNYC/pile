@@ -10,7 +10,7 @@ const historySchema = z.object({
   id: z.string(),
   workspaceId: z.string(),
   issueId: z.string(),
-  linearId: z.string(),
+  linearId: z.string().nullable(),
   field: z.string(),
   fromValue: z.string().nullable(),
   toValue: z.string().nullable(),
