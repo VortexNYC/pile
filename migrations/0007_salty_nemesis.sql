@@ -9,4 +9,8 @@ CREATE TABLE `issue_relations` (
 );
 --> statement-breakpoint
 CREATE INDEX `issue_relations_from_idx` ON `issue_relations` (`workspace_id`,`from_issue_id`);--> statement-breakpoint
-CREATE INDEX `issue_relations_to_idx` ON `issue_relations` (`workspace_id`,`to_issue_id`);
+CREATE INDEX `issue_relations_to_idx` ON `issue_relations` (`workspace_id`,`to_issue_id`);--> statement-breakpoint
+DROP INDEX `comments_author_idx`;--> statement-breakpoint
+CREATE INDEX `comments_author_idx` ON `comments` (`workspace_id`,`author_id`);--> statement-breakpoint
+ALTER TABLE `linear_users` ADD `linear_id` text NOT NULL;--> statement-breakpoint
+CREATE INDEX `linear_users_linear_idx` ON `linear_users` (`workspace_id`,`linear_id`);

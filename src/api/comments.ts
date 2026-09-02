@@ -156,9 +156,9 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(getCommentRoute, async (c) => {
-    const { id } = c.req.valid("param");
+    const { workspaceId, id } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    const item = await getComment(db, id);
+    const item = await getComment(db, workspaceId, id);
     if (!item) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -170,10 +170,10 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(updateCommentRoute, async (c) => {
-    const { id } = c.req.valid("param");
+    const { workspaceId, id } = c.req.valid("param");
     const { body } = c.req.valid("json");
     const db = createD1(c.env.D1);
-    const item = await updateComment(db, id, { body });
+    const item = await updateComment(db, workspaceId, id, { body });
     if (!item) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -185,9 +185,9 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(deleteCommentRoute, async (c) => {
-    const { id } = c.req.valid("param");
+    const { workspaceId, id } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    await deleteComment(db, id);
+    await deleteComment(db, workspaceId, id);
     return c.body(null, 204);
   });
 }

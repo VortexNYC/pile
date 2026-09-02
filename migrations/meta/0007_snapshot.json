@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "ad824a68-559b-4d3a-8ae3-fdda8ada9db1",
+  "id": "cc1748c3-c393-4a98-9477-00b6b8fb2702",
   "prevId": "f329eea2-6c3a-41fb-8ac5-9ffbfb3455e8",
   "tables": {
     "account": {
@@ -204,6 +204,7 @@
         "comments_author_idx": {
           "name": "comments_author_idx",
           "columns": [
+            "workspace_id",
             "author_id"
           ],
           "isUnique": false
@@ -507,6 +508,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "linear_id": {
+          "name": "linear_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
         "name": {
           "name": "name",
           "type": "text",
@@ -535,6 +543,14 @@
           "name": "linear_users_workspace_idx",
           "columns": [
             "workspace_id"
+          ],
+          "isUnique": false
+        },
+        "linear_users_linear_idx": {
+          "name": "linear_users_linear_idx",
+          "columns": [
+            "workspace_id",
+            "linear_id"
           ],
           "isUnique": false
         },

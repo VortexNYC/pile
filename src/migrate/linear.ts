@@ -65,9 +65,6 @@ interface LinearIssue {
   comments: { nodes: LinearComment[] };
   parent?: { id: string } | null;
   children: { nodes: Array<{ id: string }> };
-  blockedBy: { nodes: Array<{ id: string }> };
-  blocks: { nodes: Array<{ id: string }> };
-  related: { nodes: Array<{ id: string }> };
   createdAt: string;
   updatedAt: string;
 }
@@ -290,21 +287,6 @@ class LinearClient {
                   id
                 }
               }
-              blockedBy(first: 10) {
-                nodes {
-                  id
-                }
-              }
-              blocks(first: 10) {
-                nodes {
-                  id
-                }
-              }
-              related(first: 10) {
-                nodes {
-                  id
-                }
-              }
               createdAt
               updatedAt
             }
@@ -374,7 +356,7 @@ export async function migrateLinear(
 
   for (const lu of linearUsers) {
     await createLinearUser(db, workspaceId, {
-      id: lu.id,
+      linearId: lu.id,
       name: lu.name,
       email: lu.email,
     });
@@ -456,7 +438,6 @@ export async function migrateLinear(
 
       for (const lc of li.comments.nodes) {
         await createComment(db, workspaceId, {
-          id: lc.id,
           issueId: li.id,
           authorId: lc.user?.id ?? "unknown",
           body: lc.body,
@@ -469,9 +450,6 @@ export async function migrateLinear(
       const relationPairs: Array<[string, string]> = [];
       if (li.parent?.id) relationPairs.push([li.parent.id, "parent"]);
       for (const c of li.children.nodes) relationPairs.push([c.id, "child"]);
-      for (const b of li.blockedBy.nodes) relationPairs.push([b.id, "blocked_by"]);
-      for (const b of li.blocks.nodes) relationPairs.push([b.id, "blocks"]);
-      for (const r of li.related.nodes) relationPairs.push([r.id, "related"]);
 
       for (const [toIssueId, type] of relationPairs) {
         await createIssueRelation(db, workspaceId, {

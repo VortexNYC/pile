@@ -15,15 +15,20 @@ export function listComments(db: D1Client, workspaceId: string, issueId: string)
     .all();
 }
 
-export function getComment(db: D1Client, id: string) {
-  return db.select().from(comments).where(eq(comments.id, id)).get();
+export function getComment(db: D1Client, workspaceId: string, id: string) {
+  return db
+    .select()
+    .from(comments)
+    .where(
+      and(eq(comments.workspaceId, workspaceId), eq(comments.id, id))
+    )
+    .get();
 }
 
 export async function createComment(
   db: D1Client,
   workspaceId: string,
   values: {
-    id?: string;
     issueId: string;
     authorId: string;
     body: string;
@@ -31,7 +36,7 @@ export async function createComment(
     updatedAt?: string;
   }
 ) {
-  const id = values.id ?? crypto.randomUUID();
+  const id = crypto.randomUUID();
   const ts = new Date().toISOString();
   await db.insert(comments).values({
     id,
@@ -42,11 +47,12 @@ export async function createComment(
     createdAt: values.createdAt ?? ts,
     updatedAt: values.updatedAt ?? ts,
   });
-  return db.select().from(comments).where(eq(comments.id, id)).get();
+  return getComment(db, workspaceId, id);
 }
 
 export async function updateComment(
   db: D1Client,
+  workspaceId: string,
   id: string,
   values: { body: string }
 ) {
@@ -54,10 +60,12 @@ export async function updateComment(
   await db
     .update(comments)
     .set({ body: values.body, updatedAt: ts })
-    .where(eq(comments.id, id));
-  return db.select().from(comments).where(eq(comments.id, id)).get();
+    .where(and(eq(comments.workspaceId, workspaceId), eq(comments.id, id)));
+  return getComment(db, workspaceId, id);
 }
 
-export async function deleteComment(db: D1Client, id: string) {
-  await db.delete(comments).where(eq(comments.id, id));
+export async function deleteComment(db: D1Client, workspaceId: string, id: string) {
+  await db
+    .delete(comments)
+    .where(and(eq(comments.workspaceId, workspaceId), eq(comments.id, id)));
 }

@@ -121,12 +121,14 @@ export const linearUsers = sqliteTable(
     workspaceId: text("workspace_id")
       .notNull()
       .references(() => workspaces.id),
+    linearId: text("linear_id").notNull(),
     name: text("name"),
     email: text("email"),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
     index("linear_users_workspace_idx").on(table.workspaceId),
+    index("linear_users_linear_idx").on(table.workspaceId, table.linearId),
     index("linear_users_email_idx").on(table.email),
   ]
 );
@@ -146,7 +148,7 @@ export const comments = sqliteTable(
   },
   (table) => [
     index("comments_issue_idx").on(table.workspaceId, table.issueId),
-    index("comments_author_idx").on(table.authorId),
+    index("comments_author_idx").on(table.workspaceId, table.authorId),
   ]
 );
 
