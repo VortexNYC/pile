@@ -114,6 +114,22 @@ export const labels = sqliteTable(
   (table) => [index("labels_workspace_idx").on(table.workspaceId)]
 );
 
+export const states = sqliteTable(
+  "states",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    name: text("name").notNull(),
+    type: text("type").notNull(),
+    color: text("color"),
+    position: text("position"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [index("states_workspace_idx").on(table.workspaceId)]
+);
+
 export const linearUsers = sqliteTable(
   "linear_users",
   {

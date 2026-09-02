@@ -3,6 +3,7 @@ import {
   createLabel,
   createProject,
   createCycle,
+  createState,
 } from "../global/workspace-entities.js";
 import { createComment } from "../global/comments.js";
 import { createLinearUser } from "../global/linear-users.js";
@@ -17,6 +18,8 @@ interface LinearState {
   id: string;
   name: string;
   type: string;
+  color?: string | null;
+  position?: number | null;
 }
 
 interface LinearLabel {
@@ -104,6 +107,7 @@ interface LinearIssue {
 interface MigrationCounts {
   issues: number;
   labels: number;
+  states: number;
   projects: number;
   cycles: number;
   users: number;
@@ -461,6 +465,16 @@ export async function migrateLinear(
     }
   }
 
+  for (const state of states) {
+    await createState(db, workspaceId, {
+      id: state.id,
+      name: state.name,
+      type: state.type,
+      color: state.color,
+      position: state.position === undefined || state.position === null ? null : String(state.position),
+    });
+  }
+
   const projectMap = new Map<string, string>();
   for (const project of projects) {
     const created = await createProject(db, workspaceId, {
@@ -649,6 +663,7 @@ export async function migrateLinear(
   return {
     issues: issueCount,
     labels: labels.length,
+    states: states.length,
     projects: projects.length,
     cycles: cycles.length,
     users: linearUsers.length,

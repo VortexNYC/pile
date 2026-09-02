@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { D1Client } from "./db.js";
-import { projects, cycles, labels } from "./schema.js";
+import { projects, cycles, labels, states } from "./schema.js";
 
 const now = () => new Date().toISOString();
 
@@ -175,4 +175,68 @@ export async function updateLabel(
 
 export async function deleteLabel(db: D1Client, id: string) {
   await db.delete(labels).where(eq(labels.id, id));
+}
+
+// States
+
+export function listStates(db: D1Client, workspaceId: string) {
+  return db
+    .select()
+    .from(states)
+    .where(eq(states.workspaceId, workspaceId))
+    .all();
+}
+
+export function getState(db: D1Client, id: string) {
+  return db.select().from(states).where(eq(states.id, id)).get();
+}
+
+export async function createState(
+  db: D1Client,
+  workspaceId: string,
+  values: {
+    id: string;
+    name: string;
+    type: string;
+    color?: string | null;
+    position?: string | null;
+  }
+) {
+  const existing = await db
+    .select()
+    .from(states)
+    .where(eq(states.id, values.id))
+    .get();
+  if (existing) {
+    return existing;
+  }
+  const ts = now();
+  await db.insert(states).values({
+    id: values.id,
+    workspaceId,
+    name: values.name,
+    type: values.type,
+    color: values.color ?? null,
+    position: values.position ?? null,
+    createdAt: ts,
+  });
+  return db.select().from(states).where(eq(states.id, values.id)).get();
+}
+
+export async function updateState(
+  db: D1Client,
+  id: string,
+  values: Partial<{
+    name: string;
+    type: string;
+    color: string | null;
+    position: string | null;
+  }>
+) {
+  await db.update(states).set(values).where(eq(states.id, id));
+  return db.select().from(states).where(eq(states.id, id)).get();
+}
+
+export async function deleteState(db: D1Client, id: string) {
+  await db.delete(states).where(eq(states.id, id));
 }
