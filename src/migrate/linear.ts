@@ -6,6 +6,7 @@ import {
 } from "../global/workspace-entities.js";
 import { createComment } from "../global/comments.js";
 import { createLinearUser } from "../global/linear-users.js";
+import { createIssueRelation } from "../global/issue-relations.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkerEnv } from "../api/middleware.js";
 import type { IssueInput, IssuePriority, IssueStatus } from "../workspace/types.js";
@@ -62,6 +63,11 @@ interface LinearIssue {
   cycle?: { id: string } | null;
   labels: { nodes: Array<{ id: string }> };
   comments: { nodes: LinearComment[] };
+  parent?: { id: string } | null;
+  children: { nodes: Array<{ id: string }> };
+  blockedBy: { nodes: Array<{ id: string }> };
+  blocks: { nodes: Array<{ id: string }> };
+  related: { nodes: Array<{ id: string }> };
   createdAt: string;
   updatedAt: string;
 }
@@ -73,6 +79,7 @@ interface MigrationCounts {
   cycles: number;
   users: number;
   comments: number;
+  relations: number;
 }
 
 class LinearClient {
@@ -264,7 +271,7 @@ class LinearClient {
                   id
                 }
               }
-              comments(first: 50) {
+              comments(first: 20) {
                 nodes {
                   id
                   body
@@ -273,6 +280,29 @@ class LinearClient {
                   }
                   createdAt
                   updatedAt
+                }
+              }
+              parent {
+                id
+              }
+              children(first: 10) {
+                nodes {
+                  id
+                }
+              }
+              blockedBy(first: 10) {
+                nodes {
+                  id
+                }
+              }
+              blocks(first: 10) {
+                nodes {
+                  id
+                }
+              }
+              related(first: 10) {
+                nodes {
+                  id
                 }
               }
               createdAt
@@ -393,6 +423,7 @@ export async function migrateLinear(
 
   let issueCount = 0;
   let commentCount = 0;
+  let relationCount = 0;
   let cursor: string | undefined;
   let hasNextPage = true;
 
@@ -434,6 +465,22 @@ export async function migrateLinear(
         });
         commentCount++;
       }
+
+      const relationPairs: Array<[string, string]> = [];
+      if (li.parent?.id) relationPairs.push([li.parent.id, "parent"]);
+      for (const c of li.children.nodes) relationPairs.push([c.id, "child"]);
+      for (const b of li.blockedBy.nodes) relationPairs.push([b.id, "blocked_by"]);
+      for (const b of li.blocks.nodes) relationPairs.push([b.id, "blocks"]);
+      for (const r of li.related.nodes) relationPairs.push([r.id, "related"]);
+
+      for (const [toIssueId, type] of relationPairs) {
+        await createIssueRelation(db, workspaceId, {
+          fromIssueId: li.id,
+          toIssueId,
+          type,
+        });
+        relationCount++;
+      }
     }
 
     hasNextPage = page.pageInfo.hasNextPage;
@@ -447,5 +494,6 @@ export async function migrateLinear(
     cycles: cycles.length,
     users: linearUsers.length,
     comments: commentCount,
+    relations: relationCount,
   };
 }

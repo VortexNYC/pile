@@ -150,6 +150,24 @@ export const comments = sqliteTable(
   ]
 );
 
+export const issueRelations = sqliteTable(
+  "issue_relations",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    fromIssueId: text("from_issue_id").notNull(),
+    toIssueId: text("to_issue_id").notNull(),
+    type: text("type").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("issue_relations_from_idx").on(table.workspaceId, table.fromIssueId),
+    index("issue_relations_to_idx").on(table.workspaceId, table.toIssueId),
+  ]
+);
+
 export const webhookSubscriptions = sqliteTable(
   "webhook_subscriptions",
   {

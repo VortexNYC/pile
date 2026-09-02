@@ -43,6 +43,13 @@
       "when": 1788307625654,
       "tag": "0005_nebulous_sue_storm",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1788308117988,
+      "tag": "0006_whole_the_watchers",
+      "breakpoints": true
     }
   ]
 }
