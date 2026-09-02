@@ -38,7 +38,8 @@ function isPublicPath(pathname: string): boolean {
     pathname === "/health" ||
     pathname === "/github" ||
     pathname.startsWith("/api/auth") ||
-    pathname.includes("/migrate/")
+    pathname.includes("/migrate/") ||
+    pathname.startsWith("/mcp")
   );
 }
 

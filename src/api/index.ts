@@ -91,7 +91,7 @@ app.doc("/openapi.json", {
 });
 
 app.all("/mcp", async (c) => {
-  return handleMcpRequest(c.req.raw, c.env);
+  return handleMcpRequest(c.req.raw, c.env, app);
 });
 
 export default app;
