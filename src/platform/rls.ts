@@ -2,13 +2,12 @@ import { createMiddleware } from "hono/factory";
 
 import type { AppContext } from "../api/middleware.js";
 import { VortexError } from "./errors.js";
+import { canAccess } from "./permissions.js";
 
-export function rls(...allowed: string[]) {
+export function rls(...allowed: ("read" | "write" | "admin")[]) {
   return createMiddleware<AppContext>(async (c, next) => {
-    const identity = c.var.workspaceIdentity;
-    const has = ["admin", ...allowed].some((p) =>
-      identity.permissions.includes(p)
-    );
+    const { permissions } = c.var.workspaceIdentity;
+    const has = allowed.some((p) => canAccess(permissions, p));
     if (!has) {
       throw new VortexError({
         code: "FORBIDDEN",

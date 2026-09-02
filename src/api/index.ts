@@ -11,12 +11,16 @@ import { registerAttachmentRoutes } from "./attachments.js";
 import { registerCommentRoutes } from "./comments.js";
 import { registerIssueHistoryRoutes } from "./issue-history.js";
 import { registerIssueRelationRoutes } from "./issue-relations.js";
+import { registerIssueSubscriberRoutes } from "./issue-subscribers.js";
 import { registerIssueRoutes } from "./issues.js";
+import { registerLinearUserRoutes } from "./linear-users.js";
 import { type AppContext, workspaceTokenMiddleware } from "./middleware.js";
 import { registerMigrateRoutes } from "./migrate.js";
 import { registerStateRoutes } from "./states.js";
 import { registerTemplateRoutes } from "./templates.js";
+import { registerTokenRoutes } from "./tokens.js";
 import { registerWorkspaceEntityRoutes } from "./workspace-entities.js";
+import { registerWorkspaceRoutes } from "./workspaces.js";
 
 const app = new OpenAPIHono<AppContext>({
   defaultHook: (result) => {
@@ -39,13 +43,17 @@ app.use("*", observabilityMiddleware);
 app.use("*", ...securityMiddleware);
 
 app.use("/workspaces/:workspaceId/*", workspaceTokenMiddleware);
+registerWorkspaceRoutes(app);
+registerTokenRoutes(app);
 registerIssueRoutes(app);
 registerWorkspaceEntityRoutes(app);
 registerCommentRoutes(app);
 registerIssueRelationRoutes(app);
+registerIssueSubscriberRoutes(app);
 registerAttachmentRoutes(app);
 registerIssueHistoryRoutes(app);
 registerStateRoutes(app);
+registerLinearUserRoutes(app);
 registerTemplateRoutes(app);
 registerMigrateRoutes(app);
 registerHealthRoutes(app);

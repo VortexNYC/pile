@@ -3,23 +3,10 @@
   "ignore": [
     "migrations/**",
     "drizzle/**",
-    "src/agents/activities.ts",
-    "src/agents/sessions.ts",
-    "src/global/workspaces.ts",
-    "src/test-setup.ts",
-    "src/types/index.ts",
     "src/mcp/openapi.json",
     "src/mcp/mcp-tools.ts",
     "packages/client/src/types.ts"
   ],
-  "ignoreIssues": {
-    "src/global/tokens.ts": ["exports"],
-    "src/global/linear-users.ts": ["exports"],
-    "src/global/issue-subscribers.ts": ["exports"],
-    "src/global/workspace-entities.ts": ["exports"],
-    "src/platform/permissions.ts": ["exports"],
-    "src/api/middleware.ts": ["types"]
-  },
   "ignoreDependencies": ["cloudflare"],
   "ignoreExportsUsedInFile": true
 }

@@ -194,8 +194,12 @@ export function listStates(db: D1Client, workspaceId: string) {
     .all();
 }
 
-export function getState(db: D1Client, id: string) {
-  return db.select().from(states).where(eq(states.id, id)).get();
+export function getState(db: D1Client, workspaceId: string, id: string) {
+  return db
+    .select()
+    .from(states)
+    .where(and(eq(states.workspaceId, workspaceId), eq(states.id, id)))
+    .get();
 }
 
 export async function createState(
@@ -239,6 +243,7 @@ export async function createState(
 
 export async function updateState(
   db: D1Client,
+  workspaceId: string,
   id: string,
   values: Partial<{
     name: string;
@@ -247,12 +252,25 @@ export async function updateState(
     position: string | null;
   }>
 ) {
-  await db.update(states).set(values).where(eq(states.id, id));
-  return db.select().from(states).where(eq(states.id, id)).get();
+  await db
+    .update(states)
+    .set(values)
+    .where(and(eq(states.workspaceId, workspaceId), eq(states.id, id)));
+  return db
+    .select()
+    .from(states)
+    .where(and(eq(states.workspaceId, workspaceId), eq(states.id, id)))
+    .get();
 }
 
-export async function deleteState(db: D1Client, id: string) {
-  await db.delete(states).where(eq(states.id, id));
+export async function deleteState(
+  db: D1Client,
+  workspaceId: string,
+  id: string
+) {
+  await db
+    .delete(states)
+    .where(and(eq(states.workspaceId, workspaceId), eq(states.id, id)));
 }
 
 // Memberships

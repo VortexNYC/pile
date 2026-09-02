@@ -1,3 +1,5 @@
+import type { Id, Timestamp } from "../types/index.js";
+
 export type IssueStatus =
   | "backlog"
   | "todo"
@@ -7,7 +9,7 @@ export type IssueStatus =
 export type IssuePriority = "low" | "medium" | "high" | "urgent";
 
 export interface IssueInput {
-  id?: string;
+  id?: Id;
   title: string;
   description?: string;
   status?: IssueStatus;
@@ -18,13 +20,13 @@ export interface IssueInput {
   labelIds?: string;
   repo?: string;
   branch?: string;
-  createdAt?: string;
-  updatedAt?: string;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
 }
 
 export interface IssueCursor {
-  createdAt: string;
-  id: string;
+  createdAt: Timestamp;
+  id: Id;
 }
 
 export interface ListIssuesArgs {
@@ -35,22 +37,22 @@ export interface ListIssuesArgs {
 }
 
 export interface Issue {
-  id: string;
-  workspaceId: string;
+  id: Id;
+  workspaceId: Id;
   title: string;
   description: string | null;
   status: IssueStatus;
   priority: IssuePriority;
-  assigneeId: string | null;
-  projectId: string | null;
-  cycleId: string | null;
+  assigneeId: Id | null;
+  projectId: Id | null;
+  cycleId: Id | null;
   labelIds: string | null;
   repo: string | null;
   branch: string | null;
   prUrl: string | null;
   prState: string | null;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 }
 
 export type RealtimeEvent =

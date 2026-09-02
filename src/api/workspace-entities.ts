@@ -5,6 +5,7 @@ import { createD1 } from "../global/db.js";
 import {
   createCycle,
   createLabel,
+  createMembership,
   createProject,
   deleteCycle,
   deleteLabel,
@@ -14,6 +15,7 @@ import {
   getProject,
   listCycles,
   listLabels,
+  listMemberships,
   listProjects,
   updateCycle,
   updateLabel,
@@ -72,6 +74,19 @@ const labelSchema = z.object({
 const labelBodySchema = z.object({
   name: z.string().min(1),
   color: z.string().optional(),
+});
+
+const membershipSchema = z.object({
+  id: z.string(),
+  workspaceId: z.string(),
+  userId: z.string(),
+  role: z.enum(["owner", "admin", "member"]),
+  createdAt: z.string(),
+});
+
+const membershipBodySchema = z.object({
+  userId: z.string().min(1),
+  role: z.enum(["owner", "admin", "member"]).optional(),
 });
 
 const listProjectsRoute = createRoute({
@@ -365,6 +380,49 @@ const deleteLabelRoute = createRoute({
   },
 });
 
+const listMembershipsRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{workspaceId}/memberships",
+  tags: ["memberships"],
+  middleware: [rls("read")],
+  request: {
+    params: z.object({ workspaceId: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Memberships list",
+      content: {
+        "application/json": {
+          schema: z.object({ memberships: z.array(membershipSchema) }),
+        },
+      },
+    },
+  },
+});
+
+const createMembershipRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{workspaceId}/memberships",
+  tags: ["memberships"],
+  middleware: [rls("admin")],
+  request: {
+    params: z.object({ workspaceId: z.string() }),
+    body: {
+      content: {
+        "application/json": { schema: membershipBodySchema },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "Membership created",
+      content: {
+        "application/json": { schema: membershipSchema },
+      },
+    },
+  },
+});
+
 export function registerWorkspaceEntityRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listProjectsRoute, async (c) => {
     const { workspaceId } = c.req.valid("param");
@@ -517,5 +575,25 @@ export function registerWorkspaceEntityRoutes(app: OpenAPIHono<AppContext>) {
     const db = createD1(c.env.D1);
     await deleteLabel(db, id);
     return c.body(null, 204);
+  });
+
+  app.openapi(listMembershipsRoute, async (c) => {
+    const { workspaceId } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const items = await listMemberships(db, workspaceId);
+    return c.json({ memberships: items });
+  });
+
+  app.openapi(createMembershipRoute, async (c) => {
+    const { workspaceId } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const db = createD1(c.env.D1);
+    const item = await createMembership(
+      db,
+      workspaceId,
+      input.userId,
+      input.role
+    );
+    return c.json(item, 201);
   });
 }
