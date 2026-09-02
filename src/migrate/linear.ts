@@ -422,6 +422,7 @@ export async function migrateLinear(
 
   const doId = env.WORKSPACE_DURABLE_OBJECT.idFromName(workspaceId);
   const stub = env.WORKSPACE_DURABLE_OBJECT.get(doId);
+  await stub.setWorkspaceId(workspaceId);
 
   let issueCount = 0;
   let commentCount = 0;

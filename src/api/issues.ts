@@ -12,6 +12,15 @@ import {
   toListArgs,
   encodeCursor,
 } from "./list-args.js";
+import type { WorkerEnv } from "./middleware.js";
+
+async function getStub(env: WorkerEnv, workspaceId: string) {
+  const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+    env.WORKSPACE_DURABLE_OBJECT.idFromName(workspaceId)
+  );
+  await stub.setWorkspaceId(workspaceId);
+  return stub;
+}
 
 const createIssueSchema = z.object({
   title: z.string().min(1),
@@ -179,9 +188,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     const { workspaceId } = c.req.valid("param");
     const query = c.req.valid("query");
     const args = toListArgs(query);
-    const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(
-      c.env.WORKSPACE_DURABLE_OBJECT.idFromName(workspaceId)
-    );
+    const stub = await getStub(c.env, workspaceId);
     const issues = await stub.listIssues(args);
     const nextCursor =
       issues.length === query.limit && issues.length > 0
@@ -196,18 +203,14 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(createIssueRoute, async (c) => {
     const input = c.req.valid("json");
     const { workspaceId } = c.req.valid("param");
-    const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(
-      c.env.WORKSPACE_DURABLE_OBJECT.idFromName(workspaceId)
-    );
+    const stub = await getStub(c.env, workspaceId);
     const issue = await stub.createIssue(input);
     return c.json(issue, 201);
   });
 
   app.openapi(getIssueRoute, async (c) => {
     const { workspaceId, id } = c.req.valid("param");
-    const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(
-      c.env.WORKSPACE_DURABLE_OBJECT.idFromName(workspaceId)
-    );
+    const stub = await getStub(c.env, workspaceId);
     const issue = await stub.getIssue(id);
     if (!issue) {
       throw new VortexError({
@@ -222,9 +225,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(updateIssueRoute, async (c) => {
     const input = c.req.valid("json");
     const { workspaceId, id } = c.req.valid("param");
-    const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(
-      c.env.WORKSPACE_DURABLE_OBJECT.idFromName(workspaceId)
-    );
+    const stub = await getStub(c.env, workspaceId);
     const issue = await stub.updateIssue(id, input);
     if (!issue) {
       throw new VortexError({
@@ -239,9 +240,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(dispatchRoute, async (c) => {
     const { agentId, model } = c.req.valid("json");
     const { workspaceId, id } = c.req.valid("param");
-    const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(
-      c.env.WORKSPACE_DURABLE_OBJECT.idFromName(workspaceId)
-    );
+    const stub = await getStub(c.env, workspaceId);
     const issue = await stub.getIssue(id);
     if (!issue) {
       throw new VortexError({

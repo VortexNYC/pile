@@ -75,7 +75,7 @@ const LATEST_SCHEMA_VERSION = MIGRATIONS.length;
 
 export class WorkspaceDO extends DurableObject<AppEnv> {
   private readonly sql: SqlStorage;
-  private readonly workspaceId: string;
+  private workspaceId: string;
   private readonly ready: Promise<void>;
 
   constructor(ctx: DurableObjectState, env: AppEnv) {
@@ -83,6 +83,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     this.sql = ctx.storage.sql;
     this.workspaceId = ctx.id.toString();
     this.ready = this.runMigrations();
+  }
+
+  async setWorkspaceId(id: string) {
+    this.workspaceId = id;
   }
 
   async fetch(request: Request): Promise<Response> {
