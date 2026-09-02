@@ -191,6 +191,27 @@ export const attachments = sqliteTable(
   ]
 );
 
+export const issueHistory = sqliteTable(
+  "issue_history",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    issueId: text("issue_id").notNull(),
+    linearId: text("linear_id").notNull(),
+    field: text("field").notNull(),
+    fromValue: text("from_value"),
+    toValue: text("to_value"),
+    actorId: text("actor_id"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("issue_history_issue_idx").on(table.workspaceId, table.issueId),
+    index("issue_history_created_idx").on(table.workspaceId, table.createdAt),
+  ]
+);
+
 export const webhookSubscriptions = sqliteTable(
   "webhook_subscriptions",
   {

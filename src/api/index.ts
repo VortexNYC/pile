@@ -10,6 +10,7 @@ import { registerWorkspaceEntityRoutes } from "./workspace-entities.js";
 import { registerCommentRoutes } from "./comments.js";
 import { registerIssueRelationRoutes } from "./issue-relations.js";
 import { registerAttachmentRoutes } from "./attachments.js";
+import { registerIssueHistoryRoutes } from "./issue-history.js";
 import { registerMigrateRoutes } from "./migrate.js";
 import { createAuth } from "../platform/auth.js";
 import { githubWebhookRoute, processGithubWebhook } from "../agents/github.js";
@@ -43,6 +44,7 @@ registerWorkspaceEntityRoutes(app);
 registerCommentRoutes(app);
 registerIssueRelationRoutes(app);
 registerAttachmentRoutes(app);
+registerIssueHistoryRoutes(app);
 registerMigrateRoutes(app);
 registerHealthRoutes(app);
 

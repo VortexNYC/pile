@@ -8,6 +8,7 @@ import { createComment } from "../global/comments.js";
 import { createLinearUser } from "../global/linear-users.js";
 import { createIssueRelation } from "../global/issue-relations.js";
 import { createAttachment, setAttachmentR2Key } from "../global/attachments.js";
+import { createIssueHistory } from "../global/issue-history.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkerEnv } from "../api/middleware.js";
 import type { IssueInput, IssuePriority, IssueStatus } from "../workspace/types.js";
@@ -61,6 +62,26 @@ interface LinearComment {
   updatedAt: string;
 }
 
+interface LinearHistory {
+  id: string;
+  createdAt: string;
+  actor?: { id: string } | null;
+  fromState?: { id: string; name?: string } | null;
+  toState?: { id: string; name?: string } | null;
+  fromPriority?: number | null;
+  toPriority?: number | null;
+  fromAssignee?: { id: string } | null;
+  toAssignee?: { id: string } | null;
+  fromProject?: { id: string; name?: string } | null;
+  toProject?: { id: string; name?: string } | null;
+  fromCycle?: { id: string; name?: string } | null;
+  toCycle?: { id: string; name?: string } | null;
+  fromTitle?: string | null;
+  toTitle?: string | null;
+  fromParent?: { id: string } | null;
+  toParent?: { id: string } | null;
+}
+
 interface LinearIssue {
   id: string;
   title: string;
@@ -73,6 +94,7 @@ interface LinearIssue {
   labels: { nodes: Array<{ id: string }> };
   comments: { nodes: LinearComment[] };
   attachments: { nodes: LinearAttachment[] };
+  history: { nodes: LinearHistory[] };
   parent?: { id: string } | null;
   children: { nodes: Array<{ id: string }> };
   createdAt: string;
@@ -88,6 +110,7 @@ interface MigrationCounts {
   comments: number;
   relations: number;
   attachments: number;
+  history: number;
 }
 
 class LinearClient {
@@ -307,6 +330,49 @@ class LinearClient {
                   createdAt
                 }
               }
+              history(first: 15) {
+                nodes {
+                  id
+                  createdAt
+                  actor {
+                    id
+                  }
+                  fromState {
+                    id
+                  }
+                  toState {
+                    id
+                  }
+                  fromPriority
+                  toPriority
+                  fromAssignee {
+                    id
+                  }
+                  toAssignee {
+                    id
+                  }
+                  fromProject {
+                    id
+                  }
+                  toProject {
+                    id
+                  }
+                  fromCycle {
+                    id
+                  }
+                  toCycle {
+                    id
+                  }
+                  fromTitle
+                  toTitle
+                  fromParent {
+                    id
+                  }
+                  toParent {
+                    id
+                  }
+                }
+              }
               createdAt
               updatedAt
             }
@@ -428,6 +494,7 @@ export async function migrateLinear(
   let commentCount = 0;
   let relationCount = 0;
   let attachmentCount = 0;
+  let historyCount = 0;
   let cursor: string | undefined;
   let hasNextPage = true;
 
@@ -508,6 +575,71 @@ export async function migrateLinear(
           }
         }
       }
+
+      for (const lh of li.history.nodes) {
+        const changes: Array<{
+          field: string;
+          from?: string | null;
+          to?: string | null;
+        }> = [
+          {
+            field: "state",
+            from: lh.fromState?.id ?? null,
+            to: lh.toState?.id ?? null,
+          },
+          {
+            field: "priority",
+            from:
+              lh.fromPriority === undefined || lh.fromPriority === null
+                ? null
+                : String(lh.fromPriority),
+            to:
+              lh.toPriority === undefined || lh.toPriority === null
+                ? null
+                : String(lh.toPriority),
+          },
+          {
+            field: "assignee",
+            from: lh.fromAssignee?.id ?? null,
+            to: lh.toAssignee?.id ?? null,
+          },
+          {
+            field: "project",
+            from: lh.fromProject?.id ?? null,
+            to: lh.toProject?.id ?? null,
+          },
+          {
+            field: "cycle",
+            from: lh.fromCycle?.id ?? null,
+            to: lh.toCycle?.id ?? null,
+          },
+          {
+            field: "title",
+            from: lh.fromTitle ?? null,
+            to: lh.toTitle ?? null,
+          },
+          {
+            field: "parent",
+            from: lh.fromParent?.id ?? null,
+            to: lh.toParent?.id ?? null,
+          },
+        ];
+
+        for (const change of changes) {
+          if (change.from !== null || change.to !== null) {
+            await createIssueHistory(db, workspaceId, {
+              issueId: li.id,
+              linearId: lh.id,
+              field: change.field,
+              fromValue: change.from,
+              toValue: change.to,
+              actorId: lh.actor?.id ?? null,
+              createdAt: lh.createdAt,
+            });
+            historyCount++;
+          }
+        }
+      }
     }
 
     hasNextPage = page.pageInfo.hasNextPage;
@@ -523,5 +655,6 @@ export async function migrateLinear(
     comments: commentCount,
     relations: relationCount,
     attachments: attachmentCount,
+    history: historyCount,
   };
 }

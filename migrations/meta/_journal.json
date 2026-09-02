@@ -64,6 +64,13 @@
       "when": 1788308799872,
       "tag": "0008_marvelous_thor",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1788309225343,
+      "tag": "0009_cool_magdalene",
+      "breakpoints": true
     }
   ]
 }
