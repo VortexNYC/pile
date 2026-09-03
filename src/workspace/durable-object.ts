@@ -357,13 +357,30 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const old = await this.getIssueByBranch(repo, branch);
     if (!old) return undefined;
 
+    const statusMap: Record<string, Issue["status"] | undefined> = {
+      draft: "backlog",
+      open: "in_progress",
+      merged: "done",
+      closed: "canceled",
+    };
+    const status = statusMap[prState];
+    const set: {
+      prUrl: string;
+      prState: string;
+      updatedAt: string;
+      status?: Issue["status"];
+    } = {
+      prUrl,
+      prState,
+      updatedAt: new Date().toISOString(),
+    };
+    if (status !== undefined) {
+      set.status = status;
+    }
+
     const issue = await this.db
       .update(workspaceIssues)
-      .set({
-        prUrl,
-        prState,
-        updatedAt: new Date().toISOString(),
-      })
+      .set(set)
       .where(
         and(eq(workspaceIssues.repo, repo), eq(workspaceIssues.branch, branch))
       )
@@ -388,6 +405,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         field: "pr_state",
         fromValue: old.prState,
         toValue: issue.prState,
+      });
+    }
+    if (old.status !== issue.status) {
+      historyEntries.push({
+        field: "status",
+        fromValue: old.status,
+        toValue: issue.status,
       });
     }
     if (historyEntries.length > 0) {

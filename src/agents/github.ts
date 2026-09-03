@@ -21,6 +21,8 @@ const pullRequestPayloadSchema = z.object({
   action: z.string(),
   pull_request: z.object({
     state: z.string(),
+    draft: z.boolean().default(false),
+    merged: z.boolean().default(false),
     html_url: z.string(),
     head: z.object({
       ref: z.string(),
@@ -155,7 +157,11 @@ async function processPullRequest(
   const repo = pull_request.head.repo.full_name;
   const branch = pull_request.head.ref;
   const prUrl = pull_request.html_url;
-  const prState = pull_request.state;
+  const prState = pull_request.draft
+    ? "draft"
+    : pull_request.merged
+      ? "merged"
+      : pull_request.state;
 
   const record = await findRepoBranch(db, repo, branch);
   if (!record) {
