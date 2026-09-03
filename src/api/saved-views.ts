@@ -50,6 +50,34 @@ function parseSavedViewFilter(value: string): FilterCondition {
   return filterConditionSchema.parse(parsed);
 }
 
+function parseSavedViewSort(value: string) {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Sort must be valid JSON",
+    });
+  }
+  return savedViewSortSchema.parse(parsed);
+}
+
+function parseSavedViewColumns(value: string) {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Columns must be valid JSON",
+    });
+  }
+  return z.array(z.string()).parse(parsed);
+}
+
 function serializeSavedView(record: SavedViewRecord) {
   const filter = parseSavedViewFilter(record.filter);
   return {
@@ -59,13 +87,8 @@ function serializeSavedView(record: SavedViewRecord) {
     name: record.name,
     filter,
     search: record.search,
-    sort: record.sort
-      ? (JSON.parse(record.sort) as {
-          field: string;
-          direction?: "asc" | "desc";
-        })
-      : null,
-    columns: record.columns ? (JSON.parse(record.columns) as string[]) : null,
+    sort: record.sort ? parseSavedViewSort(record.sort) : null,
+    columns: record.columns ? parseSavedViewColumns(record.columns) : null,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   };

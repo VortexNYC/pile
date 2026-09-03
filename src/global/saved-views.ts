@@ -50,11 +50,7 @@ export function createSavedView(
     createdAt: now,
     updatedAt: now,
   };
-  return db
-    .insert(savedViews)
-    .values(row)
-    .returning()
-    .get() as Promise<SavedViewRecord>;
+  return db.insert(savedViews).values(row).returning().get();
 }
 
 export function listSavedViews(
@@ -65,7 +61,7 @@ export function listSavedViews(
     .select()
     .from(savedViews)
     .where(eq(savedViews.workspaceId, workspaceId))
-    .all() as Promise<SavedViewRecord[]>;
+    .all();
 }
 
 export function getSavedView(
@@ -77,7 +73,7 @@ export function getSavedView(
     .select()
     .from(savedViews)
     .where(and(eq(savedViews.id, id), eq(savedViews.workspaceId, workspaceId)))
-    .get() as Promise<SavedViewRecord | undefined>;
+    .get();
 }
 
 export interface SavedViewUpdate {
@@ -111,7 +107,7 @@ export function updateSavedView(
     .set(set)
     .where(and(eq(savedViews.id, id), eq(savedViews.workspaceId, workspaceId)))
     .returning()
-    .get() as Promise<SavedViewRecord | undefined>;
+    .get();
 }
 
 export function deleteSavedView(
@@ -123,5 +119,5 @@ export function deleteSavedView(
     .delete(savedViews)
     .where(and(eq(savedViews.id, id), eq(savedViews.workspaceId, workspaceId)))
     .returning()
-    .get() as Promise<SavedViewRecord | undefined>;
+    .get();
 }
