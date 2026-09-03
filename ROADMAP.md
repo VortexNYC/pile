@@ -4,6 +4,7 @@ This is the durable tracker for the open-source Linear alternative. Operational 
 
 ## Done
 
+- Outbound GitHub comment writeback: Vortex comment -> GitHub issue/PR comment.
 - Magic-word PR linking: parse `fixes KEY-123` / `closes KEY-123` from PR title, body, or branch and update the linked Vortex issue.
 - Workspace-scoped D1 + Durable Object SQLite architecture
 - Hono `@hono/zod-openapi` API with generated OpenAPI/MCP/client
@@ -27,7 +28,6 @@ This is the durable tracker for the open-source Linear alternative. Operational 
 ## Next
 
 - Linear API / CLI / MCP / docs parity audit and gap mapping (#20).
-- Outbound GitHub writeback: Vortex comment -> GitHub issue/PR comment.
 - `GET /workspaces/{id}/issues?identifier=KEY-123` lookup.
 - `POST /workspaces` create endpoint (with `key`).
 - Better Auth human sign-in and workspace user mapping.
