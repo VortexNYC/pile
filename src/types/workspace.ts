@@ -39,6 +39,7 @@ export interface ListIssuesArgs {
   cycleId?: string;
   labelId?: string;
   search?: string;
+  issueIds?: string[];
 }
 
 export interface Issue {

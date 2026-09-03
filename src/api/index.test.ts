@@ -18,6 +18,7 @@ async function seedWorkspace() {
   const workspace = await createWorkspace(db, {
     name: "Test workspace",
     slug: `test-${crypto.randomUUID()}`,
+    key: `T${crypto.randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase()}`,
     ownerId: "user-1",
   });
   return workspace!.id;
@@ -327,5 +328,83 @@ describe("API integration", () => {
       env
     );
     expect(deleteRes.status).toBe(204);
+  });
+
+  it("searches issues by title, description, identifier and comments", async () => {
+    const workspaceId = await seedWorkspace();
+    const token = await adminToken(workspaceId);
+
+    const issueA = await app.fetch(
+      request(`/workspaces/${workspaceId}/issues`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          title: "Unique alpha title",
+          description: "beta description",
+        }),
+      }),
+      env
+    );
+    expect(issueA.status).toBe(201);
+    const issueAData = await issueA.json<{ id: string; identifier: string }>();
+
+    const issueB = await app.fetch(
+      request(`/workspaces/${workspaceId}/issues`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          title: "Another issue",
+          description: "gamma delta",
+        }),
+      }),
+      env
+    );
+    expect(issueB.status).toBe(201);
+
+    await app.fetch(
+      request(`/workspaces/${workspaceId}/issues/${issueAData.id}/comments`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ body: "epsilon comment body" }),
+      }),
+      env
+    );
+
+    const byTitle = await app.fetch(
+      request(`/workspaces/${workspaceId}/issues?search=Unique+alpha`, {
+        token,
+      }),
+      env
+    );
+    expect(byTitle.status).toBe(200);
+    const byTitleBody = await byTitle.json<{ issues: unknown[] }>();
+    expect(byTitleBody.issues.length).toBe(1);
+
+    const byDescription = await app.fetch(
+      request(`/workspaces/${workspaceId}/issues?search=gamma`, { token }),
+      env
+    );
+    expect(byDescription.status).toBe(200);
+    const byDescriptionBody = await byDescription.json<{ issues: unknown[] }>();
+    expect(byDescriptionBody.issues.length).toBe(1);
+
+    const byIdentifier = await app.fetch(
+      request(
+        `/workspaces/${workspaceId}/issues?search=${issueAData.identifier}`,
+        { token }
+      ),
+      env
+    );
+    expect(byIdentifier.status).toBe(200);
+    const byIdentifierBody = await byIdentifier.json<{ issues: unknown[] }>();
+    expect(byIdentifierBody.issues.length).toBe(1);
+
+    const byComment = await app.fetch(
+      request(`/workspaces/${workspaceId}/issues?search=epsilon`, { token }),
+      env
+    );
+    expect(byComment.status).toBe(200);
+    const byCommentBody = await byComment.json<{ issues: unknown[] }>();
+    expect(byCommentBody.issues.length).toBe(1);
   });
 });

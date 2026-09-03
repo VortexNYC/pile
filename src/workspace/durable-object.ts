@@ -1,5 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
-import { and, desc, eq, like, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, like, lt, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/durable-sqlite";
 import { migrate } from "drizzle-orm/durable-sqlite/migrator";
 import { z } from "zod";
@@ -229,13 +229,23 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         )
       );
     }
+    const searchConditions = [];
     if (args.search) {
       const pattern = `%${args.search}%`;
+      searchConditions.push(
+        like(workspaceIssues.title, pattern),
+        like(sql`COALESCE(${workspaceIssues.description}, '')`, pattern),
+        like(sql`COALESCE(${workspaceIssues.identifier}, '')`, pattern)
+      );
+    }
+    if (args.issueIds && args.issueIds.length > 0) {
+      searchConditions.push(inArray(workspaceIssues.id, args.issueIds));
+    }
+    if (searchConditions.length > 0) {
       conditions.push(
-        or(
-          like(workspaceIssues.title, pattern),
-          like(sql`COALESCE(${workspaceIssues.description}, '')`, pattern)
-        )
+        searchConditions.length === 1
+          ? searchConditions[0]
+          : or(...searchConditions)
       );
     }
     if (args.cursor) {

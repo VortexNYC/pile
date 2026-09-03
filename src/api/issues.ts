@@ -1,12 +1,12 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
-import { eq, and } from "drizzle-orm";
+import { eq, and, like } from "drizzle-orm";
 
 import { getAgentProvider } from "../agents/index.js";
 import { createD1 } from "../global/db.js";
 import { deleteIssueReferences } from "../global/issue-data.js";
 import { createRepoBranch } from "../global/repo-branches.js";
-import { repoBranches } from "../global/schema.js";
+import { comments, repoBranches } from "../global/schema.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
@@ -213,6 +213,26 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       return c.json({ issues: issue ? [issue] : [] });
     }
     const args = toListArgs(query);
+
+    if (query.search) {
+      const db = createD1(c.env.D1);
+      const pattern = `%${query.search}%`;
+      const matchingComments = await db
+        .select({ issueId: comments.issueId })
+        .from(comments)
+        .where(
+          and(
+            eq(comments.workspaceId, workspaceId),
+            like(comments.body, pattern)
+          )
+        )
+        .all();
+      const issueIds = [...new Set(matchingComments.map((row) => row.issueId))];
+      if (issueIds.length > 0) {
+        args.issueIds = issueIds;
+      }
+    }
+
     const issues = await stub.listIssues(args);
     const nextCursor =
       issues.length === query.limit && issues.length > 0
