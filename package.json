@@ -31,7 +31,8 @@
     "lint:fix": "vp lint --fix",
     "format": "vp fmt",
     "format:check": "vp fmt --check",
-    "check": "pnpm run contract:check && vp check && pnpm test"
+    "money-guard": "tsx scripts/money-guard.ts",
+    "check": "pnpm run contract:check && vp check && pnpm run money-guard && pnpm test"
   },
   "dependencies": {
     "@hono/zod-openapi": "1.6.2",

@@ -24,6 +24,7 @@ pnpm run check
 - **No `any`.** Use `unknown` and narrow immediately.
 - **No `eslint-disable`, `biome-ignore`, or `@ts-ignore`.** Fix the actual error.
 - **Native-first.** Use Hono/Drizzle/Zod/Better Auth primitives; do not hand-roll OpenAPI or runtime mocks.
+- **Monetary math is `dinero.js`.** Any `cost`, `price`, `amount`, etc. must use `dinero.js` (import from `src/platform/money.ts` once it exists). `pnpm run money-guard` enforces this.
 - **No AI attribution** in commits, PRs, or generated files.
 
 ## Important gotchas
