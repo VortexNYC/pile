@@ -282,4 +282,50 @@ describe("API integration", () => {
     const historyBody = await historyRes.json<{ history: unknown[] }>();
     expect(historyBody.history.length).toBeGreaterThanOrEqual(1);
   });
+
+  it("manages webhook subscriptions", async () => {
+    const workspaceId = await seedWorkspace();
+    const token = await adminToken(workspaceId);
+    const url = "http://127.0.0.1:1/webhook";
+
+    const createRes = await app.fetch(
+      request(`/workspaces/${workspaceId}/webhook-subscriptions`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ url, events: "issue.created" }),
+      }),
+      env
+    );
+    expect(createRes.status).toBe(201);
+    const sub = await createRes.json<{ id: string; url: string }>();
+    expect(sub.url).toBe(url);
+
+    const listRes = await app.fetch(
+      request(`/workspaces/${workspaceId}/webhook-subscriptions`, { token }),
+      env
+    );
+    expect(listRes.status).toBe(200);
+    const list = await listRes.json<{ subscriptions: unknown[] }>();
+    expect(list.subscriptions.length).toBe(1);
+
+    const deliveriesRes = await app.fetch(
+      request(
+        `/workspaces/${workspaceId}/webhook-subscriptions/${sub.id}/deliveries`,
+        { token }
+      ),
+      env
+    );
+    expect(deliveriesRes.status).toBe(200);
+    const deliveries = await deliveriesRes.json<{ deliveries: unknown[] }>();
+    expect(Array.isArray(deliveries.deliveries)).toBe(true);
+
+    const deleteRes = await app.fetch(
+      request(`/workspaces/${workspaceId}/webhook-subscriptions/${sub.id}`, {
+        method: "DELETE",
+        token,
+      }),
+      env
+    );
+    expect(deleteRes.status).toBe(204);
+  });
 });
