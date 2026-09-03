@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/tsconfig",
   "extends": "./base.json",
   "compilerOptions": {
-    "lib": ["ES2022"],
+    "lib": ["ES2022", "ES2023"],
     "types": [
       "@cloudflare/workers-types",
       "@cloudflare/vitest-pool-workers",

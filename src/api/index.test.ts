@@ -59,7 +59,7 @@ describe("API integration", () => {
   it("lists workspaces", async () => {
     const res = await app.fetch(request("/workspaces"), env);
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = await res.json<{ workspaces: unknown[] }>();
     expect(Array.isArray(body.workspaces)).toBe(true);
   });
 
@@ -80,7 +80,7 @@ describe("API integration", () => {
       env
     );
     expect(create.status).toBe(201);
-    const state = await create.json();
+    const state = await create.json<{ id: string; name: string }>();
     expect(state.name).toBe("Todo");
 
     const list = await app.fetch(
@@ -88,7 +88,7 @@ describe("API integration", () => {
       env
     );
     expect(list.status).toBe(200);
-    const listBody = await list.json();
+    const listBody = await list.json<{ states: unknown[] }>();
     expect(listBody.states).toHaveLength(1);
 
     const get = await app.fetch(
@@ -106,7 +106,7 @@ describe("API integration", () => {
       env
     );
     expect(patch.status).toBe(200);
-    const updated = await patch.json();
+    const updated = await patch.json<{ name: string }>();
     expect(updated.name).toBe("In Progress");
 
     const del = await app.fetch(
@@ -132,7 +132,7 @@ describe("API integration", () => {
       env
     );
     expect(create.status).toBe(201);
-    const created = await create.json();
+    const created = await create.json<{ id: string; name: string }>();
     expect(created.name).toBe("ci");
 
     const list = await app.fetch(
@@ -140,7 +140,7 @@ describe("API integration", () => {
       env
     );
     expect(list.status).toBe(200);
-    const listBody = await list.json();
+    const listBody = await list.json<{ tokens: unknown[] }>();
     expect(listBody.tokens.length).toBeGreaterThanOrEqual(1);
 
     const del = await app.fetch(
@@ -166,7 +166,7 @@ describe("API integration", () => {
       env
     );
     expect(create.status).toBe(201);
-    const membership = await create.json();
+    const membership = await create.json<{ userId: string }>();
     expect(membership.userId).toBe("user-1");
 
     const list = await app.fetch(
@@ -174,7 +174,7 @@ describe("API integration", () => {
       env
     );
     expect(list.status).toBe(200);
-    const listBody = await list.json();
+    const listBody = await list.json<{ memberships: unknown[] }>();
     expect(listBody.memberships).toHaveLength(1);
   });
 
@@ -195,7 +195,7 @@ describe("API integration", () => {
       env
     );
     expect(create.status).toBe(201);
-    const user = await create.json();
+    const user = await create.json<{ id: string; linearId: string }>();
     expect(user.linearId).toBe("linear-user-1");
 
     const get = await app.fetch(
@@ -205,7 +205,7 @@ describe("API integration", () => {
       env
     );
     expect(get.status).toBe(200);
-    const got = await get.json();
+    const got = await get.json<{ id: string }>();
     expect(got.id).toBe(user.id);
   });
 
@@ -235,7 +235,7 @@ describe("API integration", () => {
       env
     );
     expect(list.status).toBe(200);
-    const body = await list.json();
+    const body = await list.json<{ subscribers: unknown[] }>();
     expect(body.subscribers).toHaveLength(1);
   });
 
@@ -256,7 +256,7 @@ describe("API integration", () => {
       env
     );
     expect(create.status).toBe(201);
-    const issue = await create.json();
+    const issue = await create.json<{ id: string }>();
 
     const update = await app.fetch(
       request("/workspaces/" + workspaceId + "/issues/" + issue.id, {
@@ -279,7 +279,7 @@ describe("API integration", () => {
       env
     );
     expect(historyRes.status).toBe(200);
-    const historyBody = await historyRes.json();
+    const historyBody = await historyRes.json<{ history: unknown[] }>();
     expect(historyBody.history.length).toBeGreaterThanOrEqual(1);
   });
 });

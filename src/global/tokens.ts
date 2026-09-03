@@ -14,12 +14,13 @@ export async function createWorkspaceToken(
   const id = crypto.randomUUID();
   const token = crypto.randomUUID();
   const tokenHash = await hashToken(token, hashSecret);
+  const createdAt = new Date().toISOString();
 
   await db
     .insert(workspaceTokens)
-    .values({ id, workspaceId, name, tokenHash, permissions });
+    .values({ id, workspaceId, name, tokenHash, permissions, createdAt });
 
-  return { id, token, name, permissions, workspaceId };
+  return { id, token, name, permissions, workspaceId, createdAt };
 }
 
 export async function findWorkspaceToken(

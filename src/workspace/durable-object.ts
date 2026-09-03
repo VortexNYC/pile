@@ -1,8 +1,10 @@
-import type { DurableObjectState } from "@cloudflare/workers-types";
 import { DurableObject } from "cloudflare:workers";
+import { and, desc, eq, like, lt, or, sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/durable-sqlite";
+import { migrate } from "drizzle-orm/durable-sqlite/migrator";
 import { z } from "zod";
 
-import { createD1, type D1Client } from "../global/db.js";
+import { createD1 } from "../global/db.js";
 import { createIssueHistory } from "../global/issue-history.js";
 import type { AppEnv } from "../types/env.js";
 import type {
@@ -11,79 +13,21 @@ import type {
   ListIssuesArgs,
   RealtimeEvent,
 } from "../types/workspace.js";
-import { execAll, execOne } from "./sql.js";
+import { workspaceMigrations } from "./migrations.js";
+import { workspaceIssues } from "./schema.js";
 import { deliverWebhooks } from "./webhooks.js";
 
-const issueSchema = z.object({
-  id: z.string(),
-  workspace_id: z.string(),
-  title: z.string(),
-  description: z.string().nullable(),
-  status: z.enum(["backlog", "todo", "in_progress", "done", "canceled"]),
-  priority: z.enum(["low", "medium", "high", "urgent"]),
-  assignee_id: z.string().nullable(),
-  project_id: z.string().nullable(),
-  cycle_id: z.string().nullable(),
-  label_ids: z.string().nullable(),
-  repo: z.string().nullable(),
-  branch: z.string().nullable(),
-  pr_url: z.string().nullable(),
-  pr_state: z.string().nullable(),
-  created_at: z.string(),
-  updated_at: z.string(),
-});
-
-const MIGRATIONS = [
-  {
-    version: 1,
-    statements: [
-      `CREATE TABLE IF NOT EXISTS issues (
-        id TEXT PRIMARY KEY,
-        workspace_id TEXT NOT NULL,
-        title TEXT NOT NULL,
-        description TEXT,
-        status TEXT NOT NULL,
-        priority TEXT NOT NULL,
-        assignee_id TEXT,
-        project_id TEXT,
-        cycle_id TEXT,
-        label_ids TEXT,
-        repo TEXT,
-        branch TEXT,
-        pr_url TEXT,
-        pr_state TEXT,
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-      )`,
-      `CREATE INDEX IF NOT EXISTS idx_issues_workspace_status
-       ON issues (status, created_at DESC)`,
-      `CREATE INDEX IF NOT EXISTS idx_issues_repo_branch
-       ON issues (repo, branch)`,
-    ],
-  },
-  {
-    version: 2,
-    statements: [
-      `CREATE INDEX IF NOT EXISTS idx_issues_created_at_id
-       ON issues (created_at DESC, id DESC)`,
-      `CREATE INDEX IF NOT EXISTS idx_issues_priority
-       ON issues (priority, created_at DESC)`,
-    ],
-  },
-];
-
-const LATEST_SCHEMA_VERSION = MIGRATIONS.length;
+type IssueKey = keyof Issue & keyof IssueInput;
 
 export class WorkspaceDO extends DurableObject<AppEnv> {
-  private readonly sql: SqlStorage;
-  private readonly db: D1Client;
   private workspaceId: string;
   private readonly ready: Promise<void>;
+  private readonly db = drizzle(this.ctx.storage, {
+    schema: { workspaceIssues },
+  });
 
   constructor(ctx: DurableObjectState, env: AppEnv) {
     super(ctx, env);
-    this.sql = ctx.storage.sql;
-    this.db = createD1(env.D1);
     this.workspaceId = ctx.id.toString();
     this.ready = this.runMigrations();
   }
@@ -136,15 +80,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   private async runMigrations() {
-    const current = (await this.ctx.storage.get<number>("schemaVersion")) ?? 0;
-    for (const migration of MIGRATIONS) {
-      if (migration.version > current) {
-        for (const statement of migration.statements) {
-          this.sql.exec(statement);
-        }
-      }
-    }
-    await this.ctx.storage.put("schemaVersion", LATEST_SCHEMA_VERSION);
+    await migrate(this.db, workspaceMigrations);
   }
 
   private async emit(event: RealtimeEvent) {
@@ -167,9 +103,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     }>,
     actorId?: string
   ) {
+    const db = createD1(this.env.D1);
     await Promise.all(
       entries.map((entry) =>
-        createIssueHistory(this.db, this.workspaceId, {
+        createIssueHistory(db, this.workspaceId, {
           issueId,
           linearId: null,
           actorId: actorId ?? null,
@@ -186,37 +123,33 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const status = input.status ?? "backlog";
     const priority = input.priority ?? "medium";
 
-    const cursor = this.sql.exec(
-      `INSERT INTO issues
-        (id, workspace_id, title, description, status, priority, assignee_id, project_id, cycle_id, label_ids, repo, branch, pr_url, pr_state, created_at, updated_at)
-       VALUES
-        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       RETURNING *`,
-      id,
-      this.workspaceId,
-      input.title,
-      input.description ?? null,
-      status,
-      priority,
-      input.assigneeId ?? null,
-      input.projectId ?? null,
-      input.cycleId ?? null,
-      input.labelIds ?? null,
-      input.repo ?? null,
-      input.branch ?? null,
-      null,
-      null,
-      input.createdAt ?? now,
-      input.updatedAt ?? now
-    );
+    const issue = await this.db
+      .insert(workspaceIssues)
+      .values({
+        id,
+        workspaceId: this.workspaceId,
+        title: input.title,
+        description: input.description ?? null,
+        status,
+        priority,
+        assigneeId: input.assigneeId ?? null,
+        projectId: input.projectId ?? null,
+        cycleId: input.cycleId ?? null,
+        labelIds: input.labelIds ?? null,
+        repo: input.repo ?? null,
+        branch: input.branch ?? null,
+        prUrl: null,
+        prState: null,
+        createdAt: input.createdAt ?? now,
+        updatedAt: input.updatedAt ?? now,
+      })
+      .returning()
+      .get();
 
-    const rows = Array.from(cursor);
-    const parsed = issueSchema.safeParse(rows[0]);
-    if (!parsed.success) {
-      throw new Error("Failed to create issue: invalid row shape");
+    if (!issue) {
+      throw new Error("Failed to create issue");
     }
 
-    const issue = toIssue(parsed.data);
     await this.emit({
       type: "issue.created",
       workspaceId: this.workspaceId,
@@ -232,13 +165,11 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   async getIssue(id: string): Promise<Issue | undefined> {
     await this.ready;
-    const row = execOne(
-      this.sql,
-      issueSchema,
-      "SELECT * FROM issues WHERE id = ?",
-      id
-    );
-    return row ? toIssue(row) : undefined;
+    return this.db
+      .select()
+      .from(workspaceIssues)
+      .where(eq(workspaceIssues.id, id))
+      .get();
   }
 
   async getIssueByBranch(
@@ -246,64 +177,75 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     branch: string
   ): Promise<Issue | undefined> {
     await this.ready;
-    const row = execOne(
-      this.sql,
-      issueSchema,
-      "SELECT * FROM issues WHERE repo = ? AND branch = ?",
-      repo,
-      branch
-    );
-    return row ? toIssue(row) : undefined;
+    return this.db
+      .select()
+      .from(workspaceIssues)
+      .where(
+        and(eq(workspaceIssues.repo, repo), eq(workspaceIssues.branch, branch))
+      )
+      .get();
   }
 
   async listIssues(args: ListIssuesArgs = {}): Promise<Issue[]> {
     await this.ready;
-    const conditions: string[] = [];
-    const params: unknown[] = [];
+    const conditions = [];
 
     if (args.status) {
-      conditions.push("status = ?");
-      params.push(args.status);
+      conditions.push(eq(workspaceIssues.status, args.status));
     }
     if (args.priority) {
-      conditions.push("priority = ?");
-      params.push(args.priority);
+      conditions.push(eq(workspaceIssues.priority, args.priority));
     }
     if (args.assigneeId) {
-      conditions.push("assignee_id = ?");
-      params.push(args.assigneeId);
+      conditions.push(eq(workspaceIssues.assigneeId, args.assigneeId));
     }
     if (args.projectId) {
-      conditions.push("project_id = ?");
-      params.push(args.projectId);
+      conditions.push(eq(workspaceIssues.projectId, args.projectId));
     }
     if (args.cycleId) {
-      conditions.push("cycle_id = ?");
-      params.push(args.cycleId);
+      conditions.push(eq(workspaceIssues.cycleId, args.cycleId));
     }
     if (args.labelId) {
       conditions.push(
-        "',' || COALESCE(label_ids, '') || ',' LIKE '%,' || ? || ',%'"
+        like(
+          sql`',' || COALESCE(${workspaceIssues.labelIds}, '') || ','`,
+          `%,${args.labelId},%`
+        )
       );
-      params.push(args.labelId);
     }
     if (args.search) {
-      conditions.push("(title LIKE ? OR COALESCE(description, '') LIKE ?)");
       const pattern = `%${args.search}%`;
-      params.push(pattern, pattern);
+      conditions.push(
+        or(
+          like(workspaceIssues.title, pattern),
+          like(sql`COALESCE(${workspaceIssues.description}, '')`, pattern)
+        )
+      );
     }
     if (args.cursor) {
-      conditions.push("(created_at < ? OR (created_at = ? AND id < ?))");
-      params.push(args.cursor.createdAt, args.cursor.createdAt, args.cursor.id);
+      conditions.push(
+        or(
+          lt(workspaceIssues.createdAt, args.cursor.createdAt),
+          and(
+            eq(workspaceIssues.createdAt, args.cursor.createdAt),
+            lt(workspaceIssues.id, args.cursor.id)
+          )
+        )
+      );
     }
 
-    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
     const limit = args.limit ?? 1_000_000;
-    const query = `SELECT * FROM issues ${where} ORDER BY created_at DESC, id DESC LIMIT ?`;
-    params.push(limit);
+    const query = this.db
+      .select()
+      .from(workspaceIssues)
+      .orderBy(desc(workspaceIssues.createdAt), desc(workspaceIssues.id))
+      .limit(limit);
 
-    const rows = execAll(this.sql, issueSchema, query, ...params);
-    return rows.map(toIssue);
+    const rows = conditions.length
+      ? query.where(and(...conditions)).all()
+      : query.all();
+
+    return rows;
   }
 
   async updateIssue(
@@ -315,54 +257,56 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const old = await this.getIssue(id);
     if (!old) return undefined;
 
-    const allowed: Array<{
-      key: keyof IssueInput;
-      column: string;
-    }> = [
-      { key: "title", column: "title" },
-      { key: "description", column: "description" },
-      { key: "status", column: "status" },
-      { key: "priority", column: "priority" },
-      { key: "assigneeId", column: "assignee_id" },
-      { key: "projectId", column: "project_id" },
-      { key: "cycleId", column: "cycle_id" },
-      { key: "labelIds", column: "label_ids" },
-      { key: "repo", column: "repo" },
-      { key: "branch", column: "branch" },
+    const set: Partial<Issue> = {
+      updatedAt: new Date().toISOString(),
+    };
+
+    const allowed: Array<{ key: IssueKey; field: string }> = [
+      { key: "title", field: "title" },
+      { key: "description", field: "description" },
+      { key: "status", field: "status" },
+      { key: "priority", field: "priority" },
+      { key: "assigneeId", field: "assignee_id" },
+      { key: "projectId", field: "project_id" },
+      { key: "cycleId", field: "cycle_id" },
+      { key: "labelIds", field: "label_ids" },
+      { key: "repo", field: "repo" },
+      { key: "branch", field: "branch" },
     ];
 
-    const sets: string[] = [];
-    const values: unknown[] = [];
+    if (patch.title !== undefined) set.title = patch.title;
+    if (patch.description !== undefined) set.description = patch.description;
+    if (patch.status !== undefined) set.status = patch.status;
+    if (patch.priority !== undefined) set.priority = patch.priority;
+    if (patch.assigneeId !== undefined) set.assigneeId = patch.assigneeId;
+    if (patch.projectId !== undefined) set.projectId = patch.projectId;
+    if (patch.cycleId !== undefined) set.cycleId = patch.cycleId;
+    if (patch.labelIds !== undefined) set.labelIds = patch.labelIds;
+    if (patch.repo !== undefined) set.repo = patch.repo;
+    if (patch.branch !== undefined) set.branch = patch.branch;
 
-    for (const { key, column } of allowed) {
-      if (key in patch) {
-        sets.push(`${column} = ?`);
-        values.push(patch[key] ?? null);
-      }
-    }
-
-    if (sets.length === 0) {
+    if (Object.keys(set).length === 1 && "updatedAt" in set) {
       return old;
     }
 
-    values.push(new Date().toISOString(), id);
-    const query = `UPDATE issues SET ${sets.join(
-      ", "
-    )}, updated_at = ? WHERE id = ? RETURNING *`;
-    const row = execOne(this.sql, issueSchema, query, ...values);
-    if (!row) return undefined;
-    const issue = toIssue(row);
+    const issue = await this.db
+      .update(workspaceIssues)
+      .set(set)
+      .where(eq(workspaceIssues.id, id))
+      .returning()
+      .get();
+    if (!issue) return undefined;
 
     const historyEntries = allowed
       .filter(({ key }) => key in patch)
-      .map(({ key, column }) => {
+      .map(({ key, field }) => {
         const before = old[key];
-        const after = issue[key as keyof Issue];
+        const after = issue[key];
         const fromValue = before === null ? null : String(before);
         const toValue = after === null ? null : String(after);
         return fromValue === toValue
           ? undefined
-          : { field: column, fromValue, toValue };
+          : { field, fromValue, toValue };
       })
       .filter(
         (
@@ -388,10 +332,19 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   async deleteIssue(id: string): Promise<boolean> {
     await this.ready;
-    Array.from(this.sql.exec("DELETE FROM issues WHERE id = ?", id));
-    const cursor = this.sql.exec("SELECT changes() AS changes");
-    const rows = Array.from(cursor) as Array<{ changes: number }>;
-    const deleted = rows.length > 0 && rows[0].changes > 0;
+    await this.db
+      .delete(workspaceIssues)
+      .where(eq(workspaceIssues.id, id))
+      .run();
+    const changes = this.db.$client.sql.exec("SELECT changes() AS changes");
+    const rows = Array.from(changes);
+    const first = rows[0];
+    const deleted =
+      first !== undefined &&
+      typeof first === "object" &&
+      "changes" in first &&
+      typeof first.changes === "number" &&
+      first.changes > 0;
     if (!deleted) return false;
     await this.emit({
       type: "issue.deleted",
@@ -412,19 +365,19 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const old = await this.getIssueByBranch(repo, branch);
     if (!old) return undefined;
 
-    const query = `UPDATE issues SET pr_url = ?, pr_state = ?, updated_at = ? WHERE repo = ? AND branch = ? RETURNING *`;
-    const row = execOne(
-      this.sql,
-      issueSchema,
-      query,
-      prUrl,
-      prState,
-      new Date().toISOString(),
-      repo,
-      branch
-    );
-    if (!row) return undefined;
-    const issue = toIssue(row);
+    const issue = await this.db
+      .update(workspaceIssues)
+      .set({
+        prUrl,
+        prState,
+        updatedAt: new Date().toISOString(),
+      })
+      .where(
+        and(eq(workspaceIssues.repo, repo), eq(workspaceIssues.branch, branch))
+      )
+      .returning()
+      .get();
+    if (!issue) return undefined;
 
     const historyEntries: Array<{
       field: string;
@@ -456,25 +409,4 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     });
     return issue;
   }
-}
-
-function toIssue(row: z.infer<typeof issueSchema>): Issue {
-  return {
-    id: row.id,
-    workspaceId: row.workspace_id,
-    title: row.title,
-    description: row.description,
-    status: row.status,
-    priority: row.priority,
-    assigneeId: row.assignee_id,
-    projectId: row.project_id,
-    cycleId: row.cycle_id,
-    labelIds: row.label_ids,
-    repo: row.repo,
-    branch: row.branch,
-    prUrl: row.pr_url,
-    prState: row.pr_state,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
 }

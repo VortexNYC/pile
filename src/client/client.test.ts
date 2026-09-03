@@ -9,7 +9,7 @@ describe("typed client integration", () => {
     const client = createIssueTrackerClient({
       baseUrl: "http://localhost",
       apiKey: "unused",
-      fetch: (request) => app.fetch(request, env),
+      fetch: async (request) => app.fetch(request, env),
     });
 
     const { data, error } = await client.GET("/workspaces");
