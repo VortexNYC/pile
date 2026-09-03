@@ -12,10 +12,12 @@ export interface AuthService {
 export function createAuth(env: AppEnv): AuthService {
   const db = createD1(env.D1);
 
-  return betterAuth({
+  const auth = betterAuth({
     database: drizzleAdapter(db, { provider: "sqlite", schema }),
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.BETTER_AUTH_URL,
     emailAndPassword: { enabled: true },
-  }) as AuthService;
+  });
+
+  return { handler: (request) => auth.handler(request) };
 }

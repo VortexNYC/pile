@@ -8,8 +8,8 @@ import {
   listTemplates,
 } from "../global/templates.js";
 import { VortexError } from "../platform/errors.js";
+import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
-import type { AppContext } from "./middleware.js";
 
 const templateSchema = z.object({
   id: z.string(),

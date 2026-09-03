@@ -10,8 +10,8 @@ import {
   updateState,
 } from "../global/workspace-entities.js";
 import { VortexError } from "../platform/errors.js";
+import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
-import type { AppContext } from "./middleware.js";
 
 const stateSchema = z.object({
   id: z.string(),

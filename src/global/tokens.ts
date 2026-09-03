@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 
-import { hashToken } from "../platform/crypto.js";
+import { hashToken } from "./crypto.js";
 import type { D1Client } from "./db.js";
 import { workspaceTokens } from "./schema.js";
 

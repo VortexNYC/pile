@@ -1,9 +1,9 @@
 import { createMiddleware } from "hono/factory";
 import { secureHeaders } from "hono/secure-headers";
 
-import type { AppContext } from "../api/middleware.js";
 import type { AppEnv } from "./env.js";
 import { VortexError } from "./errors.js";
+import type { AppContext } from "./middleware.js";
 
 const UNSAFE_METHODS = new Set(["POST", "PATCH", "PUT", "DELETE"]);
 

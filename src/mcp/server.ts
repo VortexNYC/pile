@@ -5,7 +5,7 @@ import {
 } from "@modelcontextprotocol/server";
 import { CfWorkerJsonSchemaValidator } from "@modelcontextprotocol/server/validators/cf-worker";
 
-import type { WorkerEnv } from "../api/middleware.js";
+import type { WorkerEnv } from "../platform/middleware.js";
 import { MCP_TOOLS } from "./mcp-tools.js";
 
 type HonoApp = {

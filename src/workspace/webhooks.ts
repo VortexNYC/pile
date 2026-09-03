@@ -1,10 +1,10 @@
 import { eq } from "drizzle-orm";
 
+import { hmacSha256Hex } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
 import { webhookSubscriptions } from "../global/schema.js";
-import { hmacSha256Hex } from "../platform/crypto.js";
-import type { AppEnv } from "../platform/env.js";
-import type { RealtimeEvent } from "../workspace/types.js";
+import type { AppEnv } from "../types/env.js";
+import type { RealtimeEvent } from "../types/workspace.js";
 
 export async function deliverWebhooks(
   env: AppEnv,

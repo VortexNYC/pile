@@ -2,17 +2,17 @@ import type { DurableObjectState } from "@cloudflare/workers-types";
 import { DurableObject } from "cloudflare:workers";
 import { z } from "zod";
 
-import { deliverWebhooks } from "../agents/webhooks.js";
 import { createD1, type D1Client } from "../global/db.js";
 import { createIssueHistory } from "../global/issue-history.js";
-import type { AppEnv } from "../platform/env.js";
-import { execAll, execOne } from "./sql.js";
+import type { AppEnv } from "../types/env.js";
 import type {
   Issue,
   IssueInput,
   ListIssuesArgs,
   RealtimeEvent,
-} from "./types.js";
+} from "../types/workspace.js";
+import { execAll, execOne } from "./sql.js";
+import { deliverWebhooks } from "./webhooks.js";
 
 const issueSchema = z.object({
   id: z.string(),

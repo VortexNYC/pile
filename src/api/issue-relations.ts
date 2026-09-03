@@ -9,8 +9,8 @@ import {
   listIssueRelations,
 } from "../global/issue-relations.js";
 import { VortexError } from "../platform/errors.js";
+import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
-import type { AppContext } from "./middleware.js";
 
 const relationSchema = z.object({
   id: z.string(),

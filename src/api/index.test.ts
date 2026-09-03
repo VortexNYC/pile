@@ -5,7 +5,7 @@ import { createD1 } from "../global/db.js";
 import { createWorkspaceToken } from "../global/tokens.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
-import type { WorkerEnv } from "./middleware.js";
+import type { WorkerEnv } from "../platform/middleware.js";
 
 declare module "cloudflare:test" {
   interface ProvidedEnv extends WorkerEnv {}

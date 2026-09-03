@@ -1,7 +1,7 @@
 import { applyD1Migrations, env } from "cloudflare:test";
 import { beforeAll } from "vitest";
 
-import type { WorkerEnv } from "../api/middleware.js";
+import type { WorkerEnv } from "../platform/middleware.js";
 
 interface D1Migration {
   name: string;

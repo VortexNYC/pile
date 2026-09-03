@@ -9,8 +9,8 @@ import {
   listIssueSubscribers,
 } from "../global/issue-subscribers.js";
 import { VortexError } from "../platform/errors.js";
+import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
-import type { AppContext } from "./middleware.js";
 
 const issueSubscriberSchema = z.object({
   id: z.string(),

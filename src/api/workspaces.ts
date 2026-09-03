@@ -8,7 +8,7 @@ import {
   listWorkspaces,
 } from "../global/workspaces.js";
 import { VortexError } from "../platform/errors.js";
-import type { AppContext } from "./middleware.js";
+import type { AppContext } from "../platform/middleware.js";
 
 const workspaceSchema = z.object({
   id: z.string(),

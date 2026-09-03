@@ -1,6 +1,6 @@
 import { createMiddleware } from "hono/factory";
 
-import type { AppContext } from "../api/middleware.js";
+import type { AppContext } from "./middleware.js";
 
 export const observabilityMiddleware = createMiddleware<AppContext>(
   async (c, next) => {

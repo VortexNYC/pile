@@ -7,8 +7,8 @@ import {
   deleteWorkspaceToken,
   listWorkspaceTokens,
 } from "../global/tokens.js";
+import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
-import type { AppContext } from "./middleware.js";
 
 const tokenSchema = z.object({
   id: z.string(),

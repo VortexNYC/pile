@@ -3,8 +3,8 @@ import { createRoute, z } from "@hono/zod-openapi";
 
 import { listAttachments } from "../global/attachments.js";
 import { createD1 } from "../global/db.js";
+import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
-import type { AppContext } from "./middleware.js";
 
 const attachmentSchema = z.object({
   id: z.string(),

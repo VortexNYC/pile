@@ -1,4 +1,4 @@
-import type { Issue } from "../workspace/types.js";
+import type { Issue } from "../types/workspace.js";
 import type { AgentProvider, AgentSession } from "./provider.js";
 
 export interface MockAgentProviderOptions {

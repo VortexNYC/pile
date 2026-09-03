@@ -8,8 +8,8 @@ import {
   listLinearUsers,
 } from "../global/linear-users.js";
 import { VortexError } from "../platform/errors.js";
+import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
-import type { AppContext } from "./middleware.js";
 
 const linearUserSchema = z.object({
   id: z.string(),

@@ -2,8 +2,8 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 import { sql } from "drizzle-orm";
 
-import type { AppContext } from "../api/middleware.js";
 import { createD1 } from "../global/db.js";
+import type { AppContext } from "./middleware.js";
 
 const healthBodySchema = z.object({
   ok: z.boolean(),

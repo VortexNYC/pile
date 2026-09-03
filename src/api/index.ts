@@ -5,6 +5,10 @@ import { handleMcpRequest } from "../mcp/server.js";
 import { createAuth } from "../platform/auth.js";
 import { toErrorResponse, VortexError } from "../platform/errors.js";
 import { registerHealthRoutes } from "../platform/health.js";
+import {
+  type AppContext,
+  workspaceTokenMiddleware,
+} from "../platform/middleware.js";
 import { observabilityMiddleware } from "../platform/observability.js";
 import { securityMiddleware } from "../platform/security.js";
 import { registerAttachmentRoutes } from "./attachments.js";
@@ -14,7 +18,6 @@ import { registerIssueRelationRoutes } from "./issue-relations.js";
 import { registerIssueSubscriberRoutes } from "./issue-subscribers.js";
 import { registerIssueRoutes } from "./issues.js";
 import { registerLinearUserRoutes } from "./linear-users.js";
-import { type AppContext, workspaceTokenMiddleware } from "./middleware.js";
 import { registerMigrateRoutes } from "./migrate.js";
 import { registerStateRoutes } from "./states.js";
 import { registerTemplateRoutes } from "./templates.js";

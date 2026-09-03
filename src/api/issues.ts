@@ -6,14 +6,14 @@ import { createD1 } from "../global/db.js";
 import { deleteIssueReferences } from "../global/issue-data.js";
 import { createRepoBranch } from "../global/repo-branches.js";
 import { VortexError } from "../platform/errors.js";
+import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
-import type { Issue, IssueInput } from "../workspace/types.js";
+import type { Issue, IssueInput } from "../types/workspace.js";
 import {
   encodeCursor,
   listIssuesQuerySchema,
   toListArgs,
 } from "./list-args.js";
-import type { AppContext, WorkerEnv } from "./middleware.js";
 
 async function getStub(env: WorkerEnv, workspaceId: string) {
   const stub = env.WORKSPACE_DURABLE_OBJECT.get(

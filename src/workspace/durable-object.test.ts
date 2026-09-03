@@ -2,9 +2,9 @@ import { env, runInDurableObject } from "cloudflare:test";
 import { eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 
-import type { WorkerEnv } from "../api/middleware.js";
 import { createD1 } from "../global/db.js";
 import { workspaces } from "../global/schema.js";
+import type { WorkerEnv } from "../platform/middleware.js";
 import type { WorkspaceDO } from "./durable-object.js";
 
 declare module "cloudflare:test" {

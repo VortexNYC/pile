@@ -1,4 +1,4 @@
-import type { Issue } from "../workspace/types.js";
+import type { Issue } from "../types/workspace.js";
 
 export interface AgentSession {
   id: string;

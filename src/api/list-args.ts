@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import type { IssueCursor, ListIssuesArgs } from "../workspace/types.js";
+import type { IssueCursor, ListIssuesArgs } from "../types/workspace.js";
 
 export const DEFAULT_LIMIT = 25;
 export const MAX_LIMIT = 100;

@@ -1,7 +1,7 @@
 import { createMiddleware } from "hono/factory";
 
-import type { AppContext } from "../api/middleware.js";
 import { VortexError } from "./errors.js";
+import type { AppContext } from "./middleware.js";
 import { canAccess } from "./permissions.js";
 
 export function rls(...allowed: ("read" | "write" | "admin")[]) {

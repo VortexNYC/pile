@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import type { AppEnv } from "../platform/env.js";
 import { VortexError } from "../platform/errors.js";
-import type { Issue } from "../workspace/types.js";
+import type { Issue } from "../types/workspace.js";
 import type { AgentProvider, AgentSession } from "./provider.js";
 
 const devinCreateResponseSchema = z.object({

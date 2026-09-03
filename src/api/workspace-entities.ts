@@ -22,8 +22,8 @@ import {
   updateProject,
 } from "../global/workspace-entities.js";
 import { VortexError } from "../platform/errors.js";
+import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
-import type { AppContext } from "./middleware.js";
 
 const projectSchema = z.object({
   id: z.string(),

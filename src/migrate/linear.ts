@@ -1,4 +1,3 @@
-import type { WorkerEnv } from "../api/middleware.js";
 import { createAttachment, setAttachmentR2Key } from "../global/attachments.js";
 import { createComment } from "../global/comments.js";
 import { createD1 } from "../global/db.js";
@@ -16,11 +15,12 @@ import {
   createState,
 } from "../global/workspace-entities.js";
 import { VortexError } from "../platform/errors.js";
+import type { WorkerEnv } from "../platform/middleware.js";
 import type {
   IssueInput,
   IssuePriority,
   IssueStatus,
-} from "../workspace/types.js";
+} from "../types/workspace.js";
 
 interface LinearState {
   id: string;

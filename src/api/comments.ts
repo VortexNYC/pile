@@ -10,8 +10,8 @@ import {
 } from "../global/comments.js";
 import { createD1 } from "../global/db.js";
 import { VortexError } from "../platform/errors.js";
+import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
-import type { AppContext } from "./middleware.js";
 
 const commentSchema = z.object({
   id: z.string(),

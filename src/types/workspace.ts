@@ -1,4 +1,4 @@
-import type { Id, Timestamp } from "../types/index.js";
+import type { Id, Timestamp } from "./index.js";
 
 export type IssueStatus =
   | "backlog"
