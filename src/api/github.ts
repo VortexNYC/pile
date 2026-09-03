@@ -7,6 +7,7 @@ import {
   createGithubInstallation,
   deleteGithubInstallation,
 } from "../global/github-installations.js";
+import { createGithubUserMapping } from "../global/github-users.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
@@ -21,6 +22,41 @@ const installResponseSchema = z.object({
       full_name: z.string(),
     })
   ),
+});
+
+const githubUserSchema = z.object({
+  id: z.string(),
+  workspaceId: z.string(),
+  userId: z.string(),
+  githubLogin: z.string(),
+});
+
+const githubUserRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{workspaceId}/github/users",
+  tags: ["github"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ workspaceId: z.string() }),
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            userId: z.string(),
+            githubLogin: z.string(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "GitHub user mapping created",
+      content: {
+        "application/json": { schema: githubUserSchema },
+      },
+    },
+  },
 });
 
 const githubInstallRoute = createRoute({
@@ -47,6 +83,19 @@ const githubInstallRoute = createRoute({
 });
 
 export function registerGithubRoutes(app: OpenAPIHono<AppContext>) {
+  app.openapi(githubUserRoute, async (c) => {
+    const { workspaceId } = c.req.valid("param");
+    const { userId, githubLogin } = c.req.valid("json");
+    const db = createD1(c.env.D1);
+    const mapping = await createGithubUserMapping(
+      db,
+      workspaceId,
+      userId,
+      githubLogin
+    );
+    return c.json(mapping, 201);
+  });
+
   app.openapi(githubInstallRoute, async (c) => {
     const { workspaceId } = c.req.valid("param");
     const { installationId } = c.req.valid("json");

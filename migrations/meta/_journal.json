@@ -134,6 +134,13 @@
       "when": 1788460949843,
       "tag": "0018_wise_magma",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1788469570463,
+      "tag": "0019_giant_quicksilver",
+      "breakpoints": true
     }
   ]
 }

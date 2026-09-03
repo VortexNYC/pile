@@ -1,5 +1,11 @@
 import { relations, sql } from "drizzle-orm";
-import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import {
+  index,
+  integer,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
 
 export const workspaces = sqliteTable("workspaces" as string, {
   id: text("id" as string).primaryKey(),
@@ -542,3 +548,30 @@ export const sessionRelations = relations(session, ({ one }) => ({
 export const accountRelations = relations(account, ({ one }) => ({
   user: one(user, { fields: [account.userId], references: [user.id] }),
 }));
+
+export const githubUsers = sqliteTable(
+  "github_users" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    workspaceId: text("workspace_id" as string)
+      .notNull()
+      .references(() => workspaces.id),
+    userId: text("user_id" as string)
+      .notNull()
+      .references(() => user.id),
+    githubLogin: text("github_login" as string).notNull(),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("github_users_workspace_login_idx" as string).on(
+      table.workspaceId,
+      table.githubLogin
+    ),
+    uniqueIndex("github_users_workspace_user_idx" as string).on(
+      table.workspaceId,
+      table.userId
+    ),
+  ]
+);

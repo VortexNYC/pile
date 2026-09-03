@@ -3069,6 +3069,76 @@
         }
       }
     },
+    "/workspaces/{workspaceId}/github/users": {
+      "post": {
+        "tags": [
+          "github"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "workspaceId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "userId": {
+                    "type": "string"
+                  },
+                  "githubLogin": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "userId",
+                  "githubLogin"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "GitHub user mapping created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "workspaceId": {
+                      "type": "string"
+                    },
+                    "userId": {
+                      "type": "string"
+                    },
+                    "githubLogin": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "workspaceId",
+                    "userId",
+                    "githubLogin"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/workspaces/{workspaceId}/github/install": {
       "post": {
         "tags": [

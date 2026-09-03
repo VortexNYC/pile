@@ -16,6 +16,7 @@ import {
   deleteGithubInstallationsByInstallationId,
   findWorkspaceByRepo,
 } from "../global/github-installations.js";
+import { findUserByGithubLogin } from "../global/github-users.js";
 import { findLabelsByWorkspaceAndNames } from "../global/labels.js";
 import {
   createRepoIssue,
@@ -739,6 +740,10 @@ async function processGitHubIssue(
     const cycleId = issue.milestone
       ? await findOrCreateCycleByName(db, workspaceId, issue.milestone.title)
       : undefined;
+    const assigneeId = issue.assignee
+      ? ((await findUserByGithubLogin(db, workspaceId, issue.assignee.login))
+          ?.userId ?? undefined)
+      : undefined;
     if (mapping) {
       const updated = await stub.updateIssue(
         mapping.issueId,
@@ -747,6 +752,7 @@ async function processGitHubIssue(
           description: issue.body ?? undefined,
           status,
           cycleId,
+          assigneeId,
           repo,
         },
         "github"
@@ -764,6 +770,7 @@ async function processGitHubIssue(
           title: issue.title,
           description: issue.body ?? undefined,
           cycleId,
+          assigneeId,
           repo,
         },
         "github"
@@ -780,6 +787,10 @@ async function processGitHubIssue(
     const cycleId = issue.milestone
       ? await findOrCreateCycleByName(db, workspaceId, issue.milestone.title)
       : undefined;
+    const assigneeId = issue.assignee
+      ? ((await findUserByGithubLogin(db, workspaceId, issue.assignee.login))
+          ?.userId ?? undefined)
+      : undefined;
     if (mapping) {
       const updated = await stub.updateIssue(
         mapping.issueId,
@@ -787,6 +798,7 @@ async function processGitHubIssue(
           title: issue.title,
           description: issue.body ?? undefined,
           cycleId,
+          assigneeId,
           repo,
         },
         "github"
@@ -850,6 +862,32 @@ async function processGitHubIssue(
       const updated = await stub.updateIssue(
         mapping.issueId,
         { labelIds },
+        "github"
+      );
+      if (!updated) {
+        throw new VortexError({
+          code: "NOT_FOUND",
+          status: 404,
+          message: "Mapped issue not found in workspace",
+        });
+      }
+    }
+    if (deliveryId) {
+      await recordWebhookDelivery(db, deliveryId, "github", event, workspaceId);
+    }
+    return c.json({ ok: true }, 200);
+  }
+
+  if (action === "assigned" || action === "unassigned") {
+    const assigneeId =
+      action === "assigned" && issue.assignee
+        ? ((await findUserByGithubLogin(db, workspaceId, issue.assignee.login))
+            ?.userId ?? undefined)
+        : null;
+    if (mapping) {
+      const updated = await stub.updateIssue(
+        mapping.issueId,
+        { assigneeId },
         "github"
       );
       if (!updated) {
