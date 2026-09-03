@@ -17,7 +17,7 @@ export interface IssueInput {
   assigneeId?: string;
   projectId?: string;
   cycleId?: string;
-  labelIds?: string;
+  labelIds?: string | null;
   repo?: string;
   branch?: string;
   createdAt?: Timestamp;

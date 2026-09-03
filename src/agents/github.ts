@@ -15,6 +15,7 @@ import {
   deleteGithubInstallationsByInstallationId,
   findWorkspaceByRepo,
 } from "../global/github-installations.js";
+import { findLabelsByWorkspaceAndNames } from "../global/labels.js";
 import {
   createRepoIssue,
   deleteRepoIssue,
@@ -815,6 +816,35 @@ async function processGitHubIssue(
     if (mapping) {
       await stub.updateIssue(mapping.issueId, { status: "canceled" }, "github");
       await deleteRepoIssue(db, repo, issue.number);
+    }
+    if (deliveryId) {
+      await recordWebhookDelivery(db, deliveryId, "github", event, workspaceId);
+    }
+    return c.json({ ok: true }, 200);
+  }
+
+  if (action === "labeled" || action === "unlabeled") {
+    if (mapping) {
+      const names = issue.labels.map((label) => label.name);
+      const matched = await findLabelsByWorkspaceAndNames(
+        db,
+        workspaceId,
+        names
+      );
+      const labelIds =
+        matched.length > 0 ? matched.map((label) => label.id).join(",") : null;
+      const updated = await stub.updateIssue(
+        mapping.issueId,
+        { labelIds },
+        "github"
+      );
+      if (!updated) {
+        throw new VortexError({
+          code: "NOT_FOUND",
+          status: 404,
+          message: "Mapped issue not found in workspace",
+        });
+      }
     }
     if (deliveryId) {
       await recordWebhookDelivery(db, deliveryId, "github", event, workspaceId);
