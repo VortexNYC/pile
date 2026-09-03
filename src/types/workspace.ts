@@ -14,9 +14,9 @@ export interface IssueInput {
   description?: string;
   status?: IssueStatus;
   priority?: IssuePriority;
-  assigneeId?: string;
-  projectId?: string;
-  cycleId?: string;
+  assigneeId?: string | null;
+  projectId?: string | null;
+  cycleId?: string | null;
   labelIds?: string | null;
   repo?: string;
   branch?: string;

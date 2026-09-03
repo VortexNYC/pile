@@ -8,6 +8,7 @@ import {
   updateComment,
 } from "../global/comments.js";
 import { hmacSha256Hex, timingSafeEqualHex } from "../global/crypto.js";
+import { findOrCreateCycleByName } from "../global/cycles.js";
 import { createD1, type D1Client } from "../global/db.js";
 import {
   createGithubInstallation,
@@ -161,6 +162,8 @@ const issuePayloadSchema = z.object({
     "unlabeled",
     "assigned",
     "unassigned",
+    "milestoned",
+    "demilestoned",
   ]),
   issue: z.object({
     number: z.number().int(),
@@ -175,6 +178,8 @@ const issuePayloadSchema = z.object({
         })
       )
       .default([]),
+    assignee: z.object({ login: z.string() }).nullable(),
+    milestone: z.object({ title: z.string() }).nullable(),
   }),
   repository: z.object({
     full_name: z.string(),
@@ -731,6 +736,9 @@ async function processGitHubIssue(
 
   if (action === "opened" || action === "reopened") {
     const status = action === "reopened" ? "todo" : "backlog";
+    const cycleId = issue.milestone
+      ? await findOrCreateCycleByName(db, workspaceId, issue.milestone.title)
+      : undefined;
     if (mapping) {
       const updated = await stub.updateIssue(
         mapping.issueId,
@@ -738,6 +746,7 @@ async function processGitHubIssue(
           title: issue.title,
           description: issue.body ?? undefined,
           status,
+          cycleId,
           repo,
         },
         "github"
@@ -754,6 +763,7 @@ async function processGitHubIssue(
         {
           title: issue.title,
           description: issue.body ?? undefined,
+          cycleId,
           repo,
         },
         "github"
@@ -767,12 +777,16 @@ async function processGitHubIssue(
   }
 
   if (action === "edited") {
+    const cycleId = issue.milestone
+      ? await findOrCreateCycleByName(db, workspaceId, issue.milestone.title)
+      : undefined;
     if (mapping) {
       const updated = await stub.updateIssue(
         mapping.issueId,
         {
           title: issue.title,
           description: issue.body ?? undefined,
+          cycleId,
           repo,
         },
         "github"
@@ -836,6 +850,31 @@ async function processGitHubIssue(
       const updated = await stub.updateIssue(
         mapping.issueId,
         { labelIds },
+        "github"
+      );
+      if (!updated) {
+        throw new VortexError({
+          code: "NOT_FOUND",
+          status: 404,
+          message: "Mapped issue not found in workspace",
+        });
+      }
+    }
+    if (deliveryId) {
+      await recordWebhookDelivery(db, deliveryId, "github", event, workspaceId);
+    }
+    return c.json({ ok: true }, 200);
+  }
+
+  if (action === "milestoned" || action === "demilestoned") {
+    const cycleId =
+      action === "milestoned" && issue.milestone
+        ? await findOrCreateCycleByName(db, workspaceId, issue.milestone.title)
+        : null;
+    if (mapping) {
+      const updated = await stub.updateIssue(
+        mapping.issueId,
+        { cycleId },
         "github"
       );
       if (!updated) {
