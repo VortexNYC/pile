@@ -25,6 +25,7 @@ This is the durable tracker for the open-source Linear alternative. Operational 
 
 ## Next
 
+- Linear API / CLI / MCP / docs parity audit and gap mapping (#20).
 - Magic-word PR linking: parse `fixes KEY-123` / `closes KEY-123` from PR titles, bodies, branch names, and commits, and update the linked Vortex issue.
 - Outbound GitHub writeback: Vortex comment -> GitHub issue/PR comment.
 - `GET /workspaces/{id}/issues?identifier=KEY-123` lookup.
@@ -33,6 +34,7 @@ This is the durable tracker for the open-source Linear alternative. Operational 
 
 ## Later
 
+- Self-host the issue tracker and use it as the source of truth for this project (#21).
 - GitHub label / assignee / milestone / check run sync.
 - Agent sessions and activities API.
 - Search and indexing.
