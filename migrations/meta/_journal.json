@@ -120,6 +120,13 @@
       "when": 1788457340171,
       "tag": "0016_daily_veda",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1788460562827,
+      "tag": "0017_wealthy_black_cat",
+      "breakpoints": true
     }
   ]
 }

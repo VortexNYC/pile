@@ -97,15 +97,17 @@ export function registerGithubRoutes(app: OpenAPIHono<AppContext>) {
     }
 
     const db = createD1(c.env.D1);
-    for (const repo of parsed.data.repositories) {
-      await deleteGithubInstallation(db, repo.full_name);
-      await createGithubInstallation(
-        db,
-        workspaceId,
-        installationId,
-        repo.full_name
-      );
-    }
+    await Promise.all(
+      parsed.data.repositories.map(async (repo) => {
+        await deleteGithubInstallation(db, repo.full_name);
+        await createGithubInstallation(
+          db,
+          workspaceId,
+          installationId,
+          repo.full_name
+        );
+      })
+    );
 
     return c.json({ repos: parsed.data.repositories });
   });

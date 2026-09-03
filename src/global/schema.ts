@@ -232,8 +232,11 @@ export const comments = sqliteTable(
       .notNull()
       .references(() => workspaces.id),
     issueId: text("issue_id" as string).notNull(),
-    authorId: text("author_id" as string).notNull(),
+    authorId: text("author_id" as string),
     body: text("body" as string).notNull(),
+    externalId: text("external_id" as string),
+    externalSource: text("external_source" as string),
+    externalAuthor: text("external_author" as string),
     createdAt: text("created_at" as string)
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
@@ -246,6 +249,11 @@ export const comments = sqliteTable(
     index("comments_author_idx" as string).on(
       table.workspaceId,
       table.authorId
+    ),
+    index("comments_external_idx" as string).on(
+      table.workspaceId,
+      table.externalSource,
+      table.externalId
     ),
   ]
 );

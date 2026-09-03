@@ -2170,10 +2170,23 @@
                             "type": "string"
                           },
                           "authorId": {
-                            "type": "string"
+                            "type": "string",
+                            "nullable": true
                           },
                           "body": {
                             "type": "string"
+                          },
+                          "externalId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "externalSource": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "externalAuthor": {
+                            "type": "string",
+                            "nullable": true
                           },
                           "createdAt": {
                             "type": "string"
@@ -2188,6 +2201,9 @@
                           "issueId",
                           "authorId",
                           "body",
+                          "externalId",
+                          "externalSource",
+                          "externalAuthor",
                           "createdAt",
                           "updatedAt"
                         ]
@@ -2261,10 +2277,23 @@
                       "type": "string"
                     },
                     "authorId": {
-                      "type": "string"
+                      "type": "string",
+                      "nullable": true
                     },
                     "body": {
                       "type": "string"
+                    },
+                    "externalId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "externalSource": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "externalAuthor": {
+                      "type": "string",
+                      "nullable": true
                     },
                     "createdAt": {
                       "type": "string"
@@ -2279,6 +2308,9 @@
                     "issueId",
                     "authorId",
                     "body",
+                    "externalId",
+                    "externalSource",
+                    "externalAuthor",
                     "createdAt",
                     "updatedAt"
                   ]
@@ -2338,10 +2370,23 @@
                       "type": "string"
                     },
                     "authorId": {
-                      "type": "string"
+                      "type": "string",
+                      "nullable": true
                     },
                     "body": {
                       "type": "string"
+                    },
+                    "externalId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "externalSource": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "externalAuthor": {
+                      "type": "string",
+                      "nullable": true
                     },
                     "createdAt": {
                       "type": "string"
@@ -2356,6 +2401,9 @@
                     "issueId",
                     "authorId",
                     "body",
+                    "externalId",
+                    "externalSource",
+                    "externalAuthor",
                     "createdAt",
                     "updatedAt"
                   ]
@@ -2431,10 +2479,23 @@
                       "type": "string"
                     },
                     "authorId": {
-                      "type": "string"
+                      "type": "string",
+                      "nullable": true
                     },
                     "body": {
                       "type": "string"
+                    },
+                    "externalId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "externalSource": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "externalAuthor": {
+                      "type": "string",
+                      "nullable": true
                     },
                     "createdAt": {
                       "type": "string"
@@ -2449,6 +2510,9 @@
                     "issueId",
                     "authorId",
                     "body",
+                    "externalId",
+                    "externalSource",
+                    "externalAuthor",
                     "createdAt",
                     "updatedAt"
                   ]

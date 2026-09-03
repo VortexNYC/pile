@@ -25,13 +25,35 @@ export function getComment(db: D1Client, workspaceId: string, id: string) {
     .get();
 }
 
+export function findCommentByExternalId(
+  db: D1Client,
+  workspaceId: string,
+  externalSource: string,
+  externalId: string
+) {
+  return db
+    .select({ id: comments.id })
+    .from(comments)
+    .where(
+      and(
+        eq(comments.workspaceId, workspaceId),
+        eq(comments.externalSource, externalSource),
+        eq(comments.externalId, externalId)
+      )
+    )
+    .get();
+}
+
 export async function createComment(
   db: D1Client,
   workspaceId: string,
   values: {
     issueId: string;
-    authorId: string;
+    authorId?: string;
     body: string;
+    externalId?: string;
+    externalSource?: string;
+    externalAuthor?: string;
     createdAt?: string;
     updatedAt?: string;
   }
@@ -42,8 +64,11 @@ export async function createComment(
     id,
     workspaceId,
     issueId: values.issueId,
-    authorId: values.authorId,
+    authorId: values.authorId ?? null,
     body: values.body,
+    externalId: values.externalId ?? null,
+    externalSource: values.externalSource ?? null,
+    externalAuthor: values.externalAuthor ?? null,
     createdAt: values.createdAt ?? ts,
     updatedAt: values.updatedAt ?? ts,
   });
@@ -54,12 +79,15 @@ export async function updateComment(
   db: D1Client,
   workspaceId: string,
   id: string,
-  values: { body: string }
+  values: { body: string; updatedAt?: string }
 ) {
   const ts = new Date().toISOString();
   await db
     .update(comments)
-    .set({ body: values.body, updatedAt: ts })
+    .set({
+      body: values.body,
+      updatedAt: values.updatedAt ?? ts,
+    })
     .where(and(eq(comments.workspaceId, workspaceId), eq(comments.id, id)));
   return getComment(db, workspaceId, id);
 }

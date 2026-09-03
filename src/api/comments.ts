@@ -17,8 +17,11 @@ const commentSchema = z.object({
   id: z.string(),
   workspaceId: z.string(),
   issueId: z.string(),
-  authorId: z.string(),
+  authorId: z.string().nullable(),
   body: z.string(),
+  externalId: z.string().nullable(),
+  externalSource: z.string().nullable(),
+  externalAuthor: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

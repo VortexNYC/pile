@@ -1,6 +1,12 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 
+import {
+  createComment,
+  deleteComment,
+  findCommentByExternalId,
+  updateComment,
+} from "../global/comments.js";
 import { hmacSha256Hex, timingSafeEqualHex } from "../global/crypto.js";
 import { createD1, type D1Client } from "../global/db.js";
 import {
@@ -77,6 +83,58 @@ const installationRepositoriesPayloadSchema = z.object({
       })
     )
     .default([]),
+});
+
+const issueCommentPayloadSchema = z.object({
+  action: z.enum(["created", "edited", "deleted"]),
+  issue: z.object({
+    number: z.number().int(),
+    pull_request: z
+      .object({
+        url: z.string(),
+      })
+      .optional(),
+  }),
+  comment: z.object({
+    id: z.number().int(),
+    body: z.string(),
+    user: z.object({
+      login: z.string(),
+    }),
+    html_url: z.string(),
+    created_at: z.string(),
+    updated_at: z.string(),
+  }),
+  repository: z.object({
+    full_name: z.string(),
+  }),
+});
+
+const pullRequestReviewCommentPayloadSchema = z.object({
+  action: z.enum(["created", "edited", "deleted"]),
+  pull_request: z.object({
+    number: z.number().int(),
+    head: z.object({
+      ref: z.string(),
+      repo: z.object({
+        full_name: z.string(),
+      }),
+    }),
+  }),
+  comment: z.object({
+    id: z.number().int(),
+    body: z.string(),
+    user: z.object({
+      login: z.string(),
+    }),
+    html_url: z.string(),
+    path: z.string(),
+    created_at: z.string(),
+    updated_at: z.string(),
+  }),
+  repository: z.object({
+    full_name: z.string(),
+  }),
 });
 
 const issuePayloadSchema = z.object({
@@ -174,6 +232,12 @@ export async function processGithubWebhook(c: Context<AppContext>) {
   if (event === "installation_repositories") {
     return processInstallationRepositories(c, db, deliveryId, event, rawBody);
   }
+  if (event === "issue_comment") {
+    return processIssueComment(c, db, deliveryId, event, rawBody);
+  }
+  if (event === "pull_request_review_comment") {
+    return processPullRequestReviewComment(c, db, deliveryId, event, rawBody);
+  }
   return c.json({ ok: true }, 200);
 }
 
@@ -217,17 +281,19 @@ async function processInstallation(
   }
 
   if (action === "created" || action === "new_permissions_accepted") {
-    for (const repo of repositories) {
-      const record = await findRepoWorkspace(db, repo.full_name);
-      if (record) {
-        await createGithubInstallation(
-          db,
-          record.workspaceId,
-          installationId,
-          repo.full_name
-        );
-      }
-    }
+    await Promise.all(
+      repositories.map(async (repo) => {
+        const record = await findRepoWorkspace(db, repo.full_name);
+        if (record) {
+          await createGithubInstallation(
+            db,
+            record.workspaceId,
+            installationId,
+            repo.full_name
+          );
+        }
+      })
+    );
     if (deliveryId) {
       await recordWebhookDelivery(
         db,
@@ -285,9 +351,11 @@ async function processInstallationRepositories(
   const installationId = installation.id.toString();
 
   if (action === "removed") {
-    for (const repo of repositories_removed) {
-      await deleteGithubInstallation(db, repo.full_name);
-    }
+    await Promise.all(
+      repositories_removed.map((repo) =>
+        deleteGithubInstallation(db, repo.full_name)
+      )
+    );
     if (deliveryId) {
       await recordWebhookDelivery(
         db,
@@ -300,17 +368,19 @@ async function processInstallationRepositories(
     return c.json({ ok: true }, 200);
   }
 
-  for (const repo of repositories_added) {
-    const record = await findRepoWorkspace(db, repo.full_name);
-    if (record) {
-      await createGithubInstallation(
-        db,
-        record.workspaceId,
-        installationId,
-        repo.full_name
-      );
-    }
-  }
+  await Promise.all(
+    repositories_added.map(async (repo) => {
+      const record = await findRepoWorkspace(db, repo.full_name);
+      if (record) {
+        await createGithubInstallation(
+          db,
+          record.workspaceId,
+          installationId,
+          repo.full_name
+        );
+      }
+    })
+  );
   if (deliveryId) {
     await recordWebhookDelivery(
       db,
@@ -319,6 +389,207 @@ async function processInstallationRepositories(
       event,
       installationId
     );
+  }
+  return c.json({ ok: true }, 200);
+}
+
+async function processIssueComment(
+  c: Context<AppContext>,
+  db: D1Client,
+  deliveryId: string | undefined,
+  event: string,
+  rawBody: string
+) {
+  let parsedBody: unknown;
+  try {
+    parsedBody = JSON.parse(rawBody);
+  } catch {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Invalid JSON",
+    });
+  }
+
+  const payload = issueCommentPayloadSchema.safeParse(parsedBody);
+  if (!payload.success) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Invalid issue_comment payload",
+      hint: payload.error.message,
+    });
+  }
+
+  const { action, issue, comment, repository } = payload.data;
+  const repo = repository.full_name;
+
+  if (issue.pull_request) {
+    // PR issue comments are handled with PR review comments for mapping.
+    if (deliveryId) {
+      await recordWebhookDelivery(db, deliveryId, "github", event);
+    }
+    return c.json({ ok: true }, 200);
+  }
+
+  const mapping = await findRepoIssue(db, repo, issue.number);
+  if (!mapping) {
+    if (deliveryId) {
+      await recordWebhookDelivery(db, deliveryId, "github", event);
+    }
+    return c.json({ ok: true }, 200);
+  }
+
+  const workspaceId = mapping.workspaceId;
+  const issueId = mapping.issueId;
+  const externalId = comment.id.toString();
+  const externalSource = "github";
+  const externalAuthor = comment.user.login;
+
+  if (action === "created") {
+    await createComment(db, workspaceId, {
+      issueId,
+      body: comment.body,
+      externalId,
+      externalSource,
+      externalAuthor,
+      createdAt: comment.created_at,
+      updatedAt: comment.updated_at,
+    });
+  }
+
+  if (action === "edited") {
+    const existing = await findCommentByExternalId(
+      db,
+      workspaceId,
+      externalSource,
+      externalId
+    );
+    if (existing) {
+      await updateComment(db, workspaceId, existing.id, {
+        body: comment.body,
+        updatedAt: comment.updated_at,
+      });
+    }
+  }
+
+  if (action === "deleted") {
+    const existing = await findCommentByExternalId(
+      db,
+      workspaceId,
+      externalSource,
+      externalId
+    );
+    if (existing) {
+      await deleteComment(db, workspaceId, existing.id);
+    }
+  }
+
+  if (deliveryId) {
+    await recordWebhookDelivery(db, deliveryId, "github", event, workspaceId);
+  }
+  return c.json({ ok: true }, 200);
+}
+
+async function processPullRequestReviewComment(
+  c: Context<AppContext>,
+  db: D1Client,
+  deliveryId: string | undefined,
+  event: string,
+  rawBody: string
+) {
+  let parsedBody: unknown;
+  try {
+    parsedBody = JSON.parse(rawBody);
+  } catch {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Invalid JSON",
+    });
+  }
+
+  const payload = pullRequestReviewCommentPayloadSchema.safeParse(parsedBody);
+  if (!payload.success) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Invalid pull_request_review_comment payload",
+      hint: payload.error.message,
+    });
+  }
+
+  const { action, pull_request, comment } = payload.data;
+  const repo = pull_request.head.repo.full_name;
+  const branch = pull_request.head.ref;
+
+  const workspaceRecord = await findWorkspaceByRepo(db, repo);
+  if (!workspaceRecord) {
+    if (deliveryId) {
+      await recordWebhookDelivery(db, deliveryId, "github", event);
+    }
+    return c.json({ ok: true }, 200);
+  }
+
+  const doId = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(
+    workspaceRecord.workspaceId
+  );
+  const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(doId);
+  const issue = await stub.getIssueByBranch(repo, branch);
+  if (!issue) {
+    if (deliveryId) {
+      await recordWebhookDelivery(db, deliveryId, "github", event);
+    }
+    return c.json({ ok: true }, 200);
+  }
+
+  const workspaceId = workspaceRecord.workspaceId;
+  const issueId = issue.id;
+  const externalId = comment.id.toString();
+  const externalSource = "github";
+  const externalAuthor = comment.user.login;
+
+  if (action === "created") {
+    await createComment(db, workspaceId, {
+      issueId,
+      body: `[${comment.path}] ${comment.body}`,
+      externalId,
+      externalSource,
+      externalAuthor,
+      createdAt: comment.created_at,
+      updatedAt: comment.updated_at,
+    });
+  }
+
+  if (action === "edited") {
+    const existing = await findCommentByExternalId(
+      db,
+      workspaceId,
+      externalSource,
+      externalId
+    );
+    if (existing) {
+      await updateComment(db, workspaceId, existing.id, {
+        body: `[${comment.path}] ${comment.body}`,
+        updatedAt: comment.updated_at,
+      });
+    }
+  }
+
+  if (action === "deleted") {
+    const existing = await findCommentByExternalId(
+      db,
+      workspaceId,
+      externalSource,
+      externalId
+    );
+    if (existing) {
+      await deleteComment(db, workspaceId, existing.id);
+    }
+  }
+
+  if (deliveryId) {
+    await recordWebhookDelivery(db, deliveryId, "github", event, workspaceId);
   }
   return c.json({ ok: true }, 200);
 }
