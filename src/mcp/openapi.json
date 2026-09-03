@@ -135,15 +135,11 @@
                   },
                   "key": {
                     "type": "string"
-                  },
-                  "ownerId": {
-                    "type": "string"
                   }
                 },
                 "required": [
                   "name",
-                  "slug",
-                  "ownerId"
+                  "slug"
                 ]
               }
             }

@@ -1012,15 +1012,11 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "key": {
               "type": "string"
-            },
-            "ownerId": {
-              "type": "string"
             }
           },
           "required": [
             "name",
-            "slug",
-            "ownerId"
+            "slug"
           ]
         }
       }

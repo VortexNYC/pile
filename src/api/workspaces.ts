@@ -9,7 +9,10 @@ import {
   listWorkspaces,
 } from "../global/workspaces.js";
 import { VortexError } from "../platform/errors.js";
-import type { AppContext } from "../platform/middleware.js";
+import {
+  requireHumanSession,
+  type AppContext,
+} from "../platform/middleware.js";
 
 const workspaceSchema = z.object({
   id: z.string(),
@@ -25,6 +28,7 @@ const createWorkspaceRoute = createRoute({
   method: "post",
   path: "/workspaces",
   tags: ["workspaces"],
+  middleware: [requireHumanSession],
   request: {
     body: {
       content: {
@@ -33,7 +37,6 @@ const createWorkspaceRoute = createRoute({
             name: z.string().min(1),
             slug: z.string().min(1),
             key: z.string().optional(),
-            ownerId: z.string(),
           }),
         },
       },
@@ -104,11 +107,19 @@ export function registerWorkspaceRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(createWorkspaceRoute, async (c) => {
     const input = c.req.valid("json");
     const db = createD1(c.env.D1);
+    const ownerId = c.var.userId;
+    if (!ownerId) {
+      throw new VortexError({
+        code: "UNAUTHORIZED",
+        status: 401,
+        message: "Session required",
+      });
+    }
     const item = await createWorkspace(db, {
       name: input.name,
       slug: input.slug,
       key: input.key,
-      ownerId: input.ownerId,
+      ownerId,
     });
     return c.json(item, 201);
   });

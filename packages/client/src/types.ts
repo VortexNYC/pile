@@ -55,7 +55,6 @@ export interface paths {
                         name: string;
                         slug: string;
                         key?: string;
-                        ownerId: string;
                     };
                 };
             };

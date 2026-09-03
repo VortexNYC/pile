@@ -9,7 +9,7 @@ export type WorkspaceToken = InferSelectModel<typeof workspaceTokens>;
 export const workspaceIdentitySchema = z.object({
   id: z.string(),
   workspaceId: z.string(),
-  type: z.literal("agent"),
+  type: z.union([z.literal("agent"), z.literal("user")]),
   permissions: z.array(z.string()),
 });
 
@@ -21,5 +21,26 @@ export function toWorkspaceIdentity(token: WorkspaceToken): WorkspaceIdentity {
     workspaceId: token.workspaceId,
     type: "agent",
     permissions: Array.from(parsePermissionSet(token.permissions)),
+  });
+}
+
+const rolePermissionsMap = {
+  owner: ["read", "write", "admin"],
+  admin: ["read", "write", "admin"],
+  member: ["read", "write"],
+} as const;
+
+export type WorkspaceRole = keyof typeof rolePermissionsMap;
+
+export function toUserWorkspaceIdentity(
+  userId: string,
+  workspaceId: string,
+  role: WorkspaceRole
+): WorkspaceIdentity {
+  return workspaceIdentitySchema.parse({
+    id: userId,
+    workspaceId,
+    type: "user",
+    permissions: [...rolePermissionsMap[role]],
   });
 }

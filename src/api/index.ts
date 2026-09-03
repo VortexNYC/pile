@@ -7,7 +7,7 @@ import { toErrorResponse, VortexError } from "../platform/errors.js";
 import { registerHealthRoutes } from "../platform/health.js";
 import {
   type AppContext,
-  workspaceTokenMiddleware,
+  workspaceAuthMiddleware,
 } from "../platform/middleware.js";
 import { observabilityMiddleware } from "../platform/observability.js";
 import { securityMiddleware } from "../platform/security.js";
@@ -46,7 +46,7 @@ app.onError((err) => {
 app.use("*", observabilityMiddleware);
 app.use("*", ...securityMiddleware);
 
-app.use("/workspaces/:workspaceId/*", workspaceTokenMiddleware);
+app.use("/workspaces/:workspaceId/*", workspaceAuthMiddleware);
 registerWorkspaceRoutes(app);
 registerTokenRoutes(app);
 registerIssueRoutes(app);

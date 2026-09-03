@@ -1,7 +1,7 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import type { D1Client } from "./db.js";
-import { workspaces } from "./schema.js";
+import { workspaceMemberships, workspaces } from "./schema.js";
 
 export function listWorkspaces(db: D1Client) {
   return db.select().from(workspaces).all();
@@ -35,5 +35,29 @@ export async function createWorkspace(
     createdAt: ts,
     updatedAt: ts,
   });
+  await db.insert(workspaceMemberships).values({
+    id: crypto.randomUUID(),
+    workspaceId: id,
+    userId: values.ownerId,
+    role: "owner",
+    createdAt: ts,
+  });
   return db.select().from(workspaces).where(eq(workspaces.id, id)).get();
+}
+
+export function getWorkspaceMembership(
+  db: D1Client,
+  workspaceId: string,
+  userId: string
+) {
+  return db
+    .select()
+    .from(workspaceMemberships)
+    .where(
+      and(
+        eq(workspaceMemberships.workspaceId, workspaceId),
+        eq(workspaceMemberships.userId, userId)
+      )
+    )
+    .get();
 }

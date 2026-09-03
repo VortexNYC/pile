@@ -5,19 +5,13 @@ import { createD1 } from "../global/db.js";
 import * as schema from "../global/schema.js";
 import type { AppEnv } from "./env.js";
 
-export interface AuthService {
-  handler: (request: Request) => Promise<Response>;
-}
-
-export function createAuth(env: AppEnv): AuthService {
+export function createAuth(env: AppEnv) {
   const db = createD1(env.D1);
 
-  const auth = betterAuth({
+  return betterAuth({
     database: drizzleAdapter(db, { provider: "sqlite", schema }),
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.BETTER_AUTH_URL,
     emailAndPassword: { enabled: true },
   });
-
-  return { handler: (request) => auth.handler(request) };
 }
