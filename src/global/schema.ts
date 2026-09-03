@@ -449,6 +449,7 @@ export const outboundWebhookDeliveries = sqliteTable(
       .notNull()
       .references(() => webhookSubscriptions.id),
     event: text("event" as string).notNull(),
+    payload: text("payload" as string).notNull(),
     url: text("url" as string).notNull(),
     status: text("status" as string)
       .notNull()

@@ -1,0 +1,1 @@
+ALTER TABLE `outbound_webhook_deliveries` ADD `payload` text NOT NULL;

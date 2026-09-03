@@ -17,7 +17,7 @@ import type {
 } from "../types/workspace.js";
 import { workspaceMigrations } from "./migrations.js";
 import { workspaceIssues } from "./schema.js";
-import { deliverWebhooks } from "./webhooks.js";
+import { deliverWebhooks, retryWebhookDeliveries } from "./webhooks.js";
 
 type IssueKey = keyof Issue & keyof IssueInput;
 
@@ -31,11 +31,22 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   constructor(ctx: DurableObjectState, env: AppEnv) {
     super(ctx, env);
     this.workspaceId = ctx.id.toString();
-    this.ready = this.runMigrations();
+    this.ready = this.initialize();
+  }
+
+  private async initialize() {
+    const [stored] = await Promise.all([
+      this.ctx.storage.get<string>("workspaceId"),
+      this.runMigrations(),
+    ]);
+    if (stored) {
+      this.workspaceId = stored;
+    }
   }
 
   async setWorkspaceId(id: string) {
     this.workspaceId = id;
+    await this.ctx.storage.put("workspaceId", id);
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -93,7 +104,21 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         // socket may be closing
       }
     }
-    this.ctx.waitUntil(deliverWebhooks(this.env, this.workspaceId, event));
+    this.ctx.waitUntil(this.sendWebhookEvent(event));
+  }
+
+  private async sendWebhookEvent(event: RealtimeEvent) {
+    const result = await deliverWebhooks(this.env, this.workspaceId, event);
+    if (result.needsRetry && result.retryAt) {
+      await this.ctx.storage.setAlarm(result.retryAt);
+    }
+  }
+
+  async alarm() {
+    const result = await retryWebhookDeliveries(this.env, this.workspaceId);
+    if (result.hasMore && result.retryAt) {
+      await this.ctx.storage.setAlarm(result.retryAt);
+    }
   }
 
   private async recordIssueHistory(
@@ -251,9 +276,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         )
         .limit(1000)
         .all();
-      const issueIds = [
-        ...new Set(matchingComments.map((row) => row.issueId)),
-      ];
+      const issueIds = [...new Set(matchingComments.map((row) => row.issueId))];
       if (issueIds.length > 0) {
         searchConditions.push(inArray(workspaceIssues.id, issueIds));
       }

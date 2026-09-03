@@ -1,13 +1,17 @@
 import { env, runInDurableObject } from "cloudflare:test";
 import { eq } from "drizzle-orm";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { createD1 } from "../global/db.js";
-import { outboundWebhookDeliveries, workspaces } from "../global/schema.js";
+import {
+  outboundWebhookDeliveries,
+  webhookSubscriptions,
+  workspaces,
+} from "../global/schema.js";
 import { createWebhookSubscription } from "../global/webhook-subscriptions.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { WorkspaceDO } from "./durable-object.js";
-import { deliverWebhooks } from "./webhooks.js";
+import { deliverWebhooks, retryWebhookDeliveries } from "./webhooks.js";
 
 declare module "cloudflare:test" {
   interface ProvidedEnv extends WorkerEnv {}
@@ -50,8 +54,19 @@ async function withWorkspace<T>(
   });
 }
 
+async function cleanupWorkspace() {
+  const db = createD1(env.D1);
+  await db
+    .delete(outboundWebhookDeliveries)
+    .where(eq(outboundWebhookDeliveries.workspaceId, WORKSPACE_ID));
+  await db
+    .delete(webhookSubscriptions)
+    .where(eq(webhookSubscriptions.workspaceId, WORKSPACE_ID));
+}
+
 describe("deliverWebhooks", () => {
   beforeAll(ensureWorkspace);
+  beforeEach(cleanupWorkspace);
 
   it("records a failed delivery for a matching subscription", async () => {
     const db = createD1(env.D1);
@@ -84,5 +99,43 @@ describe("deliverWebhooks", () => {
     expect(deliveries[0].status).toBe("failed");
     expect(deliveries[0].subscriptionId).toBe(sub.id);
     expect(deliveries[0].event).toBe("issue.created");
+    expect(deliveries[0].attemptCount).toBe(1);
+  });
+
+  it("retries failed deliveries and increments attemptCount", async () => {
+    const db = createD1(env.D1);
+
+    const stub = getStub();
+    const issue = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Webhook retry test issue" })
+    );
+
+    const sub = await createWebhookSubscription(db, WORKSPACE_ID, {
+      url: "http://127.0.0.1:1/webhook",
+      events: "issue.created",
+    });
+    if (!sub) {
+      throw new Error("Webhook subscription not created");
+    }
+
+    await deliverWebhooks(env, WORKSPACE_ID, {
+      type: "issue.created",
+      workspaceId: WORKSPACE_ID,
+      issue,
+    });
+
+    const result = await retryWebhookDeliveries(env, WORKSPACE_ID);
+    expect(result.hasMore).toBe(true);
+    expect(typeof result.retryAt).toBe("number");
+
+    const deliveries = await db
+      .select()
+      .from(outboundWebhookDeliveries)
+      .where(eq(outboundWebhookDeliveries.subscriptionId, sub.id))
+      .all();
+
+    expect(deliveries.length).toBe(1);
+    expect(deliveries[0].status).toBe("failed");
+    expect(deliveries[0].attemptCount).toBe(2);
   });
 });
