@@ -441,7 +441,6 @@ describe("API integration", () => {
       userId,
       role: "member",
       createdAt: ts,
-      updatedAt: ts,
     });
 
     const issue = await app.fetch(

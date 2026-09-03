@@ -22,6 +22,18 @@ import type {
 } from "../types/workspace.js";
 import { workspaceMigrations } from "./migrations.js";
 import { workspaceIssues } from "./schema.js";
+import {
+  commentToSearchDocument,
+  createWorkspaceSearchIndex,
+  indexCommentDocument,
+  indexIssueDocument,
+  insertMultiple as insertSearchDocs,
+  issueToSearchDocument,
+  removeIssueDocuments,
+  searchIssues,
+  type CommentForSearch,
+  type WorkspaceSearchIndex,
+} from "./search.js";
 import { deliverWebhooks, retryWebhookDeliveries } from "./webhooks.js";
 
 type IssueKey = keyof Issue & keyof IssueInput;
@@ -29,6 +41,7 @@ type IssueKey = keyof Issue & keyof IssueInput;
 export class WorkspaceDO extends DurableObject<AppEnv> {
   private workspaceId: string;
   private readonly ready: Promise<void>;
+  private searchIndex: WorkspaceSearchIndex | null = null;
   private readonly db = drizzle(this.ctx.storage, {
     schema: { workspaceIssues },
   });
@@ -99,6 +112,39 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   private async runMigrations() {
     await migrate(this.db, workspaceMigrations);
+  }
+
+  private async ensureSearchIndex() {
+    if (this.searchIndex) return this.searchIndex;
+
+    const index = await createWorkspaceSearchIndex();
+    const [issues, commentRows] = await Promise.all([
+      this.db.select().from(workspaceIssues).all(),
+      createD1(this.env.D1)
+        .select({
+          id: comments.id,
+          issueId: comments.issueId,
+          body: comments.body,
+          createdAt: comments.createdAt,
+        })
+        .from(comments)
+        .where(eq(comments.workspaceId, this.workspaceId))
+        .all(),
+    ]);
+
+    const docs: Array<ReturnType<typeof issueToSearchDocument>> = [];
+    for (const issue of issues) {
+      docs.push(issueToSearchDocument(issue));
+    }
+    for (const comment of commentRows) {
+      docs.push(commentToSearchDocument(comment as CommentForSearch));
+    }
+    if (docs.length > 0) {
+      await insertSearchDocs(index, docs);
+    }
+
+    this.searchIndex = index;
+    return index;
   }
 
   private async emit(event: RealtimeEvent) {
@@ -197,6 +243,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       throw new Error("Failed to create issue");
     }
 
+    const index = await this.ensureSearchIndex();
+    await indexIssueDocument(index, issue);
+
     await this.emit({
       type: "issue.created",
       workspaceId: this.workspaceId,
@@ -236,6 +285,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       .get();
   }
 
+  async indexComment(comment: CommentForSearch) {
+    await this.ready;
+    const index = await this.ensureSearchIndex();
+    await indexCommentDocument(index, comment);
+  }
+
   async listIssues(args: ListIssuesArgs = {}): Promise<Issue[]> {
     await this.ready;
     const conditions = [];
@@ -263,38 +318,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         )
       );
     }
-    const searchConditions = [];
     if (args.search) {
-      const pattern = `%${args.search}%`;
-      searchConditions.push(
-        like(workspaceIssues.title, pattern),
-        like(sql`COALESCE(${workspaceIssues.description}, '')`, pattern),
-        like(sql`COALESCE(${workspaceIssues.identifier}, '')`, pattern)
-      );
-
-      const db = createD1(this.env.D1);
-      const matchingComments = await db
-        .select({ issueId: comments.issueId })
-        .from(comments)
-        .where(
-          and(
-            eq(comments.workspaceId, this.workspaceId),
-            like(comments.body, pattern)
-          )
-        )
-        .limit(1000)
-        .all();
-      const issueIds = [...new Set(matchingComments.map((row) => row.issueId))];
-      if (issueIds.length > 0) {
-        searchConditions.push(inArray(workspaceIssues.id, issueIds));
+      const index = await this.ensureSearchIndex();
+      const issueIds = await searchIssues(index, args.search, args.limit);
+      if (issueIds.length === 0) {
+        return [];
       }
-    }
-    if (searchConditions.length > 0) {
-      conditions.push(
-        searchConditions.length === 1
-          ? searchConditions[0]
-          : or(...searchConditions)
-      );
+      conditions.push(inArray(workspaceIssues.id, issueIds));
     }
     if (args.cursor) {
       conditions.push(
@@ -396,6 +426,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       await this.recordIssueHistory(issue.id, historyEntries, actorId);
     }
 
+    const index = await this.ensureSearchIndex();
+    await indexIssueDocument(index, issue);
+
     await this.emit({
       type: "issue.updated",
       workspaceId: this.workspaceId,
@@ -416,6 +449,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       .returning()
       .get();
     if (!deleted) return false;
+
+    const index = await this.ensureSearchIndex();
+    await removeIssueDocuments(index, id);
+
     await this.emit({
       type: "issue.deleted",
       workspaceId: this.workspaceId,

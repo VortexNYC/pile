@@ -179,6 +179,12 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
     const issueStub = await getStub(c.env, workspaceId);
     const issue = await issueStub.getIssue(issueId);
     if (issue) {
+      await issueStub.indexComment({
+        id: item.id,
+        issueId,
+        body: item.body,
+        createdAt: item.createdAt,
+      });
       await notifyCommentCreated(
         c.env,
         workspaceId,
