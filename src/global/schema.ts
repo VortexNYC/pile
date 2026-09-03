@@ -438,6 +438,43 @@ export const webhookDeliveries = sqliteTable(
   ]
 );
 
+export const outboundWebhookDeliveries = sqliteTable(
+  "outbound_webhook_deliveries" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    workspaceId: text("workspace_id" as string)
+      .notNull()
+      .references(() => workspaces.id),
+    subscriptionId: text("subscription_id" as string)
+      .notNull()
+      .references(() => webhookSubscriptions.id),
+    event: text("event" as string).notNull(),
+    url: text("url" as string).notNull(),
+    status: text("status" as string)
+      .notNull()
+      .default("pending"),
+    statusCode: integer("status_code" as string, { mode: "number" }),
+    error: text("error" as string),
+    attemptCount: integer("attempt_count" as string, { mode: "number" })
+      .notNull()
+      .default(1),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("outbound_webhook_deliveries_workspace_idx" as string).on(
+      table.workspaceId
+    ),
+    index("outbound_webhook_deliveries_subscription_idx" as string).on(
+      table.subscriptionId
+    ),
+  ]
+);
+
 export const user = sqliteTable("user" as string, {
   id: text("id" as string).primaryKey(),
   name: text("name" as string).notNull(),

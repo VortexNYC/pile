@@ -212,6 +212,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesWorkspaceIdWebhooksubscriptionsId",
+    "description": "(DELETE /workspaces/{workspaceId}/webhook-subscriptions/{id})",
+    "method": "DELETE",
+    "path": "/workspaces/{workspaceId}/webhook-subscriptions/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "workspaceId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspaces",
     "description": "(GET /workspaces)",
     "method": "GET",
@@ -732,6 +753,65 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesWorkspaceIdWebhooksubscriptions",
+    "description": "(GET /workspaces/{workspaceId}/webhook-subscriptions)",
+    "method": "GET",
+    "path": "/workspaces/{workspaceId}/webhook-subscriptions",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "workspaceId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesWorkspaceIdWebhooksubscriptionsId",
+    "description": "(GET /workspaces/{workspaceId}/webhook-subscriptions/{id})",
+    "method": "GET",
+    "path": "/workspaces/{workspaceId}/webhook-subscriptions/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "workspaceId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesWorkspaceIdWebhooksubscriptionsIdDeliveries",
+    "description": "(GET /workspaces/{workspaceId}/webhook-subscriptions/{id}/deliveries)",
+    "method": "GET",
+    "path": "/workspaces/{workspaceId}/webhook-subscriptions/{id}/deliveries",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "workspaceId"
+      ]
+    }
+  },
+  {
     "name": "patchWorkspacesWorkspaceIdCyclesId",
     "description": "(PATCH /workspaces/{workspaceId}/cycles/{id})",
     "method": "PATCH",
@@ -980,6 +1060,42 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string"
             },
             "position": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "id",
+        "workspaceId"
+      ]
+    }
+  },
+  {
+    "name": "patchWorkspacesWorkspaceIdWebhooksubscriptionsId",
+    "description": "(PATCH /workspaces/{workspaceId}/webhook-subscriptions/{id})",
+    "method": "PATCH",
+    "path": "/workspaces/{workspaceId}/webhook-subscriptions/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "events": {
+              "type": "string"
+            },
+            "secret": {
               "type": "string"
             }
           }
@@ -1617,6 +1733,41 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           },
           "required": [
             "name"
+          ]
+        }
+      },
+      "required": [
+        "workspaceId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesWorkspaceIdWebhooksubscriptions",
+    "description": "(POST /workspaces/{workspaceId}/webhook-subscriptions)",
+    "method": "POST",
+    "path": "/workspaces/{workspaceId}/webhook-subscriptions",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "events": {
+              "type": "string"
+            },
+            "secret": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "url"
           ]
         }
       },

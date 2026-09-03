@@ -23,6 +23,7 @@ import { registerMigrateRoutes } from "./migrate.js";
 import { registerStateRoutes } from "./states.js";
 import { registerTemplateRoutes } from "./templates.js";
 import { registerTokenRoutes } from "./tokens.js";
+import { registerWebhookRoutes } from "./webhooks.js";
 import { registerWorkspaceEntityRoutes } from "./workspace-entities.js";
 import { registerWorkspaceRoutes } from "./workspaces.js";
 
@@ -58,6 +59,7 @@ registerAttachmentRoutes(app);
 registerGithubRoutes(app);
 registerIssueHistoryRoutes(app);
 registerStateRoutes(app);
+registerWebhookRoutes(app);
 registerLinearUserRoutes(app);
 registerTemplateRoutes(app);
 registerMigrateRoutes(app);
