@@ -31,6 +31,8 @@ import type { AppContext } from "../platform/middleware.js";
 const pullRequestPayloadSchema = z.object({
   action: z.string(),
   pull_request: z.object({
+    title: z.string(),
+    body: z.string().nullable(),
     state: z.string(),
     draft: z.boolean().default(false),
     merged: z.boolean().default(false),
@@ -43,6 +45,16 @@ const pullRequestPayloadSchema = z.object({
     }),
   }),
 });
+
+function parseIssueIdentifiers(text: string) {
+  const regex = /\b([A-Za-z][A-Za-z0-9_-]*-\d+)\b/g;
+  const matches: string[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(text)) !== null) {
+    matches.push(match[1]);
+  }
+  return [...new Set(matches)];
+}
 
 const installationPayloadSchema = z.object({
   action: z.enum([
@@ -642,6 +654,21 @@ async function processPullRequest(
   );
   const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(doId);
   await stub.updatePrState(repo, branch, prUrl, prState, "github");
+
+  const text = [pull_request.title, pull_request.body ?? "", branch].join(" ");
+  const identifiers = parseIssueIdentifiers(text);
+  await Promise.all(
+    identifiers.map((identifier) =>
+      stub.updatePrByIdentifier(
+        identifier,
+        prUrl,
+        prState,
+        repo,
+        branch,
+        "github"
+      )
+    )
+  );
 
   if (deliveryId) {
     await recordWebhookDelivery(
