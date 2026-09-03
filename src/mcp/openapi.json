@@ -633,6 +633,12 @@
                   },
                   "labelIds": {
                     "type": "string"
+                  },
+                  "repo": {
+                    "type": "string"
+                  },
+                  "branch": {
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -756,6 +762,12 @@
                     "type": "string"
                   },
                   "labelIds": {
+                    "type": "string"
+                  },
+                  "repo": {
+                    "type": "string"
+                  },
+                  "branch": {
                     "type": "string"
                   }
                 }

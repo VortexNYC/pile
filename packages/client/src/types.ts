@@ -317,6 +317,8 @@ export interface paths {
                         projectId?: string;
                         cycleId?: string;
                         labelIds?: string;
+                        repo?: string;
+                        branch?: string;
                     };
                 };
             };
@@ -416,6 +418,8 @@ export interface paths {
                         projectId?: string;
                         cycleId?: string;
                         labelIds?: string;
+                        repo?: string;
+                        branch?: string;
                     };
                 };
             };

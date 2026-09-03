@@ -1,10 +1,12 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
+import { eq, and } from "drizzle-orm";
 
 import { getAgentProvider } from "../agents/index.js";
 import { createD1 } from "../global/db.js";
 import { deleteIssueReferences } from "../global/issue-data.js";
 import { createRepoBranch } from "../global/repo-branches.js";
+import { repoBranches } from "../global/schema.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
@@ -34,6 +36,8 @@ const createIssueSchema = z.object({
   projectId: z.string().optional(),
   cycleId: z.string().optional(),
   labelIds: z.string().optional(),
+  repo: z.string().optional(),
+  branch: z.string().optional(),
 }) satisfies z.ZodType<IssueInput>;
 
 const updateIssueSchema = createIssueSchema.partial();
@@ -220,6 +224,16 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     const identity = c.get("workspaceIdentity");
     const stub = await getStub(c.env, workspaceId);
     const issue = await stub.createIssue(input, identity.id);
+    if (issue.repo && issue.branch) {
+      const db = createD1(c.env.D1);
+      await createRepoBranch(
+        db,
+        workspaceId,
+        issue.repo,
+        issue.branch,
+        issue.id
+      );
+    }
     return c.json(issue, 201);
   });
 
@@ -249,6 +263,24 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         status: 404,
         message: "Issue not found",
       });
+    }
+    const db = createD1(c.env.D1);
+    await db
+      .delete(repoBranches)
+      .where(
+        and(
+          eq(repoBranches.workspaceId, workspaceId),
+          eq(repoBranches.issueId, issue.id)
+        )
+      );
+    if (issue.repo && issue.branch) {
+      await createRepoBranch(
+        db,
+        workspaceId,
+        issue.repo,
+        issue.branch,
+        issue.id
+      );
     }
     return c.json(issue);
   });

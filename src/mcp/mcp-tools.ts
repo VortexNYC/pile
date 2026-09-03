@@ -821,6 +821,12 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "labelIds": {
               "type": "string"
+            },
+            "repo": {
+              "type": "string"
+            },
+            "branch": {
+              "type": "string"
             }
           }
         }
@@ -1070,6 +1076,12 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string"
             },
             "labelIds": {
+              "type": "string"
+            },
+            "repo": {
+              "type": "string"
+            },
+            "branch": {
               "type": "string"
             }
           },
