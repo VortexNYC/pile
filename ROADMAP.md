@@ -4,6 +4,7 @@ This is the durable tracker for the open-source Linear alternative. Operational 
 
 ## Done
 
+- GitHub assignee sync: map GitHub logins to Vortex users via github_users and set assigneeId on assigned/unassigned webhooks.
 - GitHub milestone sync: create Vortex cycles from GitHub milestones and update issue cycleId on milestoned/demilestoned webhooks.
 - GitHub issue label sync: map GitHub label names to Vortex labels and update issue labelIds on labeled/unlabeled webhooks.
 - Outbound GitHub comment writeback: Vortex comment -> GitHub issue/PR comment.
@@ -37,7 +38,7 @@ This is the durable tracker for the open-source Linear alternative. Operational 
 ## Later
 
 - Self-host the issue tracker and use it as the source of truth for this project (#21).
-- GitHub assignee / check run sync.
+- GitHub check run sync.
 - Agent sessions and activities API.
 - Search and indexing.
 - Notifications and outbound webhooks.
