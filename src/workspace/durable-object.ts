@@ -12,6 +12,7 @@ import {
   notifyIssueUpdated,
 } from "../global/notify-issue.js";
 import { comments } from "../global/schema.js";
+import { getDefaultTeam, getTeamById } from "../global/teams.js";
 import { getWorkspaceById } from "../global/workspaces.js";
 import type { AppEnv } from "../types/env.js";
 import type {
@@ -133,12 +134,22 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         .all(),
     ]);
 
+    const issueById = new Map(issues.map((issue) => [issue.id, issue]));
     const docs: Array<ReturnType<typeof issueToSearchDocument>> = [];
     for (const issue of issues) {
       docs.push(issueToSearchDocument(issue));
     }
     for (const comment of commentRows) {
-      docs.push(commentToSearchDocument(comment as CommentForSearch));
+      const issue = issueById.get(comment.issueId);
+      docs.push(
+        commentToSearchDocument({
+          id: comment.id,
+          issueId: comment.issueId,
+          teamId: issue?.teamId ?? "",
+          body: comment.body,
+          createdAt: comment.createdAt,
+        })
+      );
     }
     if (docs.length > 0) {
       await insertSearchDocs(index, docs);
@@ -204,22 +215,30 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
     const d1 = createD1(this.env.D1);
     const workspace = await getWorkspaceById(d1, this.workspaceId);
-    let number: number | null = null;
-    let identifier: string | null = null;
-    if (workspace?.key) {
-      const last = await this.db
-        .select({ number: sql<number | null>`MAX(number)` })
-        .from(workspaceIssues)
-        .get();
-      number = (last?.number ?? 0) + 1;
-      identifier = `${workspace.key}-${number}`;
+    const team = input.teamId
+      ? await getTeamById(d1, input.teamId, this.workspaceId)
+      : await getDefaultTeam(d1, this.workspaceId);
+    if (!team) {
+      throw new Error(
+        input.teamId ? "Team not found" : "Workspace has no default team"
+      );
     }
+
+    const key = team.key || workspace?.key || "general";
+    const last = await this.db
+      .select({ number: sql<number | null>`MAX(number)` })
+      .from(workspaceIssues)
+      .where(eq(workspaceIssues.teamId, team.id))
+      .get();
+    const number = (last?.number ?? 0) + 1;
+    const identifier = `${key}-${number}`;
 
     const issue = await this.db
       .insert(workspaceIssues)
       .values({
         id,
         workspaceId: this.workspaceId,
+        teamId: team.id,
         title: input.title,
         description: input.description ?? null,
         status,
@@ -296,6 +315,15 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     await this.ready;
     const conditions = [];
 
+    const visibleTeamIds =
+      args.teamIds && args.teamIds.length > 0 ? args.teamIds : undefined;
+
+    if (visibleTeamIds) {
+      conditions.push(inArray(workspaceIssues.teamId, visibleTeamIds));
+    }
+    if (args.teamId) {
+      conditions.push(eq(workspaceIssues.teamId, args.teamId));
+    }
     if (args.status) {
       conditions.push(eq(workspaceIssues.status, args.status));
     }
@@ -324,7 +352,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     }
     if (args.search) {
       const index = await this.ensureSearchIndex();
-      const issueIds = await searchIssues(index, args.search, args.limit);
+      const issueIds = await searchIssues(
+        index,
+        args.search,
+        visibleTeamIds ?? [],
+        args.limit
+      );
       if (issueIds.length === 0) {
         return [];
       }
@@ -370,6 +403,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     };
 
     const allowed: Array<{ key: IssueKey; field: string }> = [
+      { key: "teamId", field: "team_id" },
       { key: "title", field: "title" },
       { key: "description", field: "description" },
       { key: "status", field: "status" },
@@ -382,6 +416,22 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       { key: "branch", field: "branch" },
     ];
 
+    if (patch.teamId !== undefined && patch.teamId !== old.teamId) {
+      const d1 = createD1(this.env.D1);
+      const team = await getTeamById(d1, patch.teamId, this.workspaceId);
+      if (!team) {
+        throw new Error("Team not found");
+      }
+      const last = await this.db
+        .select({ number: sql<number | null>`MAX(number)` })
+        .from(workspaceIssues)
+        .where(eq(workspaceIssues.teamId, team.id))
+        .get();
+      const number = (last?.number ?? 0) + 1;
+      set.teamId = team.id;
+      set.number = number;
+      set.identifier = `${team.key}-${number}`;
+    }
     if (patch.title !== undefined) set.title = patch.title;
     if (patch.description !== undefined) set.description = patch.description;
     if (patch.status !== undefined) set.status = patch.status;

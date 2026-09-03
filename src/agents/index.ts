@@ -1,5 +1,6 @@
 import type { AppEnv } from "../platform/env.js";
 import { VortexError } from "../platform/errors.js";
+import type { Issue } from "../types/workspace.js";
 import { DevinAgentProvider } from "./devin.js";
 import type { AgentProvider } from "./provider.js";
 import type { AgentSessionRecord } from "./sessions.js";
@@ -31,14 +32,19 @@ export async function dispatchAgent(
   env: AppEnv,
   agentId: string,
   workspaceId: string,
-  issue: { id: string; title: string; description: string | null }
+  issue: {
+    id: string;
+    teamId: string;
+    title: string;
+    description: string | null;
+  }
 ): Promise<AgentSessionRecord> {
   const provider = getAgentProvider(agentId, env);
-  const issueInput = {
+  const issueInput: Issue = {
     ...issue,
     workspaceId,
-    status: "backlog" as const,
-    priority: "medium" as const,
+    status: "backlog",
+    priority: "medium",
     assigneeId: null,
     projectId: null,
     cycleId: null,

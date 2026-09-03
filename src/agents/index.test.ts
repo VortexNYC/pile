@@ -28,6 +28,7 @@ describe("agent providers", () => {
 
     const session = await dispatchAgent({} as AppEnv, "mock", "ws-1", {
       id: "issue-1",
+      teamId: "team-1",
       title: "Test",
       description: null,
     });

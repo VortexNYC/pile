@@ -11,6 +11,7 @@ export type IssuePriority = "low" | "medium" | "high" | "urgent";
 
 export interface IssueInput {
   id?: Id;
+  teamId?: string;
   title: string;
   description?: string;
   status?: IssueStatus;
@@ -33,6 +34,8 @@ export interface IssueCursor {
 export interface ListIssuesArgs {
   limit?: number;
   cursor?: IssueCursor;
+  teamId?: string;
+  teamIds?: string[];
   status?: IssueStatus;
   priority?: IssuePriority;
   assigneeId?: string;
@@ -46,6 +49,7 @@ export interface ListIssuesArgs {
 export interface Issue {
   id: Id;
   workspaceId: Id;
+  teamId: string;
   title: string;
   description: string | null;
   status: IssueStatus;

@@ -4,6 +4,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import { createD1 } from "../global/db.js";
 import { workspaces } from "../global/schema.js";
+import { createDefaultTeam } from "../global/teams.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { WorkspaceDO } from "./durable-object.js";
 
@@ -27,10 +28,12 @@ async function ensureWorkspace() {
     id: WORKSPACE_ID,
     name: "Test workspace",
     slug: "test-workspace",
+    key: "TEST",
     ownerId: "user-1",
     createdAt: now,
     updatedAt: now,
   });
+  await createDefaultTeam(db, WORKSPACE_ID, "TEST", "user-1");
 }
 
 function getStub() {

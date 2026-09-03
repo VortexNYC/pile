@@ -680,3 +680,66 @@ export const savedViews = sqliteTable(
     ),
   ]
 );
+
+export const teams = sqliteTable(
+  "teams" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    workspaceId: text("workspace_id" as string)
+      .notNull()
+      .references(() => workspaces.id),
+    key: text("key" as string).notNull(),
+    name: text("name" as string).notNull(),
+    ownerId: text("owner_id" as string).notNull(),
+    isDefault: integer("is_default" as string, { mode: "boolean" })
+      .notNull()
+      .default(false),
+    isPublic: integer("is_public" as string, { mode: "boolean" })
+      .notNull()
+      .default(false),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("teams_workspace_idx" as string).on(table.workspaceId),
+    uniqueIndex("teams_workspace_key_idx" as string).on(
+      table.workspaceId,
+      table.key
+    ),
+  ]
+);
+
+export const teamMemberships = sqliteTable(
+  "team_memberships" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    workspaceId: text("workspace_id" as string)
+      .notNull()
+      .references(() => workspaces.id),
+    teamId: text("team_id" as string)
+      .notNull()
+      .references(() => teams.id),
+    memberId: text("member_id" as string).notNull(),
+    memberType: text("member_type" as string, {
+      enum: ["user", "agent"],
+    }).notNull(),
+    role: text("role" as string, { enum: ["member", "guest"] })
+      .notNull()
+      .default("member"),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("team_memberships_workspace_idx" as string).on(table.workspaceId),
+    uniqueIndex("team_memberships_member_idx" as string).on(
+      table.teamId,
+      table.memberId,
+      table.memberType
+    ),
+  ]
+);

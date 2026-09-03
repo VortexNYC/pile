@@ -12,6 +12,7 @@ export const listIssuesQuerySchema = z.object({
     return Number.isNaN(n) || n < 1 || n > MAX_LIMIT ? DEFAULT_LIMIT : n;
   }, z.number().int().min(1).max(MAX_LIMIT)),
   cursor: z.string().optional(),
+  teamId: z.string().optional(),
   status: z
     .enum(["backlog", "todo", "in_progress", "done", "canceled"])
     .optional(),
@@ -58,6 +59,9 @@ export function toListArgs(query: ListIssuesQuery): ListIssuesArgs {
   const args: ListIssuesArgs = { limit: query.limit };
   if (query.cursor) {
     args.cursor = decodeCursor(query.cursor);
+  }
+  if (query.teamId) {
+    args.teamId = query.teamId;
   }
   if (query.status) {
     args.status = query.status;

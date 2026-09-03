@@ -11,6 +11,7 @@ export const workspaceIssues = sqliteTable(
   {
     id: text("id" as string).primaryKey(),
     workspaceId: text("workspace_id" as string).notNull(),
+    teamId: text("team_id" as string).notNull(),
     title: text("title" as string).notNull(),
     description: text("description" as string),
     status: text("status" as string, {
@@ -43,6 +44,11 @@ export const workspaceIssues = sqliteTable(
     uniqueIndex("idx_issues_identifier" as string).on(
       table.workspaceId,
       table.identifier
+    ),
+    uniqueIndex("idx_issues_team_number" as string).on(
+      table.workspaceId,
+      table.teamId,
+      table.number
     ),
   ]
 );

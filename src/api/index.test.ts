@@ -575,4 +575,128 @@ describe("API integration", () => {
     );
     expect(markAll.status).toBe(204);
   });
+
+  it("scopes issues to teams with per-team numbering and visibility", async () => {
+    const workspaceId = await seedWorkspace();
+    const admin = await adminToken(workspaceId);
+
+    const teamA = await app.fetch(
+      request(`/workspaces/${workspaceId}/teams`, {
+        method: "POST",
+        token: admin,
+        body: JSON.stringify({
+          key: "ENG",
+          name: "Engineering",
+          isPublic: false,
+        }),
+      }),
+      env
+    );
+    expect(teamA.status).toBe(201);
+    const teamAData = await teamA.json<{ id: string; key: string }>();
+
+    const teamB = await app.fetch(
+      request(`/workspaces/${workspaceId}/teams`, {
+        method: "POST",
+        token: admin,
+        body: JSON.stringify({
+          key: "DES",
+          name: "Design",
+          isPublic: false,
+        }),
+      }),
+      env
+    );
+    expect(teamB.status).toBe(201);
+    const teamBData = await teamB.json<{ id: string; key: string }>();
+
+    const issueA = await app.fetch(
+      request(`/workspaces/${workspaceId}/issues`, {
+        method: "POST",
+        token: admin,
+        body: JSON.stringify({
+          title: "Eng issue",
+          teamId: teamAData.id,
+        }),
+      }),
+      env
+    );
+    expect(issueA.status).toBe(201);
+    const issueAData = await issueA.json<{ identifier: string }>();
+    expect(issueAData.identifier).toBe("ENG-1");
+
+    const issueB = await app.fetch(
+      request(`/workspaces/${workspaceId}/issues`, {
+        method: "POST",
+        token: admin,
+        body: JSON.stringify({
+          title: "Des issue",
+          teamId: teamBData.id,
+        }),
+      }),
+      env
+    );
+    expect(issueB.status).toBe(201);
+    const issueBData = await issueB.json<{ identifier: string }>();
+    expect(issueBData.identifier).toBe("DES-1");
+
+    const engList = await app.fetch(
+      request(`/workspaces/${workspaceId}/issues?teamId=${teamAData.id}`, {
+        token: admin,
+      }),
+      env
+    );
+    expect(engList.status).toBe(200);
+    const engBody = await engList.json<{ issues: { identifier: string }[] }>();
+    expect(engBody.issues.length).toBe(1);
+    expect(engBody.issues[0].identifier).toBe("ENG-1");
+
+    const memberTokenRes = await app.fetch(
+      request(`/workspaces/${workspaceId}/tokens`, {
+        method: "POST",
+        token: admin,
+        body: JSON.stringify({ name: "member", permissions: "read,write" }),
+      }),
+      env
+    );
+    expect(memberTokenRes.status).toBe(201);
+    const memberTokenData = await memberTokenRes.json<{
+      id: string;
+      token: string;
+    }>();
+
+    const addMember = await app.fetch(
+      request(`/workspaces/${workspaceId}/teams/${teamAData.id}/members`, {
+        method: "POST",
+        token: admin,
+        body: JSON.stringify({
+          memberId: memberTokenData.id,
+          memberType: "agent",
+        }),
+      }),
+      env
+    );
+    expect(addMember.status).toBe(204);
+
+    const memberList = await app.fetch(
+      request(`/workspaces/${workspaceId}/issues`, {
+        token: memberTokenData.token,
+      }),
+      env
+    );
+    expect(memberList.status).toBe(200);
+    const memberBody = await memberList.json<{
+      issues: { identifier: string }[];
+    }>();
+    expect(memberBody.issues.length).toBe(1);
+    expect(memberBody.issues[0].identifier).toBe("ENG-1");
+
+    const privateTeamList = await app.fetch(
+      request(`/workspaces/${workspaceId}/issues?teamId=${teamBData.id}`, {
+        token: memberTokenData.token,
+      }),
+      env
+    );
+    expect(privateTeamList.status).toBe(404);
+  });
 });

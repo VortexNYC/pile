@@ -14,6 +14,7 @@ export const searchSchema = {
   id: "string",
   kind: "string",
   issueId: "string",
+  teamId: "string",
   identifier: "string",
   title: "string",
   description: "string",
@@ -45,6 +46,7 @@ export function issueToSearchDocument(issue: Issue): SearchDocument {
     id: issue.id,
     kind: "issue",
     issueId: issue.id,
+    teamId: issue.teamId,
     identifier: issue.identifier ?? "",
     title: issue.title,
     description: issue.description ?? "",
@@ -62,6 +64,7 @@ export function issueToSearchDocument(issue: Issue): SearchDocument {
 export interface CommentForSearch {
   id: string;
   issueId: string;
+  teamId: string;
   body: string;
   createdAt: string;
 }
@@ -73,6 +76,7 @@ export function commentToSearchDocument(
     id: comment.id,
     kind: "comment",
     issueId: comment.issueId,
+    teamId: comment.teamId,
     identifier: "",
     title: "",
     description: "",
@@ -120,8 +124,10 @@ export async function removeIssueDocuments(
 export async function searchIssues(
   index: WorkspaceSearchIndex,
   query: string,
+  teamIds: string[],
   limit = 1000
 ): Promise<string[]> {
+  const where = teamIds.length > 0 ? { teamId: teamIds } : undefined;
   const [identifierResult, contentResult] = await Promise.all([
     search(index, {
       term: query,
@@ -129,6 +135,7 @@ export async function searchIssues(
       limit,
       exact: true,
       tolerance: 0,
+      where,
     }),
     search(index, {
       term: query,
@@ -140,6 +147,7 @@ export async function searchIssues(
         description: 1,
         body: 0.5,
       },
+      where,
     }),
   ]);
 

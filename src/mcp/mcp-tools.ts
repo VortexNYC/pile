@@ -212,6 +212,59 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesWorkspaceIdTeamsId",
+    "description": "(DELETE /workspaces/{workspaceId}/teams/{id})",
+    "method": "DELETE",
+    "path": "/workspaces/{workspaceId}/teams/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "workspaceId"
+      ]
+    }
+  },
+  {
+    "name": "deleteWorkspacesWorkspaceIdTeamsIdMembersMemberId",
+    "description": "(DELETE /workspaces/{workspaceId}/teams/{id}/members/{memberId})",
+    "method": "DELETE",
+    "path": "/workspaces/{workspaceId}/teams/{id}/members/{memberId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "memberId": {
+          "type": "string"
+        },
+        "memberType": {
+          "type": "string",
+          "enum": [
+            "user",
+            "agent"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "memberId",
+        "workspaceId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesWorkspaceIdTokensId",
     "description": "(DELETE /workspaces/{workspaceId}/tokens/{id})",
     "method": "DELETE",
@@ -353,6 +406,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "maximum": 100
         },
         "cursor": {
+          "type": "string"
+        },
+        "teamId": {
           "type": "string"
         },
         "status": {
@@ -802,6 +858,65 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesWorkspaceIdTeams",
+    "description": "(GET /workspaces/{workspaceId}/teams)",
+    "method": "GET",
+    "path": "/workspaces/{workspaceId}/teams",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "workspaceId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesWorkspaceIdTeamsId",
+    "description": "(GET /workspaces/{workspaceId}/teams/{id})",
+    "method": "GET",
+    "path": "/workspaces/{workspaceId}/teams/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "workspaceId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesWorkspaceIdTeamsIdMembers",
+    "description": "(GET /workspaces/{workspaceId}/teams/{id}/members)",
+    "method": "GET",
+    "path": "/workspaces/{workspaceId}/teams/{id}/members",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "workspaceId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesWorkspaceIdTemplates",
     "description": "(GET /workspaces/{workspaceId}/templates)",
     "method": "GET",
@@ -974,6 +1089,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "title": {
               "type": "string",
               "minLength": 1
+            },
+            "teamId": {
+              "type": "string"
             },
             "description": {
               "type": "string"
@@ -1260,6 +1378,43 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "patchWorkspacesWorkspaceIdTeamsId",
+    "description": "(PATCH /workspaces/{workspaceId}/teams/{id})",
+    "method": "PATCH",
+    "path": "/workspaces/{workspaceId}/teams/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "key": {
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "isPublic": {
+              "type": "boolean"
+            }
+          }
+        }
+      },
+      "required": [
+        "id",
+        "workspaceId"
+      ]
+    }
+  },
+  {
     "name": "patchWorkspacesWorkspaceIdWebhooksubscriptionsId",
     "description": "(PATCH /workspaces/{workspaceId}/webhook-subscriptions/{id})",
     "method": "PATCH",
@@ -1441,6 +1596,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "title": {
               "type": "string",
               "minLength": 1
+            },
+            "teamId": {
+              "type": "string"
             },
             "description": {
               "type": "string"
@@ -1933,6 +2091,90 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
+        "workspaceId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesWorkspaceIdTeams",
+    "description": "(POST /workspaces/{workspaceId}/teams)",
+    "method": "POST",
+    "path": "/workspaces/{workspaceId}/teams",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "key": {
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "isPublic": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "key",
+            "name"
+          ]
+        }
+      },
+      "required": [
+        "workspaceId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesWorkspaceIdTeamsIdMembers",
+    "description": "(POST /workspaces/{workspaceId}/teams/{id}/members)",
+    "method": "POST",
+    "path": "/workspaces/{workspaceId}/teams/{id}/members",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "memberId": {
+              "type": "string"
+            },
+            "memberType": {
+              "type": "string",
+              "enum": [
+                "user",
+                "agent"
+              ]
+            },
+            "role": {
+              "type": "string",
+              "enum": [
+                "member",
+                "guest"
+              ]
+            }
+          },
+          "required": [
+            "memberId",
+            "memberType"
+          ]
+        }
+      },
+      "required": [
+        "id",
         "workspaceId"
       ]
     }

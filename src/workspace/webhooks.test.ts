@@ -8,6 +8,7 @@ import {
   webhookSubscriptions,
   workspaces,
 } from "../global/schema.js";
+import { createDefaultTeam } from "../global/teams.js";
 import { createWebhookSubscription } from "../global/webhook-subscriptions.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { WorkspaceDO } from "./durable-object.js";
@@ -33,10 +34,12 @@ async function ensureWorkspace() {
     id: WORKSPACE_ID,
     name: "Webhook test workspace",
     slug: "webhook-test-workspace",
+    key: "WEB",
     ownerId: "user-1",
     createdAt: now,
     updatedAt: now,
   });
+  await createDefaultTeam(db, WORKSPACE_ID, "WEB", "user-1");
 }
 
 function getStub() {

@@ -8,7 +8,14 @@ import { deleteIssueReferences } from "../global/issue-data.js";
 import { createRepoBranch } from "../global/repo-branches.js";
 import { getSavedView } from "../global/saved-views.js";
 import { repoBranches } from "../global/schema.js";
+import {
+  canAccessTeam,
+  getDefaultTeam,
+  getTeamById,
+  getVisibleTeamIds,
+} from "../global/teams.js";
 import { VortexError } from "../platform/errors.js";
+import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 import type { Issue, IssueInput } from "../types/workspace.js";
@@ -27,8 +34,59 @@ async function getStub(env: WorkerEnv, workspaceId: string) {
   return stub;
 }
 
+async function loadVisibleTeamIds(
+  db: ReturnType<typeof createD1>,
+  workspaceId: string,
+  identity: WorkspaceIdentity
+): Promise<string[]> {
+  return getVisibleTeamIds(db, workspaceId, identity);
+}
+
+async function assertIssueAccess(
+  db: ReturnType<typeof createD1>,
+  issue: Issue,
+  identity: WorkspaceIdentity
+): Promise<void> {
+  const allowed = await canAccessTeam(db, issue.teamId, identity);
+  if (!allowed) {
+    throw new VortexError({
+      code: "NOT_FOUND",
+      status: 404,
+      message: "Issue not found",
+    });
+  }
+}
+
+async function assertTeamAccess(
+  db: ReturnType<typeof createD1>,
+  workspaceId: string,
+  teamId: string | undefined,
+  identity: WorkspaceIdentity
+): Promise<string> {
+  const resolvedTeamId = teamId
+    ? (await getTeamById(db, teamId, workspaceId))?.id
+    : (await getDefaultTeam(db, workspaceId))?.id;
+  if (!resolvedTeamId) {
+    throw new VortexError({
+      code: "NOT_FOUND",
+      status: 404,
+      message: "Team not found",
+    });
+  }
+  const allowed = await canAccessTeam(db, resolvedTeamId, identity);
+  if (!allowed) {
+    throw new VortexError({
+      code: "FORBIDDEN",
+      status: 403,
+      message: "Cannot create issue in this team",
+    });
+  }
+  return resolvedTeamId;
+}
+
 const createIssueSchema = z.object({
   title: z.string().min(1),
+  teamId: z.string().optional(),
   description: z.string().optional(),
   status: z
     .enum(["backlog", "todo", "in_progress", "done", "canceled"])
@@ -48,6 +106,7 @@ const issueApiSchema = z
   .object({
     id: z.string(),
     workspaceId: z.string(),
+    teamId: z.string(),
     title: z.string(),
     description: z.string().nullable(),
     status: z.enum(["backlog", "todo", "in_progress", "done", "canceled"]),
@@ -209,14 +268,26 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listIssuesRoute, async (c) => {
     const { workspaceId } = c.req.valid("param");
     const query = c.req.valid("query");
+    const identity = c.get("workspaceIdentity");
+    const db = createD1(c.env.D1);
     const stub = await getStub(c.env, workspaceId);
+    const visibleTeamIds = await loadVisibleTeamIds(db, workspaceId, identity);
     if (query.identifier) {
       const issue = await stub.getIssueByIdentifier(query.identifier);
+      if (issue) {
+        await assertIssueAccess(db, issue, identity);
+      }
       return c.json({ issues: issue ? [issue] : [] });
     }
     const args = toListArgs(query);
+    if (query.teamId && !visibleTeamIds.includes(query.teamId)) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Team not found",
+      });
+    }
     if (query.view) {
-      const db = createD1(c.env.D1);
       const view = await getSavedView(db, query.view, workspaceId);
       if (!view) {
         throw new VortexError({
@@ -241,6 +312,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         args.search = view.search;
       }
     }
+    args.teamIds = visibleTeamIds;
     const issues = await stub.listIssues(args);
     const nextCursor =
       issues.length === query.limit && issues.length > 0
@@ -256,10 +328,16 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     const input = c.req.valid("json");
     const { workspaceId } = c.req.valid("param");
     const identity = c.get("workspaceIdentity");
+    const db = createD1(c.env.D1);
+    const teamId = await assertTeamAccess(
+      db,
+      workspaceId,
+      input.teamId,
+      identity
+    );
     const stub = await getStub(c.env, workspaceId);
-    const issue = await stub.createIssue(input, identity.id);
+    const issue = await stub.createIssue({ ...input, teamId }, identity.id);
     if (issue.repo && issue.branch) {
-      const db = createD1(c.env.D1);
       await createRepoBranch(
         db,
         workspaceId,
@@ -273,6 +351,8 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(getIssueRoute, async (c) => {
     const { workspaceId, id } = c.req.valid("param");
+    const identity = c.get("workspaceIdentity");
+    const db = createD1(c.env.D1);
     const stub = await getStub(c.env, workspaceId);
     const issue = await stub.getIssue(id);
     if (!issue) {
@@ -282,6 +362,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         message: "Issue not found",
       });
     }
+    await assertIssueAccess(db, issue, identity);
     return c.json(issue);
   });
 
@@ -289,8 +370,22 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     const input = c.req.valid("json");
     const { workspaceId, id } = c.req.valid("param");
     const identity = c.get("workspaceIdentity");
+    const db = createD1(c.env.D1);
     const stub = await getStub(c.env, workspaceId);
-    const issue = await stub.updateIssue(id, input, identity.id);
+    const existing = await stub.getIssue(id);
+    if (!existing) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Issue not found",
+      });
+    }
+    await assertIssueAccess(db, existing, identity);
+    let teamId = existing.teamId;
+    if (input.teamId !== undefined) {
+      teamId = await assertTeamAccess(db, workspaceId, input.teamId, identity);
+    }
+    const issue = await stub.updateIssue(id, { ...input, teamId }, identity.id);
     if (!issue) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -298,7 +393,6 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         message: "Issue not found",
       });
     }
-    const db = createD1(c.env.D1);
     await db
       .delete(repoBranches)
       .where(
@@ -322,7 +416,17 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(deleteIssueRoute, async (c) => {
     const { workspaceId, id } = c.req.valid("param");
     const identity = c.get("workspaceIdentity");
+    const db = createD1(c.env.D1);
     const stub = await getStub(c.env, workspaceId);
+    const existing = await stub.getIssue(id);
+    if (!existing) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Issue not found",
+      });
+    }
+    await assertIssueAccess(db, existing, identity);
     const deleted = await stub.deleteIssue(id, identity.id);
     if (!deleted) {
       throw new VortexError({
@@ -331,7 +435,6 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         message: "Issue not found",
       });
     }
-    const db = createD1(c.env.D1);
     await deleteIssueReferences(db, workspaceId, id);
     return c.body(null, 204);
   });
@@ -339,6 +442,8 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(dispatchRoute, async (c) => {
     const { agentId, model } = c.req.valid("json");
     const { workspaceId, id } = c.req.valid("param");
+    const identity = c.get("workspaceIdentity");
+    const db = createD1(c.env.D1);
     const stub = await getStub(c.env, workspaceId);
     const issue = await stub.getIssue(id);
     if (!issue) {
@@ -348,12 +453,12 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         message: "Issue not found",
       });
     }
+    await assertIssueAccess(db, issue, identity);
 
     const provider = getAgentProvider(agentId ?? "devin", c.env);
     const session = await provider.dispatch(workspaceId, issue, model);
 
     if (issue.repo && issue.branch) {
-      const db = createD1(c.env.D1);
       await createRepoBranch(
         db,
         workspaceId,

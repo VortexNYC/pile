@@ -302,6 +302,7 @@ export interface paths {
                 query?: {
                     limit?: number | null;
                     cursor?: string;
+                    teamId?: string;
                     status?: "backlog" | "todo" | "in_progress" | "done" | "canceled";
                     priority?: "low" | "medium" | "high" | "urgent";
                     assigneeId?: string;
@@ -348,6 +349,7 @@ export interface paths {
                 content: {
                     "application/json": {
                         title: string;
+                        teamId?: string;
                         description?: string;
                         /** @enum {string} */
                         status?: "backlog" | "todo" | "in_progress" | "done" | "canceled";
@@ -449,6 +451,7 @@ export interface paths {
                 content: {
                     "application/json": {
                         title?: string;
+                        teamId?: string;
                         description?: string;
                         /** @enum {string} */
                         status?: "backlog" | "todo" | "in_progress" | "done" | "canceled";
@@ -2805,6 +2808,330 @@ export interface paths {
         };
         trace?: never;
     };
+    "/workspaces/{workspaceId}/teams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    workspaceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Teams list */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            teams: {
+                                id: string;
+                                workspaceId: string;
+                                key: string;
+                                name: string;
+                                ownerId: string;
+                                isDefault: boolean;
+                                isPublic: boolean;
+                                createdAt: string;
+                                updatedAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    workspaceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        key: string;
+                        name: string;
+                        isPublic?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description Team created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            workspaceId: string;
+                            key: string;
+                            name: string;
+                            ownerId: string;
+                            isDefault: boolean;
+                            isPublic: boolean;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{workspaceId}/teams/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    workspaceId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Team */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            workspaceId: string;
+                            key: string;
+                            name: string;
+                            ownerId: string;
+                            isDefault: boolean;
+                            isPublic: boolean;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Team not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    workspaceId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Team deleted */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    workspaceId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        key?: string;
+                        name?: string;
+                        isPublic?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description Team updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            workspaceId: string;
+                            key: string;
+                            name: string;
+                            ownerId: string;
+                            isDefault: boolean;
+                            isPublic: boolean;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Team not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/workspaces/{workspaceId}/teams/{id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    workspaceId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Team members */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            members: {
+                                memberId: string;
+                                /** @enum {string} */
+                                memberType: "user" | "agent";
+                                role: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    workspaceId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        memberId: string;
+                        /** @enum {string} */
+                        memberType: "user" | "agent";
+                        /** @enum {string} */
+                        role?: "member" | "guest";
+                    };
+                };
+            };
+            responses: {
+                /** @description Member added */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{workspaceId}/teams/{id}/members/{memberId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: {
+            parameters: {
+                query?: {
+                    memberType?: "user" | "agent";
+                };
+                header?: never;
+                path: {
+                    workspaceId: string;
+                    id: string;
+                    memberId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Member removed */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{workspaceId}/templates": {
         parameters: {
             query?: never;
@@ -3127,6 +3454,7 @@ export interface components {
         Issue: {
             id: string;
             workspaceId: string;
+            teamId: string;
             title: string;
             description: string | null;
             /** @enum {string} */

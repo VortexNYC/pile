@@ -3,6 +3,7 @@ import { migrate } from "drizzle-orm/durable-sqlite/migrator";
 const v1 = `CREATE TABLE IF NOT EXISTS issues (
   id TEXT PRIMARY KEY,
   workspace_id TEXT NOT NULL,
+  team_id TEXT NOT NULL,
   title TEXT NOT NULL,
   description TEXT,
   status TEXT NOT NULL,
@@ -29,7 +30,9 @@ CREATE INDEX IF NOT EXISTS idx_issues_created_at_id ON issues (created_at DESC, 
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_issues_priority ON issues (priority, created_at DESC)
 --> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS idx_issues_identifier ON issues (workspace_id, identifier)`;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_issues_identifier ON issues (workspace_id, identifier)
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS idx_issues_team_number ON issues (workspace_id, team_id, number)`;
 
 export const workspaceMigrations = {
   journal: {

@@ -21,6 +21,7 @@ import { z } from "zod";
 import { workspaceIssues } from "./schema.js";
 
 export const filterFieldSchema = z.enum([
+  "teamId",
   "status",
   "priority",
   "assigneeId",
@@ -138,6 +139,7 @@ export const filterConditionSchema: z.ZodType<FilterCondition> = z.union([
 ]);
 
 const columnByField = {
+  teamId: workspaceIssues.teamId,
   status: workspaceIssues.status,
   priority: workspaceIssues.priority,
   assigneeId: workspaceIssues.assigneeId,

@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 
 import type { D1Client } from "./db.js";
 import { workspaceMemberships, workspaces } from "./schema.js";
+import { createDefaultTeam } from "./teams.js";
 
 export function listWorkspaces(db: D1Client) {
   return db.select().from(workspaces).all();
@@ -42,6 +43,7 @@ export async function createWorkspace(
     role: "owner",
     createdAt: ts,
   });
+  await createDefaultTeam(db, id, values.key ?? null, values.ownerId);
   return db.select().from(workspaces).where(eq(workspaces.id, id)).get();
 }
 
