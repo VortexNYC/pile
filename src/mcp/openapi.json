@@ -4071,28 +4071,6 @@
         }
       }
     },
-    "/workspaces/{workspaceId}/ws": {
-      "get": {
-        "tags": [
-          "realtime"
-        ],
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "name": "workspaceId",
-            "in": "path"
-          }
-        ],
-        "responses": {
-          "101": {
-            "description": "WebSocket upgraded"
-          }
-        }
-      }
-    },
     "/github": {
       "post": {
         "tags": [
@@ -4116,6 +4094,28 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/workspaces/{workspaceId}/ws": {
+      "get": {
+        "tags": [
+          "realtime"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "workspaceId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "101": {
+            "description": "WebSocket upgraded"
           }
         }
       }

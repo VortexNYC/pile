@@ -85,9 +85,7 @@ function extractWorkspaceIdFromLabels(
   return label?.name.split(":")[1]?.trim();
 }
 
-export async function processGithubWebhook(
-  c: Context<AppContext>
-): Promise<{ ok: true }> {
+export async function processGithubWebhook(c: Context<AppContext>) {
   const signature = c.req.header("x-hub-signature-256") ?? "";
   const rawBody = await c.req.text();
 
@@ -112,7 +110,7 @@ export async function processGithubWebhook(
   if (deliveryId) {
     const existing = await findWebhookDelivery(db, deliveryId);
     if (existing) {
-      return { ok: true };
+      return c.json({ ok: true }, 200);
     }
   }
 
@@ -122,7 +120,7 @@ export async function processGithubWebhook(
   if (event === "issues") {
     return processGitHubIssue(c, db, deliveryId, event, rawBody);
   }
-  return { ok: true };
+  return c.json({ ok: true }, 200);
 }
 
 async function processPullRequest(
@@ -131,7 +129,7 @@ async function processPullRequest(
   deliveryId: string | undefined,
   event: string,
   rawBody: string
-): Promise<{ ok: true }> {
+) {
   let parsedBody: unknown;
   try {
     parsedBody = JSON.parse(rawBody);
@@ -161,7 +159,7 @@ async function processPullRequest(
 
   const record = await findRepoBranch(db, repo, branch);
   if (!record) {
-    return { ok: true };
+    return c.json({ ok: true }, 200);
   }
 
   const doId = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(record.workspaceId);
@@ -178,7 +176,7 @@ async function processPullRequest(
     );
   }
 
-  return { ok: true };
+  return c.json({ ok: true }, 200);
 }
 
 async function processGitHubIssue(
@@ -187,7 +185,7 @@ async function processGitHubIssue(
   deliveryId: string | undefined,
   event: string,
   rawBody: string
-): Promise<{ ok: true }> {
+) {
   let parsedBody: unknown;
   try {
     parsedBody = JSON.parse(rawBody);
@@ -219,7 +217,7 @@ async function processGitHubIssue(
   }
 
   if (!workspaceId) {
-    return { ok: true };
+    return c.json({ ok: true }, 200);
   }
 
   const doId = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(workspaceId);
@@ -260,7 +258,7 @@ async function processGitHubIssue(
     if (deliveryId) {
       await recordWebhookDelivery(db, deliveryId, "github", event, workspaceId);
     }
-    return { ok: true };
+    return c.json({ ok: true }, 200);
   }
 
   if (action === "edited") {
@@ -285,7 +283,7 @@ async function processGitHubIssue(
     if (deliveryId) {
       await recordWebhookDelivery(db, deliveryId, "github", event, workspaceId);
     }
-    return { ok: true };
+    return c.json({ ok: true }, 200);
   }
 
   if (action === "closed") {
@@ -306,7 +304,7 @@ async function processGitHubIssue(
     if (deliveryId) {
       await recordWebhookDelivery(db, deliveryId, "github", event, workspaceId);
     }
-    return { ok: true };
+    return c.json({ ok: true }, 200);
   }
 
   if (action === "deleted") {
@@ -317,11 +315,11 @@ async function processGitHubIssue(
     if (deliveryId) {
       await recordWebhookDelivery(db, deliveryId, "github", event, workspaceId);
     }
-    return { ok: true };
+    return c.json({ ok: true }, 200);
   }
 
   if (deliveryId) {
     await recordWebhookDelivery(db, deliveryId, "github", event, workspaceId);
   }
-  return { ok: true };
+  return c.json({ ok: true }, 200);
 }

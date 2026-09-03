@@ -61,6 +61,8 @@ registerTemplateRoutes(app);
 registerMigrateRoutes(app);
 registerHealthRoutes(app);
 
+app.openapi(githubWebhookRoute, processGithubWebhook);
+
 app.openapi(
   createRoute({
     method: "get",
