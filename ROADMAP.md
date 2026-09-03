@@ -4,6 +4,8 @@ This is the durable tracker for the open-source Linear alternative. Operational 
 
 ## Done
 
+- `GET /workspaces/{id}/issues?identifier=KEY-123` lookup.
+- `POST /workspaces` create endpoint (with `key`).
 - GitHub assignee sync: map GitHub logins to Vortex users via github_users and set assigneeId on assigned/unassigned webhooks.
 - GitHub milestone sync: create Vortex cycles from GitHub milestones and update issue cycleId on milestoned/demilestoned webhooks.
 - GitHub issue label sync: map GitHub label names to Vortex labels and update issue labelIds on labeled/unlabeled webhooks.
@@ -31,8 +33,6 @@ This is the durable tracker for the open-source Linear alternative. Operational 
 ## Next
 
 - Linear API / CLI / MCP / docs parity audit and gap mapping (#20).
-- `GET /workspaces/{id}/issues?identifier=KEY-123` lookup.
-- `POST /workspaces` create endpoint (with `key`).
 - Better Auth human sign-in and workspace user mapping.
 
 ## Later
