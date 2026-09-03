@@ -6,6 +6,8 @@ export interface AppEnv {
   ALLOWED_ORIGINS?: string;
   DEVIN_TOKEN: string;
   GITHUB_WEBHOOK_SECRET?: string;
+  GITHUB_APP_ID?: string;
+  GITHUB_PRIVATE_KEY?: string;
   WEBHOOK_SECRET?: string;
   DISPATCH_SECRET?: string;
   DEVIN_ORG_ID?: string;

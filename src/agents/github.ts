@@ -3,6 +3,11 @@ import type { Context } from "hono";
 
 import { hmacSha256Hex, timingSafeEqualHex } from "../global/crypto.js";
 import { createD1, type D1Client } from "../global/db.js";
+import {
+  createGithubInstallation,
+  deleteGithubInstallation,
+  deleteGithubInstallationsByInstallationId,
+} from "../global/github-installations.js";
 import { findRepoBranch } from "../global/repo-branches.js";
 import {
   createRepoIssue,
@@ -31,6 +36,47 @@ const pullRequestPayloadSchema = z.object({
       }),
     }),
   }),
+});
+
+const installationPayloadSchema = z.object({
+  action: z.enum([
+    "created",
+    "deleted",
+    "new_permissions_accepted",
+    "suspend",
+    "unsuspend",
+  ]),
+  installation: z.object({
+    id: z.number().int(),
+  }),
+  repositories: z
+    .array(
+      z.object({
+        full_name: z.string(),
+      })
+    )
+    .default([]),
+});
+
+const installationRepositoriesPayloadSchema = z.object({
+  action: z.enum(["added", "removed"]),
+  installation: z.object({
+    id: z.number().int(),
+  }),
+  repositories_added: z
+    .array(
+      z.object({
+        full_name: z.string(),
+      })
+    )
+    .default([]),
+  repositories_removed: z
+    .array(
+      z.object({
+        full_name: z.string(),
+      })
+    )
+    .default([]),
 });
 
 const issuePayloadSchema = z.object({
@@ -121,6 +167,158 @@ export async function processGithubWebhook(c: Context<AppContext>) {
   }
   if (event === "issues") {
     return processGitHubIssue(c, db, deliveryId, event, rawBody);
+  }
+  if (event === "installation") {
+    return processInstallation(c, db, deliveryId, event, rawBody);
+  }
+  if (event === "installation_repositories") {
+    return processInstallationRepositories(c, db, deliveryId, event, rawBody);
+  }
+  return c.json({ ok: true }, 200);
+}
+
+async function processInstallation(
+  c: Context<AppContext>,
+  db: D1Client,
+  deliveryId: string | undefined,
+  event: string,
+  rawBody: string
+) {
+  let parsedBody: unknown;
+  try {
+    parsedBody = JSON.parse(rawBody);
+  } catch {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Invalid JSON",
+    });
+  }
+
+  const payload = installationPayloadSchema.safeParse(parsedBody);
+  if (!payload.success) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Invalid installation payload",
+      hint: payload.error.message,
+    });
+  }
+
+  const { action, installation, repositories } = payload.data;
+  const installationId = installation.id.toString();
+
+  if (action === "deleted") {
+    await deleteGithubInstallationsByInstallationId(db, installationId);
+    if (deliveryId) {
+      await recordWebhookDelivery(db, deliveryId, "github", event, "deleted");
+    }
+    return c.json({ ok: true }, 200);
+  }
+
+  if (action === "created" || action === "new_permissions_accepted") {
+    for (const repo of repositories) {
+      const record = await findRepoWorkspace(db, repo.full_name);
+      if (record) {
+        await createGithubInstallation(
+          db,
+          record.workspaceId,
+          installationId,
+          repo.full_name
+        );
+      }
+    }
+    if (deliveryId) {
+      await recordWebhookDelivery(
+        db,
+        deliveryId,
+        "github",
+        event,
+        installationId
+      );
+    }
+    return c.json({ ok: true }, 200);
+  }
+
+  if (deliveryId) {
+    await recordWebhookDelivery(
+      db,
+      deliveryId,
+      "github",
+      event,
+      installationId
+    );
+  }
+  return c.json({ ok: true }, 200);
+}
+
+async function processInstallationRepositories(
+  c: Context<AppContext>,
+  db: D1Client,
+  deliveryId: string | undefined,
+  event: string,
+  rawBody: string
+) {
+  let parsedBody: unknown;
+  try {
+    parsedBody = JSON.parse(rawBody);
+  } catch {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Invalid JSON",
+    });
+  }
+
+  const payload = installationRepositoriesPayloadSchema.safeParse(parsedBody);
+  if (!payload.success) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Invalid installation_repositories payload",
+      hint: payload.error.message,
+    });
+  }
+
+  const { action, installation, repositories_added, repositories_removed } =
+    payload.data;
+  const installationId = installation.id.toString();
+
+  if (action === "removed") {
+    for (const repo of repositories_removed) {
+      await deleteGithubInstallation(db, repo.full_name);
+    }
+    if (deliveryId) {
+      await recordWebhookDelivery(
+        db,
+        deliveryId,
+        "github",
+        event,
+        installationId
+      );
+    }
+    return c.json({ ok: true }, 200);
+  }
+
+  for (const repo of repositories_added) {
+    const record = await findRepoWorkspace(db, repo.full_name);
+    if (record) {
+      await createGithubInstallation(
+        db,
+        record.workspaceId,
+        installationId,
+        repo.full_name
+      );
+    }
+  }
+  if (deliveryId) {
+    await recordWebhookDelivery(
+      db,
+      deliveryId,
+      "github",
+      event,
+      installationId
+    );
   }
   return c.json({ ok: true }, 200);
 }

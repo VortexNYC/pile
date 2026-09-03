@@ -95,6 +95,25 @@ export const repoIssues = sqliteTable(
   ]
 );
 
+export const githubInstallations = sqliteTable(
+  "github_installations" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    workspaceId: text("workspace_id" as string)
+      .notNull()
+      .references(() => workspaces.id),
+    installationId: text("installation_id" as string).notNull(),
+    repo: text("repo" as string).notNull(),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("github_installations_repo_idx" as string).on(table.repo),
+    index("github_installations_workspace_idx" as string).on(table.workspaceId),
+  ]
+);
+
 export const projects = sqliteTable(
   "projects" as string,
   {
