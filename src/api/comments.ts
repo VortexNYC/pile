@@ -9,6 +9,9 @@ import {
   updateComment,
 } from "../global/comments.js";
 import { createD1 } from "../global/db.js";
+import { getInstallationToken } from "../global/github-auth.js";
+import { findGithubInstallation } from "../global/github-installations.js";
+import { findRepoIssueByIssueId } from "../global/repo-issues.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
@@ -151,11 +154,62 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
     const { workspaceId, issueId } = c.req.valid("param");
     const { body } = c.req.valid("json");
     const db = createD1(c.env.D1);
-    const item = await createComment(db, workspaceId, {
+    const created = await createComment(db, workspaceId, {
       issueId,
       authorId: c.var.workspaceIdentity.id,
       body,
     });
+    if (!created) {
+      throw new VortexError({
+        code: "INTERNAL_ERROR",
+        status: 500,
+        message: "Failed to create comment",
+      });
+    }
+    let item = created;
+
+    const mapping = await findRepoIssueByIssueId(db, issueId);
+    if (mapping) {
+      const installation = await findGithubInstallation(db, mapping.repo);
+      if (installation) {
+        const token = await getInstallationToken(
+          c.env,
+          installation.installationId
+        );
+        if (token) {
+          const response = await fetch(
+            `https://api.github.com/repos/${mapping.repo}/issues/${mapping.issueNumber}/comments`,
+            {
+              method: "POST",
+              headers: {
+                Accept: "application/vnd.github+json",
+                Authorization: `Bearer ${token}`,
+                "X-GitHub-Api-Version": "2022-11-28",
+                "Content-Type": "application/json",
+                "User-Agent": "vortex",
+              },
+              body: JSON.stringify({ body }),
+            }
+          );
+          if (response.ok) {
+            const raw: unknown = await response.json();
+            const parsed = z.object({ id: z.number().int() }).safeParse(raw);
+            if (parsed.success) {
+              const externalId = parsed.data.id.toString();
+              const updated = await updateComment(db, workspaceId, item.id, {
+                body,
+                externalId,
+                externalSource: "github",
+              });
+              if (updated) {
+                item = updated;
+              }
+            }
+          }
+        }
+      }
+    }
+
     return c.json(item, 201);
   });
 

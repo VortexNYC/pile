@@ -13,6 +13,14 @@ export function findRepoIssue(db: D1Client, repo: string, issueNumber: number) {
     .get();
 }
 
+export function findRepoIssueByIssueId(db: D1Client, issueId: string) {
+  return db
+    .select()
+    .from(repoIssues)
+    .where(eq(repoIssues.issueId, issueId))
+    .get();
+}
+
 export async function createRepoIssue(
   db: D1Client,
   workspaceId: string,

@@ -79,13 +79,22 @@ export async function updateComment(
   db: D1Client,
   workspaceId: string,
   id: string,
-  values: { body: string; updatedAt?: string }
+  values: {
+    body: string;
+    externalId?: string;
+    externalSource?: string;
+    externalAuthor?: string;
+    updatedAt?: string;
+  }
 ) {
   const ts = new Date().toISOString();
   await db
     .update(comments)
     .set({
       body: values.body,
+      externalId: values.externalId,
+      externalSource: values.externalSource,
+      externalAuthor: values.externalAuthor,
       updatedAt: values.updatedAt ?? ts,
     })
     .where(and(eq(comments.workspaceId, workspaceId), eq(comments.id, id)));
