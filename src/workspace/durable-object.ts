@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { createD1 } from "../global/db.js";
 import { createIssueHistory } from "../global/issue-history.js";
+import { comments } from "../global/schema.js";
 import { getWorkspaceById } from "../global/workspaces.js";
 import type { AppEnv } from "../types/env.js";
 import type {
@@ -237,9 +238,25 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         like(sql`COALESCE(${workspaceIssues.description}, '')`, pattern),
         like(sql`COALESCE(${workspaceIssues.identifier}, '')`, pattern)
       );
-    }
-    if (args.issueIds && args.issueIds.length > 0) {
-      searchConditions.push(inArray(workspaceIssues.id, args.issueIds));
+
+      const db = createD1(this.env.D1);
+      const matchingComments = await db
+        .select({ issueId: comments.issueId })
+        .from(comments)
+        .where(
+          and(
+            eq(comments.workspaceId, this.workspaceId),
+            like(comments.body, pattern)
+          )
+        )
+        .limit(1000)
+        .all();
+      const issueIds = [
+        ...new Set(matchingComments.map((row) => row.issueId)),
+      ];
+      if (issueIds.length > 0) {
+        searchConditions.push(inArray(workspaceIssues.id, issueIds));
+      }
     }
     if (searchConditions.length > 0) {
       conditions.push(
