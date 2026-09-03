@@ -310,6 +310,7 @@ export interface paths {
                     labelId?: string;
                     search?: string;
                     identifier?: string;
+                    view?: string;
                 };
                 header?: never;
                 path: {
@@ -2560,6 +2561,248 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{workspaceId}/saved-views": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    workspaceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Saved views list */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            views: {
+                                id: string;
+                                workspaceId: string;
+                                ownerId: string;
+                                name: string;
+                                filter?: unknown;
+                                search: string | null;
+                                sort: {
+                                    field: string;
+                                    /** @enum {string} */
+                                    direction?: "asc" | "desc";
+                                } | null;
+                                columns: string[] | null;
+                                createdAt: string;
+                                updatedAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    workspaceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        name: string;
+                        filter?: unknown;
+                        search?: string;
+                        sort?: {
+                            field: string;
+                            /** @enum {string} */
+                            direction?: "asc" | "desc";
+                        };
+                        columns?: string[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Saved view created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            workspaceId: string;
+                            ownerId: string;
+                            name: string;
+                            filter?: unknown;
+                            search: string | null;
+                            sort: {
+                                field: string;
+                                /** @enum {string} */
+                                direction?: "asc" | "desc";
+                            } | null;
+                            columns: string[] | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{workspaceId}/saved-views/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    workspaceId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Saved view */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            workspaceId: string;
+                            ownerId: string;
+                            name: string;
+                            filter?: unknown;
+                            search: string | null;
+                            sort: {
+                                field: string;
+                                /** @enum {string} */
+                                direction?: "asc" | "desc";
+                            } | null;
+                            columns: string[] | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Saved view not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    workspaceId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Saved view deleted */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    workspaceId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        name?: string;
+                        filter?: unknown;
+                        search?: string;
+                        sort?: {
+                            field: string;
+                            /** @enum {string} */
+                            direction?: "asc" | "desc";
+                        } | null;
+                        columns?: string[] | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Saved view updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            workspaceId: string;
+                            ownerId: string;
+                            name: string;
+                            filter?: unknown;
+                            search: string | null;
+                            sort: {
+                                field: string;
+                                /** @enum {string} */
+                                direction?: "asc" | "desc";
+                            } | null;
+                            columns: string[] | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Saved view not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         trace?: never;
     };
     "/workspaces/{workspaceId}/templates": {

@@ -6,11 +6,13 @@ import { getAgentProvider } from "../agents/index.js";
 import { createD1 } from "../global/db.js";
 import { deleteIssueReferences } from "../global/issue-data.js";
 import { createRepoBranch } from "../global/repo-branches.js";
+import { getSavedView } from "../global/saved-views.js";
 import { repoBranches } from "../global/schema.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 import type { Issue, IssueInput } from "../types/workspace.js";
+import { filterConditionSchema } from "../workspace/filter.js";
 import {
   encodeCursor,
   listIssuesQuerySchema,
@@ -213,6 +215,32 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       return c.json({ issues: issue ? [issue] : [] });
     }
     const args = toListArgs(query);
+    if (query.view) {
+      const db = createD1(c.env.D1);
+      const view = await getSavedView(db, query.view, workspaceId);
+      if (!view) {
+        throw new VortexError({
+          code: "NOT_FOUND",
+          status: 404,
+          message: "Saved view not found",
+        });
+      }
+      let parsedFilter: unknown;
+      try {
+        parsedFilter = JSON.parse(view.filter);
+      } catch {
+        throw new VortexError({
+          code: "INTERNAL_ERROR",
+          status: 500,
+          message: "Saved view has invalid filter JSON",
+        });
+      }
+      const filter = filterConditionSchema.parse(parsedFilter);
+      args.filter = filter;
+      if (view.search && !args.search) {
+        args.search = view.search;
+      }
+    }
     const issues = await stub.listIssues(args);
     const nextCursor =
       issues.length === query.limit && issues.length > 0

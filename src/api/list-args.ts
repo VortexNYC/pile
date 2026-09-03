@@ -22,6 +22,7 @@ export const listIssuesQuerySchema = z.object({
   labelId: z.string().optional(),
   search: z.string().optional(),
   identifier: z.string().optional(),
+  view: z.string().optional(),
 });
 
 export type ListIssuesQuery = z.infer<typeof listIssuesQuerySchema>;

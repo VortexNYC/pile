@@ -1,3 +1,4 @@
+import type { FilterCondition } from "../workspace/filter.js";
 import type { Id, Timestamp } from "./index.js";
 
 export type IssueStatus =
@@ -39,6 +40,7 @@ export interface ListIssuesArgs {
   cycleId?: string;
   labelId?: string;
   search?: string;
+  filter?: FilterCondition;
 }
 
 export interface Issue {

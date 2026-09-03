@@ -20,6 +20,7 @@ import type {
   ListIssuesArgs,
   RealtimeEvent,
 } from "../types/workspace.js";
+import { filterToSql } from "./filter.js";
 import { workspaceMigrations } from "./migrations.js";
 import { workspaceIssues } from "./schema.js";
 import {
@@ -317,6 +318,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           `%,${args.labelId},%`
         )
       );
+    }
+    if (args.filter) {
+      conditions.push(filterToSql(args.filter));
     }
     if (args.search) {
       const index = await this.ensureSearchIndex();

@@ -114,9 +114,7 @@ export async function removeIssueDocuments(
     where: { issueId },
     limit: 1000,
   });
-  for (const hit of result.hits) {
-    await remove(index, hit.id);
-  }
+  await Promise.all(result.hits.map((hit) => remove(index, hit.id)));
 }
 
 export async function searchIssues(

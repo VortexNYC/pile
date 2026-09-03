@@ -651,3 +651,32 @@ export const githubUsers = sqliteTable(
     ),
   ]
 );
+
+export const savedViews = sqliteTable(
+  "saved_views" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    workspaceId: text("workspace_id" as string)
+      .notNull()
+      .references(() => workspaces.id),
+    ownerId: text("owner_id" as string).notNull(),
+    name: text("name" as string).notNull(),
+    filter: text("filter" as string).notNull(),
+    search: text("search" as string),
+    sort: text("sort" as string),
+    columns: text("columns" as string),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("saved_views_workspace_idx" as string).on(table.workspaceId),
+    index("saved_views_owner_idx" as string).on(
+      table.workspaceId,
+      table.ownerId
+    ),
+  ]
+);

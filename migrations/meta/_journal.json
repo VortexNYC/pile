@@ -162,6 +162,20 @@
       "when": 1788475125718,
       "tag": "0022_equal_vulture",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1788476486293,
+      "tag": "0023_yummy_firestar",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1788476667530,
+      "tag": "0024_nappy_felicia_hardy",
+      "breakpoints": true
     }
   ]
 }

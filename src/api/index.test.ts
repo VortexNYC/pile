@@ -417,6 +417,66 @@ describe("API integration", () => {
     expect(byCommentBody.issues.length).toBe(1);
   });
 
+  it("creates saved views and applies them to issue lists", async () => {
+    const workspaceId = await seedWorkspace();
+    const token = await adminToken(workspaceId);
+
+    const todoIssue = await app.fetch(
+      request(`/workspaces/${workspaceId}/issues`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          title: "Todo issue",
+          description: "todo desc",
+          status: "todo",
+        }),
+      }),
+      env
+    );
+    expect(todoIssue.status).toBe(201);
+
+    await app.fetch(
+      request(`/workspaces/${workspaceId}/issues`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          title: "Done issue",
+          description: "done desc",
+          status: "done",
+        }),
+      }),
+      env
+    );
+
+    const filter = {
+      op: "eq",
+      field: "status",
+      value: "todo",
+    } as const;
+
+    const createView = await app.fetch(
+      request(`/workspaces/${workspaceId}/saved-views`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          name: "Todo only",
+          filter,
+        }),
+      }),
+      env
+    );
+    expect(createView.status).toBe(201);
+    const view = await createView.json<{ id: string }>();
+
+    const apply = await app.fetch(
+      request(`/workspaces/${workspaceId}/issues?view=${view.id}`, { token }),
+      env
+    );
+    expect(apply.status).toBe(200);
+    const applyBody = await apply.json<{ issues: unknown[] }>();
+    expect(applyBody.issues.length).toBe(1);
+  });
+
   it("creates notifications on issue creation and lists them", async () => {
     const db = createD1(env.D1);
     const workspaceId = await seedWorkspace();

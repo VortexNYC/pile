@@ -170,6 +170,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesWorkspaceIdSavedviewsId",
+    "description": "(DELETE /workspaces/{workspaceId}/saved-views/{id})",
+    "method": "DELETE",
+    "path": "/workspaces/{workspaceId}/saved-views/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "workspaceId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesWorkspaceIdStatesId",
     "description": "(DELETE /workspaces/{workspaceId}/states/{id})",
     "method": "DELETE",
@@ -369,6 +390,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "type": "string"
         },
         "identifier": {
+          "type": "string"
+        },
+        "view": {
           "type": "string"
         }
       },
@@ -685,6 +709,44 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "description": "(GET /workspaces/{workspaceId}/projects/{id})",
     "method": "GET",
     "path": "/workspaces/{workspaceId}/projects/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "workspaceId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesWorkspaceIdSavedviews",
+    "description": "(GET /workspaces/{workspaceId}/saved-views)",
+    "method": "GET",
+    "path": "/workspaces/{workspaceId}/saved-views",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "workspaceId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesWorkspaceIdSavedviewsId",
+    "description": "(GET /workspaces/{workspaceId}/saved-views/{id})",
+    "method": "GET",
+    "path": "/workspaces/{workspaceId}/saved-views/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1085,6 +1147,69 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "endDate": {
               "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "id",
+        "workspaceId"
+      ]
+    }
+  },
+  {
+    "name": "patchWorkspacesWorkspaceIdSavedviewsId",
+    "description": "(PATCH /workspaces/{workspaceId}/saved-views/{id})",
+    "method": "PATCH",
+    "path": "/workspaces/{workspaceId}/saved-views/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "filter": {
+              "nullable": true
+            },
+            "search": {
+              "type": "string"
+            },
+            "sort": {
+              "type": "object",
+              "nullable": true,
+              "properties": {
+                "field": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "direction": {
+                  "type": "string",
+                  "enum": [
+                    "asc",
+                    "desc"
+                  ]
+                }
+              },
+              "required": [
+                "field"
+              ]
+            },
+            "columns": {
+              "type": "array",
+              "nullable": true,
+              "items": {
+                "type": "string"
+              }
             }
           }
         }
@@ -1695,6 +1820,66 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "endDate": {
               "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ]
+        }
+      },
+      "required": [
+        "workspaceId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesWorkspaceIdSavedviews",
+    "description": "(POST /workspaces/{workspaceId}/saved-views)",
+    "method": "POST",
+    "path": "/workspaces/{workspaceId}/saved-views",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "filter": {
+              "nullable": true
+            },
+            "search": {
+              "type": "string"
+            },
+            "sort": {
+              "type": "object",
+              "properties": {
+                "field": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "direction": {
+                  "type": "string",
+                  "enum": [
+                    "asc",
+                    "desc"
+                  ]
+                }
+              },
+              "required": [
+                "field"
+              ]
+            },
+            "columns": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             }
           },
           "required": [
