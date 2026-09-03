@@ -4,6 +4,7 @@ This is the durable tracker for the open-source Linear alternative. Operational 
 
 ## Done
 
+- Better Auth human sign-in and workspace user mapping: workspace routes now accept workspace tokens _or_ Better Auth sessions; membership roles enforce permissions; `POST /workspaces` creates an owner membership.
 - `GET /workspaces/{id}/issues?identifier=KEY-123` lookup.
 - `POST /workspaces` create endpoint (with `key`).
 - GitHub assignee sync: map GitHub logins to Vortex users via github_users and set assigneeId on assigned/unassigned webhooks.
@@ -33,7 +34,6 @@ This is the durable tracker for the open-source Linear alternative. Operational 
 ## Next
 
 - Linear API / CLI / MCP / docs parity audit and gap mapping (#20).
-- Better Auth human sign-in and workspace user mapping.
 
 ## Later
 
