@@ -34,12 +34,12 @@ This is the durable tracker for the open-source Linear alternative. Operational 
 
 ## Next
 
-- Outbound webhooks and notification delivery.
-- Issue search and indexing (full-text + filter DSL).
-- Teams within a workspace (multi-team org model).
-- Jira import.
-- Initiatives and roadmaps.
-- Agent sessions and activities API.
+- Outbound webhooks and notification delivery (#22).
+- Issue search and indexing (#23).
+- Teams within a workspace (#24).
+- Jira import (#25).
+- Initiatives and roadmaps (#26).
+- Agent sessions and activities API (#27).
 
 ## Later
 
