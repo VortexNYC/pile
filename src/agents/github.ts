@@ -7,8 +7,8 @@ import {
   createGithubInstallation,
   deleteGithubInstallation,
   deleteGithubInstallationsByInstallationId,
+  findWorkspaceByRepo,
 } from "../global/github-installations.js";
-import { findRepoBranch } from "../global/repo-branches.js";
 import {
   createRepoIssue,
   deleteRepoIssue,
@@ -361,12 +361,14 @@ async function processPullRequest(
       ? "merged"
       : pull_request.state;
 
-  const record = await findRepoBranch(db, repo, branch);
-  if (!record) {
+  const workspaceRecord = await findWorkspaceByRepo(db, repo);
+  if (!workspaceRecord) {
     return c.json({ ok: true }, 200);
   }
 
-  const doId = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(record.workspaceId);
+  const doId = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(
+    workspaceRecord.workspaceId
+  );
   const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(doId);
   await stub.updatePrState(repo, branch, prUrl, prState, "github");
 
@@ -376,7 +378,7 @@ async function processPullRequest(
       deliveryId,
       "github",
       event,
-      record.workspaceId
+      workspaceRecord.workspaceId
     );
   }
 
@@ -416,7 +418,7 @@ async function processGitHubIssue(
 
   let workspaceId = extractWorkspaceIdFromLabels(issue.labels);
   if (!workspaceId) {
-    const record = await findRepoWorkspace(db, repo);
+    const record = await findWorkspaceByRepo(db, repo);
     workspaceId = record?.workspaceId;
   }
 

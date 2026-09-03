@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 
 import type { D1Client } from "./db.js";
-import { githubInstallations } from "./schema.js";
+import { githubInstallations, repoBranches } from "./schema.js";
 
 export function findGithubInstallation(db: D1Client, repo: string) {
   return db
@@ -37,4 +37,18 @@ export async function deleteGithubInstallationsByInstallationId(
   await db
     .delete(githubInstallations)
     .where(eq(githubInstallations.installationId, installationId));
+}
+
+export async function findWorkspaceByRepo(db: D1Client, repo: string) {
+  const fromBranch = await db
+    .select({ workspaceId: repoBranches.workspaceId })
+    .from(repoBranches)
+    .where(eq(repoBranches.repo, repo))
+    .get();
+  if (fromBranch) return fromBranch;
+  return db
+    .select({ workspaceId: githubInstallations.workspaceId })
+    .from(githubInstallations)
+    .where(eq(githubInstallations.repo, repo))
+    .get();
 }
