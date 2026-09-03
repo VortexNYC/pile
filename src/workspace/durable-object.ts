@@ -6,6 +6,11 @@ import { z } from "zod";
 
 import { createD1 } from "../global/db.js";
 import { createIssueHistory } from "../global/issue-history.js";
+import {
+  notifyIssueCreated,
+  notifyIssueDeleted,
+  notifyIssueUpdated,
+} from "../global/notify-issue.js";
 import { comments } from "../global/schema.js";
 import { getWorkspaceById } from "../global/workspaces.js";
 import type { AppEnv } from "../types/env.js";
@@ -197,6 +202,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       workspaceId: this.workspaceId,
       issue,
     });
+    this.ctx.waitUntil(
+      notifyIssueCreated(this.env, this.workspaceId, issue, actorId)
+    );
     await this.recordIssueHistory(
       issue.id,
       [{ field: "created", fromValue: null, toValue: issue.title }],
@@ -393,11 +401,15 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       workspaceId: this.workspaceId,
       issue,
     });
+    this.ctx.waitUntil(
+      notifyIssueUpdated(this.env, this.workspaceId, issue, actorId)
+    );
     return issue;
   }
 
-  async deleteIssue(id: string): Promise<boolean> {
+  async deleteIssue(id: string, actorId?: string): Promise<boolean> {
     await this.ready;
+    const old = await this.getIssue(id);
     const deleted = await this.db
       .delete(workspaceIssues)
       .where(eq(workspaceIssues.id, id))
@@ -409,6 +421,11 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       workspaceId: this.workspaceId,
       issueId: id,
     });
+    if (old) {
+      this.ctx.waitUntil(
+        notifyIssueDeleted(this.env, this.workspaceId, old, actorId)
+      );
+    }
     return true;
   }
 

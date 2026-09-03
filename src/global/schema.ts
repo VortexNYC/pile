@@ -476,6 +476,44 @@ export const outboundWebhookDeliveries = sqliteTable(
   ]
 );
 
+export const notifications = sqliteTable(
+  "notifications" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    workspaceId: text("workspace_id" as string)
+      .notNull()
+      .references(() => workspaces.id),
+    recipientId: text("recipient_id" as string).notNull(),
+    recipientType: text("recipient_type" as string)
+      .notNull()
+      .default("user"),
+    issueId: text("issue_id" as string).notNull(),
+    type: text("type" as string).notNull(),
+    read: integer("read" as string, { mode: "boolean" })
+      .notNull()
+      .default(false),
+    metadata: text("metadata" as string),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("notifications_recipient_idx" as string).on(
+      table.workspaceId,
+      table.recipientId,
+      table.recipientType,
+      table.read
+    ),
+    index("notifications_issue_idx" as string).on(
+      table.workspaceId,
+      table.issueId
+    ),
+  ]
+);
+
 export const user = sqliteTable("user" as string, {
   id: text("id" as string).primaryKey(),
   name: text("name" as string).notNull(),

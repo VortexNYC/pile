@@ -107,45 +107,52 @@ export async function deliverWebhooks(
   }
 
   const payload = JSON.stringify(event);
+
+  const results = await Promise.all(
+    subscriptions
+      .filter(
+        (sub) =>
+          sub.events === "*" || sub.events.split(",").includes(event.type)
+      )
+      .map(async (sub) => {
+        const deliveryId = crypto.randomUUID();
+        await db.insert(outboundWebhookDeliveries).values({
+          id: deliveryId,
+          workspaceId,
+          subscriptionId: sub.id,
+          event: event.type,
+          payload,
+          url: sub.url,
+          status: "pending",
+          attemptCount: 1,
+        });
+
+        const result = await attemptDelivery(env, {
+          id: deliveryId,
+          subscriptionId: sub.id,
+          url: sub.url,
+          payload,
+          event: event.type,
+          attemptCount: 1,
+        });
+
+        await db
+          .update(outboundWebhookDeliveries)
+          .set({
+            status: result.status,
+            statusCode: result.statusCode ?? null,
+            error: result.error ?? null,
+            updatedAt: new Date().toISOString(),
+          })
+          .where(eq(outboundWebhookDeliveries.id, deliveryId));
+
+        return result;
+      })
+  );
+
   let needsRetry = false;
   let retryAt: number | undefined;
-
-  for (const sub of subscriptions) {
-    if (sub.events !== "*" && !sub.events.split(",").includes(event.type)) {
-      continue;
-    }
-
-    const deliveryId = crypto.randomUUID();
-    await db.insert(outboundWebhookDeliveries).values({
-      id: deliveryId,
-      workspaceId,
-      subscriptionId: sub.id,
-      event: event.type,
-      payload,
-      url: sub.url,
-      status: "pending",
-      attemptCount: 1,
-    });
-
-    const result = await attemptDelivery(env, {
-      id: deliveryId,
-      subscriptionId: sub.id,
-      url: sub.url,
-      payload,
-      event: event.type,
-      attemptCount: 1,
-    });
-
-    await db
-      .update(outboundWebhookDeliveries)
-      .set({
-        status: result.status,
-        statusCode: result.statusCode ?? null,
-        error: result.error ?? null,
-        updatedAt: new Date().toISOString(),
-      })
-      .where(eq(outboundWebhookDeliveries.id, deliveryId));
-
+  for (const result of results) {
     if (result.status !== "delivered") {
       needsRetry = true;
       const candidate = Date.now() + retryDelayMs(1);
@@ -178,42 +185,45 @@ export async function retryWebhookDeliveries(
     return { hasMore: false };
   }
 
+  const results = await Promise.all(
+    remaining.map(async (row) => {
+      const attemptCount = row.attemptCount + 1;
+      await db
+        .update(outboundWebhookDeliveries)
+        .set({ attemptCount })
+        .where(eq(outboundWebhookDeliveries.id, row.id));
+
+      const result = await attemptDelivery(env, {
+        id: row.id,
+        subscriptionId: row.subscriptionId,
+        url: row.url,
+        payload: row.payload,
+        event: row.event,
+        attemptCount,
+      });
+
+      await db
+        .update(outboundWebhookDeliveries)
+        .set({
+          status: result.status,
+          statusCode: result.statusCode ?? null,
+          error: result.error ?? null,
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(outboundWebhookDeliveries.id, row.id));
+
+      return { attemptCount, result };
+    })
+  );
+
   let hasMore = false;
   let retryAt: number | undefined;
-
-  for (const row of remaining) {
-    const attemptCount = row.attemptCount + 1;
-    await db
-      .update(outboundWebhookDeliveries)
-      .set({ attemptCount })
-      .where(eq(outboundWebhookDeliveries.id, row.id));
-
-    const result = await attemptDelivery(env, {
-      id: row.id,
-      subscriptionId: row.subscriptionId,
-      url: row.url,
-      payload: row.payload,
-      event: row.event,
-      attemptCount,
-    });
-
-    await db
-      .update(outboundWebhookDeliveries)
-      .set({
-        status: result.status,
-        statusCode: result.statusCode ?? null,
-        error: result.error ?? null,
-        updatedAt: new Date().toISOString(),
-      })
-      .where(eq(outboundWebhookDeliveries.id, row.id));
-
-    if (result.status !== "delivered") {
-      if (attemptCount < MAX_ATTEMPTS) {
-        hasMore = true;
-        const candidate = Date.now() + retryDelayMs(attemptCount);
-        if (retryAt === undefined || candidate < retryAt) {
-          retryAt = candidate;
-        }
+  for (const { attemptCount, result } of results) {
+    if (result.status !== "delivered" && attemptCount < MAX_ATTEMPTS) {
+      hasMore = true;
+      const candidate = Date.now() + retryDelayMs(attemptCount);
+      if (retryAt === undefined || candidate < retryAt) {
+        retryAt = candidate;
       }
     }
   }

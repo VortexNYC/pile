@@ -622,6 +622,48 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesWorkspaceIdNotifications",
+    "description": "(GET /workspaces/{workspaceId}/notifications)",
+    "method": "GET",
+    "path": "/workspaces/{workspaceId}/notifications",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        },
+        "unreadOnly": {
+          "type": "string",
+          "description": "Only unread notifications"
+        },
+        "limit": {
+          "type": "string",
+          "description": "Max notifications to return"
+        }
+      },
+      "required": [
+        "workspaceId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesWorkspaceIdNotificationsUnreadcount",
+    "description": "(GET /workspaces/{workspaceId}/notifications/unread-count)",
+    "method": "GET",
+    "path": "/workspaces/{workspaceId}/notifications/unread-count",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "workspaceId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesWorkspaceIdProjects",
     "description": "(GET /workspaces/{workspaceId}/projects)",
     "method": "GET",
@@ -982,6 +1024,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string"
             }
           }
+        }
+      },
+      "required": [
+        "id",
+        "workspaceId"
+      ]
+    }
+  },
+  {
+    "name": "patchWorkspacesWorkspaceIdNotificationsIdRead",
+    "description": "(PATCH /workspaces/{workspaceId}/notifications/{id}/read)",
+    "method": "PATCH",
+    "path": "/workspaces/{workspaceId}/notifications/{id}/read",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
         }
       },
       "required": [
@@ -1579,6 +1642,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "linearToken",
             "teamId"
           ]
+        }
+      },
+      "required": [
+        "workspaceId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesWorkspaceIdNotificationsMarkallread",
+    "description": "(POST /workspaces/{workspaceId}/notifications/mark-all-read)",
+    "method": "POST",
+    "path": "/workspaces/{workspaceId}/notifications/mark-all-read",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
         }
       },
       "required": [

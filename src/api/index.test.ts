@@ -2,6 +2,11 @@ import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
 import { createD1 } from "../global/db.js";
+import {
+  createNotification,
+  getNotificationsForRecipient,
+} from "../global/notifications.js";
+import { user as userTable, workspaceMemberships } from "../global/schema.js";
 import { createWorkspaceToken } from "../global/tokens.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
@@ -25,15 +30,19 @@ async function seedWorkspace() {
 }
 
 async function adminToken(workspaceId: string) {
+  const token = await createAdminTokenRecord(workspaceId);
+  return token.token;
+}
+
+async function createAdminTokenRecord(workspaceId: string) {
   const db = createD1(env.D1);
-  const token = await createWorkspaceToken(
+  return createWorkspaceToken(
     db,
     workspaceId,
     "test-admin",
     "admin",
     env.TOKEN_HASH_SECRET
   );
-  return token.token;
 }
 
 function request(
@@ -406,5 +415,105 @@ describe("API integration", () => {
     expect(byComment.status).toBe(200);
     const byCommentBody = await byComment.json<{ issues: unknown[] }>();
     expect(byCommentBody.issues.length).toBe(1);
+  });
+
+  it("creates notifications on issue creation and lists them", async () => {
+    const db = createD1(env.D1);
+    const workspaceId = await seedWorkspace();
+    const tokenRecord = await createAdminTokenRecord(workspaceId);
+    const token = tokenRecord.token;
+
+    const userId = crypto.randomUUID();
+    const ts = new Date().toISOString();
+    const now = new Date();
+    await db.insert(userTable).values({
+      id: userId,
+      name: "Alice",
+      email: "alice@example.com",
+      emailVerified: false,
+      image: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.insert(workspaceMemberships).values({
+      id: crypto.randomUUID(),
+      workspaceId,
+      userId,
+      role: "member",
+      createdAt: ts,
+      updatedAt: ts,
+    });
+
+    const issue = await app.fetch(
+      request(`/workspaces/${workspaceId}/issues`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          title: "Notify me",
+          description: "Assigned issue",
+          assigneeId: userId,
+        }),
+      }),
+      env
+    );
+    expect(issue.status).toBe(201);
+    const issueData = await issue.json<{ id: string }>();
+
+    const userNotes = await getNotificationsForRecipient(
+      db,
+      workspaceId,
+      userId,
+      "user"
+    );
+    expect(userNotes.length).toBeGreaterThanOrEqual(1);
+    expect(userNotes[0].type).toBe("issue_created");
+    expect(userNotes[0].issueId).toBe(issueData.id);
+
+    await createNotification(db, {
+      workspaceId,
+      recipientId: tokenRecord.id,
+      recipientType: "agent",
+      issueId: issueData.id,
+      type: "issue_created",
+    });
+
+    const list = await app.fetch(
+      request(`/workspaces/${workspaceId}/notifications`, { token }),
+      env
+    );
+    expect(list.status).toBe(200);
+    const listBody = await list.json<{ notifications: unknown[] }>();
+    expect(listBody.notifications.length).toBe(1);
+
+    const count = await app.fetch(
+      request(`/workspaces/${workspaceId}/notifications/unread-count`, {
+        token,
+      }),
+      env
+    );
+    expect(count.status).toBe(200);
+    const countBody = await count.json<{ count: number }>();
+    expect(countBody.count).toBe(1);
+
+    const noteId = (listBody.notifications[0] as { id: string }).id;
+    const mark = await app.fetch(
+      request(`/workspaces/${workspaceId}/notifications/${noteId}/read`, {
+        method: "PATCH",
+        token,
+      }),
+      env
+    );
+    expect(mark.status).toBe(200);
+    const markBody = await mark.json<{ read: boolean }>();
+    expect(markBody.read).toBe(true);
+
+    const markAll = await app.fetch(
+      request(`/workspaces/${workspaceId}/notifications/mark-all-read`, {
+        method: "POST",
+        token,
+      }),
+      env
+    );
+    expect(markAll.status).toBe(204);
   });
 });

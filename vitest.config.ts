@@ -17,6 +17,7 @@ export default defineConfig({
         bindings: {
           TEST_MIGRATIONS: migrations,
           TOKEN_HASH_SECRET: "test-token-hash-secret-do-not-use-in-prod",
+          BETTER_AUTH_SECRET: "test-better-auth-secret-do-not-use-in-prod",
         },
       },
     }),

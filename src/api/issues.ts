@@ -293,8 +293,9 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(deleteIssueRoute, async (c) => {
     const { workspaceId, id } = c.req.valid("param");
+    const identity = c.get("workspaceIdentity");
     const stub = await getStub(c.env, workspaceId);
-    const deleted = await stub.deleteIssue(id);
+    const deleted = await stub.deleteIssue(id, identity.id);
     if (!deleted) {
       throw new VortexError({
         code: "NOT_FOUND",

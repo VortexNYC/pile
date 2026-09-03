@@ -11,10 +11,18 @@ import {
 import { createD1 } from "../global/db.js";
 import { getInstallationToken } from "../global/github-auth.js";
 import { findGithubInstallation } from "../global/github-installations.js";
+import { notifyCommentCreated } from "../global/notify-issue.js";
 import { findRepoIssueByIssueId } from "../global/repo-issues.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
+import type { WorkerEnv } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
+
+function getStub(env: WorkerEnv, workspaceId: string) {
+  return env.WORKSPACE_DURABLE_OBJECT.get(
+    env.WORKSPACE_DURABLE_OBJECT.idFromName(workspaceId)
+  );
+}
 
 const commentSchema = z.object({
   id: z.string(),
@@ -167,6 +175,17 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
     let item = created;
+
+    const issueStub = await getStub(c.env, workspaceId);
+    const issue = await issueStub.getIssue(issueId);
+    if (issue) {
+      await notifyCommentCreated(
+        c.env,
+        workspaceId,
+        issue,
+        c.var.workspaceIdentity.id
+      );
+    }
 
     const mapping = await findRepoIssueByIssueId(db, issueId);
     if (mapping) {
