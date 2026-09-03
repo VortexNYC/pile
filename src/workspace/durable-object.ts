@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { createD1 } from "../global/db.js";
 import { createIssueHistory } from "../global/issue-history.js";
+import { getWorkspaceById } from "../global/workspaces.js";
 import type { AppEnv } from "../types/env.js";
 import type {
   Issue,
@@ -123,6 +124,19 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const status = input.status ?? "backlog";
     const priority = input.priority ?? "medium";
 
+    const d1 = createD1(this.env.D1);
+    const workspace = await getWorkspaceById(d1, this.workspaceId);
+    let number: number | null = null;
+    let identifier: string | null = null;
+    if (workspace?.key) {
+      const last = await this.db
+        .select({ number: sql<number | null>`MAX(number)` })
+        .from(workspaceIssues)
+        .get();
+      number = (last?.number ?? 0) + 1;
+      identifier = `${workspace.key}-${number}`;
+    }
+
     const issue = await this.db
       .insert(workspaceIssues)
       .values({
@@ -136,6 +150,8 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         projectId: input.projectId ?? null,
         cycleId: input.cycleId ?? null,
         labelIds: input.labelIds ?? null,
+        number,
+        identifier,
         repo: input.repo ?? null,
         branch: input.branch ?? null,
         prUrl: null,

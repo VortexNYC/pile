@@ -14,6 +14,7 @@ const workspaceSchema = z.object({
   id: z.string(),
   name: z.string(),
   slug: z.string(),
+  key: z.string().nullable(),
   ownerId: z.string(),
   createdAt: z.string(),
   updatedAt: z.string(),

@@ -7,6 +7,7 @@ export const workspaces = sqliteTable("workspaces" as string, {
   slug: text("slug" as string)
     .notNull()
     .unique(),
+  key: text("key" as string).unique(),
   ownerId: text("owner_id" as string).notNull(),
   createdAt: text("created_at" as string)
     .notNull()

@@ -127,6 +127,13 @@
       "when": 1788460562827,
       "tag": "0017_wealthy_black_cat",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1788460949843,
+      "tag": "0018_wise_magma",
+      "breakpoints": true
     }
   ]
 }

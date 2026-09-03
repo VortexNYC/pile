@@ -58,6 +58,14 @@
             "type": "string",
             "nullable": true
           },
+          "number": {
+            "type": "number",
+            "nullable": true
+          },
+          "identifier": {
+            "type": "string",
+            "nullable": true
+          },
           "repo": {
             "type": "string",
             "nullable": true
@@ -92,6 +100,8 @@
           "projectId",
           "cycleId",
           "labelIds",
+          "number",
+          "identifier",
           "repo",
           "branch",
           "prUrl",
@@ -131,6 +141,10 @@
                           "slug": {
                             "type": "string"
                           },
+                          "key": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "ownerId": {
                             "type": "string"
                           },
@@ -145,6 +159,7 @@
                           "id",
                           "name",
                           "slug",
+                          "key",
                           "ownerId",
                           "createdAt",
                           "updatedAt"
@@ -194,6 +209,10 @@
                     "slug": {
                       "type": "string"
                     },
+                    "key": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "ownerId": {
                       "type": "string"
                     },
@@ -208,6 +227,7 @@
                     "id",
                     "name",
                     "slug",
+                    "key",
                     "ownerId",
                     "createdAt",
                     "updatedAt"
@@ -251,6 +271,10 @@
                     "slug": {
                       "type": "string"
                     },
+                    "key": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "ownerId": {
                       "type": "string"
                     },
@@ -265,6 +289,7 @@
                     "id",
                     "name",
                     "slug",
+                    "key",
                     "ownerId",
                     "createdAt",
                     "updatedAt"

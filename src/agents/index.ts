@@ -43,6 +43,8 @@ export async function dispatchAgent(
     projectId: null,
     cycleId: null,
     labelIds: null,
+    number: null,
+    identifier: null,
     repo: null,
     branch: null,
     prUrl: null,

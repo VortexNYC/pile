@@ -31,6 +31,7 @@ export interface paths {
                                 id: string;
                                 name: string;
                                 slug: string;
+                                key: string | null;
                                 ownerId: string;
                                 createdAt: string;
                                 updatedAt: string;
@@ -76,6 +77,7 @@ export interface paths {
                             id: string;
                             name: string;
                             slug: string;
+                            key: string | null;
                             ownerId: string;
                             createdAt: string;
                             updatedAt: string;
@@ -120,6 +122,7 @@ export interface paths {
                             id: string;
                             name: string;
                             slug: string;
+                            key: string | null;
                             ownerId: string;
                             createdAt: string;
                             updatedAt: string;
@@ -2383,6 +2386,8 @@ export interface components {
             projectId: string | null;
             cycleId: string | null;
             labelIds: string | null;
+            number: number | null;
+            identifier: string | null;
             repo: string | null;
             branch: string | null;
             prUrl: string | null;

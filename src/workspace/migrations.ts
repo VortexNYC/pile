@@ -11,6 +11,8 @@ const v1 = `CREATE TABLE IF NOT EXISTS issues (
   project_id TEXT,
   cycle_id TEXT,
   label_ids TEXT,
+  number INTEGER,
+  identifier TEXT,
   repo TEXT,
   branch TEXT,
   pr_url TEXT,
@@ -25,7 +27,9 @@ CREATE INDEX IF NOT EXISTS idx_issues_repo_branch ON issues (repo, branch)
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_issues_created_at_id ON issues (created_at DESC, id DESC)
 --> statement-breakpoint
-CREATE INDEX IF NOT EXISTS idx_issues_priority ON issues (priority, created_at DESC)`;
+CREATE INDEX IF NOT EXISTS idx_issues_priority ON issues (priority, created_at DESC)
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS idx_issues_identifier ON issues (workspace_id, identifier)`;
 
 export const workspaceMigrations = {
   journal: {

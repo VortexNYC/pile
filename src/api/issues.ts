@@ -54,6 +54,8 @@ const issueApiSchema = z
     projectId: z.string().nullable(),
     cycleId: z.string().nullable(),
     labelIds: z.string().nullable(),
+    number: z.number().nullable(),
+    identifier: z.string().nullable(),
     repo: z.string().nullable(),
     branch: z.string().nullable(),
     prUrl: z.string().nullable(),

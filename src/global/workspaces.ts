@@ -20,6 +20,7 @@ export async function createWorkspace(
   values: {
     name: string;
     slug: string;
+    key?: string;
     ownerId: string;
   }
 ) {
@@ -29,6 +30,7 @@ export async function createWorkspace(
     id,
     name: values.name,
     slug: values.slug,
+    key: values.key ?? null,
     ownerId: values.ownerId,
     createdAt: ts,
     updatedAt: ts,

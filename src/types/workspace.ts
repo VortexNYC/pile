@@ -52,6 +52,8 @@ export interface Issue {
   projectId: Id | null;
   cycleId: Id | null;
   labelIds: string | null;
+  number: number | null;
+  identifier: string | null;
   repo: string | null;
   branch: string | null;
   prUrl: string | null;
