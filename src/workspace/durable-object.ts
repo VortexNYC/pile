@@ -332,19 +332,11 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   async deleteIssue(id: string): Promise<boolean> {
     await this.ready;
-    await this.db
+    const deleted = await this.db
       .delete(workspaceIssues)
       .where(eq(workspaceIssues.id, id))
-      .run();
-    const changes = this.db.$client.sql.exec("SELECT changes() AS changes");
-    const rows = Array.from(changes);
-    const first = rows[0];
-    const deleted =
-      first !== undefined &&
-      typeof first === "object" &&
-      "changes" in first &&
-      typeof first.changes === "number" &&
-      first.changes > 0;
+      .returning()
+      .get();
     if (!deleted) return false;
     await this.emit({
       type: "issue.deleted",
