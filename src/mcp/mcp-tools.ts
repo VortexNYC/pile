@@ -346,6 +346,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         },
         "search": {
           "type": "string"
+        },
+        "identifier": {
+          "type": "string"
         }
       },
       "required": [
@@ -986,6 +989,41 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         "id",
         "workspaceId"
       ]
+    }
+  },
+  {
+    "name": "postWorkspaces",
+    "description": "(POST /workspaces)",
+    "method": "POST",
+    "path": "/workspaces",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "slug": {
+              "type": "string",
+              "minLength": 1
+            },
+            "key": {
+              "type": "string"
+            },
+            "ownerId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "slug",
+            "ownerId"
+          ]
+        }
+      }
     }
   },
   {

@@ -3,6 +3,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 
 import { createD1 } from "../global/db.js";
 import {
+  createWorkspace,
   getWorkspaceById,
   getWorkspaceBySlug,
   listWorkspaces,
@@ -18,6 +19,34 @@ const workspaceSchema = z.object({
   ownerId: z.string(),
   createdAt: z.string(),
   updatedAt: z.string(),
+});
+
+const createWorkspaceRoute = createRoute({
+  method: "post",
+  path: "/workspaces",
+  tags: ["workspaces"],
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            name: z.string().min(1),
+            slug: z.string().min(1),
+            key: z.string().optional(),
+            ownerId: z.string(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "Workspace created",
+      content: {
+        "application/json": { schema: workspaceSchema },
+      },
+    },
+  },
 });
 
 const listWorkspacesRoute = createRoute({
@@ -72,6 +101,18 @@ const getWorkspaceBySlugRoute = createRoute({
 });
 
 export function registerWorkspaceRoutes(app: OpenAPIHono<AppContext>) {
+  app.openapi(createWorkspaceRoute, async (c) => {
+    const input = c.req.valid("json");
+    const db = createD1(c.env.D1);
+    const item = await createWorkspace(db, {
+      name: input.name,
+      slug: input.slug,
+      key: input.key,
+      ownerId: input.ownerId,
+    });
+    return c.json(item, 201);
+  });
+
   app.openapi(listWorkspacesRoute, async (c) => {
     const db = createD1(c.env.D1);
     const items = await listWorkspaces(db);

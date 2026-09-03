@@ -115,6 +115,86 @@
   },
   "paths": {
     "/workspaces": {
+      "post": {
+        "tags": [
+          "workspaces"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "slug": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "key": {
+                    "type": "string"
+                  },
+                  "ownerId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name",
+                  "slug",
+                  "ownerId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Workspace created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "slug": {
+                      "type": "string"
+                    },
+                    "key": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "ownerId": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "slug",
+                    "key",
+                    "ownerId",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
       "get": {
         "tags": [
           "workspaces"
@@ -571,6 +651,14 @@
             },
             "required": false,
             "name": "search",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "identifier",
             "in": "query"
           }
         ],

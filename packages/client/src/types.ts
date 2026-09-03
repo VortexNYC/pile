@@ -42,7 +42,43 @@ export interface paths {
             };
         };
         put?: never;
-        post?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        name: string;
+                        slug: string;
+                        key?: string;
+                        ownerId: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Workspace created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            name: string;
+                            slug: string;
+                            key: string | null;
+                            ownerId: string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -274,6 +310,7 @@ export interface paths {
                     cycleId?: string;
                     labelId?: string;
                     search?: string;
+                    identifier?: string;
                 };
                 header?: never;
                 path: {

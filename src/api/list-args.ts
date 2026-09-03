@@ -21,6 +21,7 @@ export const listIssuesQuerySchema = z.object({
   cycleId: z.string().optional(),
   labelId: z.string().optional(),
   search: z.string().optional(),
+  identifier: z.string().optional(),
 });
 
 export type ListIssuesQuery = z.infer<typeof listIssuesQuerySchema>;

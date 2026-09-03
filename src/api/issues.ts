@@ -207,8 +207,12 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listIssuesRoute, async (c) => {
     const { workspaceId } = c.req.valid("param");
     const query = c.req.valid("query");
-    const args = toListArgs(query);
     const stub = await getStub(c.env, workspaceId);
+    if (query.identifier) {
+      const issue = await stub.getIssueByIdentifier(query.identifier);
+      return c.json({ issues: issue ? [issue] : [] });
+    }
+    const args = toListArgs(query);
     const issues = await stub.listIssues(args);
     const nextCursor =
       issues.length === query.limit && issues.length > 0
