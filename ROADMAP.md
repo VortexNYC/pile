@@ -4,6 +4,7 @@ This is the durable tracker for the open-source Linear alternative. Operational 
 
 ## Done
 
+- Linear API / CLI / MCP / docs parity audit and gap mapping (#20): `docs/linear-parity.md` maps all major Linear domains to Vortex status and identifies the next slices.
 - Better Auth human sign-in and workspace user mapping: workspace routes now accept workspace tokens _or_ Better Auth sessions; membership roles enforce permissions; `POST /workspaces` creates an owner membership.
 - `GET /workspaces/{id}/issues?identifier=KEY-123` lookup.
 - `POST /workspaces` create endpoint (with `key`).
@@ -33,14 +34,18 @@ This is the durable tracker for the open-source Linear alternative. Operational 
 
 ## Next
 
-- Linear API / CLI / MCP / docs parity audit and gap mapping (#20).
+- Outbound webhooks and notification delivery.
+- Issue search and indexing (full-text + filter DSL).
+- Teams within a workspace (multi-team org model).
+- Jira import.
+- Initiatives and roadmaps.
+- Agent sessions and activities API.
 
 ## Later
 
 - Self-host the issue tracker and use it as the source of truth for this project (#21).
 - GitHub check run sync.
-- Agent sessions and activities API.
-- Search and indexing.
-- Notifications and outbound webhooks.
 - Billing and metering.
+- Published docs site and full CLI parity.
+- Slack / GitLab / Zendesk / Intercom integrations.
 - Frontend (after backend is solid).
