@@ -1027,6 +1027,34 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesWorkspaceIdGithubInstall",
+    "description": "(POST /workspaces/{workspaceId}/github/install)",
+    "method": "POST",
+    "path": "/workspaces/{workspaceId}/github/install",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "installationId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "installationId"
+          ]
+        }
+      },
+      "required": [
+        "workspaceId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesWorkspaceIdIssues",
     "description": "(POST /workspaces/{workspaceId}/issues)",
     "method": "POST",

@@ -13,7 +13,13 @@ export async function getInstallationToken(
   const privateKey = env.GITHUB_PRIVATE_KEY;
   if (!appId || !privateKey) return undefined;
 
-  const key = await importPKCS8(privateKey, "RS256");
+  let key: CryptoKey;
+  try {
+    key = await importPKCS8(privateKey, "RS256");
+  } catch {
+    return undefined;
+  }
+
   const now = Math.floor(Date.now() / 1000);
   const jwt = await new SignJWT({})
     .setProtectedHeader({ alg: "RS256" })

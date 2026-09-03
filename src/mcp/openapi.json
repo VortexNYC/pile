@@ -2980,6 +2980,71 @@
         }
       }
     },
+    "/workspaces/{workspaceId}/github/install": {
+      "post": {
+        "tags": [
+          "github"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "workspaceId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "installationId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "installationId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Installed repositories",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "repos": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "full_name": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "full_name"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "repos"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/workspaces/{workspaceId}/issues/{issueId}/history": {
       "get": {
         "tags": [
