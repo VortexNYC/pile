@@ -1,13 +1,28 @@
 import type { FilterCondition } from "../workspace/filter.js";
 import type { Id, Timestamp } from "./index.js";
 
-export type IssueStatus =
-  | "backlog"
-  | "todo"
-  | "in_progress"
-  | "done"
-  | "canceled";
-export type IssuePriority = "low" | "medium" | "high" | "urgent";
+export const ISSUE_STATUSES = [
+  "triage",
+  "backlog",
+  "todo",
+  "in_progress",
+  "done",
+  "canceled",
+] as const;
+export type IssueStatus = (typeof ISSUE_STATUSES)[number];
+
+export const ISSUE_PRIORITIES = ["low", "medium", "high", "urgent"] as const;
+export type IssuePriority = (typeof ISSUE_PRIORITIES)[number];
+
+export const ISSUE_RESOLUTIONS = [
+  "duplicate",
+  "not_planned",
+  "intended_behavior",
+  "not_reproducible",
+  "obsolete",
+  "resolved",
+] as const;
+export type IssueResolution = (typeof ISSUE_RESOLUTIONS)[number];
 
 export interface IssueInput {
   id?: Id;
@@ -16,6 +31,7 @@ export interface IssueInput {
   description?: string;
   status?: IssueStatus;
   priority?: IssuePriority;
+  resolution?: IssueResolution | null;
   assigneeId?: string | null;
   projectId?: string | null;
   cycleId?: string | null;
@@ -54,6 +70,7 @@ export interface Issue {
   description: string | null;
   status: IssueStatus;
   priority: IssuePriority;
+  resolution: IssueResolution | null;
   assigneeId: Id | null;
   projectId: Id | null;
   cycleId: Id | null;

@@ -15,13 +15,17 @@ import {
 import { comments } from "../global/schema.js";
 import { getDefaultTeam, getTeamById } from "../global/teams.js";
 import { getWorkspaceById } from "../global/workspaces.js";
+import { VortexError } from "../platform/errors.js";
 import type { AppEnv } from "../types/env.js";
-import type {
-  Comment,
-  Issue,
-  IssueInput,
-  ListIssuesArgs,
-  RealtimeEvent,
+import {
+  ISSUE_RESOLUTIONS,
+  type Comment,
+  type Issue,
+  type IssueInput,
+  type IssueResolution,
+  type IssueStatus,
+  type ListIssuesArgs,
+  type RealtimeEvent,
 } from "../types/workspace.js";
 import { filterToSql } from "./filter.js";
 import { workspaceMigrations } from "./migrations.js";
@@ -41,6 +45,28 @@ import {
 import { deliverWebhooks, retryWebhookDeliveries } from "./webhooks.js";
 
 type IssueKey = keyof Issue & keyof IssueInput;
+
+const TERMINAL_STATUSES: ReadonlyArray<IssueStatus> = ["done", "canceled"];
+
+function validateIssueResolution(
+  status: IssueStatus,
+  resolution: IssueResolution | null
+): IssueResolution | null {
+  if (resolution === null) return null;
+  if (!ISSUE_RESOLUTIONS.some((r) => r === resolution)) {
+    throw VortexError.fromCode(
+      "BAD_REQUEST",
+      `Invalid issue resolution: ${resolution}`
+    );
+  }
+  if (!TERMINAL_STATUSES.some((s) => s === status)) {
+    throw VortexError.fromCode(
+      "BAD_REQUEST",
+      `Resolution can only be set when status is done or canceled, got ${status}`
+    );
+  }
+  return resolution;
+}
 
 export class WorkspaceDO extends DurableObject<AppEnv> {
   private organizationId: string;
@@ -214,6 +240,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const id = input.id ?? crypto.randomUUID();
     const status = input.status ?? "backlog";
     const priority = input.priority ?? "medium";
+    const resolution = validateIssueResolution(
+      status,
+      input.resolution ?? null
+    );
 
     const d1 = createD1(this.env.D1);
     const workspace = await getWorkspaceById(d1, this.organizationId);
@@ -245,6 +275,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         description: input.description ?? null,
         status,
         priority,
+        resolution,
         assigneeId: input.assigneeId ?? null,
         projectId: input.projectId ?? null,
         cycleId: input.cycleId ?? null,
@@ -400,6 +431,18 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const old = await this.getIssue(id);
     if (!old) return undefined;
 
+    const newStatus = patch.status ?? old.status;
+    const newResolution =
+      patch.resolution !== undefined
+        ? patch.resolution
+        : patch.status !== undefined && newStatus !== old.status
+          ? null
+          : old.resolution;
+    const resolvedResolution = validateIssueResolution(
+      newStatus,
+      newResolution
+    );
+
     const set: Partial<Issue> = {
       updatedAt: new Date().toISOString(),
     };
@@ -410,6 +453,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       { key: "description", field: "description" },
       { key: "status", field: "status" },
       { key: "priority", field: "priority" },
+      { key: "resolution", field: "resolution" },
       { key: "assigneeId", field: "assignee_id" },
       { key: "projectId", field: "project_id" },
       { key: "cycleId", field: "cycle_id" },
@@ -438,6 +482,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (patch.description !== undefined) set.description = patch.description;
     if (patch.status !== undefined) set.status = patch.status;
     if (patch.priority !== undefined) set.priority = patch.priority;
+    if (patch.resolution !== undefined || patch.status !== undefined) {
+      set.resolution = resolvedResolution;
+    }
     if (patch.assigneeId !== undefined) set.assigneeId = patch.assigneeId;
     if (patch.projectId !== undefined) set.projectId = patch.projectId;
     if (patch.cycleId !== undefined) set.cycleId = patch.cycleId;

@@ -1,6 +1,11 @@
 import { z } from "zod";
 
-import type { IssueCursor, ListIssuesArgs } from "../types/workspace.js";
+import {
+  ISSUE_PRIORITIES,
+  ISSUE_STATUSES,
+  type IssueCursor,
+  type ListIssuesArgs,
+} from "../types/workspace.js";
 
 export const DEFAULT_LIMIT = 25;
 export const MAX_LIMIT = 100;
@@ -13,10 +18,8 @@ export const listIssuesQuerySchema = z.object({
   }, z.number().int().min(1).max(MAX_LIMIT)),
   cursor: z.string().optional(),
   teamId: z.string().optional(),
-  status: z
-    .enum(["backlog", "todo", "in_progress", "done", "canceled"])
-    .optional(),
-  priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
+  status: z.enum(ISSUE_STATUSES).optional(),
+  priority: z.enum(ISSUE_PRIORITIES).optional(),
   assigneeId: z.string().optional(),
   projectId: z.string().optional(),
   cycleId: z.string().optional(),

@@ -79,12 +79,78 @@ describe("WorkspaceDO", () => {
     expect(issue.title).toBe("Test issue");
     expect(issue.status).toBe("backlog");
     expect(issue.priority).toBe("medium");
+    expect(issue.resolution).toBeNull();
 
     const issues = await withWorkspace(stub, (instance) =>
       instance.listIssues()
     );
     expect(issues.length).toBeGreaterThan(0);
     expect(issues[0].id).toBe(issue.id);
+  });
+
+  it("supports triage status and resolution semantics", async () => {
+    const stub = getStub();
+    const triage = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Triage me", status: "triage" })
+    );
+    expect(triage.status).toBe("triage");
+    expect(triage.resolution).toBeNull();
+
+    const closed = await withWorkspace(stub, (instance) =>
+      instance.createIssue({
+        title: "Done issue",
+        status: "done",
+        resolution: "resolved",
+      })
+    );
+    expect(closed.status).toBe("done");
+    expect(closed.resolution).toBe("resolved");
+
+    await expect(
+      withWorkspace(stub, (instance) =>
+        instance.createIssue({
+          title: "Bad resolution",
+          status: "todo",
+          resolution: "not_planned",
+        })
+      )
+    ).rejects.toThrow();
+  });
+
+  it("clears and validates resolution on status change", async () => {
+    const stub = getStub();
+    const issue = await withWorkspace(stub, (instance) =>
+      instance.createIssue({
+        title: "Resolve then reopen",
+        status: "canceled",
+        resolution: "not_planned",
+      })
+    );
+    expect(issue.resolution).toBe("not_planned");
+
+    const reopened = await withWorkspace(stub, (instance) =>
+      instance.updateIssue(issue.id, { status: "todo" })
+    );
+    expect(reopened?.status).toBe("todo");
+    expect(reopened?.resolution).toBeNull();
+
+    const resolved = await withWorkspace(stub, (instance) =>
+      instance.updateIssue(issue.id, {
+        status: "done",
+        resolution: "resolved",
+      })
+    );
+    expect(resolved?.status).toBe("done");
+    expect(resolved?.resolution).toBe("resolved");
+
+    await expect(
+      withWorkspace(stub, (instance) =>
+        instance.updateIssue(issue.id, {
+          status: "in_progress",
+          resolution: "obsolete",
+        })
+      )
+    ).rejects.toThrow();
   });
 
   it("gets an issue by id", async () => {

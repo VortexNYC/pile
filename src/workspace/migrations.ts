@@ -74,15 +74,19 @@ CREATE UNIQUE INDEX idx_issues_identifier ON issues (organization_id, identifier
 --> statement-breakpoint
 CREATE UNIQUE INDEX idx_issues_team_number ON issues (organization_id, team_id, number)`;
 
+const v3 = `ALTER TABLE issues ADD COLUMN resolution TEXT`;
+
 export const workspaceMigrations = {
   journal: {
     entries: [
       { idx: 0, when: 0, tag: "v1", breakpoints: false },
       { idx: 1, when: 1, tag: "v2", breakpoints: true },
+      { idx: 2, when: 2, tag: "v3", breakpoints: false },
     ],
   },
   migrations: {
     m0000: v1,
     m0001: v2,
+    m0002: v3,
   },
 } satisfies Parameters<typeof migrate>[1];

@@ -314,7 +314,7 @@ export interface paths {
                     limit?: number | null;
                     cursor?: string;
                     teamId?: string;
-                    status?: "backlog" | "todo" | "in_progress" | "done" | "canceled";
+                    status?: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
                     priority?: "low" | "medium" | "high" | "urgent";
                     assigneeId?: string;
                     projectId?: string;
@@ -364,9 +364,11 @@ export interface paths {
                         teamId?: string;
                         description?: string;
                         /** @enum {string} */
-                        status?: "backlog" | "todo" | "in_progress" | "done" | "canceled";
+                        status?: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
                         /** @enum {string} */
                         priority?: "low" | "medium" | "high" | "urgent";
+                        /** @enum {string|null} */
+                        resolution?: "duplicate" | "not_planned" | "intended_behavior" | "not_reproducible" | "obsolete" | "resolved" | null;
                         assigneeId?: string;
                         projectId?: string;
                         cycleId?: string;
@@ -469,9 +471,11 @@ export interface paths {
                         teamId?: string;
                         description?: string;
                         /** @enum {string} */
-                        status?: "backlog" | "todo" | "in_progress" | "done" | "canceled";
+                        status?: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
                         /** @enum {string} */
                         priority?: "low" | "medium" | "high" | "urgent";
+                        /** @enum {string|null} */
+                        resolution?: "duplicate" | "not_planned" | "intended_behavior" | "not_reproducible" | "obsolete" | "resolved" | null;
                         assigneeId?: string;
                         projectId?: string;
                         cycleId?: string;
@@ -4354,9 +4358,11 @@ export interface components {
             title: string;
             description: string | null;
             /** @enum {string} */
-            status: "backlog" | "todo" | "in_progress" | "done" | "canceled";
+            status: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
             /** @enum {string} */
             priority: "low" | "medium" | "high" | "urgent";
+            /** @enum {string|null} */
+            resolution: "duplicate" | "not_planned" | "intended_behavior" | "not_reproducible" | "obsolete" | "resolved" | null;
             assigneeId: string | null;
             projectId: string | null;
             cycleId: string | null;

@@ -29,6 +29,7 @@
           "status": {
             "type": "string",
             "enum": [
+              "triage",
               "backlog",
               "todo",
               "in_progress",
@@ -43,6 +44,19 @@
               "medium",
               "high",
               "urgent"
+            ]
+          },
+          "resolution": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "duplicate",
+              "not_planned",
+              "intended_behavior",
+              "not_reproducible",
+              "obsolete",
+              "resolved",
+              null
             ]
           },
           "assigneeId": {
@@ -100,6 +114,7 @@
           "description",
           "status",
           "priority",
+          "resolution",
           "assigneeId",
           "projectId",
           "cycleId",
@@ -613,6 +628,7 @@
             "schema": {
               "type": "string",
               "enum": [
+                "triage",
                 "backlog",
                 "todo",
                 "in_progress",
@@ -756,6 +772,7 @@
                   "status": {
                     "type": "string",
                     "enum": [
+                      "triage",
                       "backlog",
                       "todo",
                       "in_progress",
@@ -770,6 +787,19 @@
                       "medium",
                       "high",
                       "urgent"
+                    ]
+                  },
+                  "resolution": {
+                    "type": "string",
+                    "nullable": true,
+                    "enum": [
+                      "duplicate",
+                      "not_planned",
+                      "intended_behavior",
+                      "not_reproducible",
+                      "obsolete",
+                      "resolved",
+                      null
                     ]
                   },
                   "assigneeId": {
@@ -891,6 +921,7 @@
                   "status": {
                     "type": "string",
                     "enum": [
+                      "triage",
                       "backlog",
                       "todo",
                       "in_progress",
@@ -905,6 +936,19 @@
                       "medium",
                       "high",
                       "urgent"
+                    ]
+                  },
+                  "resolution": {
+                    "type": "string",
+                    "nullable": true,
+                    "enum": [
+                      "duplicate",
+                      "not_planned",
+                      "intended_behavior",
+                      "not_reproducible",
+                      "obsolete",
+                      "resolved",
+                      null
                     ]
                   },
                   "assigneeId": {

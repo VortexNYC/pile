@@ -15,11 +15,28 @@ export const workspaceIssues = sqliteTable(
     title: text("title" as string).notNull(),
     description: text("description" as string),
     status: text("status" as string, {
-      enum: ["backlog", "todo", "in_progress", "done", "canceled"] as const,
+      enum: [
+        "triage",
+        "backlog",
+        "todo",
+        "in_progress",
+        "done",
+        "canceled",
+      ] as const,
     }).notNull(),
     priority: text("priority" as string, {
       enum: ["low", "medium", "high", "urgent"] as const,
     }).notNull(),
+    resolution: text("resolution" as string, {
+      enum: [
+        "duplicate",
+        "not_planned",
+        "intended_behavior",
+        "not_reproducible",
+        "obsolete",
+        "resolved",
+      ] as const,
+    }),
     assigneeId: text("assignee_id" as string),
     projectId: text("project_id" as string),
     cycleId: text("cycle_id" as string),

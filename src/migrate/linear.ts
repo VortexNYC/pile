@@ -447,6 +447,7 @@ function mapStatus(state: LinearState | null): IssueStatus | undefined {
   if (!state) return undefined;
 
   const typeMap: Record<string, IssueStatus> = {
+    triage: "triage",
     backlog: "backlog",
     unstarted: "todo",
     started: "in_progress",

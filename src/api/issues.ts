@@ -18,7 +18,15 @@ import { VortexError } from "../platform/errors.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
-import type { Issue, IssueInput } from "../types/workspace.js";
+import {
+  ISSUE_PRIORITIES,
+  ISSUE_RESOLUTIONS,
+  ISSUE_STATUSES,
+  type Issue,
+  type IssueInput,
+  type IssueResolution,
+  type IssueStatus,
+} from "../types/workspace.js";
 import { filterConditionSchema } from "../workspace/filter.js";
 import { agentSessionSchema } from "./agent-sessions.js";
 import {
@@ -85,14 +93,34 @@ async function assertTeamAccess(
   return resolvedTeamId;
 }
 
+const TERMINAL_STATUSES: ReadonlyArray<IssueStatus> = ["done", "canceled"];
+
+function validateIssueState(
+  status: IssueStatus,
+  resolution: IssueResolution | null | undefined
+): void {
+  if (resolution === undefined || resolution === null) return;
+  if (!ISSUE_RESOLUTIONS.some((r) => r === resolution)) {
+    throw VortexError.fromCode(
+      "BAD_REQUEST",
+      `Invalid issue resolution: ${resolution}`
+    );
+  }
+  if (!TERMINAL_STATUSES.some((s) => s === status)) {
+    throw VortexError.fromCode(
+      "BAD_REQUEST",
+      `Resolution can only be set when status is done or canceled, got ${status}`
+    );
+  }
+}
+
 const createIssueSchema = z.object({
   title: z.string().min(1),
   teamId: z.string().optional(),
   description: z.string().optional(),
-  status: z
-    .enum(["backlog", "todo", "in_progress", "done", "canceled"])
-    .optional(),
-  priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
+  status: z.enum(ISSUE_STATUSES).optional(),
+  priority: z.enum(ISSUE_PRIORITIES).optional(),
+  resolution: z.enum(ISSUE_RESOLUTIONS).nullable().optional(),
   assigneeId: z.string().optional(),
   projectId: z.string().optional(),
   cycleId: z.string().optional(),
@@ -110,8 +138,9 @@ const issueApiSchema = z
     teamId: z.string(),
     title: z.string(),
     description: z.string().nullable(),
-    status: z.enum(["backlog", "todo", "in_progress", "done", "canceled"]),
-    priority: z.enum(["low", "medium", "high", "urgent"]),
+    status: z.enum(ISSUE_STATUSES),
+    priority: z.enum(ISSUE_PRIORITIES),
+    resolution: z.enum(ISSUE_RESOLUTIONS).nullable(),
     assigneeId: z.string().nullable(),
     projectId: z.string().nullable(),
     cycleId: z.string().nullable(),
@@ -331,6 +360,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       input.teamId,
       identity
     );
+    validateIssueState(input.status ?? "backlog", input.resolution);
     const stub = await getStub(c.env, organizationId);
     const issue = await stub.createIssue({ ...input, teamId }, identity.id);
     if (issue.repo && issue.branch) {
@@ -386,6 +416,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         identity
       );
     }
+    validateIssueState(input.status ?? existing.status, input.resolution);
     const issue = await stub.updateIssue(id, { ...input, teamId }, identity.id);
     if (!issue) {
       throw new VortexError({

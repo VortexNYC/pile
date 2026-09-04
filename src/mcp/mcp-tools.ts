@@ -524,6 +524,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         "status": {
           "type": "string",
           "enum": [
+            "triage",
             "backlog",
             "todo",
             "in_progress",
@@ -1373,6 +1374,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "status": {
               "type": "string",
               "enum": [
+                "triage",
                 "backlog",
                 "todo",
                 "in_progress",
@@ -1387,6 +1389,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "medium",
                 "high",
                 "urgent"
+              ]
+            },
+            "resolution": {
+              "type": "string",
+              "nullable": true,
+              "enum": [
+                "duplicate",
+                "not_planned",
+                "intended_behavior",
+                "not_reproducible",
+                "obsolete",
+                "resolved",
+                null
               ]
             },
             "assigneeId": {
@@ -2029,6 +2044,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "status": {
               "type": "string",
               "enum": [
+                "triage",
                 "backlog",
                 "todo",
                 "in_progress",
@@ -2043,6 +2059,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "medium",
                 "high",
                 "urgent"
+              ]
+            },
+            "resolution": {
+              "type": "string",
+              "nullable": true,
+              "enum": [
+                "duplicate",
+                "not_planned",
+                "intended_behavior",
+                "not_reproducible",
+                "obsolete",
+                "resolved",
+                null
               ]
             },
             "assigneeId": {

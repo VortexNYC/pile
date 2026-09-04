@@ -53,6 +53,7 @@ export async function dispatchAgent(
     organizationId,
     status: "backlog",
     priority: "medium",
+    resolution: null,
     assigneeId: null,
     projectId: null,
     cycleId: null,

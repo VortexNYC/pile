@@ -314,6 +314,63 @@ describe("API integration", () => {
     expect(historyBody.history.length).toBeGreaterThanOrEqual(1);
   });
 
+  it("supports triage status and resolution on issues", async () => {
+    const organizationId = await seedWorkspace();
+    const token = await adminToken(organizationId);
+
+    const create = await app.fetch(
+      request("/workspaces/" + organizationId + "/issues", {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          title: "Triage issue",
+          status: "triage",
+        }),
+      }),
+      env
+    );
+    expect(create.status).toBe(201);
+    const triage = await create.json<{
+      id: string;
+      status: string;
+      resolution: string | null;
+    }>();
+    expect(triage.status).toBe("triage");
+    expect(triage.resolution).toBeNull();
+
+    const resolve = await app.fetch(
+      request("/workspaces/" + organizationId + "/issues/" + triage.id, {
+        method: "PATCH",
+        token,
+        body: JSON.stringify({
+          status: "done",
+          resolution: "resolved",
+        }),
+      }),
+      env
+    );
+    expect(resolve.status).toBe(200);
+    const resolved = await resolve.json<{
+      status: string;
+      resolution: string | null;
+    }>();
+    expect(resolved.status).toBe("done");
+    expect(resolved.resolution).toBe("resolved");
+
+    const bad = await app.fetch(
+      request("/workspaces/" + organizationId + "/issues/" + triage.id, {
+        method: "PATCH",
+        token,
+        body: JSON.stringify({
+          status: "todo",
+          resolution: "duplicate",
+        }),
+      }),
+      env
+    );
+    expect(bad.status).toBe(400);
+  });
+
   it("manages webhook subscriptions", async () => {
     const organizationId = await seedWorkspace();
     const token = await adminToken(organizationId);
