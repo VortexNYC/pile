@@ -99,31 +99,6 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
-    "name": "deleteWorkspacesOrganizationIdIssuesIssueIdRelationsId",
-    "description": "Delete issue relation (DELETE /workspaces/{organizationId}/issues/{issueId}/relations/{id})",
-    "method": "DELETE",
-    "path": "/workspaces/{organizationId}/issues/{issueId}/relations/{id}",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "organizationId": {
-          "type": "string"
-        },
-        "issueId": {
-          "type": "string"
-        },
-        "id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "id",
-        "issueId",
-        "organizationId"
-      ]
-    }
-  },
-  {
     "name": "deleteWorkspacesOrganizationIdIssuesIssueIdSubscribersId",
     "description": "Delete issue subscriber (DELETE /workspaces/{organizationId}/issues/{issueId}/subscribers/{id})",
     "method": "DELETE",
@@ -208,6 +183,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "organizationId",
         "reactionId"
+      ]
+    }
+  },
+  {
+    "name": "deleteWorkspacesOrganizationIdRelationsId",
+    "description": "Delete relation (DELETE /workspaces/{organizationId}/relations/{id})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/relations/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
       ]
     }
   },

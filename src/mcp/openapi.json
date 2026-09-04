@@ -4960,7 +4960,7 @@
         "summary": "Create issue relation"
       }
     },
-    "/workspaces/{organizationId}/issues/{issueId}/relations/{id}": {
+    "/workspaces/{organizationId}/relations/{id}": {
       "delete": {
         "tags": [
           "relations"
@@ -4979,14 +4979,6 @@
               "type": "string"
             },
             "required": true,
-            "name": "issueId",
-            "in": "path"
-          },
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
             "name": "id",
             "in": "path"
           }
@@ -4996,7 +4988,7 @@
             "description": "Relation deleted"
           }
         },
-        "summary": "Delete issue relation"
+        "summary": "Delete relation"
       }
     },
     "/workspaces/{organizationId}/issues/{issueId}/subscribers": {

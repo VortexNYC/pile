@@ -1,4 +1,5 @@
 import { env } from "cloudflare:test";
+import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
@@ -7,7 +8,11 @@ import {
   createNotification,
   getNotificationsForRecipient,
 } from "../global/notifications.js";
-import { member as memberTable, user as userTable } from "../global/schema.js";
+import {
+  apikey as apikeyTable,
+  member as memberTable,
+  user as userTable,
+} from "../global/schema.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
@@ -58,6 +63,11 @@ async function createAdminTokenRecord(organizationId: string) {
     },
   });
   const parsed = z.object({ id: z.string(), key: z.string() }).parse(result);
+  const db = createD1(env.D1);
+  await db
+    .update(apikeyTable)
+    .set({ rateLimitEnabled: false })
+    .where(eq(apikeyTable.id, parsed.id));
   return { id: parsed.id, token: parsed.key, referenceId: "user-1" };
 }
 
@@ -786,6 +796,117 @@ describe("API integration", () => {
     expect(afterDelRes.status).toBe(200);
     const afterDelBody = await afterDelRes.json<{ reactions: unknown[] }>();
     expect(afterDelBody.reactions).toHaveLength(0);
+  });
+
+  it("manages issue relations with all Linear types and inverse lookup", async () => {
+    const organizationId = await seedWorkspace();
+    const token = await adminToken(organizationId);
+
+    const aRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ title: "Issue A" }),
+      }),
+      env
+    );
+    expect(aRes.status).toBe(201);
+    const issueA = await aRes.json<{ id: string }>();
+
+    const bRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ title: "Issue B" }),
+      }),
+      env
+    );
+    expect(bRes.status).toBe(201);
+    const issueB = await bRes.json<{ id: string }>();
+
+    const types = ["related", "blocks", "duplicate", "similar"] as const;
+    const created = await Promise.all(
+      types.map(async (type) => {
+        const relRes = await app.fetch(
+          request(
+            `/workspaces/${organizationId}/issues/${issueA.id}/relations`,
+            {
+              method: "POST",
+              token,
+              body: JSON.stringify({ toIssueId: issueB.id, type }),
+            }
+          ),
+          env
+        );
+        expect(relRes.status).toBe(201);
+        return relRes.json<{ id: string; type: string }>();
+      })
+    );
+
+    const outgoingRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/issues/${issueA.id}/relations?direction=outgoing`,
+        { token }
+      ),
+      env
+    );
+    expect(outgoingRes.status).toBe(200);
+    const outgoingBody = await outgoingRes.json<{
+      relations: { type: string }[];
+    }>();
+    expect(outgoingBody.relations).toHaveLength(4);
+    expect(
+      types.every((type) =>
+        outgoingBody.relations.some((rel) => rel.type === type)
+      )
+    ).toBe(true);
+
+    const incomingRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/issues/${issueB.id}/relations?direction=incoming`,
+        { token }
+      ),
+      env
+    );
+    expect(incomingRes.status).toBe(200);
+    const incomingBody = await incomingRes.json<{
+      inverseRelations: { type: string }[];
+    }>();
+    expect(incomingBody.inverseRelations).toHaveLength(4);
+
+    const invalidRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${issueA.id}/relations`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ toIssueId: issueB.id, type: "unknown" }),
+      }),
+      env
+    );
+    expect(invalidRes.status).toBe(400);
+
+    await Promise.all(
+      created.map(async (rel) => {
+        const delRes = await app.fetch(
+          request(`/workspaces/${organizationId}/relations/${rel.id}`, {
+            method: "DELETE",
+            token,
+          }),
+          env
+        );
+        expect(delRes.status).toBe(204);
+      })
+    );
+
+    const afterDelRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/issues/${issueA.id}/relations?direction=outgoing`,
+        { token }
+      ),
+      env
+    );
+    expect(afterDelRes.status).toBe(200);
+    const afterDelBody = await afterDelRes.json<{ relations: unknown[] }>();
+    expect(afterDelBody.relations).toHaveLength(0);
   });
 
   it("creates notifications on issue creation and lists them", async () => {

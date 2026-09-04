@@ -2448,7 +2448,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{organizationId}/issues/{issueId}/relations/{id}": {
+    "/workspaces/{organizationId}/relations/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -2458,14 +2458,13 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Delete issue relation */
+        /** Delete relation */
         delete: {
             parameters: {
                 query?: never;
                 header?: never;
                 path: {
                     organizationId: string;
-                    issueId: string;
                     id: string;
                 };
                 cookie?: never;

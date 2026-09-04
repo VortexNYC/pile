@@ -9,9 +9,12 @@ import {
   listInverseIssueRelations,
   listIssueRelations,
 } from "../global/issue-relations.js";
+import { canAccessTeam } from "../global/teams.js";
 import { VortexError } from "../platform/errors.js";
-import type { AppContext } from "../platform/middleware.js";
+import type { WorkspaceIdentity } from "../platform/identity.js";
+import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
+import type { Issue } from "../types/workspace.js";
 
 const relationSchema = z.object({
   id: z.string(),
@@ -33,6 +36,44 @@ const relationBodySchema = z.object({
   toIssueId: z.string().min(1),
   type: relationTypeSchema,
 });
+
+async function getStub(env: WorkerEnv, organizationId: string) {
+  const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+    env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+  );
+  await stub.setOrganizationId(organizationId);
+  return stub;
+}
+
+async function getIssue(
+  stub: { getIssue(id: string): Promise<Issue | undefined> },
+  id: string
+): Promise<Issue> {
+  const issue = await stub.getIssue(id);
+  if (!issue) {
+    throw new VortexError({
+      code: "NOT_FOUND",
+      status: 404,
+      message: "Issue not found",
+    });
+  }
+  return issue;
+}
+
+async function assertIssueAccess(
+  db: ReturnType<typeof createD1>,
+  issue: Issue,
+  identity: WorkspaceIdentity
+): Promise<void> {
+  const allowed = await canAccessTeam(db, issue.teamId, identity);
+  if (!allowed) {
+    throw new VortexError({
+      code: "NOT_FOUND",
+      status: 404,
+      message: "Issue not found",
+    });
+  }
+}
 
 const listRelationsRoute = createRoute({
   method: "get",
@@ -83,13 +124,12 @@ const createRelationRoute = createRoute({
 
 const deleteRelationRoute = createRoute({
   method: "delete",
-  path: "/workspaces/{organizationId}/issues/{issueId}/relations/{id}",
+  path: "/workspaces/{organizationId}/relations/{id}",
   tags: ["relations"],
   middleware: [rls("write")],
   request: {
     params: z.object({
       organizationId: z.string(),
-      issueId: z.string(),
       id: z.string(),
     }),
   },
@@ -102,7 +142,11 @@ export function registerIssueRelationRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listRelationsRoute, async (c) => {
     const { organizationId, issueId } = c.req.valid("param");
     const { direction } = c.req.valid("query");
+    const identity = c.get("workspaceIdentity");
     const db = createD1(c.env.D1);
+    const stub = await getStub(c.env, organizationId);
+    const issue = await getIssue(stub, issueId);
+    await assertIssueAccess(db, issue, identity);
     const outgoing =
       direction === undefined || direction === "outgoing"
         ? await listIssueRelations(db, organizationId, issueId)
@@ -113,14 +157,23 @@ export function registerIssueRelationRoutes(app: OpenAPIHono<AppContext>) {
         : [];
     return c.json({
       relations: outgoing,
-      inverseRelations: direction === undefined ? incoming : undefined,
+      inverseRelations:
+        direction === undefined || direction === "incoming"
+          ? incoming
+          : undefined,
     });
   });
 
   app.openapi(createRelationRoute, async (c) => {
     const { organizationId, issueId } = c.req.valid("param");
     const { toIssueId, type } = c.req.valid("json");
+    const identity = c.get("workspaceIdentity");
     const db = createD1(c.env.D1);
+    const stub = await getStub(c.env, organizationId);
+    const fromIssue = await getIssue(stub, issueId);
+    const toIssue = await getIssue(stub, toIssueId);
+    await assertIssueAccess(db, fromIssue, identity);
+    await assertIssueAccess(db, toIssue, identity);
     const relation = await createIssueRelation(db, organizationId, {
       fromIssueId: issueId,
       toIssueId,
@@ -131,6 +184,7 @@ export function registerIssueRelationRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(deleteRelationRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
+    const identity = c.get("workspaceIdentity");
     const db = createD1(c.env.D1);
     const existing = await getIssueRelation(db, organizationId, id);
     if (!existing) {
@@ -140,6 +194,9 @@ export function registerIssueRelationRoutes(app: OpenAPIHono<AppContext>) {
         message: "Relation not found",
       });
     }
+    const stub = await getStub(c.env, organizationId);
+    const issue = await getIssue(stub, existing.fromIssueId);
+    await assertIssueAccess(db, issue, identity);
     await deleteIssueRelation(db, organizationId, id);
     return c.body(null, 204);
   });
