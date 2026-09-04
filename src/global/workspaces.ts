@@ -4,14 +4,7 @@ import { z } from "zod";
 import { createAuth } from "../platform/auth.js";
 import type { AppEnv } from "../platform/env.js";
 import type { D1Client } from "./db.js";
-import {
-  member,
-  organization,
-  team as teamTable,
-  teamMember as teamMemberTable,
-  workspaceMemberships,
-  workspaces,
-} from "./schema.js";
+import { member, organization, workspaces } from "./schema.js";
 import { createDefaultTeam } from "./teams.js";
 
 const workspaceMetadataSchema = z
@@ -112,7 +105,7 @@ export async function createWorkspace(
     },
   });
   const orgId = z.object({ id: z.string() }).parse(orgResult).id;
-  const workspaceKey = values.key ?? null;
+  const workspaceKey = values.key ?? "general";
   const now = new Date();
   const iso = now.toISOString();
 
@@ -125,42 +118,22 @@ export async function createWorkspace(
     createdAt: iso,
     updatedAt: iso,
   });
-  await db.insert(workspaceMemberships).values({
-    id: crypto.randomUUID(),
-    workspaceId: orgId,
-    userId: values.ownerId,
-    role: "owner",
-    createdAt: iso,
-  });
 
-  const oldTeam = await createDefaultTeam(
+  const defaultTeam = await createDefaultTeam(
     db,
     orgId,
     workspaceKey,
     values.ownerId
   );
-  const teamId = oldTeam.id;
-
-  await db.insert(teamTable).values({
-    id: teamId,
-    name: "General",
-    memberCount: 1,
-    organizationId: orgId,
-    metadata: JSON.stringify({ key: workspaceKey, isDefault: true }),
-    createdAt: now,
-    updatedAt: now,
-  });
-  await db.insert(teamMemberTable).values({
-    id: crypto.randomUUID(),
-    teamId,
-    userId: values.ownerId,
-    createdAt: now,
-  });
+  const teamId = defaultTeam.id;
 
   await db
     .update(organization)
     .set({
-      metadata: JSON.stringify({ key: workspaceKey, defaultTeamId: teamId }),
+      metadata: JSON.stringify({
+        key: values.key ?? null,
+        defaultTeamId: teamId,
+      }),
       updatedAt: now,
     })
     .where(eq(organization.id, orgId));

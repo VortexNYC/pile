@@ -1,16 +1,21 @@
 import { and, eq } from "drizzle-orm";
+import { z } from "zod";
 
-import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { D1Client } from "./db.js";
-import { teams, teamMemberships } from "./schema.js";
+import {
+  apikey,
+  member,
+  team,
+  teamMember,
+  user as userTable,
+} from "./schema.js";
 
-export interface TeamInput {
-  workspaceId: string;
-  key: string;
-  name: string;
-  ownerId: string;
-  isPublic?: boolean;
-}
+const teamMetadataSchema = z.object({
+  key: z.string(),
+  ownerId: z.string(),
+  isDefault: z.boolean(),
+  isPublic: z.boolean(),
+});
 
 export interface TeamRecord {
   id: string;
@@ -24,85 +29,77 @@ export interface TeamRecord {
   updatedAt: string;
 }
 
-export interface TeamUpdate {
-  key?: string;
-  name?: string;
-  isPublic?: boolean;
+function parseTeamMetadata(raw: string | null | undefined) {
+  if (!raw) {
+    return null;
+  }
+  const parsed = teamMetadataSchema.safeParse(JSON.parse(raw));
+  return parsed.success ? parsed.data : null;
 }
 
-export async function createTeam(
-  db: D1Client,
-  input: TeamInput,
-  options: { isDefault?: boolean } = {}
-): Promise<TeamRecord> {
-  const id = crypto.randomUUID();
-  const now = new Date().toISOString();
-  await db.insert(teams).values({
-    id,
-    workspaceId: input.workspaceId,
-    key: input.key,
-    name: input.name,
-    ownerId: input.ownerId,
-    isDefault: options.isDefault ?? false,
-    isPublic: input.isPublic ?? false,
-    createdAt: now,
-    updatedAt: now,
-  });
-  const row = await db.select().from(teams).where(eq(teams.id, id)).get();
-  return row as TeamRecord;
+function teamRecordFromRow(row: typeof team.$inferSelect): TeamRecord {
+  const metadata = parseTeamMetadata(row.metadata) ?? {
+    key: "general",
+    ownerId: "",
+    isDefault: false,
+    isPublic: false,
+  };
+  return {
+    id: row.id,
+    workspaceId: row.organizationId,
+    key: metadata.key,
+    name: row.name,
+    ownerId: metadata.ownerId,
+    isDefault: metadata.isDefault,
+    isPublic: metadata.isPublic,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
 }
 
-export async function createDefaultTeam(
-  db: D1Client,
-  workspaceId: string,
-  workspaceKey: string | null,
-  ownerId: string
-): Promise<TeamRecord> {
-  const existing = await db
-    .select()
-    .from(teams)
-    .where(and(eq(teams.workspaceId, workspaceId), eq(teams.isDefault, true)))
-    .get();
-  if (existing) return existing as TeamRecord;
-
-  const record = await createTeam(
-    db,
-    {
-      workspaceId,
-      key: workspaceKey ?? "general",
-      name: "General",
-      ownerId,
-      isPublic: true,
-    },
-    { isDefault: true }
-  );
-  await addTeamMember(db, workspaceId, record.id, ownerId, "user");
-  return record;
+function teamMetadataString(values: {
+  key: string;
+  ownerId: string;
+  isDefault: boolean;
+  isPublic: boolean;
+}) {
+  return JSON.stringify(values);
 }
 
 export async function getTeamById(
   db: D1Client,
   id: string,
-  workspaceId: string
+  workspaceId?: string
 ): Promise<TeamRecord | undefined> {
   const row = await db
     .select()
-    .from(teams)
-    .where(and(eq(teams.id, id), eq(teams.workspaceId, workspaceId)))
+    .from(team)
+    .where(
+      workspaceId
+        ? and(eq(team.id, id), eq(team.organizationId, workspaceId))
+        : eq(team.id, id)
+    )
     .get();
-  return row as TeamRecord | undefined;
+  if (!row) return undefined;
+  return teamRecordFromRow(row);
 }
 
 export async function getDefaultTeam(
   db: D1Client,
   workspaceId: string
 ): Promise<TeamRecord | undefined> {
-  const row = await db
+  const rows = await db
     .select()
-    .from(teams)
-    .where(and(eq(teams.workspaceId, workspaceId), eq(teams.isDefault, true)))
-    .get();
-  return row as TeamRecord | undefined;
+    .from(team)
+    .where(eq(team.organizationId, workspaceId))
+    .all();
+  for (const row of rows) {
+    const metadata = parseTeamMetadata(row.metadata);
+    if (metadata?.isDefault) {
+      return teamRecordFromRow(row);
+    }
+  }
+  return undefined;
 }
 
 export async function listTeams(
@@ -111,44 +108,139 @@ export async function listTeams(
 ): Promise<TeamRecord[]> {
   const rows = await db
     .select()
-    .from(teams)
-    .where(eq(teams.workspaceId, workspaceId))
+    .from(team)
+    .where(eq(team.organizationId, workspaceId))
     .all();
-  return rows as TeamRecord[];
+  return rows.map(teamRecordFromRow);
+}
+
+interface CreateTeamInput {
+  workspaceId: string;
+  key: string;
+  name: string;
+  ownerId: string;
+  isDefault?: boolean;
+  isPublic?: boolean;
+}
+
+export async function createTeam(
+  db: D1Client,
+  values: CreateTeamInput
+): Promise<TeamRecord> {
+  const id = crypto.randomUUID();
+  const metadata = teamMetadataString({
+    key: values.key,
+    ownerId: values.ownerId,
+    isDefault: values.isDefault ?? false,
+    isPublic: values.isPublic ?? false,
+  });
+  await db.insert(team).values({
+    id,
+    name: values.name,
+    organizationId: values.workspaceId,
+    memberCount: 0,
+    metadata,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+  const row = await getTeamById(db, id, values.workspaceId);
+  if (!row) {
+    throw new Error("Failed to create team");
+  }
+  return row;
+}
+
+export async function createDefaultTeam(
+  db: D1Client,
+  workspaceId: string,
+  workspaceKey: string,
+  ownerId: string
+): Promise<TeamRecord> {
+  const record = await createTeam(db, {
+    workspaceId,
+    key: workspaceKey,
+    name: "General",
+    ownerId,
+    isDefault: true,
+    isPublic: false,
+  });
+  await addTeamMember(db, workspaceId, record.id, ownerId, "user");
+  return record;
+}
+
+interface UpdateTeamInput {
+  key?: string;
+  name?: string;
+  isPublic?: boolean;
 }
 
 export async function updateTeam(
   db: D1Client,
   id: string,
   workspaceId: string,
-  update: TeamUpdate
+  input: UpdateTeamInput
 ): Promise<TeamRecord | undefined> {
-  const set: Partial<Record<string, string | boolean | null>> = {
-    updatedAt: new Date().toISOString(),
-  };
-  if (update.key !== undefined) set.key = update.key;
-  if (update.name !== undefined) set.name = update.name;
-  if (update.isPublic !== undefined) set.isPublic = update.isPublic;
-  const row = await db
-    .update(teams)
-    .set(set)
-    .where(and(eq(teams.id, id), eq(teams.workspaceId, workspaceId)))
-    .returning()
-    .get();
-  return row as TeamRecord | undefined;
+  const existing = await getTeamById(db, id, workspaceId);
+  if (!existing) return undefined;
+
+  const metadata = teamMetadataString({
+    key: input.key ?? existing.key,
+    ownerId: existing.ownerId,
+    isDefault: existing.isDefault,
+    isPublic: input.isPublic ?? existing.isPublic,
+  });
+
+  await db
+    .update(team)
+    .set({
+      name: input.name ?? existing.name,
+      metadata,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(team.id, id), eq(team.organizationId, workspaceId)));
+
+  return getTeamById(db, id, workspaceId);
 }
 
 export async function deleteTeam(
   db: D1Client,
   id: string,
   workspaceId: string
-): Promise<TeamRecord | undefined> {
-  const row = await db
-    .delete(teams)
-    .where(and(eq(teams.id, id), eq(teams.workspaceId, workspaceId)))
-    .returning()
+): Promise<void> {
+  await db
+    .delete(team)
+    .where(and(eq(team.id, id), eq(team.organizationId, workspaceId)));
+}
+
+function userTypeFromMetadata(
+  raw: string | null | undefined
+): "user" | "agent" {
+  if (!raw) return "user";
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed?.type === "agent" ? "agent" : "user";
+  } catch {
+    return "user";
+  }
+}
+
+async function resolveUserId(
+  db: D1Client,
+  memberId: string,
+  memberType: "user" | "agent"
+): Promise<string> {
+  if (memberType === "user") {
+    return memberId;
+  }
+  const key = await db
+    .select()
+    .from(apikey)
+    .where(eq(apikey.id, memberId))
     .get();
-  return row as TeamRecord | undefined;
+  if (!key) {
+    throw new Error("Token not found");
+  }
+  return key.referenceId;
 }
 
 export async function addTeamMember(
@@ -156,40 +248,60 @@ export async function addTeamMember(
   workspaceId: string,
   teamId: string,
   memberId: string,
-  memberType: "user" | "agent",
-  role: "member" | "guest" = "member"
+  memberType: "user" | "agent" = "user"
 ): Promise<void> {
-  const id = crypto.randomUUID();
-  const now = new Date().toISOString();
-  await db
-    .insert(teamMemberships)
-    .values({
-      id,
-      workspaceId,
+  const userId = await resolveUserId(db, memberId, memberType);
+
+  const existingMember = await db
+    .select()
+    .from(member)
+    .where(
+      and(eq(member.organizationId, workspaceId), eq(member.userId, userId))
+    )
+    .get();
+  if (!existingMember) {
+    const user = await db
+      .select()
+      .from(userTable)
+      .where(eq(userTable.id, userId))
+      .get();
+    if (!user) {
+      throw new Error("User not found");
+    }
+    await db.insert(member).values({
+      id: crypto.randomUUID(),
+      organizationId: workspaceId,
+      userId,
+      role: "member",
+      createdAt: new Date(),
+    });
+  }
+
+  const existingTeamMember = await db
+    .select()
+    .from(teamMember)
+    .where(and(eq(teamMember.teamId, teamId), eq(teamMember.userId, userId)))
+    .get();
+  if (!existingTeamMember) {
+    await db.insert(teamMember).values({
+      id: crypto.randomUUID(),
       teamId,
-      memberId,
-      memberType,
-      role,
-      createdAt: now,
-    })
-    .onConflictDoNothing();
+      userId,
+      createdAt: new Date(),
+    });
+  }
 }
 
 export async function removeTeamMember(
   db: D1Client,
   teamId: string,
   memberId: string,
-  memberType: "user" | "agent"
+  memberType: "user" | "agent" = "user"
 ): Promise<void> {
+  const userId = await resolveUserId(db, memberId, memberType);
   await db
-    .delete(teamMemberships)
-    .where(
-      and(
-        eq(teamMemberships.teamId, teamId),
-        eq(teamMemberships.memberId, memberId),
-        eq(teamMemberships.memberType, memberType)
-      )
-    );
+    .delete(teamMember)
+    .where(and(eq(teamMember.teamId, teamId), eq(teamMember.userId, userId)));
 }
 
 export async function listTeamMembers(
@@ -198,72 +310,29 @@ export async function listTeamMembers(
 ): Promise<{ memberId: string; memberType: "user" | "agent"; role: string }[]> {
   const rows = await db
     .select({
-      memberId: teamMemberships.memberId,
-      memberType: teamMemberships.memberType,
-      role: teamMemberships.role,
+      userId: teamMember.userId,
+      userMetadata: userTable.metadata,
     })
-    .from(teamMemberships)
-    .where(eq(teamMemberships.teamId, teamId))
+    .from(teamMember)
+    .where(eq(teamMember.teamId, teamId))
+    .leftJoin(userTable, eq(teamMember.userId, userTable.id))
     .all();
-  return rows as {
-    memberId: string;
-    memberType: "user" | "agent";
-    role: string;
-  }[];
-}
-
-export async function getVisibleTeamIds(
-  db: D1Client,
-  workspaceId: string,
-  identity: WorkspaceIdentity
-): Promise<string[]> {
-  const memberRows = await db
-    .select({ teamId: teamMemberships.teamId })
-    .from(teamMemberships)
-    .where(
-      and(
-        eq(teamMemberships.workspaceId, workspaceId),
-        eq(teamMemberships.memberId, identity.id),
-        eq(teamMemberships.memberType, identity.type)
-      )
-    )
-    .all();
-  const memberTeamIds = new Set(memberRows.map((r) => r.teamId));
-
-  if (identity.permissions.includes("admin")) {
-    const allTeams = await db
-      .select({ id: teams.id })
-      .from(teams)
-      .where(eq(teams.workspaceId, workspaceId))
-      .all();
-    for (const t of allTeams) memberTeamIds.add(t.id);
-    return [...memberTeamIds];
-  }
-
-  const publicRows = await db
-    .select({ id: teams.id })
-    .from(teams)
-    .where(and(eq(teams.workspaceId, workspaceId), eq(teams.isPublic, true)))
-    .all();
-  for (const t of publicRows) memberTeamIds.add(t.id);
-  return [...memberTeamIds];
+  return rows.map((r) => ({
+    memberId: r.userId,
+    memberType: userTypeFromMetadata(r.userMetadata),
+    role: "member",
+  }));
 }
 
 export async function isTeamMember(
   db: D1Client,
   teamId: string,
-  identity: WorkspaceIdentity
+  userId: string
 ): Promise<boolean> {
   const row = await db
-    .select({ id: teamMemberships.id })
-    .from(teamMemberships)
-    .where(
-      and(
-        eq(teamMemberships.teamId, teamId),
-        eq(teamMemberships.memberId, identity.id),
-        eq(teamMemberships.memberType, identity.type)
-      )
-    )
+    .select()
+    .from(teamMember)
+    .where(and(eq(teamMember.teamId, teamId), eq(teamMember.userId, userId)))
     .get();
   return !!row;
 }
@@ -271,15 +340,43 @@ export async function isTeamMember(
 export async function canAccessTeam(
   db: D1Client,
   teamId: string,
-  identity: WorkspaceIdentity
+  identity: { id: string; permissions: string[] }
 ): Promise<boolean> {
-  const team = await db
-    .select({ isPublic: teams.isPublic, workspaceId: teams.workspaceId })
-    .from(teams)
-    .where(eq(teams.id, teamId))
-    .get();
-  if (!team) return false;
+  const record = await getTeamById(db, teamId);
+  if (!record) return false;
+  if (record.isPublic) return true;
   if (identity.permissions.includes("admin")) return true;
-  if (team.isPublic) return true;
-  return isTeamMember(db, teamId, identity);
+  return isTeamMember(db, record.id, identity.id);
+}
+
+export async function getVisibleTeamIds(
+  db: D1Client,
+  workspaceId: string,
+  identity: { id: string; permissions: string[] }
+): Promise<string[]> {
+  const teamRows = await db
+    .select()
+    .from(team)
+    .where(eq(team.organizationId, workspaceId))
+    .all();
+
+  const memberTeamIds = new Set(
+    (
+      await db
+        .select({ teamId: teamMember.teamId })
+        .from(teamMember)
+        .where(eq(teamMember.userId, identity.id))
+        .all()
+    ).map((r) => r.teamId)
+  );
+
+  const isAdmin = identity.permissions.includes("admin");
+  const visible: string[] = [];
+  for (const row of teamRows) {
+    const metadata = parseTeamMetadata(row.metadata);
+    if (isAdmin || metadata?.isPublic || memberTeamIds.has(row.id)) {
+      visible.push(row.id);
+    }
+  }
+  return visible;
 }

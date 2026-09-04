@@ -14,10 +14,12 @@ export type WorkspaceIdentity = z.infer<typeof workspaceIdentitySchema>;
 const apiKeyMetadataSchema = z.object({
   workspaceId: z.string(),
   permissions: z.string(),
+  actorType: z.enum(["user", "agent"]).optional(),
 });
 
 const apiKeyResultSchema = z.object({
   id: z.string(),
+  referenceId: z.string(),
   metadata: z.unknown(),
 });
 
@@ -32,9 +34,9 @@ export function toApiKeyWorkspaceIdentity(input: unknown): WorkspaceIdentity {
   const key = apiKeyResultSchema.parse(input);
   const parsed = parseApiKeyMetadata(key.metadata);
   return workspaceIdentitySchema.parse({
-    id: key.id,
+    id: key.referenceId,
     workspaceId: parsed.workspaceId,
-    type: "agent",
+    type: parsed.actorType ?? "user",
     permissions: Array.from(parsePermissionSet(parsed.permissions)),
   });
 }

@@ -395,14 +395,7 @@ export function registerTeamRoutes(app: OpenAPIHono<AppContext>) {
         message: "Cannot manage this team",
       });
     }
-    await addTeamMember(
-      db,
-      workspaceId,
-      id,
-      body.memberId,
-      body.memberType,
-      body.role ?? "member"
-    );
+    await addTeamMember(db, workspaceId, id, body.memberId, body.memberType);
     return c.body(null, 204);
   });
 

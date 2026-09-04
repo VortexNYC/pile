@@ -470,6 +470,16 @@
                   },
                   "permissions": {
                     "type": "string"
+                  },
+                  "actorType": {
+                    "type": "string",
+                    "enum": [
+                      "user",
+                      "agent"
+                    ]
+                  },
+                  "provider": {
+                    "type": "string"
                   }
                 },
                 "required": [

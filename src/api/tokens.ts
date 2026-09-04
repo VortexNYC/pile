@@ -3,7 +3,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { eq } from "drizzle-orm";
 
 import { createD1 } from "../global/db.js";
-import { apikey } from "../global/schema.js";
+import { apikey, user as userTable } from "../global/schema.js";
 import { getWorkspaceById } from "../global/workspaces.js";
 import { createAuth } from "../platform/auth.js";
 import { VortexError } from "../platform/errors.js";
@@ -30,6 +30,8 @@ const tokenWithSecretSchema = z.object({
 const tokenBodySchema = z.object({
   name: z.string().min(1),
   permissions: z.string().optional(),
+  actorType: z.enum(["user", "agent"]).optional(),
+  provider: z.string().optional(),
 });
 
 const listTokensRoute = createRoute({
@@ -135,8 +137,27 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
     const identity = c.get("workspaceIdentity");
     const db = createD1(c.env.D1);
 
+    const auth = createAuth(c.env);
+    const permissions = input.permissions ?? "read";
+    const actorType = input.actorType ?? "user";
     let userId = identity.id;
-    if (identity.type === "agent") {
+
+    if (actorType === "agent") {
+      const agentId = crypto.randomUUID();
+      await db.insert(userTable).values({
+        id: agentId,
+        name: input.name,
+        email: `agent-${agentId}@${workspaceId}.vortex.nyc`,
+        emailVerified: true,
+        metadata: JSON.stringify({
+          type: "agent",
+          provider: input.provider ?? "vortex",
+        }),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      userId = agentId;
+    } else if (identity.type === "agent") {
       const workspace = await getWorkspaceById(db, workspaceId);
       if (!workspace) {
         throw new VortexError({
@@ -148,13 +169,11 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
       userId = workspace.ownerId;
     }
 
-    const auth = createAuth(c.env);
-    const permissions = input.permissions ?? "read";
     const result = await auth.api.createApiKey({
       body: {
         userId,
         name: input.name,
-        metadata: { workspaceId, permissions },
+        metadata: { workspaceId, permissions, actorType },
       },
     });
 

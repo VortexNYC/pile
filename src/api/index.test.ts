@@ -62,7 +62,7 @@ async function createAdminTokenRecord(workspaceId: string) {
     },
   });
   const parsed = z.object({ id: z.string(), key: z.string() }).parse(result);
-  return { id: parsed.id, token: parsed.key };
+  return { id: parsed.id, token: parsed.key, referenceId: "user-1" };
 }
 
 function request(
@@ -557,8 +557,8 @@ describe("API integration", () => {
 
     await createNotification(db, {
       workspaceId,
-      recipientId: tokenRecord.id,
-      recipientType: "agent",
+      recipientId: tokenRecord.referenceId,
+      recipientType: "user",
       issueId: issueData.id,
       type: "issue_created",
     });
@@ -682,7 +682,11 @@ describe("API integration", () => {
       request(`/workspaces/${workspaceId}/tokens`, {
         method: "POST",
         token: admin,
-        body: JSON.stringify({ name: "member", permissions: "read,write" }),
+        body: JSON.stringify({
+          name: "member",
+          permissions: "read,write",
+          actorType: "agent",
+        }),
       }),
       env
     );

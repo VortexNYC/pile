@@ -226,6 +226,9 @@ export interface paths {
                     "application/json": {
                         name: string;
                         permissions?: string;
+                        /** @enum {string} */
+                        actorType?: "user" | "agent";
+                        provider?: string;
                     };
                 };
             };

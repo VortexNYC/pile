@@ -2395,6 +2395,16 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "permissions": {
               "type": "string"
+            },
+            "actorType": {
+              "type": "string",
+              "enum": [
+                "user",
+                "agent"
+              ]
+            },
+            "provider": {
+              "type": "string"
             }
           },
           "required": [

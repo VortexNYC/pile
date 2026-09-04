@@ -4,7 +4,10 @@ import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { createD1 } from "../global/db.js";
 import {
+  member,
+  organization,
   outboundWebhookDeliveries,
+  user as userTable,
   webhookSubscriptions,
   workspaces,
 } from "../global/schema.js";
@@ -29,15 +32,41 @@ async function ensureWorkspace() {
     .get();
   if (existing) return;
 
-  const now = new Date().toISOString();
+  const now = new Date();
+  await db
+    .insert(userTable)
+    .values({
+      id: "user-1",
+      name: "Test",
+      email: "user-1@test.local",
+      emailVerified: true,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .onConflictDoNothing();
+  await db.insert(organization).values({
+    id: WORKSPACE_ID,
+    name: "Webhook test workspace",
+    slug: "webhook-test-workspace",
+    metadata: JSON.stringify({ key: "WEB" }),
+    createdAt: now,
+    updatedAt: now,
+  });
   await db.insert(workspaces).values({
     id: WORKSPACE_ID,
     name: "Webhook test workspace",
     slug: "webhook-test-workspace",
     key: "WEB",
     ownerId: "user-1",
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString(),
+  });
+  await db.insert(member).values({
+    id: crypto.randomUUID(),
+    organizationId: WORKSPACE_ID,
+    userId: "user-1",
+    role: "owner",
     createdAt: now,
-    updatedAt: now,
   });
   await createDefaultTeam(db, WORKSPACE_ID, "WEB", "user-1");
 }

@@ -3,7 +3,12 @@ import { eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { createD1 } from "../global/db.js";
-import { workspaces } from "../global/schema.js";
+import {
+  member,
+  organization,
+  user as userTable,
+  workspaces,
+} from "../global/schema.js";
 import { createDefaultTeam } from "../global/teams.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { WorkspaceDO } from "./durable-object.js";
@@ -23,15 +28,41 @@ async function ensureWorkspace() {
     .get();
   if (existing) return;
 
-  const now = new Date().toISOString();
+  const now = new Date();
+  await db
+    .insert(userTable)
+    .values({
+      id: "user-1",
+      name: "Test",
+      email: "user-1@test.local",
+      emailVerified: true,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .onConflictDoNothing();
+  await db.insert(organization).values({
+    id: WORKSPACE_ID,
+    name: "Test workspace",
+    slug: "test-workspace",
+    metadata: JSON.stringify({ key: "TEST" }),
+    createdAt: now,
+    updatedAt: now,
+  });
   await db.insert(workspaces).values({
     id: WORKSPACE_ID,
     name: "Test workspace",
     slug: "test-workspace",
     key: "TEST",
     ownerId: "user-1",
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString(),
+  });
+  await db.insert(member).values({
+    id: crypto.randomUUID(),
+    organizationId: WORKSPACE_ID,
+    userId: "user-1",
+    role: "owner",
     createdAt: now,
-    updatedAt: now,
   });
   await createDefaultTeam(db, WORKSPACE_ID, "TEST", "user-1");
 }
