@@ -9,7 +9,7 @@ const outputPath = resolve(repoRoot, "src/mcp/mcp-tools.ts");
 const EXCLUDED_PATH_PREFIXES = [
   "/github",
   "/health",
-  "/workspaces/{workspaceId}/ws",
+  "/workspaces/{organizationId}/ws",
   "/openapi",
 ] as const;
 const HTTP_METHODS = ["get", "post", "put", "patch", "delete"] as const;

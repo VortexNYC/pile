@@ -31,7 +31,7 @@ async function getStub(env: WorkerEnv, organizationId: string) {
   const stub = env.WORKSPACE_DURABLE_OBJECT.get(
     env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
   );
-  await stub.setWorkspaceId(organizationId);
+  await stub.setOrganizationId(organizationId);
   return stub;
 }
 

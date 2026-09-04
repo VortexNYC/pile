@@ -579,7 +579,7 @@ export async function migrateLinear(
 
   const doId = env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId);
   const stub = env.WORKSPACE_DURABLE_OBJECT.get(doId);
-  await stub.setWorkspaceId(organizationId);
+  await stub.setOrganizationId(organizationId);
 
   let issueCount = 0;
   let commentCount = 0;

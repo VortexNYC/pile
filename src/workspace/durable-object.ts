@@ -64,7 +64,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     }
   }
 
-  async setWorkspaceId(id: string) {
+  async setOrganizationId(id: string) {
     this.organizationId = id;
     await this.ctx.storage.put("organizationId", id);
   }

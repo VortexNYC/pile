@@ -63,7 +63,7 @@ async function withWorkspace<T>(
   callback: (instance: WorkspaceDO) => T | Promise<T>
 ): Promise<T> {
   return runInDurableObject(stub, async (instance) => {
-    await instance.setWorkspaceId(WORKSPACE_ID);
+    await instance.setOrganizationId(WORKSPACE_ID);
     return callback(instance);
   });
 }

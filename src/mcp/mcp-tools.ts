@@ -1058,23 +1058,6 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
-    "name": "getWorkspacesOrganizationIdWs",
-    "description": "(GET /workspaces/{organizationId}/ws)",
-    "method": "GET",
-    "path": "/workspaces/{organizationId}/ws",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "organizationId": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "organizationId"
-      ]
-    }
-  },
-  {
     "name": "getWorkspacesSlugSlug",
     "description": "(GET /workspaces/slug/{slug})",
     "method": "GET",
