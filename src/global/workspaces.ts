@@ -181,12 +181,9 @@ export function getWorkspaceMembership(
 ) {
   return db
     .select()
-    .from(workspaceMemberships)
+    .from(member)
     .where(
-      and(
-        eq(workspaceMemberships.workspaceId, workspaceId),
-        eq(workspaceMemberships.userId, userId)
-      )
+      and(eq(member.organizationId, workspaceId), eq(member.userId, userId))
     )
     .get();
 }

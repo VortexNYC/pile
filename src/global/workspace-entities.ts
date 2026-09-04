@@ -1,13 +1,8 @@
 import { and, eq } from "drizzle-orm";
+import { z } from "zod";
 
 import type { D1Client } from "./db.js";
-import {
-  cycles,
-  labels,
-  projects,
-  states,
-  workspaceMemberships,
-} from "./schema.js";
+import { cycles, labels, member, projects, states } from "./schema.js";
 
 const now = () => new Date().toISOString();
 
@@ -323,12 +318,25 @@ export async function deleteState(
 
 // Memberships
 
-export function listMemberships(db: D1Client, workspaceId: string) {
-  return db
+const membershipRoleSchema = z.enum(["owner", "admin", "member"]);
+
+function mapMember(row: typeof member.$inferSelect) {
+  return {
+    id: row.id,
+    workspaceId: row.organizationId,
+    userId: row.userId,
+    role: membershipRoleSchema.parse(row.role),
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+export async function listMemberships(db: D1Client, workspaceId: string) {
+  const rows = await db
     .select()
-    .from(workspaceMemberships)
-    .where(eq(workspaceMemberships.workspaceId, workspaceId))
+    .from(member)
+    .where(eq(member.organizationId, workspaceId))
     .all();
+  return rows.map(mapMember);
 }
 
 export async function createMembership(
@@ -339,29 +347,22 @@ export async function createMembership(
 ) {
   const existing = await db
     .select()
-    .from(workspaceMemberships)
+    .from(member)
     .where(
-      and(
-        eq(workspaceMemberships.workspaceId, workspaceId),
-        eq(workspaceMemberships.userId, userId)
-      )
+      and(eq(member.organizationId, workspaceId), eq(member.userId, userId))
     )
     .get();
   if (existing) {
-    return existing;
+    return mapMember(existing);
   }
   const id = crypto.randomUUID();
-  const ts = now();
-  await db.insert(workspaceMemberships).values({
+  await db.insert(member).values({
     id,
-    workspaceId,
+    organizationId: workspaceId,
     userId,
     role,
-    createdAt: ts,
+    createdAt: new Date(),
   });
-  return db
-    .select()
-    .from(workspaceMemberships)
-    .where(eq(workspaceMemberships.id, id))
-    .get();
+  const row = await db.select().from(member).where(eq(member.id, id)).get();
+  return mapMember(row!);
 }
