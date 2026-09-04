@@ -47,15 +47,18 @@ const rolePermissionsMap = {
 
 export type WorkspaceRole = keyof typeof rolePermissionsMap;
 
+const workspaceRoleSchema = z.enum(["owner", "admin", "member"]);
+
 export function toUserWorkspaceIdentity(
   userId: string,
   workspaceId: string,
-  role: WorkspaceRole
+  role: string
 ): WorkspaceIdentity {
+  const parsedRole = workspaceRoleSchema.parse(role);
   return workspaceIdentitySchema.parse({
     id: userId,
     workspaceId,
     type: "user",
-    permissions: [...rolePermissionsMap[role]],
+    permissions: [...rolePermissionsMap[parsedRole]],
   });
 }
