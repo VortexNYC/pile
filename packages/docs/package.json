@@ -8,6 +8,8 @@
     "doctor": "blume doctor"
   },
   "dependencies": {
+    "@astrojs/cloudflare": "^14.3.0",
+    "@openrouter/ai-sdk-provider": "^3.0.0",
     "blume": "^1.6.0"
   }
 }
