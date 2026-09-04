@@ -11,11 +11,6 @@ export default defineConfig({
   },
   ai: {
     llmsTxt: true,
-    ask: {
-      enabled: true,
-      provider: "openrouter",
-      model: "openai/gpt-4.1-mini",
-    },
     mcp: {
       enabled: true,
     },
