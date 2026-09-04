@@ -55,7 +55,7 @@ describe("agent sessions", () => {
     expect(session.issueId).toBe("issue-1");
     expect(session.status).toBe("created");
 
-    const found = await getAgentSession(db, session.id);
+    const found = await getAgentSession(db, organizationId, session.id);
     expect(found).not.toBeNull();
     expect(found?.id).toBe(session.id);
   });
@@ -87,7 +87,7 @@ describe("agent sessions", () => {
       actorType: "user",
     });
 
-    const updated = await updateAgentSession(db, session.id, {
+    const updated = await updateAgentSession(db, organizationId, session.id, {
       status: "completed",
       result: "done",
     });
@@ -119,7 +119,11 @@ describe("agent sessions", () => {
     expect(activities[0]?.type).toBe("thought");
     expect(activities[0]?.message).toBe("Thinking...");
 
-    const withActivities = await getAgentSessionWithActivities(db, session.id);
+    const withActivities = await getAgentSessionWithActivities(
+      db,
+      organizationId,
+      session.id
+    );
     expect(withActivities?.activities.length).toBe(1);
   });
 });

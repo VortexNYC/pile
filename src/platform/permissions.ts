@@ -12,7 +12,7 @@ export function parsePermissionSet(
 
 export function canAccess(
   permissions: string | string[],
-  action: "read" | "write" | "admin"
+  action: string
 ): boolean {
   const set = parsePermissionSet(permissions);
   return set.has(action) || set.has("admin") || set.has("*");

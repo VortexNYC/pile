@@ -164,4 +164,99 @@ describe("agent sessions API", () => {
     expect(patched.status).toBe("completed");
     expect(patched.result).toBe("done");
   });
+
+  it("uses scoped agent:read and agent:write permissions", async () => {
+    const db = createD1(env.D1);
+    const { createAgentSession } = await import("../global/agent-sessions.js");
+    const session = await createAgentSession(db, {
+      organizationId,
+      issueId: "issue-scoped",
+      agentId: "mock",
+      provider: "mock",
+      actorId: "user-1",
+      actorType: "user",
+    });
+
+    const tokenRes = await app.fetch(
+      request(`/workspaces/${organizationId}/tokens`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          name: "scoped-agent",
+          permissions: "agent:read,agent:write",
+          actorType: "agent",
+        }),
+      }),
+      env
+    );
+    expect(tokenRes.status).toBe(201);
+    const { token: agentToken } = await tokenRes.json<{ token: string }>();
+
+    const listRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions?issueId=issue-scoped`,
+        { token: agentToken }
+      ),
+      env
+    );
+    expect(listRes.status).toBe(200);
+
+    const getRes = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/sessions/${session.id}`, {
+        token: agentToken,
+      }),
+      env
+    );
+    expect(getRes.status).toBe(200);
+
+    const activityRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/activities`,
+        {
+          method: "POST",
+          token: agentToken,
+          body: JSON.stringify({ type: "thought", message: "scoped" }),
+        }
+      ),
+      env
+    );
+    expect(activityRes.status).toBe(201);
+
+    const patchRes = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/sessions/${session.id}`, {
+        method: "PATCH",
+        token: agentToken,
+        body: JSON.stringify({ status: "completed" }),
+      }),
+      env
+    );
+    expect(patchRes.status).toBe(200);
+
+    const readOnlyRes = await app.fetch(
+      request(`/workspaces/${organizationId}/tokens`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          name: "readonly-agent",
+          permissions: "agent:read",
+          actorType: "agent",
+        }),
+      }),
+      env
+    );
+    expect(readOnlyRes.status).toBe(201);
+    const { token: readOnlyToken } = await readOnlyRes.json<{
+      token: string;
+    }>();
+
+    const forbiddenPatchRes = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/sessions/${session.id}`, {
+        method: "PATCH",
+        token: readOnlyToken,
+        body: JSON.stringify({ status: "failed" }),
+      }),
+      env
+    );
+    expect(forbiddenPatchRes.status).toBe(403);
+  });
 });

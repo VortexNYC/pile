@@ -330,7 +330,7 @@ const dispatchRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/issues/{id}/dispatch",
   tags: ["agents"],
-  middleware: [rls("write")],
+  middleware: [rls("write", "agent:write")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
     body: {

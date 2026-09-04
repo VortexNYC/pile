@@ -61,8 +61,21 @@ export async function createAgentSession(
   return row;
 }
 
-export async function getAgentSession(db: D1Client, id: string) {
-  return db.select().from(agentSessions).where(eq(agentSessions.id, id)).get();
+export async function getAgentSession(
+  db: D1Client,
+  organizationId: string,
+  id: string
+) {
+  return db
+    .select()
+    .from(agentSessions)
+    .where(
+      and(
+        eq(agentSessions.organizationId, organizationId),
+        eq(agentSessions.id, id)
+      )
+    )
+    .get();
 }
 
 export async function listAgentSessions(
@@ -85,10 +98,11 @@ export async function listAgentSessions(
 
 export async function updateAgentSession(
   db: D1Client,
+  organizationId: string,
   id: string,
   input: Partial<Pick<AgentSession, "status" | "result" | "url">>
 ) {
-  const existing = await getAgentSession(db, id);
+  const existing = await getAgentSession(db, organizationId, id);
   if (!existing) return null;
 
   const set: Partial<AgentSession> = { updatedAt: new Date().toISOString() };
@@ -97,7 +111,7 @@ export async function updateAgentSession(
   if (input.url !== undefined) set.url = input.url;
 
   await db.update(agentSessions).set(set).where(eq(agentSessions.id, id));
-  return getAgentSession(db, id);
+  return getAgentSession(db, organizationId, id);
 }
 
 export async function addAgentActivity(
@@ -140,8 +154,12 @@ export async function listAgentActivities(
     .all();
 }
 
-export async function getAgentSessionWithActivities(db: D1Client, id: string) {
-  const session = await getAgentSession(db, id);
+export async function getAgentSessionWithActivities(
+  db: D1Client,
+  organizationId: string,
+  id: string
+) {
+  const session = await getAgentSession(db, organizationId, id);
   if (!session) return null;
   const activities = await listAgentActivities(db, id);
   return { ...session, activities };

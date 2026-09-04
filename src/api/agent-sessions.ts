@@ -91,7 +91,7 @@ const listSessionsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/agent/sessions",
   tags: ["agent-sessions"],
-  middleware: [rls("read")],
+  middleware: [rls("read", "agent:read")],
   request: {
     params: z.object({ organizationId: z.string() }),
     query: z.object({
@@ -115,7 +115,7 @@ const getSessionRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/agent/sessions/{sessionId}",
   tags: ["agent-sessions"],
-  middleware: [rls("read")],
+  middleware: [rls("read", "agent:read")],
   request: {
     params: z.object({ organizationId: z.string(), sessionId: z.string() }),
   },
@@ -134,7 +134,7 @@ const addActivityRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/activities",
   tags: ["agent-sessions"],
-  middleware: [rls("write")],
+  middleware: [rls("write", "agent:write")],
   request: {
     params: z.object({ organizationId: z.string(), sessionId: z.string() }),
     body: {
@@ -164,7 +164,7 @@ const patchSessionRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/agent/sessions/{sessionId}",
   tags: ["agent-sessions"],
-  middleware: [rls("write")],
+  middleware: [rls("write", "agent:write")],
   request: {
     params: z.object({ organizationId: z.string(), sessionId: z.string() }),
     body: {
@@ -194,7 +194,7 @@ const pollSessionRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/poll",
   tags: ["agent-sessions"],
-  middleware: [rls("write")],
+  middleware: [rls("write", "agent:write")],
   request: {
     params: z.object({ organizationId: z.string(), sessionId: z.string() }),
   },
@@ -224,9 +224,13 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(getSessionRoute, async (c) => {
-    const { sessionId } = c.req.valid("param");
+    const { organizationId, sessionId } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    const session = await getAgentSessionWithActivities(db, sessionId);
+    const session = await getAgentSessionWithActivities(
+      db,
+      organizationId,
+      sessionId
+    );
     if (!session) {
       return c.json({ message: "Session not found" }, 404);
     }
@@ -234,12 +238,12 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(addActivityRoute, async (c) => {
-    const { sessionId } = c.req.valid("param");
+    const { organizationId, sessionId } = c.req.valid("param");
     const body = c.req.valid("json");
     const identity = c.var.workspaceIdentity;
     const db = createD1(c.env.D1);
 
-    const session = await getAgentSession(db, sessionId);
+    const session = await getAgentSession(db, organizationId, sessionId);
     if (!session) {
       return c.json({ message: "Session not found" }, 404);
     }
@@ -255,11 +259,11 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(patchSessionRoute, async (c) => {
-    const { sessionId } = c.req.valid("param");
+    const { organizationId, sessionId } = c.req.valid("param");
     const body = c.req.valid("json");
     const db = createD1(c.env.D1);
 
-    const updated = await updateAgentSession(db, sessionId, {
+    const updated = await updateAgentSession(db, organizationId, sessionId, {
       status: body.status,
       result: body.result,
       url: body.url,
@@ -273,10 +277,10 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(pollSessionRoute, async (c) => {
-    const { sessionId } = c.req.valid("param");
+    const { organizationId, sessionId } = c.req.valid("param");
     const db = createD1(c.env.D1);
 
-    const session = await getAgentSession(db, sessionId);
+    const session = await getAgentSession(db, organizationId, sessionId);
     if (!session) {
       return c.json({ message: "Session not found" }, 404);
     }
@@ -284,7 +288,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     const provider = getAgentProvider(session.agentId, c.env);
     const polled = await provider.poll(sessionId);
 
-    const updated = await updateAgentSession(db, sessionId, {
+    const updated = await updateAgentSession(db, organizationId, sessionId, {
       status: polled.status as AgentSession["status"],
       result: polled.result ?? undefined,
       url: polled.url ?? undefined,

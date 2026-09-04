@@ -4,7 +4,7 @@ import { VortexError } from "./errors.js";
 import type { AppContext } from "./middleware.js";
 import { canAccess } from "./permissions.js";
 
-export function rls(...allowed: ("read" | "write" | "admin")[]) {
+export function rls(...allowed: string[]) {
   return createMiddleware<AppContext>(async (c, next) => {
     const { permissions } = c.var.workspaceIdentity;
     const has = allowed.some((p) => canAccess(permissions, p));
