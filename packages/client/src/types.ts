@@ -547,6 +547,71 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/issues/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create issue batch */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        ids: string[];
+                        patch: {
+                            title?: string;
+                            teamId?: string;
+                            description?: string;
+                            /** @enum {string} */
+                            status?: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
+                            /** @enum {string} */
+                            priority?: "low" | "medium" | "high" | "urgent";
+                            /** @enum {string|null} */
+                            resolution?: "duplicate" | "not_planned" | "intended_behavior" | "not_reproducible" | "obsolete" | "resolved" | null;
+                            parentId?: string | null;
+                            subIssueSortOrder?: number | null;
+                            assigneeId?: string;
+                            projectId?: string;
+                            cycleId?: string;
+                            labelIds?: string;
+                            repo?: string;
+                            branch?: string;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Issues updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            issues: components["schemas"]["Issue"][];
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/issues/{id}/dispatch": {
         parameters: {
             query?: never;

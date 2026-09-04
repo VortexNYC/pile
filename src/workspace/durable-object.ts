@@ -723,6 +723,30 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     }
   }
 
+  async batchUpdateIssues(
+    ids: string[],
+    patch: Partial<IssueInput>,
+    actorId?: string
+  ): Promise<Issue[]> {
+    return this.batchUpdateSequentially(ids, 0, patch, actorId, []);
+  }
+
+  private async batchUpdateSequentially(
+    ids: string[],
+    index: number,
+    patch: Partial<IssueInput>,
+    actorId: string | undefined,
+    acc: Issue[]
+  ): Promise<Issue[]> {
+    if (index >= ids.length) return acc;
+    const issue = await this.updateIssue(ids[index], patch, actorId);
+    if (!issue) {
+      throw VortexError.fromCode("NOT_FOUND", `Issue not found: ${ids[index]}`);
+    }
+    acc.push(issue);
+    return this.batchUpdateSequentially(ids, index + 1, patch, actorId, acc);
+  }
+
   private async closeChildrenSequentially(
     children: Issue[],
     index: number,

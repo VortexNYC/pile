@@ -2171,6 +2171,115 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdIssuesBatch",
+    "description": "Create issue batch (POST /workspaces/{organizationId}/issues/batch)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/issues/batch",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "minItems": 1,
+              "maxItems": 100
+            },
+            "patch": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "teamId": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "triage",
+                    "backlog",
+                    "todo",
+                    "in_progress",
+                    "done",
+                    "canceled"
+                  ]
+                },
+                "priority": {
+                  "type": "string",
+                  "enum": [
+                    "low",
+                    "medium",
+                    "high",
+                    "urgent"
+                  ]
+                },
+                "resolution": {
+                  "type": "string",
+                  "nullable": true,
+                  "enum": [
+                    "duplicate",
+                    "not_planned",
+                    "intended_behavior",
+                    "not_reproducible",
+                    "obsolete",
+                    "resolved",
+                    null
+                  ]
+                },
+                "parentId": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "subIssueSortOrder": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "assigneeId": {
+                  "type": "string"
+                },
+                "projectId": {
+                  "type": "string"
+                },
+                "cycleId": {
+                  "type": "string"
+                },
+                "labelIds": {
+                  "type": "string"
+                },
+                "repo": {
+                  "type": "string"
+                },
+                "branch": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "required": [
+            "ids",
+            "patch"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdIssuesIdDispatch",
     "description": "Dispatch issue (POST /workspaces/{organizationId}/issues/{id}/dispatch)",
     "method": "POST",

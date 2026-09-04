@@ -263,6 +263,36 @@ const updateIssueRoute = createRoute({
   },
 });
 
+const batchUpdateIssuesSchema = z.object({
+  ids: z.array(z.string().min(1)).min(1).max(100),
+  patch: updateIssueSchema,
+});
+
+const batchUpdateIssuesRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/issues/batch",
+  tags: ["issues"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+    body: {
+      content: {
+        "application/json": { schema: batchUpdateIssuesSchema },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Issues updated",
+      content: {
+        "application/json": {
+          schema: z.object({ issues: z.array(issueApiSchema) }),
+        },
+      },
+    },
+  },
+});
+
 const deleteIssueRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/issues/{id}",
@@ -542,6 +572,65 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       );
     }
     return c.json(issue);
+  });
+
+  app.openapi(batchUpdateIssuesRoute, async (c) => {
+    const { ids, patch } = c.req.valid("json");
+    const { organizationId } = c.req.valid("param");
+    const identity = c.get("workspaceIdentity");
+    const db = createD1(c.env.D1);
+    const stub = await getStub(c.env, organizationId);
+
+    if (patch.teamId !== undefined) {
+      await assertTeamAccess(db, organizationId, patch.teamId, identity);
+    }
+
+    if (patch.parentId !== undefined && patch.parentId !== null) {
+      const parent = await stub.getIssue(patch.parentId);
+      if (!parent) {
+        throw new VortexError({
+          code: "BAD_REQUEST",
+          status: 400,
+          message: "Parent issue not found",
+        });
+      }
+      await assertIssueAccess(db, parent, identity);
+    }
+
+    const existingIssues = await Promise.all(
+      ids.map((id) => stub.getIssue(id))
+    );
+    const missing = existingIssues.findIndex((issue) => !issue);
+    if (missing !== -1) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: `Issue not found: ${ids[missing]}`,
+      });
+    }
+    const validIssues: Issue[] = [];
+    for (const issue of existingIssues) {
+      if (issue) {
+        validIssues.push(issue);
+      }
+    }
+
+    await Promise.all(
+      validIssues.map((issue) => assertIssueAccess(db, issue, identity))
+    );
+    for (const issue of validIssues) {
+      validateIssueState(patch.status ?? issue.status, patch.resolution);
+    }
+
+    if (patch.parentId !== undefined && patch.parentId !== null) {
+      const parentId: string = patch.parentId;
+      await Promise.all(
+        ids.map((id) => wouldCreateCycle(stub, id, parentId, new Set<string>()))
+      );
+    }
+
+    const issues = await stub.batchUpdateIssues(ids, patch, identity.id);
+    return c.json({ issues });
   });
 
   app.openapi(deleteIssueRoute, async (c) => {

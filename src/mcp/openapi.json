@@ -1125,6 +1125,145 @@
         "summary": "List issue children"
       }
     },
+    "/workspaces/{organizationId}/issues/batch": {
+      "post": {
+        "tags": [
+          "issues"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "minItems": 1,
+                    "maxItems": 100
+                  },
+                  "patch": {
+                    "type": "object",
+                    "properties": {
+                      "title": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "teamId": {
+                        "type": "string"
+                      },
+                      "description": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "triage",
+                          "backlog",
+                          "todo",
+                          "in_progress",
+                          "done",
+                          "canceled"
+                        ]
+                      },
+                      "priority": {
+                        "type": "string",
+                        "enum": [
+                          "low",
+                          "medium",
+                          "high",
+                          "urgent"
+                        ]
+                      },
+                      "resolution": {
+                        "type": "string",
+                        "nullable": true,
+                        "enum": [
+                          "duplicate",
+                          "not_planned",
+                          "intended_behavior",
+                          "not_reproducible",
+                          "obsolete",
+                          "resolved",
+                          null
+                        ]
+                      },
+                      "parentId": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "subIssueSortOrder": {
+                        "type": "number",
+                        "nullable": true
+                      },
+                      "assigneeId": {
+                        "type": "string"
+                      },
+                      "projectId": {
+                        "type": "string"
+                      },
+                      "cycleId": {
+                        "type": "string"
+                      },
+                      "labelIds": {
+                        "type": "string"
+                      },
+                      "repo": {
+                        "type": "string"
+                      },
+                      "branch": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "required": [
+                  "ids",
+                  "patch"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Issues updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Issue"
+                      }
+                    }
+                  },
+                  "required": [
+                    "issues"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create issue batch"
+      }
+    },
     "/workspaces/{organizationId}/issues/{id}/dispatch": {
       "post": {
         "tags": [

@@ -657,6 +657,56 @@ describe("API integration", () => {
     ).toBe(true);
   });
 
+  it("batch updates issues", async () => {
+    const organizationId = await seedWorkspace();
+    const token = await adminToken(organizationId);
+
+    const issue1Res = await app.fetch(
+      request(`/workspaces/${organizationId}/issues`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ title: "Batch one" }),
+      }),
+      env
+    );
+    expect(issue1Res.status).toBe(201);
+    const issue1 = await issue1Res.json<{ id: string }>();
+
+    const issue2Res = await app.fetch(
+      request(`/workspaces/${organizationId}/issues`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ title: "Batch two" }),
+      }),
+      env
+    );
+    expect(issue2Res.status).toBe(201);
+    const issue2 = await issue2Res.json<{ id: string }>();
+
+    const batchRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/batch`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          ids: [issue1.id, issue2.id],
+          patch: { status: "done", resolution: "resolved" },
+        }),
+      }),
+      env
+    );
+    expect(batchRes.status).toBe(200);
+    const batchBody = await batchRes.json<{
+      issues: { id: string; status: string; resolution: string | null }[];
+    }>();
+    expect(batchBody.issues).toHaveLength(2);
+    expect(batchBody.issues.every((issue) => issue.status === "done")).toBe(
+      true
+    );
+    expect(
+      batchBody.issues.every((issue) => issue.resolution === "resolved")
+    ).toBe(true);
+  });
+
   it("creates notifications on issue creation and lists them", async () => {
     const db = createD1(env.D1);
     const organizationId = await seedWorkspace();
