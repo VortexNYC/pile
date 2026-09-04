@@ -2,6 +2,7 @@ import { env, runInDurableObject } from "cloudflare:test";
 import { eq } from "drizzle-orm";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
+import { createComment } from "../global/comments.js";
 import { createD1 } from "../global/db.js";
 import {
   member,
@@ -159,5 +160,47 @@ describe("deliverWebhooks", () => {
     expect(deliveries.length).toBe(1);
     expect(deliveries[0].status).toBe("failed");
     expect(deliveries[0].attemptCount).toBe(2);
+  });
+
+  it("delivers comment.created events to matching subscriptions", async () => {
+    const db = createD1(env.D1);
+    const stub = getStub();
+    const issue = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Comment webhook test issue" })
+    );
+    const comment = await createComment(db, WORKSPACE_ID, {
+      issueId: issue.id,
+      authorId: "user-1",
+      body: "A comment",
+    });
+    if (!comment) {
+      throw new Error("Comment not created");
+    }
+
+    const sub = await createWebhookSubscription(db, WORKSPACE_ID, {
+      url: "http://127.0.0.1:1/webhook",
+      events: "comment.created",
+    });
+    if (!sub) {
+      throw new Error("Webhook subscription not created");
+    }
+
+    await deliverWebhooks(env, WORKSPACE_ID, {
+      type: "comment.created",
+      organizationId: WORKSPACE_ID,
+      issue,
+      comment,
+    });
+
+    const deliveries = await db
+      .select()
+      .from(outboundWebhookDeliveries)
+      .where(eq(outboundWebhookDeliveries.subscriptionId, sub.id))
+      .all();
+
+    expect(deliveries.length).toBe(1);
+    expect(deliveries[0].event).toBe("comment.created");
+    expect(deliveries[0].status).toBe("failed");
+    expect(deliveries[0].attemptCount).toBe(1);
   });
 });

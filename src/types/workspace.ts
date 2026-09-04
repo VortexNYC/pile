@@ -68,6 +68,19 @@ export interface Issue {
   updatedAt: Timestamp;
 }
 
+export interface Comment {
+  id: Id;
+  organizationId: Id;
+  issueId: Id;
+  authorId: Id | null;
+  body: string;
+  externalId: string | null;
+  externalSource: string | null;
+  externalAuthor: string | null;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
 export type RealtimeEvent =
   | {
       type: "connected";
@@ -92,4 +105,22 @@ export type RealtimeEvent =
       type: "issue.deleted";
       organizationId: string;
       issueId: Id;
+    }
+  | {
+      type: "comment.created";
+      organizationId: string;
+      issue: Issue;
+      comment: Comment;
+    }
+  | {
+      type: "comment.updated";
+      organizationId: string;
+      issue: Issue;
+      comment: Comment;
+    }
+  | {
+      type: "comment.deleted";
+      organizationId: string;
+      issueId: Id;
+      commentId: Id;
     };

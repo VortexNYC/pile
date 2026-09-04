@@ -7,6 +7,7 @@ import { z } from "zod";
 import { createD1 } from "../global/db.js";
 import { createIssueHistory } from "../global/issue-history.js";
 import {
+  notifyCommentCreated,
   notifyIssueCreated,
   notifyIssueDeleted,
   notifyIssueUpdated,
@@ -16,6 +17,7 @@ import { getDefaultTeam, getTeamById } from "../global/teams.js";
 import { getWorkspaceById } from "../global/workspaces.js";
 import type { AppEnv } from "../types/env.js";
 import type {
+  Comment,
   Issue,
   IssueInput,
   ListIssuesArgs,
@@ -518,6 +520,41 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       );
     }
     return true;
+  }
+
+  async emitCommentCreated(
+    comment: Comment,
+    issue: Issue,
+    actorId?: string
+  ): Promise<void> {
+    await this.ready;
+    await this.emit({
+      type: "comment.created",
+      organizationId: this.organizationId,
+      issue,
+      comment,
+    });
+    await notifyCommentCreated(this.env, this.organizationId, issue, actorId);
+  }
+
+  async emitCommentUpdated(comment: Comment, issue: Issue): Promise<void> {
+    await this.ready;
+    await this.emit({
+      type: "comment.updated",
+      organizationId: this.organizationId,
+      issue,
+      comment,
+    });
+  }
+
+  async emitCommentDeleted(commentId: string, issueId: string): Promise<void> {
+    await this.ready;
+    await this.emit({
+      type: "comment.deleted",
+      organizationId: this.organizationId,
+      issueId,
+      commentId,
+    });
   }
 
   async getIssueByIdentifier(identifier: string): Promise<Issue | undefined> {

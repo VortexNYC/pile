@@ -11,7 +11,6 @@ import {
 import { createD1 } from "../global/db.js";
 import { getInstallationToken } from "../global/github-auth.js";
 import { findGithubInstallation } from "../global/github-installations.js";
-import { notifyCommentCreated } from "../global/notify-issue.js";
 import { findRepoIssueByIssueId } from "../global/repo-issues.js";
 import { canAccessTeam } from "../global/teams.js";
 import { VortexError } from "../platform/errors.js";
@@ -222,7 +221,6 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
       body: item.body,
       createdAt: item.createdAt,
     });
-    await notifyCommentCreated(c.env, organizationId, issue, identity.id);
 
     const mapping = await findRepoIssueByIssueId(db, issueId);
     if (mapping) {
@@ -265,6 +263,8 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
         }
       }
     }
+
+    await issueStub.emitCommentCreated(item, issue, identity.id);
 
     return c.json(item, 201);
   });
@@ -339,6 +339,7 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
         message: "Comment not found",
       });
     }
+    await issueStub.emitCommentUpdated(item, issue);
     return c.json(item);
   });
 
@@ -372,6 +373,7 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
     await deleteComment(db, organizationId, id);
+    await issueStub.emitCommentDeleted(id, issueId);
     return c.body(null, 204);
   });
 }

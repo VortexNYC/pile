@@ -19,7 +19,7 @@ Vortex covers the core issue-tracking surface (issues, comments, labels, states,
 
 1. **Search & filtering** — Linear has rich search, issue filters, custom views, and semantic search. Vortex has only basic `status`/`priority`/`assignee`/`project`/`cycle`/`label` list filters and a `search` text parameter on issues.
 2. **Teams** — Linear is multi-team inside an organization. Vortex has workspaces (Better Auth organizations) and teams, with per-team issue scoping and visibility.
-3. **Notifications & outbound webhooks** — Linear has user notifications, delivery preferences, and outgoing webhooks. Vortex has inbound GitHub webhooks only.
+3. **Notifications & outbound webhooks** — Linear has user notifications, delivery preferences, and outgoing webhooks. Vortex has in-app notifications and outbound webhooks for issue/comment lifecycle events, including retries and a delivery log. No email, push, or delivery preferences yet.
 4. **Advanced project/cycle objects** — Linear has initiatives, roadmaps, milestones, project updates, and release pipelines. Vortex has projects and cycles.
 5. **Agent/AI surfaces** — Linear has agent sessions, activities, skills, and AI conversations. Vortex has agent sessions and activities; skills/conversations are not yet modeled.
 6. **CLI / SDK / docs parity** — Vortex has an OpenAPI-generated client and MCP tools but no standalone CLI parity, no GraphQL API, and no published docs site.
@@ -111,8 +111,8 @@ Plus `/openapi.json`, `/mcp`, `/api/auth/*`, `/github` webhooks, and health.
 | **Customers**                         | `customers`, `customerNeeds`, `customerStatuses`, `customerTiers`                                                                                                       | Missing                                                                         | Not modeled.                                                                                                                                                                     |
 | **Attachments**                       | `attachments`, `attachmentCreate/Delete/Update`, `attachmentLink*` (GitHub, Slack, etc.)                                                                                | Partial                                                                         | `attachments` table and route. GitHub attachments via migration. No deep link types (Slack, Intercom, etc.).                                                                     |
 | **Search & filters**                  | `search`, `issueSearch`, `customViews`, `customViewCreate`, `aiConversation*`, `semanticSearch`                                                                         | Missing                                                                         | No search index, no custom views, no AI conversation/activity surfaces.                                                                                                          |
-| **Notifications**                     | `notifications`, `notificationSubscriptionCreate`, `notificationDeliveryPreferences`, `pushSubscriptions`                                                               | Missing                                                                         | Only `issueSubscribers`; no delivery, email, or push.                                                                                                                            |
-| **Webhooks**                          | `webhooks`, `webhookCreate/Update/Delete`, `oauthClient*`                                                                                                               | Partial                                                                         | Inbound GitHub webhooks + delivery idempotency. No outbound Vortex webhooks or OAuth app management.                                                                             |
+| **Notifications**                     | `notifications`, `notificationSubscriptionCreate`, `notificationDeliveryPreferences`, `pushSubscriptions`                                                               | Partial                                                                         | In-app notifications for issue/comment lifecycle events; list/unread/mark read. No email, push, or delivery preferences.                                                         |
+| **Webhooks**                          | `webhooks`, `webhookCreate/Update/Delete`, `oauthClient*`                                                                                                               | Partial                                                                         | Outbound Vortex webhooks for issue/comment lifecycle events, retries, delivery log, and subscription CRUD. Inbound GitHub webhooks + idempotency. No OAuth app management.       |
 | **Integrations**                      | `integration*`, `jira*`, `github`, `gitlab`, `slack`, `zendesk`                                                                                                         | Partial                                                                         | GitHub App install + issue/comment/PR/label/milestone/assignee sync. No Slack/Jira/GitLab/Zendesk.                                                                               |
 | **Import / migration**                | `import` tooling, CSV, Jira                                                                                                                                             | Partial                                                                         | `POST /workspaces/{id}/migrate/linear` imports a Linear team into a Vortex workspace. No Jira/CSV.                                                                               |
 |                                       | **Agent / AI surfaces**                                                                                                                                                 | `agentSessions`, `agentActivities`, `agentSkills`, `aiConversation*`, `prompt*` | Partial                                                                                                                                                                          | `agent_sessions` and `agent_activities` D1 tables plus `GET/POST/PATCH` routes; provider dispatch persists sessions. No skills or AI conversation model yet. |
@@ -135,19 +135,17 @@ Vortex currently exposes roughly **50 HTTP routes**. Linear's public GraphQL sur
 ## Biggest blockers to "never touch Linear again"
 
 1. **Search and custom views** — agents and users cannot find issues beyond simple list filters.
-2. **Notifications / outbound webhooks** — Vortex cannot notify external systems when issues change, which breaks many integrations.
-3. **Initiatives / roadmaps / milestones** — roadmap planning is missing.
-4. **Slack/Zendesk/GitLab/Intercom integrations** — only GitHub is wired.
-5. **Published docs / SDK / CLI** — the API is OpenAPI-first but lacks a docs site and a full CLI.
+2. **Initiatives / roadmaps / milestones** — roadmap planning is missing.
+3. **Slack/Zendesk/GitLab/Intercom integrations** — only GitHub is wired.
+4. **Published docs / SDK / CLI** — the API is OpenAPI-first but lacks a docs site and a full CLI.
 
 ## Recommended next slices
 
 Based on the gap map and the current backend-first priority, the next high-leverage slices are:
 
-1. **Outbound webhooks + notification delivery** — unblocks integrations and dogfooding.
-2. **Issue search and indexing** — full-text + filter DSL.
-3. **Initiatives / roadmaps** — project planning surface.
-4. **Slack / Zendesk / GitLab / Intercom integrations** — expand beyond GitHub.
+1. **Issue search and indexing** — full-text + filter DSL.
+2. **Initiatives / roadmaps** — project planning surface.
+3. **Slack / Zendesk / GitLab / Intercom integrations** — expand beyond GitHub.
 
 ## How to update this document
 

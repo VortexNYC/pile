@@ -13,6 +13,7 @@ This is the durable tracker for the open-source Linear alternative. Operational 
 - GitHub issue label sync: map GitHub label names to Vortex labels and update issue labelIds on labeled/unlabeled webhooks.
 - Outbound GitHub comment writeback: Vortex comment -> GitHub issue/PR comment.
 - Magic-word PR linking: parse `fixes KEY-123` / `closes KEY-123` from PR title, body, or branch and update the linked Vortex issue.
+- Outbound webhooks + notification delivery: issue/comment lifecycle events are emitted as realtime events, delivered to webhook subscriptions with retries, logged in `outbound_webhook_deliveries`, and surfaced as in-app notifications for assignees/subscribers.
 - Workspace-scoped D1 + Durable Object SQLite architecture
 - Hono `@hono/zod-openapi` API with generated OpenAPI/MCP/client
 - Issues CRUD, history, subscribers, relations, comments, attachments
@@ -36,7 +37,6 @@ This is the durable tracker for the open-source Linear alternative. Operational 
 
 ## Next
 
-- Outbound webhooks + notification delivery.
 - Issue search and indexing.
 - Initiatives and roadmaps (#26).
 

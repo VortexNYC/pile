@@ -599,6 +599,29 @@ describe("API integration", () => {
       env
     );
     expect(markAll.status).toBe(204);
+
+    const comment = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${issueData.id}/comments`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ body: "New comment" }),
+      }),
+      env
+    );
+    expect(comment.status).toBe(201);
+    await comment.json();
+
+    const assigneeNotes = await getNotificationsForRecipient(
+      db,
+      organizationId,
+      userId,
+      "user"
+    );
+    const commentNotes = assigneeNotes.filter(
+      (n) => n.type === "comment_created"
+    );
+    expect(commentNotes.length).toBe(1);
+    expect(commentNotes[0].issueId).toBe(issueData.id);
   });
 
   it("scopes issues to teams with per-team numbering and visibility", async () => {
