@@ -40,6 +40,7 @@
     "@orama/orama": "3.1.18",
     "better-auth": "^1.7.2",
     "drizzle-orm": "^0.45.2",
+    "emoji-regex": "10.6.0",
     "hono": "^4.13.5",
     "jose": "^6.2.10",
     "zod": "^4.5.4"

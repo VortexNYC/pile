@@ -2015,9 +2015,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "type": "object",
           "properties": {
             "emoji": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 8
+              "type": "string"
             }
           },
           "required": [
@@ -2426,9 +2424,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "type": "object",
           "properties": {
             "emoji": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 8
+              "type": "string"
             }
           },
           "required": [

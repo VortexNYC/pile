@@ -1,5 +1,6 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
+import emojiRegex from "emoji-regex";
 
 import { getComment } from "../global/comments.js";
 import { createD1 } from "../global/db.js";
@@ -28,7 +29,13 @@ const reactionSchema = z.object({
 });
 
 const createReactionSchema = z.object({
-  emoji: z.string().min(1).max(8),
+  emoji: z.string().refine(
+    (value) => {
+      const match = value.match(emojiRegex());
+      return match !== null && match[0] === value;
+    },
+    { message: "must be a single valid emoji" }
+  ),
 });
 
 async function getIssue(

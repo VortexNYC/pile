@@ -6904,9 +6904,7 @@
                 "type": "object",
                 "properties": {
                   "emoji": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 8
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -7080,9 +7078,7 @@
                 "type": "object",
                 "properties": {
                   "emoji": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 8
+                    "type": "string"
                   }
                 },
                 "required": [

@@ -726,7 +726,7 @@ describe("API integration", () => {
       request(`/workspaces/${organizationId}/issues/${issue.id}/reactions`, {
         method: "POST",
         token,
-        body: JSON.stringify({ emoji: "+1" }),
+        body: JSON.stringify({ emoji: "👍" }),
       }),
       env
     );
@@ -742,7 +742,7 @@ describe("API integration", () => {
     expect(listRes.status).toBe(200);
     const listBody = await listRes.json<{ reactions: { emoji: string }[] }>();
     expect(listBody.reactions).toHaveLength(1);
-    expect(listBody.reactions[0].emoji).toBe("+1");
+    expect(listBody.reactions[0].emoji).toBe("👍");
 
     const commentRes = await app.fetch(
       request(`/workspaces/${organizationId}/issues/${issue.id}/comments`, {
@@ -761,7 +761,7 @@ describe("API integration", () => {
         {
           method: "POST",
           token,
-          body: JSON.stringify({ emoji: "tada" }),
+          body: JSON.stringify({ emoji: "🎉" }),
         }
       ),
       env
