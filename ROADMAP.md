@@ -25,6 +25,7 @@ This is the durable tracker for the open-source Linear alternative. Operational 
 - Linear user migration
 - Agent dispatch
 - Agent sessions and activities API (#27)
+- Issue search and indexing: full-text search across issue title, description, identifier, and comments; applied to `GET /workspaces/{id}/issues?search=` and saved views.
 - Multi-tenant GitHub App:
   - `github_installations` table
   - Installation / repository webhooks
@@ -37,7 +38,6 @@ This is the durable tracker for the open-source Linear alternative. Operational 
 
 ## Next
 
-- Issue search and indexing.
 - Initiatives and roadmaps (#26).
 
 ## Later
