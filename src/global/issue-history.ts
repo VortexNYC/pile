@@ -5,7 +5,7 @@ import { issueHistory } from "./schema.js";
 
 export function listIssueHistory(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   issueId: string
 ) {
   return db
@@ -13,7 +13,7 @@ export function listIssueHistory(
     .from(issueHistory)
     .where(
       and(
-        eq(issueHistory.workspaceId, workspaceId),
+        eq(issueHistory.organizationId, organizationId),
         eq(issueHistory.issueId, issueId)
       )
     )
@@ -21,19 +21,26 @@ export function listIssueHistory(
     .all();
 }
 
-export function getIssueHistory(db: D1Client, workspaceId: string, id: string) {
+export function getIssueHistory(
+  db: D1Client,
+  organizationId: string,
+  id: string
+) {
   return db
     .select()
     .from(issueHistory)
     .where(
-      and(eq(issueHistory.workspaceId, workspaceId), eq(issueHistory.id, id))
+      and(
+        eq(issueHistory.organizationId, organizationId),
+        eq(issueHistory.id, id)
+      )
     )
     .get();
 }
 
 export async function createIssueHistory(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   values: {
     issueId: string;
     linearId: string | null;
@@ -48,7 +55,7 @@ export async function createIssueHistory(
   const ts = new Date().toISOString();
   await db.insert(issueHistory).values({
     id,
-    workspaceId,
+    organizationId,
     issueId: values.issueId,
     linearId: values.linearId,
     field: values.field,
@@ -57,5 +64,5 @@ export async function createIssueHistory(
     actorId: values.actorId ?? null,
     createdAt: values.createdAt ?? ts,
   });
-  return getIssueHistory(db, workspaceId, id);
+  return getIssueHistory(db, organizationId, id);
 }

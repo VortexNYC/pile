@@ -19,7 +19,7 @@ export type NotificationType =
 export type RecipientType = "user" | "agent";
 
 export interface NotificationInput {
-  workspaceId: string;
+  organizationId: string;
   recipientId: string;
   recipientType?: RecipientType;
   issueId: string;
@@ -35,7 +35,7 @@ export async function createNotification(
   const ts = new Date().toISOString();
   await db.insert(notifications).values({
     id,
-    workspaceId: input.workspaceId,
+    organizationId: input.organizationId,
     recipientId: input.recipientId,
     recipientType: input.recipientType ?? "user",
     issueId: input.issueId,
@@ -51,13 +51,13 @@ export async function createNotification(
 
 export async function getNotificationsForRecipient(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   recipientId: string,
   recipientType: RecipientType,
   options: { unreadOnly?: boolean; limit?: number } = {}
 ) {
   const conditions = [
-    eq(notifications.workspaceId, workspaceId),
+    eq(notifications.organizationId, organizationId),
     eq(notifications.recipientId, recipientId),
     eq(notifications.recipientType, recipientType),
   ];
@@ -75,7 +75,7 @@ export async function getNotificationsForRecipient(
 
 export async function getUnreadNotificationCount(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   recipientId: string,
   recipientType: RecipientType
 ) {
@@ -84,7 +84,7 @@ export async function getUnreadNotificationCount(
     .from(notifications)
     .where(
       and(
-        eq(notifications.workspaceId, workspaceId),
+        eq(notifications.organizationId, organizationId),
         eq(notifications.recipientId, recipientId),
         eq(notifications.recipientType, recipientType),
         eq(notifications.read, false)
@@ -96,7 +96,7 @@ export async function getUnreadNotificationCount(
 
 export async function markNotificationRead(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   recipientId: string,
   recipientType: RecipientType,
   notificationId: string
@@ -107,7 +107,7 @@ export async function markNotificationRead(
     .where(
       and(
         eq(notifications.id, notificationId),
-        eq(notifications.workspaceId, workspaceId),
+        eq(notifications.organizationId, organizationId),
         eq(notifications.recipientId, recipientId),
         eq(notifications.recipientType, recipientType)
       )
@@ -128,7 +128,7 @@ export async function markNotificationRead(
 
 export async function markAllNotificationsRead(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   recipientId: string,
   recipientType: RecipientType
 ) {
@@ -137,7 +137,7 @@ export async function markAllNotificationsRead(
     .set({ read: true, updatedAt: new Date().toISOString() })
     .where(
       and(
-        eq(notifications.workspaceId, workspaceId),
+        eq(notifications.organizationId, organizationId),
         eq(notifications.recipientId, recipientId),
         eq(notifications.recipientType, recipientType),
         eq(notifications.read, false)
@@ -147,7 +147,7 @@ export async function markAllNotificationsRead(
 
 export async function resolveIssueRecipients(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   issue: { id: string; assigneeId: string | null },
   excludeRecipientId?: string
 ): Promise<string[]> {
@@ -156,7 +156,7 @@ export async function resolveIssueRecipients(
   if (issue.assigneeId) {
     const membership = await getWorkspaceMembership(
       db,
-      workspaceId,
+      organizationId,
       issue.assigneeId
     );
     if (membership) {
@@ -167,7 +167,7 @@ export async function resolveIssueRecipients(
         .from(githubUsers)
         .where(
           and(
-            eq(githubUsers.workspaceId, workspaceId),
+            eq(githubUsers.organizationId, organizationId),
             eq(githubUsers.githubLogin, issue.assigneeId)
           )
         )
@@ -180,7 +180,7 @@ export async function resolveIssueRecipients(
           .from(linearUsers)
           .where(
             and(
-              eq(linearUsers.workspaceId, workspaceId),
+              eq(linearUsers.organizationId, organizationId),
               eq(linearUsers.linearId, issue.assigneeId)
             )
           )
@@ -204,7 +204,7 @@ export async function resolveIssueRecipients(
     .from(issueSubscribers)
     .where(
       and(
-        eq(issueSubscribers.workspaceId, workspaceId),
+        eq(issueSubscribers.organizationId, organizationId),
         eq(issueSubscribers.issueId, issue.id)
       )
     )
@@ -217,7 +217,7 @@ export async function resolveIssueRecipients(
       .from(linearUsers)
       .where(
         and(
-          eq(linearUsers.workspaceId, workspaceId),
+          eq(linearUsers.organizationId, organizationId),
           inArray(linearUsers.linearId, linearIds)
         )
       )

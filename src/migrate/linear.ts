@@ -476,7 +476,7 @@ function mapPriority(
 
 export async function migrateLinear(
   env: WorkerEnv,
-  workspaceId: string,
+  organizationId: string,
   linearToken: string,
   teamId: string
 ): Promise<MigrationCounts> {
@@ -496,7 +496,7 @@ export async function migrateLinear(
   let membershipCount = 0;
 
   for (const lu of linearUsers) {
-    await createLinearUser(db, workspaceId, {
+    await createLinearUser(db, organizationId, {
       linearId: lu.id,
       name: lu.name,
       email: lu.email,
@@ -512,7 +512,7 @@ export async function migrateLinear(
           emailVerified: true,
         }));
       if (localUser) {
-        await createMembership(db, workspaceId, localUser.id, "member");
+        await createMembership(db, organizationId, localUser.id, "member");
         membershipCount++;
       }
     }
@@ -522,7 +522,7 @@ export async function migrateLinear(
 
   const labelMap = new Map<string, string>();
   for (const label of labels) {
-    const created = await createLabel(db, workspaceId, {
+    const created = await createLabel(db, organizationId, {
       name: label.name,
       color: label.color,
     });
@@ -532,7 +532,7 @@ export async function migrateLinear(
   }
 
   for (const state of states) {
-    await createState(db, workspaceId, {
+    await createState(db, organizationId, {
       linearId: state.id,
       name: state.name,
       type: state.type,
@@ -545,7 +545,7 @@ export async function migrateLinear(
   }
 
   for (const tmpl of templates) {
-    await createTemplate(db, workspaceId, {
+    await createTemplate(db, organizationId, {
       linearId: tmpl.id,
       name: tmpl.name,
       templateData: tmpl.templateData,
@@ -554,7 +554,7 @@ export async function migrateLinear(
 
   const projectMap = new Map<string, string>();
   for (const project of projects) {
-    const created = await createProject(db, workspaceId, {
+    const created = await createProject(db, organizationId, {
       name: project.name,
       status: project.state ?? "active",
       startDate: project.startDate,
@@ -567,7 +567,7 @@ export async function migrateLinear(
 
   const cycleMap = new Map<string, string>();
   for (const cycle of cycles) {
-    const created = await createCycle(db, workspaceId, {
+    const created = await createCycle(db, organizationId, {
       name: cycle.name,
       startDate: cycle.startsAt,
       endDate: cycle.endsAt,
@@ -577,9 +577,9 @@ export async function migrateLinear(
     }
   }
 
-  const doId = env.WORKSPACE_DURABLE_OBJECT.idFromName(workspaceId);
+  const doId = env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId);
   const stub = env.WORKSPACE_DURABLE_OBJECT.get(doId);
-  await stub.setWorkspaceId(workspaceId);
+  await stub.setWorkspaceId(organizationId);
 
   let issueCount = 0;
   let commentCount = 0;
@@ -618,7 +618,7 @@ export async function migrateLinear(
       issueCount++;
 
       for (const lc of li.comments.nodes) {
-        await createComment(db, workspaceId, {
+        await createComment(db, organizationId, {
           issueId: li.id,
           authorId: lc.user?.id ?? "unknown",
           body: lc.body,
@@ -633,7 +633,7 @@ export async function migrateLinear(
       for (const c of li.children.nodes) relationPairs.push([c.id, "child"]);
 
       for (const [toIssueId, type] of relationPairs) {
-        await createIssueRelation(db, workspaceId, {
+        await createIssueRelation(db, organizationId, {
           fromIssueId: li.id,
           toIssueId,
           type,
@@ -642,7 +642,7 @@ export async function migrateLinear(
       }
 
       for (const la of li.attachments.nodes) {
-        const created = await createAttachment(db, workspaceId, {
+        const created = await createAttachment(db, organizationId, {
           issueId: li.id,
           linearId: la.id,
           url: la.url,
@@ -659,11 +659,11 @@ export async function migrateLinear(
           const dl = await fetch(la.url, { method: "GET" });
           const ct = dl.headers.get("Content-Type") ?? "";
           if (dl.body && ct && !ct.includes("text/html")) {
-            const r2Key = `attachments/${workspaceId}/${li.id}/${created.id}`;
+            const r2Key = `attachments/${organizationId}/${li.id}/${created.id}`;
             await env.ATTACHMENTS_BUCKET.put(r2Key, dl.body, {
               httpMetadata: { contentType: ct },
             });
-            await setAttachmentR2Key(db, workspaceId, created.id, r2Key);
+            await setAttachmentR2Key(db, organizationId, created.id, r2Key);
           }
         }
       }
@@ -719,7 +719,7 @@ export async function migrateLinear(
 
         for (const change of changes) {
           if (change.from !== null || change.to !== null) {
-            await createIssueHistory(db, workspaceId, {
+            await createIssueHistory(db, organizationId, {
               issueId: li.id,
               linearId: lh.id,
               field: change.field,
@@ -734,7 +734,7 @@ export async function migrateLinear(
       }
 
       for (const sub of li.subscribers.nodes) {
-        await createIssueSubscriber(db, workspaceId, {
+        await createIssueSubscriber(db, organizationId, {
           issueId: li.id,
           linearUserId: sub.id,
         });

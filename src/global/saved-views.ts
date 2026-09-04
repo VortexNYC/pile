@@ -5,7 +5,7 @@ import type { D1Client } from "./db.js";
 import { savedViews } from "./schema.js";
 
 export interface SavedViewInput {
-  workspaceId: string;
+  organizationId: string;
   ownerId: string;
   name: string;
   filter: FilterCondition;
@@ -21,7 +21,7 @@ export interface SavedViewSort {
 
 export interface SavedViewRecord {
   id: string;
-  workspaceId: string;
+  organizationId: string;
   ownerId: string;
   name: string;
   filter: string;
@@ -40,7 +40,7 @@ export function createSavedView(
   const now = new Date().toISOString();
   const row = {
     id,
-    workspaceId: input.workspaceId,
+    organizationId: input.organizationId,
     ownerId: input.ownerId,
     name: input.name,
     filter: JSON.stringify(input.filter),
@@ -55,24 +55,26 @@ export function createSavedView(
 
 export function listSavedViews(
   db: D1Client,
-  workspaceId: string
+  organizationId: string
 ): Promise<SavedViewRecord[]> {
   return db
     .select()
     .from(savedViews)
-    .where(eq(savedViews.workspaceId, workspaceId))
+    .where(eq(savedViews.organizationId, organizationId))
     .all();
 }
 
 export function getSavedView(
   db: D1Client,
   id: string,
-  workspaceId: string
+  organizationId: string
 ): Promise<SavedViewRecord | undefined> {
   return db
     .select()
     .from(savedViews)
-    .where(and(eq(savedViews.id, id), eq(savedViews.workspaceId, workspaceId)))
+    .where(
+      and(eq(savedViews.id, id), eq(savedViews.organizationId, organizationId))
+    )
     .get();
 }
 
@@ -87,7 +89,7 @@ export interface SavedViewUpdate {
 export function updateSavedView(
   db: D1Client,
   id: string,
-  workspaceId: string,
+  organizationId: string,
   update: SavedViewUpdate
 ): Promise<SavedViewRecord | undefined> {
   const set: Partial<Record<string, string | null>> = {
@@ -105,7 +107,9 @@ export function updateSavedView(
   return db
     .update(savedViews)
     .set(set)
-    .where(and(eq(savedViews.id, id), eq(savedViews.workspaceId, workspaceId)))
+    .where(
+      and(eq(savedViews.id, id), eq(savedViews.organizationId, organizationId))
+    )
     .returning()
     .get();
 }
@@ -113,11 +117,13 @@ export function updateSavedView(
 export function deleteSavedView(
   db: D1Client,
   id: string,
-  workspaceId: string
+  organizationId: string
 ): Promise<SavedViewRecord | undefined> {
   return db
     .delete(savedViews)
-    .where(and(eq(savedViews.id, id), eq(savedViews.workspaceId, workspaceId)))
+    .where(
+      and(eq(savedViews.id, id), eq(savedViews.organizationId, organizationId))
+    )
     .returning()
     .get();
 }

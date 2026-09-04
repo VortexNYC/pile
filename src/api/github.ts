@@ -26,18 +26,18 @@ const installResponseSchema = z.object({
 
 const githubUserSchema = z.object({
   id: z.string(),
-  workspaceId: z.string(),
+  organizationId: z.string(),
   userId: z.string(),
   githubLogin: z.string(),
 });
 
 const githubUserRoute = createRoute({
   method: "post",
-  path: "/workspaces/{workspaceId}/github/users",
+  path: "/workspaces/{organizationId}/github/users",
   tags: ["github"],
   middleware: [rls("write")],
   request: {
-    params: z.object({ workspaceId: z.string() }),
+    params: z.object({ organizationId: z.string() }),
     body: {
       content: {
         "application/json": {
@@ -61,11 +61,11 @@ const githubUserRoute = createRoute({
 
 const githubInstallRoute = createRoute({
   method: "post",
-  path: "/workspaces/{workspaceId}/github/install",
+  path: "/workspaces/{organizationId}/github/install",
   tags: ["github"],
   middleware: [rls("write")],
   request: {
-    params: z.object({ workspaceId: z.string() }),
+    params: z.object({ organizationId: z.string() }),
     body: {
       content: {
         "application/json": { schema: installSchema },
@@ -84,12 +84,12 @@ const githubInstallRoute = createRoute({
 
 export function registerGithubRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(githubUserRoute, async (c) => {
-    const { workspaceId } = c.req.valid("param");
+    const { organizationId } = c.req.valid("param");
     const { userId, githubLogin } = c.req.valid("json");
     const db = createD1(c.env.D1);
     const mapping = await createGithubUserMapping(
       db,
-      workspaceId,
+      organizationId,
       userId,
       githubLogin
     );
@@ -97,7 +97,7 @@ export function registerGithubRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(githubInstallRoute, async (c) => {
-    const { workspaceId } = c.req.valid("param");
+    const { organizationId } = c.req.valid("param");
     const { installationId } = c.req.valid("json");
 
     const token = await getInstallationToken(c.env, installationId);
@@ -151,7 +151,7 @@ export function registerGithubRoutes(app: OpenAPIHono<AppContext>) {
         await deleteGithubInstallation(db, repo.full_name);
         await createGithubInstallation(
           db,
-          workspaceId,
+          organizationId,
           installationId,
           repo.full_name
         );

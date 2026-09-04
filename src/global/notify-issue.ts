@@ -8,7 +8,7 @@ import {
 
 async function notifyRecipients(
   env: AppEnv,
-  workspaceId: string,
+  organizationId: string,
   issue: { id: string; assigneeId: string | null },
   type: NotificationType,
   actorId?: string
@@ -16,14 +16,14 @@ async function notifyRecipients(
   const db = createD1(env.D1);
   const recipients = await resolveIssueRecipients(
     db,
-    workspaceId,
+    organizationId,
     issue,
     actorId
   );
   await Promise.all(
     recipients.map((recipientId) =>
       createNotification(db, {
-        workspaceId,
+        organizationId,
         recipientId,
         recipientType: "user",
         issueId: issue.id,
@@ -35,46 +35,52 @@ async function notifyRecipients(
 
 export async function notifyIssueCreated(
   env: AppEnv,
-  workspaceId: string,
+  organizationId: string,
   issue: { id: string; assigneeId: string | null },
   actorId?: string
 ) {
-  return notifyRecipients(env, workspaceId, issue, "issue_created", actorId);
+  return notifyRecipients(env, organizationId, issue, "issue_created", actorId);
 }
 
 export async function notifyIssueUpdated(
   env: AppEnv,
-  workspaceId: string,
+  organizationId: string,
   issue: { id: string; assigneeId: string | null },
   actorId?: string
 ) {
-  return notifyRecipients(env, workspaceId, issue, "issue_updated", actorId);
+  return notifyRecipients(env, organizationId, issue, "issue_updated", actorId);
 }
 
 export async function notifyIssueDeleted(
   env: AppEnv,
-  workspaceId: string,
+  organizationId: string,
   issue: { id: string; assigneeId: string | null },
   actorId?: string
 ) {
-  return notifyRecipients(env, workspaceId, issue, "issue_deleted", actorId);
+  return notifyRecipients(env, organizationId, issue, "issue_deleted", actorId);
 }
 
 export async function notifyCommentCreated(
   env: AppEnv,
-  workspaceId: string,
+  organizationId: string,
   issue: { id: string; assigneeId: string | null },
   actorId?: string
 ) {
-  return notifyRecipients(env, workspaceId, issue, "comment_created", actorId);
+  return notifyRecipients(
+    env,
+    organizationId,
+    issue,
+    "comment_created",
+    actorId
+  );
 }
 
 export async function notifyMany(
   env: AppEnv,
-  workspaceId: string,
+  organizationId: string,
   issue: { id: string; assigneeId: string | null },
   type: NotificationType,
   actorId?: string
 ) {
-  return notifyRecipients(env, workspaceId, issue, type, actorId);
+  return notifyRecipients(env, organizationId, issue, type, actorId);
 }

@@ -3,11 +3,11 @@ import { and, eq } from "drizzle-orm";
 import type { D1Client } from "./db.js";
 import { outboundWebhookDeliveries, webhookSubscriptions } from "./schema.js";
 
-export function listWebhookSubscriptions(db: D1Client, workspaceId: string) {
+export function listWebhookSubscriptions(db: D1Client, organizationId: string) {
   return db
     .select()
     .from(webhookSubscriptions)
-    .where(eq(webhookSubscriptions.workspaceId, workspaceId))
+    .where(eq(webhookSubscriptions.organizationId, organizationId))
     .all();
 }
 
@@ -21,7 +21,7 @@ export function getWebhookSubscription(db: D1Client, id: string) {
 
 export function findWebhookSubscriptionByWorkspace(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   id: string
 ) {
   return db
@@ -30,7 +30,7 @@ export function findWebhookSubscriptionByWorkspace(
     .where(
       and(
         eq(webhookSubscriptions.id, id),
-        eq(webhookSubscriptions.workspaceId, workspaceId)
+        eq(webhookSubscriptions.organizationId, organizationId)
       )
     )
     .get();
@@ -38,7 +38,7 @@ export function findWebhookSubscriptionByWorkspace(
 
 export async function createWebhookSubscription(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   values: {
     url: string;
     events?: string;
@@ -49,7 +49,7 @@ export async function createWebhookSubscription(
   const ts = new Date().toISOString();
   await db.insert(webhookSubscriptions).values({
     id,
-    workspaceId,
+    organizationId,
     url: values.url,
     events: values.events ?? "*",
     secret: values.secret ?? "",
@@ -60,7 +60,7 @@ export async function createWebhookSubscription(
 
 export async function updateWebhookSubscription(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   id: string,
   values: {
     url?: string;
@@ -70,7 +70,7 @@ export async function updateWebhookSubscription(
 ) {
   const existing = await findWebhookSubscriptionByWorkspace(
     db,
-    workspaceId,
+    organizationId,
     id
   );
   if (!existing) return null;
@@ -91,12 +91,12 @@ export async function updateWebhookSubscription(
 
 export async function deleteWebhookSubscription(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   id: string
 ) {
   const existing = await findWebhookSubscriptionByWorkspace(
     db,
-    workspaceId,
+    organizationId,
     id
   );
   if (!existing) return false;
@@ -107,7 +107,7 @@ export async function deleteWebhookSubscription(
 
 export function listWebhookDeliveries(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   subscriptionId: string
 ) {
   return db
@@ -115,7 +115,7 @@ export function listWebhookDeliveries(
     .from(outboundWebhookDeliveries)
     .where(
       and(
-        eq(outboundWebhookDeliveries.workspaceId, workspaceId),
+        eq(outboundWebhookDeliveries.organizationId, organizationId),
         eq(outboundWebhookDeliveries.subscriptionId, subscriptionId)
       )
     )

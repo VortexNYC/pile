@@ -48,7 +48,7 @@ export interface ListIssuesArgs {
 
 export interface Issue {
   id: Id;
-  workspaceId: Id;
+  organizationId: Id;
   teamId: string;
   title: string;
   description: string | null;
@@ -71,25 +71,25 @@ export interface Issue {
 export type RealtimeEvent =
   | {
       type: "connected";
-      workspaceId: string;
+      organizationId: string;
     }
   | {
       type: "issue.created";
-      workspaceId: string;
+      organizationId: string;
       issue: Issue;
     }
   | {
       type: "issue.updated";
-      workspaceId: string;
+      organizationId: string;
       issue: Issue;
     }
   | {
       type: "pr.updated";
-      workspaceId: string;
+      organizationId: string;
       issue: Issue;
     }
   | {
       type: "issue.deleted";
-      workspaceId: string;
+      organizationId: string;
       issueId: Id;
     };

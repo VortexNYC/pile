@@ -14,7 +14,7 @@ import { rls } from "../platform/rls.js";
 
 const issueSubscriberSchema = z.object({
   id: z.string(),
-  workspaceId: z.string(),
+  organizationId: z.string(),
   issueId: z.string(),
   linearUserId: z.string(),
   createdAt: z.string(),
@@ -26,11 +26,11 @@ const subscriberBodySchema = z.object({
 
 const listIssueSubscribersRoute = createRoute({
   method: "get",
-  path: "/workspaces/{workspaceId}/issues/{issueId}/subscribers",
+  path: "/workspaces/{organizationId}/issues/{issueId}/subscribers",
   tags: ["issue-subscribers"],
   middleware: [rls("read")],
   request: {
-    params: z.object({ workspaceId: z.string(), issueId: z.string() }),
+    params: z.object({ organizationId: z.string(), issueId: z.string() }),
   },
   responses: {
     200: {
@@ -46,11 +46,11 @@ const listIssueSubscribersRoute = createRoute({
 
 const createIssueSubscriberRoute = createRoute({
   method: "post",
-  path: "/workspaces/{workspaceId}/issues/{issueId}/subscribers",
+  path: "/workspaces/{organizationId}/issues/{issueId}/subscribers",
   tags: ["issue-subscribers"],
   middleware: [rls("write")],
   request: {
-    params: z.object({ workspaceId: z.string(), issueId: z.string() }),
+    params: z.object({ organizationId: z.string(), issueId: z.string() }),
     body: {
       content: {
         "application/json": { schema: subscriberBodySchema },
@@ -69,12 +69,12 @@ const createIssueSubscriberRoute = createRoute({
 
 const deleteIssueSubscriberRoute = createRoute({
   method: "delete",
-  path: "/workspaces/{workspaceId}/issues/{issueId}/subscribers/{id}",
+  path: "/workspaces/{organizationId}/issues/{issueId}/subscribers/{id}",
   tags: ["issue-subscribers"],
   middleware: [rls("write")],
   request: {
     params: z.object({
-      workspaceId: z.string(),
+      organizationId: z.string(),
       issueId: z.string(),
       id: z.string(),
     }),
@@ -86,17 +86,17 @@ const deleteIssueSubscriberRoute = createRoute({
 
 export function registerIssueSubscriberRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listIssueSubscribersRoute, async (c) => {
-    const { workspaceId, issueId } = c.req.valid("param");
+    const { organizationId, issueId } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    const items = await listIssueSubscribers(db, workspaceId, issueId);
+    const items = await listIssueSubscribers(db, organizationId, issueId);
     return c.json({ subscribers: items });
   });
 
   app.openapi(createIssueSubscriberRoute, async (c) => {
-    const { workspaceId, issueId } = c.req.valid("param");
+    const { organizationId, issueId } = c.req.valid("param");
     const input = c.req.valid("json");
     const db = createD1(c.env.D1);
-    const item = await createIssueSubscriber(db, workspaceId, {
+    const item = await createIssueSubscriber(db, organizationId, {
       issueId,
       linearUserId: input.linearUserId,
     });
@@ -104,9 +104,9 @@ export function registerIssueSubscriberRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(deleteIssueSubscriberRoute, async (c) => {
-    const { workspaceId, id } = c.req.valid("param");
+    const { organizationId, id } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    const existing = await getIssueSubscriber(db, workspaceId, id);
+    const existing = await getIssueSubscriber(db, organizationId, id);
     if (!existing) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -114,7 +114,7 @@ export function registerIssueSubscriberRoutes(app: OpenAPIHono<AppContext>) {
         message: "Subscriber not found",
       });
     }
-    await deleteIssueSubscriber(db, workspaceId, id);
+    await deleteIssueSubscriber(db, organizationId, id);
     return c.body(null, 204);
   });
 }

@@ -13,7 +13,7 @@ import { rls } from "../platform/rls.js";
 
 const templateSchema = z.object({
   id: z.string(),
-  workspaceId: z.string(),
+  organizationId: z.string(),
   linearId: z.string(),
   name: z.string(),
   templateData: z.string().nullable(),
@@ -28,11 +28,11 @@ const templateBodySchema = z.object({
 
 const listTemplatesRoute = createRoute({
   method: "get",
-  path: "/workspaces/{workspaceId}/templates",
+  path: "/workspaces/{organizationId}/templates",
   tags: ["templates"],
   middleware: [rls("read")],
   request: {
-    params: z.object({ workspaceId: z.string() }),
+    params: z.object({ organizationId: z.string() }),
   },
   responses: {
     200: {
@@ -48,11 +48,11 @@ const listTemplatesRoute = createRoute({
 
 const createTemplateRoute = createRoute({
   method: "post",
-  path: "/workspaces/{workspaceId}/templates",
+  path: "/workspaces/{organizationId}/templates",
   tags: ["templates"],
   middleware: [rls("write")],
   request: {
-    params: z.object({ workspaceId: z.string() }),
+    params: z.object({ organizationId: z.string() }),
     body: {
       content: {
         "application/json": { schema: templateBodySchema },
@@ -71,11 +71,11 @@ const createTemplateRoute = createRoute({
 
 const getTemplateRoute = createRoute({
   method: "get",
-  path: "/workspaces/{workspaceId}/templates/{id}",
+  path: "/workspaces/{organizationId}/templates/{id}",
   tags: ["templates"],
   middleware: [rls("read")],
   request: {
-    params: z.object({ workspaceId: z.string(), id: z.string() }),
+    params: z.object({ organizationId: z.string(), id: z.string() }),
   },
   responses: {
     200: {
@@ -89,24 +89,24 @@ const getTemplateRoute = createRoute({
 
 export function registerTemplateRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listTemplatesRoute, async (c) => {
-    const { workspaceId } = c.req.valid("param");
+    const { organizationId } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    const items = await listTemplates(db, workspaceId);
+    const items = await listTemplates(db, organizationId);
     return c.json({ templates: items });
   });
 
   app.openapi(createTemplateRoute, async (c) => {
-    const { workspaceId } = c.req.valid("param");
+    const { organizationId } = c.req.valid("param");
     const input = c.req.valid("json");
     const db = createD1(c.env.D1);
-    const item = await createTemplate(db, workspaceId, input);
+    const item = await createTemplate(db, organizationId, input);
     return c.json(item, 201);
   });
 
   app.openapi(getTemplateRoute, async (c) => {
-    const { workspaceId, id } = c.req.valid("param");
+    const { organizationId, id } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    const item = await getTemplate(db, workspaceId, id);
+    const item = await getTemplate(db, organizationId, id);
     if (!item) {
       throw new VortexError({
         code: "NOT_FOUND",

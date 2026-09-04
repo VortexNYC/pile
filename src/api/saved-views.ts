@@ -25,7 +25,7 @@ const savedViewSortSchema = z.object({
 
 const savedViewSchema = z.object({
   id: z.string(),
-  workspaceId: z.string(),
+  organizationId: z.string(),
   ownerId: z.string(),
   name: z.string(),
   filter: z.unknown(),
@@ -82,7 +82,7 @@ function serializeSavedView(record: SavedViewRecord) {
   const filter = parseSavedViewFilter(record.filter);
   return {
     id: record.id,
-    workspaceId: record.workspaceId,
+    organizationId: record.organizationId,
     ownerId: record.ownerId,
     name: record.name,
     filter,
@@ -116,11 +116,11 @@ const updateSavedViewBodySchema = z.object({
 
 const listSavedViewsRoute = createRoute({
   method: "get",
-  path: "/workspaces/{workspaceId}/saved-views",
+  path: "/workspaces/{organizationId}/saved-views",
   tags: ["saved-views"],
   middleware: [rls("read")],
   request: {
-    params: z.object({ workspaceId: z.string() }),
+    params: z.object({ organizationId: z.string() }),
   },
   responses: {
     200: {
@@ -136,11 +136,11 @@ const listSavedViewsRoute = createRoute({
 
 const createSavedViewRoute = createRoute({
   method: "post",
-  path: "/workspaces/{workspaceId}/saved-views",
+  path: "/workspaces/{organizationId}/saved-views",
   tags: ["saved-views"],
   middleware: [rls("write")],
   request: {
-    params: z.object({ workspaceId: z.string() }),
+    params: z.object({ organizationId: z.string() }),
     body: {
       content: {
         "application/json": { schema: createSavedViewBodySchema },
@@ -159,11 +159,11 @@ const createSavedViewRoute = createRoute({
 
 const getSavedViewRoute = createRoute({
   method: "get",
-  path: "/workspaces/{workspaceId}/saved-views/{id}",
+  path: "/workspaces/{organizationId}/saved-views/{id}",
   tags: ["saved-views"],
   middleware: [rls("read")],
   request: {
-    params: z.object({ workspaceId: z.string(), id: z.string() }),
+    params: z.object({ organizationId: z.string(), id: z.string() }),
   },
   responses: {
     200: {
@@ -178,11 +178,11 @@ const getSavedViewRoute = createRoute({
 
 const updateSavedViewRoute = createRoute({
   method: "patch",
-  path: "/workspaces/{workspaceId}/saved-views/{id}",
+  path: "/workspaces/{organizationId}/saved-views/{id}",
   tags: ["saved-views"],
   middleware: [rls("write")],
   request: {
-    params: z.object({ workspaceId: z.string(), id: z.string() }),
+    params: z.object({ organizationId: z.string(), id: z.string() }),
     body: {
       content: {
         "application/json": { schema: updateSavedViewBodySchema },
@@ -202,11 +202,11 @@ const updateSavedViewRoute = createRoute({
 
 const deleteSavedViewRoute = createRoute({
   method: "delete",
-  path: "/workspaces/{workspaceId}/saved-views/{id}",
+  path: "/workspaces/{organizationId}/saved-views/{id}",
   tags: ["saved-views"],
   middleware: [rls("write")],
   request: {
-    params: z.object({ workspaceId: z.string(), id: z.string() }),
+    params: z.object({ organizationId: z.string(), id: z.string() }),
   },
   responses: {
     204: { description: "Saved view deleted" },
@@ -221,19 +221,19 @@ function getIdentity(c: {
 
 export function registerSavedViewRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listSavedViewsRoute, async (c) => {
-    const { workspaceId } = c.req.valid("param");
+    const { organizationId } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    const records = await listSavedViews(db, workspaceId);
+    const records = await listSavedViews(db, organizationId);
     return c.json({ views: records.map(serializeSavedView) });
   });
 
   app.openapi(createSavedViewRoute, async (c) => {
-    const { workspaceId } = c.req.valid("param");
+    const { organizationId } = c.req.valid("param");
     const body = c.req.valid("json");
     const identity = getIdentity(c);
     const db = createD1(c.env.D1);
     const record = await createSavedView(db, {
-      workspaceId,
+      organizationId,
       ownerId: identity.id,
       name: body.name,
       filter: unknownToFilter(body.filter),
@@ -245,9 +245,9 @@ export function registerSavedViewRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(getSavedViewRoute, async (c) => {
-    const { workspaceId, id } = c.req.valid("param");
+    const { organizationId, id } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    const record = await getSavedView(db, id, workspaceId);
+    const record = await getSavedView(db, id, organizationId);
     if (!record) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -259,11 +259,11 @@ export function registerSavedViewRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(updateSavedViewRoute, async (c) => {
-    const { workspaceId, id } = c.req.valid("param");
+    const { organizationId, id } = c.req.valid("param");
     const body = c.req.valid("json");
     const identity = getIdentity(c);
     const db = createD1(c.env.D1);
-    const existing = await getSavedView(db, id, workspaceId);
+    const existing = await getSavedView(db, id, organizationId);
     if (!existing) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -281,7 +281,7 @@ export function registerSavedViewRoutes(app: OpenAPIHono<AppContext>) {
         message: "Cannot modify another user's saved view",
       });
     }
-    const record = await updateSavedView(db, id, workspaceId, {
+    const record = await updateSavedView(db, id, organizationId, {
       name: body.name,
       filter:
         body.filter === undefined ? undefined : unknownToFilter(body.filter),
@@ -300,10 +300,10 @@ export function registerSavedViewRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(deleteSavedViewRoute, async (c) => {
-    const { workspaceId, id } = c.req.valid("param");
+    const { organizationId, id } = c.req.valid("param");
     const identity = getIdentity(c);
     const db = createD1(c.env.D1);
-    const existing = await getSavedView(db, id, workspaceId);
+    const existing = await getSavedView(db, id, organizationId);
     if (!existing) {
       return c.body(null, 204);
     }
@@ -317,7 +317,7 @@ export function registerSavedViewRoutes(app: OpenAPIHono<AppContext>) {
         message: "Cannot delete another user's saved view",
       });
     }
-    await deleteSavedView(db, id, workspaceId);
+    await deleteSavedView(db, id, organizationId);
     return c.body(null, 204);
   });
 }

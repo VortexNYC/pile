@@ -3,25 +3,27 @@ import { and, eq } from "drizzle-orm";
 import type { D1Client } from "./db.js";
 import { templates } from "./schema.js";
 
-export function listTemplates(db: D1Client, workspaceId: string) {
+export function listTemplates(db: D1Client, organizationId: string) {
   return db
     .select()
     .from(templates)
-    .where(eq(templates.workspaceId, workspaceId))
+    .where(eq(templates.organizationId, organizationId))
     .all();
 }
 
-export function getTemplate(db: D1Client, workspaceId: string, id: string) {
+export function getTemplate(db: D1Client, organizationId: string, id: string) {
   return db
     .select()
     .from(templates)
-    .where(and(eq(templates.workspaceId, workspaceId), eq(templates.id, id)))
+    .where(
+      and(eq(templates.organizationId, organizationId), eq(templates.id, id))
+    )
     .get();
 }
 
 export async function createTemplate(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   values: {
     linearId: string;
     name: string;
@@ -33,7 +35,7 @@ export async function createTemplate(
     .from(templates)
     .where(
       and(
-        eq(templates.workspaceId, workspaceId),
+        eq(templates.organizationId, organizationId),
         eq(templates.linearId, values.linearId)
       )
     )
@@ -44,7 +46,7 @@ export async function createTemplate(
   const id = crypto.randomUUID();
   await db.insert(templates).values({
     id,
-    workspaceId,
+    organizationId,
     linearId: values.linearId,
     name: values.name,
     templateData: values.templateData ?? null,

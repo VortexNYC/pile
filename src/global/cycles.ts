@@ -5,13 +5,15 @@ import { cycles } from "./schema.js";
 
 export async function findOrCreateCycleByName(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   name: string
 ) {
   const existing = await db
     .select({ id: cycles.id })
     .from(cycles)
-    .where(and(eq(cycles.workspaceId, workspaceId), eq(cycles.name, name)))
+    .where(
+      and(eq(cycles.organizationId, organizationId), eq(cycles.name, name))
+    )
     .get();
   if (existing) {
     return existing.id;
@@ -21,7 +23,7 @@ export async function findOrCreateCycleByName(
   const ts = new Date().toISOString();
   await db.insert(cycles).values({
     id,
-    workspaceId,
+    organizationId,
     projectId: null,
     name,
     startDate: null,

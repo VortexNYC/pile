@@ -8,7 +8,7 @@ import { rls } from "../platform/rls.js";
 
 const historySchema = z.object({
   id: z.string(),
-  workspaceId: z.string(),
+  organizationId: z.string(),
   issueId: z.string(),
   linearId: z.string().nullable(),
   field: z.string(),
@@ -20,11 +20,11 @@ const historySchema = z.object({
 
 const listIssueHistoryRoute = createRoute({
   method: "get",
-  path: "/workspaces/{workspaceId}/issues/{issueId}/history",
+  path: "/workspaces/{organizationId}/issues/{issueId}/history",
   tags: ["history"],
   middleware: [rls("read")],
   request: {
-    params: z.object({ workspaceId: z.string(), issueId: z.string() }),
+    params: z.object({ organizationId: z.string(), issueId: z.string() }),
   },
   responses: {
     200: {
@@ -40,9 +40,9 @@ const listIssueHistoryRoute = createRoute({
 
 export function registerIssueHistoryRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listIssueHistoryRoute, async (c) => {
-    const { workspaceId, issueId } = c.req.valid("param");
+    const { organizationId, issueId } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    const items = await listIssueHistory(db, workspaceId, issueId);
+    const items = await listIssueHistory(db, organizationId, issueId);
     return c.json({ history: items });
   });
 }

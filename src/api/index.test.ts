@@ -43,18 +43,18 @@ async function seedWorkspace() {
   return workspace!.id;
 }
 
-async function adminToken(workspaceId: string) {
-  const token = await createAdminTokenRecord(workspaceId);
+async function adminToken(organizationId: string) {
+  const token = await createAdminTokenRecord(organizationId);
   return token.token;
 }
 
-async function createAdminTokenRecord(workspaceId: string) {
+async function createAdminTokenRecord(organizationId: string) {
   const auth = createAuth(env);
   const result = await auth.api.createApiKey({
     body: {
       userId: "user-1",
       name: "test-admin",
-      metadata: { workspaceId, permissions: "admin" },
+      metadata: { organizationId, permissions: "admin" },
     },
   });
   const parsed = z.object({ id: z.string(), key: z.string() }).parse(result);
@@ -90,11 +90,11 @@ describe("API integration", () => {
   });
 
   it("manages workspace states", async () => {
-    const workspaceId = await seedWorkspace();
-    const token = await adminToken(workspaceId);
+    const organizationId = await seedWorkspace();
+    const token = await adminToken(organizationId);
 
     const create = await app.fetch(
-      request("/workspaces/" + workspaceId + "/states", {
+      request("/workspaces/" + organizationId + "/states", {
         method: "POST",
         token,
         body: JSON.stringify({
@@ -110,7 +110,7 @@ describe("API integration", () => {
     expect(state.name).toBe("Todo");
 
     const list = await app.fetch(
-      request("/workspaces/" + workspaceId + "/states", { token }),
+      request("/workspaces/" + organizationId + "/states", { token }),
       env
     );
     expect(list.status).toBe(200);
@@ -118,13 +118,15 @@ describe("API integration", () => {
     expect(listBody.states).toHaveLength(1);
 
     const get = await app.fetch(
-      request("/workspaces/" + workspaceId + "/states/" + state.id, { token }),
+      request("/workspaces/" + organizationId + "/states/" + state.id, {
+        token,
+      }),
       env
     );
     expect(get.status).toBe(200);
 
     const patch = await app.fetch(
-      request("/workspaces/" + workspaceId + "/states/" + state.id, {
+      request("/workspaces/" + organizationId + "/states/" + state.id, {
         method: "PATCH",
         token,
         body: JSON.stringify({ name: "In Progress", type: "started" }),
@@ -136,7 +138,7 @@ describe("API integration", () => {
     expect(updated.name).toBe("In Progress");
 
     const del = await app.fetch(
-      request("/workspaces/" + workspaceId + "/states/" + state.id, {
+      request("/workspaces/" + organizationId + "/states/" + state.id, {
         method: "DELETE",
         token,
       }),
@@ -146,11 +148,11 @@ describe("API integration", () => {
   });
 
   it("manages workspace tokens", async () => {
-    const workspaceId = await seedWorkspace();
-    const token = await adminToken(workspaceId);
+    const organizationId = await seedWorkspace();
+    const token = await adminToken(organizationId);
 
     const create = await app.fetch(
-      request("/workspaces/" + workspaceId + "/tokens", {
+      request("/workspaces/" + organizationId + "/tokens", {
         method: "POST",
         token,
         body: JSON.stringify({ name: "ci", permissions: "read" }),
@@ -162,7 +164,7 @@ describe("API integration", () => {
     expect(created.name).toBe("ci");
 
     const list = await app.fetch(
-      request("/workspaces/" + workspaceId + "/tokens", { token }),
+      request("/workspaces/" + organizationId + "/tokens", { token }),
       env
     );
     expect(list.status).toBe(200);
@@ -170,7 +172,7 @@ describe("API integration", () => {
     expect(listBody.tokens.length).toBeGreaterThanOrEqual(1);
 
     const del = await app.fetch(
-      request("/workspaces/" + workspaceId + "/tokens/" + created.id, {
+      request("/workspaces/" + organizationId + "/tokens/" + created.id, {
         method: "DELETE",
         token,
       }),
@@ -180,11 +182,11 @@ describe("API integration", () => {
   });
 
   it("manages memberships", async () => {
-    const workspaceId = await seedWorkspace();
-    const token = await adminToken(workspaceId);
+    const organizationId = await seedWorkspace();
+    const token = await adminToken(organizationId);
 
     const create = await app.fetch(
-      request("/workspaces/" + workspaceId + "/memberships", {
+      request("/workspaces/" + organizationId + "/memberships", {
         method: "POST",
         token,
         body: JSON.stringify({ userId: "user-1", role: "member" }),
@@ -196,7 +198,7 @@ describe("API integration", () => {
     expect(membership.userId).toBe("user-1");
 
     const list = await app.fetch(
-      request("/workspaces/" + workspaceId + "/memberships", { token }),
+      request("/workspaces/" + organizationId + "/memberships", { token }),
       env
     );
     expect(list.status).toBe(200);
@@ -205,11 +207,11 @@ describe("API integration", () => {
   });
 
   it("manages linear users", async () => {
-    const workspaceId = await seedWorkspace();
-    const token = await adminToken(workspaceId);
+    const organizationId = await seedWorkspace();
+    const token = await adminToken(organizationId);
 
     const create = await app.fetch(
-      request("/workspaces/" + workspaceId + "/linear-users", {
+      request("/workspaces/" + organizationId + "/linear-users", {
         method: "POST",
         token,
         body: JSON.stringify({
@@ -225,9 +227,12 @@ describe("API integration", () => {
     expect(user.linearId).toBe("linear-user-1");
 
     const get = await app.fetch(
-      request("/workspaces/" + workspaceId + "/linear-users/" + user.linearId, {
-        token,
-      }),
+      request(
+        "/workspaces/" + organizationId + "/linear-users/" + user.linearId,
+        {
+          token,
+        }
+      ),
       env
     );
     expect(get.status).toBe(200);
@@ -236,13 +241,13 @@ describe("API integration", () => {
   });
 
   it("manages issue subscribers", async () => {
-    const workspaceId = await seedWorkspace();
+    const organizationId = await seedWorkspace();
     const issueId = "issue-1";
-    const token = await adminToken(workspaceId);
+    const token = await adminToken(organizationId);
 
     const create = await app.fetch(
       request(
-        "/workspaces/" + workspaceId + "/issues/" + issueId + "/subscribers",
+        "/workspaces/" + organizationId + "/issues/" + issueId + "/subscribers",
         {
           method: "POST",
           token,
@@ -255,7 +260,7 @@ describe("API integration", () => {
 
     const list = await app.fetch(
       request(
-        "/workspaces/" + workspaceId + "/issues/" + issueId + "/subscribers",
+        "/workspaces/" + organizationId + "/issues/" + issueId + "/subscribers",
         { token }
       ),
       env
@@ -266,11 +271,11 @@ describe("API integration", () => {
   });
 
   it("records issue history on create and update", async () => {
-    const workspaceId = await seedWorkspace();
-    const token = await adminToken(workspaceId);
+    const organizationId = await seedWorkspace();
+    const token = await adminToken(organizationId);
 
     const create = await app.fetch(
-      request("/workspaces/" + workspaceId + "/issues", {
+      request("/workspaces/" + organizationId + "/issues", {
         method: "POST",
         token,
         body: JSON.stringify({
@@ -285,7 +290,7 @@ describe("API integration", () => {
     const issue = await create.json<{ id: string }>();
 
     const update = await app.fetch(
-      request("/workspaces/" + workspaceId + "/issues/" + issue.id, {
+      request("/workspaces/" + organizationId + "/issues/" + issue.id, {
         method: "PATCH",
         token,
         body: JSON.stringify({
@@ -299,7 +304,7 @@ describe("API integration", () => {
 
     const historyRes = await app.fetch(
       request(
-        "/workspaces/" + workspaceId + "/issues/" + issue.id + "/history",
+        "/workspaces/" + organizationId + "/issues/" + issue.id + "/history",
         { token }
       ),
       env
@@ -310,12 +315,12 @@ describe("API integration", () => {
   });
 
   it("manages webhook subscriptions", async () => {
-    const workspaceId = await seedWorkspace();
-    const token = await adminToken(workspaceId);
+    const organizationId = await seedWorkspace();
+    const token = await adminToken(organizationId);
     const url = "http://127.0.0.1:1/webhook";
 
     const createRes = await app.fetch(
-      request(`/workspaces/${workspaceId}/webhook-subscriptions`, {
+      request(`/workspaces/${organizationId}/webhook-subscriptions`, {
         method: "POST",
         token,
         body: JSON.stringify({ url, events: "issue.created" }),
@@ -327,7 +332,7 @@ describe("API integration", () => {
     expect(sub.url).toBe(url);
 
     const listRes = await app.fetch(
-      request(`/workspaces/${workspaceId}/webhook-subscriptions`, { token }),
+      request(`/workspaces/${organizationId}/webhook-subscriptions`, { token }),
       env
     );
     expect(listRes.status).toBe(200);
@@ -336,7 +341,7 @@ describe("API integration", () => {
 
     const deliveriesRes = await app.fetch(
       request(
-        `/workspaces/${workspaceId}/webhook-subscriptions/${sub.id}/deliveries`,
+        `/workspaces/${organizationId}/webhook-subscriptions/${sub.id}/deliveries`,
         { token }
       ),
       env
@@ -346,7 +351,7 @@ describe("API integration", () => {
     expect(Array.isArray(deliveries.deliveries)).toBe(true);
 
     const deleteRes = await app.fetch(
-      request(`/workspaces/${workspaceId}/webhook-subscriptions/${sub.id}`, {
+      request(`/workspaces/${organizationId}/webhook-subscriptions/${sub.id}`, {
         method: "DELETE",
         token,
       }),
@@ -356,11 +361,11 @@ describe("API integration", () => {
   });
 
   it("searches issues by title, description, identifier and comments", async () => {
-    const workspaceId = await seedWorkspace();
-    const token = await adminToken(workspaceId);
+    const organizationId = await seedWorkspace();
+    const token = await adminToken(organizationId);
 
     const issueA = await app.fetch(
-      request(`/workspaces/${workspaceId}/issues`, {
+      request(`/workspaces/${organizationId}/issues`, {
         method: "POST",
         token,
         body: JSON.stringify({
@@ -374,7 +379,7 @@ describe("API integration", () => {
     const issueAData = await issueA.json<{ id: string; identifier: string }>();
 
     const issueB = await app.fetch(
-      request(`/workspaces/${workspaceId}/issues`, {
+      request(`/workspaces/${organizationId}/issues`, {
         method: "POST",
         token,
         body: JSON.stringify({
@@ -387,16 +392,19 @@ describe("API integration", () => {
     expect(issueB.status).toBe(201);
 
     await app.fetch(
-      request(`/workspaces/${workspaceId}/issues/${issueAData.id}/comments`, {
-        method: "POST",
-        token,
-        body: JSON.stringify({ body: "epsilon comment body" }),
-      }),
+      request(
+        `/workspaces/${organizationId}/issues/${issueAData.id}/comments`,
+        {
+          method: "POST",
+          token,
+          body: JSON.stringify({ body: "epsilon comment body" }),
+        }
+      ),
       env
     );
 
     const byTitle = await app.fetch(
-      request(`/workspaces/${workspaceId}/issues?search=Unique+alpha`, {
+      request(`/workspaces/${organizationId}/issues?search=Unique+alpha`, {
         token,
       }),
       env
@@ -406,7 +414,7 @@ describe("API integration", () => {
     expect(byTitleBody.issues.length).toBe(1);
 
     const byDescription = await app.fetch(
-      request(`/workspaces/${workspaceId}/issues?search=gamma`, { token }),
+      request(`/workspaces/${organizationId}/issues?search=gamma`, { token }),
       env
     );
     expect(byDescription.status).toBe(200);
@@ -415,7 +423,7 @@ describe("API integration", () => {
 
     const byIdentifier = await app.fetch(
       request(
-        `/workspaces/${workspaceId}/issues?search=${issueAData.identifier}`,
+        `/workspaces/${organizationId}/issues?search=${issueAData.identifier}`,
         { token }
       ),
       env
@@ -425,7 +433,7 @@ describe("API integration", () => {
     expect(byIdentifierBody.issues.length).toBe(1);
 
     const byComment = await app.fetch(
-      request(`/workspaces/${workspaceId}/issues?search=epsilon`, { token }),
+      request(`/workspaces/${organizationId}/issues?search=epsilon`, { token }),
       env
     );
     expect(byComment.status).toBe(200);
@@ -434,11 +442,11 @@ describe("API integration", () => {
   });
 
   it("creates saved views and applies them to issue lists", async () => {
-    const workspaceId = await seedWorkspace();
-    const token = await adminToken(workspaceId);
+    const organizationId = await seedWorkspace();
+    const token = await adminToken(organizationId);
 
     const todoIssue = await app.fetch(
-      request(`/workspaces/${workspaceId}/issues`, {
+      request(`/workspaces/${organizationId}/issues`, {
         method: "POST",
         token,
         body: JSON.stringify({
@@ -452,7 +460,7 @@ describe("API integration", () => {
     expect(todoIssue.status).toBe(201);
 
     await app.fetch(
-      request(`/workspaces/${workspaceId}/issues`, {
+      request(`/workspaces/${organizationId}/issues`, {
         method: "POST",
         token,
         body: JSON.stringify({
@@ -471,7 +479,7 @@ describe("API integration", () => {
     } as const;
 
     const createView = await app.fetch(
-      request(`/workspaces/${workspaceId}/saved-views`, {
+      request(`/workspaces/${organizationId}/saved-views`, {
         method: "POST",
         token,
         body: JSON.stringify({
@@ -485,7 +493,9 @@ describe("API integration", () => {
     const view = await createView.json<{ id: string }>();
 
     const apply = await app.fetch(
-      request(`/workspaces/${workspaceId}/issues?view=${view.id}`, { token }),
+      request(`/workspaces/${organizationId}/issues?view=${view.id}`, {
+        token,
+      }),
       env
     );
     expect(apply.status).toBe(200);
@@ -495,8 +505,8 @@ describe("API integration", () => {
 
   it("creates notifications on issue creation and lists them", async () => {
     const db = createD1(env.D1);
-    const workspaceId = await seedWorkspace();
-    const tokenRecord = await createAdminTokenRecord(workspaceId);
+    const organizationId = await seedWorkspace();
+    const tokenRecord = await createAdminTokenRecord(organizationId);
     const token = tokenRecord.token;
 
     const userId = crypto.randomUUID();
@@ -512,14 +522,14 @@ describe("API integration", () => {
     });
     await db.insert(memberTable).values({
       id: crypto.randomUUID(),
-      organizationId: workspaceId,
+      organizationId: organizationId,
       userId,
       role: "member",
       createdAt: now,
     });
 
     const issue = await app.fetch(
-      request(`/workspaces/${workspaceId}/issues`, {
+      request(`/workspaces/${organizationId}/issues`, {
         method: "POST",
         token,
         body: JSON.stringify({
@@ -535,7 +545,7 @@ describe("API integration", () => {
 
     const userNotes = await getNotificationsForRecipient(
       db,
-      workspaceId,
+      organizationId,
       userId,
       "user"
     );
@@ -544,7 +554,7 @@ describe("API integration", () => {
     expect(userNotes[0].issueId).toBe(issueData.id);
 
     await createNotification(db, {
-      workspaceId,
+      organizationId,
       recipientId: tokenRecord.referenceId,
       recipientType: "user",
       issueId: issueData.id,
@@ -552,7 +562,7 @@ describe("API integration", () => {
     });
 
     const list = await app.fetch(
-      request(`/workspaces/${workspaceId}/notifications`, { token }),
+      request(`/workspaces/${organizationId}/notifications`, { token }),
       env
     );
     expect(list.status).toBe(200);
@@ -560,7 +570,7 @@ describe("API integration", () => {
     expect(listBody.notifications.length).toBe(1);
 
     const count = await app.fetch(
-      request(`/workspaces/${workspaceId}/notifications/unread-count`, {
+      request(`/workspaces/${organizationId}/notifications/unread-count`, {
         token,
       }),
       env
@@ -571,7 +581,7 @@ describe("API integration", () => {
 
     const noteId = (listBody.notifications[0] as { id: string }).id;
     const mark = await app.fetch(
-      request(`/workspaces/${workspaceId}/notifications/${noteId}/read`, {
+      request(`/workspaces/${organizationId}/notifications/${noteId}/read`, {
         method: "PATCH",
         token,
       }),
@@ -582,7 +592,7 @@ describe("API integration", () => {
     expect(markBody.read).toBe(true);
 
     const markAll = await app.fetch(
-      request(`/workspaces/${workspaceId}/notifications/mark-all-read`, {
+      request(`/workspaces/${organizationId}/notifications/mark-all-read`, {
         method: "POST",
         token,
       }),
@@ -592,11 +602,11 @@ describe("API integration", () => {
   });
 
   it("scopes issues to teams with per-team numbering and visibility", async () => {
-    const workspaceId = await seedWorkspace();
-    const admin = await adminToken(workspaceId);
+    const organizationId = await seedWorkspace();
+    const admin = await adminToken(organizationId);
 
     const teamA = await app.fetch(
-      request(`/workspaces/${workspaceId}/teams`, {
+      request(`/workspaces/${organizationId}/teams`, {
         method: "POST",
         token: admin,
         body: JSON.stringify({
@@ -611,7 +621,7 @@ describe("API integration", () => {
     const teamAData = await teamA.json<{ id: string; key: string }>();
 
     const teamB = await app.fetch(
-      request(`/workspaces/${workspaceId}/teams`, {
+      request(`/workspaces/${organizationId}/teams`, {
         method: "POST",
         token: admin,
         body: JSON.stringify({
@@ -626,7 +636,7 @@ describe("API integration", () => {
     const teamBData = await teamB.json<{ id: string; key: string }>();
 
     const issueA = await app.fetch(
-      request(`/workspaces/${workspaceId}/issues`, {
+      request(`/workspaces/${organizationId}/issues`, {
         method: "POST",
         token: admin,
         body: JSON.stringify({
@@ -641,7 +651,7 @@ describe("API integration", () => {
     expect(issueAData.identifier).toBe("ENG-1");
 
     const issueB = await app.fetch(
-      request(`/workspaces/${workspaceId}/issues`, {
+      request(`/workspaces/${organizationId}/issues`, {
         method: "POST",
         token: admin,
         body: JSON.stringify({
@@ -656,7 +666,7 @@ describe("API integration", () => {
     expect(issueBData.identifier).toBe("DES-1");
 
     const engList = await app.fetch(
-      request(`/workspaces/${workspaceId}/issues?teamId=${teamAData.id}`, {
+      request(`/workspaces/${organizationId}/issues?teamId=${teamAData.id}`, {
         token: admin,
       }),
       env
@@ -667,7 +677,7 @@ describe("API integration", () => {
     expect(engBody.issues[0].identifier).toBe("ENG-1");
 
     const memberTokenRes = await app.fetch(
-      request(`/workspaces/${workspaceId}/tokens`, {
+      request(`/workspaces/${organizationId}/tokens`, {
         method: "POST",
         token: admin,
         body: JSON.stringify({
@@ -685,7 +695,7 @@ describe("API integration", () => {
     }>();
 
     const addMember = await app.fetch(
-      request(`/workspaces/${workspaceId}/teams/${teamAData.id}/members`, {
+      request(`/workspaces/${organizationId}/teams/${teamAData.id}/members`, {
         method: "POST",
         token: admin,
         body: JSON.stringify({
@@ -698,7 +708,7 @@ describe("API integration", () => {
     expect(addMember.status).toBe(204);
 
     const memberList = await app.fetch(
-      request(`/workspaces/${workspaceId}/issues`, {
+      request(`/workspaces/${organizationId}/issues`, {
         token: memberTokenData.token,
       }),
       env
@@ -711,7 +721,7 @@ describe("API integration", () => {
     expect(memberBody.issues[0].identifier).toBe("ENG-1");
 
     const privateTeamList = await app.fetch(
-      request(`/workspaces/${workspaceId}/issues?teamId=${teamBData.id}`, {
+      request(`/workspaces/${organizationId}/issues?teamId=${teamBData.id}`, {
         token: memberTokenData.token,
       }),
       env

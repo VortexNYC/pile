@@ -12,7 +12,7 @@ import { rls } from "../platform/rls.js";
 
 const tokenSchema = z.object({
   id: z.string(),
-  workspaceId: z.string(),
+  organizationId: z.string(),
   name: z.string(),
   permissions: z.string(),
   createdAt: z.string(),
@@ -20,7 +20,7 @@ const tokenSchema = z.object({
 
 const tokenWithSecretSchema = z.object({
   id: z.string(),
-  workspaceId: z.string(),
+  organizationId: z.string(),
   name: z.string(),
   token: z.string(),
   permissions: z.string(),
@@ -36,11 +36,11 @@ const tokenBodySchema = z.object({
 
 const listTokensRoute = createRoute({
   method: "get",
-  path: "/workspaces/{workspaceId}/tokens",
+  path: "/workspaces/{organizationId}/tokens",
   tags: ["tokens"],
   middleware: [rls("read")],
   request: {
-    params: z.object({ workspaceId: z.string() }),
+    params: z.object({ organizationId: z.string() }),
   },
   responses: {
     200: {
@@ -56,11 +56,11 @@ const listTokensRoute = createRoute({
 
 const createTokenRoute = createRoute({
   method: "post",
-  path: "/workspaces/{workspaceId}/tokens",
+  path: "/workspaces/{organizationId}/tokens",
   tags: ["tokens"],
   middleware: [rls("admin")],
   request: {
-    params: z.object({ workspaceId: z.string() }),
+    params: z.object({ organizationId: z.string() }),
     body: {
       content: {
         "application/json": { schema: tokenBodySchema },
@@ -79,11 +79,11 @@ const createTokenRoute = createRoute({
 
 const deleteTokenRoute = createRoute({
   method: "delete",
-  path: "/workspaces/{workspaceId}/tokens/{id}",
+  path: "/workspaces/{organizationId}/tokens/{id}",
   tags: ["tokens"],
   middleware: [rls("admin")],
   request: {
-    params: z.object({ workspaceId: z.string(), id: z.string() }),
+    params: z.object({ organizationId: z.string(), id: z.string() }),
   },
   responses: {
     204: { description: "Token deleted" },
@@ -91,12 +91,12 @@ const deleteTokenRoute = createRoute({
 });
 
 const apiKeyMetadataSchema = z.object({
-  workspaceId: z.string(),
+  organizationId: z.string(),
   permissions: z.string(),
 });
 
 function parseApiKeyMetadata(metadata: string | null | undefined): {
-  workspaceId: string;
+  organizationId: string;
   permissions: string;
 } | null {
   if (!metadata) return null;
@@ -109,7 +109,7 @@ function parseApiKeyMetadata(metadata: string | null | undefined): {
 
 export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listTokensRoute, async (c) => {
-    const { workspaceId } = c.req.valid("param");
+    const { organizationId } = c.req.valid("param");
     const db = createD1(c.env.D1);
     const rows = await db.select().from(apikey).all();
     const tokens = rows
@@ -117,10 +117,10 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
         row,
         parsed: parseApiKeyMetadata(row.metadata),
       }))
-      .filter(({ parsed }) => parsed?.workspaceId === workspaceId)
+      .filter(({ parsed }) => parsed?.organizationId === organizationId)
       .map(({ row, parsed }) => ({
         id: row.id,
-        workspaceId: parsed!.workspaceId,
+        organizationId: parsed!.organizationId,
         name: row.name ?? "",
         permissions: parsed!.permissions,
         createdAt:
@@ -132,7 +132,7 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(createTokenRoute, async (c) => {
-    const { workspaceId } = c.req.valid("param");
+    const { organizationId } = c.req.valid("param");
     const input = c.req.valid("json");
     const identity = c.get("workspaceIdentity");
     const db = createD1(c.env.D1);
@@ -147,7 +147,7 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
       await db.insert(userTable).values({
         id: agentId,
         name: input.name,
-        email: `agent-${agentId}@${workspaceId}.vortex.nyc`,
+        email: `agent-${agentId}@${organizationId}.vortex.nyc`,
         emailVerified: true,
         metadata: JSON.stringify({
           type: "agent",
@@ -158,7 +158,7 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
       });
       userId = agentId;
     } else if (identity.type === "agent") {
-      const workspace = await getWorkspaceById(db, workspaceId);
+      const workspace = await getWorkspaceById(db, organizationId);
       if (!workspace) {
         throw new VortexError({
           code: "NOT_FOUND",
@@ -173,7 +173,7 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
       body: {
         userId,
         name: input.name,
-        metadata: { workspaceId, permissions, actorType },
+        metadata: { organizationId, permissions, actorType },
       },
     });
 
@@ -188,7 +188,7 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
     return c.json(
       {
         id: parsed.id,
-        workspaceId,
+        organizationId,
         name: parsed.name ?? input.name,
         token: parsed.key,
         permissions,
@@ -202,11 +202,11 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(deleteTokenRoute, async (c) => {
-    const { workspaceId, id } = c.req.valid("param");
+    const { organizationId, id } = c.req.valid("param");
     const db = createD1(c.env.D1);
     const row = await db.select().from(apikey).where(eq(apikey.id, id)).get();
     const parsed = parseApiKeyMetadata(row?.metadata);
-    if (!row || parsed?.workspaceId !== workspaceId) {
+    if (!row || parsed?.organizationId !== organizationId) {
       throw new VortexError({
         code: "NOT_FOUND",
         status: 404,

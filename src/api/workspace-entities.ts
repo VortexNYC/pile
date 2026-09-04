@@ -27,7 +27,7 @@ import { rls } from "../platform/rls.js";
 
 const projectSchema = z.object({
   id: z.string(),
-  workspaceId: z.string(),
+  organizationId: z.string(),
   name: z.string(),
   description: z.string().nullable(),
   status: z.string(),
@@ -47,7 +47,7 @@ const projectBodySchema = z.object({
 
 const cycleSchema = z.object({
   id: z.string(),
-  workspaceId: z.string(),
+  organizationId: z.string(),
   projectId: z.string().nullable(),
   name: z.string(),
   startDate: z.string().nullable(),
@@ -65,7 +65,7 @@ const cycleBodySchema = z.object({
 
 const labelSchema = z.object({
   id: z.string(),
-  workspaceId: z.string(),
+  organizationId: z.string(),
   name: z.string(),
   color: z.string().nullable(),
   createdAt: z.string(),
@@ -78,7 +78,7 @@ const labelBodySchema = z.object({
 
 const membershipSchema = z.object({
   id: z.string(),
-  workspaceId: z.string(),
+  organizationId: z.string(),
   userId: z.string(),
   role: z.enum(["owner", "admin", "member"]),
   createdAt: z.string(),
@@ -91,11 +91,11 @@ const membershipBodySchema = z.object({
 
 const listProjectsRoute = createRoute({
   method: "get",
-  path: "/workspaces/{workspaceId}/projects",
+  path: "/workspaces/{organizationId}/projects",
   tags: ["projects"],
   middleware: [rls("read")],
   request: {
-    params: z.object({ workspaceId: z.string() }),
+    params: z.object({ organizationId: z.string() }),
   },
   responses: {
     200: {
@@ -111,11 +111,11 @@ const listProjectsRoute = createRoute({
 
 const createProjectRoute = createRoute({
   method: "post",
-  path: "/workspaces/{workspaceId}/projects",
+  path: "/workspaces/{organizationId}/projects",
   tags: ["projects"],
   middleware: [rls("write")],
   request: {
-    params: z.object({ workspaceId: z.string() }),
+    params: z.object({ organizationId: z.string() }),
     body: {
       content: {
         "application/json": { schema: projectBodySchema },
@@ -134,11 +134,11 @@ const createProjectRoute = createRoute({
 
 const getProjectRoute = createRoute({
   method: "get",
-  path: "/workspaces/{workspaceId}/projects/{id}",
+  path: "/workspaces/{organizationId}/projects/{id}",
   tags: ["projects"],
   middleware: [rls("read")],
   request: {
-    params: z.object({ workspaceId: z.string(), id: z.string() }),
+    params: z.object({ organizationId: z.string(), id: z.string() }),
   },
   responses: {
     200: {
@@ -152,11 +152,11 @@ const getProjectRoute = createRoute({
 
 const updateProjectRoute = createRoute({
   method: "patch",
-  path: "/workspaces/{workspaceId}/projects/{id}",
+  path: "/workspaces/{organizationId}/projects/{id}",
   tags: ["projects"],
   middleware: [rls("write")],
   request: {
-    params: z.object({ workspaceId: z.string(), id: z.string() }),
+    params: z.object({ organizationId: z.string(), id: z.string() }),
     body: {
       content: {
         "application/json": { schema: projectBodySchema.partial() },
@@ -175,11 +175,11 @@ const updateProjectRoute = createRoute({
 
 const deleteProjectRoute = createRoute({
   method: "delete",
-  path: "/workspaces/{workspaceId}/projects/{id}",
+  path: "/workspaces/{organizationId}/projects/{id}",
   tags: ["projects"],
   middleware: [rls("write")],
   request: {
-    params: z.object({ workspaceId: z.string(), id: z.string() }),
+    params: z.object({ organizationId: z.string(), id: z.string() }),
   },
   responses: {
     204: { description: "Project deleted" },
@@ -188,11 +188,11 @@ const deleteProjectRoute = createRoute({
 
 const listCyclesRoute = createRoute({
   method: "get",
-  path: "/workspaces/{workspaceId}/cycles",
+  path: "/workspaces/{organizationId}/cycles",
   tags: ["cycles"],
   middleware: [rls("read")],
   request: {
-    params: z.object({ workspaceId: z.string() }),
+    params: z.object({ organizationId: z.string() }),
   },
   responses: {
     200: {
@@ -208,11 +208,11 @@ const listCyclesRoute = createRoute({
 
 const createCycleRoute = createRoute({
   method: "post",
-  path: "/workspaces/{workspaceId}/cycles",
+  path: "/workspaces/{organizationId}/cycles",
   tags: ["cycles"],
   middleware: [rls("write")],
   request: {
-    params: z.object({ workspaceId: z.string() }),
+    params: z.object({ organizationId: z.string() }),
     body: {
       content: {
         "application/json": { schema: cycleBodySchema },
@@ -231,11 +231,11 @@ const createCycleRoute = createRoute({
 
 const getCycleRoute = createRoute({
   method: "get",
-  path: "/workspaces/{workspaceId}/cycles/{id}",
+  path: "/workspaces/{organizationId}/cycles/{id}",
   tags: ["cycles"],
   middleware: [rls("read")],
   request: {
-    params: z.object({ workspaceId: z.string(), id: z.string() }),
+    params: z.object({ organizationId: z.string(), id: z.string() }),
   },
   responses: {
     200: {
@@ -249,11 +249,11 @@ const getCycleRoute = createRoute({
 
 const updateCycleRoute = createRoute({
   method: "patch",
-  path: "/workspaces/{workspaceId}/cycles/{id}",
+  path: "/workspaces/{organizationId}/cycles/{id}",
   tags: ["cycles"],
   middleware: [rls("write")],
   request: {
-    params: z.object({ workspaceId: z.string(), id: z.string() }),
+    params: z.object({ organizationId: z.string(), id: z.string() }),
     body: {
       content: {
         "application/json": { schema: cycleBodySchema.partial() },
@@ -272,11 +272,11 @@ const updateCycleRoute = createRoute({
 
 const deleteCycleRoute = createRoute({
   method: "delete",
-  path: "/workspaces/{workspaceId}/cycles/{id}",
+  path: "/workspaces/{organizationId}/cycles/{id}",
   tags: ["cycles"],
   middleware: [rls("write")],
   request: {
-    params: z.object({ workspaceId: z.string(), id: z.string() }),
+    params: z.object({ organizationId: z.string(), id: z.string() }),
   },
   responses: {
     204: { description: "Cycle deleted" },
@@ -285,11 +285,11 @@ const deleteCycleRoute = createRoute({
 
 const listLabelsRoute = createRoute({
   method: "get",
-  path: "/workspaces/{workspaceId}/labels",
+  path: "/workspaces/{organizationId}/labels",
   tags: ["labels"],
   middleware: [rls("read")],
   request: {
-    params: z.object({ workspaceId: z.string() }),
+    params: z.object({ organizationId: z.string() }),
   },
   responses: {
     200: {
@@ -305,11 +305,11 @@ const listLabelsRoute = createRoute({
 
 const createLabelRoute = createRoute({
   method: "post",
-  path: "/workspaces/{workspaceId}/labels",
+  path: "/workspaces/{organizationId}/labels",
   tags: ["labels"],
   middleware: [rls("write")],
   request: {
-    params: z.object({ workspaceId: z.string() }),
+    params: z.object({ organizationId: z.string() }),
     body: {
       content: {
         "application/json": { schema: labelBodySchema },
@@ -328,11 +328,11 @@ const createLabelRoute = createRoute({
 
 const getLabelRoute = createRoute({
   method: "get",
-  path: "/workspaces/{workspaceId}/labels/{id}",
+  path: "/workspaces/{organizationId}/labels/{id}",
   tags: ["labels"],
   middleware: [rls("read")],
   request: {
-    params: z.object({ workspaceId: z.string(), id: z.string() }),
+    params: z.object({ organizationId: z.string(), id: z.string() }),
   },
   responses: {
     200: {
@@ -346,11 +346,11 @@ const getLabelRoute = createRoute({
 
 const updateLabelRoute = createRoute({
   method: "patch",
-  path: "/workspaces/{workspaceId}/labels/{id}",
+  path: "/workspaces/{organizationId}/labels/{id}",
   tags: ["labels"],
   middleware: [rls("write")],
   request: {
-    params: z.object({ workspaceId: z.string(), id: z.string() }),
+    params: z.object({ organizationId: z.string(), id: z.string() }),
     body: {
       content: {
         "application/json": { schema: labelBodySchema.partial() },
@@ -369,11 +369,11 @@ const updateLabelRoute = createRoute({
 
 const deleteLabelRoute = createRoute({
   method: "delete",
-  path: "/workspaces/{workspaceId}/labels/{id}",
+  path: "/workspaces/{organizationId}/labels/{id}",
   tags: ["labels"],
   middleware: [rls("write")],
   request: {
-    params: z.object({ workspaceId: z.string(), id: z.string() }),
+    params: z.object({ organizationId: z.string(), id: z.string() }),
   },
   responses: {
     204: { description: "Label deleted" },
@@ -382,11 +382,11 @@ const deleteLabelRoute = createRoute({
 
 const listMembershipsRoute = createRoute({
   method: "get",
-  path: "/workspaces/{workspaceId}/memberships",
+  path: "/workspaces/{organizationId}/memberships",
   tags: ["memberships"],
   middleware: [rls("read")],
   request: {
-    params: z.object({ workspaceId: z.string() }),
+    params: z.object({ organizationId: z.string() }),
   },
   responses: {
     200: {
@@ -402,11 +402,11 @@ const listMembershipsRoute = createRoute({
 
 const createMembershipRoute = createRoute({
   method: "post",
-  path: "/workspaces/{workspaceId}/memberships",
+  path: "/workspaces/{organizationId}/memberships",
   tags: ["memberships"],
   middleware: [rls("admin")],
   request: {
-    params: z.object({ workspaceId: z.string() }),
+    params: z.object({ organizationId: z.string() }),
     body: {
       content: {
         "application/json": { schema: membershipBodySchema },
@@ -425,24 +425,24 @@ const createMembershipRoute = createRoute({
 
 export function registerWorkspaceEntityRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listProjectsRoute, async (c) => {
-    const { workspaceId } = c.req.valid("param");
+    const { organizationId } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    const items = await listProjects(db, workspaceId);
+    const items = await listProjects(db, organizationId);
     return c.json({ projects: items });
   });
 
   app.openapi(createProjectRoute, async (c) => {
-    const { workspaceId } = c.req.valid("param");
+    const { organizationId } = c.req.valid("param");
     const input = c.req.valid("json");
     const db = createD1(c.env.D1);
-    const item = await createProject(db, workspaceId, input);
+    const item = await createProject(db, organizationId, input);
     return c.json(item, 201);
   });
 
   app.openapi(getProjectRoute, async (c) => {
-    const { workspaceId, id } = c.req.valid("param");
+    const { organizationId, id } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    const item = await getProject(db, workspaceId, id);
+    const item = await getProject(db, organizationId, id);
     if (!item) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -454,10 +454,10 @@ export function registerWorkspaceEntityRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(updateProjectRoute, async (c) => {
-    const { workspaceId, id } = c.req.valid("param");
+    const { organizationId, id } = c.req.valid("param");
     const input = c.req.valid("json");
     const db = createD1(c.env.D1);
-    const item = await updateProject(db, workspaceId, id, input);
+    const item = await updateProject(db, organizationId, id, input);
     if (!item) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -469,31 +469,31 @@ export function registerWorkspaceEntityRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(deleteProjectRoute, async (c) => {
-    const { workspaceId, id } = c.req.valid("param");
+    const { organizationId, id } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    await deleteProject(db, workspaceId, id);
+    await deleteProject(db, organizationId, id);
     return c.body(null, 204);
   });
 
   app.openapi(listCyclesRoute, async (c) => {
-    const { workspaceId } = c.req.valid("param");
+    const { organizationId } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    const items = await listCycles(db, workspaceId);
+    const items = await listCycles(db, organizationId);
     return c.json({ cycles: items });
   });
 
   app.openapi(createCycleRoute, async (c) => {
-    const { workspaceId } = c.req.valid("param");
+    const { organizationId } = c.req.valid("param");
     const input = c.req.valid("json");
     const db = createD1(c.env.D1);
-    const item = await createCycle(db, workspaceId, input);
+    const item = await createCycle(db, organizationId, input);
     return c.json(item, 201);
   });
 
   app.openapi(getCycleRoute, async (c) => {
-    const { workspaceId, id } = c.req.valid("param");
+    const { organizationId, id } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    const item = await getCycle(db, workspaceId, id);
+    const item = await getCycle(db, organizationId, id);
     if (!item) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -505,10 +505,10 @@ export function registerWorkspaceEntityRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(updateCycleRoute, async (c) => {
-    const { workspaceId, id } = c.req.valid("param");
+    const { organizationId, id } = c.req.valid("param");
     const input = c.req.valid("json");
     const db = createD1(c.env.D1);
-    const item = await updateCycle(db, workspaceId, id, input);
+    const item = await updateCycle(db, organizationId, id, input);
     if (!item) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -520,31 +520,31 @@ export function registerWorkspaceEntityRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(deleteCycleRoute, async (c) => {
-    const { workspaceId, id } = c.req.valid("param");
+    const { organizationId, id } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    await deleteCycle(db, workspaceId, id);
+    await deleteCycle(db, organizationId, id);
     return c.body(null, 204);
   });
 
   app.openapi(listLabelsRoute, async (c) => {
-    const { workspaceId } = c.req.valid("param");
+    const { organizationId } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    const items = await listLabels(db, workspaceId);
+    const items = await listLabels(db, organizationId);
     return c.json({ labels: items });
   });
 
   app.openapi(createLabelRoute, async (c) => {
-    const { workspaceId } = c.req.valid("param");
+    const { organizationId } = c.req.valid("param");
     const input = c.req.valid("json");
     const db = createD1(c.env.D1);
-    const item = await createLabel(db, workspaceId, input);
+    const item = await createLabel(db, organizationId, input);
     return c.json(item, 201);
   });
 
   app.openapi(getLabelRoute, async (c) => {
-    const { workspaceId, id } = c.req.valid("param");
+    const { organizationId, id } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    const item = await getLabel(db, workspaceId, id);
+    const item = await getLabel(db, organizationId, id);
     if (!item) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -556,10 +556,10 @@ export function registerWorkspaceEntityRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(updateLabelRoute, async (c) => {
-    const { workspaceId, id } = c.req.valid("param");
+    const { organizationId, id } = c.req.valid("param");
     const input = c.req.valid("json");
     const db = createD1(c.env.D1);
-    const item = await updateLabel(db, workspaceId, id, input);
+    const item = await updateLabel(db, organizationId, id, input);
     if (!item) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -571,26 +571,26 @@ export function registerWorkspaceEntityRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(deleteLabelRoute, async (c) => {
-    const { workspaceId, id } = c.req.valid("param");
+    const { organizationId, id } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    await deleteLabel(db, workspaceId, id);
+    await deleteLabel(db, organizationId, id);
     return c.body(null, 204);
   });
 
   app.openapi(listMembershipsRoute, async (c) => {
-    const { workspaceId } = c.req.valid("param");
+    const { organizationId } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    const items = await listMemberships(db, workspaceId);
+    const items = await listMemberships(db, organizationId);
     return c.json({ memberships: items });
   });
 
   app.openapi(createMembershipRoute, async (c) => {
-    const { workspaceId } = c.req.valid("param");
+    const { organizationId } = c.req.valid("param");
     const input = c.req.valid("json");
     const db = createD1(c.env.D1);
     const item = await createMembership(
       db,
-      workspaceId,
+      organizationId,
       input.userId,
       input.role
     );

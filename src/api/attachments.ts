@@ -8,7 +8,7 @@ import { rls } from "../platform/rls.js";
 
 const attachmentSchema = z.object({
   id: z.string(),
-  workspaceId: z.string(),
+  organizationId: z.string(),
   issueId: z.string(),
   linearId: z.string(),
   url: z.string(),
@@ -20,11 +20,11 @@ const attachmentSchema = z.object({
 
 const listAttachmentsRoute = createRoute({
   method: "get",
-  path: "/workspaces/{workspaceId}/issues/{issueId}/attachments",
+  path: "/workspaces/{organizationId}/issues/{issueId}/attachments",
   tags: ["attachments"],
   middleware: [rls("read")],
   request: {
-    params: z.object({ workspaceId: z.string(), issueId: z.string() }),
+    params: z.object({ organizationId: z.string(), issueId: z.string() }),
   },
   responses: {
     200: {
@@ -40,9 +40,9 @@ const listAttachmentsRoute = createRoute({
 
 export function registerAttachmentRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listAttachmentsRoute, async (c) => {
-    const { workspaceId, issueId } = c.req.valid("param");
+    const { organizationId, issueId } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    const items = await listAttachments(db, workspaceId, issueId);
+    const items = await listAttachments(db, organizationId, issueId);
     return c.json({ attachments: items });
   });
 }

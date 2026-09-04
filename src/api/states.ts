@@ -15,7 +15,7 @@ import { rls } from "../platform/rls.js";
 
 const stateSchema = z.object({
   id: z.string(),
-  workspaceId: z.string(),
+  organizationId: z.string(),
   linearId: z.string(),
   name: z.string(),
   type: z.string(),
@@ -41,11 +41,11 @@ const createStateBodySchema = z.object({
 
 const createStateRoute = createRoute({
   method: "post",
-  path: "/workspaces/{workspaceId}/states",
+  path: "/workspaces/{organizationId}/states",
   tags: ["states"],
   middleware: [rls("write")],
   request: {
-    params: z.object({ workspaceId: z.string() }),
+    params: z.object({ organizationId: z.string() }),
     body: {
       content: {
         "application/json": { schema: createStateBodySchema },
@@ -64,11 +64,11 @@ const createStateRoute = createRoute({
 
 const listStatesRoute = createRoute({
   method: "get",
-  path: "/workspaces/{workspaceId}/states",
+  path: "/workspaces/{organizationId}/states",
   tags: ["states"],
   middleware: [rls("read")],
   request: {
-    params: z.object({ workspaceId: z.string() }),
+    params: z.object({ organizationId: z.string() }),
   },
   responses: {
     200: {
@@ -84,11 +84,11 @@ const listStatesRoute = createRoute({
 
 const getStateRoute = createRoute({
   method: "get",
-  path: "/workspaces/{workspaceId}/states/{id}",
+  path: "/workspaces/{organizationId}/states/{id}",
   tags: ["states"],
   middleware: [rls("read")],
   request: {
-    params: z.object({ workspaceId: z.string(), id: z.string() }),
+    params: z.object({ organizationId: z.string(), id: z.string() }),
   },
   responses: {
     200: {
@@ -102,11 +102,11 @@ const getStateRoute = createRoute({
 
 const updateStateRoute = createRoute({
   method: "patch",
-  path: "/workspaces/{workspaceId}/states/{id}",
+  path: "/workspaces/{organizationId}/states/{id}",
   tags: ["states"],
   middleware: [rls("write")],
   request: {
-    params: z.object({ workspaceId: z.string(), id: z.string() }),
+    params: z.object({ organizationId: z.string(), id: z.string() }),
     body: {
       content: {
         "application/json": { schema: stateBodySchema },
@@ -125,11 +125,11 @@ const updateStateRoute = createRoute({
 
 const deleteStateRoute = createRoute({
   method: "delete",
-  path: "/workspaces/{workspaceId}/states/{id}",
+  path: "/workspaces/{organizationId}/states/{id}",
   tags: ["states"],
   middleware: [rls("write")],
   request: {
-    params: z.object({ workspaceId: z.string(), id: z.string() }),
+    params: z.object({ organizationId: z.string(), id: z.string() }),
   },
   responses: {
     204: { description: "State deleted" },
@@ -138,24 +138,24 @@ const deleteStateRoute = createRoute({
 
 export function registerStateRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(createStateRoute, async (c) => {
-    const { workspaceId } = c.req.valid("param");
+    const { organizationId } = c.req.valid("param");
     const input = c.req.valid("json");
     const db = createD1(c.env.D1);
-    const item = await createState(db, workspaceId, input);
+    const item = await createState(db, organizationId, input);
     return c.json(item, 201);
   });
 
   app.openapi(listStatesRoute, async (c) => {
-    const { workspaceId } = c.req.valid("param");
+    const { organizationId } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    const items = await listStates(db, workspaceId);
+    const items = await listStates(db, organizationId);
     return c.json({ states: items });
   });
 
   app.openapi(getStateRoute, async (c) => {
-    const { workspaceId, id } = c.req.valid("param");
+    const { organizationId, id } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    const item = await getState(db, workspaceId, id);
+    const item = await getState(db, organizationId, id);
     if (!item) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -167,10 +167,10 @@ export function registerStateRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(updateStateRoute, async (c) => {
-    const { workspaceId, id } = c.req.valid("param");
+    const { organizationId, id } = c.req.valid("param");
     const body = c.req.valid("json");
     const db = createD1(c.env.D1);
-    const item = await updateState(db, workspaceId, id, body);
+    const item = await updateState(db, organizationId, id, body);
     if (!item) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -182,9 +182,9 @@ export function registerStateRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(deleteStateRoute, async (c) => {
-    const { workspaceId, id } = c.req.valid("param");
+    const { organizationId, id } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    await deleteState(db, workspaceId, id);
+    await deleteState(db, organizationId, id);
     return c.body(null, 204);
   });
 }

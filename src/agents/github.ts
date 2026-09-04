@@ -306,7 +306,7 @@ async function processInstallation(
         if (record) {
           await createGithubInstallation(
             db,
-            record.workspaceId,
+            record.organizationId,
             installationId,
             repo.full_name
           );
@@ -393,7 +393,7 @@ async function processInstallationRepositories(
       if (record) {
         await createGithubInstallation(
           db,
-          record.workspaceId,
+          record.organizationId,
           installationId,
           repo.full_name
         );
@@ -459,14 +459,14 @@ async function processIssueComment(
     return c.json({ ok: true }, 200);
   }
 
-  const workspaceId = mapping.workspaceId;
+  const organizationId = mapping.organizationId;
   const issueId = mapping.issueId;
   const externalId = comment.id.toString();
   const externalSource = "github";
   const externalAuthor = comment.user.login;
 
   if (action === "created") {
-    await createComment(db, workspaceId, {
+    await createComment(db, organizationId, {
       issueId,
       body: comment.body,
       externalId,
@@ -480,12 +480,12 @@ async function processIssueComment(
   if (action === "edited") {
     const existing = await findCommentByExternalId(
       db,
-      workspaceId,
+      organizationId,
       externalSource,
       externalId
     );
     if (existing) {
-      await updateComment(db, workspaceId, existing.id, {
+      await updateComment(db, organizationId, existing.id, {
         body: comment.body,
         updatedAt: comment.updated_at,
       });
@@ -495,17 +495,23 @@ async function processIssueComment(
   if (action === "deleted") {
     const existing = await findCommentByExternalId(
       db,
-      workspaceId,
+      organizationId,
       externalSource,
       externalId
     );
     if (existing) {
-      await deleteComment(db, workspaceId, existing.id);
+      await deleteComment(db, organizationId, existing.id);
     }
   }
 
   if (deliveryId) {
-    await recordWebhookDelivery(db, deliveryId, "github", event, workspaceId);
+    await recordWebhookDelivery(
+      db,
+      deliveryId,
+      "github",
+      event,
+      organizationId
+    );
   }
   return c.json({ ok: true }, 200);
 }
@@ -551,7 +557,7 @@ async function processPullRequestReviewComment(
   }
 
   const doId = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(
-    workspaceRecord.workspaceId
+    workspaceRecord.organizationId
   );
   const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(doId);
   const issue = await stub.getIssueByBranch(repo, branch);
@@ -562,14 +568,14 @@ async function processPullRequestReviewComment(
     return c.json({ ok: true }, 200);
   }
 
-  const workspaceId = workspaceRecord.workspaceId;
+  const organizationId = workspaceRecord.organizationId;
   const issueId = issue.id;
   const externalId = comment.id.toString();
   const externalSource = "github";
   const externalAuthor = comment.user.login;
 
   if (action === "created") {
-    await createComment(db, workspaceId, {
+    await createComment(db, organizationId, {
       issueId,
       body: `[${comment.path}] ${comment.body}`,
       externalId,
@@ -583,12 +589,12 @@ async function processPullRequestReviewComment(
   if (action === "edited") {
     const existing = await findCommentByExternalId(
       db,
-      workspaceId,
+      organizationId,
       externalSource,
       externalId
     );
     if (existing) {
-      await updateComment(db, workspaceId, existing.id, {
+      await updateComment(db, organizationId, existing.id, {
         body: `[${comment.path}] ${comment.body}`,
         updatedAt: comment.updated_at,
       });
@@ -598,17 +604,23 @@ async function processPullRequestReviewComment(
   if (action === "deleted") {
     const existing = await findCommentByExternalId(
       db,
-      workspaceId,
+      organizationId,
       externalSource,
       externalId
     );
     if (existing) {
-      await deleteComment(db, workspaceId, existing.id);
+      await deleteComment(db, organizationId, existing.id);
     }
   }
 
   if (deliveryId) {
-    await recordWebhookDelivery(db, deliveryId, "github", event, workspaceId);
+    await recordWebhookDelivery(
+      db,
+      deliveryId,
+      "github",
+      event,
+      organizationId
+    );
   }
   return c.json({ ok: true }, 200);
 }
@@ -657,7 +669,7 @@ async function processPullRequest(
   }
 
   const doId = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(
-    workspaceRecord.workspaceId
+    workspaceRecord.organizationId
   );
   const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(doId);
   await stub.updatePrState(repo, branch, prUrl, prState, "github");
@@ -683,7 +695,7 @@ async function processPullRequest(
       deliveryId,
       "github",
       event,
-      workspaceRecord.workspaceId
+      workspaceRecord.organizationId
     );
   }
 
@@ -721,27 +733,27 @@ async function processGitHubIssue(
   const { action, issue, repository } = payload.data;
   const repo = repository.full_name;
 
-  let workspaceId = extractWorkspaceIdFromLabels(issue.labels);
-  if (!workspaceId) {
+  let organizationId = extractWorkspaceIdFromLabels(issue.labels);
+  if (!organizationId) {
     const record = await findWorkspaceByRepo(db, repo);
-    workspaceId = record?.workspaceId;
+    organizationId = record?.organizationId;
   }
 
-  if (!workspaceId) {
+  if (!organizationId) {
     return c.json({ ok: true }, 200);
   }
 
-  const doId = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(workspaceId);
+  const doId = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId);
   const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(doId);
   const mapping = await findRepoIssue(db, repo, issue.number);
 
   if (action === "opened" || action === "reopened") {
     const status = action === "reopened" ? "todo" : "backlog";
     const cycleId = issue.milestone
-      ? await findOrCreateCycleByName(db, workspaceId, issue.milestone.title)
+      ? await findOrCreateCycleByName(db, organizationId, issue.milestone.title)
       : undefined;
     const assigneeId = issue.assignee
-      ? ((await findUserByGithubLogin(db, workspaceId, issue.assignee.login))
+      ? ((await findUserByGithubLogin(db, organizationId, issue.assignee.login))
           ?.userId ?? undefined)
       : undefined;
     if (mapping) {
@@ -775,20 +787,26 @@ async function processGitHubIssue(
         },
         "github"
       );
-      await createRepoIssue(db, workspaceId, repo, issue.number, created.id);
+      await createRepoIssue(db, organizationId, repo, issue.number, created.id);
     }
     if (deliveryId) {
-      await recordWebhookDelivery(db, deliveryId, "github", event, workspaceId);
+      await recordWebhookDelivery(
+        db,
+        deliveryId,
+        "github",
+        event,
+        organizationId
+      );
     }
     return c.json({ ok: true }, 200);
   }
 
   if (action === "edited") {
     const cycleId = issue.milestone
-      ? await findOrCreateCycleByName(db, workspaceId, issue.milestone.title)
+      ? await findOrCreateCycleByName(db, organizationId, issue.milestone.title)
       : undefined;
     const assigneeId = issue.assignee
-      ? ((await findUserByGithubLogin(db, workspaceId, issue.assignee.login))
+      ? ((await findUserByGithubLogin(db, organizationId, issue.assignee.login))
           ?.userId ?? undefined)
       : undefined;
     if (mapping) {
@@ -812,7 +830,13 @@ async function processGitHubIssue(
       }
     }
     if (deliveryId) {
-      await recordWebhookDelivery(db, deliveryId, "github", event, workspaceId);
+      await recordWebhookDelivery(
+        db,
+        deliveryId,
+        "github",
+        event,
+        organizationId
+      );
     }
     return c.json({ ok: true }, 200);
   }
@@ -833,7 +857,13 @@ async function processGitHubIssue(
       }
     }
     if (deliveryId) {
-      await recordWebhookDelivery(db, deliveryId, "github", event, workspaceId);
+      await recordWebhookDelivery(
+        db,
+        deliveryId,
+        "github",
+        event,
+        organizationId
+      );
     }
     return c.json({ ok: true }, 200);
   }
@@ -844,7 +874,13 @@ async function processGitHubIssue(
       await deleteRepoIssue(db, repo, issue.number);
     }
     if (deliveryId) {
-      await recordWebhookDelivery(db, deliveryId, "github", event, workspaceId);
+      await recordWebhookDelivery(
+        db,
+        deliveryId,
+        "github",
+        event,
+        organizationId
+      );
     }
     return c.json({ ok: true }, 200);
   }
@@ -854,7 +890,7 @@ async function processGitHubIssue(
       const names = issue.labels.map((label) => label.name);
       const matched = await findLabelsByWorkspaceAndNames(
         db,
-        workspaceId,
+        organizationId,
         names
       );
       const labelIds =
@@ -873,7 +909,13 @@ async function processGitHubIssue(
       }
     }
     if (deliveryId) {
-      await recordWebhookDelivery(db, deliveryId, "github", event, workspaceId);
+      await recordWebhookDelivery(
+        db,
+        deliveryId,
+        "github",
+        event,
+        organizationId
+      );
     }
     return c.json({ ok: true }, 200);
   }
@@ -881,8 +923,13 @@ async function processGitHubIssue(
   if (action === "assigned" || action === "unassigned") {
     const assigneeId =
       action === "assigned" && issue.assignee
-        ? ((await findUserByGithubLogin(db, workspaceId, issue.assignee.login))
-            ?.userId ?? undefined)
+        ? ((
+            await findUserByGithubLogin(
+              db,
+              organizationId,
+              issue.assignee.login
+            )
+          )?.userId ?? undefined)
         : null;
     if (mapping) {
       const updated = await stub.updateIssue(
@@ -899,7 +946,13 @@ async function processGitHubIssue(
       }
     }
     if (deliveryId) {
-      await recordWebhookDelivery(db, deliveryId, "github", event, workspaceId);
+      await recordWebhookDelivery(
+        db,
+        deliveryId,
+        "github",
+        event,
+        organizationId
+      );
     }
     return c.json({ ok: true }, 200);
   }
@@ -907,7 +960,11 @@ async function processGitHubIssue(
   if (action === "milestoned" || action === "demilestoned") {
     const cycleId =
       action === "milestoned" && issue.milestone
-        ? await findOrCreateCycleByName(db, workspaceId, issue.milestone.title)
+        ? await findOrCreateCycleByName(
+            db,
+            organizationId,
+            issue.milestone.title
+          )
         : null;
     if (mapping) {
       const updated = await stub.updateIssue(
@@ -924,13 +981,25 @@ async function processGitHubIssue(
       }
     }
     if (deliveryId) {
-      await recordWebhookDelivery(db, deliveryId, "github", event, workspaceId);
+      await recordWebhookDelivery(
+        db,
+        deliveryId,
+        "github",
+        event,
+        organizationId
+      );
     }
     return c.json({ ok: true }, 200);
   }
 
   if (deliveryId) {
-    await recordWebhookDelivery(db, deliveryId, "github", event, workspaceId);
+    await recordWebhookDelivery(
+      db,
+      deliveryId,
+      "github",
+      event,
+      organizationId
+    );
   }
   return c.json({ ok: true }, 200);
 }

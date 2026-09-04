@@ -14,7 +14,7 @@ import { rls } from "../platform/rls.js";
 
 const relationSchema = z.object({
   id: z.string(),
-  workspaceId: z.string(),
+  organizationId: z.string(),
   fromIssueId: z.string(),
   toIssueId: z.string(),
   type: z.string(),
@@ -35,11 +35,11 @@ const relationBodySchema = z.object({
 
 const listRelationsRoute = createRoute({
   method: "get",
-  path: "/workspaces/{workspaceId}/issues/{issueId}/relations",
+  path: "/workspaces/{organizationId}/issues/{issueId}/relations",
   tags: ["relations"],
   middleware: [rls("read")],
   request: {
-    params: z.object({ workspaceId: z.string(), issueId: z.string() }),
+    params: z.object({ organizationId: z.string(), issueId: z.string() }),
   },
   responses: {
     200: {
@@ -55,11 +55,11 @@ const listRelationsRoute = createRoute({
 
 const createRelationRoute = createRoute({
   method: "post",
-  path: "/workspaces/{workspaceId}/issues/{issueId}/relations",
+  path: "/workspaces/{organizationId}/issues/{issueId}/relations",
   tags: ["relations"],
   middleware: [rls("write")],
   request: {
-    params: z.object({ workspaceId: z.string(), issueId: z.string() }),
+    params: z.object({ organizationId: z.string(), issueId: z.string() }),
     body: {
       content: {
         "application/json": { schema: relationBodySchema },
@@ -78,12 +78,12 @@ const createRelationRoute = createRoute({
 
 const deleteRelationRoute = createRoute({
   method: "delete",
-  path: "/workspaces/{workspaceId}/issues/{issueId}/relations/{id}",
+  path: "/workspaces/{organizationId}/issues/{issueId}/relations/{id}",
   tags: ["relations"],
   middleware: [rls("write")],
   request: {
     params: z.object({
-      workspaceId: z.string(),
+      organizationId: z.string(),
       issueId: z.string(),
       id: z.string(),
     }),
@@ -95,17 +95,17 @@ const deleteRelationRoute = createRoute({
 
 export function registerIssueRelationRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listRelationsRoute, async (c) => {
-    const { workspaceId, issueId } = c.req.valid("param");
+    const { organizationId, issueId } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    const relations = await listIssueRelations(db, workspaceId, issueId);
+    const relations = await listIssueRelations(db, organizationId, issueId);
     return c.json({ relations });
   });
 
   app.openapi(createRelationRoute, async (c) => {
-    const { workspaceId, issueId } = c.req.valid("param");
+    const { organizationId, issueId } = c.req.valid("param");
     const { toIssueId, type } = c.req.valid("json");
     const db = createD1(c.env.D1);
-    const relation = await createIssueRelation(db, workspaceId, {
+    const relation = await createIssueRelation(db, organizationId, {
       fromIssueId: issueId,
       toIssueId,
       type,
@@ -114,9 +114,9 @@ export function registerIssueRelationRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(deleteRelationRoute, async (c) => {
-    const { workspaceId, id } = c.req.valid("param");
+    const { organizationId, id } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    const existing = await getIssueRelation(db, workspaceId, id);
+    const existing = await getIssueRelation(db, organizationId, id);
     if (!existing) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -124,7 +124,7 @@ export function registerIssueRelationRoutes(app: OpenAPIHono<AppContext>) {
         message: "Relation not found",
       });
     }
-    await deleteIssueRelation(db, workspaceId, id);
+    await deleteIssueRelation(db, organizationId, id);
     return c.body(null, 204);
   });
 }

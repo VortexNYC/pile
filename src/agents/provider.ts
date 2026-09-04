@@ -12,7 +12,7 @@ export interface AgentProviderSession {
 export interface AgentProvider {
   id: string;
   dispatch(
-    workspaceId: string,
+    organizationId: string,
     issue: Issue,
     model?: string
   ): Promise<AgentProviderSession>;

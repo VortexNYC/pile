@@ -5,7 +5,7 @@ import { attachments } from "./schema.js";
 
 export function listAttachments(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   issueId: string
 ) {
   return db
@@ -13,26 +13,33 @@ export function listAttachments(
     .from(attachments)
     .where(
       and(
-        eq(attachments.workspaceId, workspaceId),
+        eq(attachments.organizationId, organizationId),
         eq(attachments.issueId, issueId)
       )
     )
     .all();
 }
 
-export function getAttachment(db: D1Client, workspaceId: string, id: string) {
+export function getAttachment(
+  db: D1Client,
+  organizationId: string,
+  id: string
+) {
   return db
     .select()
     .from(attachments)
     .where(
-      and(eq(attachments.workspaceId, workspaceId), eq(attachments.id, id))
+      and(
+        eq(attachments.organizationId, organizationId),
+        eq(attachments.id, id)
+      )
     )
     .get();
 }
 
 export async function createAttachment(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   values: {
     issueId: string;
     linearId: string;
@@ -47,7 +54,7 @@ export async function createAttachment(
   const ts = new Date().toISOString();
   await db.insert(attachments).values({
     id,
-    workspaceId,
+    organizationId,
     issueId: values.issueId,
     linearId: values.linearId,
     url: values.url,
@@ -56,12 +63,12 @@ export async function createAttachment(
     r2Key: values.r2Key ?? null,
     createdAt: values.createdAt ?? ts,
   });
-  return getAttachment(db, workspaceId, id);
+  return getAttachment(db, organizationId, id);
 }
 
 export async function setAttachmentR2Key(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   id: string,
   r2Key: string
 ) {
@@ -69,6 +76,9 @@ export async function setAttachmentR2Key(
     .update(attachments)
     .set({ r2Key })
     .where(
-      and(eq(attachments.workspaceId, workspaceId), eq(attachments.id, id))
+      and(
+        eq(attachments.organizationId, organizationId),
+        eq(attachments.id, id)
+      )
     );
 }

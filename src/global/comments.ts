@@ -5,29 +5,34 @@ import { comments } from "./schema.js";
 
 export function listComments(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   issueId: string
 ) {
   return db
     .select()
     .from(comments)
     .where(
-      and(eq(comments.workspaceId, workspaceId), eq(comments.issueId, issueId))
+      and(
+        eq(comments.organizationId, organizationId),
+        eq(comments.issueId, issueId)
+      )
     )
     .all();
 }
 
-export function getComment(db: D1Client, workspaceId: string, id: string) {
+export function getComment(db: D1Client, organizationId: string, id: string) {
   return db
     .select()
     .from(comments)
-    .where(and(eq(comments.workspaceId, workspaceId), eq(comments.id, id)))
+    .where(
+      and(eq(comments.organizationId, organizationId), eq(comments.id, id))
+    )
     .get();
 }
 
 export function findCommentByExternalId(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   externalSource: string,
   externalId: string
 ) {
@@ -36,7 +41,7 @@ export function findCommentByExternalId(
     .from(comments)
     .where(
       and(
-        eq(comments.workspaceId, workspaceId),
+        eq(comments.organizationId, organizationId),
         eq(comments.externalSource, externalSource),
         eq(comments.externalId, externalId)
       )
@@ -46,7 +51,7 @@ export function findCommentByExternalId(
 
 export async function createComment(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   values: {
     issueId: string;
     authorId?: string;
@@ -62,7 +67,7 @@ export async function createComment(
   const ts = new Date().toISOString();
   await db.insert(comments).values({
     id,
-    workspaceId,
+    organizationId,
     issueId: values.issueId,
     authorId: values.authorId ?? null,
     body: values.body,
@@ -72,12 +77,12 @@ export async function createComment(
     createdAt: values.createdAt ?? ts,
     updatedAt: values.updatedAt ?? ts,
   });
-  return getComment(db, workspaceId, id);
+  return getComment(db, organizationId, id);
 }
 
 export async function updateComment(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   id: string,
   values: {
     body: string;
@@ -97,16 +102,20 @@ export async function updateComment(
       externalAuthor: values.externalAuthor,
       updatedAt: values.updatedAt ?? ts,
     })
-    .where(and(eq(comments.workspaceId, workspaceId), eq(comments.id, id)));
-  return getComment(db, workspaceId, id);
+    .where(
+      and(eq(comments.organizationId, organizationId), eq(comments.id, id))
+    );
+  return getComment(db, organizationId, id);
 }
 
 export async function deleteComment(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   id: string
 ) {
   await db
     .delete(comments)
-    .where(and(eq(comments.workspaceId, workspaceId), eq(comments.id, id)));
+    .where(
+      and(eq(comments.organizationId, organizationId), eq(comments.id, id))
+    );
 }

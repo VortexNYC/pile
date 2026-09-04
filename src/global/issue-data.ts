@@ -13,20 +13,23 @@ import {
 
 export async function deleteIssueReferences(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   issueId: string
 ) {
   await db
     .delete(comments)
     .where(
-      and(eq(comments.workspaceId, workspaceId), eq(comments.issueId, issueId))
+      and(
+        eq(comments.organizationId, organizationId),
+        eq(comments.issueId, issueId)
+      )
     );
 
   await db
     .delete(issueRelations)
     .where(
       and(
-        eq(issueRelations.workspaceId, workspaceId),
+        eq(issueRelations.organizationId, organizationId),
         or(
           eq(issueRelations.fromIssueId, issueId),
           eq(issueRelations.toIssueId, issueId)
@@ -38,7 +41,7 @@ export async function deleteIssueReferences(
     .delete(attachments)
     .where(
       and(
-        eq(attachments.workspaceId, workspaceId),
+        eq(attachments.organizationId, organizationId),
         eq(attachments.issueId, issueId)
       )
     );
@@ -47,7 +50,7 @@ export async function deleteIssueReferences(
     .delete(issueHistory)
     .where(
       and(
-        eq(issueHistory.workspaceId, workspaceId),
+        eq(issueHistory.organizationId, organizationId),
         eq(issueHistory.issueId, issueId)
       )
     );
@@ -56,7 +59,7 @@ export async function deleteIssueReferences(
     .delete(issueSubscribers)
     .where(
       and(
-        eq(issueSubscribers.workspaceId, workspaceId),
+        eq(issueSubscribers.organizationId, organizationId),
         eq(issueSubscribers.issueId, issueId)
       )
     );
@@ -65,7 +68,7 @@ export async function deleteIssueReferences(
     .delete(repoIssues)
     .where(
       and(
-        eq(repoIssues.workspaceId, workspaceId),
+        eq(repoIssues.organizationId, organizationId),
         eq(repoIssues.issueId, issueId)
       )
     );
@@ -74,7 +77,7 @@ export async function deleteIssueReferences(
     .delete(repoBranches)
     .where(
       and(
-        eq(repoBranches.workspaceId, workspaceId),
+        eq(repoBranches.organizationId, organizationId),
         eq(repoBranches.issueId, issueId)
       )
     );

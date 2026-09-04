@@ -3,7 +3,7 @@ import type { AgentProvider, AgentProviderSession } from "./provider.js";
 
 export interface MockAgentProviderOptions {
   dispatch?: (
-    workspaceId: string,
+    organizationId: string,
     issue: Issue,
     model?: string
   ) => AgentProviderSession | Promise<AgentProviderSession>;
@@ -22,12 +22,12 @@ export class MockAgentProvider implements AgentProvider {
   }
 
   async dispatch(
-    workspaceId: string,
+    organizationId: string,
     issue: Issue,
     model?: string
   ): Promise<AgentProviderSession> {
     if (this.options.dispatch) {
-      return await this.options.dispatch(workspaceId, issue, model);
+      return await this.options.dispatch(organizationId, issue, model);
     }
     return {
       id: "mock-session",

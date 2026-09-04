@@ -27,20 +27,20 @@ import {
   toListArgs,
 } from "./list-args.js";
 
-async function getStub(env: WorkerEnv, workspaceId: string) {
+async function getStub(env: WorkerEnv, organizationId: string) {
   const stub = env.WORKSPACE_DURABLE_OBJECT.get(
-    env.WORKSPACE_DURABLE_OBJECT.idFromName(workspaceId)
+    env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
   );
-  await stub.setWorkspaceId(workspaceId);
+  await stub.setWorkspaceId(organizationId);
   return stub;
 }
 
 async function loadVisibleTeamIds(
   db: ReturnType<typeof createD1>,
-  workspaceId: string,
+  organizationId: string,
   identity: WorkspaceIdentity
 ): Promise<string[]> {
-  return getVisibleTeamIds(db, workspaceId, identity);
+  return getVisibleTeamIds(db, organizationId, identity);
 }
 
 async function assertIssueAccess(
@@ -60,13 +60,13 @@ async function assertIssueAccess(
 
 async function assertTeamAccess(
   db: ReturnType<typeof createD1>,
-  workspaceId: string,
+  organizationId: string,
   teamId: string | undefined,
   identity: WorkspaceIdentity
 ): Promise<string> {
   const resolvedTeamId = teamId
-    ? (await getTeamById(db, teamId, workspaceId))?.id
-    : (await getDefaultTeam(db, workspaceId))?.id;
+    ? (await getTeamById(db, teamId, organizationId))?.id
+    : (await getDefaultTeam(db, organizationId))?.id;
   if (!resolvedTeamId) {
     throw new VortexError({
       code: "NOT_FOUND",
@@ -106,7 +106,7 @@ const updateIssueSchema = createIssueSchema.partial();
 const issueApiSchema = z
   .object({
     id: z.string(),
-    workspaceId: z.string(),
+    organizationId: z.string(),
     teamId: z.string(),
     title: z.string(),
     description: z.string().nullable(),
@@ -129,11 +129,11 @@ const issueApiSchema = z
 
 const listIssuesRoute = createRoute({
   method: "get",
-  path: "/workspaces/{workspaceId}/issues",
+  path: "/workspaces/{organizationId}/issues",
   tags: ["issues"],
   middleware: [rls("read")],
   request: {
-    params: z.object({ workspaceId: z.string() }),
+    params: z.object({ organizationId: z.string() }),
     query: listIssuesQuerySchema,
   },
   responses: {
@@ -153,11 +153,11 @@ const listIssuesRoute = createRoute({
 
 const createIssueRoute = createRoute({
   method: "post",
-  path: "/workspaces/{workspaceId}/issues",
+  path: "/workspaces/{organizationId}/issues",
   tags: ["issues"],
   middleware: [rls("write")],
   request: {
-    params: z.object({ workspaceId: z.string() }),
+    params: z.object({ organizationId: z.string() }),
     body: {
       content: {
         "application/json": { schema: createIssueSchema },
@@ -176,11 +176,11 @@ const createIssueRoute = createRoute({
 
 const getIssueRoute = createRoute({
   method: "get",
-  path: "/workspaces/{workspaceId}/issues/{id}",
+  path: "/workspaces/{organizationId}/issues/{id}",
   tags: ["issues"],
   middleware: [rls("read")],
   request: {
-    params: z.object({ workspaceId: z.string(), id: z.string() }),
+    params: z.object({ organizationId: z.string(), id: z.string() }),
   },
   responses: {
     200: {
@@ -194,11 +194,11 @@ const getIssueRoute = createRoute({
 
 const updateIssueRoute = createRoute({
   method: "patch",
-  path: "/workspaces/{workspaceId}/issues/{id}",
+  path: "/workspaces/{organizationId}/issues/{id}",
   tags: ["issues"],
   middleware: [rls("write")],
   request: {
-    params: z.object({ workspaceId: z.string(), id: z.string() }),
+    params: z.object({ organizationId: z.string(), id: z.string() }),
     body: {
       content: {
         "application/json": { schema: updateIssueSchema },
@@ -217,11 +217,11 @@ const updateIssueRoute = createRoute({
 
 const deleteIssueRoute = createRoute({
   method: "delete",
-  path: "/workspaces/{workspaceId}/issues/{id}",
+  path: "/workspaces/{organizationId}/issues/{id}",
   tags: ["issues"],
   middleware: [rls("write")],
   request: {
-    params: z.object({ workspaceId: z.string(), id: z.string() }),
+    params: z.object({ organizationId: z.string(), id: z.string() }),
   },
   responses: {
     204: { description: "Issue deleted" },
@@ -230,11 +230,11 @@ const deleteIssueRoute = createRoute({
 
 const dispatchRoute = createRoute({
   method: "post",
-  path: "/workspaces/{workspaceId}/issues/{id}/dispatch",
+  path: "/workspaces/{organizationId}/issues/{id}/dispatch",
   tags: ["agents"],
   middleware: [rls("write")],
   request: {
-    params: z.object({ workspaceId: z.string(), id: z.string() }),
+    params: z.object({ organizationId: z.string(), id: z.string() }),
     body: {
       content: {
         "application/json": {
@@ -258,12 +258,16 @@ const dispatchRoute = createRoute({
 
 export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listIssuesRoute, async (c) => {
-    const { workspaceId } = c.req.valid("param");
+    const { organizationId } = c.req.valid("param");
     const query = c.req.valid("query");
     const identity = c.get("workspaceIdentity");
     const db = createD1(c.env.D1);
-    const stub = await getStub(c.env, workspaceId);
-    const visibleTeamIds = await loadVisibleTeamIds(db, workspaceId, identity);
+    const stub = await getStub(c.env, organizationId);
+    const visibleTeamIds = await loadVisibleTeamIds(
+      db,
+      organizationId,
+      identity
+    );
     if (query.identifier) {
       const issue = await stub.getIssueByIdentifier(query.identifier);
       if (issue) {
@@ -280,7 +284,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
     if (query.view) {
-      const view = await getSavedView(db, query.view, workspaceId);
+      const view = await getSavedView(db, query.view, organizationId);
       if (!view) {
         throw new VortexError({
           code: "NOT_FOUND",
@@ -318,21 +322,21 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(createIssueRoute, async (c) => {
     const input = c.req.valid("json");
-    const { workspaceId } = c.req.valid("param");
+    const { organizationId } = c.req.valid("param");
     const identity = c.get("workspaceIdentity");
     const db = createD1(c.env.D1);
     const teamId = await assertTeamAccess(
       db,
-      workspaceId,
+      organizationId,
       input.teamId,
       identity
     );
-    const stub = await getStub(c.env, workspaceId);
+    const stub = await getStub(c.env, organizationId);
     const issue = await stub.createIssue({ ...input, teamId }, identity.id);
     if (issue.repo && issue.branch) {
       await createRepoBranch(
         db,
-        workspaceId,
+        organizationId,
         issue.repo,
         issue.branch,
         issue.id
@@ -342,10 +346,10 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(getIssueRoute, async (c) => {
-    const { workspaceId, id } = c.req.valid("param");
+    const { organizationId, id } = c.req.valid("param");
     const identity = c.get("workspaceIdentity");
     const db = createD1(c.env.D1);
-    const stub = await getStub(c.env, workspaceId);
+    const stub = await getStub(c.env, organizationId);
     const issue = await stub.getIssue(id);
     if (!issue) {
       throw new VortexError({
@@ -360,10 +364,10 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(updateIssueRoute, async (c) => {
     const input = c.req.valid("json");
-    const { workspaceId, id } = c.req.valid("param");
+    const { organizationId, id } = c.req.valid("param");
     const identity = c.get("workspaceIdentity");
     const db = createD1(c.env.D1);
-    const stub = await getStub(c.env, workspaceId);
+    const stub = await getStub(c.env, organizationId);
     const existing = await stub.getIssue(id);
     if (!existing) {
       throw new VortexError({
@@ -375,7 +379,12 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     await assertIssueAccess(db, existing, identity);
     let teamId = existing.teamId;
     if (input.teamId !== undefined) {
-      teamId = await assertTeamAccess(db, workspaceId, input.teamId, identity);
+      teamId = await assertTeamAccess(
+        db,
+        organizationId,
+        input.teamId,
+        identity
+      );
     }
     const issue = await stub.updateIssue(id, { ...input, teamId }, identity.id);
     if (!issue) {
@@ -389,14 +398,14 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       .delete(repoBranches)
       .where(
         and(
-          eq(repoBranches.workspaceId, workspaceId),
+          eq(repoBranches.organizationId, organizationId),
           eq(repoBranches.issueId, issue.id)
         )
       );
     if (issue.repo && issue.branch) {
       await createRepoBranch(
         db,
-        workspaceId,
+        organizationId,
         issue.repo,
         issue.branch,
         issue.id
@@ -406,10 +415,10 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(deleteIssueRoute, async (c) => {
-    const { workspaceId, id } = c.req.valid("param");
+    const { organizationId, id } = c.req.valid("param");
     const identity = c.get("workspaceIdentity");
     const db = createD1(c.env.D1);
-    const stub = await getStub(c.env, workspaceId);
+    const stub = await getStub(c.env, organizationId);
     const existing = await stub.getIssue(id);
     if (!existing) {
       throw new VortexError({
@@ -427,16 +436,16 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         message: "Issue not found",
       });
     }
-    await deleteIssueReferences(db, workspaceId, id);
+    await deleteIssueReferences(db, organizationId, id);
     return c.body(null, 204);
   });
 
   app.openapi(dispatchRoute, async (c) => {
     const { agentId, model } = c.req.valid("json");
-    const { workspaceId, id } = c.req.valid("param");
+    const { organizationId, id } = c.req.valid("param");
     const identity = c.get("workspaceIdentity");
     const db = createD1(c.env.D1);
-    const stub = await getStub(c.env, workspaceId);
+    const stub = await getStub(c.env, organizationId);
     const issue = await stub.getIssue(id);
     if (!issue) {
       throw new VortexError({
@@ -450,7 +459,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     const session = await dispatchAgent(
       c.env,
       agentId ?? "devin",
-      workspaceId,
+      organizationId,
       {
         id: issue.id,
         teamId: issue.teamId,
@@ -464,7 +473,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     if (issue.repo && issue.branch) {
       await createRepoBranch(
         db,
-        workspaceId,
+        organizationId,
         issue.repo,
         issue.branch,
         issue.id

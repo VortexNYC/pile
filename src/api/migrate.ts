@@ -7,11 +7,11 @@ import { rls } from "../platform/rls.js";
 
 const migrateLinearRoute = createRoute({
   method: "post",
-  path: "/workspaces/{workspaceId}/migrate/linear",
+  path: "/workspaces/{organizationId}/migrate/linear",
   tags: ["migrate"],
   middleware: [rls("admin")],
   request: {
-    params: z.object({ workspaceId: z.string() }),
+    params: z.object({ organizationId: z.string() }),
     body: {
       content: {
         "application/json": {
@@ -45,9 +45,14 @@ const migrateLinearRoute = createRoute({
 
 export function registerMigrateRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(migrateLinearRoute, async (c) => {
-    const { workspaceId } = c.req.valid("param");
+    const { organizationId } = c.req.valid("param");
     const { linearToken, teamId } = c.req.valid("json");
-    const counts = await migrateLinear(c.env, workspaceId, linearToken, teamId);
+    const counts = await migrateLinear(
+      c.env,
+      organizationId,
+      linearToken,
+      teamId
+    );
     return c.json({ ok: true, counts });
   });
 }

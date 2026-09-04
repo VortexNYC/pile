@@ -35,7 +35,7 @@ export class DevinAgentProvider implements AgentProvider {
   constructor(private env: AppEnv) {}
 
   async dispatch(
-    workspaceId: string,
+    organizationId: string,
     issue: Issue,
     model = "swe-1-7-medium"
   ): Promise<AgentProviderSession> {
@@ -61,7 +61,7 @@ export class DevinAgentProvider implements AgentProvider {
           platform: this.env.DEVIN_OUTPOST ?? "user:daytona-linux",
           model,
           title: issue.title,
-          tags: [`vortex:${workspaceId}`, `issue:${issue.id}`],
+          tags: [`vortex:${organizationId}`, `issue:${issue.id}`],
         }),
       }
     );

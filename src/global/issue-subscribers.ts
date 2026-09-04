@@ -5,7 +5,7 @@ import { issueSubscribers } from "./schema.js";
 
 export function listIssueSubscribers(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   issueId: string
 ) {
   return db
@@ -13,7 +13,7 @@ export function listIssueSubscribers(
     .from(issueSubscribers)
     .where(
       and(
-        eq(issueSubscribers.workspaceId, workspaceId),
+        eq(issueSubscribers.organizationId, organizationId),
         eq(issueSubscribers.issueId, issueId)
       )
     )
@@ -22,7 +22,7 @@ export function listIssueSubscribers(
 
 export function getIssueSubscriber(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   id: string
 ) {
   return db
@@ -30,7 +30,7 @@ export function getIssueSubscriber(
     .from(issueSubscribers)
     .where(
       and(
-        eq(issueSubscribers.workspaceId, workspaceId),
+        eq(issueSubscribers.organizationId, organizationId),
         eq(issueSubscribers.id, id)
       )
     )
@@ -39,14 +39,14 @@ export function getIssueSubscriber(
 
 export async function deleteIssueSubscriber(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   id: string
 ) {
   await db
     .delete(issueSubscribers)
     .where(
       and(
-        eq(issueSubscribers.workspaceId, workspaceId),
+        eq(issueSubscribers.organizationId, organizationId),
         eq(issueSubscribers.id, id)
       )
     );
@@ -54,7 +54,7 @@ export async function deleteIssueSubscriber(
 
 export async function createIssueSubscriber(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   values: {
     issueId: string;
     linearUserId: string;
@@ -65,7 +65,7 @@ export async function createIssueSubscriber(
     .from(issueSubscribers)
     .where(
       and(
-        eq(issueSubscribers.workspaceId, workspaceId),
+        eq(issueSubscribers.organizationId, organizationId),
         eq(issueSubscribers.issueId, values.issueId),
         eq(issueSubscribers.linearUserId, values.linearUserId)
       )
@@ -77,7 +77,7 @@ export async function createIssueSubscriber(
   const id = crypto.randomUUID();
   await db.insert(issueSubscribers).values({
     id,
-    workspaceId,
+    organizationId,
     issueId: values.issueId,
     linearUserId: values.linearUserId,
   });

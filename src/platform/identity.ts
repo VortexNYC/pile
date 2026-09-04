@@ -4,7 +4,7 @@ import { parsePermissionSet } from "./permissions.js";
 
 export const workspaceIdentitySchema = z.object({
   id: z.string(),
-  workspaceId: z.string(),
+  organizationId: z.string(),
   type: z.union([z.literal("agent"), z.literal("user")]),
   permissions: z.array(z.string()),
 });
@@ -12,7 +12,7 @@ export const workspaceIdentitySchema = z.object({
 export type WorkspaceIdentity = z.infer<typeof workspaceIdentitySchema>;
 
 const apiKeyMetadataSchema = z.object({
-  workspaceId: z.string(),
+  organizationId: z.string(),
   permissions: z.string(),
   actorType: z.enum(["user", "agent"]).optional(),
 });
@@ -35,7 +35,7 @@ export function toApiKeyWorkspaceIdentity(input: unknown): WorkspaceIdentity {
   const parsed = parseApiKeyMetadata(key.metadata);
   return workspaceIdentitySchema.parse({
     id: key.referenceId,
-    workspaceId: parsed.workspaceId,
+    organizationId: parsed.organizationId,
     type: parsed.actorType ?? "user",
     permissions: Array.from(parsePermissionSet(parsed.permissions)),
   });
@@ -53,13 +53,13 @@ const workspaceRoleSchema = z.enum(["owner", "admin", "member"]);
 
 export function toUserWorkspaceIdentity(
   userId: string,
-  workspaceId: string,
+  organizationId: string,
   role: string
 ): WorkspaceIdentity {
   const parsedRole = workspaceRoleSchema.parse(role);
   return workspaceIdentitySchema.parse({
     id: userId,
-    workspaceId,
+    organizationId,
     type: "user",
     permissions: [...rolePermissionsMap[parsedRole]],
   });

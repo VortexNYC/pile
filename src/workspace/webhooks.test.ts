@@ -80,10 +80,10 @@ async function cleanupWorkspace() {
   const db = createD1(env.D1);
   await db
     .delete(outboundWebhookDeliveries)
-    .where(eq(outboundWebhookDeliveries.workspaceId, WORKSPACE_ID));
+    .where(eq(outboundWebhookDeliveries.organizationId, WORKSPACE_ID));
   await db
     .delete(webhookSubscriptions)
-    .where(eq(webhookSubscriptions.workspaceId, WORKSPACE_ID));
+    .where(eq(webhookSubscriptions.organizationId, WORKSPACE_ID));
 }
 
 describe("deliverWebhooks", () => {
@@ -107,7 +107,7 @@ describe("deliverWebhooks", () => {
 
     await deliverWebhooks(env, WORKSPACE_ID, {
       type: "issue.created",
-      workspaceId: WORKSPACE_ID,
+      organizationId: WORKSPACE_ID,
       issue,
     });
 
@@ -142,7 +142,7 @@ describe("deliverWebhooks", () => {
 
     await deliverWebhooks(env, WORKSPACE_ID, {
       type: "issue.created",
-      workspaceId: WORKSPACE_ID,
+      organizationId: WORKSPACE_ID,
       issue,
     });
 

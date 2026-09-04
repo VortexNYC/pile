@@ -139,14 +139,14 @@ export async function createWorkspace(
 
 export function getWorkspaceMembership(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   userId: string
 ) {
   return db
     .select()
     .from(member)
     .where(
-      and(eq(member.organizationId, workspaceId), eq(member.userId, userId))
+      and(eq(member.organizationId, organizationId), eq(member.userId, userId))
     )
     .get();
 }

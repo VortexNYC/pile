@@ -41,7 +41,7 @@ import { deliverWebhooks, retryWebhookDeliveries } from "./webhooks.js";
 type IssueKey = keyof Issue & keyof IssueInput;
 
 export class WorkspaceDO extends DurableObject<AppEnv> {
-  private workspaceId: string;
+  private organizationId: string;
   private readonly ready: Promise<void>;
   private searchIndex: WorkspaceSearchIndex | null = null;
   private readonly db = drizzle(this.ctx.storage, {
@@ -50,23 +50,23 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   constructor(ctx: DurableObjectState, env: AppEnv) {
     super(ctx, env);
-    this.workspaceId = ctx.id.toString();
+    this.organizationId = ctx.id.toString();
     this.ready = this.initialize();
   }
 
   private async initialize() {
     const [stored] = await Promise.all([
-      this.ctx.storage.get<string>("workspaceId"),
+      this.ctx.storage.get<string>("organizationId"),
       this.runMigrations(),
     ]);
     if (stored) {
-      this.workspaceId = stored;
+      this.organizationId = stored;
     }
   }
 
   async setWorkspaceId(id: string) {
-    this.workspaceId = id;
-    await this.ctx.storage.put("workspaceId", id);
+    this.organizationId = id;
+    await this.ctx.storage.put("organizationId", id);
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -82,7 +82,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
     await this.emit({
       type: "connected",
-      workspaceId: this.workspaceId,
+      organizationId: this.organizationId,
     });
 
     return new Response(null, {
@@ -130,7 +130,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           createdAt: comments.createdAt,
         })
         .from(comments)
-        .where(eq(comments.workspaceId, this.workspaceId))
+        .where(eq(comments.organizationId, this.organizationId))
         .all(),
     ]);
 
@@ -171,14 +171,14 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   private async sendWebhookEvent(event: RealtimeEvent) {
-    const result = await deliverWebhooks(this.env, this.workspaceId, event);
+    const result = await deliverWebhooks(this.env, this.organizationId, event);
     if (result.needsRetry && result.retryAt) {
       await this.ctx.storage.setAlarm(result.retryAt);
     }
   }
 
   async alarm() {
-    const result = await retryWebhookDeliveries(this.env, this.workspaceId);
+    const result = await retryWebhookDeliveries(this.env, this.organizationId);
     if (result.hasMore && result.retryAt) {
       await this.ctx.storage.setAlarm(result.retryAt);
     }
@@ -196,7 +196,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const db = createD1(this.env.D1);
     await Promise.all(
       entries.map((entry) =>
-        createIssueHistory(db, this.workspaceId, {
+        createIssueHistory(db, this.organizationId, {
           issueId,
           linearId: null,
           actorId: actorId ?? null,
@@ -214,10 +214,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const priority = input.priority ?? "medium";
 
     const d1 = createD1(this.env.D1);
-    const workspace = await getWorkspaceById(d1, this.workspaceId);
+    const workspace = await getWorkspaceById(d1, this.organizationId);
     const team = input.teamId
-      ? await getTeamById(d1, input.teamId, this.workspaceId)
-      : await getDefaultTeam(d1, this.workspaceId);
+      ? await getTeamById(d1, input.teamId, this.organizationId)
+      : await getDefaultTeam(d1, this.organizationId);
     if (!team) {
       throw new Error(
         input.teamId ? "Team not found" : "Workspace has no default team"
@@ -237,7 +237,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       .insert(workspaceIssues)
       .values({
         id,
-        workspaceId: this.workspaceId,
+        organizationId: this.organizationId,
         teamId: team.id,
         title: input.title,
         description: input.description ?? null,
@@ -268,11 +268,11 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
     await this.emit({
       type: "issue.created",
-      workspaceId: this.workspaceId,
+      organizationId: this.organizationId,
       issue,
     });
     this.ctx.waitUntil(
-      notifyIssueCreated(this.env, this.workspaceId, issue, actorId)
+      notifyIssueCreated(this.env, this.organizationId, issue, actorId)
     );
     await this.recordIssueHistory(
       issue.id,
@@ -418,7 +418,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
     if (patch.teamId !== undefined && patch.teamId !== old.teamId) {
       const d1 = createD1(this.env.D1);
-      const team = await getTeamById(d1, patch.teamId, this.workspaceId);
+      const team = await getTeamById(d1, patch.teamId, this.organizationId);
       if (!team) {
         throw new Error("Team not found");
       }
@@ -485,11 +485,11 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
     await this.emit({
       type: "issue.updated",
-      workspaceId: this.workspaceId,
+      organizationId: this.organizationId,
       issue,
     });
     this.ctx.waitUntil(
-      notifyIssueUpdated(this.env, this.workspaceId, issue, actorId)
+      notifyIssueUpdated(this.env, this.organizationId, issue, actorId)
     );
     return issue;
   }
@@ -509,12 +509,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
     await this.emit({
       type: "issue.deleted",
-      workspaceId: this.workspaceId,
+      organizationId: this.organizationId,
       issueId: id,
     });
     if (old) {
       this.ctx.waitUntil(
-        notifyIssueDeleted(this.env, this.workspaceId, old, actorId)
+        notifyIssueDeleted(this.env, this.organizationId, old, actorId)
       );
     }
     return true;
@@ -610,7 +610,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
     await this.emit({
       type: "pr.updated",
-      workspaceId: this.workspaceId,
+      organizationId: this.organizationId,
       issue,
     });
     return issue;
@@ -690,7 +690,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
     await this.emit({
       type: "pr.updated",
-      workspaceId: this.workspaceId,
+      organizationId: this.organizationId,
       issue,
     });
     return issue;

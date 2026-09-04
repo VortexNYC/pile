@@ -3,17 +3,17 @@ import { and, eq } from "drizzle-orm";
 import type { D1Client } from "./db.js";
 import { linearUsers } from "./schema.js";
 
-export function listLinearUsers(db: D1Client, workspaceId: string) {
+export function listLinearUsers(db: D1Client, organizationId: string) {
   return db
     .select()
     .from(linearUsers)
-    .where(eq(linearUsers.workspaceId, workspaceId))
+    .where(eq(linearUsers.organizationId, organizationId))
     .all();
 }
 
 export function getLinearUser(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   linearId: string
 ) {
   return db
@@ -21,7 +21,7 @@ export function getLinearUser(
     .from(linearUsers)
     .where(
       and(
-        eq(linearUsers.workspaceId, workspaceId),
+        eq(linearUsers.organizationId, organizationId),
         eq(linearUsers.linearId, linearId)
       )
     )
@@ -30,7 +30,7 @@ export function getLinearUser(
 
 export async function createLinearUser(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   values: {
     linearId: string;
     name?: string;
@@ -42,7 +42,7 @@ export async function createLinearUser(
     .from(linearUsers)
     .where(
       and(
-        eq(linearUsers.workspaceId, workspaceId),
+        eq(linearUsers.organizationId, organizationId),
         eq(linearUsers.linearId, values.linearId)
       )
     )
@@ -53,7 +53,7 @@ export async function createLinearUser(
   const id = crypto.randomUUID();
   await db.insert(linearUsers).values({
     id,
-    workspaceId,
+    organizationId,
     linearId: values.linearId,
     name: values.name ?? null,
     email: values.email ?? null,
@@ -63,7 +63,7 @@ export async function createLinearUser(
     .from(linearUsers)
     .where(
       and(
-        eq(linearUsers.workspaceId, workspaceId),
+        eq(linearUsers.organizationId, organizationId),
         eq(linearUsers.linearId, values.linearId)
       )
     )

@@ -20,7 +20,7 @@ import { rls } from "../platform/rls.js";
 
 const teamSchema = z.object({
   id: z.string(),
-  workspaceId: z.string(),
+  organizationId: z.string(),
   key: z.string(),
   name: z.string(),
   ownerId: z.string(),
@@ -33,7 +33,7 @@ const teamSchema = z.object({
 function serializeTeam(record: TeamRecord) {
   return {
     id: record.id,
-    workspaceId: record.workspaceId,
+    organizationId: record.organizationId,
     key: record.key,
     name: record.name,
     ownerId: record.ownerId,
@@ -64,11 +64,11 @@ const teamMemberSchema = z.object({
 
 const listTeamsRoute = createRoute({
   method: "get",
-  path: "/workspaces/{workspaceId}/teams",
+  path: "/workspaces/{organizationId}/teams",
   tags: ["teams"],
   middleware: [rls("read")],
   request: {
-    params: z.object({ workspaceId: z.string() }),
+    params: z.object({ organizationId: z.string() }),
   },
   responses: {
     200: {
@@ -84,11 +84,11 @@ const listTeamsRoute = createRoute({
 
 const createTeamRoute = createRoute({
   method: "post",
-  path: "/workspaces/{workspaceId}/teams",
+  path: "/workspaces/{organizationId}/teams",
   tags: ["teams"],
   middleware: [rls("write")],
   request: {
-    params: z.object({ workspaceId: z.string() }),
+    params: z.object({ organizationId: z.string() }),
     body: {
       content: {
         "application/json": { schema: createTeamBodySchema },
@@ -107,11 +107,11 @@ const createTeamRoute = createRoute({
 
 const getTeamRoute = createRoute({
   method: "get",
-  path: "/workspaces/{workspaceId}/teams/{id}",
+  path: "/workspaces/{organizationId}/teams/{id}",
   tags: ["teams"],
   middleware: [rls("read")],
   request: {
-    params: z.object({ workspaceId: z.string(), id: z.string() }),
+    params: z.object({ organizationId: z.string(), id: z.string() }),
   },
   responses: {
     200: {
@@ -126,11 +126,11 @@ const getTeamRoute = createRoute({
 
 const updateTeamRoute = createRoute({
   method: "patch",
-  path: "/workspaces/{workspaceId}/teams/{id}",
+  path: "/workspaces/{organizationId}/teams/{id}",
   tags: ["teams"],
   middleware: [rls("write")],
   request: {
-    params: z.object({ workspaceId: z.string(), id: z.string() }),
+    params: z.object({ organizationId: z.string(), id: z.string() }),
     body: {
       content: {
         "application/json": { schema: updateTeamBodySchema },
@@ -150,11 +150,11 @@ const updateTeamRoute = createRoute({
 
 const deleteTeamRoute = createRoute({
   method: "delete",
-  path: "/workspaces/{workspaceId}/teams/{id}",
+  path: "/workspaces/{organizationId}/teams/{id}",
   tags: ["teams"],
   middleware: [rls("write")],
   request: {
-    params: z.object({ workspaceId: z.string(), id: z.string() }),
+    params: z.object({ organizationId: z.string(), id: z.string() }),
   },
   responses: {
     204: { description: "Team deleted" },
@@ -163,11 +163,11 @@ const deleteTeamRoute = createRoute({
 
 const listTeamMembersRoute = createRoute({
   method: "get",
-  path: "/workspaces/{workspaceId}/teams/{id}/members",
+  path: "/workspaces/{organizationId}/teams/{id}/members",
   tags: ["teams"],
   middleware: [rls("read")],
   request: {
-    params: z.object({ workspaceId: z.string(), id: z.string() }),
+    params: z.object({ organizationId: z.string(), id: z.string() }),
   },
   responses: {
     200: {
@@ -191,11 +191,11 @@ const listTeamMembersRoute = createRoute({
 
 const addTeamMemberRoute = createRoute({
   method: "post",
-  path: "/workspaces/{workspaceId}/teams/{id}/members",
+  path: "/workspaces/{organizationId}/teams/{id}/members",
   tags: ["teams"],
   middleware: [rls("write")],
   request: {
-    params: z.object({ workspaceId: z.string(), id: z.string() }),
+    params: z.object({ organizationId: z.string(), id: z.string() }),
     body: {
       content: {
         "application/json": { schema: teamMemberSchema },
@@ -209,12 +209,12 @@ const addTeamMemberRoute = createRoute({
 
 const removeTeamMemberRoute = createRoute({
   method: "delete",
-  path: "/workspaces/{workspaceId}/teams/{id}/members/{memberId}",
+  path: "/workspaces/{organizationId}/teams/{id}/members/{memberId}",
   tags: ["teams"],
   middleware: [rls("write")],
   request: {
     params: z.object({
-      workspaceId: z.string(),
+      organizationId: z.string(),
       id: z.string(),
       memberId: z.string(),
     }),
@@ -241,24 +241,24 @@ function canManageTeam(
 
 export function registerTeamRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listTeamsRoute, async (c) => {
-    const { workspaceId } = c.req.valid("param");
+    const { organizationId } = c.req.valid("param");
     const identity = c.get("workspaceIdentity");
     const db = createD1(c.env.D1);
     const visibleIds = new Set(
-      await getVisibleTeamIds(db, workspaceId, identity)
+      await getVisibleTeamIds(db, organizationId, identity)
     );
-    const allTeams = await listTeams(db, workspaceId);
+    const allTeams = await listTeams(db, organizationId);
     const teams = allTeams.filter((t) => visibleIds.has(t.id));
     return c.json({ teams: teams.map(serializeTeam) });
   });
 
   app.openapi(createTeamRoute, async (c) => {
-    const { workspaceId } = c.req.valid("param");
+    const { organizationId } = c.req.valid("param");
     const body = c.req.valid("json");
     const identity = c.get("workspaceIdentity");
     const db = createD1(c.env.D1);
     const record = await createTeam(db, {
-      workspaceId,
+      organizationId,
       key: body.key,
       name: body.name,
       ownerId: identity.id,
@@ -268,10 +268,10 @@ export function registerTeamRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(getTeamRoute, async (c) => {
-    const { workspaceId, id } = c.req.valid("param");
+    const { organizationId, id } = c.req.valid("param");
     const identity = c.get("workspaceIdentity");
     const db = createD1(c.env.D1);
-    const record = await getTeamById(db, id, workspaceId);
+    const record = await getTeamById(db, id, organizationId);
     if (!record) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -280,7 +280,7 @@ export function registerTeamRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
     const visibleIds = new Set(
-      await getVisibleTeamIds(db, workspaceId, identity)
+      await getVisibleTeamIds(db, organizationId, identity)
     );
     if (!visibleIds.has(record.id)) {
       throw new VortexError({
@@ -293,11 +293,11 @@ export function registerTeamRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(updateTeamRoute, async (c) => {
-    const { workspaceId, id } = c.req.valid("param");
+    const { organizationId, id } = c.req.valid("param");
     const body = c.req.valid("json");
     const identity = c.get("workspaceIdentity");
     const db = createD1(c.env.D1);
-    const existing = await getTeamById(db, id, workspaceId);
+    const existing = await getTeamById(db, id, organizationId);
     if (!existing) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -312,7 +312,7 @@ export function registerTeamRoutes(app: OpenAPIHono<AppContext>) {
         message: "Cannot update this team",
       });
     }
-    const record = await updateTeam(db, id, workspaceId, body);
+    const record = await updateTeam(db, id, organizationId, body);
     if (!record) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -324,10 +324,10 @@ export function registerTeamRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(deleteTeamRoute, async (c) => {
-    const { workspaceId, id } = c.req.valid("param");
+    const { organizationId, id } = c.req.valid("param");
     const identity = c.get("workspaceIdentity");
     const db = createD1(c.env.D1);
-    const existing = await getTeamById(db, id, workspaceId);
+    const existing = await getTeamById(db, id, organizationId);
     if (!existing) {
       return c.body(null, 204);
     }
@@ -345,15 +345,15 @@ export function registerTeamRoutes(app: OpenAPIHono<AppContext>) {
         message: "Cannot delete this team",
       });
     }
-    await deleteTeam(db, id, workspaceId);
+    await deleteTeam(db, id, organizationId);
     return c.body(null, 204);
   });
 
   app.openapi(listTeamMembersRoute, async (c) => {
-    const { workspaceId, id } = c.req.valid("param");
+    const { organizationId, id } = c.req.valid("param");
     const identity = c.get("workspaceIdentity");
     const db = createD1(c.env.D1);
-    const record = await getTeamById(db, id, workspaceId);
+    const record = await getTeamById(db, id, organizationId);
     if (!record) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -362,7 +362,7 @@ export function registerTeamRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
     const visibleIds = new Set(
-      await getVisibleTeamIds(db, workspaceId, identity)
+      await getVisibleTeamIds(db, organizationId, identity)
     );
     if (!visibleIds.has(record.id)) {
       throw new VortexError({
@@ -376,11 +376,11 @@ export function registerTeamRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(addTeamMemberRoute, async (c) => {
-    const { workspaceId, id } = c.req.valid("param");
+    const { organizationId, id } = c.req.valid("param");
     const body = c.req.valid("json");
     const identity = c.get("workspaceIdentity");
     const db = createD1(c.env.D1);
-    const record = await getTeamById(db, id, workspaceId);
+    const record = await getTeamById(db, id, organizationId);
     if (!record) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -395,16 +395,16 @@ export function registerTeamRoutes(app: OpenAPIHono<AppContext>) {
         message: "Cannot manage this team",
       });
     }
-    await addTeamMember(db, workspaceId, id, body.memberId, body.memberType);
+    await addTeamMember(db, organizationId, id, body.memberId, body.memberType);
     return c.body(null, 204);
   });
 
   app.openapi(removeTeamMemberRoute, async (c) => {
-    const { workspaceId, id, memberId } = c.req.valid("param");
+    const { organizationId, id, memberId } = c.req.valid("param");
     const { memberType } = c.req.valid("query");
     const identity = c.get("workspaceIdentity");
     const db = createD1(c.env.D1);
-    const record = await getTeamById(db, id, workspaceId);
+    const record = await getTeamById(db, id, organizationId);
     if (!record) {
       throw new VortexError({
         code: "NOT_FOUND",

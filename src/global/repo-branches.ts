@@ -13,7 +13,7 @@ export function findRepoBranch(db: D1Client, repo: string, branch: string) {
 
 export async function createRepoBranch(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   repo: string,
   branch: string,
   issueId: string
@@ -21,6 +21,6 @@ export async function createRepoBranch(
   const id = crypto.randomUUID();
   await db
     .insert(repoBranches)
-    .values({ id, workspaceId, repo, branch, issueId });
-  return { id, workspaceId, repo, branch, issueId };
+    .values({ id, organizationId, repo, branch, issueId });
+  return { id, organizationId, repo, branch, issueId };
 }

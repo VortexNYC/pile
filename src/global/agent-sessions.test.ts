@@ -15,7 +15,7 @@ import { user as userTable } from "./schema.js";
 import { createWorkspace } from "./workspaces.js";
 
 describe("agent sessions", () => {
-  let workspaceId: string;
+  let organizationId: string;
 
   beforeAll(async () => {
     const db = createD1(env.D1);
@@ -37,13 +37,13 @@ describe("agent sessions", () => {
       slug: `agent-sessions-${crypto.randomUUID()}`,
       ownerId: "user-1",
     });
-    workspaceId = workspace!.id;
+    organizationId = workspace!.id;
   });
 
   it("creates and retrieves a session", async () => {
     const db = createD1(env.D1);
     const session = await createAgentSession(db, {
-      workspaceId,
+      organizationId,
       issueId: "issue-1",
       agentId: "devin",
       provider: "devin",
@@ -51,7 +51,7 @@ describe("agent sessions", () => {
       actorType: "user",
     });
 
-    expect(session.workspaceId).toBe(workspaceId);
+    expect(session.organizationId).toBe(organizationId);
     expect(session.issueId).toBe("issue-1");
     expect(session.status).toBe("created");
 
@@ -63,7 +63,7 @@ describe("agent sessions", () => {
   it("lists sessions for a workspace", async () => {
     const db = createD1(env.D1);
     await createAgentSession(db, {
-      workspaceId,
+      organizationId,
       issueId: "issue-list",
       agentId: "mock",
       provider: "mock",
@@ -71,15 +71,15 @@ describe("agent sessions", () => {
       actorType: "user",
     });
 
-    const sessions = await listAgentSessions(db, workspaceId);
+    const sessions = await listAgentSessions(db, organizationId);
     expect(sessions.length).toBeGreaterThanOrEqual(1);
-    expect(sessions[0]?.workspaceId).toBe(workspaceId);
+    expect(sessions[0]?.organizationId).toBe(organizationId);
   });
 
   it("updates session state", async () => {
     const db = createD1(env.D1);
     const session = await createAgentSession(db, {
-      workspaceId,
+      organizationId,
       issueId: "issue-update",
       agentId: "mock",
       provider: "mock",
@@ -98,7 +98,7 @@ describe("agent sessions", () => {
   it("adds and lists activities", async () => {
     const db = createD1(env.D1);
     const session = await createAgentSession(db, {
-      workspaceId,
+      organizationId,
       issueId: "issue-activity",
       agentId: "mock",
       provider: "mock",

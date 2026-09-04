@@ -11,14 +11,14 @@ export interface McpToolDefinition {
 
 export const MCP_TOOLS: readonly McpToolDefinition[] = [
   {
-    "name": "deleteWorkspacesWorkspaceIdCyclesId",
-    "description": "(DELETE /workspaces/{workspaceId}/cycles/{id})",
+    "name": "deleteWorkspacesOrganizationIdCyclesId",
+    "description": "(DELETE /workspaces/{organizationId}/cycles/{id})",
     "method": "DELETE",
-    "path": "/workspaces/{workspaceId}/cycles/{id}",
+    "path": "/workspaces/{organizationId}/cycles/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "id": {
@@ -27,19 +27,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "deleteWorkspacesWorkspaceIdIssuesId",
-    "description": "(DELETE /workspaces/{workspaceId}/issues/{id})",
+    "name": "deleteWorkspacesOrganizationIdIssuesId",
+    "description": "(DELETE /workspaces/{organizationId}/issues/{id})",
     "method": "DELETE",
-    "path": "/workspaces/{workspaceId}/issues/{id}",
+    "path": "/workspaces/{organizationId}/issues/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "id": {
@@ -48,19 +48,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "deleteWorkspacesWorkspaceIdIssuesIssueIdCommentsId",
-    "description": "(DELETE /workspaces/{workspaceId}/issues/{issueId}/comments/{id})",
+    "name": "deleteWorkspacesOrganizationIdIssuesIssueIdCommentsId",
+    "description": "(DELETE /workspaces/{organizationId}/issues/{issueId}/comments/{id})",
     "method": "DELETE",
-    "path": "/workspaces/{workspaceId}/issues/{issueId}/comments/{id}",
+    "path": "/workspaces/{organizationId}/issues/{issueId}/comments/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "issueId": {
@@ -73,19 +73,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "id",
         "issueId",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "deleteWorkspacesWorkspaceIdIssuesIssueIdRelationsId",
-    "description": "(DELETE /workspaces/{workspaceId}/issues/{issueId}/relations/{id})",
+    "name": "deleteWorkspacesOrganizationIdIssuesIssueIdRelationsId",
+    "description": "(DELETE /workspaces/{organizationId}/issues/{issueId}/relations/{id})",
     "method": "DELETE",
-    "path": "/workspaces/{workspaceId}/issues/{issueId}/relations/{id}",
+    "path": "/workspaces/{organizationId}/issues/{issueId}/relations/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "issueId": {
@@ -98,19 +98,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "id",
         "issueId",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "deleteWorkspacesWorkspaceIdIssuesIssueIdSubscribersId",
-    "description": "(DELETE /workspaces/{workspaceId}/issues/{issueId}/subscribers/{id})",
+    "name": "deleteWorkspacesOrganizationIdIssuesIssueIdSubscribersId",
+    "description": "(DELETE /workspaces/{organizationId}/issues/{issueId}/subscribers/{id})",
     "method": "DELETE",
-    "path": "/workspaces/{workspaceId}/issues/{issueId}/subscribers/{id}",
+    "path": "/workspaces/{organizationId}/issues/{issueId}/subscribers/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "issueId": {
@@ -123,19 +123,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "id",
         "issueId",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "deleteWorkspacesWorkspaceIdLabelsId",
-    "description": "(DELETE /workspaces/{workspaceId}/labels/{id})",
+    "name": "deleteWorkspacesOrganizationIdLabelsId",
+    "description": "(DELETE /workspaces/{organizationId}/labels/{id})",
     "method": "DELETE",
-    "path": "/workspaces/{workspaceId}/labels/{id}",
+    "path": "/workspaces/{organizationId}/labels/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "id": {
@@ -144,19 +144,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "deleteWorkspacesWorkspaceIdProjectsId",
-    "description": "(DELETE /workspaces/{workspaceId}/projects/{id})",
+    "name": "deleteWorkspacesOrganizationIdProjectsId",
+    "description": "(DELETE /workspaces/{organizationId}/projects/{id})",
     "method": "DELETE",
-    "path": "/workspaces/{workspaceId}/projects/{id}",
+    "path": "/workspaces/{organizationId}/projects/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "id": {
@@ -165,19 +165,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "deleteWorkspacesWorkspaceIdSavedviewsId",
-    "description": "(DELETE /workspaces/{workspaceId}/saved-views/{id})",
+    "name": "deleteWorkspacesOrganizationIdSavedviewsId",
+    "description": "(DELETE /workspaces/{organizationId}/saved-views/{id})",
     "method": "DELETE",
-    "path": "/workspaces/{workspaceId}/saved-views/{id}",
+    "path": "/workspaces/{organizationId}/saved-views/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "id": {
@@ -186,19 +186,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "deleteWorkspacesWorkspaceIdStatesId",
-    "description": "(DELETE /workspaces/{workspaceId}/states/{id})",
+    "name": "deleteWorkspacesOrganizationIdStatesId",
+    "description": "(DELETE /workspaces/{organizationId}/states/{id})",
     "method": "DELETE",
-    "path": "/workspaces/{workspaceId}/states/{id}",
+    "path": "/workspaces/{organizationId}/states/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "id": {
@@ -207,19 +207,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "deleteWorkspacesWorkspaceIdTeamsId",
-    "description": "(DELETE /workspaces/{workspaceId}/teams/{id})",
+    "name": "deleteWorkspacesOrganizationIdTeamsId",
+    "description": "(DELETE /workspaces/{organizationId}/teams/{id})",
     "method": "DELETE",
-    "path": "/workspaces/{workspaceId}/teams/{id}",
+    "path": "/workspaces/{organizationId}/teams/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "id": {
@@ -228,19 +228,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "deleteWorkspacesWorkspaceIdTeamsIdMembersMemberId",
-    "description": "(DELETE /workspaces/{workspaceId}/teams/{id}/members/{memberId})",
+    "name": "deleteWorkspacesOrganizationIdTeamsIdMembersMemberId",
+    "description": "(DELETE /workspaces/{organizationId}/teams/{id}/members/{memberId})",
     "method": "DELETE",
-    "path": "/workspaces/{workspaceId}/teams/{id}/members/{memberId}",
+    "path": "/workspaces/{organizationId}/teams/{id}/members/{memberId}",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "id": {
@@ -260,19 +260,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "id",
         "memberId",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "deleteWorkspacesWorkspaceIdTokensId",
-    "description": "(DELETE /workspaces/{workspaceId}/tokens/{id})",
+    "name": "deleteWorkspacesOrganizationIdTokensId",
+    "description": "(DELETE /workspaces/{organizationId}/tokens/{id})",
     "method": "DELETE",
-    "path": "/workspaces/{workspaceId}/tokens/{id}",
+    "path": "/workspaces/{organizationId}/tokens/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "id": {
@@ -281,19 +281,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "deleteWorkspacesWorkspaceIdWebhooksubscriptionsId",
-    "description": "(DELETE /workspaces/{workspaceId}/webhook-subscriptions/{id})",
+    "name": "deleteWorkspacesOrganizationIdWebhooksubscriptionsId",
+    "description": "(DELETE /workspaces/{organizationId}/webhook-subscriptions/{id})",
     "method": "DELETE",
-    "path": "/workspaces/{workspaceId}/webhook-subscriptions/{id}",
+    "path": "/workspaces/{organizationId}/webhook-subscriptions/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "id": {
@@ -302,7 +302,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
@@ -334,31 +334,14 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
-    "name": "getWorkspacesSlugSlug",
-    "description": "(GET /workspaces/slug/{slug})",
+    "name": "getWorkspacesOrganizationIdAgentSessions",
+    "description": "(GET /workspaces/{organizationId}/agent/sessions)",
     "method": "GET",
-    "path": "/workspaces/slug/{slug}",
+    "path": "/workspaces/{organizationId}/agent/sessions",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "slug": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "slug"
-      ]
-    }
-  },
-  {
-    "name": "getWorkspacesWorkspaceIdAgentSessions",
-    "description": "(GET /workspaces/{workspaceId}/agent/sessions)",
-    "method": "GET",
-    "path": "/workspaces/{workspaceId}/agent/sessions",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "issueId": {
@@ -369,19 +352,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "getWorkspacesWorkspaceIdAgentSessionsSessionId",
-    "description": "(GET /workspaces/{workspaceId}/agent/sessions/{sessionId})",
+    "name": "getWorkspacesOrganizationIdAgentSessionsSessionId",
+    "description": "(GET /workspaces/{organizationId}/agent/sessions/{sessionId})",
     "method": "GET",
-    "path": "/workspaces/{workspaceId}/agent/sessions/{sessionId}",
+    "path": "/workspaces/{organizationId}/agent/sessions/{sessionId}",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "sessionId": {
@@ -389,37 +372,37 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
-        "sessionId",
-        "workspaceId"
+        "organizationId",
+        "sessionId"
       ]
     }
   },
   {
-    "name": "getWorkspacesWorkspaceIdCycles",
-    "description": "(GET /workspaces/{workspaceId}/cycles)",
+    "name": "getWorkspacesOrganizationIdCycles",
+    "description": "(GET /workspaces/{organizationId}/cycles)",
     "method": "GET",
-    "path": "/workspaces/{workspaceId}/cycles",
+    "path": "/workspaces/{organizationId}/cycles",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         }
       },
       "required": [
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "getWorkspacesWorkspaceIdCyclesId",
-    "description": "(GET /workspaces/{workspaceId}/cycles/{id})",
+    "name": "getWorkspacesOrganizationIdCyclesId",
+    "description": "(GET /workspaces/{organizationId}/cycles/{id})",
     "method": "GET",
-    "path": "/workspaces/{workspaceId}/cycles/{id}",
+    "path": "/workspaces/{organizationId}/cycles/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "id": {
@@ -428,19 +411,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "getWorkspacesWorkspaceIdIssues",
-    "description": "(GET /workspaces/{workspaceId}/issues)",
+    "name": "getWorkspacesOrganizationIdIssues",
+    "description": "(GET /workspaces/{organizationId}/issues)",
     "method": "GET",
-    "path": "/workspaces/{workspaceId}/issues",
+    "path": "/workspaces/{organizationId}/issues",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "limit": {
@@ -497,19 +480,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "getWorkspacesWorkspaceIdIssuesId",
-    "description": "(GET /workspaces/{workspaceId}/issues/{id})",
+    "name": "getWorkspacesOrganizationIdIssuesId",
+    "description": "(GET /workspaces/{organizationId}/issues/{id})",
     "method": "GET",
-    "path": "/workspaces/{workspaceId}/issues/{id}",
+    "path": "/workspaces/{organizationId}/issues/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "id": {
@@ -518,19 +501,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "getWorkspacesWorkspaceIdIssuesIssueIdAttachments",
-    "description": "(GET /workspaces/{workspaceId}/issues/{issueId}/attachments)",
+    "name": "getWorkspacesOrganizationIdIssuesIssueIdAttachments",
+    "description": "(GET /workspaces/{organizationId}/issues/{issueId}/attachments)",
     "method": "GET",
-    "path": "/workspaces/{workspaceId}/issues/{issueId}/attachments",
+    "path": "/workspaces/{organizationId}/issues/{issueId}/attachments",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "issueId": {
@@ -539,19 +522,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "issueId",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "getWorkspacesWorkspaceIdIssuesIssueIdComments",
-    "description": "(GET /workspaces/{workspaceId}/issues/{issueId}/comments)",
+    "name": "getWorkspacesOrganizationIdIssuesIssueIdComments",
+    "description": "(GET /workspaces/{organizationId}/issues/{issueId}/comments)",
     "method": "GET",
-    "path": "/workspaces/{workspaceId}/issues/{issueId}/comments",
+    "path": "/workspaces/{organizationId}/issues/{issueId}/comments",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "issueId": {
@@ -560,19 +543,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "issueId",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "getWorkspacesWorkspaceIdIssuesIssueIdCommentsId",
-    "description": "(GET /workspaces/{workspaceId}/issues/{issueId}/comments/{id})",
+    "name": "getWorkspacesOrganizationIdIssuesIssueIdCommentsId",
+    "description": "(GET /workspaces/{organizationId}/issues/{issueId}/comments/{id})",
     "method": "GET",
-    "path": "/workspaces/{workspaceId}/issues/{issueId}/comments/{id}",
+    "path": "/workspaces/{organizationId}/issues/{issueId}/comments/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "issueId": {
@@ -585,19 +568,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "id",
         "issueId",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "getWorkspacesWorkspaceIdIssuesIssueIdHistory",
-    "description": "(GET /workspaces/{workspaceId}/issues/{issueId}/history)",
+    "name": "getWorkspacesOrganizationIdIssuesIssueIdHistory",
+    "description": "(GET /workspaces/{organizationId}/issues/{issueId}/history)",
     "method": "GET",
-    "path": "/workspaces/{workspaceId}/issues/{issueId}/history",
+    "path": "/workspaces/{organizationId}/issues/{issueId}/history",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "issueId": {
@@ -606,19 +589,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "issueId",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "getWorkspacesWorkspaceIdIssuesIssueIdRelations",
-    "description": "(GET /workspaces/{workspaceId}/issues/{issueId}/relations)",
+    "name": "getWorkspacesOrganizationIdIssuesIssueIdRelations",
+    "description": "(GET /workspaces/{organizationId}/issues/{issueId}/relations)",
     "method": "GET",
-    "path": "/workspaces/{workspaceId}/issues/{issueId}/relations",
+    "path": "/workspaces/{organizationId}/issues/{issueId}/relations",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "issueId": {
@@ -627,19 +610,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "issueId",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "getWorkspacesWorkspaceIdIssuesIssueIdSubscribers",
-    "description": "(GET /workspaces/{workspaceId}/issues/{issueId}/subscribers)",
+    "name": "getWorkspacesOrganizationIdIssuesIssueIdSubscribers",
+    "description": "(GET /workspaces/{organizationId}/issues/{issueId}/subscribers)",
     "method": "GET",
-    "path": "/workspaces/{workspaceId}/issues/{issueId}/subscribers",
+    "path": "/workspaces/{organizationId}/issues/{issueId}/subscribers",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "issueId": {
@@ -648,36 +631,36 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "issueId",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "getWorkspacesWorkspaceIdLabels",
-    "description": "(GET /workspaces/{workspaceId}/labels)",
+    "name": "getWorkspacesOrganizationIdLabels",
+    "description": "(GET /workspaces/{organizationId}/labels)",
     "method": "GET",
-    "path": "/workspaces/{workspaceId}/labels",
+    "path": "/workspaces/{organizationId}/labels",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         }
       },
       "required": [
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "getWorkspacesWorkspaceIdLabelsId",
-    "description": "(GET /workspaces/{workspaceId}/labels/{id})",
+    "name": "getWorkspacesOrganizationIdLabelsId",
+    "description": "(GET /workspaces/{organizationId}/labels/{id})",
     "method": "GET",
-    "path": "/workspaces/{workspaceId}/labels/{id}",
+    "path": "/workspaces/{organizationId}/labels/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "id": {
@@ -686,36 +669,36 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "getWorkspacesWorkspaceIdLinearusers",
-    "description": "(GET /workspaces/{workspaceId}/linear-users)",
+    "name": "getWorkspacesOrganizationIdLinearusers",
+    "description": "(GET /workspaces/{organizationId}/linear-users)",
     "method": "GET",
-    "path": "/workspaces/{workspaceId}/linear-users",
+    "path": "/workspaces/{organizationId}/linear-users",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         }
       },
       "required": [
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "getWorkspacesWorkspaceIdLinearusersLinearId",
-    "description": "(GET /workspaces/{workspaceId}/linear-users/{linearId})",
+    "name": "getWorkspacesOrganizationIdLinearusersLinearId",
+    "description": "(GET /workspaces/{organizationId}/linear-users/{linearId})",
     "method": "GET",
-    "path": "/workspaces/{workspaceId}/linear-users/{linearId}",
+    "path": "/workspaces/{organizationId}/linear-users/{linearId}",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "linearId": {
@@ -724,36 +707,36 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "linearId",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "getWorkspacesWorkspaceIdMemberships",
-    "description": "(GET /workspaces/{workspaceId}/memberships)",
+    "name": "getWorkspacesOrganizationIdMemberships",
+    "description": "(GET /workspaces/{organizationId}/memberships)",
     "method": "GET",
-    "path": "/workspaces/{workspaceId}/memberships",
+    "path": "/workspaces/{organizationId}/memberships",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         }
       },
       "required": [
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "getWorkspacesWorkspaceIdNotifications",
-    "description": "(GET /workspaces/{workspaceId}/notifications)",
+    "name": "getWorkspacesOrganizationIdNotifications",
+    "description": "(GET /workspaces/{organizationId}/notifications)",
     "method": "GET",
-    "path": "/workspaces/{workspaceId}/notifications",
+    "path": "/workspaces/{organizationId}/notifications",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "unreadOnly": {
@@ -766,53 +749,53 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "getWorkspacesWorkspaceIdNotificationsUnreadcount",
-    "description": "(GET /workspaces/{workspaceId}/notifications/unread-count)",
+    "name": "getWorkspacesOrganizationIdNotificationsUnreadcount",
+    "description": "(GET /workspaces/{organizationId}/notifications/unread-count)",
     "method": "GET",
-    "path": "/workspaces/{workspaceId}/notifications/unread-count",
+    "path": "/workspaces/{organizationId}/notifications/unread-count",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         }
       },
       "required": [
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "getWorkspacesWorkspaceIdProjects",
-    "description": "(GET /workspaces/{workspaceId}/projects)",
+    "name": "getWorkspacesOrganizationIdProjects",
+    "description": "(GET /workspaces/{organizationId}/projects)",
     "method": "GET",
-    "path": "/workspaces/{workspaceId}/projects",
+    "path": "/workspaces/{organizationId}/projects",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         }
       },
       "required": [
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "getWorkspacesWorkspaceIdProjectsId",
-    "description": "(GET /workspaces/{workspaceId}/projects/{id})",
+    "name": "getWorkspacesOrganizationIdProjectsId",
+    "description": "(GET /workspaces/{organizationId}/projects/{id})",
     "method": "GET",
-    "path": "/workspaces/{workspaceId}/projects/{id}",
+    "path": "/workspaces/{organizationId}/projects/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "id": {
@@ -821,36 +804,36 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "getWorkspacesWorkspaceIdSavedviews",
-    "description": "(GET /workspaces/{workspaceId}/saved-views)",
+    "name": "getWorkspacesOrganizationIdSavedviews",
+    "description": "(GET /workspaces/{organizationId}/saved-views)",
     "method": "GET",
-    "path": "/workspaces/{workspaceId}/saved-views",
+    "path": "/workspaces/{organizationId}/saved-views",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         }
       },
       "required": [
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "getWorkspacesWorkspaceIdSavedviewsId",
-    "description": "(GET /workspaces/{workspaceId}/saved-views/{id})",
+    "name": "getWorkspacesOrganizationIdSavedviewsId",
+    "description": "(GET /workspaces/{organizationId}/saved-views/{id})",
     "method": "GET",
-    "path": "/workspaces/{workspaceId}/saved-views/{id}",
+    "path": "/workspaces/{organizationId}/saved-views/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "id": {
@@ -859,36 +842,36 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "getWorkspacesWorkspaceIdStates",
-    "description": "(GET /workspaces/{workspaceId}/states)",
+    "name": "getWorkspacesOrganizationIdStates",
+    "description": "(GET /workspaces/{organizationId}/states)",
     "method": "GET",
-    "path": "/workspaces/{workspaceId}/states",
+    "path": "/workspaces/{organizationId}/states",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         }
       },
       "required": [
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "getWorkspacesWorkspaceIdStatesId",
-    "description": "(GET /workspaces/{workspaceId}/states/{id})",
+    "name": "getWorkspacesOrganizationIdStatesId",
+    "description": "(GET /workspaces/{organizationId}/states/{id})",
     "method": "GET",
-    "path": "/workspaces/{workspaceId}/states/{id}",
+    "path": "/workspaces/{organizationId}/states/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "id": {
@@ -897,36 +880,36 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "getWorkspacesWorkspaceIdTeams",
-    "description": "(GET /workspaces/{workspaceId}/teams)",
+    "name": "getWorkspacesOrganizationIdTeams",
+    "description": "(GET /workspaces/{organizationId}/teams)",
     "method": "GET",
-    "path": "/workspaces/{workspaceId}/teams",
+    "path": "/workspaces/{organizationId}/teams",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         }
       },
       "required": [
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "getWorkspacesWorkspaceIdTeamsId",
-    "description": "(GET /workspaces/{workspaceId}/teams/{id})",
+    "name": "getWorkspacesOrganizationIdTeamsId",
+    "description": "(GET /workspaces/{organizationId}/teams/{id})",
     "method": "GET",
-    "path": "/workspaces/{workspaceId}/teams/{id}",
+    "path": "/workspaces/{organizationId}/teams/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "id": {
@@ -935,19 +918,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "getWorkspacesWorkspaceIdTeamsIdMembers",
-    "description": "(GET /workspaces/{workspaceId}/teams/{id}/members)",
+    "name": "getWorkspacesOrganizationIdTeamsIdMembers",
+    "description": "(GET /workspaces/{organizationId}/teams/{id}/members)",
     "method": "GET",
-    "path": "/workspaces/{workspaceId}/teams/{id}/members",
+    "path": "/workspaces/{organizationId}/teams/{id}/members",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "id": {
@@ -956,36 +939,36 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "getWorkspacesWorkspaceIdTemplates",
-    "description": "(GET /workspaces/{workspaceId}/templates)",
+    "name": "getWorkspacesOrganizationIdTemplates",
+    "description": "(GET /workspaces/{organizationId}/templates)",
     "method": "GET",
-    "path": "/workspaces/{workspaceId}/templates",
+    "path": "/workspaces/{organizationId}/templates",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         }
       },
       "required": [
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "getWorkspacesWorkspaceIdTemplatesId",
-    "description": "(GET /workspaces/{workspaceId}/templates/{id})",
+    "name": "getWorkspacesOrganizationIdTemplatesId",
+    "description": "(GET /workspaces/{organizationId}/templates/{id})",
     "method": "GET",
-    "path": "/workspaces/{workspaceId}/templates/{id}",
+    "path": "/workspaces/{organizationId}/templates/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "id": {
@@ -994,53 +977,53 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "getWorkspacesWorkspaceIdTokens",
-    "description": "(GET /workspaces/{workspaceId}/tokens)",
+    "name": "getWorkspacesOrganizationIdTokens",
+    "description": "(GET /workspaces/{organizationId}/tokens)",
     "method": "GET",
-    "path": "/workspaces/{workspaceId}/tokens",
+    "path": "/workspaces/{organizationId}/tokens",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         }
       },
       "required": [
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "getWorkspacesWorkspaceIdWebhooksubscriptions",
-    "description": "(GET /workspaces/{workspaceId}/webhook-subscriptions)",
+    "name": "getWorkspacesOrganizationIdWebhooksubscriptions",
+    "description": "(GET /workspaces/{organizationId}/webhook-subscriptions)",
     "method": "GET",
-    "path": "/workspaces/{workspaceId}/webhook-subscriptions",
+    "path": "/workspaces/{organizationId}/webhook-subscriptions",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         }
       },
       "required": [
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "getWorkspacesWorkspaceIdWebhooksubscriptionsId",
-    "description": "(GET /workspaces/{workspaceId}/webhook-subscriptions/{id})",
+    "name": "getWorkspacesOrganizationIdWebhooksubscriptionsId",
+    "description": "(GET /workspaces/{organizationId}/webhook-subscriptions/{id})",
     "method": "GET",
-    "path": "/workspaces/{workspaceId}/webhook-subscriptions/{id}",
+    "path": "/workspaces/{organizationId}/webhook-subscriptions/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "id": {
@@ -1049,19 +1032,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "getWorkspacesWorkspaceIdWebhooksubscriptionsIdDeliveries",
-    "description": "(GET /workspaces/{workspaceId}/webhook-subscriptions/{id}/deliveries)",
+    "name": "getWorkspacesOrganizationIdWebhooksubscriptionsIdDeliveries",
+    "description": "(GET /workspaces/{organizationId}/webhook-subscriptions/{id}/deliveries)",
     "method": "GET",
-    "path": "/workspaces/{workspaceId}/webhook-subscriptions/{id}/deliveries",
+    "path": "/workspaces/{organizationId}/webhook-subscriptions/{id}/deliveries",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "id": {
@@ -1070,19 +1053,53 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "patchWorkspacesWorkspaceIdAgentSessionsSessionId",
-    "description": "(PATCH /workspaces/{workspaceId}/agent/sessions/{sessionId})",
+    "name": "getWorkspacesOrganizationIdWs",
+    "description": "(GET /workspaces/{organizationId}/ws)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/ws",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesSlugSlug",
+    "description": "(GET /workspaces/slug/{slug})",
+    "method": "GET",
+    "path": "/workspaces/slug/{slug}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "slug": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "slug"
+      ]
+    }
+  },
+  {
+    "name": "patchWorkspacesOrganizationIdAgentSessionsSessionId",
+    "description": "(PATCH /workspaces/{organizationId}/agent/sessions/{sessionId})",
     "method": "PATCH",
-    "path": "/workspaces/{workspaceId}/agent/sessions/{sessionId}",
+    "path": "/workspaces/{organizationId}/agent/sessions/{sessionId}",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "sessionId": {
@@ -1112,20 +1129,20 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
-        "sessionId",
-        "workspaceId"
+        "organizationId",
+        "sessionId"
       ]
     }
   },
   {
-    "name": "patchWorkspacesWorkspaceIdCyclesId",
-    "description": "(PATCH /workspaces/{workspaceId}/cycles/{id})",
+    "name": "patchWorkspacesOrganizationIdCyclesId",
+    "description": "(PATCH /workspaces/{organizationId}/cycles/{id})",
     "method": "PATCH",
-    "path": "/workspaces/{workspaceId}/cycles/{id}",
+    "path": "/workspaces/{organizationId}/cycles/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "id": {
@@ -1152,19 +1169,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "patchWorkspacesWorkspaceIdIssuesId",
-    "description": "(PATCH /workspaces/{workspaceId}/issues/{id})",
+    "name": "patchWorkspacesOrganizationIdIssuesId",
+    "description": "(PATCH /workspaces/{organizationId}/issues/{id})",
     "method": "PATCH",
-    "path": "/workspaces/{workspaceId}/issues/{id}",
+    "path": "/workspaces/{organizationId}/issues/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "id": {
@@ -1225,19 +1242,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "patchWorkspacesWorkspaceIdIssuesIssueIdCommentsId",
-    "description": "(PATCH /workspaces/{workspaceId}/issues/{issueId}/comments/{id})",
+    "name": "patchWorkspacesOrganizationIdIssuesIssueIdCommentsId",
+    "description": "(PATCH /workspaces/{organizationId}/issues/{issueId}/comments/{id})",
     "method": "PATCH",
-    "path": "/workspaces/{workspaceId}/issues/{issueId}/comments/{id}",
+    "path": "/workspaces/{organizationId}/issues/{issueId}/comments/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "issueId": {
@@ -1262,19 +1279,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "id",
         "issueId",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "patchWorkspacesWorkspaceIdLabelsId",
-    "description": "(PATCH /workspaces/{workspaceId}/labels/{id})",
+    "name": "patchWorkspacesOrganizationIdLabelsId",
+    "description": "(PATCH /workspaces/{organizationId}/labels/{id})",
     "method": "PATCH",
-    "path": "/workspaces/{workspaceId}/labels/{id}",
+    "path": "/workspaces/{organizationId}/labels/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "id": {
@@ -1295,19 +1312,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "patchWorkspacesWorkspaceIdNotificationsIdRead",
-    "description": "(PATCH /workspaces/{workspaceId}/notifications/{id}/read)",
+    "name": "patchWorkspacesOrganizationIdNotificationsIdRead",
+    "description": "(PATCH /workspaces/{organizationId}/notifications/{id}/read)",
     "method": "PATCH",
-    "path": "/workspaces/{workspaceId}/notifications/{id}/read",
+    "path": "/workspaces/{organizationId}/notifications/{id}/read",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "id": {
@@ -1316,19 +1333,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "patchWorkspacesWorkspaceIdProjectsId",
-    "description": "(PATCH /workspaces/{workspaceId}/projects/{id})",
+    "name": "patchWorkspacesOrganizationIdProjectsId",
+    "description": "(PATCH /workspaces/{organizationId}/projects/{id})",
     "method": "PATCH",
-    "path": "/workspaces/{workspaceId}/projects/{id}",
+    "path": "/workspaces/{organizationId}/projects/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "id": {
@@ -1358,19 +1375,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "patchWorkspacesWorkspaceIdSavedviewsId",
-    "description": "(PATCH /workspaces/{workspaceId}/saved-views/{id})",
+    "name": "patchWorkspacesOrganizationIdSavedviewsId",
+    "description": "(PATCH /workspaces/{organizationId}/saved-views/{id})",
     "method": "PATCH",
-    "path": "/workspaces/{workspaceId}/saved-views/{id}",
+    "path": "/workspaces/{organizationId}/saved-views/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "id": {
@@ -1421,19 +1438,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "patchWorkspacesWorkspaceIdStatesId",
-    "description": "(PATCH /workspaces/{workspaceId}/states/{id})",
+    "name": "patchWorkspacesOrganizationIdStatesId",
+    "description": "(PATCH /workspaces/{organizationId}/states/{id})",
     "method": "PATCH",
-    "path": "/workspaces/{workspaceId}/states/{id}",
+    "path": "/workspaces/{organizationId}/states/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "id": {
@@ -1460,19 +1477,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "patchWorkspacesWorkspaceIdTeamsId",
-    "description": "(PATCH /workspaces/{workspaceId}/teams/{id})",
+    "name": "patchWorkspacesOrganizationIdTeamsId",
+    "description": "(PATCH /workspaces/{organizationId}/teams/{id})",
     "method": "PATCH",
-    "path": "/workspaces/{workspaceId}/teams/{id}",
+    "path": "/workspaces/{organizationId}/teams/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "id": {
@@ -1497,19 +1514,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "patchWorkspacesWorkspaceIdWebhooksubscriptionsId",
-    "description": "(PATCH /workspaces/{workspaceId}/webhook-subscriptions/{id})",
+    "name": "patchWorkspacesOrganizationIdWebhooksubscriptionsId",
+    "description": "(PATCH /workspaces/{organizationId}/webhook-subscriptions/{id})",
     "method": "PATCH",
-    "path": "/workspaces/{workspaceId}/webhook-subscriptions/{id}",
+    "path": "/workspaces/{organizationId}/webhook-subscriptions/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "id": {
@@ -1533,7 +1550,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
@@ -1569,14 +1586,14 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
-    "name": "postWorkspacesWorkspaceIdAgentSessionsSessionIdActivities",
-    "description": "(POST /workspaces/{workspaceId}/agent/sessions/{sessionId}/activities)",
+    "name": "postWorkspacesOrganizationIdAgentSessionsSessionIdActivities",
+    "description": "(POST /workspaces/{organizationId}/agent/sessions/{sessionId}/activities)",
     "method": "POST",
-    "path": "/workspaces/{workspaceId}/agent/sessions/{sessionId}/activities",
+    "path": "/workspaces/{organizationId}/agent/sessions/{sessionId}/activities",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "sessionId": {
@@ -1614,20 +1631,20 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
-        "sessionId",
-        "workspaceId"
+        "organizationId",
+        "sessionId"
       ]
     }
   },
   {
-    "name": "postWorkspacesWorkspaceIdAgentSessionsSessionIdPoll",
-    "description": "(POST /workspaces/{workspaceId}/agent/sessions/{sessionId}/poll)",
+    "name": "postWorkspacesOrganizationIdAgentSessionsSessionIdPoll",
+    "description": "(POST /workspaces/{organizationId}/agent/sessions/{sessionId}/poll)",
     "method": "POST",
-    "path": "/workspaces/{workspaceId}/agent/sessions/{sessionId}/poll",
+    "path": "/workspaces/{organizationId}/agent/sessions/{sessionId}/poll",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "sessionId": {
@@ -1635,20 +1652,20 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
-        "sessionId",
-        "workspaceId"
+        "organizationId",
+        "sessionId"
       ]
     }
   },
   {
-    "name": "postWorkspacesWorkspaceIdCycles",
-    "description": "(POST /workspaces/{workspaceId}/cycles)",
+    "name": "postWorkspacesOrganizationIdCycles",
+    "description": "(POST /workspaces/{organizationId}/cycles)",
     "method": "POST",
-    "path": "/workspaces/{workspaceId}/cycles",
+    "path": "/workspaces/{organizationId}/cycles",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "body": {
@@ -1674,19 +1691,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "postWorkspacesWorkspaceIdGithubInstall",
-    "description": "(POST /workspaces/{workspaceId}/github/install)",
+    "name": "postWorkspacesOrganizationIdGithubInstall",
+    "description": "(POST /workspaces/{organizationId}/github/install)",
     "method": "POST",
-    "path": "/workspaces/{workspaceId}/github/install",
+    "path": "/workspaces/{organizationId}/github/install",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "body": {
@@ -1702,19 +1719,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "postWorkspacesWorkspaceIdGithubUsers",
-    "description": "(POST /workspaces/{workspaceId}/github/users)",
+    "name": "postWorkspacesOrganizationIdGithubUsers",
+    "description": "(POST /workspaces/{organizationId}/github/users)",
     "method": "POST",
-    "path": "/workspaces/{workspaceId}/github/users",
+    "path": "/workspaces/{organizationId}/github/users",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "body": {
@@ -1734,19 +1751,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "postWorkspacesWorkspaceIdIssues",
-    "description": "(POST /workspaces/{workspaceId}/issues)",
+    "name": "postWorkspacesOrganizationIdIssues",
+    "description": "(POST /workspaces/{organizationId}/issues)",
     "method": "POST",
-    "path": "/workspaces/{workspaceId}/issues",
+    "path": "/workspaces/{organizationId}/issues",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "body": {
@@ -1806,19 +1823,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "postWorkspacesWorkspaceIdIssuesIdDispatch",
-    "description": "(POST /workspaces/{workspaceId}/issues/{id}/dispatch)",
+    "name": "postWorkspacesOrganizationIdIssuesIdDispatch",
+    "description": "(POST /workspaces/{organizationId}/issues/{id}/dispatch)",
     "method": "POST",
-    "path": "/workspaces/{workspaceId}/issues/{id}/dispatch",
+    "path": "/workspaces/{organizationId}/issues/{id}/dispatch",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "id": {
@@ -1838,19 +1855,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "postWorkspacesWorkspaceIdIssuesIssueIdComments",
-    "description": "(POST /workspaces/{workspaceId}/issues/{issueId}/comments)",
+    "name": "postWorkspacesOrganizationIdIssuesIssueIdComments",
+    "description": "(POST /workspaces/{organizationId}/issues/{issueId}/comments)",
     "method": "POST",
-    "path": "/workspaces/{workspaceId}/issues/{issueId}/comments",
+    "path": "/workspaces/{organizationId}/issues/{issueId}/comments",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "issueId": {
@@ -1871,19 +1888,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "issueId",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "postWorkspacesWorkspaceIdIssuesIssueIdRelations",
-    "description": "(POST /workspaces/{workspaceId}/issues/{issueId}/relations)",
+    "name": "postWorkspacesOrganizationIdIssuesIssueIdRelations",
+    "description": "(POST /workspaces/{organizationId}/issues/{issueId}/relations)",
     "method": "POST",
-    "path": "/workspaces/{workspaceId}/issues/{issueId}/relations",
+    "path": "/workspaces/{organizationId}/issues/{issueId}/relations",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "issueId": {
@@ -1916,19 +1933,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "issueId",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "postWorkspacesWorkspaceIdIssuesIssueIdSubscribers",
-    "description": "(POST /workspaces/{workspaceId}/issues/{issueId}/subscribers)",
+    "name": "postWorkspacesOrganizationIdIssuesIssueIdSubscribers",
+    "description": "(POST /workspaces/{organizationId}/issues/{issueId}/subscribers)",
     "method": "POST",
-    "path": "/workspaces/{workspaceId}/issues/{issueId}/subscribers",
+    "path": "/workspaces/{organizationId}/issues/{issueId}/subscribers",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "issueId": {
@@ -1949,19 +1966,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "issueId",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "postWorkspacesWorkspaceIdLabels",
-    "description": "(POST /workspaces/{workspaceId}/labels)",
+    "name": "postWorkspacesOrganizationIdLabels",
+    "description": "(POST /workspaces/{organizationId}/labels)",
     "method": "POST",
-    "path": "/workspaces/{workspaceId}/labels",
+    "path": "/workspaces/{organizationId}/labels",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "body": {
@@ -1981,19 +1998,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "postWorkspacesWorkspaceIdLinearusers",
-    "description": "(POST /workspaces/{workspaceId}/linear-users)",
+    "name": "postWorkspacesOrganizationIdLinearusers",
+    "description": "(POST /workspaces/{organizationId}/linear-users)",
     "method": "POST",
-    "path": "/workspaces/{workspaceId}/linear-users",
+    "path": "/workspaces/{organizationId}/linear-users",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "body": {
@@ -2016,19 +2033,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "postWorkspacesWorkspaceIdMemberships",
-    "description": "(POST /workspaces/{workspaceId}/memberships)",
+    "name": "postWorkspacesOrganizationIdMemberships",
+    "description": "(POST /workspaces/{organizationId}/memberships)",
     "method": "POST",
-    "path": "/workspaces/{workspaceId}/memberships",
+    "path": "/workspaces/{organizationId}/memberships",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "body": {
@@ -2053,19 +2070,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "postWorkspacesWorkspaceIdMigrateLinear",
-    "description": "(POST /workspaces/{workspaceId}/migrate/linear)",
+    "name": "postWorkspacesOrganizationIdMigrateLinear",
+    "description": "(POST /workspaces/{organizationId}/migrate/linear)",
     "method": "POST",
-    "path": "/workspaces/{workspaceId}/migrate/linear",
+    "path": "/workspaces/{organizationId}/migrate/linear",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "body": {
@@ -2087,36 +2104,36 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "postWorkspacesWorkspaceIdNotificationsMarkallread",
-    "description": "(POST /workspaces/{workspaceId}/notifications/mark-all-read)",
+    "name": "postWorkspacesOrganizationIdNotificationsMarkallread",
+    "description": "(POST /workspaces/{organizationId}/notifications/mark-all-read)",
     "method": "POST",
-    "path": "/workspaces/{workspaceId}/notifications/mark-all-read",
+    "path": "/workspaces/{organizationId}/notifications/mark-all-read",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         }
       },
       "required": [
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "postWorkspacesWorkspaceIdProjects",
-    "description": "(POST /workspaces/{workspaceId}/projects)",
+    "name": "postWorkspacesOrganizationIdProjects",
+    "description": "(POST /workspaces/{organizationId}/projects)",
     "method": "POST",
-    "path": "/workspaces/{workspaceId}/projects",
+    "path": "/workspaces/{organizationId}/projects",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "body": {
@@ -2145,19 +2162,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "postWorkspacesWorkspaceIdSavedviews",
-    "description": "(POST /workspaces/{workspaceId}/saved-views)",
+    "name": "postWorkspacesOrganizationIdSavedviews",
+    "description": "(POST /workspaces/{organizationId}/saved-views)",
     "method": "POST",
-    "path": "/workspaces/{workspaceId}/saved-views",
+    "path": "/workspaces/{organizationId}/saved-views",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "body": {
@@ -2205,19 +2222,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "postWorkspacesWorkspaceIdStates",
-    "description": "(POST /workspaces/{workspaceId}/states)",
+    "name": "postWorkspacesOrganizationIdStates",
+    "description": "(POST /workspaces/{organizationId}/states)",
     "method": "POST",
-    "path": "/workspaces/{workspaceId}/states",
+    "path": "/workspaces/{organizationId}/states",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "body": {
@@ -2250,19 +2267,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "postWorkspacesWorkspaceIdTeams",
-    "description": "(POST /workspaces/{workspaceId}/teams)",
+    "name": "postWorkspacesOrganizationIdTeams",
+    "description": "(POST /workspaces/{organizationId}/teams)",
     "method": "POST",
-    "path": "/workspaces/{workspaceId}/teams",
+    "path": "/workspaces/{organizationId}/teams",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "body": {
@@ -2287,19 +2304,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "postWorkspacesWorkspaceIdTeamsIdMembers",
-    "description": "(POST /workspaces/{workspaceId}/teams/{id}/members)",
+    "name": "postWorkspacesOrganizationIdTeamsIdMembers",
+    "description": "(POST /workspaces/{organizationId}/teams/{id}/members)",
     "method": "POST",
-    "path": "/workspaces/{workspaceId}/teams/{id}/members",
+    "path": "/workspaces/{organizationId}/teams/{id}/members",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "id": {
@@ -2334,19 +2351,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "postWorkspacesWorkspaceIdTemplates",
-    "description": "(POST /workspaces/{workspaceId}/templates)",
+    "name": "postWorkspacesOrganizationIdTemplates",
+    "description": "(POST /workspaces/{organizationId}/templates)",
     "method": "POST",
-    "path": "/workspaces/{workspaceId}/templates",
+    "path": "/workspaces/{organizationId}/templates",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "body": {
@@ -2371,19 +2388,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "postWorkspacesWorkspaceIdTokens",
-    "description": "(POST /workspaces/{workspaceId}/tokens)",
+    "name": "postWorkspacesOrganizationIdTokens",
+    "description": "(POST /workspaces/{organizationId}/tokens)",
     "method": "POST",
-    "path": "/workspaces/{workspaceId}/tokens",
+    "path": "/workspaces/{organizationId}/tokens",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "body": {
@@ -2413,19 +2430,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
-        "workspaceId"
+        "organizationId"
       ]
     }
   },
   {
-    "name": "postWorkspacesWorkspaceIdWebhooksubscriptions",
-    "description": "(POST /workspaces/{workspaceId}/webhook-subscriptions)",
+    "name": "postWorkspacesOrganizationIdWebhooksubscriptions",
+    "description": "(POST /workspaces/{organizationId}/webhook-subscriptions)",
     "method": "POST",
-    "path": "/workspaces/{workspaceId}/webhook-subscriptions",
+    "path": "/workspaces/{organizationId}/webhook-subscriptions",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "workspaceId": {
+        "organizationId": {
           "type": "string"
         },
         "body": {
@@ -2448,7 +2465,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
-        "workspaceId"
+        "organizationId"
       ]
     }
   }

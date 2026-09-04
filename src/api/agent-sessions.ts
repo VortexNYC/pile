@@ -37,7 +37,7 @@ const agentSessionStatusSchema = z.enum([
 
 export const agentSessionSchema = z.object({
   id: z.string(),
-  workspaceId: z.string(),
+  organizationId: z.string(),
   issueId: z.string(),
   agentId: z.string(),
   provider: z.string(),
@@ -89,11 +89,11 @@ function toSessionResponse(row: AgentSession, activities?: AgentActivity[]) {
 
 const listSessionsRoute = createRoute({
   method: "get",
-  path: "/workspaces/{workspaceId}/agent/sessions",
+  path: "/workspaces/{organizationId}/agent/sessions",
   tags: ["agent-sessions"],
   middleware: [rls("read")],
   request: {
-    params: z.object({ workspaceId: z.string() }),
+    params: z.object({ organizationId: z.string() }),
     query: z.object({
       issueId: z.string().optional(),
       limit: z.string().optional(),
@@ -113,11 +113,11 @@ const listSessionsRoute = createRoute({
 
 const getSessionRoute = createRoute({
   method: "get",
-  path: "/workspaces/{workspaceId}/agent/sessions/{sessionId}",
+  path: "/workspaces/{organizationId}/agent/sessions/{sessionId}",
   tags: ["agent-sessions"],
   middleware: [rls("read")],
   request: {
-    params: z.object({ workspaceId: z.string(), sessionId: z.string() }),
+    params: z.object({ organizationId: z.string(), sessionId: z.string() }),
   },
   responses: {
     200: {
@@ -132,11 +132,11 @@ const getSessionRoute = createRoute({
 
 const addActivityRoute = createRoute({
   method: "post",
-  path: "/workspaces/{workspaceId}/agent/sessions/{sessionId}/activities",
+  path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/activities",
   tags: ["agent-sessions"],
   middleware: [rls("write")],
   request: {
-    params: z.object({ workspaceId: z.string(), sessionId: z.string() }),
+    params: z.object({ organizationId: z.string(), sessionId: z.string() }),
     body: {
       content: {
         "application/json": {
@@ -162,11 +162,11 @@ const addActivityRoute = createRoute({
 
 const patchSessionRoute = createRoute({
   method: "patch",
-  path: "/workspaces/{workspaceId}/agent/sessions/{sessionId}",
+  path: "/workspaces/{organizationId}/agent/sessions/{sessionId}",
   tags: ["agent-sessions"],
   middleware: [rls("write")],
   request: {
-    params: z.object({ workspaceId: z.string(), sessionId: z.string() }),
+    params: z.object({ organizationId: z.string(), sessionId: z.string() }),
     body: {
       content: {
         "application/json": {
@@ -192,11 +192,11 @@ const patchSessionRoute = createRoute({
 
 const pollSessionRoute = createRoute({
   method: "post",
-  path: "/workspaces/{workspaceId}/agent/sessions/{sessionId}/poll",
+  path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/poll",
   tags: ["agent-sessions"],
   middleware: [rls("write")],
   request: {
-    params: z.object({ workspaceId: z.string(), sessionId: z.string() }),
+    params: z.object({ organizationId: z.string(), sessionId: z.string() }),
   },
   responses: {
     200: {
@@ -211,10 +211,10 @@ const pollSessionRoute = createRoute({
 
 export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listSessionsRoute, async (c) => {
-    const { workspaceId } = c.req.valid("param");
+    const { organizationId } = c.req.valid("param");
     const query = c.req.valid("query");
     const db = createD1(c.env.D1);
-    const rows = await listAgentSessions(db, workspaceId, {
+    const rows = await listAgentSessions(db, organizationId, {
       issueId: query.issueId,
       limit: query.limit ? Number(query.limit) : undefined,
     });

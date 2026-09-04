@@ -11,7 +11,7 @@ export const repoBranches = sqliteTable(
   "repo_branches" as string,
   {
     id: text("id" as string).primaryKey(),
-    workspaceId: text("workspace_id" as string)
+    organizationId: text("organization_id" as string)
       .notNull()
       .references(() => organization.id),
     repo: text("repo" as string).notNull(),
@@ -33,7 +33,7 @@ export const repoIssues = sqliteTable(
   "repo_issues" as string,
   {
     id: text("id" as string).primaryKey(),
-    workspaceId: text("workspace_id" as string)
+    organizationId: text("organization_id" as string)
       .notNull()
       .references(() => organization.id),
     repo: text("repo" as string).notNull(),
@@ -48,7 +48,7 @@ export const repoIssues = sqliteTable(
       table.repo,
       table.issueNumber
     ),
-    index("repo_issues_workspace_idx" as string).on(table.workspaceId),
+    index("repo_issues_organization_idx" as string).on(table.organizationId),
   ]
 );
 
@@ -56,7 +56,7 @@ export const githubInstallations = sqliteTable(
   "github_installations" as string,
   {
     id: text("id" as string).primaryKey(),
-    workspaceId: text("workspace_id" as string)
+    organizationId: text("organization_id" as string)
       .notNull()
       .references(() => organization.id),
     installationId: text("installation_id" as string).notNull(),
@@ -67,7 +67,9 @@ export const githubInstallations = sqliteTable(
   },
   (table) => [
     index("github_installations_repo_idx" as string).on(table.repo),
-    index("github_installations_workspace_idx" as string).on(table.workspaceId),
+    index("github_installations_organization_idx" as string).on(
+      table.organizationId
+    ),
   ]
 );
 
@@ -75,7 +77,7 @@ export const projects = sqliteTable(
   "projects" as string,
   {
     id: text("id" as string).primaryKey(),
-    workspaceId: text("workspace_id" as string)
+    organizationId: text("organization_id" as string)
       .notNull()
       .references(() => organization.id),
     name: text("name" as string).notNull(),
@@ -92,14 +94,16 @@ export const projects = sqliteTable(
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
   },
-  (table) => [index("projects_workspace_idx" as string).on(table.workspaceId)]
+  (table) => [
+    index("projects_organization_idx" as string).on(table.organizationId),
+  ]
 );
 
 export const cycles = sqliteTable(
   "cycles" as string,
   {
     id: text("id" as string).primaryKey(),
-    workspaceId: text("workspace_id" as string)
+    organizationId: text("organization_id" as string)
       .notNull()
       .references(() => organization.id),
     projectId: text("project_id" as string).references(() => projects.id),
@@ -114,7 +118,7 @@ export const cycles = sqliteTable(
       .default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
-    index("cycles_workspace_idx" as string).on(table.workspaceId),
+    index("cycles_organization_idx" as string).on(table.organizationId),
     index("cycles_project_idx" as string).on(table.projectId),
   ]
 );
@@ -123,7 +127,7 @@ export const labels = sqliteTable(
   "labels" as string,
   {
     id: text("id" as string).primaryKey(),
-    workspaceId: text("workspace_id" as string)
+    organizationId: text("organization_id" as string)
       .notNull()
       .references(() => organization.id),
     name: text("name" as string).notNull(),
@@ -132,14 +136,16 @@ export const labels = sqliteTable(
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
   },
-  (table) => [index("labels_workspace_idx" as string).on(table.workspaceId)]
+  (table) => [
+    index("labels_organization_idx" as string).on(table.organizationId),
+  ]
 );
 
 export const states = sqliteTable(
   "states" as string,
   {
     id: text("id" as string).primaryKey(),
-    workspaceId: text("workspace_id" as string)
+    organizationId: text("organization_id" as string)
       .notNull()
       .references(() => organization.id),
     linearId: text("linear_id" as string).notNull(),
@@ -152,8 +158,11 @@ export const states = sqliteTable(
       .default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
-    index("states_workspace_idx" as string).on(table.workspaceId),
-    index("states_linear_idx" as string).on(table.workspaceId, table.linearId),
+    index("states_organization_idx" as string).on(table.organizationId),
+    index("states_linear_idx" as string).on(
+      table.organizationId,
+      table.linearId
+    ),
   ]
 );
 
@@ -161,7 +170,7 @@ export const linearUsers = sqliteTable(
   "linear_users" as string,
   {
     id: text("id" as string).primaryKey(),
-    workspaceId: text("workspace_id" as string)
+    organizationId: text("organization_id" as string)
       .notNull()
       .references(() => organization.id),
     linearId: text("linear_id" as string).notNull(),
@@ -172,9 +181,9 @@ export const linearUsers = sqliteTable(
       .default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
-    index("linear_users_workspace_idx" as string).on(table.workspaceId),
+    index("linear_users_organization_idx" as string).on(table.organizationId),
     index("linear_users_linear_idx" as string).on(
-      table.workspaceId,
+      table.organizationId,
       table.linearId
     ),
     index("linear_users_email_idx" as string).on(table.email),
@@ -185,7 +194,7 @@ export const comments = sqliteTable(
   "comments" as string,
   {
     id: text("id" as string).primaryKey(),
-    workspaceId: text("workspace_id" as string)
+    organizationId: text("organization_id" as string)
       .notNull()
       .references(() => organization.id),
     issueId: text("issue_id" as string).notNull(),
@@ -202,13 +211,16 @@ export const comments = sqliteTable(
       .default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
-    index("comments_issue_idx" as string).on(table.workspaceId, table.issueId),
+    index("comments_issue_idx" as string).on(
+      table.organizationId,
+      table.issueId
+    ),
     index("comments_author_idx" as string).on(
-      table.workspaceId,
+      table.organizationId,
       table.authorId
     ),
     index("comments_external_idx" as string).on(
-      table.workspaceId,
+      table.organizationId,
       table.externalSource,
       table.externalId
     ),
@@ -219,7 +231,7 @@ export const issueRelations = sqliteTable(
   "issue_relations" as string,
   {
     id: text("id" as string).primaryKey(),
-    workspaceId: text("workspace_id" as string)
+    organizationId: text("organization_id" as string)
       .notNull()
       .references(() => organization.id),
     fromIssueId: text("from_issue_id" as string).notNull(),
@@ -231,11 +243,11 @@ export const issueRelations = sqliteTable(
   },
   (table) => [
     index("issue_relations_from_idx" as string).on(
-      table.workspaceId,
+      table.organizationId,
       table.fromIssueId
     ),
     index("issue_relations_to_idx" as string).on(
-      table.workspaceId,
+      table.organizationId,
       table.toIssueId
     ),
   ]
@@ -245,7 +257,7 @@ export const attachments = sqliteTable(
   "attachments" as string,
   {
     id: text("id" as string).primaryKey(),
-    workspaceId: text("workspace_id" as string)
+    organizationId: text("organization_id" as string)
       .notNull()
       .references(() => organization.id),
     issueId: text("issue_id" as string).notNull(),
@@ -260,11 +272,11 @@ export const attachments = sqliteTable(
   },
   (table) => [
     index("attachments_issue_idx" as string).on(
-      table.workspaceId,
+      table.organizationId,
       table.issueId
     ),
     index("attachments_linear_idx" as string).on(
-      table.workspaceId,
+      table.organizationId,
       table.linearId
     ),
   ]
@@ -274,7 +286,7 @@ export const issueHistory = sqliteTable(
   "issue_history" as string,
   {
     id: text("id" as string).primaryKey(),
-    workspaceId: text("workspace_id" as string)
+    organizationId: text("organization_id" as string)
       .notNull()
       .references(() => organization.id),
     issueId: text("issue_id" as string).notNull(),
@@ -289,11 +301,11 @@ export const issueHistory = sqliteTable(
   },
   (table) => [
     index("issue_history_issue_idx" as string).on(
-      table.workspaceId,
+      table.organizationId,
       table.issueId
     ),
     index("issue_history_created_idx" as string).on(
-      table.workspaceId,
+      table.organizationId,
       table.createdAt
     ),
   ]
@@ -303,7 +315,7 @@ export const issueSubscribers = sqliteTable(
   "issue_subscribers" as string,
   {
     id: text("id" as string).primaryKey(),
-    workspaceId: text("workspace_id" as string)
+    organizationId: text("organization_id" as string)
       .notNull()
       .references(() => organization.id),
     issueId: text("issue_id" as string).notNull(),
@@ -314,11 +326,11 @@ export const issueSubscribers = sqliteTable(
   },
   (table) => [
     index("issue_subscribers_issue_idx" as string).on(
-      table.workspaceId,
+      table.organizationId,
       table.issueId
     ),
     index("issue_subscribers_user_idx" as string).on(
-      table.workspaceId,
+      table.organizationId,
       table.linearUserId
     ),
   ]
@@ -328,7 +340,7 @@ export const templates = sqliteTable(
   "templates" as string,
   {
     id: text("id" as string).primaryKey(),
-    workspaceId: text("workspace_id" as string)
+    organizationId: text("organization_id" as string)
       .notNull()
       .references(() => organization.id),
     linearId: text("linear_id" as string).notNull(),
@@ -339,9 +351,9 @@ export const templates = sqliteTable(
       .default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
-    index("templates_workspace_idx" as string).on(table.workspaceId),
+    index("templates_organization_idx" as string).on(table.organizationId),
     index("templates_linear_idx" as string).on(
-      table.workspaceId,
+      table.organizationId,
       table.linearId
     ),
   ]
@@ -351,7 +363,7 @@ export const webhookSubscriptions = sqliteTable(
   "webhook_subscriptions" as string,
   {
     id: text("id" as string).primaryKey(),
-    workspaceId: text("workspace_id" as string)
+    organizationId: text("organization_id" as string)
       .notNull()
       .references(() => organization.id),
     url: text("url" as string).notNull(),
@@ -366,8 +378,8 @@ export const webhookSubscriptions = sqliteTable(
       .default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
-    index("webhook_subscriptions_workspace_idx" as string).on(
-      table.workspaceId
+    index("webhook_subscriptions_organization_idx" as string).on(
+      table.organizationId
     ),
   ]
 );
@@ -378,7 +390,7 @@ export const webhookDeliveries = sqliteTable(
     deliveryId: text("delivery_id" as string).primaryKey(),
     source: text("source" as string).notNull(),
     event: text("event" as string).notNull(),
-    workspaceId: text("workspace_id" as string).references(
+    organizationId: text("organization_id" as string).references(
       () => organization.id
     ),
     processedAt: text("processed_at" as string)
@@ -386,7 +398,9 @@ export const webhookDeliveries = sqliteTable(
       .default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
-    index("webhook_deliveries_workspace_idx" as string).on(table.workspaceId),
+    index("webhook_deliveries_organization_idx" as string).on(
+      table.organizationId
+    ),
   ]
 );
 
@@ -394,7 +408,7 @@ export const outboundWebhookDeliveries = sqliteTable(
   "outbound_webhook_deliveries" as string,
   {
     id: text("id" as string).primaryKey(),
-    workspaceId: text("workspace_id" as string)
+    organizationId: text("organization_id" as string)
       .notNull()
       .references(() => organization.id),
     subscriptionId: text("subscription_id" as string)
@@ -419,8 +433,8 @@ export const outboundWebhookDeliveries = sqliteTable(
       .default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
-    index("outbound_webhook_deliveries_workspace_idx" as string).on(
-      table.workspaceId
+    index("outbound_webhook_deliveries_organization_idx" as string).on(
+      table.organizationId
     ),
     index("outbound_webhook_deliveries_subscription_idx" as string).on(
       table.subscriptionId
@@ -432,7 +446,7 @@ export const notifications = sqliteTable(
   "notifications" as string,
   {
     id: text("id" as string).primaryKey(),
-    workspaceId: text("workspace_id" as string)
+    organizationId: text("organization_id" as string)
       .notNull()
       .references(() => organization.id),
     recipientId: text("recipient_id" as string).notNull(),
@@ -454,13 +468,13 @@ export const notifications = sqliteTable(
   },
   (table) => [
     index("notifications_recipient_idx" as string).on(
-      table.workspaceId,
+      table.organizationId,
       table.recipientId,
       table.recipientType,
       table.read
     ),
     index("notifications_issue_idx" as string).on(
-      table.workspaceId,
+      table.organizationId,
       table.issueId
     ),
   ]
@@ -762,7 +776,7 @@ export const githubUsers = sqliteTable(
   "github_users" as string,
   {
     id: text("id" as string).primaryKey(),
-    workspaceId: text("workspace_id" as string)
+    organizationId: text("organization_id" as string)
       .notNull()
       .references(() => organization.id),
     userId: text("user_id" as string)
@@ -775,11 +789,11 @@ export const githubUsers = sqliteTable(
   },
   (table) => [
     uniqueIndex("github_users_workspace_login_idx" as string).on(
-      table.workspaceId,
+      table.organizationId,
       table.githubLogin
     ),
     uniqueIndex("github_users_workspace_user_idx" as string).on(
-      table.workspaceId,
+      table.organizationId,
       table.userId
     ),
   ]
@@ -789,7 +803,7 @@ export const savedViews = sqliteTable(
   "saved_views" as string,
   {
     id: text("id" as string).primaryKey(),
-    workspaceId: text("workspace_id" as string)
+    organizationId: text("organization_id" as string)
       .notNull()
       .references(() => organization.id),
     ownerId: text("owner_id" as string).notNull(),
@@ -806,9 +820,9 @@ export const savedViews = sqliteTable(
       .default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
-    index("saved_views_workspace_idx" as string).on(table.workspaceId),
+    index("saved_views_organization_idx" as string).on(table.organizationId),
     index("saved_views_owner_idx" as string).on(
-      table.workspaceId,
+      table.organizationId,
       table.ownerId
     ),
   ]
@@ -818,7 +832,7 @@ export const agentSessions = sqliteTable(
   "agent_sessions" as string,
   {
     id: text("id" as string).primaryKey(),
-    workspaceId: text("workspace_id" as string)
+    organizationId: text("organization_id" as string)
       .notNull()
       .references(() => organization.id),
     issueId: text("issue_id" as string).notNull(),
@@ -850,8 +864,8 @@ export const agentSessions = sqliteTable(
       .default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
-    index("agent_sessions_workspace_idx" as string).on(
-      table.workspaceId,
+    index("agent_sessions_organization_idx" as string).on(
+      table.organizationId,
       table.createdAt,
       table.id
     ),

@@ -11,7 +11,7 @@ export type AgentSessionStatus = AgentSession["status"];
 export type AgentActivityType = AgentActivity["type"];
 
 export interface AgentSessionInput {
-  workspaceId: string;
+  organizationId: string;
   issueId: string;
   agentId: string;
   provider: string;
@@ -38,7 +38,7 @@ export async function createAgentSession(
   const ts = new Date().toISOString();
   await db.insert(agentSessions).values({
     id,
-    workspaceId: input.workspaceId,
+    organizationId: input.organizationId,
     issueId: input.issueId,
     agentId: input.agentId,
     provider: input.provider,
@@ -67,10 +67,10 @@ export async function getAgentSession(db: D1Client, id: string) {
 
 export async function listAgentSessions(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   options: { issueId?: string; limit?: number } = {}
 ) {
-  const conditions = [eq(agentSessions.workspaceId, workspaceId)];
+  const conditions = [eq(agentSessions.organizationId, organizationId)];
   if (options.issueId) {
     conditions.push(eq(agentSessions.issueId, options.issueId));
   }

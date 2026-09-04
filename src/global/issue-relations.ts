@@ -18,7 +18,7 @@ export function isValidRelationType(type: string): boolean {
 
 export function listIssueRelations(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   fromIssueId: string
 ) {
   return db
@@ -26,7 +26,7 @@ export function listIssueRelations(
     .from(issueRelations)
     .where(
       and(
-        eq(issueRelations.workspaceId, workspaceId),
+        eq(issueRelations.organizationId, organizationId),
         eq(issueRelations.fromIssueId, fromIssueId)
       )
     )
@@ -35,7 +35,7 @@ export function listIssueRelations(
 
 export function getIssueRelation(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   id: string
 ) {
   return db
@@ -43,7 +43,7 @@ export function getIssueRelation(
     .from(issueRelations)
     .where(
       and(
-        eq(issueRelations.workspaceId, workspaceId),
+        eq(issueRelations.organizationId, organizationId),
         eq(issueRelations.id, id)
       )
     )
@@ -52,7 +52,7 @@ export function getIssueRelation(
 
 export async function createIssueRelation(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   values: {
     fromIssueId: string;
     toIssueId: string;
@@ -65,7 +65,7 @@ export async function createIssueRelation(
   const id = crypto.randomUUID();
   await db.insert(issueRelations).values({
     id,
-    workspaceId,
+    organizationId,
     fromIssueId: values.fromIssueId,
     toIssueId: values.toIssueId,
     type: values.type,
@@ -79,14 +79,14 @@ export async function createIssueRelation(
 
 export async function deleteIssueRelation(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   id: string
 ) {
   await db
     .delete(issueRelations)
     .where(
       and(
-        eq(issueRelations.workspaceId, workspaceId),
+        eq(issueRelations.organizationId, organizationId),
         eq(issueRelations.id, id)
       )
     );

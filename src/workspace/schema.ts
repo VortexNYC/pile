@@ -10,7 +10,7 @@ export const workspaceIssues = sqliteTable(
   "issues" as string,
   {
     id: text("id" as string).primaryKey(),
-    workspaceId: text("workspace_id" as string).notNull(),
+    organizationId: text("workspace_id" as string).notNull(),
     teamId: text("team_id" as string).notNull(),
     title: text("title" as string).notNull(),
     description: text("description" as string),
@@ -42,11 +42,11 @@ export const workspaceIssues = sqliteTable(
     index("idx_issues_created_at_id" as string).on(table.createdAt, table.id),
     index("idx_issues_priority" as string).on(table.priority, table.createdAt),
     uniqueIndex("idx_issues_identifier" as string).on(
-      table.workspaceId,
+      table.organizationId,
       table.identifier
     ),
     uniqueIndex("idx_issues_team_number" as string).on(
-      table.workspaceId,
+      table.organizationId,
       table.teamId,
       table.number
     ),

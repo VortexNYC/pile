@@ -23,7 +23,7 @@ export function findRepoIssueByIssueId(db: D1Client, issueId: string) {
 
 export async function createRepoIssue(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   repo: string,
   issueNumber: number,
   issueId: string
@@ -31,8 +31,8 @@ export async function createRepoIssue(
   const id = crypto.randomUUID();
   await db
     .insert(repoIssues)
-    .values({ id, workspaceId, repo, issueNumber, issueId });
-  return { id, workspaceId, repo, issueNumber, issueId };
+    .values({ id, organizationId, repo, issueNumber, issueId });
+  return { id, organizationId, repo, issueNumber, issueId };
 }
 
 export async function deleteRepoIssue(
@@ -49,7 +49,7 @@ export async function deleteRepoIssue(
 
 export function findRepoWorkspace(db: D1Client, repo: string) {
   return db
-    .select({ workspaceId: repoBranches.workspaceId })
+    .select({ organizationId: repoBranches.organizationId })
     .from(repoBranches)
     .where(eq(repoBranches.repo, repo))
     .limit(1)

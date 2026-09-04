@@ -13,7 +13,7 @@ import { rls } from "../platform/rls.js";
 
 const notificationSchema = z.object({
   id: z.string(),
-  workspaceId: z.string(),
+  organizationId: z.string(),
   recipientId: z.string(),
   recipientType: z.string(),
   issueId: z.string(),
@@ -26,11 +26,11 @@ const notificationSchema = z.object({
 
 const listNotificationsRoute = createRoute({
   method: "get",
-  path: "/workspaces/{workspaceId}/notifications",
+  path: "/workspaces/{organizationId}/notifications",
   tags: ["notifications"],
   middleware: [rls("read")],
   request: {
-    params: z.object({ workspaceId: z.string() }),
+    params: z.object({ organizationId: z.string() }),
     query: z.object({
       unreadOnly: z
         .string()
@@ -56,11 +56,11 @@ const listNotificationsRoute = createRoute({
 
 const unreadCountRoute = createRoute({
   method: "get",
-  path: "/workspaces/{workspaceId}/notifications/unread-count",
+  path: "/workspaces/{organizationId}/notifications/unread-count",
   tags: ["notifications"],
   middleware: [rls("read")],
   request: {
-    params: z.object({ workspaceId: z.string() }),
+    params: z.object({ organizationId: z.string() }),
   },
   responses: {
     200: {
@@ -76,11 +76,11 @@ const unreadCountRoute = createRoute({
 
 const markReadRoute = createRoute({
   method: "patch",
-  path: "/workspaces/{workspaceId}/notifications/{id}/read",
+  path: "/workspaces/{organizationId}/notifications/{id}/read",
   tags: ["notifications"],
   middleware: [rls("write")],
   request: {
-    params: z.object({ workspaceId: z.string(), id: z.string() }),
+    params: z.object({ organizationId: z.string(), id: z.string() }),
   },
   responses: {
     200: {
@@ -97,11 +97,11 @@ const markReadRoute = createRoute({
 
 const markAllReadRoute = createRoute({
   method: "post",
-  path: "/workspaces/{workspaceId}/notifications/mark-all-read",
+  path: "/workspaces/{organizationId}/notifications/mark-all-read",
   tags: ["notifications"],
   middleware: [rls("write")],
   request: {
-    params: z.object({ workspaceId: z.string() }),
+    params: z.object({ organizationId: z.string() }),
   },
   responses: {
     204: { description: "All notifications marked read" },
@@ -110,7 +110,7 @@ const markAllReadRoute = createRoute({
 
 function toNotificationResponse(row: {
   id: string;
-  workspaceId: string;
+  organizationId: string;
   recipientId: string;
   recipientType: string;
   issueId: string;
@@ -128,13 +128,13 @@ function toNotificationResponse(row: {
 
 export function registerNotificationRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listNotificationsRoute, async (c) => {
-    const { workspaceId } = c.req.valid("param");
+    const { organizationId } = c.req.valid("param");
     const query = c.req.valid("query");
     const db = createD1(c.env.D1);
     const identity = c.var.workspaceIdentity;
     const rows = await getNotificationsForRecipient(
       db,
-      workspaceId,
+      organizationId,
       identity.id,
       identity.type,
       {
@@ -146,12 +146,12 @@ export function registerNotificationRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(unreadCountRoute, async (c) => {
-    const { workspaceId } = c.req.valid("param");
+    const { organizationId } = c.req.valid("param");
     const db = createD1(c.env.D1);
     const identity = c.var.workspaceIdentity;
     const count = await getUnreadNotificationCount(
       db,
-      workspaceId,
+      organizationId,
       identity.id,
       identity.type
     );
@@ -159,12 +159,12 @@ export function registerNotificationRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(markReadRoute, async (c) => {
-    const { workspaceId, id } = c.req.valid("param");
+    const { organizationId, id } = c.req.valid("param");
     const db = createD1(c.env.D1);
     const identity = c.var.workspaceIdentity;
     const updated = await markNotificationRead(
       db,
-      workspaceId,
+      organizationId,
       identity.id,
       identity.type,
       id
@@ -176,10 +176,15 @@ export function registerNotificationRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(markAllReadRoute, async (c) => {
-    const { workspaceId } = c.req.valid("param");
+    const { organizationId } = c.req.valid("param");
     const db = createD1(c.env.D1);
     const identity = c.var.workspaceIdentity;
-    await markAllNotificationsRead(db, workspaceId, identity.id, identity.type);
+    await markAllNotificationsRead(
+      db,
+      organizationId,
+      identity.id,
+      identity.type
+    );
     return c.body(null, 204);
   });
 }

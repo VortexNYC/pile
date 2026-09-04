@@ -51,7 +51,7 @@ app.onError((err) => {
 app.use("*", observabilityMiddleware);
 app.use("*", ...securityMiddleware);
 
-app.use("/workspaces/:workspaceId/*", workspaceAuthMiddleware);
+app.use("/workspaces/:organizationId/*", workspaceAuthMiddleware);
 registerWorkspaceRoutes(app);
 registerTokenRoutes(app);
 registerIssueRoutes(app);
@@ -78,10 +78,10 @@ app.openapi(githubWebhookRoute, processGithubWebhook);
 app.openapi(
   createRoute({
     method: "get",
-    path: "/workspaces/{workspaceId}/ws",
+    path: "/workspaces/{organizationId}/ws",
     tags: ["realtime"],
     request: {
-      params: z.object({ workspaceId: z.string() }),
+      params: z.object({ organizationId: z.string() }),
     },
     responses: {
       101: {
@@ -90,8 +90,8 @@ app.openapi(
     },
   }),
   async (c) => {
-    const { workspaceId } = c.req.valid("param");
-    const id = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(workspaceId);
+    const { organizationId } = c.req.valid("param");
+    const id = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId);
     const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(id);
     return await stub.fetch(c.req.raw);
   }

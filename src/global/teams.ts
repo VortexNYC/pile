@@ -19,7 +19,7 @@ const teamMetadataSchema = z.object({
 
 export interface TeamRecord {
   id: string;
-  workspaceId: string;
+  organizationId: string;
   key: string;
   name: string;
   ownerId: string;
@@ -46,7 +46,7 @@ function teamRecordFromRow(row: typeof team.$inferSelect): TeamRecord {
   };
   return {
     id: row.id,
-    workspaceId: row.organizationId,
+    organizationId: row.organizationId,
     key: metadata.key,
     name: row.name,
     ownerId: metadata.ownerId,
@@ -69,14 +69,14 @@ function teamMetadataString(values: {
 export async function getTeamById(
   db: D1Client,
   id: string,
-  workspaceId?: string
+  organizationId?: string
 ): Promise<TeamRecord | undefined> {
   const row = await db
     .select()
     .from(team)
     .where(
-      workspaceId
-        ? and(eq(team.id, id), eq(team.organizationId, workspaceId))
+      organizationId
+        ? and(eq(team.id, id), eq(team.organizationId, organizationId))
         : eq(team.id, id)
     )
     .get();
@@ -86,12 +86,12 @@ export async function getTeamById(
 
 export async function getDefaultTeam(
   db: D1Client,
-  workspaceId: string
+  organizationId: string
 ): Promise<TeamRecord | undefined> {
   const rows = await db
     .select()
     .from(team)
-    .where(eq(team.organizationId, workspaceId))
+    .where(eq(team.organizationId, organizationId))
     .all();
   for (const row of rows) {
     const metadata = parseTeamMetadata(row.metadata);
@@ -104,18 +104,18 @@ export async function getDefaultTeam(
 
 export async function listTeams(
   db: D1Client,
-  workspaceId: string
+  organizationId: string
 ): Promise<TeamRecord[]> {
   const rows = await db
     .select()
     .from(team)
-    .where(eq(team.organizationId, workspaceId))
+    .where(eq(team.organizationId, organizationId))
     .all();
   return rows.map(teamRecordFromRow);
 }
 
 interface CreateTeamInput {
-  workspaceId: string;
+  organizationId: string;
   key: string;
   name: string;
   ownerId: string;
@@ -137,13 +137,13 @@ export async function createTeam(
   await db.insert(team).values({
     id,
     name: values.name,
-    organizationId: values.workspaceId,
+    organizationId: values.organizationId,
     memberCount: 0,
     metadata,
     createdAt: new Date(),
     updatedAt: new Date(),
   });
-  const row = await getTeamById(db, id, values.workspaceId);
+  const row = await getTeamById(db, id, values.organizationId);
   if (!row) {
     throw new Error("Failed to create team");
   }
@@ -152,19 +152,19 @@ export async function createTeam(
 
 export async function createDefaultTeam(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   workspaceKey: string,
   ownerId: string
 ): Promise<TeamRecord> {
   const record = await createTeam(db, {
-    workspaceId,
+    organizationId,
     key: workspaceKey,
     name: "General",
     ownerId,
     isDefault: true,
     isPublic: false,
   });
-  await addTeamMember(db, workspaceId, record.id, ownerId, "user");
+  await addTeamMember(db, organizationId, record.id, ownerId, "user");
   return record;
 }
 
@@ -177,10 +177,10 @@ interface UpdateTeamInput {
 export async function updateTeam(
   db: D1Client,
   id: string,
-  workspaceId: string,
+  organizationId: string,
   input: UpdateTeamInput
 ): Promise<TeamRecord | undefined> {
-  const existing = await getTeamById(db, id, workspaceId);
+  const existing = await getTeamById(db, id, organizationId);
   if (!existing) return undefined;
 
   const metadata = teamMetadataString({
@@ -197,19 +197,19 @@ export async function updateTeam(
       metadata,
       updatedAt: new Date(),
     })
-    .where(and(eq(team.id, id), eq(team.organizationId, workspaceId)));
+    .where(and(eq(team.id, id), eq(team.organizationId, organizationId)));
 
-  return getTeamById(db, id, workspaceId);
+  return getTeamById(db, id, organizationId);
 }
 
 export async function deleteTeam(
   db: D1Client,
   id: string,
-  workspaceId: string
+  organizationId: string
 ): Promise<void> {
   await db
     .delete(team)
-    .where(and(eq(team.id, id), eq(team.organizationId, workspaceId)));
+    .where(and(eq(team.id, id), eq(team.organizationId, organizationId)));
 }
 
 function userTypeFromMetadata(
@@ -245,7 +245,7 @@ async function resolveUserId(
 
 export async function addTeamMember(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   teamId: string,
   memberId: string,
   memberType: "user" | "agent" = "user"
@@ -256,7 +256,7 @@ export async function addTeamMember(
     .select()
     .from(member)
     .where(
-      and(eq(member.organizationId, workspaceId), eq(member.userId, userId))
+      and(eq(member.organizationId, organizationId), eq(member.userId, userId))
     )
     .get();
   if (!existingMember) {
@@ -270,7 +270,7 @@ export async function addTeamMember(
     }
     await db.insert(member).values({
       id: crypto.randomUUID(),
-      organizationId: workspaceId,
+      organizationId: organizationId,
       userId,
       role: "member",
       createdAt: new Date(),
@@ -351,13 +351,13 @@ export async function canAccessTeam(
 
 export async function getVisibleTeamIds(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   identity: { id: string; permissions: string[] }
 ): Promise<string[]> {
   const teamRows = await db
     .select()
     .from(team)
-    .where(eq(team.organizationId, workspaceId))
+    .where(eq(team.organizationId, organizationId))
     .all();
 
   const memberTeamIds = new Set(

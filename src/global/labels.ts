@@ -5,7 +5,7 @@ import { labels } from "./schema.js";
 
 export function findLabelsByWorkspaceAndNames(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   names: string[]
 ) {
   if (names.length === 0) {
@@ -15,7 +15,10 @@ export function findLabelsByWorkspaceAndNames(
     .select({ id: labels.id })
     .from(labels)
     .where(
-      and(eq(labels.workspaceId, workspaceId), inArray(labels.name, names))
+      and(
+        eq(labels.organizationId, organizationId),
+        inArray(labels.name, names)
+      )
     )
     .all();
 }

@@ -26,7 +26,7 @@ export const workspaceAuthMiddleware = createMiddleware<{
   Bindings: WorkerEnv;
   Variables: AppContext["Variables"];
 }>(async (c, next) => {
-  const workspaceId = c.req.param("workspaceId");
+  const organizationId = c.req.param("organizationId");
   const db = createD1(c.env.D1);
   const header = c.req.header("Authorization") ?? "";
   const token = header.replace(/^Bearer\s+/i, "").trim();
@@ -62,7 +62,7 @@ export const workspaceAuthMiddleware = createMiddleware<{
     }
 
     const identity = toApiKeyWorkspaceIdentity(result.key);
-    if (workspaceId && identity.workspaceId !== workspaceId) {
+    if (organizationId && identity.organizationId !== organizationId) {
       throw new VortexError({
         code: "FORBIDDEN",
         status: 403,
@@ -83,7 +83,7 @@ export const workspaceAuthMiddleware = createMiddleware<{
     });
   }
 
-  if (!workspaceId) {
+  if (!organizationId) {
     throw new VortexError({
       code: "BAD_REQUEST",
       status: 400,
@@ -91,7 +91,7 @@ export const workspaceAuthMiddleware = createMiddleware<{
     });
   }
 
-  const membership = await getWorkspaceMembership(db, workspaceId, userId);
+  const membership = await getWorkspaceMembership(db, organizationId, userId);
   if (!membership) {
     throw new VortexError({
       code: "FORBIDDEN",
@@ -102,7 +102,7 @@ export const workspaceAuthMiddleware = createMiddleware<{
 
   c.set(
     "workspaceIdentity",
-    toUserWorkspaceIdentity(userId, workspaceId, membership.role)
+    toUserWorkspaceIdentity(userId, organizationId, membership.role)
   );
   await next();
 });

@@ -5,7 +5,7 @@ import { githubUsers } from "./schema.js";
 
 export function findUserByGithubLogin(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   githubLogin: string
 ) {
   return db
@@ -13,7 +13,7 @@ export function findUserByGithubLogin(
     .from(githubUsers)
     .where(
       and(
-        eq(githubUsers.workspaceId, workspaceId),
+        eq(githubUsers.organizationId, organizationId),
         eq(githubUsers.githubLogin, githubLogin)
       )
     )
@@ -22,16 +22,16 @@ export function findUserByGithubLogin(
 
 export async function createGithubUserMapping(
   db: D1Client,
-  workspaceId: string,
+  organizationId: string,
   userId: string,
   githubLogin: string
 ) {
   const id = crypto.randomUUID();
   await db.insert(githubUsers).values({
     id,
-    workspaceId,
+    organizationId,
     userId,
     githubLogin,
   });
-  return { id, workspaceId, userId, githubLogin };
+  return { id, organizationId, userId, githubLogin };
 }

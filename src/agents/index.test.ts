@@ -14,7 +14,7 @@ import {
 
 const actor: WorkspaceIdentity = {
   id: "user-1",
-  workspaceId: "",
+  organizationId: "",
   type: "user",
   permissions: ["write"],
 };
@@ -40,7 +40,7 @@ beforeAll(async () => {
     ownerId: actor.id,
   });
   if (workspace) {
-    actor.workspaceId = workspace.id;
+    actor.organizationId = workspace.id;
   }
 });
 
@@ -65,7 +65,7 @@ describe("agent providers", () => {
     const session = await dispatchAgent(
       env,
       "mock",
-      actor.workspaceId,
+      actor.organizationId,
       {
         id: "issue-1",
         teamId: "team-1",

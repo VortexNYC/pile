@@ -13,7 +13,7 @@ import { rls } from "../platform/rls.js";
 
 const linearUserSchema = z.object({
   id: z.string(),
-  workspaceId: z.string(),
+  organizationId: z.string(),
   linearId: z.string(),
   name: z.string().nullable(),
   email: z.string().nullable(),
@@ -28,11 +28,11 @@ const createLinearUserBodySchema = z.object({
 
 const createLinearUserRoute = createRoute({
   method: "post",
-  path: "/workspaces/{workspaceId}/linear-users",
+  path: "/workspaces/{organizationId}/linear-users",
   tags: ["linear-users"],
   middleware: [rls("write")],
   request: {
-    params: z.object({ workspaceId: z.string() }),
+    params: z.object({ organizationId: z.string() }),
     body: {
       content: {
         "application/json": { schema: createLinearUserBodySchema },
@@ -51,11 +51,11 @@ const createLinearUserRoute = createRoute({
 
 const listLinearUsersRoute = createRoute({
   method: "get",
-  path: "/workspaces/{workspaceId}/linear-users",
+  path: "/workspaces/{organizationId}/linear-users",
   tags: ["linear-users"],
   middleware: [rls("read")],
   request: {
-    params: z.object({ workspaceId: z.string() }),
+    params: z.object({ organizationId: z.string() }),
   },
   responses: {
     200: {
@@ -71,11 +71,11 @@ const listLinearUsersRoute = createRoute({
 
 const getLinearUserRoute = createRoute({
   method: "get",
-  path: "/workspaces/{workspaceId}/linear-users/{linearId}",
+  path: "/workspaces/{organizationId}/linear-users/{linearId}",
   tags: ["linear-users"],
   middleware: [rls("read")],
   request: {
-    params: z.object({ workspaceId: z.string(), linearId: z.string() }),
+    params: z.object({ organizationId: z.string(), linearId: z.string() }),
   },
   responses: {
     200: {
@@ -89,24 +89,24 @@ const getLinearUserRoute = createRoute({
 
 export function registerLinearUserRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(createLinearUserRoute, async (c) => {
-    const { workspaceId } = c.req.valid("param");
+    const { organizationId } = c.req.valid("param");
     const input = c.req.valid("json");
     const db = createD1(c.env.D1);
-    const item = await createLinearUser(db, workspaceId, input);
+    const item = await createLinearUser(db, organizationId, input);
     return c.json(item, 201);
   });
 
   app.openapi(listLinearUsersRoute, async (c) => {
-    const { workspaceId } = c.req.valid("param");
+    const { organizationId } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    const items = await listLinearUsers(db, workspaceId);
+    const items = await listLinearUsers(db, organizationId);
     return c.json({ linearUsers: items });
   });
 
   app.openapi(getLinearUserRoute, async (c) => {
-    const { workspaceId, linearId } = c.req.valid("param");
+    const { organizationId, linearId } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    const item = await getLinearUser(db, workspaceId, linearId);
+    const item = await getLinearUser(db, organizationId, linearId);
     if (!item) {
       throw new VortexError({
         code: "NOT_FOUND",

@@ -19,17 +19,17 @@ import type { AppContext } from "../platform/middleware.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 
-async function getStub(env: WorkerEnv, workspaceId: string) {
+async function getStub(env: WorkerEnv, organizationId: string) {
   const stub = env.WORKSPACE_DURABLE_OBJECT.get(
-    env.WORKSPACE_DURABLE_OBJECT.idFromName(workspaceId)
+    env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
   );
-  await stub.setWorkspaceId(workspaceId);
+  await stub.setWorkspaceId(organizationId);
   return stub;
 }
 
 const commentSchema = z.object({
   id: z.string(),
-  workspaceId: z.string(),
+  organizationId: z.string(),
   issueId: z.string(),
   authorId: z.string().nullable(),
   body: z.string(),
@@ -46,11 +46,11 @@ const createCommentBodySchema = z.object({
 
 const listCommentsRoute = createRoute({
   method: "get",
-  path: "/workspaces/{workspaceId}/issues/{issueId}/comments",
+  path: "/workspaces/{organizationId}/issues/{issueId}/comments",
   tags: ["comments"],
   middleware: [rls("read")],
   request: {
-    params: z.object({ workspaceId: z.string(), issueId: z.string() }),
+    params: z.object({ organizationId: z.string(), issueId: z.string() }),
   },
   responses: {
     200: {
@@ -66,11 +66,11 @@ const listCommentsRoute = createRoute({
 
 const createCommentRoute = createRoute({
   method: "post",
-  path: "/workspaces/{workspaceId}/issues/{issueId}/comments",
+  path: "/workspaces/{organizationId}/issues/{issueId}/comments",
   tags: ["comments"],
   middleware: [rls("write")],
   request: {
-    params: z.object({ workspaceId: z.string(), issueId: z.string() }),
+    params: z.object({ organizationId: z.string(), issueId: z.string() }),
     body: {
       content: {
         "application/json": { schema: createCommentBodySchema },
@@ -89,12 +89,12 @@ const createCommentRoute = createRoute({
 
 const getCommentRoute = createRoute({
   method: "get",
-  path: "/workspaces/{workspaceId}/issues/{issueId}/comments/{id}",
+  path: "/workspaces/{organizationId}/issues/{issueId}/comments/{id}",
   tags: ["comments"],
   middleware: [rls("read")],
   request: {
     params: z.object({
-      workspaceId: z.string(),
+      organizationId: z.string(),
       issueId: z.string(),
       id: z.string(),
     }),
@@ -111,12 +111,12 @@ const getCommentRoute = createRoute({
 
 const updateCommentRoute = createRoute({
   method: "patch",
-  path: "/workspaces/{workspaceId}/issues/{issueId}/comments/{id}",
+  path: "/workspaces/{organizationId}/issues/{issueId}/comments/{id}",
   tags: ["comments"],
   middleware: [rls("write")],
   request: {
     params: z.object({
-      workspaceId: z.string(),
+      organizationId: z.string(),
       issueId: z.string(),
       id: z.string(),
     }),
@@ -138,12 +138,12 @@ const updateCommentRoute = createRoute({
 
 const deleteCommentRoute = createRoute({
   method: "delete",
-  path: "/workspaces/{workspaceId}/issues/{issueId}/comments/{id}",
+  path: "/workspaces/{organizationId}/issues/{issueId}/comments/{id}",
   tags: ["comments"],
   middleware: [rls("write")],
   request: {
     params: z.object({
-      workspaceId: z.string(),
+      organizationId: z.string(),
       issueId: z.string(),
       id: z.string(),
     }),
@@ -155,10 +155,10 @@ const deleteCommentRoute = createRoute({
 
 export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listCommentsRoute, async (c) => {
-    const { workspaceId, issueId } = c.req.valid("param");
+    const { organizationId, issueId } = c.req.valid("param");
     const identity = c.var.workspaceIdentity;
     const db = createD1(c.env.D1);
-    const issueStub = await getStub(c.env, workspaceId);
+    const issueStub = await getStub(c.env, organizationId);
     const issue = await issueStub.getIssue(issueId);
     if (!issue) {
       throw new VortexError({
@@ -175,16 +175,16 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
         message: "Issue not found",
       });
     }
-    const items = await listComments(db, workspaceId, issueId);
+    const items = await listComments(db, organizationId, issueId);
     return c.json({ comments: items });
   });
 
   app.openapi(createCommentRoute, async (c) => {
-    const { workspaceId, issueId } = c.req.valid("param");
+    const { organizationId, issueId } = c.req.valid("param");
     const { body } = c.req.valid("json");
     const identity = c.var.workspaceIdentity;
     const db = createD1(c.env.D1);
-    const issueStub = await getStub(c.env, workspaceId);
+    const issueStub = await getStub(c.env, organizationId);
     const issue = await issueStub.getIssue(issueId);
     if (!issue) {
       throw new VortexError({
@@ -201,7 +201,7 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
         message: "Cannot comment on this issue",
       });
     }
-    const created = await createComment(db, workspaceId, {
+    const created = await createComment(db, organizationId, {
       issueId,
       authorId: identity.id,
       body,
@@ -222,7 +222,7 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
       body: item.body,
       createdAt: item.createdAt,
     });
-    await notifyCommentCreated(c.env, workspaceId, issue, identity.id);
+    await notifyCommentCreated(c.env, organizationId, issue, identity.id);
 
     const mapping = await findRepoIssueByIssueId(db, issueId);
     if (mapping) {
@@ -252,7 +252,7 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
             const parsed = z.object({ id: z.number().int() }).safeParse(raw);
             if (parsed.success) {
               const externalId = parsed.data.id.toString();
-              const updated = await updateComment(db, workspaceId, item.id, {
+              const updated = await updateComment(db, organizationId, item.id, {
                 body,
                 externalId,
                 externalSource: "github",
@@ -270,10 +270,10 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(getCommentRoute, async (c) => {
-    const { workspaceId, issueId, id } = c.req.valid("param");
+    const { organizationId, issueId, id } = c.req.valid("param");
     const identity = c.var.workspaceIdentity;
     const db = createD1(c.env.D1);
-    const item = await getComment(db, workspaceId, id);
+    const item = await getComment(db, organizationId, id);
     if (!item || item.issueId !== issueId) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -281,7 +281,7 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
         message: "Comment not found",
       });
     }
-    const issueStub = await getStub(c.env, workspaceId);
+    const issueStub = await getStub(c.env, organizationId);
     const issue = await issueStub.getIssue(item.issueId);
     if (!issue) {
       throw new VortexError({
@@ -302,11 +302,11 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(updateCommentRoute, async (c) => {
-    const { workspaceId, issueId, id } = c.req.valid("param");
+    const { organizationId, issueId, id } = c.req.valid("param");
     const { body } = c.req.valid("json");
     const identity = c.var.workspaceIdentity;
     const db = createD1(c.env.D1);
-    const existing = await getComment(db, workspaceId, id);
+    const existing = await getComment(db, organizationId, id);
     if (!existing || existing.issueId !== issueId) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -314,7 +314,7 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
         message: "Comment not found",
       });
     }
-    const issueStub = await getStub(c.env, workspaceId);
+    const issueStub = await getStub(c.env, organizationId);
     const issue = await issueStub.getIssue(existing.issueId);
     if (!issue) {
       throw new VortexError({
@@ -331,7 +331,7 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
         message: "Comment not found",
       });
     }
-    const item = await updateComment(db, workspaceId, id, { body });
+    const item = await updateComment(db, organizationId, id, { body });
     if (!item) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -343,10 +343,10 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(deleteCommentRoute, async (c) => {
-    const { workspaceId, issueId, id } = c.req.valid("param");
+    const { organizationId, issueId, id } = c.req.valid("param");
     const identity = c.var.workspaceIdentity;
     const db = createD1(c.env.D1);
-    const existing = await getComment(db, workspaceId, id);
+    const existing = await getComment(db, organizationId, id);
     if (!existing || existing.issueId !== issueId) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -354,7 +354,7 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
         message: "Comment not found",
       });
     }
-    const issueStub = await getStub(c.env, workspaceId);
+    const issueStub = await getStub(c.env, organizationId);
     const issue = await issueStub.getIssue(existing.issueId);
     if (!issue) {
       throw new VortexError({
@@ -371,7 +371,7 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
         message: "Comment not found",
       });
     }
-    await deleteComment(db, workspaceId, id);
+    await deleteComment(db, organizationId, id);
     return c.body(null, 204);
   });
 }

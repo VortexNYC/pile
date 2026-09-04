@@ -174,7 +174,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{workspaceId}/tokens": {
+    "/workspaces/{organizationId}/tokens": {
         parameters: {
             query?: never;
             header?: never;
@@ -186,7 +186,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                 };
                 cookie?: never;
             };
@@ -201,7 +201,7 @@ export interface paths {
                         "application/json": {
                             tokens: {
                                 id: string;
-                                workspaceId: string;
+                                organizationId: string;
                                 name: string;
                                 permissions: string;
                                 createdAt: string;
@@ -217,7 +217,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                 };
                 cookie?: never;
             };
@@ -241,7 +241,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             name: string;
                             token: string;
                             permissions: string;
@@ -257,7 +257,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{workspaceId}/tokens/{id}": {
+    "/workspaces/{organizationId}/tokens/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -272,7 +272,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     id: string;
                 };
                 cookie?: never;
@@ -293,7 +293,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{workspaceId}/issues": {
+    "/workspaces/{organizationId}/issues": {
         parameters: {
             query?: never;
             header?: never;
@@ -318,7 +318,7 @@ export interface paths {
                 };
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                 };
                 cookie?: never;
             };
@@ -344,7 +344,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                 };
                 cookie?: never;
             };
@@ -385,7 +385,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{workspaceId}/issues/{id}": {
+    "/workspaces/{organizationId}/issues/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -397,7 +397,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     id: string;
                 };
                 cookie?: never;
@@ -422,7 +422,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     id: string;
                 };
                 cookie?: never;
@@ -445,7 +445,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     id: string;
                 };
                 cookie?: never;
@@ -483,7 +483,7 @@ export interface paths {
         };
         trace?: never;
     };
-    "/workspaces/{workspaceId}/issues/{id}/dispatch": {
+    "/workspaces/{organizationId}/issues/{id}/dispatch": {
         parameters: {
             query?: never;
             header?: never;
@@ -497,7 +497,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     id: string;
                 };
                 cookie?: never;
@@ -519,7 +519,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             issueId: string;
                             agentId: string;
                             provider: string;
@@ -553,7 +553,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{workspaceId}/agent/sessions": {
+    "/workspaces/{organizationId}/agent/sessions": {
         parameters: {
             query?: never;
             header?: never;
@@ -568,7 +568,7 @@ export interface paths {
                 };
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                 };
                 cookie?: never;
             };
@@ -583,7 +583,7 @@ export interface paths {
                         "application/json": {
                             sessions: {
                                 id: string;
-                                workspaceId: string;
+                                organizationId: string;
                                 issueId: string;
                                 agentId: string;
                                 provider: string;
@@ -620,7 +620,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{workspaceId}/agent/sessions/{sessionId}": {
+    "/workspaces/{organizationId}/agent/sessions/{sessionId}": {
         parameters: {
             query?: never;
             header?: never;
@@ -632,7 +632,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     sessionId: string;
                 };
                 cookie?: never;
@@ -647,7 +647,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             issueId: string;
                             agentId: string;
                             provider: string;
@@ -692,7 +692,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     sessionId: string;
                 };
                 cookie?: never;
@@ -716,7 +716,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             issueId: string;
                             agentId: string;
                             provider: string;
@@ -753,7 +753,7 @@ export interface paths {
         };
         trace?: never;
     };
-    "/workspaces/{workspaceId}/agent/sessions/{sessionId}/activities": {
+    "/workspaces/{organizationId}/agent/sessions/{sessionId}/activities": {
         parameters: {
             query?: never;
             header?: never;
@@ -767,7 +767,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     sessionId: string;
                 };
                 cookie?: never;
@@ -818,7 +818,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{workspaceId}/agent/sessions/{sessionId}/poll": {
+    "/workspaces/{organizationId}/agent/sessions/{sessionId}/poll": {
         parameters: {
             query?: never;
             header?: never;
@@ -832,7 +832,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     sessionId: string;
                 };
                 cookie?: never;
@@ -847,7 +847,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             issueId: string;
                             agentId: string;
                             provider: string;
@@ -888,7 +888,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{workspaceId}/projects": {
+    "/workspaces/{organizationId}/projects": {
         parameters: {
             query?: never;
             header?: never;
@@ -900,7 +900,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                 };
                 cookie?: never;
             };
@@ -915,7 +915,7 @@ export interface paths {
                         "application/json": {
                             projects: {
                                 id: string;
-                                workspaceId: string;
+                                organizationId: string;
                                 name: string;
                                 description: string | null;
                                 status: string;
@@ -935,7 +935,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                 };
                 cookie?: never;
             };
@@ -959,7 +959,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             name: string;
                             description: string | null;
                             status: string;
@@ -978,7 +978,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{workspaceId}/projects/{id}": {
+    "/workspaces/{organizationId}/projects/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -990,7 +990,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     id: string;
                 };
                 cookie?: never;
@@ -1005,7 +1005,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             name: string;
                             description: string | null;
                             status: string;
@@ -1025,7 +1025,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     id: string;
                 };
                 cookie?: never;
@@ -1048,7 +1048,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     id: string;
                 };
                 cookie?: never;
@@ -1073,7 +1073,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             name: string;
                             description: string | null;
                             status: string;
@@ -1088,7 +1088,7 @@ export interface paths {
         };
         trace?: never;
     };
-    "/workspaces/{workspaceId}/cycles": {
+    "/workspaces/{organizationId}/cycles": {
         parameters: {
             query?: never;
             header?: never;
@@ -1100,7 +1100,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                 };
                 cookie?: never;
             };
@@ -1115,7 +1115,7 @@ export interface paths {
                         "application/json": {
                             cycles: {
                                 id: string;
-                                workspaceId: string;
+                                organizationId: string;
                                 projectId: string | null;
                                 name: string;
                                 startDate: string | null;
@@ -1134,7 +1134,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                 };
                 cookie?: never;
             };
@@ -1157,7 +1157,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             projectId: string | null;
                             name: string;
                             startDate: string | null;
@@ -1175,7 +1175,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{workspaceId}/cycles/{id}": {
+    "/workspaces/{organizationId}/cycles/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1187,7 +1187,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     id: string;
                 };
                 cookie?: never;
@@ -1202,7 +1202,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             projectId: string | null;
                             name: string;
                             startDate: string | null;
@@ -1221,7 +1221,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     id: string;
                 };
                 cookie?: never;
@@ -1244,7 +1244,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     id: string;
                 };
                 cookie?: never;
@@ -1268,7 +1268,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             projectId: string | null;
                             name: string;
                             startDate: string | null;
@@ -1282,7 +1282,7 @@ export interface paths {
         };
         trace?: never;
     };
-    "/workspaces/{workspaceId}/labels": {
+    "/workspaces/{organizationId}/labels": {
         parameters: {
             query?: never;
             header?: never;
@@ -1294,7 +1294,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                 };
                 cookie?: never;
             };
@@ -1309,7 +1309,7 @@ export interface paths {
                         "application/json": {
                             labels: {
                                 id: string;
-                                workspaceId: string;
+                                organizationId: string;
                                 name: string;
                                 color: string | null;
                                 createdAt: string;
@@ -1325,7 +1325,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                 };
                 cookie?: never;
             };
@@ -1346,7 +1346,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             name: string;
                             color: string | null;
                             createdAt: string;
@@ -1361,7 +1361,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{workspaceId}/labels/{id}": {
+    "/workspaces/{organizationId}/labels/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1373,7 +1373,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     id: string;
                 };
                 cookie?: never;
@@ -1388,7 +1388,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             name: string;
                             color: string | null;
                             createdAt: string;
@@ -1404,7 +1404,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     id: string;
                 };
                 cookie?: never;
@@ -1427,7 +1427,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     id: string;
                 };
                 cookie?: never;
@@ -1449,7 +1449,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             name: string;
                             color: string | null;
                             createdAt: string;
@@ -1460,7 +1460,7 @@ export interface paths {
         };
         trace?: never;
     };
-    "/workspaces/{workspaceId}/memberships": {
+    "/workspaces/{organizationId}/memberships": {
         parameters: {
             query?: never;
             header?: never;
@@ -1472,7 +1472,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                 };
                 cookie?: never;
             };
@@ -1487,7 +1487,7 @@ export interface paths {
                         "application/json": {
                             memberships: {
                                 id: string;
-                                workspaceId: string;
+                                organizationId: string;
                                 userId: string;
                                 /** @enum {string} */
                                 role: "owner" | "admin" | "member";
@@ -1504,7 +1504,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                 };
                 cookie?: never;
             };
@@ -1526,7 +1526,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             userId: string;
                             /** @enum {string} */
                             role: "owner" | "admin" | "member";
@@ -1542,7 +1542,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{workspaceId}/issues/{issueId}/comments": {
+    "/workspaces/{organizationId}/issues/{issueId}/comments": {
         parameters: {
             query?: never;
             header?: never;
@@ -1554,7 +1554,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     issueId: string;
                 };
                 cookie?: never;
@@ -1570,7 +1570,7 @@ export interface paths {
                         "application/json": {
                             comments: {
                                 id: string;
-                                workspaceId: string;
+                                organizationId: string;
                                 issueId: string;
                                 authorId: string | null;
                                 body: string;
@@ -1591,7 +1591,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     issueId: string;
                 };
                 cookie?: never;
@@ -1612,7 +1612,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             issueId: string;
                             authorId: string | null;
                             body: string;
@@ -1632,7 +1632,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{workspaceId}/issues/{issueId}/comments/{id}": {
+    "/workspaces/{organizationId}/issues/{issueId}/comments/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1644,7 +1644,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     issueId: string;
                     id: string;
                 };
@@ -1660,7 +1660,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             issueId: string;
                             authorId: string | null;
                             body: string;
@@ -1681,7 +1681,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     issueId: string;
                     id: string;
                 };
@@ -1705,7 +1705,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     issueId: string;
                     id: string;
                 };
@@ -1727,7 +1727,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             issueId: string;
                             authorId: string | null;
                             body: string;
@@ -1743,7 +1743,7 @@ export interface paths {
         };
         trace?: never;
     };
-    "/workspaces/{workspaceId}/issues/{issueId}/relations": {
+    "/workspaces/{organizationId}/issues/{issueId}/relations": {
         parameters: {
             query?: never;
             header?: never;
@@ -1755,7 +1755,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     issueId: string;
                 };
                 cookie?: never;
@@ -1771,7 +1771,7 @@ export interface paths {
                         "application/json": {
                             relations: {
                                 id: string;
-                                workspaceId: string;
+                                organizationId: string;
                                 fromIssueId: string;
                                 toIssueId: string;
                                 type: string;
@@ -1788,7 +1788,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     issueId: string;
                 };
                 cookie?: never;
@@ -1811,7 +1811,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             fromIssueId: string;
                             toIssueId: string;
                             type: string;
@@ -1827,7 +1827,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{workspaceId}/issues/{issueId}/relations/{id}": {
+    "/workspaces/{organizationId}/issues/{issueId}/relations/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1842,7 +1842,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     issueId: string;
                     id: string;
                 };
@@ -1864,7 +1864,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{workspaceId}/issues/{issueId}/subscribers": {
+    "/workspaces/{organizationId}/issues/{issueId}/subscribers": {
         parameters: {
             query?: never;
             header?: never;
@@ -1876,7 +1876,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     issueId: string;
                 };
                 cookie?: never;
@@ -1892,7 +1892,7 @@ export interface paths {
                         "application/json": {
                             subscribers: {
                                 id: string;
-                                workspaceId: string;
+                                organizationId: string;
                                 issueId: string;
                                 linearUserId: string;
                                 createdAt: string;
@@ -1908,7 +1908,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     issueId: string;
                 };
                 cookie?: never;
@@ -1929,7 +1929,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             issueId: string;
                             linearUserId: string;
                             createdAt: string;
@@ -1944,7 +1944,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{workspaceId}/issues/{issueId}/subscribers/{id}": {
+    "/workspaces/{organizationId}/issues/{issueId}/subscribers/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1959,7 +1959,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     issueId: string;
                     id: string;
                 };
@@ -1981,7 +1981,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{workspaceId}/issues/{issueId}/attachments": {
+    "/workspaces/{organizationId}/issues/{issueId}/attachments": {
         parameters: {
             query?: never;
             header?: never;
@@ -1993,7 +1993,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     issueId: string;
                 };
                 cookie?: never;
@@ -2009,7 +2009,7 @@ export interface paths {
                         "application/json": {
                             attachments: {
                                 id: string;
-                                workspaceId: string;
+                                organizationId: string;
                                 issueId: string;
                                 linearId: string;
                                 url: string;
@@ -2031,7 +2031,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{workspaceId}/github/users": {
+    "/workspaces/{organizationId}/github/users": {
         parameters: {
             query?: never;
             header?: never;
@@ -2045,7 +2045,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                 };
                 cookie?: never;
             };
@@ -2066,7 +2066,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             userId: string;
                             githubLogin: string;
                         };
@@ -2080,7 +2080,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{workspaceId}/github/install": {
+    "/workspaces/{organizationId}/github/install": {
         parameters: {
             query?: never;
             header?: never;
@@ -2094,7 +2094,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                 };
                 cookie?: never;
             };
@@ -2127,7 +2127,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{workspaceId}/issues/{issueId}/history": {
+    "/workspaces/{organizationId}/issues/{issueId}/history": {
         parameters: {
             query?: never;
             header?: never;
@@ -2139,7 +2139,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     issueId: string;
                 };
                 cookie?: never;
@@ -2155,7 +2155,7 @@ export interface paths {
                         "application/json": {
                             history: {
                                 id: string;
-                                workspaceId: string;
+                                organizationId: string;
                                 issueId: string;
                                 linearId: string | null;
                                 field: string;
@@ -2177,7 +2177,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{workspaceId}/states": {
+    "/workspaces/{organizationId}/states": {
         parameters: {
             query?: never;
             header?: never;
@@ -2189,7 +2189,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                 };
                 cookie?: never;
             };
@@ -2204,7 +2204,7 @@ export interface paths {
                         "application/json": {
                             states: {
                                 id: string;
-                                workspaceId: string;
+                                organizationId: string;
                                 linearId: string;
                                 name: string;
                                 type: string;
@@ -2223,7 +2223,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                 };
                 cookie?: never;
             };
@@ -2247,7 +2247,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             linearId: string;
                             name: string;
                             type: string;
@@ -2265,7 +2265,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{workspaceId}/states/{id}": {
+    "/workspaces/{organizationId}/states/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -2277,7 +2277,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     id: string;
                 };
                 cookie?: never;
@@ -2292,7 +2292,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             linearId: string;
                             name: string;
                             type: string;
@@ -2311,7 +2311,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     id: string;
                 };
                 cookie?: never;
@@ -2334,7 +2334,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     id: string;
                 };
                 cookie?: never;
@@ -2358,7 +2358,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             linearId: string;
                             name: string;
                             type: string;
@@ -2372,7 +2372,7 @@ export interface paths {
         };
         trace?: never;
     };
-    "/workspaces/{workspaceId}/webhook-subscriptions": {
+    "/workspaces/{organizationId}/webhook-subscriptions": {
         parameters: {
             query?: never;
             header?: never;
@@ -2384,7 +2384,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                 };
                 cookie?: never;
             };
@@ -2399,7 +2399,7 @@ export interface paths {
                         "application/json": {
                             subscriptions: {
                                 id: string;
-                                workspaceId: string;
+                                organizationId: string;
                                 url: string;
                                 events: string;
                                 secret: string;
@@ -2416,7 +2416,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                 };
                 cookie?: never;
             };
@@ -2439,7 +2439,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             url: string;
                             events: string;
                             secret: string;
@@ -2455,7 +2455,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{workspaceId}/webhook-subscriptions/{id}": {
+    "/workspaces/{organizationId}/webhook-subscriptions/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -2467,7 +2467,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     id: string;
                 };
                 cookie?: never;
@@ -2482,7 +2482,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             url: string;
                             events: string;
                             secret: string;
@@ -2499,7 +2499,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     id: string;
                 };
                 cookie?: never;
@@ -2522,7 +2522,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     id: string;
                 };
                 cookie?: never;
@@ -2546,7 +2546,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             url: string;
                             events: string;
                             secret: string;
@@ -2558,7 +2558,7 @@ export interface paths {
         };
         trace?: never;
     };
-    "/workspaces/{workspaceId}/webhook-subscriptions/{id}/deliveries": {
+    "/workspaces/{organizationId}/webhook-subscriptions/{id}/deliveries": {
         parameters: {
             query?: never;
             header?: never;
@@ -2570,7 +2570,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     id: string;
                 };
                 cookie?: never;
@@ -2586,7 +2586,7 @@ export interface paths {
                         "application/json": {
                             deliveries: {
                                 id: string;
-                                workspaceId: string;
+                                organizationId: string;
                                 subscriptionId: string;
                                 event: string;
                                 url: string;
@@ -2610,7 +2610,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{workspaceId}/linear-users": {
+    "/workspaces/{organizationId}/linear-users": {
         parameters: {
             query?: never;
             header?: never;
@@ -2622,7 +2622,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                 };
                 cookie?: never;
             };
@@ -2637,7 +2637,7 @@ export interface paths {
                         "application/json": {
                             linearUsers: {
                                 id: string;
-                                workspaceId: string;
+                                organizationId: string;
                                 linearId: string;
                                 name: string | null;
                                 email: string | null;
@@ -2654,7 +2654,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                 };
                 cookie?: never;
             };
@@ -2676,7 +2676,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             linearId: string;
                             name: string | null;
                             email: string | null;
@@ -2692,7 +2692,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{workspaceId}/linear-users/{linearId}": {
+    "/workspaces/{organizationId}/linear-users/{linearId}": {
         parameters: {
             query?: never;
             header?: never;
@@ -2704,7 +2704,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     linearId: string;
                 };
                 cookie?: never;
@@ -2719,7 +2719,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             linearId: string;
                             name: string | null;
                             email: string | null;
@@ -2737,7 +2737,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{workspaceId}/notifications": {
+    "/workspaces/{organizationId}/notifications": {
         parameters: {
             query?: never;
             header?: never;
@@ -2754,7 +2754,7 @@ export interface paths {
                 };
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                 };
                 cookie?: never;
             };
@@ -2769,7 +2769,7 @@ export interface paths {
                         "application/json": {
                             notifications: {
                                 id: string;
-                                workspaceId: string;
+                                organizationId: string;
                                 recipientId: string;
                                 recipientType: string;
                                 issueId: string;
@@ -2792,7 +2792,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{workspaceId}/notifications/unread-count": {
+    "/workspaces/{organizationId}/notifications/unread-count": {
         parameters: {
             query?: never;
             header?: never;
@@ -2804,7 +2804,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                 };
                 cookie?: never;
             };
@@ -2831,7 +2831,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{workspaceId}/notifications/{id}/read": {
+    "/workspaces/{organizationId}/notifications/{id}/read": {
         parameters: {
             query?: never;
             header?: never;
@@ -2849,7 +2849,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     id: string;
                 };
                 cookie?: never;
@@ -2864,7 +2864,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             recipientId: string;
                             recipientType: string;
                             issueId: string;
@@ -2887,7 +2887,7 @@ export interface paths {
         };
         trace?: never;
     };
-    "/workspaces/{workspaceId}/notifications/mark-all-read": {
+    "/workspaces/{organizationId}/notifications/mark-all-read": {
         parameters: {
             query?: never;
             header?: never;
@@ -2901,7 +2901,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                 };
                 cookie?: never;
             };
@@ -2922,7 +2922,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{workspaceId}/saved-views": {
+    "/workspaces/{organizationId}/saved-views": {
         parameters: {
             query?: never;
             header?: never;
@@ -2934,7 +2934,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                 };
                 cookie?: never;
             };
@@ -2949,7 +2949,7 @@ export interface paths {
                         "application/json": {
                             views: {
                                 id: string;
-                                workspaceId: string;
+                                organizationId: string;
                                 ownerId: string;
                                 name: string;
                                 filter?: unknown;
@@ -2974,7 +2974,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                 };
                 cookie?: never;
             };
@@ -3002,7 +3002,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             ownerId: string;
                             name: string;
                             filter?: unknown;
@@ -3026,7 +3026,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{workspaceId}/saved-views/{id}": {
+    "/workspaces/{organizationId}/saved-views/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -3038,7 +3038,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     id: string;
                 };
                 cookie?: never;
@@ -3053,7 +3053,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             ownerId: string;
                             name: string;
                             filter?: unknown;
@@ -3085,7 +3085,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     id: string;
                 };
                 cookie?: never;
@@ -3108,7 +3108,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     id: string;
                 };
                 cookie?: never;
@@ -3137,7 +3137,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             ownerId: string;
                             name: string;
                             filter?: unknown;
@@ -3164,7 +3164,7 @@ export interface paths {
         };
         trace?: never;
     };
-    "/workspaces/{workspaceId}/teams": {
+    "/workspaces/{organizationId}/teams": {
         parameters: {
             query?: never;
             header?: never;
@@ -3176,7 +3176,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                 };
                 cookie?: never;
             };
@@ -3191,7 +3191,7 @@ export interface paths {
                         "application/json": {
                             teams: {
                                 id: string;
-                                workspaceId: string;
+                                organizationId: string;
                                 key: string;
                                 name: string;
                                 ownerId: string;
@@ -3211,7 +3211,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                 };
                 cookie?: never;
             };
@@ -3233,7 +3233,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             key: string;
                             name: string;
                             ownerId: string;
@@ -3252,7 +3252,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{workspaceId}/teams/{id}": {
+    "/workspaces/{organizationId}/teams/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -3264,7 +3264,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     id: string;
                 };
                 cookie?: never;
@@ -3279,7 +3279,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             key: string;
                             name: string;
                             ownerId: string;
@@ -3306,7 +3306,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     id: string;
                 };
                 cookie?: never;
@@ -3329,7 +3329,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     id: string;
                 };
                 cookie?: never;
@@ -3352,7 +3352,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             key: string;
                             name: string;
                             ownerId: string;
@@ -3374,7 +3374,7 @@ export interface paths {
         };
         trace?: never;
     };
-    "/workspaces/{workspaceId}/teams/{id}/members": {
+    "/workspaces/{organizationId}/teams/{id}/members": {
         parameters: {
             query?: never;
             header?: never;
@@ -3386,7 +3386,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     id: string;
                 };
                 cookie?: never;
@@ -3417,7 +3417,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     id: string;
                 };
                 cookie?: never;
@@ -3449,7 +3449,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{workspaceId}/teams/{id}/members/{memberId}": {
+    "/workspaces/{organizationId}/teams/{id}/members/{memberId}": {
         parameters: {
             query?: never;
             header?: never;
@@ -3466,7 +3466,7 @@ export interface paths {
                 };
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     id: string;
                     memberId: string;
                 };
@@ -3488,7 +3488,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{workspaceId}/templates": {
+    "/workspaces/{organizationId}/templates": {
         parameters: {
             query?: never;
             header?: never;
@@ -3500,7 +3500,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                 };
                 cookie?: never;
             };
@@ -3515,7 +3515,7 @@ export interface paths {
                         "application/json": {
                             templates: {
                                 id: string;
-                                workspaceId: string;
+                                organizationId: string;
                                 linearId: string;
                                 name: string;
                                 templateData: string | null;
@@ -3532,7 +3532,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                 };
                 cookie?: never;
             };
@@ -3554,7 +3554,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             linearId: string;
                             name: string;
                             templateData: string | null;
@@ -3570,7 +3570,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{workspaceId}/templates/{id}": {
+    "/workspaces/{organizationId}/templates/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -3582,7 +3582,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                     id: string;
                 };
                 cookie?: never;
@@ -3597,7 +3597,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            workspaceId: string;
+                            organizationId: string;
                             linearId: string;
                             name: string;
                             templateData: string | null;
@@ -3615,7 +3615,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{workspaceId}/migrate/linear": {
+    "/workspaces/{organizationId}/migrate/linear": {
         parameters: {
             query?: never;
             header?: never;
@@ -3629,7 +3629,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                 };
                 cookie?: never;
             };
@@ -3768,7 +3768,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{workspaceId}/ws": {
+    "/workspaces/{organizationId}/ws": {
         parameters: {
             query?: never;
             header?: never;
@@ -3780,7 +3780,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    workspaceId: string;
+                    organizationId: string;
                 };
                 cookie?: never;
             };
@@ -3809,7 +3809,7 @@ export interface components {
     schemas: {
         Issue: {
             id: string;
-            workspaceId: string;
+            organizationId: string;
             teamId: string;
             title: string;
             description: string | null;

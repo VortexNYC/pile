@@ -33,7 +33,7 @@ function request(
 }
 
 describe("agent sessions API", () => {
-  let workspaceId: string;
+  let organizationId: string;
   let token: string;
 
   beforeAll(async () => {
@@ -56,13 +56,13 @@ describe("agent sessions API", () => {
       slug: `agent-api-${crypto.randomUUID()}`,
       ownerId: "user-1",
     });
-    workspaceId = workspace!.id;
+    organizationId = workspace!.id;
     const auth = createAuth(env);
     const result = await auth.api.createApiKey({
       body: {
         userId: "user-1",
         name: "test-admin",
-        metadata: { workspaceId, permissions: "admin" },
+        metadata: { organizationId, permissions: "admin" },
       },
     });
     token = z.object({ key: z.string() }).parse(result).key;
@@ -72,7 +72,7 @@ describe("agent sessions API", () => {
 
   it("creates a session by dispatching an agent", async () => {
     const issueRes = await app.fetch(
-      request(`/workspaces/${workspaceId}/issues`, {
+      request(`/workspaces/${organizationId}/issues`, {
         method: "POST",
         token,
         body: JSON.stringify({ title: "Agent test" }),
@@ -83,7 +83,7 @@ describe("agent sessions API", () => {
     const issue = await issueRes.json<{ id: string }>();
 
     const dispatchRes = await app.fetch(
-      request(`/workspaces/${workspaceId}/issues/${issue.id}/dispatch`, {
+      request(`/workspaces/${organizationId}/issues/${issue.id}/dispatch`, {
         method: "POST",
         token,
         body: JSON.stringify({ agentId: "mock" }),
@@ -100,9 +100,12 @@ describe("agent sessions API", () => {
     expect(session.status).toBe("created");
 
     const listRes = await app.fetch(
-      request(`/workspaces/${workspaceId}/agent/sessions?issueId=${issue.id}`, {
-        token,
-      }),
+      request(
+        `/workspaces/${organizationId}/agent/sessions?issueId=${issue.id}`,
+        {
+          token,
+        }
+      ),
       env
     );
     expect(listRes.status).toBe(200);
@@ -110,7 +113,7 @@ describe("agent sessions API", () => {
     expect(list.sessions.length).toBe(1);
 
     const getRes = await app.fetch(
-      request(`/workspaces/${workspaceId}/agent/sessions/${session.id}`, {
+      request(`/workspaces/${organizationId}/agent/sessions/${session.id}`, {
         token,
       }),
       env
@@ -124,7 +127,7 @@ describe("agent sessions API", () => {
     const db = createD1(env.D1);
     const { createAgentSession } = await import("../global/agent-sessions.js");
     const session = await createAgentSession(db, {
-      workspaceId,
+      organizationId,
       issueId: "issue-patch",
       agentId: "mock",
       provider: "mock",
@@ -134,7 +137,7 @@ describe("agent sessions API", () => {
 
     const activityRes = await app.fetch(
       request(
-        `/workspaces/${workspaceId}/agent/sessions/${session.id}/activities`,
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/activities`,
         {
           method: "POST",
           token,
@@ -146,7 +149,7 @@ describe("agent sessions API", () => {
     expect(activityRes.status).toBe(201);
 
     const patchRes = await app.fetch(
-      request(`/workspaces/${workspaceId}/agent/sessions/${session.id}`, {
+      request(`/workspaces/${organizationId}/agent/sessions/${session.id}`, {
         method: "PATCH",
         token,
         body: JSON.stringify({ status: "completed", result: "done" }),

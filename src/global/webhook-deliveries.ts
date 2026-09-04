@@ -16,7 +16,7 @@ export async function recordWebhookDelivery(
   deliveryId: string,
   source: string,
   event: string,
-  workspaceId?: string
+  organizationId?: string
 ): Promise<void> {
   await db
     .insert(webhookDeliveries)
@@ -24,7 +24,7 @@ export async function recordWebhookDelivery(
       deliveryId,
       source,
       event,
-      workspaceId: workspaceId ?? null,
+      organizationId: organizationId ?? null,
     })
     .onConflictDoNothing();
 }

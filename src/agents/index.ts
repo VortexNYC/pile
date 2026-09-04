@@ -37,7 +37,7 @@ export function registerAgentProvider(
 export async function dispatchAgent(
   env: AppEnv,
   agentId: string,
-  workspaceId: string,
+  organizationId: string,
   issue: {
     id: string;
     teamId: string;
@@ -50,7 +50,7 @@ export async function dispatchAgent(
   const provider = getAgentProvider(agentId, env);
   const issueInput: Issue = {
     ...issue,
-    workspaceId,
+    organizationId,
     status: "backlog",
     priority: "medium",
     assigneeId: null,
@@ -67,14 +67,14 @@ export async function dispatchAgent(
     updatedAt: new Date().toISOString(),
   };
   const providerSession = await provider.dispatch(
-    workspaceId,
+    organizationId,
     issueInput,
     model
   );
 
   const db = createD1(env.D1);
   const session = await createAgentSession(db, {
-    workspaceId,
+    organizationId,
     issueId: issue.id,
     agentId: providerSession.agentId,
     provider: agentId,

@@ -92,14 +92,14 @@ async function attemptDelivery(
 
 export async function deliverWebhooks(
   env: AppEnv,
-  workspaceId: string,
+  organizationId: string,
   event: RealtimeEvent
 ): Promise<{ needsRetry: boolean; retryAt?: number }> {
   const db = createD1(env.D1);
   const subscriptions = await db
     .select()
     .from(webhookSubscriptions)
-    .where(eq(webhookSubscriptions.workspaceId, workspaceId))
+    .where(eq(webhookSubscriptions.organizationId, organizationId))
     .all();
 
   if (subscriptions.length === 0) {
@@ -118,7 +118,7 @@ export async function deliverWebhooks(
         const deliveryId = crypto.randomUUID();
         await db.insert(outboundWebhookDeliveries).values({
           id: deliveryId,
-          workspaceId,
+          organizationId,
           subscriptionId: sub.id,
           event: event.type,
           payload,
@@ -167,7 +167,7 @@ export async function deliverWebhooks(
 
 export async function retryWebhookDeliveries(
   env: AppEnv,
-  workspaceId: string
+  organizationId: string
 ): Promise<{ hasMore: boolean; retryAt?: number }> {
   const db = createD1(env.D1);
   const remaining = await db
@@ -175,7 +175,7 @@ export async function retryWebhookDeliveries(
     .from(outboundWebhookDeliveries)
     .where(
       and(
-        eq(outboundWebhookDeliveries.workspaceId, workspaceId),
+        eq(outboundWebhookDeliveries.organizationId, organizationId),
         ne(outboundWebhookDeliveries.status, "delivered"),
         lt(outboundWebhookDeliveries.attemptCount, MAX_ATTEMPTS)
       )

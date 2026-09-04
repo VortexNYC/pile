@@ -16,7 +16,7 @@ import { rls } from "../platform/rls.js";
 
 const webhookSubscriptionSchema = z.object({
   id: z.string(),
-  workspaceId: z.string(),
+  organizationId: z.string(),
   url: z.string(),
   events: z.string(),
   secret: z.string(),
@@ -25,11 +25,11 @@ const webhookSubscriptionSchema = z.object({
 
 const createWebhookSubscriptionRoute = createRoute({
   method: "post",
-  path: "/workspaces/{workspaceId}/webhook-subscriptions",
+  path: "/workspaces/{organizationId}/webhook-subscriptions",
   tags: ["webhooks"],
   middleware: [rls("admin")],
   request: {
-    params: z.object({ workspaceId: z.string() }),
+    params: z.object({ organizationId: z.string() }),
     body: {
       content: {
         "application/json": {
@@ -54,11 +54,11 @@ const createWebhookSubscriptionRoute = createRoute({
 
 const listWebhookSubscriptionsRoute = createRoute({
   method: "get",
-  path: "/workspaces/{workspaceId}/webhook-subscriptions",
+  path: "/workspaces/{organizationId}/webhook-subscriptions",
   tags: ["webhooks"],
   middleware: [rls("admin")],
   request: {
-    params: z.object({ workspaceId: z.string() }),
+    params: z.object({ organizationId: z.string() }),
   },
   responses: {
     200: {
@@ -76,11 +76,11 @@ const listWebhookSubscriptionsRoute = createRoute({
 
 const getWebhookSubscriptionRoute = createRoute({
   method: "get",
-  path: "/workspaces/{workspaceId}/webhook-subscriptions/{id}",
+  path: "/workspaces/{organizationId}/webhook-subscriptions/{id}",
   tags: ["webhooks"],
   middleware: [rls("admin")],
   request: {
-    params: z.object({ workspaceId: z.string(), id: z.string() }),
+    params: z.object({ organizationId: z.string(), id: z.string() }),
   },
   responses: {
     200: {
@@ -94,11 +94,11 @@ const getWebhookSubscriptionRoute = createRoute({
 
 const updateWebhookSubscriptionRoute = createRoute({
   method: "patch",
-  path: "/workspaces/{workspaceId}/webhook-subscriptions/{id}",
+  path: "/workspaces/{organizationId}/webhook-subscriptions/{id}",
   tags: ["webhooks"],
   middleware: [rls("admin")],
   request: {
-    params: z.object({ workspaceId: z.string(), id: z.string() }),
+    params: z.object({ organizationId: z.string(), id: z.string() }),
     body: {
       content: {
         "application/json": {
@@ -123,11 +123,11 @@ const updateWebhookSubscriptionRoute = createRoute({
 
 const deleteWebhookSubscriptionRoute = createRoute({
   method: "delete",
-  path: "/workspaces/{workspaceId}/webhook-subscriptions/{id}",
+  path: "/workspaces/{organizationId}/webhook-subscriptions/{id}",
   tags: ["webhooks"],
   middleware: [rls("admin")],
   request: {
-    params: z.object({ workspaceId: z.string(), id: z.string() }),
+    params: z.object({ organizationId: z.string(), id: z.string() }),
   },
   responses: {
     204: {
@@ -138,11 +138,11 @@ const deleteWebhookSubscriptionRoute = createRoute({
 
 const listWebhookDeliveriesRoute = createRoute({
   method: "get",
-  path: "/workspaces/{workspaceId}/webhook-subscriptions/{id}/deliveries",
+  path: "/workspaces/{organizationId}/webhook-subscriptions/{id}/deliveries",
   tags: ["webhooks"],
   middleware: [rls("admin")],
   request: {
-    params: z.object({ workspaceId: z.string(), id: z.string() }),
+    params: z.object({ organizationId: z.string(), id: z.string() }),
   },
   responses: {
     200: {
@@ -153,7 +153,7 @@ const listWebhookDeliveriesRoute = createRoute({
             deliveries: z.array(
               z.object({
                 id: z.string(),
-                workspaceId: z.string(),
+                organizationId: z.string(),
                 subscriptionId: z.string(),
                 event: z.string(),
                 url: z.string(),
@@ -174,24 +174,28 @@ const listWebhookDeliveriesRoute = createRoute({
 
 export function registerWebhookRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(createWebhookSubscriptionRoute, async (c) => {
-    const { workspaceId } = c.req.valid("param");
+    const { organizationId } = c.req.valid("param");
     const input = c.req.valid("json");
     const db = createD1(c.env.D1);
-    const item = await createWebhookSubscription(db, workspaceId, input);
+    const item = await createWebhookSubscription(db, organizationId, input);
     return c.json(item, 201);
   });
 
   app.openapi(listWebhookSubscriptionsRoute, async (c) => {
-    const { workspaceId } = c.req.valid("param");
+    const { organizationId } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    const items = await listWebhookSubscriptions(db, workspaceId);
+    const items = await listWebhookSubscriptions(db, organizationId);
     return c.json({ subscriptions: items });
   });
 
   app.openapi(getWebhookSubscriptionRoute, async (c) => {
-    const { workspaceId, id } = c.req.valid("param");
+    const { organizationId, id } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    const item = await findWebhookSubscriptionByWorkspace(db, workspaceId, id);
+    const item = await findWebhookSubscriptionByWorkspace(
+      db,
+      organizationId,
+      id
+    );
     if (!item) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -203,10 +207,10 @@ export function registerWebhookRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(updateWebhookSubscriptionRoute, async (c) => {
-    const { workspaceId, id } = c.req.valid("param");
+    const { organizationId, id } = c.req.valid("param");
     const input = c.req.valid("json");
     const db = createD1(c.env.D1);
-    const item = await updateWebhookSubscription(db, workspaceId, id, input);
+    const item = await updateWebhookSubscription(db, organizationId, id, input);
     if (!item) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -218,9 +222,9 @@ export function registerWebhookRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(deleteWebhookSubscriptionRoute, async (c) => {
-    const { workspaceId, id } = c.req.valid("param");
+    const { organizationId, id } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    const deleted = await deleteWebhookSubscription(db, workspaceId, id);
+    const deleted = await deleteWebhookSubscription(db, organizationId, id);
     if (!deleted) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -232,9 +236,9 @@ export function registerWebhookRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(listWebhookDeliveriesRoute, async (c) => {
-    const { workspaceId, id } = c.req.valid("param");
+    const { organizationId, id } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    const items = await listWebhookDeliveries(db, workspaceId, id);
+    const items = await listWebhookDeliveries(db, organizationId, id);
     return c.json({ deliveries: items });
   });
 }
