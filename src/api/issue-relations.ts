@@ -6,6 +6,7 @@ import {
   createIssueRelation,
   deleteIssueRelation,
   getIssueRelation,
+  listInverseIssueRelations,
   listIssueRelations,
 } from "../global/issue-relations.js";
 import { VortexError } from "../platform/errors.js";
@@ -21,16 +22,16 @@ const relationSchema = z.object({
   createdAt: z.string(),
 });
 
+const relationTypeSchema = z.enum([
+  "related",
+  "blocks",
+  "duplicate",
+  "similar",
+]);
+
 const relationBodySchema = z.object({
   toIssueId: z.string().min(1),
-  type: z.enum([
-    "parent",
-    "child",
-    "blocks",
-    "blocked_by",
-    "related",
-    "duplicate",
-  ]),
+  type: relationTypeSchema,
 });
 
 const listRelationsRoute = createRoute({
@@ -40,13 +41,17 @@ const listRelationsRoute = createRoute({
   middleware: [rls("read")],
   request: {
     params: z.object({ organizationId: z.string(), issueId: z.string() }),
+    query: z.object({ direction: z.enum(["outgoing", "incoming"]).optional() }),
   },
   responses: {
     200: {
       description: "Issue relations",
       content: {
         "application/json": {
-          schema: z.object({ relations: z.array(relationSchema) }),
+          schema: z.object({
+            relations: z.array(relationSchema),
+            inverseRelations: z.array(relationSchema).optional(),
+          }),
         },
       },
     },
@@ -96,9 +101,20 @@ const deleteRelationRoute = createRoute({
 export function registerIssueRelationRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listRelationsRoute, async (c) => {
     const { organizationId, issueId } = c.req.valid("param");
+    const { direction } = c.req.valid("query");
     const db = createD1(c.env.D1);
-    const relations = await listIssueRelations(db, organizationId, issueId);
-    return c.json({ relations });
+    const outgoing =
+      direction === undefined || direction === "outgoing"
+        ? await listIssueRelations(db, organizationId, issueId)
+        : [];
+    const incoming =
+      direction === undefined || direction === "incoming"
+        ? await listInverseIssueRelations(db, organizationId, issueId)
+        : [];
+    return c.json({
+      relations: outgoing,
+      inverseRelations: direction === undefined ? incoming : undefined,
+    });
   });
 
   app.openapi(createRelationRoute, async (c) => {

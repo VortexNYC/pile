@@ -560,6 +560,66 @@ describe("API integration", () => {
     expect(applyBody.issues.length).toBe(1);
   });
 
+  it("creates parent/child issue hierarchies", async () => {
+    const organizationId = await seedWorkspace();
+    const token = await adminToken(organizationId);
+
+    const parentRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          title: "Parent issue",
+          priority: "high",
+        }),
+      }),
+      env
+    );
+    expect(parentRes.status).toBe(201);
+    const parent = await parentRes.json<{ id: string; priority: string }>();
+    expect(parent.priority).toBe("high");
+
+    const childRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          title: "Child issue",
+          parentId: parent.id,
+        }),
+      }),
+      env
+    );
+    expect(childRes.status).toBe(201);
+    const child = await childRes.json<{
+      id: string;
+      parentId: string | null;
+      priority: string;
+    }>();
+    expect(child.parentId).toBe(parent.id);
+    expect(child.priority).toBe("high");
+
+    const childrenRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${parent.id}/children`, {
+        token,
+      }),
+      env
+    );
+    expect(childrenRes.status).toBe(200);
+    const childrenBody = await childrenRes.json<{ issues: unknown[] }>();
+    expect(childrenBody.issues).toHaveLength(1);
+
+    const cycleRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${parent.id}`, {
+        method: "PATCH",
+        token,
+        body: JSON.stringify({ parentId: child.id }),
+      }),
+      env
+    );
+    expect(cycleRes.status).toBe(400);
+  });
+
   it("creates notifications on issue creation and lists them", async () => {
     const db = createD1(env.D1);
     const organizationId = await seedWorkspace();

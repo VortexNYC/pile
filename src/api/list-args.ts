@@ -20,6 +20,7 @@ export const listIssuesQuerySchema = z.object({
   teamId: z.string().optional(),
   status: z.enum(ISSUE_STATUSES).optional(),
   priority: z.enum(ISSUE_PRIORITIES).optional(),
+  parentId: z.string().optional(),
   assigneeId: z.string().optional(),
   projectId: z.string().optional(),
   cycleId: z.string().optional(),
@@ -71,6 +72,9 @@ export function toListArgs(query: ListIssuesQuery): ListIssuesArgs {
   }
   if (query.priority) {
     args.priority = query.priority;
+  }
+  if (query.parentId) {
+    args.parentId = query.parentId;
   }
   if (query.assigneeId) {
     args.assigneeId = query.assigneeId;

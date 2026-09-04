@@ -541,6 +541,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "urgent"
           ]
         },
+        "parentId": {
+          "type": "string"
+        },
         "assigneeId": {
           "type": "string"
         },
@@ -573,6 +576,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "description": "Get issue (GET /workspaces/{organizationId}/issues/{id})",
     "method": "GET",
     "path": "/workspaces/{organizationId}/issues/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdIssuesIdChildren",
+    "description": "List issue children (GET /workspaces/{organizationId}/issues/{id}/children)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/issues/{id}/children",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -690,6 +714,13 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         },
         "issueId": {
           "type": "string"
+        },
+        "direction": {
+          "type": "string",
+          "enum": [
+            "outgoing",
+            "incoming"
+          ]
         }
       },
       "required": [
@@ -1404,6 +1435,14 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 null
               ]
             },
+            "parentId": {
+              "type": "string",
+              "nullable": true
+            },
+            "subIssueSortOrder": {
+              "type": "number",
+              "nullable": true
+            },
             "assigneeId": {
               "type": "string"
             },
@@ -2074,6 +2113,14 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 null
               ]
             },
+            "parentId": {
+              "type": "string",
+              "nullable": true
+            },
+            "subIssueSortOrder": {
+              "type": "number",
+              "nullable": true
+            },
             "assigneeId": {
               "type": "string"
             },
@@ -2192,12 +2239,10 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "type": {
               "type": "string",
               "enum": [
-                "parent",
-                "child",
-                "blocks",
-                "blocked_by",
                 "related",
-                "duplicate"
+                "blocks",
+                "duplicate",
+                "similar"
               ]
             }
           },

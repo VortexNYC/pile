@@ -80,6 +80,8 @@ describe("WorkspaceDO", () => {
     expect(issue.status).toBe("backlog");
     expect(issue.priority).toBe("medium");
     expect(issue.resolution).toBeNull();
+    expect(issue.parentId).toBeNull();
+    expect(issue.subIssueSortOrder).toBeNull();
 
     const issues = await withWorkspace(stub, (instance) =>
       instance.listIssues()
@@ -198,5 +200,34 @@ describe("WorkspaceDO", () => {
     );
     expect(updated?.prUrl).toBe("https://github.com/owner/repo/pull/1");
     expect(updated?.prState).toBe("open");
+  });
+
+  it("supports parent/child issue hierarchy", async () => {
+    const stub = getStub();
+    const parent = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Parent issue" })
+    );
+    const child = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Child issue", parentId: parent.id })
+    );
+    expect(child.parentId).toBe(parent.id);
+    expect(child.priority).toBe(parent.priority);
+
+    const children = await withWorkspace(stub, (instance) =>
+      instance.getIssueChildren(parent.id)
+    );
+    expect(children).toHaveLength(1);
+    expect(children[0].id).toBe(child.id);
+
+    await expect(
+      withWorkspace(stub, (instance) =>
+        instance.updateIssue(parent.id, { parentId: child.id })
+      )
+    ).rejects.toThrow();
+
+    const removed = await withWorkspace(stub, (instance) =>
+      instance.updateIssue(child.id, { parentId: null })
+    );
+    expect(removed?.parentId).toBeNull();
   });
 });

@@ -43,6 +43,21 @@ async function getStub(env: WorkerEnv, organizationId: string) {
   return stub;
 }
 
+async function wouldCreateCycle(
+  stub: Awaited<ReturnType<typeof getStub>>,
+  issueId: string,
+  parentId: string,
+  seen: Set<string>
+): Promise<boolean> {
+  if (parentId === issueId) return true;
+  if (seen.has(parentId)) return true;
+  seen.add(parentId);
+  const issue = await stub.getIssue(parentId);
+  const next = issue?.parentId ?? null;
+  if (next === null) return false;
+  return wouldCreateCycle(stub, issueId, next, seen);
+}
+
 async function loadVisibleTeamIds(
   db: ReturnType<typeof createD1>,
   organizationId: string,
@@ -121,6 +136,8 @@ const createIssueSchema = z.object({
   status: z.enum(ISSUE_STATUSES).optional(),
   priority: z.enum(ISSUE_PRIORITIES).optional(),
   resolution: z.enum(ISSUE_RESOLUTIONS).nullable().optional(),
+  parentId: z.string().nullable().optional(),
+  subIssueSortOrder: z.number().nullable().optional(),
   assigneeId: z.string().optional(),
   projectId: z.string().optional(),
   cycleId: z.string().optional(),
@@ -141,6 +158,8 @@ const issueApiSchema = z
     status: z.enum(ISSUE_STATUSES),
     priority: z.enum(ISSUE_PRIORITIES),
     resolution: z.enum(ISSUE_RESOLUTIONS).nullable(),
+    parentId: z.string().nullable(),
+    subIssueSortOrder: z.number().nullable(),
     assigneeId: z.string().nullable(),
     projectId: z.string().nullable(),
     cycleId: z.string().nullable(),
@@ -257,6 +276,26 @@ const deleteIssueRoute = createRoute({
   },
 });
 
+const getIssueChildrenRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/issues/{id}/children",
+  tags: ["issues"],
+  middleware: [rls("read")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Issue children",
+      content: {
+        "application/json": {
+          schema: z.object({ issues: z.array(issueApiSchema) }),
+        },
+      },
+    },
+  },
+});
+
 const dispatchRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/issues/{id}/dispatch",
@@ -354,15 +393,31 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId } = c.req.valid("param");
     const identity = c.get("workspaceIdentity");
     const db = createD1(c.env.D1);
-    const teamId = await assertTeamAccess(
+    const stub = await getStub(c.env, organizationId);
+    let teamId = input.teamId;
+    if (input.parentId) {
+      const parent = await stub.getIssue(input.parentId);
+      if (!parent) {
+        throw new VortexError({
+          code: "BAD_REQUEST",
+          status: 400,
+          message: "Parent issue not found",
+        });
+      }
+      await assertIssueAccess(db, parent, identity);
+      teamId ??= parent.teamId;
+    }
+    const resolvedTeamId = await assertTeamAccess(
       db,
       organizationId,
-      input.teamId,
+      teamId,
       identity
     );
     validateIssueState(input.status ?? "backlog", input.resolution);
-    const stub = await getStub(c.env, organizationId);
-    const issue = await stub.createIssue({ ...input, teamId }, identity.id);
+    const issue = await stub.createIssue(
+      { ...input, teamId: resolvedTeamId },
+      identity.id
+    );
     if (issue.repo && issue.branch) {
       await createRepoBranch(
         db,
@@ -392,6 +447,32 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     return c.json(issue);
   });
 
+  app.openapi(getIssueChildrenRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const identity = c.get("workspaceIdentity");
+    const db = createD1(c.env.D1);
+    const stub = await getStub(c.env, organizationId);
+    const issue = await stub.getIssue(id);
+    if (!issue) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Issue not found",
+      });
+    }
+    await assertIssueAccess(db, issue, identity);
+    const children = await stub.getIssueChildren(id);
+    const visibleTeamIds = await loadVisibleTeamIds(
+      db,
+      organizationId,
+      identity
+    );
+    const visibleChildren = children.filter((child) =>
+      visibleTeamIds.includes(child.teamId)
+    );
+    return c.json({ issues: visibleChildren });
+  });
+
   app.openapi(updateIssueRoute, async (c) => {
     const input = c.req.valid("json");
     const { organizationId, id } = c.req.valid("param");
@@ -415,6 +496,24 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         input.teamId,
         identity
       );
+    }
+    if (input.parentId !== undefined && input.parentId !== null) {
+      const parent = await stub.getIssue(input.parentId);
+      if (!parent) {
+        throw new VortexError({
+          code: "BAD_REQUEST",
+          status: 400,
+          message: "Parent issue not found",
+        });
+      }
+      await assertIssueAccess(db, parent, identity);
+      if (await wouldCreateCycle(stub, id, input.parentId, new Set<string>())) {
+        throw new VortexError({
+          code: "BAD_REQUEST",
+          status: 400,
+          message: "Parent would create a cycle",
+        });
+      }
     }
     validateIssueState(input.status ?? existing.status, input.resolution);
     const issue = await stub.updateIssue(id, { ...input, teamId }, identity.id);

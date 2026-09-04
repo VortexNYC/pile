@@ -32,6 +32,8 @@ export interface IssueInput {
   status?: IssueStatus;
   priority?: IssuePriority;
   resolution?: IssueResolution | null;
+  parentId?: string | null;
+  subIssueSortOrder?: number | null;
   assigneeId?: string | null;
   projectId?: string | null;
   cycleId?: string | null;
@@ -54,6 +56,7 @@ export interface ListIssuesArgs {
   teamIds?: string[];
   status?: IssueStatus;
   priority?: IssuePriority;
+  parentId?: string | null;
   assigneeId?: string;
   projectId?: string;
   cycleId?: string;
@@ -71,6 +74,8 @@ export interface Issue {
   status: IssueStatus;
   priority: IssuePriority;
   resolution: IssueResolution | null;
+  parentId: Id | null;
+  subIssueSortOrder: number | null;
   assigneeId: Id | null;
   projectId: Id | null;
   cycleId: Id | null;

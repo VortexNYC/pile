@@ -316,6 +316,7 @@ export interface paths {
                     teamId?: string;
                     status?: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
                     priority?: "low" | "medium" | "high" | "urgent";
+                    parentId?: string;
                     assigneeId?: string;
                     projectId?: string;
                     cycleId?: string;
@@ -369,6 +370,8 @@ export interface paths {
                         priority?: "low" | "medium" | "high" | "urgent";
                         /** @enum {string|null} */
                         resolution?: "duplicate" | "not_planned" | "intended_behavior" | "not_reproducible" | "obsolete" | "resolved" | null;
+                        parentId?: string | null;
+                        subIssueSortOrder?: number | null;
                         assigneeId?: string;
                         projectId?: string;
                         cycleId?: string;
@@ -476,6 +479,8 @@ export interface paths {
                         priority?: "low" | "medium" | "high" | "urgent";
                         /** @enum {string|null} */
                         resolution?: "duplicate" | "not_planned" | "intended_behavior" | "not_reproducible" | "obsolete" | "resolved" | null;
+                        parentId?: string | null;
+                        subIssueSortOrder?: number | null;
                         assigneeId?: string;
                         projectId?: string;
                         cycleId?: string;
@@ -497,6 +502,47 @@ export interface paths {
                 };
             };
         };
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/issues/{id}/children": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List issue children */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Issue children */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            issues: components["schemas"]["Issue"][];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/workspaces/{organizationId}/issues/{id}/dispatch": {
@@ -2249,7 +2295,9 @@ export interface paths {
         /** List issue relations */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    direction?: "outgoing" | "incoming";
+                };
                 header?: never;
                 path: {
                     organizationId: string;
@@ -2267,6 +2315,14 @@ export interface paths {
                     content: {
                         "application/json": {
                             relations: {
+                                id: string;
+                                organizationId: string;
+                                fromIssueId: string;
+                                toIssueId: string;
+                                type: string;
+                                createdAt: string;
+                            }[];
+                            inverseRelations?: {
                                 id: string;
                                 organizationId: string;
                                 fromIssueId: string;
@@ -2296,7 +2352,7 @@ export interface paths {
                     "application/json": {
                         toIssueId: string;
                         /** @enum {string} */
-                        type: "parent" | "child" | "blocks" | "blocked_by" | "related" | "duplicate";
+                        type: "related" | "blocks" | "duplicate" | "similar";
                     };
                 };
             };
@@ -4363,6 +4419,8 @@ export interface components {
             priority: "low" | "medium" | "high" | "urgent";
             /** @enum {string|null} */
             resolution: "duplicate" | "not_planned" | "intended_behavior" | "not_reproducible" | "obsolete" | "resolved" | null;
+            parentId: string | null;
+            subIssueSortOrder: number | null;
             assigneeId: string | null;
             projectId: string | null;
             cycleId: string | null;

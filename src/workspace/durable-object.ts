@@ -1,5 +1,16 @@
 import { DurableObject } from "cloudflare:workers";
-import { and, desc, eq, inArray, like, lt, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  like,
+  lt,
+  or,
+  sql,
+} from "drizzle-orm";
 import { drizzle } from "drizzle-orm/durable-sqlite";
 import { migrate } from "drizzle-orm/durable-sqlite/migrator";
 import { z } from "zod";
@@ -47,6 +58,40 @@ import { deliverWebhooks, retryWebhookDeliveries } from "./webhooks.js";
 type IssueKey = keyof Issue & keyof IssueInput;
 
 const TERMINAL_STATUSES: ReadonlyArray<IssueStatus> = ["done", "canceled"];
+
+async function resolveParent(
+  getIssue: (id: string) => Promise<Issue | undefined>,
+  parentId: string | null,
+  issueId: string
+): Promise<Issue | null> {
+  if (parentId === null) return null;
+  if (parentId === issueId) {
+    throw VortexError.fromCode(
+      "BAD_REQUEST",
+      "An issue cannot be its own parent"
+    );
+  }
+  const parent = await getIssue(parentId);
+  if (!parent) {
+    throw VortexError.fromCode("BAD_REQUEST", "Parent issue not found");
+  }
+  return parent;
+}
+
+async function wouldCreateCycle(
+  getIssue: (id: string) => Promise<Issue | undefined>,
+  issueId: string,
+  parentId: string,
+  seen: Set<string>
+): Promise<boolean> {
+  if (parentId === issueId) return true;
+  if (seen.has(parentId)) return true;
+  seen.add(parentId);
+  const issue = await getIssue(parentId);
+  const next = issue?.parentId ?? null;
+  if (next === null) return false;
+  return wouldCreateCycle(getIssue, issueId, next, seen);
+}
 
 function validateIssueResolution(
   status: IssueStatus,
@@ -239,16 +284,34 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const now = new Date().toISOString();
     const id = input.id ?? crypto.randomUUID();
     const status = input.status ?? "backlog";
-    const priority = input.priority ?? "medium";
     const resolution = validateIssueResolution(
       status,
       input.resolution ?? null
     );
 
+    const parent = await resolveParent(
+      (parentIssueId) => this.getIssue(parentIssueId),
+      input.parentId ?? null,
+      id
+    );
+    let teamId = input.teamId;
+    let priority = input.priority;
+    let projectId = input.projectId;
+    let cycleId = input.cycleId;
+    if (parent) {
+      if (teamId === undefined) teamId = parent.teamId;
+      if (priority === undefined) priority = parent.priority;
+      if (projectId === undefined) projectId = parent.projectId;
+      if (cycleId === undefined) cycleId = parent.cycleId;
+    }
+    const resolvedPriority = priority ?? "medium";
+    const resolvedProjectId = projectId ?? null;
+    const resolvedCycleId = cycleId ?? null;
+
     const d1 = createD1(this.env.D1);
     const workspace = await getWorkspaceById(d1, this.organizationId);
-    const team = input.teamId
-      ? await getTeamById(d1, input.teamId, this.organizationId)
+    const team = teamId
+      ? await getTeamById(d1, teamId, this.organizationId)
       : await getDefaultTeam(d1, this.organizationId);
     if (!team) {
       throw new Error(
@@ -274,11 +337,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         title: input.title,
         description: input.description ?? null,
         status,
-        priority,
+        priority: resolvedPriority,
         resolution,
+        parentId: parent?.id ?? null,
+        subIssueSortOrder: input.subIssueSortOrder ?? null,
         assigneeId: input.assigneeId ?? null,
-        projectId: input.projectId ?? null,
-        cycleId: input.cycleId ?? null,
+        projectId: resolvedProjectId,
+        cycleId: resolvedCycleId,
         labelIds: input.labelIds ?? null,
         number,
         identifier,
@@ -324,6 +389,19 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       .get();
   }
 
+  async getIssueChildren(id: string): Promise<Issue[]> {
+    await this.ready;
+    return this.db
+      .select()
+      .from(workspaceIssues)
+      .where(eq(workspaceIssues.parentId, id))
+      .orderBy(
+        asc(workspaceIssues.subIssueSortOrder),
+        desc(workspaceIssues.createdAt)
+      )
+      .all();
+  }
+
   async getIssueByBranch(
     repo: string,
     branch: string
@@ -362,6 +440,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     }
     if (args.priority) {
       conditions.push(eq(workspaceIssues.priority, args.priority));
+    }
+    if (args.parentId !== undefined) {
+      if (args.parentId === null) {
+        conditions.push(isNull(workspaceIssues.parentId));
+      } else {
+        conditions.push(eq(workspaceIssues.parentId, args.parentId));
+      }
     }
     if (args.assigneeId) {
       conditions.push(eq(workspaceIssues.assigneeId, args.assigneeId));
@@ -454,6 +539,8 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       { key: "status", field: "status" },
       { key: "priority", field: "priority" },
       { key: "resolution", field: "resolution" },
+      { key: "parentId", field: "parent_id" },
+      { key: "subIssueSortOrder", field: "sub_issue_sort_order" },
       { key: "assigneeId", field: "assignee_id" },
       { key: "projectId", field: "project_id" },
       { key: "cycleId", field: "cycle_id" },
@@ -461,6 +548,32 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       { key: "repo", field: "repo" },
       { key: "branch", field: "branch" },
     ];
+
+    let newParentId: string | null | undefined = undefined;
+    if (patch.parentId !== undefined) {
+      if (patch.parentId === null) {
+        newParentId = null;
+      } else {
+        const parent = await this.getIssue(patch.parentId);
+        if (!parent) {
+          throw VortexError.fromCode("BAD_REQUEST", "Parent issue not found");
+        }
+        if (
+          await wouldCreateCycle(
+            (parentIssueId) => this.getIssue(parentIssueId),
+            id,
+            patch.parentId,
+            new Set<string>()
+          )
+        ) {
+          throw VortexError.fromCode(
+            "BAD_REQUEST",
+            "Parent would create a cycle"
+          );
+        }
+        newParentId = patch.parentId;
+      }
+    }
 
     if (patch.teamId !== undefined && patch.teamId !== old.teamId) {
       const d1 = createD1(this.env.D1);
@@ -485,6 +598,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (patch.resolution !== undefined || patch.status !== undefined) {
       set.resolution = resolvedResolution;
     }
+    if (newParentId !== undefined) set.parentId = newParentId;
+    if (patch.subIssueSortOrder !== undefined)
+      set.subIssueSortOrder = patch.subIssueSortOrder;
     if (patch.assigneeId !== undefined) set.assigneeId = patch.assigneeId;
     if (patch.projectId !== undefined) set.projectId = patch.projectId;
     if (patch.cycleId !== undefined) set.cycleId = patch.cycleId;

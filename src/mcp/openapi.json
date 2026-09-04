@@ -59,6 +59,14 @@
               null
             ]
           },
+          "parentId": {
+            "type": "string",
+            "nullable": true
+          },
+          "subIssueSortOrder": {
+            "type": "number",
+            "nullable": true
+          },
           "assigneeId": {
             "type": "string",
             "nullable": true
@@ -115,6 +123,8 @@
           "status",
           "priority",
           "resolution",
+          "parentId",
+          "subIssueSortOrder",
           "assigneeId",
           "projectId",
           "cycleId",
@@ -659,6 +669,14 @@
               "type": "string"
             },
             "required": false,
+            "name": "parentId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
             "name": "assigneeId",
             "in": "query"
           },
@@ -801,6 +819,14 @@
                       "resolved",
                       null
                     ]
+                  },
+                  "parentId": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "subIssueSortOrder": {
+                    "type": "number",
+                    "nullable": true
                   },
                   "assigneeId": {
                     "type": "string"
@@ -951,6 +977,14 @@
                       null
                     ]
                   },
+                  "parentId": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "subIssueSortOrder": {
+                    "type": "number",
+                    "nullable": true
+                  },
                   "assigneeId": {
                     "type": "string"
                   },
@@ -1016,6 +1050,55 @@
           }
         },
         "summary": "Delete issue"
+      }
+    },
+    "/workspaces/{organizationId}/issues/{id}/children": {
+      "get": {
+        "tags": [
+          "issues"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Issue children",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Issue"
+                      }
+                    }
+                  },
+                  "required": [
+                    "issues"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List issue children"
       }
     },
     "/workspaces/{organizationId}/issues/{id}/dispatch": {
@@ -4520,6 +4603,18 @@
             "required": true,
             "name": "issueId",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "outgoing",
+                "incoming"
+              ]
+            },
+            "required": false,
+            "name": "direction",
+            "in": "query"
           }
         ],
         "responses": {
@@ -4531,6 +4626,40 @@
                   "type": "object",
                   "properties": {
                     "relations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "fromIssueId": {
+                            "type": "string"
+                          },
+                          "toIssueId": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "fromIssueId",
+                          "toIssueId",
+                          "type",
+                          "createdAt"
+                        ]
+                      }
+                    },
+                    "inverseRelations": {
                       "type": "array",
                       "items": {
                         "type": "object",
@@ -4610,12 +4739,10 @@
                   "type": {
                     "type": "string",
                     "enum": [
-                      "parent",
-                      "child",
-                      "blocks",
-                      "blocked_by",
                       "related",
-                      "duplicate"
+                      "blocks",
+                      "duplicate",
+                      "similar"
                     ]
                   }
                 },

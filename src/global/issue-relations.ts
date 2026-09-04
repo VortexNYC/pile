@@ -3,14 +3,7 @@ import { and, eq } from "drizzle-orm";
 import type { D1Client } from "./db.js";
 import { issueRelations } from "./schema.js";
 
-const relationTypes = new Set([
-  "parent",
-  "child",
-  "blocks",
-  "blocked_by",
-  "related",
-  "duplicate",
-]);
+const relationTypes = new Set(["related", "blocks", "duplicate", "similar"]);
 
 export function isValidRelationType(type: string): boolean {
   return relationTypes.has(type);
@@ -28,6 +21,23 @@ export function listIssueRelations(
       and(
         eq(issueRelations.organizationId, organizationId),
         eq(issueRelations.fromIssueId, fromIssueId)
+      )
+    )
+    .all();
+}
+
+export function listInverseIssueRelations(
+  db: D1Client,
+  organizationId: string,
+  toIssueId: string
+) {
+  return db
+    .select()
+    .from(issueRelations)
+    .where(
+      and(
+        eq(issueRelations.organizationId, organizationId),
+        eq(issueRelations.toIssueId, toIssueId)
       )
     )
     .all();

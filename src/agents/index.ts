@@ -54,6 +54,8 @@ export async function dispatchAgent(
     status: "backlog",
     priority: "medium",
     resolution: null,
+    parentId: null,
+    subIssueSortOrder: null,
     assigneeId: null,
     projectId: null,
     cycleId: null,

@@ -76,17 +76,25 @@ CREATE UNIQUE INDEX idx_issues_team_number ON issues (organization_id, team_id, 
 
 const v3 = `ALTER TABLE issues ADD COLUMN resolution TEXT`;
 
+const v4 = `ALTER TABLE issues ADD COLUMN parent_id TEXT`;
+
+const v5 = `ALTER TABLE issues ADD COLUMN sub_issue_sort_order REAL`;
+
 export const workspaceMigrations = {
   journal: {
     entries: [
       { idx: 0, when: 0, tag: "v1", breakpoints: false },
       { idx: 1, when: 1, tag: "v2", breakpoints: true },
       { idx: 2, when: 2, tag: "v3", breakpoints: false },
+      { idx: 3, when: 3, tag: "v4", breakpoints: false },
+      { idx: 4, when: 4, tag: "v5", breakpoints: false },
     ],
   },
   migrations: {
     m0000: v1,
     m0001: v2,
     m0002: v3,
+    m0003: v4,
+    m0004: v5,
   },
 } satisfies Parameters<typeof migrate>[1];

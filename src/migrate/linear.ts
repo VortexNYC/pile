@@ -2,7 +2,6 @@ import { createAttachment, setAttachmentR2Key } from "../global/attachments.js";
 import { createComment } from "../global/comments.js";
 import { createD1 } from "../global/db.js";
 import { createIssueHistory } from "../global/issue-history.js";
-import { createIssueRelation } from "../global/issue-relations.js";
 import { createIssueSubscriber } from "../global/issue-subscribers.js";
 import { createLinearUser } from "../global/linear-users.js";
 import { createTemplate } from "../global/templates.js";
@@ -584,12 +583,13 @@ export async function migrateLinear(
 
   let issueCount = 0;
   let commentCount = 0;
-  let relationCount = 0;
+  let parentLinkCount = 0;
   let attachmentCount = 0;
   let historyCount = 0;
   let subscriberCount = 0;
   let cursor: string | undefined;
   let hasNextPage = true;
+  const parentLinks = new Map<string, string>();
 
   while (hasNextPage) {
     const page = await client.getIssuesPage(teamId, cursor);
@@ -629,17 +629,8 @@ export async function migrateLinear(
         commentCount++;
       }
 
-      const relationPairs: Array<[string, string]> = [];
-      if (li.parent?.id) relationPairs.push([li.parent.id, "parent"]);
-      for (const c of li.children.nodes) relationPairs.push([c.id, "child"]);
-
-      for (const [toIssueId, type] of relationPairs) {
-        await createIssueRelation(db, organizationId, {
-          fromIssueId: li.id,
-          toIssueId,
-          type,
-        });
-        relationCount++;
+      if (li.parent?.id) {
+        parentLinks.set(li.id, li.parent.id);
       }
 
       for (const la of li.attachments.nodes) {
@@ -747,6 +738,19 @@ export async function migrateLinear(
     cursor = page.pageInfo.endCursor;
   }
 
+  for (const [childId, parentId] of parentLinks) {
+    const parent = await stub.getIssue(parentId);
+    const child = await stub.getIssue(childId);
+    if (parent && child) {
+      try {
+        await stub.updateIssue(childId, { parentId });
+        parentLinkCount++;
+      } catch {
+        // Parent may create a cycle or be in a different team; skip.
+      }
+    }
+  }
+
   return {
     issues: issueCount,
     labels: labels.length,
@@ -755,7 +759,7 @@ export async function migrateLinear(
     cycles: cycles.length,
     users: linearUsers.length,
     comments: commentCount,
-    relations: relationCount,
+    relations: parentLinkCount,
     attachments: attachmentCount,
     history: historyCount,
     subscribers: subscriberCount,
