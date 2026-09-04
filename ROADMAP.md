@@ -18,6 +18,7 @@ This is the durable tracker for the open-source Linear alternative. Operational 
 - Issues CRUD, history, subscribers, relations, comments, attachments
 - States, labels, projects, cycles, templates
 - Workspace tokens and membership model
+- Better Auth ownership of workspaces, members, invitations, and teams: workspaces are Better Auth organizations; human/agent users are Better Auth `user` rows; members and team members live in Better Auth tables; API keys are credentials linked to those users
 - MCP server
 - Real-time DO events
 - Linear user migration

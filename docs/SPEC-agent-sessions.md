@@ -4,7 +4,7 @@
 
 Make agents first-class actors in Vortex by tracking every agent run as a session with a stream of activities. A session is created when an agent is dispatched to an issue; activities capture thoughts, responses, errors, elicitations, and actions. The API lets users and other agents inspect progress, resume context, and audit agent work.
 
-This is not a new auth system. It is the session/activity surface on top of Vortex's existing `WorkspaceIdentity` auth, which today comes from `workspaceTokens` for agents and Better Auth for humans. The `actorId`/`actorType` fields are auth-agnostic and will carry Better Auth `api-key` or `agent-auth` identities when those are adopted.
+This is not a new auth system. It is the session/activity surface on top of Vortex's existing `WorkspaceIdentity` auth. Human and agent actors are both Better Auth `user` rows; agent users are marked with `metadata.type: "agent"`. Workspace access is verified through Better Auth `member` records, and API keys are Better Auth credentials linked to those users. The `actorId`/`actorType` fields map to `WorkspaceIdentity.id` (the underlying `user.id`) and `WorkspaceIdentity.type` (from `user.metadata` or API key metadata).
 
 ## Data Model
 
