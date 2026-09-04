@@ -1,6 +1,7 @@
 import { apiKey } from "@better-auth/api-key";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { betterAuth } from "better-auth/minimal";
+import { organization } from "better-auth/plugins";
 
 import { createD1 } from "../global/db.js";
 import * as schema from "../global/schema.js";
@@ -20,6 +21,21 @@ export function createAuth(env: AppEnv) {
         permissions: {
           defaultPermissions: {
             vortex: ["read"],
+          },
+        },
+      }),
+      organization({
+        teams: { enabled: true },
+        schema: {
+          organization: {
+            additionalFields: {
+              metadata: { type: "string", required: false },
+            },
+          },
+          team: {
+            additionalFields: {
+              metadata: { type: "string", required: false },
+            },
           },
         },
       }),

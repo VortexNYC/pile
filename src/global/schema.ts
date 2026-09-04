@@ -535,6 +535,8 @@ export const session = sqliteTable(
       .$onUpdate(() => new Date()),
     ipAddress: text("ip_address" as string),
     userAgent: text("user_agent" as string),
+    activeOrganizationId: text("active_organization_id" as string),
+    activeTeamId: text("active_team_id" as string),
     userId: text("user_id" as string)
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
@@ -594,6 +596,132 @@ export const verification = sqliteTable("verification" as string, {
     .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
     .$onUpdate(() => new Date()),
 });
+
+export const organization = sqliteTable(
+  "organization" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    name: text("name" as string).notNull(),
+    slug: text("slug" as string)
+      .notNull()
+      .unique(),
+    logo: text("logo" as string),
+    metadata: text("metadata" as string),
+    createdAt: integer("created_at" as string, { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`),
+    updatedAt: integer("updated_at" as string, { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [index("organization_slug_idx" as string).on(table.slug)]
+);
+
+export const member = sqliteTable(
+  "member" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: text("user_id" as string)
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    role: text("role" as string)
+      .notNull()
+      .default("member"),
+    createdAt: integer("created_at" as string, { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`),
+  },
+  (table) => [
+    index("member_organizationId_idx" as string).on(table.organizationId),
+    index("member_userId_idx" as string).on(table.userId),
+    index("member_org_user_idx" as string).on(
+      table.organizationId,
+      table.userId
+    ),
+  ]
+);
+
+export const team = sqliteTable(
+  "team" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    name: text("name" as string).notNull(),
+    memberCount: integer("member_count" as string, { mode: "number" })
+      .notNull()
+      .default(0),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    metadata: text("metadata" as string),
+    createdAt: integer("created_at" as string, { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`),
+    updatedAt: integer("updated_at" as string, { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    index("team_organizationId_idx" as string).on(table.organizationId),
+    index("team_org_name_idx" as string).on(table.organizationId, table.name),
+  ]
+);
+
+export const teamMember = sqliteTable(
+  "team_member" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    teamId: text("team_id" as string)
+      .notNull()
+      .references(() => team.id, { onDelete: "cascade" }),
+    userId: text("user_id" as string)
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    membershipKey: text("membership_key" as string).unique(),
+    createdAt: integer("created_at" as string, { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`),
+  },
+  (table) => [
+    index("teamMember_teamId_idx" as string).on(table.teamId),
+    index("teamMember_userId_idx" as string).on(table.userId),
+    index("teamMember_team_user_idx" as string).on(table.teamId, table.userId),
+  ]
+);
+
+export const invitation = sqliteTable(
+  "invitation" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    email: text("email" as string).notNull(),
+    role: text("role" as string).notNull(),
+    status: text("status" as string)
+      .notNull()
+      .default("pending"),
+    teamId: text("team_id" as string).references(() => team.id, {
+      onDelete: "cascade",
+    }),
+    expiresAt: integer("expires_at" as string, {
+      mode: "timestamp_ms",
+    }).notNull(),
+    inviterId: text("inviter_id" as string)
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    createdAt: integer("created_at" as string, { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`),
+  },
+  (table) => [
+    index("invitation_organizationId_idx" as string).on(table.organizationId),
+  ]
+);
 
 export const apikey = sqliteTable(
   "apikey" as string,

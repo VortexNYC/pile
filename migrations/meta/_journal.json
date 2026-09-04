@@ -204,6 +204,13 @@
       "when": 1788485792818,
       "tag": "0028_lying_next_avengers",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "6",
+      "when": 1788489266077,
+      "tag": "0029_talented_whiplash",
+      "breakpoints": true
     }
   ]
 }
