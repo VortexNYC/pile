@@ -36,7 +36,8 @@ This is the durable tracker for the open-source Linear alternative. Operational 
 
 ## Next
 
-- Jira import (#25).
+- Outbound webhooks + notification delivery.
+- Issue search and indexing.
 - Initiatives and roadmaps (#26).
 
 ## Later

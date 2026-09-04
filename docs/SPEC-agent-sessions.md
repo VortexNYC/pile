@@ -8,11 +8,11 @@ This is not a new auth system. It is the session/activity surface on top of Vort
 
 ## Data Model
 
-D1 tables (workspace-scoped metadata):
+D1 tables (organization-scoped metadata):
 
 - `agent_sessions`
   - `id` text PK
-  - `workspaceId` text FK workspaces.id
+  - `organizationId` text FK organization.id
   - `issueId` text FK issue.id (logical; issues live in the Workspace DO)
   - `agentId` text — provider id, e.g. `"devin"`, `"mock"`
   - `provider` text — same as `agentId` for now; future may split provider from agent persona
@@ -33,27 +33,27 @@ D1 tables (workspace-scoped metadata):
 
 Indexes:
 
-- `agent_sessions_workspace_id_idx` on `agent_sessions(workspaceId, createdAt DESC, id)`
-- `agent_sessions_issue_id_idx` on `agent_sessions(issueId)`
-- `agent_activities_session_id_idx` on `agent_activities(sessionId, createdAt)`
+- `agent_sessions_organization_idx` on `agent_sessions(organizationId, createdAt DESC, id)`
+- `agent_sessions_issue_idx` on `agent_sessions(issueId)`
+- `agent_activities_session_idx` on `agent_activities(sessionId, createdAt)`
 
 ## API Surface
 
-All routes live under `/workspaces/{workspaceId}` and reuse `workspaceAuthMiddleware` (`rls("read")` / `rls("write")`).
+All routes live under `/workspaces/{organizationId}` and reuse `workspaceAuthMiddleware` (`rls("read")` / `rls("write")`).
 
-- `GET /workspaces/{workspaceId}/agent/sessions`
+- `GET /workspaces/{organizationId}/agent/sessions`
   - List sessions for a workspace, optionally `?issueId=` filtered.
   - Sorted `createdAt DESC, id`.
-- `GET /workspaces/{workspaceId}/agent/sessions/{sessionId}`
+- `GET /workspaces/{organizationId}/agent/sessions/{sessionId}`
   - Get session with `activities` included.
-- `POST /workspaces/{workspaceId}/agent/sessions/{sessionId}/activities`
+- `POST /workspaces/{organizationId}/agent/sessions/{sessionId}/activities`
   - Append an activity. Body: `{ type, message, payload? }`.
   - Used by agents or provider webhooks to stream progress.
-- `POST /workspaces/{workspaceId}/agent/sessions/{sessionId}/poll`
+- `POST /workspaces/{organizationId}/agent/sessions/{sessionId}/poll`
   - Poll the provider for the latest session state and update the record.
-- `PATCH /workspaces/{workspaceId}/agent/sessions/{sessionId}`
+- `PATCH /workspaces/{organizationId}/agent/sessions/{sessionId}`
   - Update `status`, `result`, `url` (e.g. by provider webhooks or admin).
-- `POST /workspaces/{workspaceId}/issues/{issueId}/dispatch`
+- `POST /workspaces/{organizationId}/issues/{issueId}/dispatch`
   - Existing dispatch route; updated to create an `agent_sessions` row and a `created` activity before returning.
 
 Authorization:
@@ -81,13 +81,13 @@ Authorization:
 
 ## Success Criteria
 
-- [ ] `POST /workspaces/{workspaceId}/issues/{issueId}/dispatch` creates an `agent_sessions` row and returns the session id.
-- [ ] `GET /workspaces/{workspaceId}/agent/sessions` returns sessions for the workspace.
-- [ ] `GET /workspaces/{workspaceId}/agent/sessions/{sessionId}` returns the session with `activities`.
+- [ ] `POST /workspaces/{organizationId}/issues/{issueId}/dispatch` creates an `agent_sessions` row and returns the session id.
+- [ ] `GET /workspaces/{organizationId}/agent/sessions` returns sessions for the workspace.
+- [ ] `GET /workspaces/{organizationId}/agent/sessions/{sessionId}` returns the session with `activities`.
 - [ ] `POST .../activities` appends a validated activity.
 - [ ] `PATCH` and `poll` update session state.
 - [ ] `pnpm run check` passes.
 
 ## Better Auth alignment
 
-Current auth resolves to `WorkspaceIdentity { id, workspaceId, type, permissions }`. The `actorId`/`actorType` columns in `agent_sessions` map directly to that identity. When Vortex migrates agent auth to Better Auth (`@better-auth/api-key` for workspace-scoped keys or `@better-auth/agent-auth` for the Agent Auth Protocol), the session/activity surface does not change: the middleware resolves a `WorkspaceIdentity` and the session records `actorId`/`actorType`.
+Current auth resolves to `WorkspaceIdentity { id, organizationId, type, permissions }`. The `actorId`/`actorType` columns in `agent_sessions` map directly to that identity. When Vortex migrates agent auth to Better Auth (`@better-auth/api-key` for workspace-scoped keys or `@better-auth/agent-auth` for the Agent Auth Protocol), the session/activity surface does not change: the middleware resolves a `WorkspaceIdentity` and the session records `actorId`/`actorType`.

@@ -18,7 +18,7 @@ This is the durable gap map for replacing Linear operationally. It is based on L
 Vortex covers the core issue-tracking surface (issues, comments, labels, states, projects, cycles, attachments, history, subscribers, relations) plus a working GitHub integration, Linear migration, and Better Auth session support. The biggest gaps versus Linear are:
 
 1. **Search & filtering** — Linear has rich search, issue filters, custom views, and semantic search. Vortex has only basic `status`/`priority`/`assignee`/`project`/`cycle`/`label` list filters and a `search` text parameter on issues.
-2. **Teams** — Linear is multi-team inside an organization. Vortex has workspaces only.
+2. **Teams** — Linear is multi-team inside an organization. Vortex has workspaces (Better Auth organizations) and teams, with per-team issue scoping and visibility.
 3. **Notifications & outbound webhooks** — Linear has user notifications, delivery preferences, and outgoing webhooks. Vortex has inbound GitHub webhooks only.
 4. **Advanced project/cycle objects** — Linear has initiatives, roadmaps, milestones, project updates, and release pipelines. Vortex has projects and cycles.
 5. **Agent/AI surfaces** — Linear has agent sessions, activities, skills, and AI conversations. Vortex has agent sessions and activities; skills/conversations are not yet modeled.
@@ -33,62 +33,62 @@ GET    /workspaces
 POST   /workspaces
 GET    /workspaces/{id}
 GET    /workspaces/slug/{slug}
-GET    /workspaces/{workspaceId}/issues
-POST   /workspaces/{workspaceId}/issues
-GET    /workspaces/{workspaceId}/issues/{id}
-PATCH  /workspaces/{workspaceId}/issues/{id}
-DELETE /workspaces/{workspaceId}/issues/{id}
-POST   /workspaces/{workspaceId}/issues/{id}/dispatch
-GET    /workspaces/{workspaceId}/issues/{issueId}/attachments
-GET    /workspaces/{workspaceId}/issues/{issueId}/comments
-POST   /workspaces/{workspaceId}/issues/{issueId}/comments
-GET    /workspaces/{workspaceId}/issues/{issueId}/comments/{id}
-PATCH  /workspaces/{workspaceId}/issues/{issueId}/comments/{id}
-DELETE /workspaces/{workspaceId}/issues/{issueId}/comments/{id}
-GET    /workspaces/{workspaceId}/issues/{issueId}/history
-GET    /workspaces/{workspaceId}/issues/{issueId}/relations
-POST   /workspaces/{workspaceId}/issues/{issueId}/relations
-DELETE /workspaces/{workspaceId}/issues/{issueId}/relations/{id}
-GET    /workspaces/{workspaceId}/issues/{issueId}/subscribers
-POST   /workspaces/{workspaceId}/issues/{issueId}/subscribers
-DELETE /workspaces/{workspaceId}/issues/{issueId}/subscribers/{id}
-GET    /workspaces/{workspaceId}/cycles
-POST   /workspaces/{workspaceId}/cycles
-GET    /workspaces/{workspaceId}/cycles/{id}
-PATCH  /workspaces/{workspaceId}/cycles/{id}
-DELETE /workspaces/{workspaceId}/cycles/{id}
-POST   /workspaces/{workspaceId}/github/install
-POST   /workspaces/{workspaceId}/github/users
-POST   /workspaces/{workspaceId}/labels
-GET    /workspaces/{workspaceId}/labels
-GET    /workspaces/{workspaceId}/labels/{id}
-PATCH  /workspaces/{workspaceId}/labels/{id}
-DELETE /workspaces/{workspaceId}/labels/{id}
-POST   /workspaces/{workspaceId}/linear-users
-GET    /workspaces/{workspaceId}/linear-users
-GET    /workspaces/{workspaceId}/linear-users/{linearId}
-POST   /workspaces/{workspaceId}/memberships
-GET    /workspaces/{workspaceId}/memberships
-POST   /workspaces/{workspaceId}/migrate/linear
-POST   /workspaces/{workspaceId}/projects
-GET    /workspaces/{workspaceId}/projects
-GET    /workspaces/{workspaceId}/projects/{id}
-PATCH  /workspaces/{workspaceId}/projects/{id}
-DELETE /workspaces/{workspaceId}/projects/{id}
-POST   /workspaces/{workspaceId}/states
-GET    /workspaces/{workspaceId}/states
-GET    /workspaces/{workspaceId}/states/{id}
-PATCH  /workspaces/{workspaceId}/states/{id}
-DELETE /workspaces/{workspaceId}/states/{id}
-POST   /workspaces/{workspaceId}/templates
-GET    /workspaces/{workspaceId}/templates
-GET    /workspaces/{workspaceId}/templates/{id}
-PATCH  /workspaces/{workspaceId}/templates/{id}
-DELETE /workspaces/{workspaceId}/templates/{id}
-POST   /workspaces/{workspaceId}/tokens
-GET    /workspaces/{workspaceId}/tokens
-DELETE /workspaces/{workspaceId}/tokens/{id}
-GET    /workspaces/{workspaceId}/ws
+GET    /workspaces/{organizationId}/issues
+POST   /workspaces/{organizationId}/issues
+GET    /workspaces/{organizationId}/issues/{id}
+PATCH  /workspaces/{organizationId}/issues/{id}
+DELETE /workspaces/{organizationId}/issues/{id}
+POST   /workspaces/{organizationId}/issues/{id}/dispatch
+GET    /workspaces/{organizationId}/issues/{issueId}/attachments
+GET    /workspaces/{organizationId}/issues/{issueId}/comments
+POST   /workspaces/{organizationId}/issues/{issueId}/comments
+GET    /workspaces/{organizationId}/issues/{issueId}/comments/{id}
+PATCH  /workspaces/{organizationId}/issues/{issueId}/comments/{id}
+DELETE /workspaces/{organizationId}/issues/{issueId}/comments/{id}
+GET    /workspaces/{organizationId}/issues/{issueId}/history
+GET    /workspaces/{organizationId}/issues/{issueId}/relations
+POST   /workspaces/{organizationId}/issues/{issueId}/relations
+DELETE /workspaces/{organizationId}/issues/{issueId}/relations/{id}
+GET    /workspaces/{organizationId}/issues/{issueId}/subscribers
+POST   /workspaces/{organizationId}/issues/{issueId}/subscribers
+DELETE /workspaces/{organizationId}/issues/{issueId}/subscribers/{id}
+GET    /workspaces/{organizationId}/cycles
+POST   /workspaces/{organizationId}/cycles
+GET    /workspaces/{organizationId}/cycles/{id}
+PATCH  /workspaces/{organizationId}/cycles/{id}
+DELETE /workspaces/{organizationId}/cycles/{id}
+POST   /workspaces/{organizationId}/github/install
+POST   /workspaces/{organizationId}/github/users
+POST   /workspaces/{organizationId}/labels
+GET    /workspaces/{organizationId}/labels
+GET    /workspaces/{organizationId}/labels/{id}
+PATCH  /workspaces/{organizationId}/labels/{id}
+DELETE /workspaces/{organizationId}/labels/{id}
+POST   /workspaces/{organizationId}/linear-users
+GET    /workspaces/{organizationId}/linear-users
+GET    /workspaces/{organizationId}/linear-users/{linearId}
+POST   /workspaces/{organizationId}/memberships
+GET    /workspaces/{organizationId}/memberships
+POST   /workspaces/{organizationId}/migrate/linear
+POST   /workspaces/{organizationId}/projects
+GET    /workspaces/{organizationId}/projects
+GET    /workspaces/{organizationId}/projects/{id}
+PATCH  /workspaces/{organizationId}/projects/{id}
+DELETE /workspaces/{organizationId}/projects/{id}
+POST   /workspaces/{organizationId}/states
+GET    /workspaces/{organizationId}/states
+GET    /workspaces/{organizationId}/states/{id}
+PATCH  /workspaces/{organizationId}/states/{id}
+DELETE /workspaces/{organizationId}/states/{id}
+POST   /workspaces/{organizationId}/templates
+GET    /workspaces/{organizationId}/templates
+GET    /workspaces/{organizationId}/templates/{id}
+PATCH  /workspaces/{organizationId}/templates/{id}
+DELETE /workspaces/{organizationId}/templates/{id}
+POST   /workspaces/{organizationId}/tokens
+GET    /workspaces/{organizationId}/tokens
+DELETE /workspaces/{organizationId}/tokens/{id}
+GET    /workspaces/{organizationId}/ws
 ```
 
 Plus `/openapi.json`, `/mcp`, `/api/auth/*`, `/github` webhooks, and health.
@@ -136,20 +136,18 @@ Vortex currently exposes roughly **50 HTTP routes**. Linear's public GraphQL sur
 
 1. **Search and custom views** — agents and users cannot find issues beyond simple list filters.
 2. **Notifications / outbound webhooks** — Vortex cannot notify external systems when issues change, which breaks many integrations.
-3. **Teams** — a single workspace cannot represent an org with multiple teams.
-4. **Initiatives / roadmaps / milestones** — roadmap planning is missing.
-5. **Jira/Slack/Zendesk/GitLab integrations** — only GitHub is wired.
-6. **Published docs / SDK / CLI** — the API is OpenAPI-first but lacks a docs site and a full CLI.
+3. **Initiatives / roadmaps / milestones** — roadmap planning is missing.
+4. **Slack/Zendesk/GitLab/Intercom integrations** — only GitHub is wired.
+5. **Published docs / SDK / CLI** — the API is OpenAPI-first but lacks a docs site and a full CLI.
 
 ## Recommended next slices
 
 Based on the gap map and the current backend-first priority, the next high-leverage slices are:
 
-1. **Outbound webhooks + notification delivery** (#21 area / notifications) — unblocks integrations and dogfooding.
+1. **Outbound webhooks + notification delivery** — unblocks integrations and dogfooding.
 2. **Issue search and indexing** — full-text + filter DSL.
-3. **Teams within a workspace** — org-wide multi-team model.
-4. **Jira import** — import from the most common alternative.
-5. **Initiatives / roadmaps** — project planning surface.
+3. **Initiatives / roadmaps** — project planning surface.
+4. **Slack / Zendesk / GitLab / Intercom integrations** — expand beyond GitHub.
 
 ## How to update this document
 
