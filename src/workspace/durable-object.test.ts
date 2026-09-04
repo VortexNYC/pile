@@ -3,12 +3,7 @@ import { eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { createD1 } from "../global/db.js";
-import {
-  member,
-  organization,
-  user as userTable,
-  workspaces,
-} from "../global/schema.js";
+import { member, organization, user as userTable } from "../global/schema.js";
 import { createDefaultTeam } from "../global/teams.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { WorkspaceDO } from "./durable-object.js";
@@ -23,8 +18,8 @@ async function ensureWorkspace() {
   const db = createD1(env.D1);
   const existing = await db
     .select()
-    .from(workspaces)
-    .where(eq(workspaces.id, WORKSPACE_ID))
+    .from(organization)
+    .where(eq(organization.id, WORKSPACE_ID))
     .get();
   if (existing) return;
 
@@ -47,15 +42,6 @@ async function ensureWorkspace() {
     metadata: JSON.stringify({ key: "TEST" }),
     createdAt: now,
     updatedAt: now,
-  });
-  await db.insert(workspaces).values({
-    id: WORKSPACE_ID,
-    name: "Test workspace",
-    slug: "test-workspace",
-    key: "TEST",
-    ownerId: "user-1",
-    createdAt: now.toISOString(),
-    updatedAt: now.toISOString(),
   });
   await db.insert(member).values({
     id: crypto.randomUUID(),

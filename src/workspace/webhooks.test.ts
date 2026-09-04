@@ -9,7 +9,6 @@ import {
   outboundWebhookDeliveries,
   user as userTable,
   webhookSubscriptions,
-  workspaces,
 } from "../global/schema.js";
 import { createDefaultTeam } from "../global/teams.js";
 import { createWebhookSubscription } from "../global/webhook-subscriptions.js";
@@ -27,8 +26,8 @@ async function ensureWorkspace() {
   const db = createD1(env.D1);
   const existing = await db
     .select()
-    .from(workspaces)
-    .where(eq(workspaces.id, WORKSPACE_ID))
+    .from(organization)
+    .where(eq(organization.id, WORKSPACE_ID))
     .get();
   if (existing) return;
 
@@ -51,15 +50,6 @@ async function ensureWorkspace() {
     metadata: JSON.stringify({ key: "WEB" }),
     createdAt: now,
     updatedAt: now,
-  });
-  await db.insert(workspaces).values({
-    id: WORKSPACE_ID,
-    name: "Webhook test workspace",
-    slug: "webhook-test-workspace",
-    key: "WEB",
-    ownerId: "user-1",
-    createdAt: now.toISOString(),
-    updatedAt: now.toISOString(),
   });
   await db.insert(member).values({
     id: crypto.randomUUID(),

@@ -7,11 +7,7 @@ import {
   createNotification,
   getNotificationsForRecipient,
 } from "../global/notifications.js";
-import {
-  member as memberTable,
-  user as userTable,
-  workspaceMemberships,
-} from "../global/schema.js";
+import { member as memberTable, user as userTable } from "../global/schema.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
@@ -504,7 +500,6 @@ describe("API integration", () => {
     const token = tokenRecord.token;
 
     const userId = crypto.randomUUID();
-    const ts = new Date().toISOString();
     const now = new Date();
     await db.insert(userTable).values({
       id: userId,
@@ -514,13 +509,6 @@ describe("API integration", () => {
       image: null,
       createdAt: now,
       updatedAt: now,
-    });
-    await db.insert(workspaceMemberships).values({
-      id: crypto.randomUUID(),
-      workspaceId,
-      userId,
-      role: "member",
-      createdAt: ts,
     });
     await db.insert(memberTable).values({
       id: crypto.randomUUID(),

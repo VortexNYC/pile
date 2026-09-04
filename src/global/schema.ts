@@ -7,46 +7,13 @@ import {
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
-export const workspaces = sqliteTable("workspaces" as string, {
-  id: text("id" as string).primaryKey(),
-  name: text("name" as string).notNull(),
-  slug: text("slug" as string)
-    .notNull()
-    .unique(),
-  key: text("key" as string).unique(),
-  ownerId: text("owner_id" as string).notNull(),
-  createdAt: text("created_at" as string)
-    .notNull()
-    .default(sql`CURRENT_TIMESTAMP`),
-  updatedAt: text("updated_at" as string)
-    .notNull()
-    .default(sql`CURRENT_TIMESTAMP`),
-});
-
-export const workspaceMemberships = sqliteTable(
-  "workspace_memberships" as string,
-  {
-    id: text("id" as string).primaryKey(),
-    workspaceId: text("workspace_id" as string)
-      .notNull()
-      .references(() => workspaces.id),
-    userId: text("user_id" as string).notNull(),
-    role: text("role" as string, {
-      enum: ["owner", "admin", "member"],
-    }).notNull(),
-    createdAt: text("created_at" as string)
-      .notNull()
-      .default(sql`CURRENT_TIMESTAMP`),
-  }
-);
-
 export const repoBranches = sqliteTable(
   "repo_branches" as string,
   {
     id: text("id" as string).primaryKey(),
     workspaceId: text("workspace_id" as string)
       .notNull()
-      .references(() => workspaces.id),
+      .references(() => organization.id),
     repo: text("repo" as string).notNull(),
     branch: text("branch" as string).notNull(),
     issueId: text("issue_id" as string).notNull(),
@@ -68,7 +35,7 @@ export const repoIssues = sqliteTable(
     id: text("id" as string).primaryKey(),
     workspaceId: text("workspace_id" as string)
       .notNull()
-      .references(() => workspaces.id),
+      .references(() => organization.id),
     repo: text("repo" as string).notNull(),
     issueNumber: integer("issue_number" as string).notNull(),
     issueId: text("issue_id" as string).notNull(),
@@ -91,7 +58,7 @@ export const githubInstallations = sqliteTable(
     id: text("id" as string).primaryKey(),
     workspaceId: text("workspace_id" as string)
       .notNull()
-      .references(() => workspaces.id),
+      .references(() => organization.id),
     installationId: text("installation_id" as string).notNull(),
     repo: text("repo" as string).notNull(),
     createdAt: text("created_at" as string)
@@ -110,7 +77,7 @@ export const projects = sqliteTable(
     id: text("id" as string).primaryKey(),
     workspaceId: text("workspace_id" as string)
       .notNull()
-      .references(() => workspaces.id),
+      .references(() => organization.id),
     name: text("name" as string).notNull(),
     description: text("description" as string),
     status: text("status" as string)
@@ -134,7 +101,7 @@ export const cycles = sqliteTable(
     id: text("id" as string).primaryKey(),
     workspaceId: text("workspace_id" as string)
       .notNull()
-      .references(() => workspaces.id),
+      .references(() => organization.id),
     projectId: text("project_id" as string).references(() => projects.id),
     name: text("name" as string).notNull(),
     startDate: text("start_date" as string),
@@ -158,7 +125,7 @@ export const labels = sqliteTable(
     id: text("id" as string).primaryKey(),
     workspaceId: text("workspace_id" as string)
       .notNull()
-      .references(() => workspaces.id),
+      .references(() => organization.id),
     name: text("name" as string).notNull(),
     color: text("color" as string),
     createdAt: text("created_at" as string)
@@ -174,7 +141,7 @@ export const states = sqliteTable(
     id: text("id" as string).primaryKey(),
     workspaceId: text("workspace_id" as string)
       .notNull()
-      .references(() => workspaces.id),
+      .references(() => organization.id),
     linearId: text("linear_id" as string).notNull(),
     name: text("name" as string).notNull(),
     type: text("type" as string).notNull(),
@@ -196,7 +163,7 @@ export const linearUsers = sqliteTable(
     id: text("id" as string).primaryKey(),
     workspaceId: text("workspace_id" as string)
       .notNull()
-      .references(() => workspaces.id),
+      .references(() => organization.id),
     linearId: text("linear_id" as string).notNull(),
     name: text("name" as string),
     email: text("email" as string),
@@ -220,7 +187,7 @@ export const comments = sqliteTable(
     id: text("id" as string).primaryKey(),
     workspaceId: text("workspace_id" as string)
       .notNull()
-      .references(() => workspaces.id),
+      .references(() => organization.id),
     issueId: text("issue_id" as string).notNull(),
     authorId: text("author_id" as string),
     body: text("body" as string).notNull(),
@@ -254,7 +221,7 @@ export const issueRelations = sqliteTable(
     id: text("id" as string).primaryKey(),
     workspaceId: text("workspace_id" as string)
       .notNull()
-      .references(() => workspaces.id),
+      .references(() => organization.id),
     fromIssueId: text("from_issue_id" as string).notNull(),
     toIssueId: text("to_issue_id" as string).notNull(),
     type: text("type" as string).notNull(),
@@ -280,7 +247,7 @@ export const attachments = sqliteTable(
     id: text("id" as string).primaryKey(),
     workspaceId: text("workspace_id" as string)
       .notNull()
-      .references(() => workspaces.id),
+      .references(() => organization.id),
     issueId: text("issue_id" as string).notNull(),
     linearId: text("linear_id" as string).notNull(),
     url: text("url" as string).notNull(),
@@ -309,7 +276,7 @@ export const issueHistory = sqliteTable(
     id: text("id" as string).primaryKey(),
     workspaceId: text("workspace_id" as string)
       .notNull()
-      .references(() => workspaces.id),
+      .references(() => organization.id),
     issueId: text("issue_id" as string).notNull(),
     linearId: text("linear_id" as string),
     field: text("field" as string).notNull(),
@@ -338,7 +305,7 @@ export const issueSubscribers = sqliteTable(
     id: text("id" as string).primaryKey(),
     workspaceId: text("workspace_id" as string)
       .notNull()
-      .references(() => workspaces.id),
+      .references(() => organization.id),
     issueId: text("issue_id" as string).notNull(),
     linearUserId: text("linear_user_id" as string).notNull(),
     createdAt: text("created_at" as string)
@@ -363,7 +330,7 @@ export const templates = sqliteTable(
     id: text("id" as string).primaryKey(),
     workspaceId: text("workspace_id" as string)
       .notNull()
-      .references(() => workspaces.id),
+      .references(() => organization.id),
     linearId: text("linear_id" as string).notNull(),
     name: text("name" as string).notNull(),
     templateData: text("template_data" as string),
@@ -386,7 +353,7 @@ export const webhookSubscriptions = sqliteTable(
     id: text("id" as string).primaryKey(),
     workspaceId: text("workspace_id" as string)
       .notNull()
-      .references(() => workspaces.id),
+      .references(() => organization.id),
     url: text("url" as string).notNull(),
     events: text("events" as string)
       .notNull()
@@ -411,7 +378,9 @@ export const webhookDeliveries = sqliteTable(
     deliveryId: text("delivery_id" as string).primaryKey(),
     source: text("source" as string).notNull(),
     event: text("event" as string).notNull(),
-    workspaceId: text("workspace_id" as string).references(() => workspaces.id),
+    workspaceId: text("workspace_id" as string).references(
+      () => organization.id
+    ),
     processedAt: text("processed_at" as string)
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
@@ -427,7 +396,7 @@ export const outboundWebhookDeliveries = sqliteTable(
     id: text("id" as string).primaryKey(),
     workspaceId: text("workspace_id" as string)
       .notNull()
-      .references(() => workspaces.id),
+      .references(() => organization.id),
     subscriptionId: text("subscription_id" as string)
       .notNull()
       .references(() => webhookSubscriptions.id),
@@ -465,7 +434,7 @@ export const notifications = sqliteTable(
     id: text("id" as string).primaryKey(),
     workspaceId: text("workspace_id" as string)
       .notNull()
-      .references(() => workspaces.id),
+      .references(() => organization.id),
     recipientId: text("recipient_id" as string).notNull(),
     recipientType: text("recipient_type" as string)
       .notNull()
@@ -795,7 +764,7 @@ export const githubUsers = sqliteTable(
     id: text("id" as string).primaryKey(),
     workspaceId: text("workspace_id" as string)
       .notNull()
-      .references(() => workspaces.id),
+      .references(() => organization.id),
     userId: text("user_id" as string)
       .notNull()
       .references(() => user.id),
@@ -822,7 +791,7 @@ export const savedViews = sqliteTable(
     id: text("id" as string).primaryKey(),
     workspaceId: text("workspace_id" as string)
       .notNull()
-      .references(() => workspaces.id),
+      .references(() => organization.id),
     ownerId: text("owner_id" as string).notNull(),
     name: text("name" as string).notNull(),
     filter: text("filter" as string).notNull(),
@@ -845,76 +814,13 @@ export const savedViews = sqliteTable(
   ]
 );
 
-export const teams = sqliteTable(
-  "teams" as string,
-  {
-    id: text("id" as string).primaryKey(),
-    workspaceId: text("workspace_id" as string)
-      .notNull()
-      .references(() => workspaces.id),
-    key: text("key" as string).notNull(),
-    name: text("name" as string).notNull(),
-    ownerId: text("owner_id" as string).notNull(),
-    isDefault: integer("is_default" as string, { mode: "boolean" })
-      .notNull()
-      .default(false),
-    isPublic: integer("is_public" as string, { mode: "boolean" })
-      .notNull()
-      .default(false),
-    createdAt: text("created_at" as string)
-      .notNull()
-      .default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at" as string)
-      .notNull()
-      .default(sql`CURRENT_TIMESTAMP`),
-  },
-  (table) => [
-    index("teams_workspace_idx" as string).on(table.workspaceId),
-    uniqueIndex("teams_workspace_key_idx" as string).on(
-      table.workspaceId,
-      table.key
-    ),
-  ]
-);
-
-export const teamMemberships = sqliteTable(
-  "team_memberships" as string,
-  {
-    id: text("id" as string).primaryKey(),
-    workspaceId: text("workspace_id" as string)
-      .notNull()
-      .references(() => workspaces.id),
-    teamId: text("team_id" as string)
-      .notNull()
-      .references(() => teams.id),
-    memberId: text("member_id" as string).notNull(),
-    memberType: text("member_type" as string, {
-      enum: ["user", "agent"],
-    }).notNull(),
-    role: text("role" as string, { enum: ["member", "guest"] })
-      .notNull()
-      .default("member"),
-    createdAt: text("created_at" as string)
-      .notNull()
-      .default(sql`CURRENT_TIMESTAMP`),
-  },
-  (table) => [
-    index("team_memberships_workspace_idx" as string).on(table.workspaceId),
-    uniqueIndex("team_memberships_member_idx" as string).on(
-      table.teamId,
-      table.memberId,
-      table.memberType
-    ),
-  ]
-);
-
 export const agentSessions = sqliteTable(
   "agent_sessions" as string,
   {
     id: text("id" as string).primaryKey(),
     workspaceId: text("workspace_id" as string)
       .notNull()
-      .references(() => workspaces.id),
+      .references(() => organization.id),
     issueId: text("issue_id" as string).notNull(),
     agentId: text("agent_id" as string).notNull(),
     provider: text("provider" as string).notNull(),

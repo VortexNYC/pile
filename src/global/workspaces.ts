@@ -4,7 +4,7 @@ import { z } from "zod";
 import { createAuth } from "../platform/auth.js";
 import type { AppEnv } from "../platform/env.js";
 import type { D1Client } from "./db.js";
-import { member, organization, workspaces } from "./schema.js";
+import { member, organization } from "./schema.js";
 import { createDefaultTeam } from "./teams.js";
 
 const workspaceMetadataSchema = z
@@ -55,8 +55,9 @@ async function buildWorkspace(
   };
 }
 
-export function listWorkspaces(db: D1Client) {
-  return db.select().from(workspaces).all() as unknown as WorkspaceRecord[];
+export async function listWorkspaces(db: D1Client) {
+  const rows = await db.select().from(organization).all();
+  return Promise.all(rows.map((row) => buildWorkspace(db, row)));
 }
 
 export async function getWorkspaceBySlug(
@@ -107,17 +108,6 @@ export async function createWorkspace(
   const orgId = z.object({ id: z.string() }).parse(orgResult).id;
   const workspaceKey = values.key ?? "general";
   const now = new Date();
-  const iso = now.toISOString();
-
-  await db.insert(workspaces).values({
-    id: orgId,
-    name: values.name,
-    slug: values.slug,
-    key: workspaceKey,
-    ownerId: values.ownerId,
-    createdAt: iso,
-    updatedAt: iso,
-  });
 
   const defaultTeam = await createDefaultTeam(
     db,
