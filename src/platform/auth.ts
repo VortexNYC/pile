@@ -29,12 +29,12 @@ export function createAuth(env: AppEnv) {
         schema: {
           organization: {
             additionalFields: {
-              metadata: { type: "string", required: false },
+              metadata: { type: "json", required: false },
             },
           },
           team: {
             additionalFields: {
-              metadata: { type: "string", required: false },
+              metadata: { type: "json", required: false },
             },
           },
         },

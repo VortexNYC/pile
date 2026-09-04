@@ -115,7 +115,7 @@ export function registerWorkspaceRoutes(app: OpenAPIHono<AppContext>) {
         message: "Session required",
       });
     }
-    const item = await createWorkspace(db, {
+    const item = await createWorkspace(db, c.env, {
       name: input.name,
       slug: input.slug,
       key: input.key,

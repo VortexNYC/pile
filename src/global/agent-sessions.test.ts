@@ -11,6 +11,7 @@ import {
   updateAgentSession,
 } from "./agent-sessions.js";
 import { createD1 } from "./db.js";
+import { user as userTable } from "./schema.js";
 import { createWorkspace } from "./workspaces.js";
 
 describe("agent sessions", () => {
@@ -18,7 +19,20 @@ describe("agent sessions", () => {
 
   beforeAll(async () => {
     const db = createD1(env.D1);
-    const workspace = await createWorkspace(db, {
+    const now = new Date();
+    await db
+      .insert(userTable)
+      .values({
+        id: "user-1",
+        name: "Test User",
+        email: "user-1@example.com",
+        emailVerified: false,
+        image: null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing({ target: [userTable.email] });
+    const workspace = await createWorkspace(db, env, {
       name: "Agent session tests",
       slug: `agent-sessions-${crypto.randomUUID()}`,
       ownerId: "user-1",

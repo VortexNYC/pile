@@ -5,6 +5,7 @@ import { z } from "zod";
 import { MockAgentProvider } from "../agents/harness.js";
 import { registerAgentProvider } from "../agents/index.js";
 import { createD1 } from "../global/db.js";
+import { user as userTable } from "../global/schema.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
@@ -37,7 +38,20 @@ describe("agent sessions API", () => {
 
   beforeAll(async () => {
     const db = createD1(env.D1);
-    const workspace = await createWorkspace(db, {
+    const now = new Date();
+    await db
+      .insert(userTable)
+      .values({
+        id: "user-1",
+        name: "Test User",
+        email: "user-1@example.com",
+        emailVerified: false,
+        image: null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing({ target: [userTable.email] });
+    const workspace = await createWorkspace(db, env, {
       name: "Agent API tests",
       slug: `agent-api-${crypto.randomUUID()}`,
       ownerId: "user-1",

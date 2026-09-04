@@ -21,7 +21,20 @@ const ORIGIN = "https://your-domain.com";
 
 async function seedWorkspace() {
   const db = createD1(env.D1);
-  const workspace = await createWorkspace(db, {
+  const now = new Date();
+  await db
+    .insert(userTable)
+    .values({
+      id: "user-1",
+      name: "Test User",
+      email: "user-1@example.com",
+      emailVerified: false,
+      image: null,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .onConflictDoNothing({ target: [userTable.email] });
+  const workspace = await createWorkspace(db, env, {
     name: "Test workspace",
     slug: `test-${crypto.randomUUID()}`,
     key: `T${crypto.randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase()}`,

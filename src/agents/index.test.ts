@@ -2,6 +2,7 @@ import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { createD1 } from "../global/db.js";
+import { user as userTable } from "../global/schema.js";
 import { createWorkspace } from "../global/workspaces.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
 import { MockAgentProvider } from "./harness.js";
@@ -20,7 +21,20 @@ const actor: WorkspaceIdentity = {
 
 beforeAll(async () => {
   const db = createD1(env.D1);
-  const workspace = await createWorkspace(db, {
+  const now = new Date();
+  await db
+    .insert(userTable)
+    .values({
+      id: "user-1",
+      name: "Test User",
+      email: "user-1@example.com",
+      emailVerified: false,
+      image: null,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .onConflictDoNothing({ target: [userTable.email] });
+  const workspace = await createWorkspace(db, env, {
     name: "Test workspace",
     slug: "test-ws",
     ownerId: actor.id,
