@@ -40,23 +40,6 @@ export const workspaceMemberships = sqliteTable(
   }
 );
 
-export const workspaceTokens = sqliteTable("workspace_tokens" as string, {
-  id: text("id" as string).primaryKey(),
-  workspaceId: text("workspace_id" as string)
-    .notNull()
-    .references(() => workspaces.id),
-  name: text("name" as string).notNull(),
-  tokenHash: text("token_hash" as string)
-    .notNull()
-    .unique(),
-  permissions: text("permissions" as string)
-    .notNull()
-    .default("read,write"),
-  createdAt: text("created_at" as string)
-    .notNull()
-    .default(sql`CURRENT_TIMESTAMP`),
-});
-
 export const repoBranches = sqliteTable(
   "repo_branches" as string,
   {
@@ -611,6 +594,58 @@ export const verification = sqliteTable("verification" as string, {
     .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
     .$onUpdate(() => new Date()),
 });
+
+export const apikey = sqliteTable(
+  "apikey" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    configId: text("config_id" as string)
+      .notNull()
+      .default("default"),
+    name: text("name" as string),
+    prefix: text("prefix" as string),
+    start: text("start" as string),
+    key: text("key" as string)
+      .notNull()
+      .unique(),
+    enabled: integer("enabled" as string, { mode: "boolean" })
+      .notNull()
+      .default(true),
+    expiresAt: integer("expires_at" as string, { mode: "timestamp_ms" }),
+    referenceId: text("reference_id" as string).notNull(),
+    lastRefillAt: integer("last_refill_at" as string, { mode: "timestamp_ms" }),
+    lastRequest: integer("last_request" as string, { mode: "timestamp_ms" }),
+    metadata: text("metadata" as string),
+    rateLimitMax: integer("rate_limit_max" as string),
+    rateLimitTimeWindow: integer("rate_limit_time_window" as string),
+    remaining: integer("remaining" as string),
+    refillAmount: integer("refill_amount" as string),
+    refillInterval: integer("refill_interval" as string),
+    rateLimitEnabled: integer("rate_limit_enabled" as string, {
+      mode: "boolean",
+    })
+      .notNull()
+      .default(true),
+    requestCount: integer("request_count" as string)
+      .notNull()
+      .default(0),
+    permissions: text("permissions" as string),
+    createdAt: integer("created_at" as string, { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`),
+    updatedAt: integer("updated_at" as string, { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    index("apikey_reference_idx" as string).on(table.referenceId),
+    index("apikey_reference_config_idx" as string).on(
+      table.referenceId,
+      table.configId
+    ),
+  ]
+);
 
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),

@@ -1,10 +1,6 @@
-import type { InferSelectModel } from "drizzle-orm";
 import { z } from "zod";
 
-import type { workspaceTokens } from "../global/schema.js";
 import { parsePermissionSet } from "./permissions.js";
-
-export type WorkspaceToken = InferSelectModel<typeof workspaceTokens>;
 
 export const workspaceIdentitySchema = z.object({
   id: z.string(),
@@ -15,12 +11,31 @@ export const workspaceIdentitySchema = z.object({
 
 export type WorkspaceIdentity = z.infer<typeof workspaceIdentitySchema>;
 
-export function toWorkspaceIdentity(token: WorkspaceToken): WorkspaceIdentity {
+const apiKeyMetadataSchema = z.object({
+  workspaceId: z.string(),
+  permissions: z.string(),
+});
+
+const apiKeyResultSchema = z.object({
+  id: z.string(),
+  metadata: z.unknown(),
+});
+
+function parseApiKeyMetadata(metadata: unknown) {
+  if (typeof metadata === "string") {
+    return apiKeyMetadataSchema.parse(JSON.parse(metadata));
+  }
+  return apiKeyMetadataSchema.parse(metadata);
+}
+
+export function toApiKeyWorkspaceIdentity(input: unknown): WorkspaceIdentity {
+  const key = apiKeyResultSchema.parse(input);
+  const parsed = parseApiKeyMetadata(key.metadata);
   return workspaceIdentitySchema.parse({
-    id: token.id,
-    workspaceId: token.workspaceId,
+    id: key.id,
+    workspaceId: parsed.workspaceId,
     type: "agent",
-    permissions: Array.from(parsePermissionSet(token.permissions)),
+    permissions: Array.from(parsePermissionSet(parsed.permissions)),
   });
 }
 

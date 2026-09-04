@@ -23,7 +23,7 @@ describe("agent sessions", () => {
       slug: `agent-sessions-${crypto.randomUUID()}`,
       ownerId: "user-1",
     });
-    workspaceId = workspace.id;
+    workspaceId = workspace!.id;
   });
 
   it("creates and retrieves a session", async () => {

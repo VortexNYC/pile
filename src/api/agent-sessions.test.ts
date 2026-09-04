@@ -1,12 +1,13 @@
 import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { MockAgentProvider } from "../agents/harness.js";
 import { registerAgentProvider } from "../agents/index.js";
 import { createD1 } from "../global/db.js";
-import { createWorkspaceToken } from "../global/tokens.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
+import { createAuth } from "../platform/auth.js";
 
 const ORIGIN = "https://your-domain.com";
 
@@ -41,15 +42,16 @@ describe("agent sessions API", () => {
       slug: `agent-api-${crypto.randomUUID()}`,
       ownerId: "user-1",
     });
-    workspaceId = workspace.id;
-    const tokenRecord = await createWorkspaceToken(
-      db,
-      workspaceId,
-      "test-admin",
-      "admin",
-      env.TOKEN_HASH_SECRET
-    );
-    token = tokenRecord.token;
+    workspaceId = workspace!.id;
+    const auth = createAuth(env);
+    const result = await auth.api.createApiKey({
+      body: {
+        userId: "user-1",
+        name: "test-admin",
+        metadata: { workspaceId, permissions: "admin" },
+      },
+    });
+    token = z.object({ key: z.string() }).parse(result).key;
 
     registerAgentProvider("mock", () => new MockAgentProvider("mock"));
   });

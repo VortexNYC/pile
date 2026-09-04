@@ -1,5 +1,6 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { createD1 } from "../global/db.js";
 import {
@@ -7,9 +8,9 @@ import {
   getNotificationsForRecipient,
 } from "../global/notifications.js";
 import { user as userTable, workspaceMemberships } from "../global/schema.js";
-import { createWorkspaceToken } from "../global/tokens.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
+import { createAuth } from "../platform/auth.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 
 declare module "cloudflare:test" {
@@ -35,14 +36,16 @@ async function adminToken(workspaceId: string) {
 }
 
 async function createAdminTokenRecord(workspaceId: string) {
-  const db = createD1(env.D1);
-  return createWorkspaceToken(
-    db,
-    workspaceId,
-    "test-admin",
-    "admin",
-    env.TOKEN_HASH_SECRET
-  );
+  const auth = createAuth(env);
+  const result = await auth.api.createApiKey({
+    body: {
+      userId: "user-1",
+      name: "test-admin",
+      metadata: { workspaceId, permissions: "admin" },
+    },
+  });
+  const parsed = z.object({ id: z.string(), key: z.string() }).parse(result);
+  return { id: parsed.id, token: parsed.key };
 }
 
 function request(

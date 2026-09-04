@@ -1,3 +1,4 @@
+import { apiKey } from "@better-auth/api-key";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { betterAuth } from "better-auth/minimal";
 
@@ -13,5 +14,15 @@ export function createAuth(env: AppEnv) {
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.BETTER_AUTH_URL,
     emailAndPassword: { enabled: true },
+    plugins: [
+      apiKey({
+        enableMetadata: true,
+        permissions: {
+          defaultPermissions: {
+            vortex: ["read"],
+          },
+        },
+      }),
+    ],
   });
 }
