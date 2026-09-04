@@ -232,6 +232,13 @@
       "when": 1788547174660,
       "tag": "0032_clear_day",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1788555658070,
+      "tag": "0033_long_mandarin",
+      "breakpoints": true
     }
   ]
 }

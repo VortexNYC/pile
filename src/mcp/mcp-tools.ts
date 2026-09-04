@@ -32,6 +32,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdInitiativesId",
+    "description": "(DELETE /workspaces/{organizationId}/initiatives/{id})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/initiatives/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdIssuesId",
     "description": "(DELETE /workspaces/{organizationId}/issues/{id})",
     "method": "DELETE",
@@ -153,6 +174,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "description": "(DELETE /workspaces/{organizationId}/projects/{id})",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/projects/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "deleteWorkspacesOrganizationIdRoadmapsId",
+    "description": "(DELETE /workspaces/{organizationId}/roadmaps/{id})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/roadmaps/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -399,6 +441,47 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "description": "(GET /workspaces/{organizationId}/cycles/{id})",
     "method": "GET",
     "path": "/workspaces/{organizationId}/cycles/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdInitiatives",
+    "description": "(GET /workspaces/{organizationId}/initiatives)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/initiatives",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "roadmapId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdInitiativesId",
+    "description": "(GET /workspaces/{organizationId}/initiatives/{id})",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/initiatives/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -809,6 +892,65 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdRoadmaps",
+    "description": "(GET /workspaces/{organizationId}/roadmaps)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/roadmaps",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdRoadmapsId",
+    "description": "(GET /workspaces/{organizationId}/roadmaps/{id})",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/roadmaps/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdRoadmapsIdInitiatives",
+    "description": "(GET /workspaces/{organizationId}/roadmaps/{id}/initiatives)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/roadmaps/{id}/initiatives",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdSavedviews",
     "description": "(GET /workspaces/{organizationId}/saved-views)",
     "method": "GET",
@@ -1157,6 +1299,51 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "patchWorkspacesOrganizationIdInitiativesId",
+    "description": "(PATCH /workspaces/{organizationId}/initiatives/{id})",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/initiatives/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "roadmapId": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "startDate": {
+              "type": "string"
+            },
+            "targetDate": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "patchWorkspacesOrganizationIdIssuesId",
     "description": "(PATCH /workspaces/{organizationId}/issues/{id})",
     "method": "PATCH",
@@ -1351,6 +1538,39 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string"
             },
             "endDate": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "patchWorkspacesOrganizationIdRoadmapsId",
+    "description": "(PATCH /workspaces/{organizationId}/roadmaps/{id})",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/roadmaps/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": {
               "type": "string"
             }
           }
@@ -1730,6 +1950,50 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "required": [
             "userId",
             "githubLogin"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdInitiatives",
+    "description": "(POST /workspaces/{organizationId}/initiatives)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/initiatives",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "roadmapId": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "startDate": {
+              "type": "string"
+            },
+            "targetDate": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
           ]
         }
       },
@@ -2136,6 +2400,38 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string"
             },
             "endDate": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdRoadmaps",
+    "description": "(POST /workspaces/{organizationId}/roadmaps)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/roadmaps",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": {
               "type": "string"
             }
           },

@@ -141,6 +141,59 @@ export const labels = sqliteTable(
   ]
 );
 
+export const roadmaps = sqliteTable(
+  "roadmaps" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    name: text("name" as string).notNull(),
+    description: text("description" as string),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("roadmaps_organization_idx" as string).on(table.organizationId),
+    index("roadmaps_org_name_idx" as string).on(
+      table.organizationId,
+      table.name
+    ),
+  ]
+);
+
+export const initiatives = sqliteTable(
+  "initiatives" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    roadmapId: text("roadmap_id" as string).references(() => roadmaps.id),
+    name: text("name" as string).notNull(),
+    description: text("description" as string),
+    status: text("status" as string)
+      .notNull()
+      .default("active"),
+    startDate: text("start_date" as string),
+    targetDate: text("target_date" as string),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("initiatives_organization_idx" as string).on(table.organizationId),
+    index("initiatives_roadmap_idx" as string).on(table.roadmapId),
+  ]
+);
+
 export const states = sqliteTable(
   "states" as string,
   {

@@ -15,13 +15,13 @@ This is the durable gap map for replacing Linear operationally. It is based on L
 
 ## Executive summary
 
-Vortex covers the core issue-tracking surface (issues, comments, labels, states, projects, cycles, attachments, history, subscribers, relations) plus a working GitHub integration, Linear migration, and Better Auth session support. The biggest gaps versus Linear are:
+Vortex covers the core issue-tracking surface (issues, comments, labels, states, projects, cycles, attachments, history, subscribers, relations) plus roadmaps, initiatives, a working GitHub integration, Linear migration, and Better Auth session support. The biggest gaps versus Linear are:
 
-1. **Initiatives / roadmaps / milestones** — Linear has initiatives, roadmaps, milestones, project updates, and release pipelines. Vortex has projects and cycles.
-2. **Teams** — Linear is multi-team inside an organization. Vortex has workspaces (Better Auth organizations) and teams, with per-team issue scoping and visibility.
-3. **Notifications & outbound webhooks** — Linear has user notifications, delivery preferences, and outgoing webhooks. Vortex has in-app notifications and outbound webhooks for issue/comment lifecycle events, including retries and a delivery log. No email, push, or delivery preferences yet.
-4. **Agent/AI surfaces** — Linear has agent sessions, activities, skills, and AI conversations. Vortex has agent sessions and activities; skills/conversations are not yet modeled.
-5. **CLI / SDK / docs parity** — Vortex has an OpenAPI-generated client and MCP tools but no standalone CLI parity, no GraphQL API, and no published docs site.
+1. **Teams** — Linear is multi-team inside an organization. Vortex has workspaces (Better Auth organizations) and teams, with per-team issue scoping and visibility.
+2. **Notifications & delivery preferences** — Linear has user notifications, delivery preferences, and outgoing webhooks. Vortex has in-app notifications and outbound webhooks for issue/comment lifecycle events, including retries and a delivery log. No email, push, or delivery preferences yet.
+3. **Agent/AI surfaces** — Linear has agent sessions, activities, skills, and AI conversations. Vortex has agent sessions and activities; skills/conversations are not yet modeled.
+4. **CLI / SDK / docs parity** — Vortex has an OpenAPI-generated client and MCP tools but no standalone CLI parity, no GraphQL API, and no published docs site.
+5. **Slack/Zendesk/GitLab/Intercom integrations** — only GitHub is wired.
 
 ## Vortex surface inventory
 
@@ -74,6 +74,17 @@ GET    /workspaces/{organizationId}/projects
 GET    /workspaces/{organizationId}/projects/{id}
 PATCH  /workspaces/{organizationId}/projects/{id}
 DELETE /workspaces/{organizationId}/projects/{id}
+POST   /workspaces/{organizationId}/roadmaps
+GET    /workspaces/{organizationId}/roadmaps
+GET    /workspaces/{organizationId}/roadmaps/{id}
+PATCH  /workspaces/{organizationId}/roadmaps/{id}
+DELETE /workspaces/{organizationId}/roadmaps/{id}
+GET    /workspaces/{organizationId}/roadmaps/{id}/initiatives
+POST   /workspaces/{organizationId}/initiatives
+GET    /workspaces/{organizationId}/initiatives
+GET    /workspaces/{organizationId}/initiatives/{id}
+PATCH  /workspaces/{organizationId}/initiatives/{id}
+DELETE /workspaces/{organizationId}/initiatives/{id}
 POST   /workspaces/{organizationId}/states
 GET    /workspaces/{organizationId}/states
 GET    /workspaces/{organizationId}/states/{id}
@@ -105,7 +116,7 @@ Plus `/openapi.json`, `/mcp`, `/api/auth/*`, `/github` webhooks, and health.
 | **States / workflow**                 | `teams/states`, `workflowStateCreate`, etc.                                                                                                                             | Done                                                                            | `states` table + CRUD. Migration maps Linear state types.                                                                                                                               |
 | **Projects**                          | `projects`, `projectCreate`, `projectUpdate`, `projectArchive`, `projectUpdateReminder`, `projectStatus`                                                                | Partial                                                                         | `projects` table + CRUD. No project updates, reminders, milestones, or status posts.                                                                                                    |
 | **Cycles**                            | `cycles`, `cycleCreate`, `cycleUpdate`, `cycleArchive`, `cycleShiftAll`, `cycleStartUpcomingCycleToday`                                                                 | Partial                                                                         | `cycles` table + CRUD. GitHub milestones map to cycles. No cycle shifting or start-today logic.                                                                                         |
-| **Initiatives / roadmaps / releases** | `initiatives`, `initiativeCreate/Update/Delete`, `roadmaps`, `roadmapCreate`, `releasePipelines`, `release`                                                             | Missing                                                                         | Not modeled.                                                                                                                                                                            |
+| **Initiatives / roadmaps / releases** | `initiatives`, `initiativeCreate/Update/Delete`, `roadmaps`, `roadmapCreate`, `releasePipelines`, `release`                                                             | Partial                                                                         | `roadmaps` and `initiatives` tables with CRUD, roadmap-to-initiative nesting, date/status. No release pipelines or releases.                                                            |
 | **Documents**                         | `documents`, `documentCreate/Update/Delete`, `documentContentHistory`                                                                                                   | Missing                                                                         | Not modeled.                                                                                                                                                                            |
 | **Customers**                         | `customers`, `customerNeeds`, `customerStatuses`, `customerTiers`                                                                                                       | Missing                                                                         | Not modeled.                                                                                                                                                                            |
 | **Attachments**                       | `attachments`, `attachmentCreate/Delete/Update`, `attachmentLink*` (GitHub, Slack, etc.)                                                                                | Partial                                                                         | `attachments` table and route. GitHub attachments via migration. No deep link types (Slack, Intercom, etc.).                                                                            |
@@ -133,16 +144,16 @@ Vortex currently exposes roughly **50 HTTP routes**. Linear's public GraphQL sur
 
 ## Biggest blockers to "never touch Linear again"
 
-1. **Initiatives / roadmaps / milestones** — roadmap planning is missing.
-2. **Slack/Zendesk/GitLab/Intercom integrations** — only GitHub is wired.
-3. **Published docs / SDK / CLI** — the API is OpenAPI-first but lacks a docs site and a full CLI.
+1. **Slack/Zendesk/GitLab/Intercom integrations** — only GitHub is wired.
+2. **Published docs / SDK / CLI** — the API is OpenAPI-first but lacks a docs site and a full CLI.
+3. **Agent/AI surfaces** — agent sessions and activities exist; no skills, conversations, or prompt model yet.
 
 ## Recommended next slices
 
 Based on the gap map and the current backend-first priority, the next high-leverage slices are:
 
-1. **Initiatives / roadmaps** — project planning surface.
-2. **Slack / Zendesk / GitLab / Intercom integrations** — expand beyond GitHub.
+1. **Slack / Zendesk / GitLab / Intercom integrations** — expand beyond GitHub.
+2. **Published docs site and CLI parity** — make the OpenAPI/MCP surface usable as a docs site and a real CLI.
 
 ## How to update this document
 

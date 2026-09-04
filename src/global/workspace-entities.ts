@@ -2,7 +2,15 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import type { D1Client } from "./db.js";
-import { cycles, labels, member, projects, states } from "./schema.js";
+import {
+  cycles,
+  initiatives,
+  labels,
+  member,
+  projects,
+  roadmaps,
+  states,
+} from "./schema.js";
 
 const now = () => new Date().toISOString();
 
@@ -373,4 +381,194 @@ export async function createMembership(
   });
   const row = await db.select().from(member).where(eq(member.id, id)).get();
   return mapMember(row!);
+}
+
+// Roadmaps
+
+export function listRoadmaps(db: D1Client, organizationId: string) {
+  return db
+    .select()
+    .from(roadmaps)
+    .where(eq(roadmaps.organizationId, organizationId))
+    .all();
+}
+
+export function getRoadmap(db: D1Client, organizationId: string, id: string) {
+  return db
+    .select()
+    .from(roadmaps)
+    .where(
+      and(eq(roadmaps.organizationId, organizationId), eq(roadmaps.id, id))
+    )
+    .get();
+}
+
+export async function createRoadmap(
+  db: D1Client,
+  organizationId: string,
+  values: {
+    name: string;
+    description?: string | null;
+  }
+) {
+  const id = crypto.randomUUID();
+  const ts = now();
+  await db.insert(roadmaps).values({
+    id,
+    organizationId,
+    name: values.name,
+    description: values.description ?? null,
+    createdAt: ts,
+    updatedAt: ts,
+  });
+  return db.select().from(roadmaps).where(eq(roadmaps.id, id)).get();
+}
+
+export async function updateRoadmap(
+  db: D1Client,
+  organizationId: string,
+  id: string,
+  values: Partial<{
+    name: string;
+    description: string | null;
+  }>
+) {
+  await db
+    .update(roadmaps)
+    .set({ ...values, updatedAt: now() })
+    .where(
+      and(eq(roadmaps.organizationId, organizationId), eq(roadmaps.id, id))
+    );
+  return db
+    .select()
+    .from(roadmaps)
+    .where(
+      and(eq(roadmaps.organizationId, organizationId), eq(roadmaps.id, id))
+    )
+    .get();
+}
+
+export async function deleteRoadmap(
+  db: D1Client,
+  organizationId: string,
+  id: string
+) {
+  await db
+    .delete(roadmaps)
+    .where(
+      and(eq(roadmaps.organizationId, organizationId), eq(roadmaps.id, id))
+    );
+}
+
+// Initiatives
+
+export function listInitiatives(
+  db: D1Client,
+  organizationId: string,
+  roadmapId?: string
+) {
+  const conditions = [eq(initiatives.organizationId, organizationId)];
+  if (roadmapId) {
+    conditions.push(eq(initiatives.roadmapId, roadmapId));
+  }
+  return db
+    .select()
+    .from(initiatives)
+    .where(and(...conditions))
+    .all();
+}
+
+export function getInitiative(
+  db: D1Client,
+  organizationId: string,
+  id: string
+) {
+  return db
+    .select()
+    .from(initiatives)
+    .where(
+      and(
+        eq(initiatives.organizationId, organizationId),
+        eq(initiatives.id, id)
+      )
+    )
+    .get();
+}
+
+export async function createInitiative(
+  db: D1Client,
+  organizationId: string,
+  values: {
+    roadmapId?: string | null;
+    name: string;
+    description?: string | null;
+    status?: string | null;
+    startDate?: string | null;
+    targetDate?: string | null;
+  }
+) {
+  const id = crypto.randomUUID();
+  const ts = now();
+  await db.insert(initiatives).values({
+    id,
+    organizationId,
+    roadmapId: values.roadmapId ?? null,
+    name: values.name,
+    description: values.description ?? null,
+    status: values.status ?? "active",
+    startDate: values.startDate ?? null,
+    targetDate: values.targetDate ?? null,
+    createdAt: ts,
+    updatedAt: ts,
+  });
+  return db.select().from(initiatives).where(eq(initiatives.id, id)).get();
+}
+
+export async function updateInitiative(
+  db: D1Client,
+  organizationId: string,
+  id: string,
+  values: Partial<{
+    roadmapId: string | null;
+    name: string;
+    description: string | null;
+    status: string;
+    startDate: string | null;
+    targetDate: string | null;
+  }>
+) {
+  await db
+    .update(initiatives)
+    .set({ ...values, updatedAt: now() })
+    .where(
+      and(
+        eq(initiatives.organizationId, organizationId),
+        eq(initiatives.id, id)
+      )
+    );
+  return db
+    .select()
+    .from(initiatives)
+    .where(
+      and(
+        eq(initiatives.organizationId, organizationId),
+        eq(initiatives.id, id)
+      )
+    )
+    .get();
+}
+
+export async function deleteInitiative(
+  db: D1Client,
+  organizationId: string,
+  id: string
+) {
+  await db
+    .delete(initiatives)
+    .where(
+      and(
+        eq(initiatives.organizationId, organizationId),
+        eq(initiatives.id, id)
+      )
+    );
 }

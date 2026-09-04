@@ -4,22 +4,32 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { createD1 } from "../global/db.js";
 import {
   createCycle,
+  createInitiative,
   createLabel,
   createMembership,
   createProject,
+  createRoadmap,
   deleteCycle,
+  deleteInitiative,
   deleteLabel,
   deleteProject,
+  deleteRoadmap,
   getCycle,
+  getInitiative,
   getLabel,
   getProject,
+  getRoadmap,
   listCycles,
+  listInitiatives,
   listLabels,
   listMemberships,
   listProjects,
+  listRoadmaps,
   updateCycle,
+  updateInitiative,
   updateLabel,
   updateProject,
+  updateRoadmap,
 } from "../global/workspace-entities.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
@@ -87,6 +97,42 @@ const membershipSchema = z.object({
 const membershipBodySchema = z.object({
   userId: z.string().min(1),
   role: z.enum(["owner", "admin", "member"]).optional(),
+});
+
+const roadmapSchema = z.object({
+  id: z.string(),
+  organizationId: z.string(),
+  name: z.string(),
+  description: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+const roadmapBodySchema = z.object({
+  name: z.string().min(1),
+  description: z.string().optional(),
+});
+
+const initiativeSchema = z.object({
+  id: z.string(),
+  organizationId: z.string(),
+  roadmapId: z.string().nullable(),
+  name: z.string(),
+  description: z.string().nullable(),
+  status: z.string(),
+  startDate: z.string().nullable(),
+  targetDate: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+const initiativeBodySchema = z.object({
+  roadmapId: z.string().optional(),
+  name: z.string().min(1),
+  description: z.string().optional(),
+  status: z.string().optional(),
+  startDate: z.string().optional(),
+  targetDate: z.string().optional(),
 });
 
 const listProjectsRoute = createRoute({
@@ -423,6 +469,223 @@ const createMembershipRoute = createRoute({
   },
 });
 
+const listRoadmapsRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/roadmaps",
+  tags: ["roadmaps"],
+  middleware: [rls("read")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Roadmaps list",
+      content: {
+        "application/json": {
+          schema: z.object({ roadmaps: z.array(roadmapSchema) }),
+        },
+      },
+    },
+  },
+});
+
+const createRoadmapRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/roadmaps",
+  tags: ["roadmaps"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+    body: {
+      content: {
+        "application/json": { schema: roadmapBodySchema },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "Roadmap created",
+      content: {
+        "application/json": { schema: roadmapSchema },
+      },
+    },
+  },
+});
+
+const getRoadmapRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/roadmaps/{id}",
+  tags: ["roadmaps"],
+  middleware: [rls("read")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Roadmap",
+      content: {
+        "application/json": { schema: roadmapSchema },
+      },
+    },
+  },
+});
+
+const updateRoadmapRoute = createRoute({
+  method: "patch",
+  path: "/workspaces/{organizationId}/roadmaps/{id}",
+  tags: ["roadmaps"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+    body: {
+      content: {
+        "application/json": { schema: roadmapBodySchema.partial() },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Roadmap updated",
+      content: {
+        "application/json": { schema: roadmapSchema },
+      },
+    },
+  },
+});
+
+const deleteRoadmapRoute = createRoute({
+  method: "delete",
+  path: "/workspaces/{organizationId}/roadmaps/{id}",
+  tags: ["roadmaps"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+  },
+  responses: {
+    204: { description: "Roadmap deleted" },
+  },
+});
+
+const listInitiativesRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/initiatives",
+  tags: ["initiatives"],
+  middleware: [rls("read")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+    query: z.object({
+      roadmapId: z.string().optional(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Initiatives list",
+      content: {
+        "application/json": {
+          schema: z.object({ initiatives: z.array(initiativeSchema) }),
+        },
+      },
+    },
+  },
+});
+
+const listRoadmapInitiativesRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/roadmaps/{id}/initiatives",
+  tags: ["roadmaps"],
+  middleware: [rls("read")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Initiatives in roadmap",
+      content: {
+        "application/json": {
+          schema: z.object({ initiatives: z.array(initiativeSchema) }),
+        },
+      },
+    },
+  },
+});
+
+const createInitiativeRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/initiatives",
+  tags: ["initiatives"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+    body: {
+      content: {
+        "application/json": { schema: initiativeBodySchema },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "Initiative created",
+      content: {
+        "application/json": { schema: initiativeSchema },
+      },
+    },
+  },
+});
+
+const getInitiativeRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/initiatives/{id}",
+  tags: ["initiatives"],
+  middleware: [rls("read")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Initiative",
+      content: {
+        "application/json": { schema: initiativeSchema },
+      },
+    },
+  },
+});
+
+const updateInitiativeRoute = createRoute({
+  method: "patch",
+  path: "/workspaces/{organizationId}/initiatives/{id}",
+  tags: ["initiatives"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+    body: {
+      content: {
+        "application/json": { schema: initiativeBodySchema.partial() },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Initiative updated",
+      content: {
+        "application/json": { schema: initiativeSchema },
+      },
+    },
+  },
+});
+
+const deleteInitiativeRoute = createRoute({
+  method: "delete",
+  path: "/workspaces/{organizationId}/initiatives/{id}",
+  tags: ["initiatives"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+  },
+  responses: {
+    204: { description: "Initiative deleted" },
+  },
+});
+
 export function registerWorkspaceEntityRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listProjectsRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
@@ -595,5 +858,115 @@ export function registerWorkspaceEntityRoutes(app: OpenAPIHono<AppContext>) {
       input.role
     );
     return c.json(item, 201);
+  });
+
+  app.openapi(listRoadmapsRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const items = await listRoadmaps(db, organizationId);
+    return c.json({ roadmaps: items });
+  });
+
+  app.openapi(createRoadmapRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const db = createD1(c.env.D1);
+    const item = await createRoadmap(db, organizationId, input);
+    return c.json(item, 201);
+  });
+
+  app.openapi(getRoadmapRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const item = await getRoadmap(db, organizationId, id);
+    if (!item) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Roadmap not found",
+      });
+    }
+    return c.json(item);
+  });
+
+  app.openapi(updateRoadmapRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const db = createD1(c.env.D1);
+    const item = await updateRoadmap(db, organizationId, id, input);
+    if (!item) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Roadmap not found",
+      });
+    }
+    return c.json(item);
+  });
+
+  app.openapi(deleteRoadmapRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    await deleteRoadmap(db, organizationId, id);
+    return c.body(null, 204);
+  });
+
+  app.openapi(listInitiativesRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const { roadmapId } = c.req.valid("query");
+    const db = createD1(c.env.D1);
+    const items = await listInitiatives(db, organizationId, roadmapId);
+    return c.json({ initiatives: items });
+  });
+
+  app.openapi(listRoadmapInitiativesRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const items = await listInitiatives(db, organizationId, id);
+    return c.json({ initiatives: items });
+  });
+
+  app.openapi(createInitiativeRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const db = createD1(c.env.D1);
+    const item = await createInitiative(db, organizationId, input);
+    return c.json(item, 201);
+  });
+
+  app.openapi(getInitiativeRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const item = await getInitiative(db, organizationId, id);
+    if (!item) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Initiative not found",
+      });
+    }
+    return c.json(item);
+  });
+
+  app.openapi(updateInitiativeRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const db = createD1(c.env.D1);
+    const item = await updateInitiative(db, organizationId, id, input);
+    if (!item) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Initiative not found",
+      });
+    }
+    return c.json(item);
+  });
+
+  app.openapi(deleteInitiativeRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    await deleteInitiative(db, organizationId, id);
+    return c.body(null, 204);
   });
 }

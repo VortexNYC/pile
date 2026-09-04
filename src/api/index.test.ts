@@ -751,4 +751,109 @@ describe("API integration", () => {
     );
     expect(privateTeamList.status).toBe(404);
   });
+
+  it("manages roadmaps and initiatives", async () => {
+    const organizationId = await seedWorkspace();
+    const token = await adminToken(organizationId);
+
+    const roadmapRes = await app.fetch(
+      request(`/workspaces/${organizationId}/roadmaps`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          name: "2026 Roadmap",
+          description: "Annual product roadmap",
+        }),
+      }),
+      env
+    );
+    expect(roadmapRes.status).toBe(201);
+    const roadmapData = await roadmapRes.json<{
+      id: string;
+      name: string;
+      description: string | null;
+    }>();
+    expect(roadmapData.name).toBe("2026 Roadmap");
+
+    const createInitiative = await app.fetch(
+      request(`/workspaces/${organizationId}/initiatives`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          roadmapId: roadmapData.id,
+          name: "Platform scale",
+          description: "Scale the platform",
+          status: "active",
+          startDate: "2026-01-01",
+          targetDate: "2026-06-30",
+        }),
+      }),
+      env
+    );
+    expect(createInitiative.status).toBe(201);
+    const initiativeData = await createInitiative.json<{
+      id: string;
+      roadmapId: string | null;
+      name: string;
+    }>();
+    expect(initiativeData.roadmapId).toBe(roadmapData.id);
+
+    const listRoadmaps = await app.fetch(
+      request(`/workspaces/${organizationId}/roadmaps`, { token }),
+      env
+    );
+    expect(listRoadmaps.status).toBe(200);
+    const roadmapsBody = await listRoadmaps.json<{ roadmaps: unknown[] }>();
+    expect(roadmapsBody.roadmaps.length).toBe(1);
+
+    const roadmapInitiatives = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/roadmaps/${roadmapData.id}/initiatives`,
+        { token }
+      ),
+      env
+    );
+    expect(roadmapInitiatives.status).toBe(200);
+    const roadmapInitiativesBody = await roadmapInitiatives.json<{
+      initiatives: { id: string }[];
+    }>();
+    expect(roadmapInitiativesBody.initiatives.length).toBe(1);
+    expect(roadmapInitiativesBody.initiatives[0].id).toBe(initiativeData.id);
+
+    const updateInitiative = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/initiatives/${initiativeData.id}`,
+        {
+          method: "PATCH",
+          token,
+          body: JSON.stringify({ status: "completed" }),
+        }
+      ),
+      env
+    );
+    expect(updateInitiative.status).toBe(200);
+    const updated = await updateInitiative.json<{ status: string }>();
+    expect(updated.status).toBe("completed");
+
+    const deleteInitiative = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/initiatives/${initiativeData.id}`,
+        {
+          method: "DELETE",
+          token,
+        }
+      ),
+      env
+    );
+    expect(deleteInitiative.status).toBe(204);
+
+    const deleteRoadmap = await app.fetch(
+      request(`/workspaces/${organizationId}/roadmaps/${roadmapData.id}`, {
+        method: "DELETE",
+        token,
+      }),
+      env
+    );
+    expect(deleteRoadmap.status).toBe(204);
+  });
 });

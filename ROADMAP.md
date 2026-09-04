@@ -26,6 +26,7 @@ This is the durable tracker for the open-source Linear alternative. Operational 
 - Agent dispatch
 - Agent sessions and activities API (#27)
 - Issue search and indexing: full-text search across issue title, description, identifier, and comments; applied to `GET /workspaces/{id}/issues?search=` and saved views.
+- Initiatives and roadmaps (#26): `roadmaps` and `initiatives` D1 tables with CRUD, roadmap-to-initiative nesting, date/status, and `GET /workspaces/{id}/roadmaps/{id}/initiatives`.
 - Multi-tenant GitHub App:
   - `github_installations` table
   - Installation / repository webhooks
@@ -38,7 +39,7 @@ This is the durable tracker for the open-source Linear alternative. Operational 
 
 ## Next
 
-- Initiatives and roadmaps (#26).
+- Slack / Zendesk / GitLab / Intercom integrations.
 
 ## Later
 
