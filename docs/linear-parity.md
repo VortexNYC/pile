@@ -20,7 +20,7 @@ Vortex covers the core issue-tracking surface (issues, comments, labels, states,
 1. **Teams** — Linear is multi-team inside an organization. Vortex has workspaces (Better Auth organizations) and teams, with per-team issue scoping and visibility.
 2. **Notifications & delivery preferences** — Linear has user notifications, delivery preferences, and outgoing webhooks. Vortex has in-app notifications and outbound webhooks for issue/comment lifecycle events, including retries and a delivery log. No email, push, or delivery preferences yet.
 3. **Agent/AI surfaces** — Linear has agent sessions, activities, skills, and AI conversations. Vortex has agent sessions and activities; skills/conversations are not yet modeled.
-4. **CLI / SDK / docs parity** — Vortex has an OpenAPI-generated client and MCP tools but no standalone CLI parity, no GraphQL API, and no published docs site.
+4. **CLI / SDK parity** — Vortex has an OpenAPI-generated client and MCP tools but no standalone CLI parity and no GraphQL API. The published docs site exists in `packages/docs` (Blume) with OpenAPI reference and `llms.txt`.
 5. **Slack/Zendesk/GitLab/Intercom integrations** — only GitHub is wired.
 
 ## Vortex surface inventory

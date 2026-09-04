@@ -36,6 +36,7 @@ This is the durable tracker for the open-source Linear alternative. Operational 
   - GitHub issue `opened`/`edited`/`closed`/`reopened` sync
   - Inbound `issue_comment` and `pull_request_review_comment` sync
 - Workspace `key` and issue `identifier` (`KEY-123`)
+- Blume docs site: `packages/docs` with OpenAPI reference, `llms.txt`, search, and the Vortex intro.
 
 ## Next
 
@@ -46,6 +47,6 @@ This is the durable tracker for the open-source Linear alternative. Operational 
 - Self-host the issue tracker and use it as the source of truth for this project (#21).
 - GitHub check run sync.
 - Billing and metering.
-- Published docs site and full CLI parity.
+- Full CLI parity.
 - Slack / GitLab / Zendesk / Intercom integrations.
 - Frontend (after backend is solid).
