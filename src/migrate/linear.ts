@@ -2,6 +2,7 @@ import { createAttachment, setAttachmentR2Key } from "../global/attachments.js";
 import { createComment } from "../global/comments.js";
 import { createD1 } from "../global/db.js";
 import { createIssueHistory } from "../global/issue-history.js";
+import { createIssueRelation } from "../global/issue-relations.js";
 import { createIssueSubscriber } from "../global/issue-subscribers.js";
 import { createLinearUser } from "../global/linear-users.js";
 import { createTemplate } from "../global/templates.js";
@@ -78,6 +79,13 @@ interface LinearComment {
   updatedAt: string;
 }
 
+interface LinearRelation {
+  id: string;
+  type: string;
+  relatedIssue: { id: string } | null;
+  issue: { id: string } | null;
+}
+
 interface LinearHistory {
   id: string;
   createdAt: string;
@@ -114,6 +122,8 @@ interface LinearIssue {
   subscribers: { nodes: Array<{ id: string }> };
   parent?: { id: string } | null;
   children: { nodes: Array<{ id: string }> };
+  relations: { nodes: LinearRelation[] };
+  inverseRelations: { nodes: LinearRelation[] };
   createdAt: string;
   updatedAt: string;
 }
@@ -364,6 +374,24 @@ class LinearClient {
                   id
                 }
               }
+              relations(first: 20) {
+                nodes {
+                  id
+                  type
+                  relatedIssue {
+                    id
+                  }
+                }
+              }
+              inverseRelations(first: 20) {
+                nodes {
+                  id
+                  type
+                  issue {
+                    id
+                  }
+                }
+              }
               attachments(first: 20) {
                 nodes {
                   id
@@ -584,12 +612,18 @@ export async function migrateLinear(
   let issueCount = 0;
   let commentCount = 0;
   let parentLinkCount = 0;
+  let relationCount = 0;
   let attachmentCount = 0;
   let historyCount = 0;
   let subscriberCount = 0;
   let cursor: string | undefined;
   let hasNextPage = true;
+  const issueIds = new Set<string>();
   const parentLinks = new Map<string, string>();
+  const relationLinks = new Map<
+    string,
+    { fromIssueId: string; toIssueId: string; type: string }
+  >();
 
   while (hasNextPage) {
     const page = await client.getIssuesPage(teamId, cursor);
@@ -617,6 +651,27 @@ export async function migrateLinear(
 
       await stub.createIssue(input);
       issueCount++;
+      issueIds.add(li.id);
+
+      for (const rel of li.relations.nodes) {
+        if (rel.relatedIssue?.id) {
+          relationLinks.set(rel.id, {
+            fromIssueId: li.id,
+            toIssueId: rel.relatedIssue.id,
+            type: rel.type,
+          });
+        }
+      }
+
+      for (const rel of li.inverseRelations.nodes) {
+        if (rel.issue?.id) {
+          relationLinks.set(rel.id, {
+            fromIssueId: rel.issue.id,
+            toIssueId: li.id,
+            type: rel.type,
+          });
+        }
+      }
 
       for (const lc of li.comments.nodes) {
         await createComment(db, organizationId, {
@@ -738,6 +793,18 @@ export async function migrateLinear(
     cursor = page.pageInfo.endCursor;
   }
 
+  for (const rel of relationLinks.values()) {
+    if (!issueIds.has(rel.fromIssueId) || !issueIds.has(rel.toIssueId)) {
+      continue;
+    }
+    try {
+      await createIssueRelation(db, organizationId, rel);
+      relationCount++;
+    } catch {
+      // Skip invalid or malformed relation edges.
+    }
+  }
+
   for (const [childId, parentId] of parentLinks) {
     const parent = await stub.getIssue(parentId);
     const child = await stub.getIssue(childId);
@@ -759,7 +826,7 @@ export async function migrateLinear(
     cycles: cycles.length,
     users: linearUsers.length,
     comments: commentCount,
-    relations: parentLinkCount,
+    relations: parentLinkCount + relationCount,
     attachments: attachmentCount,
     history: historyCount,
     subscribers: subscriberCount,
