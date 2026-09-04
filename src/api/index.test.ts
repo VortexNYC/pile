@@ -707,6 +707,87 @@ describe("API integration", () => {
     ).toBe(true);
   });
 
+  it("manages reactions on issues and comments", async () => {
+    const organizationId = await seedWorkspace();
+    const token = await adminToken(organizationId);
+
+    const issueRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ title: "React to me" }),
+      }),
+      env
+    );
+    expect(issueRes.status).toBe(201);
+    const issue = await issueRes.json<{ id: string }>();
+
+    const reactRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${issue.id}/reactions`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ emoji: "+1" }),
+      }),
+      env
+    );
+    expect(reactRes.status).toBe(201);
+    const reaction = await reactRes.json<{ id: string }>();
+
+    const listRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${issue.id}/reactions`, {
+        token,
+      }),
+      env
+    );
+    expect(listRes.status).toBe(200);
+    const listBody = await listRes.json<{ reactions: { emoji: string }[] }>();
+    expect(listBody.reactions).toHaveLength(1);
+    expect(listBody.reactions[0].emoji).toBe("+1");
+
+    const commentRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${issue.id}/comments`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ body: "A comment" }),
+      }),
+      env
+    );
+    expect(commentRes.status).toBe(201);
+    const comment = await commentRes.json<{ id: string }>();
+
+    const commentReactRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/comments/${comment.id}/reactions`,
+        {
+          method: "POST",
+          token,
+          body: JSON.stringify({ emoji: "tada" }),
+        }
+      ),
+      env
+    );
+    expect(commentReactRes.status).toBe(201);
+
+    const delRes = await app.fetch(
+      request(`/workspaces/${organizationId}/reactions/${reaction.id}`, {
+        method: "DELETE",
+        token,
+      }),
+      env
+    );
+    expect(delRes.status).toBe(204);
+
+    const afterDelRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${issue.id}/reactions`, {
+        token,
+      }),
+      env
+    );
+    expect(afterDelRes.status).toBe(200);
+    const afterDelBody = await afterDelRes.json<{ reactions: unknown[] }>();
+    expect(afterDelBody.reactions).toHaveLength(0);
+  });
+
   it("creates notifications on issue creation and lists them", async () => {
     const db = createD1(env.D1);
     const organizationId = await seedWorkspace();

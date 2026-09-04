@@ -280,6 +280,40 @@ export const comments = sqliteTable(
   ]
 );
 
+export const reactions = sqliteTable(
+  "reactions" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    targetType: text("target_type" as string).notNull(),
+    targetId: text("target_id" as string).notNull(),
+    actorId: text("actor_id" as string).notNull(),
+    emoji: text("emoji" as string).notNull(),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("reactions_target_idx" as string).on(
+      table.organizationId,
+      table.targetType,
+      table.targetId
+    ),
+    uniqueIndex("reactions_unique_idx" as string).on(
+      table.organizationId,
+      table.targetType,
+      table.targetId,
+      table.actorId,
+      table.emoji
+    ),
+  ]
+);
+
 export const issueRelations = sqliteTable(
   "issue_relations" as string,
   {

@@ -191,6 +191,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdReactionsReactionId",
+    "description": "Delete reaction (DELETE /workspaces/{organizationId}/reactions/{reactionId})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/reactions/{reactionId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "reactionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "reactionId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdRoadmapsId",
     "description": "Delete roadmap (DELETE /workspaces/{organizationId}/roadmaps/{id})",
     "method": "DELETE",
@@ -420,6 +441,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdCommentsCommentIdReactions",
+    "description": "List comment reactions (GET /workspaces/{organizationId}/comments/{commentId}/reactions)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/comments/{commentId}/reactions",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "commentId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "commentId",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdCycles",
     "description": "List cycles (GET /workspaces/{organizationId}/cycles)",
     "method": "GET",
@@ -611,6 +653,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "description": "List issue children (GET /workspaces/{organizationId}/issues/{id}/children)",
     "method": "GET",
     "path": "/workspaces/{organizationId}/issues/{id}/children",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdIssuesIdReactions",
+    "description": "List issue reactions (GET /workspaces/{organizationId}/issues/{id}/reactions)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/issues/{id}/reactions",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1935,6 +1998,40 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdCommentsCommentIdReactions",
+    "description": "Create comment reaction (POST /workspaces/{organizationId}/comments/{commentId}/reactions)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/comments/{commentId}/reactions",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "commentId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "emoji": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8
+            }
+          },
+          "required": [
+            "emoji"
+          ]
+        }
+      },
+      "required": [
+        "commentId",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdCycles",
     "description": "Create cycle (POST /workspaces/{organizationId}/cycles)",
     "method": "POST",
@@ -2303,6 +2400,40 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string"
             }
           }
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdIssuesIdReactions",
+    "description": "Create issue reaction (POST /workspaces/{organizationId}/issues/{id}/reactions)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/issues/{id}/reactions",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "emoji": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8
+            }
+          },
+          "required": [
+            "emoji"
+          ]
         }
       },
       "required": [
