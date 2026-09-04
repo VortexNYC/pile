@@ -1,0 +1,18 @@
+---
+title: Introduction
+description: Vortex is an open-source, agent-native issue tracker built on Cloudflare Workers, Durable Objects, and D1.
+---
+
+# Vortex
+
+Vortex is an open-source, agent-native issue tracker designed to replace Linear operationally. It is backend-first: HTTP, MCP, OpenAPI, and a generated client, with workspace-isolated real-time state.
+
+## What makes it different
+
+- **Agent-native from day one**: scoped API tokens, MCP tools, agent sessions, and outbound webhooks so agents can read and mutate state reliably.
+- **Workspace-isolated real-time state**: one Durable Object per organization coordinates state, with D1 for metadata and R2 for attachments.
+- **OpenAPI-first**: every route is typed with `@hono/zod-openapi` and exposed as an MCP tool, with a generated TypeScript client.
+
+## Explore the API
+
+The full HTTP API reference is generated from the OpenAPI spec and lives at [`/api`](/api).
