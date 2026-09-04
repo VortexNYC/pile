@@ -183,6 +183,13 @@
       "when": 1788478020919,
       "tag": "0025_productive_naoko",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1788483060285,
+      "tag": "0026_lowly_lester",
+      "breakpoints": true
     }
   ]
 }

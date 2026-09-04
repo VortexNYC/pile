@@ -22,6 +22,7 @@ This is the durable tracker for the open-source Linear alternative. Operational 
 - Real-time DO events
 - Linear user migration
 - Agent dispatch
+- Agent sessions and activities API (#27)
 - Multi-tenant GitHub App:
   - `github_installations` table
   - Installation / repository webhooks
@@ -34,12 +35,8 @@ This is the durable tracker for the open-source Linear alternative. Operational 
 
 ## Next
 
-- Outbound webhooks and notification delivery (#22).
-- Issue search and indexing (#23).
-- Teams within a workspace (#24).
 - Jira import (#25).
 - Initiatives and roadmaps (#26).
-- Agent sessions and activities API (#27).
 
 ## Later
 

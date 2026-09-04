@@ -743,3 +743,73 @@ export const teamMemberships = sqliteTable(
     ),
   ]
 );
+
+export const agentSessions = sqliteTable(
+  "agent_sessions" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    workspaceId: text("workspace_id" as string)
+      .notNull()
+      .references(() => workspaces.id),
+    issueId: text("issue_id" as string).notNull(),
+    agentId: text("agent_id" as string).notNull(),
+    provider: text("provider" as string).notNull(),
+    actorId: text("actor_id" as string).notNull(),
+    actorType: text("actor_type" as string, {
+      enum: ["user", "agent"],
+    }).notNull(),
+    status: text("status" as string, {
+      enum: [
+        "created",
+        "running",
+        "waiting",
+        "completed",
+        "failed",
+        "canceled",
+      ],
+    })
+      .notNull()
+      .default("created"),
+    result: text("result" as string),
+    url: text("url" as string),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("agent_sessions_workspace_idx" as string).on(
+      table.workspaceId,
+      table.createdAt,
+      table.id
+    ),
+    index("agent_sessions_issue_idx" as string).on(table.issueId),
+  ]
+);
+
+export const agentActivities = sqliteTable(
+  "agent_activities" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    sessionId: text("session_id" as string)
+      .notNull()
+      .references(() => agentSessions.id),
+    actorId: text("actor_id" as string),
+    type: text("type" as string, {
+      enum: ["thought", "response", "error", "elicitation", "action", "status"],
+    }).notNull(),
+    message: text("message" as string).notNull(),
+    payload: text("payload" as string),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("agent_activities_session_idx" as string).on(
+      table.sessionId,
+      table.createdAt
+    ),
+  ]
+);

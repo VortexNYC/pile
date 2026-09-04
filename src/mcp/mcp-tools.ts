@@ -351,6 +351,50 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesWorkspaceIdAgentSessions",
+    "description": "(GET /workspaces/{workspaceId}/agent/sessions)",
+    "method": "GET",
+    "path": "/workspaces/{workspaceId}/agent/sessions",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        },
+        "issueId": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "workspaceId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesWorkspaceIdAgentSessionsSessionId",
+    "description": "(GET /workspaces/{workspaceId}/agent/sessions/{sessionId})",
+    "method": "GET",
+    "path": "/workspaces/{workspaceId}/agent/sessions/{sessionId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId",
+        "workspaceId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesWorkspaceIdCycles",
     "description": "(GET /workspaces/{workspaceId}/cycles)",
     "method": "GET",
@@ -1031,6 +1075,49 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "patchWorkspacesWorkspaceIdAgentSessionsSessionId",
+    "description": "(PATCH /workspaces/{workspaceId}/agent/sessions/{sessionId})",
+    "method": "PATCH",
+    "path": "/workspaces/{workspaceId}/agent/sessions/{sessionId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "created",
+                "running",
+                "waiting",
+                "completed",
+                "failed",
+                "canceled"
+              ]
+            },
+            "result": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "sessionId",
+        "workspaceId"
+      ]
+    }
+  },
+  {
     "name": "patchWorkspacesWorkspaceIdCyclesId",
     "description": "(PATCH /workspaces/{workspaceId}/cycles/{id})",
     "method": "PATCH",
@@ -1479,6 +1566,78 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           ]
         }
       }
+    }
+  },
+  {
+    "name": "postWorkspacesWorkspaceIdAgentSessionsSessionIdActivities",
+    "description": "(POST /workspaces/{workspaceId}/agent/sessions/{sessionId}/activities)",
+    "method": "POST",
+    "path": "/workspaces/{workspaceId}/agent/sessions/{sessionId}/activities",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "thought",
+                "response",
+                "error",
+                "elicitation",
+                "action",
+                "status"
+              ]
+            },
+            "message": {
+              "type": "string",
+              "minLength": 1
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": {
+                "nullable": true
+              }
+            }
+          },
+          "required": [
+            "type",
+            "message"
+          ]
+        }
+      },
+      "required": [
+        "sessionId",
+        "workspaceId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesWorkspaceIdAgentSessionsSessionIdPoll",
+    "description": "(POST /workspaces/{workspaceId}/agent/sessions/{sessionId}/poll)",
+    "method": "POST",
+    "path": "/workspaces/{workspaceId}/agent/sessions/{sessionId}/poll",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId",
+        "workspaceId"
+      ]
     }
   },
   {

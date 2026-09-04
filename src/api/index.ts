@@ -11,6 +11,7 @@ import {
 } from "../platform/middleware.js";
 import { observabilityMiddleware } from "../platform/observability.js";
 import { securityMiddleware } from "../platform/security.js";
+import { registerAgentSessionRoutes } from "./agent-sessions.js";
 import { registerAttachmentRoutes } from "./attachments.js";
 import { registerCommentRoutes } from "./comments.js";
 import { registerGithubRoutes } from "./github.js";
@@ -54,6 +55,7 @@ app.use("/workspaces/:workspaceId/*", workspaceAuthMiddleware);
 registerWorkspaceRoutes(app);
 registerTokenRoutes(app);
 registerIssueRoutes(app);
+registerAgentSessionRoutes(app);
 registerWorkspaceEntityRoutes(app);
 registerCommentRoutes(app);
 registerIssueRelationRoutes(app);

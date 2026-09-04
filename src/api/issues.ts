@@ -2,7 +2,7 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 import { eq, and } from "drizzle-orm";
 
-import { getAgentProvider } from "../agents/index.js";
+import { dispatchAgent } from "../agents/index.js";
 import { createD1 } from "../global/db.js";
 import { deleteIssueReferences } from "../global/issue-data.js";
 import { createRepoBranch } from "../global/repo-branches.js";
@@ -20,6 +20,7 @@ import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 import type { Issue, IssueInput } from "../types/workspace.js";
 import { filterConditionSchema } from "../workspace/filter.js";
+import { agentSessionSchema } from "./agent-sessions.js";
 import {
   encodeCursor,
   listIssuesQuerySchema,
@@ -125,15 +126,6 @@ const issueApiSchema = z
     updatedAt: z.string(),
   })
   .openapi("Issue") satisfies z.ZodType<Issue>;
-
-const agentSessionSchema = z.object({
-  id: z.string(),
-  agentId: z.string(),
-  issueId: z.string(),
-  status: z.string(),
-  result: z.string().optional(),
-  url: z.string().optional(),
-});
 
 const listIssuesRoute = createRoute({
   method: "get",
@@ -455,8 +447,19 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     }
     await assertIssueAccess(db, issue, identity);
 
-    const provider = getAgentProvider(agentId ?? "devin", c.env);
-    const session = await provider.dispatch(workspaceId, issue, model);
+    const session = await dispatchAgent(
+      c.env,
+      agentId ?? "devin",
+      workspaceId,
+      {
+        id: issue.id,
+        teamId: issue.teamId,
+        title: issue.title,
+        description: issue.description,
+      },
+      identity,
+      model
+    );
 
     if (issue.repo && issue.branch) {
       await createRepoBranch(

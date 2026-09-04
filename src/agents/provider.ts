@@ -1,6 +1,6 @@
 import type { Issue } from "../types/workspace.js";
 
-export interface AgentSession {
+export interface AgentProviderSession {
   id: string;
   agentId: string;
   issueId: string;
@@ -15,6 +15,6 @@ export interface AgentProvider {
     workspaceId: string,
     issue: Issue,
     model?: string
-  ): Promise<AgentSession>;
-  poll(sessionId: string): Promise<AgentSession>;
+  ): Promise<AgentProviderSession>;
+  poll(sessionId: string): Promise<AgentProviderSession>;
 }

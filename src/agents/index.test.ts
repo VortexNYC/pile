@@ -1,6 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { env } from "cloudflare:test";
+import { beforeAll, describe, expect, it } from "vitest";
 
-import type { AppEnv } from "../platform/env.js";
+import { createD1 } from "../global/db.js";
+import { createWorkspace } from "../global/workspaces.js";
+import type { WorkspaceIdentity } from "../platform/identity.js";
 import { MockAgentProvider } from "./harness.js";
 import {
   dispatchAgent,
@@ -8,9 +11,28 @@ import {
   registerAgentProvider,
 } from "./index.js";
 
+const actor: WorkspaceIdentity = {
+  id: "user-1",
+  workspaceId: "",
+  type: "user",
+  permissions: ["write"],
+};
+
+beforeAll(async () => {
+  const db = createD1(env.D1);
+  const workspace = await createWorkspace(db, {
+    name: "Test workspace",
+    slug: "test-ws",
+    ownerId: actor.id,
+  });
+  if (workspace) {
+    actor.workspaceId = workspace.id;
+  }
+});
+
 describe("agent providers", () => {
   it("throws for unknown provider", () => {
-    expect(() => getAgentProvider("unknown", {} as AppEnv)).toThrow(
+    expect(() => getAgentProvider("unknown", env)).toThrow(
       "Unknown agent provider: unknown"
     );
   });
@@ -26,16 +48,23 @@ describe("agent providers", () => {
     });
     registerAgentProvider("mock", () => provider);
 
-    const session = await dispatchAgent({} as AppEnv, "mock", "ws-1", {
-      id: "issue-1",
-      teamId: "team-1",
-      title: "Test",
-      description: null,
-    });
+    const session = await dispatchAgent(
+      env,
+      "mock",
+      actor.workspaceId,
+      {
+        id: "issue-1",
+        teamId: "team-1",
+        title: "Test",
+        description: null,
+      },
+      actor
+    );
 
-    expect(session.id).toBe("test-1");
     expect(session.agentId).toBe("mock");
     expect(session.issueId).toBe("issue-1");
+    expect(session.provider).toBe("mock");
+    expect(session.actorId).toBe("user-1");
   });
 
   it("polls a mock session", async () => {
@@ -50,7 +79,7 @@ describe("agent providers", () => {
     });
     registerAgentProvider("mock-poll", () => provider);
 
-    const p = getAgentProvider("mock-poll", {} as AppEnv);
+    const p = getAgentProvider("mock-poll", env);
     const session = await p.poll("session-1");
 
     expect(session.id).toBe("session-1");

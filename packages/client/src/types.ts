@@ -516,13 +516,366 @@ export interface paths {
                     content: {
                         "application/json": {
                             id: string;
-                            agentId: string;
+                            workspaceId: string;
                             issueId: string;
-                            status: string;
-                            result?: string;
-                            url?: string;
+                            agentId: string;
+                            provider: string;
+                            actorId: string;
+                            /** @enum {string} */
+                            actorType: "user" | "agent";
+                            /** @enum {string} */
+                            status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                            result: string | null;
+                            url: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                            activities?: {
+                                id: string;
+                                sessionId: string;
+                                actorId: string | null;
+                                /** @enum {string} */
+                                type: "thought" | "response" | "error" | "elicitation" | "action" | "status";
+                                message: string;
+                                payload?: unknown;
+                                createdAt: string;
+                            }[];
                         };
                     };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{workspaceId}/agent/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    issueId?: string;
+                    limit?: string;
+                };
+                header?: never;
+                path: {
+                    workspaceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Agent sessions list */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            sessions: {
+                                id: string;
+                                workspaceId: string;
+                                issueId: string;
+                                agentId: string;
+                                provider: string;
+                                actorId: string;
+                                /** @enum {string} */
+                                actorType: "user" | "agent";
+                                /** @enum {string} */
+                                status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                                result: string | null;
+                                url: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                activities?: {
+                                    id: string;
+                                    sessionId: string;
+                                    actorId: string | null;
+                                    /** @enum {string} */
+                                    type: "thought" | "response" | "error" | "elicitation" | "action" | "status";
+                                    message: string;
+                                    payload?: unknown;
+                                    createdAt: string;
+                                }[];
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{workspaceId}/agent/sessions/{sessionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    workspaceId: string;
+                    sessionId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Agent session with activities */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            workspaceId: string;
+                            issueId: string;
+                            agentId: string;
+                            provider: string;
+                            actorId: string;
+                            /** @enum {string} */
+                            actorType: "user" | "agent";
+                            /** @enum {string} */
+                            status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                            result: string | null;
+                            url: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                            activities?: {
+                                id: string;
+                                sessionId: string;
+                                actorId: string | null;
+                                /** @enum {string} */
+                                type: "thought" | "response" | "error" | "elicitation" | "action" | "status";
+                                message: string;
+                                payload?: unknown;
+                                createdAt: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Session not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    workspaceId: string;
+                    sessionId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        status?: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                        result?: string;
+                        url?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Session updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            workspaceId: string;
+                            issueId: string;
+                            agentId: string;
+                            provider: string;
+                            actorId: string;
+                            /** @enum {string} */
+                            actorType: "user" | "agent";
+                            /** @enum {string} */
+                            status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                            result: string | null;
+                            url: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                            activities?: {
+                                id: string;
+                                sessionId: string;
+                                actorId: string | null;
+                                /** @enum {string} */
+                                type: "thought" | "response" | "error" | "elicitation" | "action" | "status";
+                                message: string;
+                                payload?: unknown;
+                                createdAt: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Session not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/workspaces/{workspaceId}/agent/sessions/{sessionId}/activities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    workspaceId: string;
+                    sessionId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        type: "thought" | "response" | "error" | "elicitation" | "action" | "status";
+                        message: string;
+                        payload?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Activity added */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            sessionId: string;
+                            actorId: string | null;
+                            /** @enum {string} */
+                            type: "thought" | "response" | "error" | "elicitation" | "action" | "status";
+                            message: string;
+                            payload?: unknown;
+                            createdAt: string;
+                        };
+                    };
+                };
+                /** @description Session not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{workspaceId}/agent/sessions/{sessionId}/poll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    workspaceId: string;
+                    sessionId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Session polled and updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            workspaceId: string;
+                            issueId: string;
+                            agentId: string;
+                            provider: string;
+                            actorId: string;
+                            /** @enum {string} */
+                            actorType: "user" | "agent";
+                            /** @enum {string} */
+                            status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                            result: string | null;
+                            url: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                            activities?: {
+                                id: string;
+                                sessionId: string;
+                                actorId: string | null;
+                                /** @enum {string} */
+                                type: "thought" | "response" | "error" | "elicitation" | "action" | "status";
+                                message: string;
+                                payload?: unknown;
+                                createdAt: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Session not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
                 };
             };
         };

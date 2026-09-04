@@ -1,13 +1,15 @@
 import type { Issue } from "../types/workspace.js";
-import type { AgentProvider, AgentSession } from "./provider.js";
+import type { AgentProvider, AgentProviderSession } from "./provider.js";
 
 export interface MockAgentProviderOptions {
   dispatch?: (
     workspaceId: string,
     issue: Issue,
     model?: string
-  ) => AgentSession | Promise<AgentSession>;
-  poll?: (sessionId: string) => AgentSession | Promise<AgentSession>;
+  ) => AgentProviderSession | Promise<AgentProviderSession>;
+  poll?: (
+    sessionId: string
+  ) => AgentProviderSession | Promise<AgentProviderSession>;
 }
 
 export class MockAgentProvider implements AgentProvider {
@@ -23,7 +25,7 @@ export class MockAgentProvider implements AgentProvider {
     workspaceId: string,
     issue: Issue,
     model?: string
-  ): Promise<AgentSession> {
+  ): Promise<AgentProviderSession> {
     if (this.options.dispatch) {
       return await this.options.dispatch(workspaceId, issue, model);
     }
@@ -35,7 +37,7 @@ export class MockAgentProvider implements AgentProvider {
     };
   }
 
-  async poll(sessionId: string): Promise<AgentSession> {
+  async poll(sessionId: string): Promise<AgentProviderSession> {
     if (this.options.poll) {
       return await this.options.poll(sessionId);
     }

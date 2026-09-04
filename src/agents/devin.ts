@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { AppEnv } from "../platform/env.js";
 import { VortexError } from "../platform/errors.js";
 import type { Issue } from "../types/workspace.js";
-import type { AgentProvider, AgentSession } from "./provider.js";
+import type { AgentProvider, AgentProviderSession } from "./provider.js";
 
 const devinCreateResponseSchema = z.object({
   session_id: z.string().optional(),
@@ -38,7 +38,7 @@ export class DevinAgentProvider implements AgentProvider {
     workspaceId: string,
     issue: Issue,
     model = "swe-1-7-medium"
-  ): Promise<AgentSession> {
+  ): Promise<AgentProviderSession> {
     const orgId = this.env.DEVIN_ORG_ID;
     if (!orgId) {
       throw new VortexError({
@@ -94,7 +94,7 @@ export class DevinAgentProvider implements AgentProvider {
     };
   }
 
-  async poll(sessionId: string): Promise<AgentSession> {
+  async poll(sessionId: string): Promise<AgentProviderSession> {
     const orgId = this.env.DEVIN_ORG_ID;
     if (!orgId) {
       throw new VortexError({
