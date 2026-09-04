@@ -12,7 +12,7 @@ export interface McpToolDefinition {
 export const MCP_TOOLS: readonly McpToolDefinition[] = [
   {
     "name": "deleteWorkspacesOrganizationIdCyclesId",
-    "description": "(DELETE /workspaces/{organizationId}/cycles/{id})",
+    "description": "Delete cycle (DELETE /workspaces/{organizationId}/cycles/{id})",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/cycles/{id}",
     "inputSchema": {
@@ -33,7 +33,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdInitiativesId",
-    "description": "(DELETE /workspaces/{organizationId}/initiatives/{id})",
+    "description": "Delete initiative (DELETE /workspaces/{organizationId}/initiatives/{id})",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/initiatives/{id}",
     "inputSchema": {
@@ -54,7 +54,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdIssuesId",
-    "description": "(DELETE /workspaces/{organizationId}/issues/{id})",
+    "description": "Delete issue (DELETE /workspaces/{organizationId}/issues/{id})",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/issues/{id}",
     "inputSchema": {
@@ -75,7 +75,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdIssuesIssueIdCommentsId",
-    "description": "(DELETE /workspaces/{organizationId}/issues/{issueId}/comments/{id})",
+    "description": "Delete issue comment (DELETE /workspaces/{organizationId}/issues/{issueId}/comments/{id})",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/issues/{issueId}/comments/{id}",
     "inputSchema": {
@@ -100,7 +100,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdIssuesIssueIdRelationsId",
-    "description": "(DELETE /workspaces/{organizationId}/issues/{issueId}/relations/{id})",
+    "description": "Delete issue relation (DELETE /workspaces/{organizationId}/issues/{issueId}/relations/{id})",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/issues/{issueId}/relations/{id}",
     "inputSchema": {
@@ -125,7 +125,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdIssuesIssueIdSubscribersId",
-    "description": "(DELETE /workspaces/{organizationId}/issues/{issueId}/subscribers/{id})",
+    "description": "Delete issue subscriber (DELETE /workspaces/{organizationId}/issues/{issueId}/subscribers/{id})",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/issues/{issueId}/subscribers/{id}",
     "inputSchema": {
@@ -150,7 +150,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdLabelsId",
-    "description": "(DELETE /workspaces/{organizationId}/labels/{id})",
+    "description": "Delete label (DELETE /workspaces/{organizationId}/labels/{id})",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/labels/{id}",
     "inputSchema": {
@@ -171,7 +171,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdProjectsId",
-    "description": "(DELETE /workspaces/{organizationId}/projects/{id})",
+    "description": "Delete project (DELETE /workspaces/{organizationId}/projects/{id})",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/projects/{id}",
     "inputSchema": {
@@ -192,7 +192,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdRoadmapsId",
-    "description": "(DELETE /workspaces/{organizationId}/roadmaps/{id})",
+    "description": "Delete roadmap (DELETE /workspaces/{organizationId}/roadmaps/{id})",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/roadmaps/{id}",
     "inputSchema": {
@@ -213,7 +213,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdSavedviewsId",
-    "description": "(DELETE /workspaces/{organizationId}/saved-views/{id})",
+    "description": "Delete saved view (DELETE /workspaces/{organizationId}/saved-views/{id})",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/saved-views/{id}",
     "inputSchema": {
@@ -234,7 +234,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdStatesId",
-    "description": "(DELETE /workspaces/{organizationId}/states/{id})",
+    "description": "Delete state (DELETE /workspaces/{organizationId}/states/{id})",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/states/{id}",
     "inputSchema": {
@@ -255,7 +255,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdTeamsId",
-    "description": "(DELETE /workspaces/{organizationId}/teams/{id})",
+    "description": "Delete team (DELETE /workspaces/{organizationId}/teams/{id})",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/teams/{id}",
     "inputSchema": {
@@ -276,7 +276,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdTeamsIdMembersMemberId",
-    "description": "(DELETE /workspaces/{organizationId}/teams/{id}/members/{memberId})",
+    "description": "Delete team member (DELETE /workspaces/{organizationId}/teams/{id}/members/{memberId})",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/teams/{id}/members/{memberId}",
     "inputSchema": {
@@ -308,7 +308,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdTokensId",
-    "description": "(DELETE /workspaces/{organizationId}/tokens/{id})",
+    "description": "Delete token (DELETE /workspaces/{organizationId}/tokens/{id})",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/tokens/{id}",
     "inputSchema": {
@@ -329,7 +329,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdWebhooksubscriptionsId",
-    "description": "(DELETE /workspaces/{organizationId}/webhook-subscriptions/{id})",
+    "description": "Delete webhook subscription (DELETE /workspaces/{organizationId}/webhook-subscriptions/{id})",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/webhook-subscriptions/{id}",
     "inputSchema": {
@@ -350,7 +350,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspaces",
-    "description": "(GET /workspaces)",
+    "description": "List workspaces (GET /workspaces)",
     "method": "GET",
     "path": "/workspaces",
     "inputSchema": {
@@ -360,7 +360,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesId",
-    "description": "(GET /workspaces/{id})",
+    "description": "Get workspace (GET /workspaces/{id})",
     "method": "GET",
     "path": "/workspaces/{id}",
     "inputSchema": {
@@ -377,7 +377,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdAgentSessions",
-    "description": "(GET /workspaces/{organizationId}/agent/sessions)",
+    "description": "List agent sessions (GET /workspaces/{organizationId}/agent/sessions)",
     "method": "GET",
     "path": "/workspaces/{organizationId}/agent/sessions",
     "inputSchema": {
@@ -400,7 +400,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdAgentSessionsSessionId",
-    "description": "(GET /workspaces/{organizationId}/agent/sessions/{sessionId})",
+    "description": "Get agent session (GET /workspaces/{organizationId}/agent/sessions/{sessionId})",
     "method": "GET",
     "path": "/workspaces/{organizationId}/agent/sessions/{sessionId}",
     "inputSchema": {
@@ -421,7 +421,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdCycles",
-    "description": "(GET /workspaces/{organizationId}/cycles)",
+    "description": "List cycles (GET /workspaces/{organizationId}/cycles)",
     "method": "GET",
     "path": "/workspaces/{organizationId}/cycles",
     "inputSchema": {
@@ -438,7 +438,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdCyclesId",
-    "description": "(GET /workspaces/{organizationId}/cycles/{id})",
+    "description": "Get cycle (GET /workspaces/{organizationId}/cycles/{id})",
     "method": "GET",
     "path": "/workspaces/{organizationId}/cycles/{id}",
     "inputSchema": {
@@ -459,7 +459,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdInitiatives",
-    "description": "(GET /workspaces/{organizationId}/initiatives)",
+    "description": "List initiatives (GET /workspaces/{organizationId}/initiatives)",
     "method": "GET",
     "path": "/workspaces/{organizationId}/initiatives",
     "inputSchema": {
@@ -479,7 +479,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdInitiativesId",
-    "description": "(GET /workspaces/{organizationId}/initiatives/{id})",
+    "description": "Get initiative (GET /workspaces/{organizationId}/initiatives/{id})",
     "method": "GET",
     "path": "/workspaces/{organizationId}/initiatives/{id}",
     "inputSchema": {
@@ -500,7 +500,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdIssues",
-    "description": "(GET /workspaces/{organizationId}/issues)",
+    "description": "List issues (GET /workspaces/{organizationId}/issues)",
     "method": "GET",
     "path": "/workspaces/{organizationId}/issues",
     "inputSchema": {
@@ -569,7 +569,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdIssuesId",
-    "description": "(GET /workspaces/{organizationId}/issues/{id})",
+    "description": "Get issue (GET /workspaces/{organizationId}/issues/{id})",
     "method": "GET",
     "path": "/workspaces/{organizationId}/issues/{id}",
     "inputSchema": {
@@ -590,7 +590,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdIssuesIssueIdAttachments",
-    "description": "(GET /workspaces/{organizationId}/issues/{issueId}/attachments)",
+    "description": "List issue attachments (GET /workspaces/{organizationId}/issues/{issueId}/attachments)",
     "method": "GET",
     "path": "/workspaces/{organizationId}/issues/{issueId}/attachments",
     "inputSchema": {
@@ -611,7 +611,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdIssuesIssueIdComments",
-    "description": "(GET /workspaces/{organizationId}/issues/{issueId}/comments)",
+    "description": "List issue comments (GET /workspaces/{organizationId}/issues/{issueId}/comments)",
     "method": "GET",
     "path": "/workspaces/{organizationId}/issues/{issueId}/comments",
     "inputSchema": {
@@ -632,7 +632,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdIssuesIssueIdCommentsId",
-    "description": "(GET /workspaces/{organizationId}/issues/{issueId}/comments/{id})",
+    "description": "Get issue comment (GET /workspaces/{organizationId}/issues/{issueId}/comments/{id})",
     "method": "GET",
     "path": "/workspaces/{organizationId}/issues/{issueId}/comments/{id}",
     "inputSchema": {
@@ -657,7 +657,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdIssuesIssueIdHistory",
-    "description": "(GET /workspaces/{organizationId}/issues/{issueId}/history)",
+    "description": "List issue history (GET /workspaces/{organizationId}/issues/{issueId}/history)",
     "method": "GET",
     "path": "/workspaces/{organizationId}/issues/{issueId}/history",
     "inputSchema": {
@@ -678,7 +678,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdIssuesIssueIdRelations",
-    "description": "(GET /workspaces/{organizationId}/issues/{issueId}/relations)",
+    "description": "List issue relations (GET /workspaces/{organizationId}/issues/{issueId}/relations)",
     "method": "GET",
     "path": "/workspaces/{organizationId}/issues/{issueId}/relations",
     "inputSchema": {
@@ -699,7 +699,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdIssuesIssueIdSubscribers",
-    "description": "(GET /workspaces/{organizationId}/issues/{issueId}/subscribers)",
+    "description": "List issue subscribers (GET /workspaces/{organizationId}/issues/{issueId}/subscribers)",
     "method": "GET",
     "path": "/workspaces/{organizationId}/issues/{issueId}/subscribers",
     "inputSchema": {
@@ -720,7 +720,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdLabels",
-    "description": "(GET /workspaces/{organizationId}/labels)",
+    "description": "List labels (GET /workspaces/{organizationId}/labels)",
     "method": "GET",
     "path": "/workspaces/{organizationId}/labels",
     "inputSchema": {
@@ -737,7 +737,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdLabelsId",
-    "description": "(GET /workspaces/{organizationId}/labels/{id})",
+    "description": "Get label (GET /workspaces/{organizationId}/labels/{id})",
     "method": "GET",
     "path": "/workspaces/{organizationId}/labels/{id}",
     "inputSchema": {
@@ -758,7 +758,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdLinearusers",
-    "description": "(GET /workspaces/{organizationId}/linear-users)",
+    "description": "List linear users (GET /workspaces/{organizationId}/linear-users)",
     "method": "GET",
     "path": "/workspaces/{organizationId}/linear-users",
     "inputSchema": {
@@ -775,7 +775,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdLinearusersLinearId",
-    "description": "(GET /workspaces/{organizationId}/linear-users/{linearId})",
+    "description": "Get linear user (GET /workspaces/{organizationId}/linear-users/{linearId})",
     "method": "GET",
     "path": "/workspaces/{organizationId}/linear-users/{linearId}",
     "inputSchema": {
@@ -796,7 +796,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdMemberships",
-    "description": "(GET /workspaces/{organizationId}/memberships)",
+    "description": "List memberships (GET /workspaces/{organizationId}/memberships)",
     "method": "GET",
     "path": "/workspaces/{organizationId}/memberships",
     "inputSchema": {
@@ -813,7 +813,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdNotifications",
-    "description": "(GET /workspaces/{organizationId}/notifications)",
+    "description": "List notifications (GET /workspaces/{organizationId}/notifications)",
     "method": "GET",
     "path": "/workspaces/{organizationId}/notifications",
     "inputSchema": {
@@ -838,7 +838,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdNotificationsUnreadcount",
-    "description": "(GET /workspaces/{organizationId}/notifications/unread-count)",
+    "description": "Get unread notification count (GET /workspaces/{organizationId}/notifications/unread-count)",
     "method": "GET",
     "path": "/workspaces/{organizationId}/notifications/unread-count",
     "inputSchema": {
@@ -855,7 +855,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdProjects",
-    "description": "(GET /workspaces/{organizationId}/projects)",
+    "description": "List projects (GET /workspaces/{organizationId}/projects)",
     "method": "GET",
     "path": "/workspaces/{organizationId}/projects",
     "inputSchema": {
@@ -872,7 +872,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdProjectsId",
-    "description": "(GET /workspaces/{organizationId}/projects/{id})",
+    "description": "Get project (GET /workspaces/{organizationId}/projects/{id})",
     "method": "GET",
     "path": "/workspaces/{organizationId}/projects/{id}",
     "inputSchema": {
@@ -893,7 +893,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdRoadmaps",
-    "description": "(GET /workspaces/{organizationId}/roadmaps)",
+    "description": "List roadmaps (GET /workspaces/{organizationId}/roadmaps)",
     "method": "GET",
     "path": "/workspaces/{organizationId}/roadmaps",
     "inputSchema": {
@@ -910,7 +910,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdRoadmapsId",
-    "description": "(GET /workspaces/{organizationId}/roadmaps/{id})",
+    "description": "Get roadmap (GET /workspaces/{organizationId}/roadmaps/{id})",
     "method": "GET",
     "path": "/workspaces/{organizationId}/roadmaps/{id}",
     "inputSchema": {
@@ -931,7 +931,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdRoadmapsIdInitiatives",
-    "description": "(GET /workspaces/{organizationId}/roadmaps/{id}/initiatives)",
+    "description": "List roadmap initiatives (GET /workspaces/{organizationId}/roadmaps/{id}/initiatives)",
     "method": "GET",
     "path": "/workspaces/{organizationId}/roadmaps/{id}/initiatives",
     "inputSchema": {
@@ -952,7 +952,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdSavedviews",
-    "description": "(GET /workspaces/{organizationId}/saved-views)",
+    "description": "List saved views (GET /workspaces/{organizationId}/saved-views)",
     "method": "GET",
     "path": "/workspaces/{organizationId}/saved-views",
     "inputSchema": {
@@ -969,7 +969,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdSavedviewsId",
-    "description": "(GET /workspaces/{organizationId}/saved-views/{id})",
+    "description": "Get saved view (GET /workspaces/{organizationId}/saved-views/{id})",
     "method": "GET",
     "path": "/workspaces/{organizationId}/saved-views/{id}",
     "inputSchema": {
@@ -990,7 +990,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdStates",
-    "description": "(GET /workspaces/{organizationId}/states)",
+    "description": "List states (GET /workspaces/{organizationId}/states)",
     "method": "GET",
     "path": "/workspaces/{organizationId}/states",
     "inputSchema": {
@@ -1007,7 +1007,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdStatesId",
-    "description": "(GET /workspaces/{organizationId}/states/{id})",
+    "description": "Get state (GET /workspaces/{organizationId}/states/{id})",
     "method": "GET",
     "path": "/workspaces/{organizationId}/states/{id}",
     "inputSchema": {
@@ -1028,7 +1028,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdTeams",
-    "description": "(GET /workspaces/{organizationId}/teams)",
+    "description": "List teams (GET /workspaces/{organizationId}/teams)",
     "method": "GET",
     "path": "/workspaces/{organizationId}/teams",
     "inputSchema": {
@@ -1045,7 +1045,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdTeamsId",
-    "description": "(GET /workspaces/{organizationId}/teams/{id})",
+    "description": "Get team (GET /workspaces/{organizationId}/teams/{id})",
     "method": "GET",
     "path": "/workspaces/{organizationId}/teams/{id}",
     "inputSchema": {
@@ -1066,7 +1066,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdTeamsIdMembers",
-    "description": "(GET /workspaces/{organizationId}/teams/{id}/members)",
+    "description": "List team members (GET /workspaces/{organizationId}/teams/{id}/members)",
     "method": "GET",
     "path": "/workspaces/{organizationId}/teams/{id}/members",
     "inputSchema": {
@@ -1087,7 +1087,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdTemplates",
-    "description": "(GET /workspaces/{organizationId}/templates)",
+    "description": "List templates (GET /workspaces/{organizationId}/templates)",
     "method": "GET",
     "path": "/workspaces/{organizationId}/templates",
     "inputSchema": {
@@ -1104,7 +1104,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdTemplatesId",
-    "description": "(GET /workspaces/{organizationId}/templates/{id})",
+    "description": "Get template (GET /workspaces/{organizationId}/templates/{id})",
     "method": "GET",
     "path": "/workspaces/{organizationId}/templates/{id}",
     "inputSchema": {
@@ -1125,7 +1125,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdTokens",
-    "description": "(GET /workspaces/{organizationId}/tokens)",
+    "description": "List tokens (GET /workspaces/{organizationId}/tokens)",
     "method": "GET",
     "path": "/workspaces/{organizationId}/tokens",
     "inputSchema": {
@@ -1142,7 +1142,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdWebhooksubscriptions",
-    "description": "(GET /workspaces/{organizationId}/webhook-subscriptions)",
+    "description": "List webhook subscriptions (GET /workspaces/{organizationId}/webhook-subscriptions)",
     "method": "GET",
     "path": "/workspaces/{organizationId}/webhook-subscriptions",
     "inputSchema": {
@@ -1159,7 +1159,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdWebhooksubscriptionsId",
-    "description": "(GET /workspaces/{organizationId}/webhook-subscriptions/{id})",
+    "description": "Get webhook subscription (GET /workspaces/{organizationId}/webhook-subscriptions/{id})",
     "method": "GET",
     "path": "/workspaces/{organizationId}/webhook-subscriptions/{id}",
     "inputSchema": {
@@ -1180,7 +1180,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdWebhooksubscriptionsIdDeliveries",
-    "description": "(GET /workspaces/{organizationId}/webhook-subscriptions/{id}/deliveries)",
+    "description": "List webhook subscription deliveries (GET /workspaces/{organizationId}/webhook-subscriptions/{id}/deliveries)",
     "method": "GET",
     "path": "/workspaces/{organizationId}/webhook-subscriptions/{id}/deliveries",
     "inputSchema": {
@@ -1201,7 +1201,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesSlugSlug",
-    "description": "(GET /workspaces/slug/{slug})",
+    "description": "Get workspace by slug (GET /workspaces/slug/{slug})",
     "method": "GET",
     "path": "/workspaces/slug/{slug}",
     "inputSchema": {
@@ -1218,7 +1218,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdAgentSessionsSessionId",
-    "description": "(PATCH /workspaces/{organizationId}/agent/sessions/{sessionId})",
+    "description": "Update agent session (PATCH /workspaces/{organizationId}/agent/sessions/{sessionId})",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/agent/sessions/{sessionId}",
     "inputSchema": {
@@ -1261,7 +1261,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdCyclesId",
-    "description": "(PATCH /workspaces/{organizationId}/cycles/{id})",
+    "description": "Update cycle (PATCH /workspaces/{organizationId}/cycles/{id})",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/cycles/{id}",
     "inputSchema": {
@@ -1300,7 +1300,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdInitiativesId",
-    "description": "(PATCH /workspaces/{organizationId}/initiatives/{id})",
+    "description": "Update initiative (PATCH /workspaces/{organizationId}/initiatives/{id})",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/initiatives/{id}",
     "inputSchema": {
@@ -1345,7 +1345,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdIssuesId",
-    "description": "(PATCH /workspaces/{organizationId}/issues/{id})",
+    "description": "Update issue (PATCH /workspaces/{organizationId}/issues/{id})",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/issues/{id}",
     "inputSchema": {
@@ -1418,7 +1418,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdIssuesIssueIdCommentsId",
-    "description": "(PATCH /workspaces/{organizationId}/issues/{issueId}/comments/{id})",
+    "description": "Update issue comment (PATCH /workspaces/{organizationId}/issues/{issueId}/comments/{id})",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/issues/{issueId}/comments/{id}",
     "inputSchema": {
@@ -1455,7 +1455,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdLabelsId",
-    "description": "(PATCH /workspaces/{organizationId}/labels/{id})",
+    "description": "Update label (PATCH /workspaces/{organizationId}/labels/{id})",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/labels/{id}",
     "inputSchema": {
@@ -1488,7 +1488,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdNotificationsIdRead",
-    "description": "(PATCH /workspaces/{organizationId}/notifications/{id}/read)",
+    "description": "Mark notification as read (PATCH /workspaces/{organizationId}/notifications/{id}/read)",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/notifications/{id}/read",
     "inputSchema": {
@@ -1509,7 +1509,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdProjectsId",
-    "description": "(PATCH /workspaces/{organizationId}/projects/{id})",
+    "description": "Update project (PATCH /workspaces/{organizationId}/projects/{id})",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/projects/{id}",
     "inputSchema": {
@@ -1551,7 +1551,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdRoadmapsId",
-    "description": "(PATCH /workspaces/{organizationId}/roadmaps/{id})",
+    "description": "Update roadmap (PATCH /workspaces/{organizationId}/roadmaps/{id})",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/roadmaps/{id}",
     "inputSchema": {
@@ -1584,7 +1584,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdSavedviewsId",
-    "description": "(PATCH /workspaces/{organizationId}/saved-views/{id})",
+    "description": "Update saved view (PATCH /workspaces/{organizationId}/saved-views/{id})",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/saved-views/{id}",
     "inputSchema": {
@@ -1647,7 +1647,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdStatesId",
-    "description": "(PATCH /workspaces/{organizationId}/states/{id})",
+    "description": "Update state (PATCH /workspaces/{organizationId}/states/{id})",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/states/{id}",
     "inputSchema": {
@@ -1686,7 +1686,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdTeamsId",
-    "description": "(PATCH /workspaces/{organizationId}/teams/{id})",
+    "description": "Update team (PATCH /workspaces/{organizationId}/teams/{id})",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/teams/{id}",
     "inputSchema": {
@@ -1723,7 +1723,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdWebhooksubscriptionsId",
-    "description": "(PATCH /workspaces/{organizationId}/webhook-subscriptions/{id})",
+    "description": "Update webhook subscription (PATCH /workspaces/{organizationId}/webhook-subscriptions/{id})",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/webhook-subscriptions/{id}",
     "inputSchema": {
@@ -1759,7 +1759,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspaces",
-    "description": "(POST /workspaces)",
+    "description": "Create workspace (POST /workspaces)",
     "method": "POST",
     "path": "/workspaces",
     "inputSchema": {
@@ -1790,7 +1790,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdAgentSessionsSessionIdActivities",
-    "description": "(POST /workspaces/{organizationId}/agent/sessions/{sessionId}/activities)",
+    "description": "Create agent session activity (POST /workspaces/{organizationId}/agent/sessions/{sessionId}/activities)",
     "method": "POST",
     "path": "/workspaces/{organizationId}/agent/sessions/{sessionId}/activities",
     "inputSchema": {
@@ -1841,7 +1841,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdAgentSessionsSessionIdPoll",
-    "description": "(POST /workspaces/{organizationId}/agent/sessions/{sessionId}/poll)",
+    "description": "Poll agent session (POST /workspaces/{organizationId}/agent/sessions/{sessionId}/poll)",
     "method": "POST",
     "path": "/workspaces/{organizationId}/agent/sessions/{sessionId}/poll",
     "inputSchema": {
@@ -1862,7 +1862,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdCycles",
-    "description": "(POST /workspaces/{organizationId}/cycles)",
+    "description": "Create cycle (POST /workspaces/{organizationId}/cycles)",
     "method": "POST",
     "path": "/workspaces/{organizationId}/cycles",
     "inputSchema": {
@@ -1900,7 +1900,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdGithubInstall",
-    "description": "(POST /workspaces/{organizationId}/github/install)",
+    "description": "Install GitHub app (POST /workspaces/{organizationId}/github/install)",
     "method": "POST",
     "path": "/workspaces/{organizationId}/github/install",
     "inputSchema": {
@@ -1928,7 +1928,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdGithubUsers",
-    "description": "(POST /workspaces/{organizationId}/github/users)",
+    "description": "Sync GitHub users (POST /workspaces/{organizationId}/github/users)",
     "method": "POST",
     "path": "/workspaces/{organizationId}/github/users",
     "inputSchema": {
@@ -1960,7 +1960,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdInitiatives",
-    "description": "(POST /workspaces/{organizationId}/initiatives)",
+    "description": "Create initiative (POST /workspaces/{organizationId}/initiatives)",
     "method": "POST",
     "path": "/workspaces/{organizationId}/initiatives",
     "inputSchema": {
@@ -2004,7 +2004,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdIssues",
-    "description": "(POST /workspaces/{organizationId}/issues)",
+    "description": "Create issue (POST /workspaces/{organizationId}/issues)",
     "method": "POST",
     "path": "/workspaces/{organizationId}/issues",
     "inputSchema": {
@@ -2076,7 +2076,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdIssuesIdDispatch",
-    "description": "(POST /workspaces/{organizationId}/issues/{id}/dispatch)",
+    "description": "Dispatch issue (POST /workspaces/{organizationId}/issues/{id}/dispatch)",
     "method": "POST",
     "path": "/workspaces/{organizationId}/issues/{id}/dispatch",
     "inputSchema": {
@@ -2108,7 +2108,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdIssuesIssueIdComments",
-    "description": "(POST /workspaces/{organizationId}/issues/{issueId}/comments)",
+    "description": "Create issue comment (POST /workspaces/{organizationId}/issues/{issueId}/comments)",
     "method": "POST",
     "path": "/workspaces/{organizationId}/issues/{issueId}/comments",
     "inputSchema": {
@@ -2141,7 +2141,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdIssuesIssueIdRelations",
-    "description": "(POST /workspaces/{organizationId}/issues/{issueId}/relations)",
+    "description": "Create issue relation (POST /workspaces/{organizationId}/issues/{issueId}/relations)",
     "method": "POST",
     "path": "/workspaces/{organizationId}/issues/{issueId}/relations",
     "inputSchema": {
@@ -2186,7 +2186,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdIssuesIssueIdSubscribers",
-    "description": "(POST /workspaces/{organizationId}/issues/{issueId}/subscribers)",
+    "description": "Create issue subscriber (POST /workspaces/{organizationId}/issues/{issueId}/subscribers)",
     "method": "POST",
     "path": "/workspaces/{organizationId}/issues/{issueId}/subscribers",
     "inputSchema": {
@@ -2219,7 +2219,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdLabels",
-    "description": "(POST /workspaces/{organizationId}/labels)",
+    "description": "Create label (POST /workspaces/{organizationId}/labels)",
     "method": "POST",
     "path": "/workspaces/{organizationId}/labels",
     "inputSchema": {
@@ -2251,7 +2251,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdLinearusers",
-    "description": "(POST /workspaces/{organizationId}/linear-users)",
+    "description": "Create linear user (POST /workspaces/{organizationId}/linear-users)",
     "method": "POST",
     "path": "/workspaces/{organizationId}/linear-users",
     "inputSchema": {
@@ -2286,7 +2286,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdMemberships",
-    "description": "(POST /workspaces/{organizationId}/memberships)",
+    "description": "Create membership (POST /workspaces/{organizationId}/memberships)",
     "method": "POST",
     "path": "/workspaces/{organizationId}/memberships",
     "inputSchema": {
@@ -2323,7 +2323,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdMigrateLinear",
-    "description": "(POST /workspaces/{organizationId}/migrate/linear)",
+    "description": "Migrate from Linear (POST /workspaces/{organizationId}/migrate/linear)",
     "method": "POST",
     "path": "/workspaces/{organizationId}/migrate/linear",
     "inputSchema": {
@@ -2357,7 +2357,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdNotificationsMarkallread",
-    "description": "(POST /workspaces/{organizationId}/notifications/mark-all-read)",
+    "description": "Mark all notifications as read (POST /workspaces/{organizationId}/notifications/mark-all-read)",
     "method": "POST",
     "path": "/workspaces/{organizationId}/notifications/mark-all-read",
     "inputSchema": {
@@ -2374,7 +2374,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdProjects",
-    "description": "(POST /workspaces/{organizationId}/projects)",
+    "description": "Create project (POST /workspaces/{organizationId}/projects)",
     "method": "POST",
     "path": "/workspaces/{organizationId}/projects",
     "inputSchema": {
@@ -2415,7 +2415,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdRoadmaps",
-    "description": "(POST /workspaces/{organizationId}/roadmaps)",
+    "description": "Create roadmap (POST /workspaces/{organizationId}/roadmaps)",
     "method": "POST",
     "path": "/workspaces/{organizationId}/roadmaps",
     "inputSchema": {
@@ -2447,7 +2447,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdSavedviews",
-    "description": "(POST /workspaces/{organizationId}/saved-views)",
+    "description": "Create saved view (POST /workspaces/{organizationId}/saved-views)",
     "method": "POST",
     "path": "/workspaces/{organizationId}/saved-views",
     "inputSchema": {
@@ -2507,7 +2507,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdStates",
-    "description": "(POST /workspaces/{organizationId}/states)",
+    "description": "Create state (POST /workspaces/{organizationId}/states)",
     "method": "POST",
     "path": "/workspaces/{organizationId}/states",
     "inputSchema": {
@@ -2552,7 +2552,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdTeams",
-    "description": "(POST /workspaces/{organizationId}/teams)",
+    "description": "Create team (POST /workspaces/{organizationId}/teams)",
     "method": "POST",
     "path": "/workspaces/{organizationId}/teams",
     "inputSchema": {
@@ -2589,7 +2589,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdTeamsIdMembers",
-    "description": "(POST /workspaces/{organizationId}/teams/{id}/members)",
+    "description": "Create team member (POST /workspaces/{organizationId}/teams/{id}/members)",
     "method": "POST",
     "path": "/workspaces/{organizationId}/teams/{id}/members",
     "inputSchema": {
@@ -2636,7 +2636,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdTemplates",
-    "description": "(POST /workspaces/{organizationId}/templates)",
+    "description": "Create template (POST /workspaces/{organizationId}/templates)",
     "method": "POST",
     "path": "/workspaces/{organizationId}/templates",
     "inputSchema": {
@@ -2673,7 +2673,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdTokens",
-    "description": "(POST /workspaces/{organizationId}/tokens)",
+    "description": "Create token (POST /workspaces/{organizationId}/tokens)",
     "method": "POST",
     "path": "/workspaces/{organizationId}/tokens",
     "inputSchema": {
@@ -2715,7 +2715,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdWebhooksubscriptions",
-    "description": "(POST /workspaces/{organizationId}/webhook-subscriptions)",
+    "description": "Create webhook subscription (POST /workspaces/{organizationId}/webhook-subscriptions)",
     "method": "POST",
     "path": "/workspaces/{organizationId}/webhook-subscriptions",
     "inputSchema": {

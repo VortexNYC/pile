@@ -11,6 +11,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List workspaces */
         get: {
             parameters: {
                 query?: never;
@@ -42,6 +43,7 @@ export interface paths {
             };
         };
         put?: never;
+        /** Create workspace */
         post: {
             parameters: {
                 query?: never;
@@ -91,6 +93,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Get workspace */
         get: {
             parameters: {
                 query?: never;
@@ -136,6 +139,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Get workspace by slug */
         get: {
             parameters: {
                 query?: never;
@@ -181,6 +185,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List tokens */
         get: {
             parameters: {
                 query?: never;
@@ -212,6 +217,7 @@ export interface paths {
             };
         };
         put?: never;
+        /** Create token */
         post: {
             parameters: {
                 query?: never;
@@ -267,6 +273,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
+        /** Delete token */
         delete: {
             parameters: {
                 query?: never;
@@ -300,6 +307,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List issues */
         get: {
             parameters: {
                 query?: {
@@ -339,6 +347,7 @@ export interface paths {
             };
         };
         put?: never;
+        /** Create issue */
         post: {
             parameters: {
                 query?: never;
@@ -392,6 +401,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Get issue */
         get: {
             parameters: {
                 query?: never;
@@ -417,6 +427,7 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        /** Delete issue */
         delete: {
             parameters: {
                 query?: never;
@@ -440,6 +451,7 @@ export interface paths {
         };
         options?: never;
         head?: never;
+        /** Update issue */
         patch: {
             parameters: {
                 query?: never;
@@ -492,6 +504,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Dispatch issue */
         post: {
             parameters: {
                 query?: never;
@@ -560,6 +573,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List agent sessions */
         get: {
             parameters: {
                 query?: {
@@ -627,6 +641,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Get agent session */
         get: {
             parameters: {
                 query?: never;
@@ -687,6 +702,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
+        /** Update agent session */
         patch: {
             parameters: {
                 query?: never;
@@ -762,6 +778,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Create agent session activity */
         post: {
             parameters: {
                 query?: never;
@@ -827,6 +844,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Poll agent session */
         post: {
             parameters: {
                 query?: never;
@@ -895,6 +913,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List projects */
         get: {
             parameters: {
                 query?: never;
@@ -930,6 +949,7 @@ export interface paths {
             };
         };
         put?: never;
+        /** Create project */
         post: {
             parameters: {
                 query?: never;
@@ -985,6 +1005,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Get project */
         get: {
             parameters: {
                 query?: never;
@@ -1020,6 +1041,7 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        /** Delete project */
         delete: {
             parameters: {
                 query?: never;
@@ -1043,6 +1065,7 @@ export interface paths {
         };
         options?: never;
         head?: never;
+        /** Update project */
         patch: {
             parameters: {
                 query?: never;
@@ -1095,6 +1118,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List cycles */
         get: {
             parameters: {
                 query?: never;
@@ -1129,6 +1153,7 @@ export interface paths {
             };
         };
         put?: never;
+        /** Create cycle */
         post: {
             parameters: {
                 query?: never;
@@ -1182,6 +1207,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Get cycle */
         get: {
             parameters: {
                 query?: never;
@@ -1216,6 +1242,7 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        /** Delete cycle */
         delete: {
             parameters: {
                 query?: never;
@@ -1239,6 +1266,7 @@ export interface paths {
         };
         options?: never;
         head?: never;
+        /** Update cycle */
         patch: {
             parameters: {
                 query?: never;
@@ -1289,6 +1317,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List labels */
         get: {
             parameters: {
                 query?: never;
@@ -1320,6 +1349,7 @@ export interface paths {
             };
         };
         put?: never;
+        /** Create label */
         post: {
             parameters: {
                 query?: never;
@@ -1368,6 +1398,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Get label */
         get: {
             parameters: {
                 query?: never;
@@ -1399,6 +1430,7 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        /** Delete label */
         delete: {
             parameters: {
                 query?: never;
@@ -1422,6 +1454,7 @@ export interface paths {
         };
         options?: never;
         head?: never;
+        /** Update label */
         patch: {
             parameters: {
                 query?: never;
@@ -1467,6 +1500,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List memberships */
         get: {
             parameters: {
                 query?: never;
@@ -1499,6 +1533,7 @@ export interface paths {
             };
         };
         put?: never;
+        /** Create membership */
         post: {
             parameters: {
                 query?: never;
@@ -1549,6 +1584,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List roadmaps */
         get: {
             parameters: {
                 query?: never;
@@ -1581,6 +1617,7 @@ export interface paths {
             };
         };
         put?: never;
+        /** Create roadmap */
         post: {
             parameters: {
                 query?: never;
@@ -1630,6 +1667,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Get roadmap */
         get: {
             parameters: {
                 query?: never;
@@ -1662,6 +1700,7 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        /** Delete roadmap */
         delete: {
             parameters: {
                 query?: never;
@@ -1685,6 +1724,7 @@ export interface paths {
         };
         options?: never;
         head?: never;
+        /** Update roadmap */
         patch: {
             parameters: {
                 query?: never;
@@ -1731,6 +1771,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List initiatives */
         get: {
             parameters: {
                 query?: {
@@ -1769,6 +1810,7 @@ export interface paths {
             };
         };
         put?: never;
+        /** Create initiative */
         post: {
             parameters: {
                 query?: never;
@@ -1826,6 +1868,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List roadmap initiatives */
         get: {
             parameters: {
                 query?: never;
@@ -1877,6 +1920,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Get initiative */
         get: {
             parameters: {
                 query?: never;
@@ -1913,6 +1957,7 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        /** Delete initiative */
         delete: {
             parameters: {
                 query?: never;
@@ -1936,6 +1981,7 @@ export interface paths {
         };
         options?: never;
         head?: never;
+        /** Update initiative */
         patch: {
             parameters: {
                 query?: never;
@@ -1990,6 +2036,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List issue comments */
         get: {
             parameters: {
                 query?: never;
@@ -2027,6 +2074,7 @@ export interface paths {
             };
         };
         put?: never;
+        /** Create issue comment */
         post: {
             parameters: {
                 query?: never;
@@ -2080,6 +2128,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Get issue comment */
         get: {
             parameters: {
                 query?: never;
@@ -2117,6 +2166,7 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        /** Delete issue comment */
         delete: {
             parameters: {
                 query?: never;
@@ -2141,6 +2191,7 @@ export interface paths {
         };
         options?: never;
         head?: never;
+        /** Update issue comment */
         patch: {
             parameters: {
                 query?: never;
@@ -2191,6 +2242,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List issue relations */
         get: {
             parameters: {
                 query?: never;
@@ -2224,6 +2276,7 @@ export interface paths {
             };
         };
         put?: never;
+        /** Create issue relation */
         post: {
             parameters: {
                 query?: never;
@@ -2278,6 +2331,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
+        /** Delete issue relation */
         delete: {
             parameters: {
                 query?: never;
@@ -2312,6 +2366,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List issue subscribers */
         get: {
             parameters: {
                 query?: never;
@@ -2344,6 +2399,7 @@ export interface paths {
             };
         };
         put?: never;
+        /** Create issue subscriber */
         post: {
             parameters: {
                 query?: never;
@@ -2395,6 +2451,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
+        /** Delete issue subscriber */
         delete: {
             parameters: {
                 query?: never;
@@ -2429,6 +2486,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List issue attachments */
         get: {
             parameters: {
                 query?: never;
@@ -2481,6 +2539,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Sync GitHub users */
         post: {
             parameters: {
                 query?: never;
@@ -2530,6 +2589,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Install GitHub app */
         post: {
             parameters: {
                 query?: never;
@@ -2575,6 +2635,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List issue history */
         get: {
             parameters: {
                 query?: never;
@@ -2625,6 +2686,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List states */
         get: {
             parameters: {
                 query?: never;
@@ -2659,6 +2721,7 @@ export interface paths {
             };
         };
         put?: never;
+        /** Create state */
         post: {
             parameters: {
                 query?: never;
@@ -2713,6 +2776,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Get state */
         get: {
             parameters: {
                 query?: never;
@@ -2747,6 +2811,7 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        /** Delete state */
         delete: {
             parameters: {
                 query?: never;
@@ -2770,6 +2835,7 @@ export interface paths {
         };
         options?: never;
         head?: never;
+        /** Update state */
         patch: {
             parameters: {
                 query?: never;
@@ -2820,6 +2886,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List webhook subscriptions */
         get: {
             parameters: {
                 query?: never;
@@ -2852,6 +2919,7 @@ export interface paths {
             };
         };
         put?: never;
+        /** Create webhook subscription */
         post: {
             parameters: {
                 query?: never;
@@ -2903,6 +2971,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Get webhook subscription */
         get: {
             parameters: {
                 query?: never;
@@ -2935,6 +3004,7 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        /** Delete webhook subscription */
         delete: {
             parameters: {
                 query?: never;
@@ -2958,6 +3028,7 @@ export interface paths {
         };
         options?: never;
         head?: never;
+        /** Update webhook subscription */
         patch: {
             parameters: {
                 query?: never;
@@ -3006,6 +3077,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List webhook subscription deliveries */
         get: {
             parameters: {
                 query?: never;
@@ -3058,6 +3130,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List linear users */
         get: {
             parameters: {
                 query?: never;
@@ -3090,6 +3163,7 @@ export interface paths {
             };
         };
         put?: never;
+        /** Create linear user */
         post: {
             parameters: {
                 query?: never;
@@ -3140,6 +3214,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Get linear user */
         get: {
             parameters: {
                 query?: never;
@@ -3185,6 +3260,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List notifications */
         get: {
             parameters: {
                 query?: {
@@ -3240,6 +3316,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Get unread notification count */
         get: {
             parameters: {
                 query?: never;
@@ -3285,6 +3362,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
+        /** Mark notification as read */
         patch: {
             parameters: {
                 query?: never;
@@ -3337,6 +3415,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Mark all notifications as read */
         post: {
             parameters: {
                 query?: never;
@@ -3370,6 +3449,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List saved views */
         get: {
             parameters: {
                 query?: never;
@@ -3410,6 +3490,7 @@ export interface paths {
             };
         };
         put?: never;
+        /** Create saved view */
         post: {
             parameters: {
                 query?: never;
@@ -3474,6 +3555,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Get saved view */
         get: {
             parameters: {
                 query?: never;
@@ -3521,6 +3603,7 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        /** Delete saved view */
         delete: {
             parameters: {
                 query?: never;
@@ -3544,6 +3627,7 @@ export interface paths {
         };
         options?: never;
         head?: never;
+        /** Update saved view */
         patch: {
             parameters: {
                 query?: never;
@@ -3612,6 +3696,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List teams */
         get: {
             parameters: {
                 query?: never;
@@ -3647,6 +3732,7 @@ export interface paths {
             };
         };
         put?: never;
+        /** Create team */
         post: {
             parameters: {
                 query?: never;
@@ -3700,6 +3786,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Get team */
         get: {
             parameters: {
                 query?: never;
@@ -3742,6 +3829,7 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        /** Delete team */
         delete: {
             parameters: {
                 query?: never;
@@ -3765,6 +3853,7 @@ export interface paths {
         };
         options?: never;
         head?: never;
+        /** Update team */
         patch: {
             parameters: {
                 query?: never;
@@ -3822,6 +3911,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List team members */
         get: {
             parameters: {
                 query?: never;
@@ -3853,6 +3943,7 @@ export interface paths {
             };
         };
         put?: never;
+        /** Create team member */
         post: {
             parameters: {
                 query?: never;
@@ -3900,6 +3991,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
+        /** Delete team member */
         delete: {
             parameters: {
                 query?: {
@@ -3936,6 +4028,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List templates */
         get: {
             parameters: {
                 query?: never;
@@ -3968,6 +4061,7 @@ export interface paths {
             };
         };
         put?: never;
+        /** Create template */
         post: {
             parameters: {
                 query?: never;
@@ -4018,6 +4112,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Get template */
         get: {
             parameters: {
                 query?: never;
@@ -4065,6 +4160,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Migrate from Linear */
         post: {
             parameters: {
                 query?: never;
@@ -4115,6 +4211,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Get health */
         get: {
             parameters: {
                 query?: never;
@@ -4181,6 +4278,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Receive GitHub webhook */
         post: {
             parameters: {
                 query?: never;
@@ -4216,6 +4314,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Open realtime connection */
         get: {
             parameters: {
                 query?: never;
