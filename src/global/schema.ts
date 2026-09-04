@@ -507,6 +507,7 @@ export const user = sqliteTable("user" as string, {
     .notNull()
     .default(false),
   image: text("image" as string),
+  metadata: text("metadata" as string),
   createdAt: integer("created_at" as string, { mode: "timestamp_ms" })
     .notNull()
     .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`),

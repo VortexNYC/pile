@@ -15,6 +15,11 @@ export function createAuth(env: AppEnv) {
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.BETTER_AUTH_URL,
     emailAndPassword: { enabled: true },
+    user: {
+      additionalFields: {
+        metadata: { type: "json", required: false },
+      },
+    },
     plugins: [
       apiKey({
         enableMetadata: true,
