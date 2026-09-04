@@ -26,6 +26,8 @@ const teamSchema = z.object({
   ownerId: z.string(),
   isDefault: z.boolean(),
   isPublic: z.boolean(),
+  parentAutoClose: z.boolean(),
+  subIssueAutoClose: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -39,6 +41,8 @@ function serializeTeam(record: TeamRecord) {
     ownerId: record.ownerId,
     isDefault: record.isDefault,
     isPublic: record.isPublic,
+    parentAutoClose: record.parentAutoClose,
+    subIssueAutoClose: record.subIssueAutoClose,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   };
@@ -48,12 +52,16 @@ const createTeamBodySchema = z.object({
   key: z.string().min(1),
   name: z.string().min(1),
   isPublic: z.boolean().optional(),
+  parentAutoClose: z.boolean().optional(),
+  subIssueAutoClose: z.boolean().optional(),
 });
 
 const updateTeamBodySchema = z.object({
   key: z.string().min(1).optional(),
   name: z.string().min(1).optional(),
   isPublic: z.boolean().optional(),
+  parentAutoClose: z.boolean().optional(),
+  subIssueAutoClose: z.boolean().optional(),
 });
 
 const teamMemberSchema = z.object({
@@ -263,6 +271,8 @@ export function registerTeamRoutes(app: OpenAPIHono<AppContext>) {
       name: body.name,
       ownerId: identity.id,
       isPublic: body.isPublic,
+      parentAutoClose: body.parentAutoClose,
+      subIssueAutoClose: body.subIssueAutoClose,
     });
     return c.json(serializeTeam(record), 201);
   });

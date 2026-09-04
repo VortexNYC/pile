@@ -57,6 +57,8 @@ export interface ListIssuesArgs {
   status?: IssueStatus;
   priority?: IssuePriority;
   parentId?: string | null;
+  hasParent?: boolean;
+  isParent?: boolean;
   assigneeId?: string;
   projectId?: string;
   cycleId?: string;

@@ -544,6 +544,20 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         "parentId": {
           "type": "string"
         },
+        "hasParent": {
+          "type": "string",
+          "enum": [
+            "true",
+            "false"
+          ]
+        },
+        "isParent": {
+          "type": "string",
+          "enum": [
+            "true",
+            "false"
+          ]
+        },
         "assigneeId": {
           "type": "string"
         },
@@ -1765,6 +1779,12 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "isPublic": {
               "type": "boolean"
+            },
+            "parentAutoClose": {
+              "type": "boolean"
+            },
+            "subIssueAutoClose": {
+              "type": "boolean"
             }
           }
         }
@@ -2647,6 +2667,12 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "minLength": 1
             },
             "isPublic": {
+              "type": "boolean"
+            },
+            "parentAutoClose": {
+              "type": "boolean"
+            },
+            "subIssueAutoClose": {
               "type": "boolean"
             }
           },

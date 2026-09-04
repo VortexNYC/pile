@@ -10,6 +10,15 @@ import {
 export const DEFAULT_LIMIT = 25;
 export const MAX_LIMIT = 100;
 
+const booleanQueryParam = z
+  .enum(["true", "false"])
+  .optional()
+  .transform((val) => {
+    if (val === "true") return true;
+    if (val === "false") return false;
+    return undefined;
+  });
+
 export const listIssuesQuerySchema = z.object({
   limit: z.preprocess((val) => {
     if (val === undefined) return DEFAULT_LIMIT;
@@ -21,6 +30,8 @@ export const listIssuesQuerySchema = z.object({
   status: z.enum(ISSUE_STATUSES).optional(),
   priority: z.enum(ISSUE_PRIORITIES).optional(),
   parentId: z.string().optional(),
+  hasParent: booleanQueryParam,
+  isParent: booleanQueryParam,
   assigneeId: z.string().optional(),
   projectId: z.string().optional(),
   cycleId: z.string().optional(),
@@ -75,6 +86,12 @@ export function toListArgs(query: ListIssuesQuery): ListIssuesArgs {
   }
   if (query.parentId) {
     args.parentId = query.parentId;
+  }
+  if (query.hasParent !== undefined) {
+    args.hasParent = query.hasParent;
+  }
+  if (query.isParent !== undefined) {
+    args.isParent = query.isParent;
   }
   if (query.assigneeId) {
     args.assigneeId = query.assigneeId;

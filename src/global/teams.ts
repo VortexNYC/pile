@@ -15,6 +15,8 @@ const teamMetadataSchema = z.object({
   ownerId: z.string(),
   isDefault: z.boolean(),
   isPublic: z.boolean(),
+  parentAutoClose: z.boolean(),
+  subIssueAutoClose: z.boolean(),
 });
 
 export interface TeamRecord {
@@ -25,6 +27,8 @@ export interface TeamRecord {
   ownerId: string;
   isDefault: boolean;
   isPublic: boolean;
+  parentAutoClose: boolean;
+  subIssueAutoClose: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -43,6 +47,8 @@ function teamRecordFromRow(row: typeof team.$inferSelect): TeamRecord {
     ownerId: "",
     isDefault: false,
     isPublic: false,
+    parentAutoClose: false,
+    subIssueAutoClose: false,
   };
   return {
     id: row.id,
@@ -52,6 +58,8 @@ function teamRecordFromRow(row: typeof team.$inferSelect): TeamRecord {
     ownerId: metadata.ownerId,
     isDefault: metadata.isDefault,
     isPublic: metadata.isPublic,
+    parentAutoClose: metadata.parentAutoClose,
+    subIssueAutoClose: metadata.subIssueAutoClose,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -62,6 +70,8 @@ function teamMetadataString(values: {
   ownerId: string;
   isDefault: boolean;
   isPublic: boolean;
+  parentAutoClose: boolean;
+  subIssueAutoClose: boolean;
 }) {
   return JSON.stringify(values);
 }
@@ -121,6 +131,8 @@ interface CreateTeamInput {
   ownerId: string;
   isDefault?: boolean;
   isPublic?: boolean;
+  parentAutoClose?: boolean;
+  subIssueAutoClose?: boolean;
 }
 
 export async function createTeam(
@@ -133,6 +145,8 @@ export async function createTeam(
     ownerId: values.ownerId,
     isDefault: values.isDefault ?? false,
     isPublic: values.isPublic ?? false,
+    parentAutoClose: values.parentAutoClose ?? false,
+    subIssueAutoClose: values.subIssueAutoClose ?? false,
   });
   await db.insert(team).values({
     id,
@@ -172,6 +186,8 @@ interface UpdateTeamInput {
   key?: string;
   name?: string;
   isPublic?: boolean;
+  parentAutoClose?: boolean;
+  subIssueAutoClose?: boolean;
 }
 
 export async function updateTeam(
@@ -188,6 +204,8 @@ export async function updateTeam(
     ownerId: existing.ownerId,
     isDefault: existing.isDefault,
     isPublic: input.isPublic ?? existing.isPublic,
+    parentAutoClose: input.parentAutoClose ?? existing.parentAutoClose,
+    subIssueAutoClose: input.subIssueAutoClose ?? existing.subIssueAutoClose,
   });
 
   await db

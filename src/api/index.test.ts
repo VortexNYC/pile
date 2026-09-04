@@ -618,6 +618,43 @@ describe("API integration", () => {
       env
     );
     expect(cycleRes.status).toBe(400);
+
+    const hasParentRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues?hasParent=true`, {
+        token,
+      }),
+      env
+    );
+    expect(hasParentRes.status).toBe(200);
+    const hasParentBody = await hasParentRes.json<{ issues: unknown[] }>();
+    expect(hasParentBody.issues.length).toBeGreaterThan(0);
+    expect(
+      hasParentBody.issues.every(
+        (issue) =>
+          typeof issue === "object" &&
+          issue !== null &&
+          "parentId" in issue &&
+          issue.parentId !== null
+      )
+    ).toBe(true);
+
+    const isParentRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues?isParent=true`, {
+        token,
+      }),
+      env
+    );
+    expect(isParentRes.status).toBe(200);
+    const isParentBody = await isParentRes.json<{ issues: unknown[] }>();
+    expect(
+      isParentBody.issues.some(
+        (issue) =>
+          typeof issue === "object" &&
+          issue !== null &&
+          "id" in issue &&
+          issue.id === parent.id
+      )
+    ).toBe(true);
   });
 
   it("creates notifications on issue creation and lists them", async () => {

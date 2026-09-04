@@ -4,15 +4,19 @@ import {
   asc,
   desc,
   eq,
+  exists,
   inArray,
+  isNotNull,
   isNull,
   like,
   lt,
+  not,
   or,
   sql,
 } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/durable-sqlite";
 import { migrate } from "drizzle-orm/durable-sqlite/migrator";
+import { alias } from "drizzle-orm/sqlite-core";
 import { z } from "zod";
 
 import { createD1 } from "../global/db.js";
@@ -58,6 +62,10 @@ import { deliverWebhooks, retryWebhookDeliveries } from "./webhooks.js";
 type IssueKey = keyof Issue & keyof IssueInput;
 
 const TERMINAL_STATUSES: ReadonlyArray<IssueStatus> = ["done", "canceled"];
+
+function isTerminalStatus(status: IssueStatus): boolean {
+  return status === "done" || status === "canceled";
+}
 
 async function resolveParent(
   getIssue: (id: string) => Promise<Issue | undefined>,
@@ -448,6 +456,24 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         conditions.push(eq(workspaceIssues.parentId, args.parentId));
       }
     }
+    if (args.hasParent !== undefined) {
+      conditions.push(
+        args.hasParent
+          ? isNotNull(workspaceIssues.parentId)
+          : isNull(workspaceIssues.parentId)
+      );
+    }
+    if (args.isParent !== undefined) {
+      const childAlias = alias(workspaceIssues, "child");
+      const childSubquery = this.db
+        .select({ id: childAlias.id })
+        .from(childAlias)
+        .where(eq(childAlias.parentId, workspaceIssues.id))
+        .limit(1);
+      conditions.push(
+        args.isParent ? exists(childSubquery) : not(exists(childSubquery))
+      );
+    }
     if (args.assigneeId) {
       conditions.push(eq(workspaceIssues.assigneeId, args.assigneeId));
     }
@@ -656,7 +682,62 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     this.ctx.waitUntil(
       notifyIssueUpdated(this.env, this.organizationId, issue, actorId)
     );
+
+    if (issue.status !== old.status) {
+      await this.applyStatusAutomation(issue, old, actorId);
+    }
+
     return issue;
+  }
+
+  private async applyStatusAutomation(
+    issue: Issue,
+    old: Issue,
+    actorId?: string
+  ): Promise<void> {
+    const d1 = createD1(this.env.D1);
+    const team = await getTeamById(d1, issue.teamId, this.organizationId);
+    if (!team) return;
+
+    if (team.subIssueAutoClose && issue.status === "done") {
+      const children = await this.getIssueChildren(issue.id);
+      await this.closeChildrenSequentially(children, 0, actorId);
+    }
+
+    if (
+      team.parentAutoClose &&
+      isTerminalStatus(issue.status) &&
+      issue.parentId
+    ) {
+      const siblings = await this.getIssueChildren(issue.parentId);
+      if (siblings.every((sibling) => isTerminalStatus(sibling.status))) {
+        const parent = await this.getIssue(issue.parentId);
+        if (parent && !isTerminalStatus(parent.status)) {
+          await this.updateIssue(
+            parent.id,
+            { status: "done", resolution: "resolved" },
+            actorId
+          );
+        }
+      }
+    }
+  }
+
+  private async closeChildrenSequentially(
+    children: Issue[],
+    index: number,
+    actorId?: string
+  ): Promise<void> {
+    if (index >= children.length) return;
+    const child = children[index];
+    if (!isTerminalStatus(child.status)) {
+      await this.updateIssue(
+        child.id,
+        { status: "done", resolution: "resolved" },
+        actorId
+      );
+    }
+    await this.closeChildrenSequentially(children, index + 1, actorId);
   }
 
   async deleteIssue(id: string, actorId?: string): Promise<boolean> {

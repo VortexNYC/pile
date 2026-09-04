@@ -317,6 +317,8 @@ export interface paths {
                     status?: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
                     priority?: "low" | "medium" | "high" | "urgent";
                     parentId?: string;
+                    hasParent?: "true" | "false";
+                    isParent?: "true" | "false";
                     assigneeId?: string;
                     projectId?: string;
                     cycleId?: string;
@@ -3783,6 +3785,8 @@ export interface paths {
                                 ownerId: string;
                                 isDefault: boolean;
                                 isPublic: boolean;
+                                parentAutoClose: boolean;
+                                subIssueAutoClose: boolean;
                                 createdAt: string;
                                 updatedAt: string;
                             }[];
@@ -3808,6 +3812,8 @@ export interface paths {
                         key: string;
                         name: string;
                         isPublic?: boolean;
+                        parentAutoClose?: boolean;
+                        subIssueAutoClose?: boolean;
                     };
                 };
             };
@@ -3826,6 +3832,8 @@ export interface paths {
                             ownerId: string;
                             isDefault: boolean;
                             isPublic: boolean;
+                            parentAutoClose: boolean;
+                            subIssueAutoClose: boolean;
                             createdAt: string;
                             updatedAt: string;
                         };
@@ -3873,6 +3881,8 @@ export interface paths {
                             ownerId: string;
                             isDefault: boolean;
                             isPublic: boolean;
+                            parentAutoClose: boolean;
+                            subIssueAutoClose: boolean;
                             createdAt: string;
                             updatedAt: string;
                         };
@@ -3930,6 +3940,8 @@ export interface paths {
                         key?: string;
                         name?: string;
                         isPublic?: boolean;
+                        parentAutoClose?: boolean;
+                        subIssueAutoClose?: boolean;
                     };
                 };
             };
@@ -3948,6 +3960,8 @@ export interface paths {
                             ownerId: string;
                             isDefault: boolean;
                             isPublic: boolean;
+                            parentAutoClose: boolean;
+                            subIssueAutoClose: boolean;
                             createdAt: string;
                             updatedAt: string;
                         };

@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import { createD1 } from "../global/db.js";
 import { member, organization, user as userTable } from "../global/schema.js";
-import { createDefaultTeam } from "../global/teams.js";
+import { createDefaultTeam, updateTeam } from "../global/teams.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { WorkspaceDO } from "./durable-object.js";
 
@@ -229,5 +229,106 @@ describe("WorkspaceDO", () => {
       instance.updateIssue(child.id, { parentId: null })
     );
     expect(removed?.parentId).toBeNull();
+  });
+
+  it("filters issues by hasParent and isParent", async () => {
+    const stub = getStub();
+    const parent = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Filter parent" })
+    );
+    await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Filter child", parentId: parent.id })
+    );
+
+    const withParent = await withWorkspace(stub, (instance) =>
+      instance.listIssues({ hasParent: true })
+    );
+    expect(withParent.every((issue) => issue.parentId !== null)).toBe(true);
+
+    const withoutParent = await withWorkspace(stub, (instance) =>
+      instance.listIssues({ hasParent: false })
+    );
+    expect(withoutParent.some((issue) => issue.parentId !== null)).toBe(false);
+
+    const parents = await withWorkspace(stub, (instance) =>
+      instance.listIssues({ isParent: true })
+    );
+    expect(parents.length).toBeGreaterThan(0);
+    expect(parents.some((issue) => issue.id === parent.id)).toBe(true);
+
+    const nonParents = await withWorkspace(stub, (instance) =>
+      instance.listIssues({ isParent: false })
+    );
+    expect(nonParents.some((issue) => issue.id === parent.id)).toBe(false);
+  });
+
+  it("auto-closes sub-issues when parent is done and setting is enabled", async () => {
+    const stub = getStub();
+    const db = createD1(env.D1);
+    const team = await createDefaultTeam(db, WORKSPACE_ID, "AUTO", "user-1");
+    await updateTeam(db, team.id, WORKSPACE_ID, { subIssueAutoClose: true });
+
+    const parent = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Auto parent", teamId: team.id })
+    );
+    const child = await withWorkspace(stub, (instance) =>
+      instance.createIssue({
+        title: "Auto child",
+        teamId: team.id,
+        parentId: parent.id,
+      })
+    );
+
+    await withWorkspace(stub, (instance) =>
+      instance.updateIssue(parent.id, { status: "done" })
+    );
+
+    const updatedChild = await withWorkspace(stub, (instance) =>
+      instance.getIssue(child.id)
+    );
+    expect(updatedChild?.status).toBe("done");
+    expect(updatedChild?.resolution).toBe("resolved");
+  });
+
+  it("auto-closes parent when all sub-issues are done and setting is enabled", async () => {
+    const stub = getStub();
+    const db = createD1(env.D1);
+    const team = await createDefaultTeam(db, WORKSPACE_ID, "AUTO2", "user-1");
+    await updateTeam(db, team.id, WORKSPACE_ID, { parentAutoClose: true });
+
+    const parent = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Auto parent 2", teamId: team.id })
+    );
+    const child1 = await withWorkspace(stub, (instance) =>
+      instance.createIssue({
+        title: "Auto child 1",
+        teamId: team.id,
+        parentId: parent.id,
+      })
+    );
+    const child2 = await withWorkspace(stub, (instance) =>
+      instance.createIssue({
+        title: "Auto child 2",
+        teamId: team.id,
+        parentId: parent.id,
+      })
+    );
+
+    await withWorkspace(stub, (instance) =>
+      instance.updateIssue(child1.id, { status: "done" })
+    );
+    let updatedParent = await withWorkspace(stub, (instance) =>
+      instance.getIssue(parent.id)
+    );
+    expect(updatedParent?.status).toBe("backlog");
+
+    await withWorkspace(stub, (instance) =>
+      instance.updateIssue(child2.id, { status: "done" })
+    );
+    updatedParent = await withWorkspace(stub, (instance) =>
+      instance.getIssue(parent.id)
+    );
+    expect(updatedParent?.status).toBe("done");
+    expect(updatedParent?.resolution).toBe("resolved");
   });
 });
