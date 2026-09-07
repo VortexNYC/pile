@@ -8,6 +8,7 @@ import { deleteIssueReferences } from "../global/issue-data.js";
 import { createRepoBranch } from "../global/repo-branches.js";
 import { getSavedView } from "../global/saved-views.js";
 import { getTemplate } from "../global/templates.js";
+import { getCycle } from "../global/workspace-entities.js";
 import { repoBranches } from "../global/schema.js";
 import {
   canAccessTeam,
@@ -36,12 +37,6 @@ import {
   toListArgs,
 } from "./list-args.js";
 
-function stripUndefined<T extends Record<string, unknown>>(obj: T): T {
-  return Object.fromEntries(
-    Object.entries(obj).filter(([, value]) => value !== undefined)
-  ) as T;
-}
-
 const templateDataSchema = z
   .object({
     title: z.string().optional(),
@@ -62,6 +57,7 @@ async function resolveTemplateDefaults(
   templateId: string | null,
   teamId: string | null
 ): Promise<Partial<z.infer<typeof createIssueSchema>>> {
+  const explicit = templateId !== null;
   let resolvedTemplateId = templateId;
   if (!resolvedTemplateId && teamId) {
     const team = await getTeamById(db, teamId, organizationId);
@@ -70,6 +66,8 @@ async function resolveTemplateDefaults(
   if (!resolvedTemplateId) return {};
   const template = await getTemplate(db, organizationId, resolvedTemplateId);
   if (!template) {
+    // A stale team default no-ops; an explicitly requested template 404s.
+    if (!explicit) return {};
     throw new VortexError({
       code: "NOT_FOUND",
       status: 404,
@@ -87,7 +85,15 @@ async function resolveTemplateDefaults(
       message: "Template has invalid data",
     });
   }
-  return templateDataSchema.parse(parsed);
+  const result = templateDataSchema.safeParse(parsed);
+  if (!result.success) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Template data is invalid",
+    });
+  }
+  return result.data;
 }
 
 async function getStub(env: WorkerEnv, organizationId: string) {
@@ -197,7 +203,7 @@ const createIssueSchema = z.object({
   isDraft: z.boolean().optional(),
   templateId: z.string().optional(),
   snoozedUntil: z.string().nullable().optional(),
-  assigneeId: z.string().optional(),
+  assigneeId: z.string().nullable().optional(),
   projectId: z.string().optional(),
   cycleId: z.string().optional(),
   labelIds: z.string().optional(),
@@ -541,7 +547,12 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     }
     if (query.view) {
       const view = await getSavedView(db, query.view, organizationId);
-      if (!view) {
+      if (
+        !view ||
+        (view.ownerId !== identity.id &&
+          !view.shared &&
+          !identity.permissions.includes("admin"))
+      ) {
         throw new VortexError({
           code: "NOT_FOUND",
           status: 404,
@@ -594,8 +605,22 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(burndownRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
     const { cycleId } = c.req.valid("query");
+    const identity = c.get("workspaceIdentity");
+    const db = createD1(c.env.D1);
+    const cycle = await getCycle(db, organizationId, cycleId);
+    if (!cycle) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Cycle not found",
+      });
+    }
+    const teamIds = await loadVisibleTeamIds(db, organizationId, identity);
     const stub = await getStub(c.env, organizationId);
-    const result = await stub.burndown(cycleId);
+    const result = await stub.burndown(cycleId, teamIds, {
+      startDate: cycle.startDate,
+      endDate: cycle.endDate,
+    });
     return c.json(result);
   });
 
@@ -613,6 +638,9 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     const args = toListArgs(query);
     args.status = "triage";
     args.isDraft = false;
+    args.hideSnoozed = query.includeSnoozed === undefined
+      ? true
+      : args.hideSnoozed;
     args.teamIds = visibleTeamIds;
     const issues = await stub.listIssues(args);
     const nextCursor =
@@ -644,23 +672,42 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       await assertIssueAccess(db, parent, identity);
       teamId ??= parent.teamId;
     }
-    const templateDefaults = await resolveTemplateDefaults(
-      db,
-      organizationId,
-      input.templateId ?? null,
-      teamId ?? null
-    );
-    const merged = { ...templateDefaults, ...stripUndefined(input) };
     const resolvedTeamId = await assertTeamAccess(
       db,
       organizationId,
       teamId,
       identity
     );
-    validateIssueState(merged.status ?? "backlog", merged.resolution);
-    const { templateId: _templateId, ...issueInput } = merged;
+    const templateDefaults = await resolveTemplateDefaults(
+      db,
+      organizationId,
+      input.templateId ?? null,
+      resolvedTeamId
+    );
+    validateIssueState(
+      input.status ?? templateDefaults.status ?? "backlog",
+      input.resolution
+    );
+    const { templateId: _templateId, ...rest } = input;
     const issue = await stub.createIssue(
-      { ...issueInput, teamId: resolvedTeamId },
+      {
+        ...rest,
+        description: input.description ?? templateDefaults.description,
+        status: input.status ?? templateDefaults.status,
+        priority: input.priority ?? templateDefaults.priority,
+        estimate:
+          input.estimate === undefined
+            ? templateDefaults.estimate
+            : input.estimate,
+        assigneeId:
+          input.assigneeId === undefined
+            ? templateDefaults.assigneeId
+            : input.assigneeId,
+        projectId: input.projectId ?? templateDefaults.projectId,
+        cycleId: input.cycleId ?? templateDefaults.cycleId,
+        labelIds: input.labelIds ?? templateDefaults.labelIds,
+        teamId: resolvedTeamId,
+      },
       identity.id
     );
     if (issue.repo && issue.branch) {

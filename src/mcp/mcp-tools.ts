@@ -1964,7 +1964,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "nullable": true
             },
             "assigneeId": {
-              "type": "string"
+              "type": "string",
+              "nullable": true
             },
             "projectId": {
               "type": "string"
@@ -2101,6 +2102,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "until": {
               "type": "string",
               "nullable": true,
+              "format": "date-time",
               "description": "ISO timestamp to snooze until, or null to unsnooze"
             }
           },
@@ -2828,7 +2830,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "nullable": true
             },
             "assigneeId": {
-              "type": "string"
+              "type": "string",
+              "nullable": true
             },
             "projectId": {
               "type": "string"
@@ -2949,7 +2952,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                   "nullable": true
                 },
                 "assigneeId": {
-                  "type": "string"
+                  "type": "string",
+                  "nullable": true
                 },
                 "projectId": {
                   "type": "string"

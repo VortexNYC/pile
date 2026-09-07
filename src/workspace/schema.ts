@@ -77,5 +77,10 @@ export const workspaceIssues = sqliteTable(
       table.teamId,
       table.number
     ),
+    index("idx_issues_triage" as string).on(
+      table.organizationId,
+      table.status,
+      table.snoozedUntil
+    ),
   ]
 );

@@ -305,6 +305,23 @@ const deleteSavedViewRoute = createRoute({
   },
 });
 
+function assertViewAccess(
+  record: SavedViewRecord,
+  identity: { id: string; permissions: string[] }
+) {
+  if (
+    record.ownerId !== identity.id &&
+    !record.shared &&
+    !identity.permissions.includes("admin")
+  ) {
+    throw new VortexError({
+      code: "NOT_FOUND",
+      status: 404,
+      message: "Saved view not found",
+    });
+  }
+}
+
 function getIdentity(c: {
   var: Pick<AppContext["Variables"], "workspaceIdentity">;
 }) {
@@ -359,6 +376,7 @@ export function registerSavedViewRoutes(app: OpenAPIHono<AppContext>) {
         message: "Saved view not found",
       });
     }
+    assertViewAccess(record, identity);
     await favoriteView(db, organizationId, id, identity.id);
     return c.json(serializeSavedView(record, true));
   });
@@ -375,6 +393,7 @@ export function registerSavedViewRoutes(app: OpenAPIHono<AppContext>) {
         message: "Saved view not found",
       });
     }
+    assertViewAccess(record, identity);
     await unfavoriteView(db, id, identity.id);
     return c.body(null, 204);
   });
@@ -405,6 +424,7 @@ export function registerSavedViewRoutes(app: OpenAPIHono<AppContext>) {
           message: "Saved view not found",
         });
       }
+      assertViewAccess(record, identity);
     }
     const prefs = await setDefaultView(
       db,
@@ -426,6 +446,7 @@ export function registerSavedViewRoutes(app: OpenAPIHono<AppContext>) {
         message: "Saved view not found",
       });
     }
+    assertViewAccess(record, getIdentity(c));
     return c.json(serializeSavedView(record));
   });
 

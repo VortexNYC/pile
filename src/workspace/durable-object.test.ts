@@ -375,14 +375,15 @@ describe("WorkspaceDO", () => {
     );
     expect(snoozed?.snoozedUntil).toBeTruthy();
 
-    const hidden = await withWorkspace(stub, (instance) =>
+    // Default lists keep snoozed issues visible; triage-style lists hide them.
+    const visible = await withWorkspace(stub, (instance) =>
       instance.listIssues({ isDraft: true })
     );
-    expect(hidden.some((i) => i.id === issue.id)).toBe(false);
-    const included = await withWorkspace(stub, (instance) =>
-      instance.listIssues({ isDraft: true, includeSnoozed: true })
+    expect(visible.some((i) => i.id === issue.id)).toBe(true);
+    const hidden = await withWorkspace(stub, (instance) =>
+      instance.listIssues({ isDraft: true, hideSnoozed: true })
     );
-    expect(included.some((i) => i.id === issue.id)).toBe(true);
+    expect(hidden.some((i) => i.id === issue.id)).toBe(false);
   });
 
   it("auto-assigns triage issues to the team triage owner", async () => {

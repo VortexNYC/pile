@@ -140,6 +140,7 @@ const snoozeRoute = createRoute({
           schema: z.object({
             until: z
               .string()
+              .datetime()
               .nullable()
               .openapi({
                 description:

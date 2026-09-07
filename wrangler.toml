@@ -1,0 +1,61 @@
+# Default (self-host) configuration: `wrangler deploy` auto-provisions
+# D1 and R2 when IDs are omitted. The hosted Vortex instance lives in
+# [env.production] and is deployed with `wrangler deploy -e production`.
+name = "issuetracker"
+main = "src/index.ts"
+compatibility_date = "2026-07-30"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+# Replace these with your Worker's real URL after the first deploy.
+# Placeholder must remain a syntactically valid URL (Better Auth validates it).
+BETTER_AUTH_URL = "https://issuetracker.example.workers.dev"
+ALLOWED_ORIGINS = "https://issuetracker.example.workers.dev"
+SLACK_REDIRECT_URI = "https://issuetracker.example.workers.dev/slack/oauth"
+# Optional: agent dispatch defaults
+# DEVIN_OUTPOST = "user:daytona-linux"
+# DEVIN_MODEL = "swe-1-7-medium"
+
+[[d1_databases]]
+binding = "D1"
+database_name = "issuetracker-global"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "ATTACHMENTS_BUCKET"
+bucket_name = "issuetracker-attachments"
+
+[[durable_objects.bindings]]
+name = "WORKSPACE_DURABLE_OBJECT"
+class_name = "WorkspaceDO"
+
+[triggers]
+crons = ["*/30 * * * *"]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["WorkspaceDO"]
+
+[env.production]
+name = "issuetracker"
+
+[env.production.vars]
+BETTER_AUTH_URL = "https://issuetracker.shlomo-31b.workers.dev"
+ALLOWED_ORIGINS = "https://issuetracker.shlomo-31b.workers.dev"
+SLACK_REDIRECT_URI = "https://issuetracker.shlomo-31b.workers.dev/slack/oauth"
+DEVIN_OUTPOST = "user:daytona-linux"
+DEVIN_MODEL = "swe-1-7-medium"
+
+[[env.production.d1_databases]]
+binding = "D1"
+database_name = "issuetracker-global"
+database_id = "c28ece66-1af9-4a83-a8f6-e1eeb2124045"
+migrations_dir = "migrations"
+
+[[env.production.r2_buckets]]
+binding = "ATTACHMENTS_BUCKET"
+bucket_name = "issuetracker-attachments"
+
+[[env.production.durable_objects.bindings]]
+name = "WORKSPACE_DURABLE_OBJECT"
+class_name = "WorkspaceDO"

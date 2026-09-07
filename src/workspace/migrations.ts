@@ -86,7 +86,7 @@ ALTER TABLE issues ADD COLUMN is_draft INTEGER NOT NULL DEFAULT 0
 --> statement-breakpoint
 ALTER TABLE issues ADD COLUMN snoozed_until TEXT
 --> statement-breakpoint
-CREATE INDEX idx_issues_triage ON issues (organization_id, status, snoozed_until)`;
+CREATE INDEX IF NOT EXISTS idx_issues_triage ON issues (organization_id, status, snoozed_until)`;
 
 export const workspaceMigrations = {
   journal: {

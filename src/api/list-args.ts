@@ -99,7 +99,7 @@ export function toListArgs(query: ListIssuesQuery): ListIssuesArgs {
     args.isDraft = query.isDraft;
   }
   if (query.includeSnoozed !== undefined) {
-    args.includeSnoozed = query.includeSnoozed;
+    args.hideSnoozed = !query.includeSnoozed;
   }
   if (query.assigneeId) {
     args.assigneeId = query.assigneeId;

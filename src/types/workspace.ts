@@ -64,7 +64,7 @@ export interface ListIssuesArgs {
   hasParent?: boolean;
   isParent?: boolean;
   isDraft?: boolean;
-  includeSnoozed?: boolean;
+  hideSnoozed?: boolean;
   assigneeId?: string;
   projectId?: string;
   cycleId?: string;

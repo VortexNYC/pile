@@ -380,7 +380,7 @@ export interface paths {
                         isDraft?: boolean;
                         templateId?: string;
                         snoozedUntil?: string | null;
-                        assigneeId?: string;
+                        assigneeId?: string | null;
                         projectId?: string;
                         cycleId?: string;
                         labelIds?: string;
@@ -646,7 +646,7 @@ export interface paths {
                         isDraft?: boolean;
                         templateId?: string;
                         snoozedUntil?: string | null;
-                        assigneeId?: string;
+                        assigneeId?: string | null;
                         projectId?: string;
                         cycleId?: string;
                         labelIds?: string;
@@ -749,7 +749,7 @@ export interface paths {
                             isDraft?: boolean;
                             templateId?: string;
                             snoozedUntil?: string | null;
-                            assigneeId?: string;
+                            assigneeId?: string | null;
                             projectId?: string;
                             cycleId?: string;
                             labelIds?: string;
@@ -1998,6 +1998,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             completedCycles: string[];
+                            activatedCycles: string[];
                             rolledOver: number;
                         };
                     };
@@ -4320,7 +4321,10 @@ export interface paths {
             requestBody?: {
                 content: {
                     "application/json": {
-                        /** @description ISO timestamp to snooze until, or null to unsnooze */
+                        /**
+                         * Format: date-time
+                         * @description ISO timestamp to snooze until, or null to unsnooze
+                         */
                         until: string | null;
                     };
                 };

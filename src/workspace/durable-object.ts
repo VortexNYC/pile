@@ -343,8 +343,11 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       );
     }
     const resolvedAssigneeId =
-      input.assigneeId ??
-      (status === "triage" ? (team.triageAssigneeId ?? null) : null);
+      input.assigneeId === undefined
+        ? status === "triage"
+          ? (team.triageAssigneeId ?? null)
+          : null
+        : input.assigneeId;
 
     const key = team.key || workspace?.key || "general";
     const last = await this.db
@@ -412,6 +415,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   async rolloverCycles(): Promise<{
     completedCycles: string[];
+    activatedCycles: string[];
     rolledOver: number;
   }> {
     await this.ready;
@@ -430,69 +434,110 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         )
       )
       .all();
-    if (ended.length === 0) return { completedCycles: [], rolledOver: 0 };
 
-    const nextCycle = await d1
-      .select()
-      .from(cycles)
+    // Activate cycles whose window has started (upcoming -> active).
+    const activated = await d1
+      .update(cycles)
+      .set({ status: "active", updatedAt: nowIso })
       .where(
         and(
           eq(cycles.organizationId, this.organizationId),
-          ne(cycles.status, "completed"),
-          or(isNull(cycles.endDate), gte(cycles.endDate, nowIso)),
-          notInArray(
-            cycles.id,
-            ended.map((cycle) => cycle.id)
-          )
+          eq(cycles.status, "upcoming"),
+          isNotNull(cycles.startDate),
+          lt(cycles.startDate, nowIso),
+          or(isNull(cycles.endDate), gte(cycles.endDate, nowIso))
         )
       )
-      .orderBy(asc(cycles.startDate))
-      .get();
+      .returning({ id: cycles.id });
 
-    await Promise.all(
-      ended.map((cycle) =>
-        d1
-          .update(cycles)
-          .set({ status: "completed", updatedAt: nowIso })
-          .where(eq(cycles.id, cycle.id))
-      )
-    );
-    const completedCycles = ended.map((cycle) => cycle.id);
+    if (ended.length === 0) {
+      return {
+        completedCycles: [],
+        activatedCycles: activated.map((c) => c.id),
+        rolledOver: 0,
+      };
+    }
 
-    const moves = await Promise.all(
+    const endedIds = ended.map((cycle) => cycle.id);
+
+    // Move unfinished issues first, then mark the cycle completed, so a
+    // failure mid-pass leaves the cycle eligible for retry on the next run.
+    const results = await Promise.all(
       ended.map(async (cycle) => {
-        if (!cycle.autoRollover || !nextCycle || nextCycle.id === cycle.id) {
-          return [];
-        }
-        const unfinished = await this.db
-          .select({ id: workspaceIssues.id })
-          .from(workspaceIssues)
+        const nextCycle = await d1
+          .select()
+          .from(cycles)
           .where(
             and(
-              eq(workspaceIssues.cycleId, cycle.id),
-              not(inArray(workspaceIssues.status, ["done", "canceled"]))
+              eq(cycles.organizationId, this.organizationId),
+              ne(cycles.status, "completed"),
+              cycle.projectId === null
+                ? isNull(cycles.projectId)
+                : eq(cycles.projectId, cycle.projectId),
+              or(isNull(cycles.endDate), gte(cycles.endDate, nowIso)),
+              notInArray(cycles.id, endedIds)
             )
           )
-          .all();
-        return unfinished.map((row) => row.id);
+          .orderBy(asc(cycles.startDate))
+          .get();
+
+        let moved = 0;
+        if (cycle.autoRollover && nextCycle) {
+          const unfinished = await this.db
+            .select({ id: workspaceIssues.id })
+            .from(workspaceIssues)
+            .where(
+              and(
+                eq(workspaceIssues.cycleId, cycle.id),
+                not(inArray(workspaceIssues.status, ["done", "canceled"]))
+              )
+            )
+            .all();
+          if (unfinished.length > 0) {
+            await this.db
+              .update(workspaceIssues)
+              .set({ cycleId: nextCycle.id, updatedAt: nowIso })
+              .where(
+                inArray(
+                  workspaceIssues.id,
+                  unfinished.map((row) => row.id)
+                )
+              );
+            moved = unfinished.length;
+          }
+        }
+
+        await d1
+          .update(cycles)
+          .set({ status: "completed", updatedAt: nowIso })
+          .where(eq(cycles.id, cycle.id));
+        return { id: cycle.id, moved };
       })
     );
-    const issueIds = moves.flat();
-    if (issueIds.length > 0 && nextCycle) {
-      await this.db
-        .update(workspaceIssues)
-        .set({ cycleId: nextCycle.id, updatedAt: nowIso })
-        .where(inArray(workspaceIssues.id, issueIds));
-    }
-    return { completedCycles, rolledOver: issueIds.length };
+
+    return {
+      completedCycles: results.map((r) => r.id),
+      activatedCycles: activated.map((c) => c.id),
+      rolledOver: results.reduce((sum, r) => sum + r.moved, 0),
+    };
   }
 
-  async cycleCapacity(cycleId: string): Promise<{
+  async cycleCapacity(
+    cycleId: string,
+    teamIds?: string[]
+  ): Promise<{
     issueCount: number;
     estimateTotal: number;
     byStatus: Record<string, { count: number; estimateTotal: number }>;
   }> {
     await this.ready;
+    if (teamIds && teamIds.length === 0) {
+      return { issueCount: 0, estimateTotal: 0, byStatus: {} };
+    }
+    const conditions = [eq(workspaceIssues.cycleId, cycleId)];
+    if (teamIds) {
+      conditions.push(inArray(workspaceIssues.teamId, teamIds));
+    }
     const rows = await this.db
       .select({
         status: workspaceIssues.status,
@@ -500,7 +545,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         estimateTotal: sql<number>`coalesce(sum(${workspaceIssues.estimate}), 0)`,
       })
       .from(workspaceIssues)
-      .where(eq(workspaceIssues.cycleId, cycleId))
+      .where(and(...conditions))
       .groupBy(workspaceIssues.status)
       .all();
     const byStatus: Record<string, { count: number; estimateTotal: number }> =
@@ -531,6 +576,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     { group: string | null; count: number; estimateTotal: number }[]
   > {
     await this.ready;
+    if (teamIds && teamIds.length === 0) return [];
     const columns = {
       status: workspaceIssues.status,
       priority: workspaceIssues.priority,
@@ -540,7 +586,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       cycleId: workspaceIssues.cycleId,
     };
     const column = columns[groupBy];
-    const conditions = teamIds?.length
+    const conditions = teamIds
       ? [inArray(workspaceIssues.teamId, teamIds)]
       : [];
     return this.db
@@ -555,12 +601,23 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       .all();
   }
 
-  async burndown(cycleId: string): Promise<{
+  async burndown(
+    cycleId: string,
+    teamIds?: string[],
+    window?: { startDate?: string | null; endDate?: string | null }
+  ): Promise<{
     total: number;
     totalEstimate: number;
     series: { date: string; scope: number; remaining: number }[];
   }> {
     await this.ready;
+    if (teamIds && teamIds.length === 0) {
+      return { total: 0, totalEstimate: 0, series: [] };
+    }
+    const conditions = [eq(workspaceIssues.cycleId, cycleId)];
+    if (teamIds) {
+      conditions.push(inArray(workspaceIssues.teamId, teamIds));
+    }
     const rows = await this.db
       .select({
         id: workspaceIssues.id,
@@ -568,7 +625,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         estimate: workspaceIssues.estimate,
       })
       .from(workspaceIssues)
-      .where(eq(workspaceIssues.cycleId, cycleId))
+      .where(and(...conditions))
       .all();
     if (rows.length === 0) {
       return { total: 0, totalEstimate: 0, series: [] };
@@ -595,14 +652,36 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
     const doneAt = new Map<string, string>();
     for (const entry of history) {
+      // Last terminal transition wins so a reopened issue burns back down.
       const prev = doneAt.get(entry.issueId);
-      if (!prev || entry.createdAt < prev) doneAt.set(entry.issueId, entry.createdAt);
+      if (!prev || entry.createdAt > prev) doneAt.set(entry.issueId, entry.createdAt);
     }
+    const currentStatus = new Map(
+      (
+        await this.db
+          .select({ id: workspaceIssues.id, status: workspaceIssues.status })
+          .from(workspaceIssues)
+          .where(
+            inArray(
+              workspaceIssues.id,
+              rows.map((row) => row.id)
+            )
+          )
+          .all()
+      ).map((row) => [row.id, row.status])
+    );
 
     const dayMs = 24 * 60 * 60 * 1000;
-    const today = Date.now();
+    const windowStart = window?.startDate ? Date.parse(window.startDate) : 0;
+    const today = Math.min(
+      Date.now(),
+      window?.endDate ? Date.parse(window.endDate) : Number.MAX_SAFE_INTEGER
+    );
+    const earliest = Math.min(
+      ...rows.map((row) => Date.parse(row.createdAt))
+    );
     const start = Math.max(
-      Math.min(...rows.map((row) => Date.parse(row.createdAt))),
+      windowStart > 0 ? Math.min(windowStart, today) : earliest,
       today - 730 * dayMs
     );
     const series: { date: string; scope: number; remaining: number }[] = [];
@@ -612,7 +691,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         (row) => Date.parse(row.createdAt) <= t + dayMs
       ).length;
       const remaining = rows.filter((row) => {
-        const done = doneAt.get(row.id);
+        const terminal = ["done", "canceled"].includes(
+          currentStatus.get(row.id) ?? ""
+        );
+        const done = terminal ? doneAt.get(row.id) : undefined;
         return (
           Date.parse(row.createdAt) <= t + dayMs && !(done && done <= dayEnd)
         );
@@ -719,7 +801,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (args.isDraft !== undefined) {
       conditions.push(eq(workspaceIssues.isDraft, args.isDraft));
     }
-    if (!args.includeSnoozed) {
+    if (args.hideSnoozed) {
       const nowIso = new Date().toISOString();
       conditions.push(
         or(
@@ -908,7 +990,25 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (patch.isDraft !== undefined) set.isDraft = patch.isDraft;
     if (patch.snoozedUntil !== undefined)
       set.snoozedUntil = patch.snoozedUntil;
+    if (
+      patch.snoozedUntil === undefined &&
+      patch.status !== undefined &&
+      patch.status !== "triage"
+    ) {
+      set.snoozedUntil = null;
+    }
     if (patch.assigneeId !== undefined) set.assigneeId = patch.assigneeId;
+    if (
+      patch.assigneeId === undefined &&
+      !old.assigneeId &&
+      patch.status === "triage"
+    ) {
+      const d1 = createD1(this.env.D1);
+      const team = await getTeamById(d1, old.teamId, this.organizationId);
+      if (team?.triageAssigneeId) {
+        set.assigneeId = team.triageAssigneeId;
+      }
+    }
     if (patch.projectId !== undefined) set.projectId = patch.projectId;
     if (patch.cycleId !== undefined) set.cycleId = patch.cycleId;
     if (patch.labelIds !== undefined) set.labelIds = patch.labelIds;

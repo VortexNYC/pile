@@ -31,6 +31,7 @@ import {
   updateProject,
   updateRoadmap,
 } from "../global/workspace-entities.js";
+import { getVisibleTeamIds } from "../global/teams.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
@@ -354,7 +355,7 @@ const rolloverCyclesRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/cycles/rollover",
   tags: ["cycles"],
-  middleware: [rls("write")],
+  middleware: [rls("admin")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -366,6 +367,7 @@ const rolloverCyclesRoute = createRoute({
         "application/json": {
           schema: z.object({
             completedCycles: z.array(z.string()),
+            activatedCycles: z.array(z.string()),
             rolledOver: z.number(),
           }),
         },
@@ -858,11 +860,13 @@ export function registerWorkspaceEntityRoutes(app: OpenAPIHono<AppContext>) {
         message: "Cycle not found",
       });
     }
+    const identity = c.var.workspaceIdentity;
+    const teamIds = await getVisibleTeamIds(db, organizationId, identity);
     const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(
       c.env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
     );
     await stub.setOrganizationId(organizationId);
-    const capacity = await stub.cycleCapacity(id);
+    const capacity = await stub.cycleCapacity(id, teamIds);
     return c.json(capacity);
   });
 

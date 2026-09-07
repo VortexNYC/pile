@@ -906,7 +906,8 @@
                     "nullable": true
                   },
                   "assigneeId": {
-                    "type": "string"
+                    "type": "string",
+                    "nullable": true
                   },
                   "projectId": {
                     "type": "string"
@@ -1439,7 +1440,8 @@
                     "nullable": true
                   },
                   "assigneeId": {
-                    "type": "string"
+                    "type": "string",
+                    "nullable": true
                   },
                   "projectId": {
                     "type": "string"
@@ -1654,7 +1656,8 @@
                         "nullable": true
                       },
                       "assigneeId": {
-                        "type": "string"
+                        "type": "string",
+                        "nullable": true
                       },
                       "projectId": {
                         "type": "string"
@@ -4316,12 +4319,19 @@
                         "type": "string"
                       }
                     },
+                    "activatedCycles": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "rolledOver": {
                       "type": "number"
                     }
                   },
                   "required": [
                     "completedCycles",
+                    "activatedCycles",
                     "rolledOver"
                   ]
                 }
@@ -8424,6 +8434,7 @@
                   "until": {
                     "type": "string",
                     "nullable": true,
+                    "format": "date-time",
                     "description": "ISO timestamp to snooze until, or null to unsnooze"
                   }
                 },

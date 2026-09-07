@@ -1,4 +1,4 @@
-import { and, count, eq, gt, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
+import { and, count, eq, gt, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 
 import type { D1Client } from "./db.js";
 import {
@@ -105,7 +105,7 @@ export async function getUnreadNotificationCount(
         eq(notifications.read, false),
         or(
           isNull(notifications.snoozedUntil),
-          lt(notifications.snoozedUntil, nowIso)
+          lte(notifications.snoozedUntil, nowIso)
         )
       )
     )

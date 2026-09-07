@@ -1,6 +1,8 @@
+import { ne } from "drizzle-orm";
+
 import app from "./api/index.js";
 import { createD1 } from "./global/db.js";
-import { organization } from "./global/schema.js";
+import { cycles } from "./global/schema.js";
 import type { WorkerEnv } from "./platform/middleware.js";
 
 export { WorkspaceDO } from "./workspace/durable-object.js";
@@ -11,9 +13,12 @@ async function scheduled(
   ctx: ExecutionContext
 ) {
   const d1 = createD1(env.D1);
+  // Only wake DOs for orgs that have a non-completed cycle; orgs without
+  // cycles never need a rollover pass.
   const orgs = await d1
-    .select({ id: organization.id })
-    .from(organization)
+    .selectDistinct({ id: cycles.organizationId })
+    .from(cycles)
+    .where(ne(cycles.status, "completed"))
     .all();
   ctx.waitUntil(
     Promise.all(
