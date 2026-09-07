@@ -7,6 +7,7 @@ import { z } from "zod";
 import { D1StateAdapter } from "../global/chat-state.js";
 import { createD1, type D1Client } from "../global/db.js";
 import { slackInstallations } from "../global/schema.js";
+import { workerdFetchAdapter } from "./fetch-adapter.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { AppEnv } from "../types/env.js";
 import type { RealtimeEvent } from "../types/workspace.js";
@@ -23,6 +24,7 @@ export function createSlack(env: AppEnv): SlackAdapter {
     clientSecret: env.SLACK_CLIENT_SECRET,
     signingSecret: env.SLACK_SIGNING_SECRET,
     encryptionKey: env.SLACK_ENCRYPTION_KEY,
+    webClientOptions: { adapter: workerdFetchAdapter },
   });
 }
 
@@ -60,8 +62,18 @@ async function createIssueFromText(
   if (!trimmed) return null;
   const doId = env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId);
   const stub = env.WORKSPACE_DURABLE_OBJECT.get(doId);
-  const issue = await stub.createIssue({ title: trimmed, description });
-  return { identifier: issue.identifier ?? null, id: issue.id };
+  await stub.setOrganizationId(organizationId);
+  try {
+    const issue = await stub.createIssue({ title: trimmed, description });
+    return { identifier: issue.identifier ?? null, id: issue.id };
+  } catch (error) {
+    console.error("createIssue via DO failed", {
+      organizationId,
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    throw error;
+  }
 }
 
 /**
@@ -96,7 +108,12 @@ export function createSlackBot(
       );
       return;
     }
-    const title = text.replace(/<@[^>]+>/g, "").trim() || "New issue";
+    const title =
+      text
+        .replace(/<@[A-Z0-9]+>/g, "")
+        .replace(/@[A-Z0-9]{8,}/g, "")
+        .replace(/^@vortex\b(\s*\(local\))?/i, "")
+        .trim() || "New issue";
     const issue = await createIssueFromText(env, link.organizationId, title);
     if (!issue) {
       await thread.post("Couldn't create an issue from that message.");
