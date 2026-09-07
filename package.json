@@ -24,6 +24,7 @@
     "openapi:generate": "tsx scripts/generate-openapi.ts",
     "mcp:generate": "tsx scripts/generate-openapi.ts && tsx scripts/generate-mcp-tools.ts",
     "client:generate": "openapi-typescript src/mcp/openapi.json -o packages/client/src/types.ts",
+    "cli:generate": "tsx scripts/generate-cli.ts",
     "cli": "pnpm -C packages/cli run cli",
     "contract:check": "tsx scripts/contract-check.ts",
     "knip": "knip",

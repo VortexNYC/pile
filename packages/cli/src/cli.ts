@@ -1,6 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
+import { COMMANDS } from "./commands.js";
+
 type Json =
   | null
   | boolean
@@ -209,6 +211,117 @@ async function requestCommand(
   return response.ok ? 0 : 1;
 }
 
+function findCommand(positionals: readonly string[]): [string, string[]] {
+  for (let end = positionals.length; end > 0; end -= 1) {
+    const key = positionals.slice(0, end).join(" ");
+    if (key in COMMANDS) {
+      return [key, positionals.slice(end)];
+    }
+  }
+  return ["", []];
+}
+
+async function commandCommand(
+  positionals: readonly string[],
+  flags: Readonly<Record<string, string | boolean>>,
+  deps: CliDeps = {}
+): Promise<number> {
+  const [name, args] = findCommand(positionals);
+  if (!name) {
+    throw new Error(`Unknown command: ${positionals.join(" ")}`);
+  }
+  const def = COMMANDS[name];
+  if (!def) {
+    throw new Error(`Unknown command: ${name}`);
+  }
+
+  const config = resolveConfig();
+  if (config.apiKey === undefined || config.apiKey.length === 0) {
+    throw new Error(
+      "Missing API key. Set ISSUETRACKER_API_KEY or run `issuetracker config set --api-key <key>`."
+    );
+  }
+
+  let path = def.path;
+  const remaining = [...args];
+  for (const param of def.params) {
+    let value: string | undefined;
+    if (param.flag === "workspace") {
+      value =
+        flagString(flags, "workspace") ?? flagString(flags, "workspace-id");
+    } else {
+      const flagValue = flagString(flags, param.flag);
+      if (flagValue !== undefined) {
+        value = flagValue;
+      } else if (remaining.length > 0) {
+        value = remaining.shift();
+      }
+    }
+    if (value === undefined) {
+      throw new Error(`Missing required parameter: --${param.flag}`);
+    }
+    path = path.replace(`{${param.name}}`, value);
+  }
+
+  const url = new URL(path, config.baseUrl.replace(/\/$/u, ""));
+  for (const param of def.query) {
+    const value = flagString(flags, param.flag);
+    if (value !== undefined) {
+      url.searchParams.set(param.name, value);
+    }
+  }
+  const queryJson = parseJsonObjectFlag(flags, "query-json");
+  if (queryJson !== undefined) {
+    for (const [key, value] of Object.entries(queryJson)) {
+      url.searchParams.set(key, String(value));
+    }
+  }
+
+  const bodyJson = parseJsonObjectFlag(flags, "body-json");
+  const body: Record<string, unknown> = bodyJson ? { ...bodyJson } : {};
+  for (const field of def.body) {
+    const value = flags[field.flag];
+    if (value === true) {
+      body[field.name] = true;
+    } else if (typeof value === "string") {
+      body[field.name] = value;
+    }
+  }
+
+  const headers = new Headers();
+  headers.set("Authorization", `Bearer ${config.apiKey}`);
+  const idempotencyKey = flagString(flags, "idempotency-key");
+  if (
+    idempotencyKey !== undefined &&
+    mutatingMethods.has(def.method as HttpMethod)
+  ) {
+    headers.set("Idempotency-Key", idempotencyKey);
+  }
+
+  const bodyText =
+    Object.keys(body).length > 0 ? JSON.stringify(body) : undefined;
+  if (bodyText !== undefined) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  const doFetch = deps.fetch ?? fetch;
+  const response = await doFetch(url, {
+    method: def.method,
+    headers,
+    body: bodyText,
+  });
+
+  const text = await response.text();
+  try {
+    const parsed = parseJson(text);
+    console.log(JSON.stringify(parsed, null, 2));
+  } catch {
+    console.log(text);
+  }
+
+  return response.ok ? 0 : 1;
+}
+
 async function configSetCommand(
   flags: Readonly<Record<string, string | boolean>>
 ): Promise<number> {
@@ -238,8 +351,7 @@ export async function runCli(
       return await configSetCommand(flags);
     }
 
-    console.log(`Usage: issuetracker [request | config set]`);
-    return 1;
+    return await commandCommand(positionals, flags, deps);
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     return 1;

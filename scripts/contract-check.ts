@@ -5,6 +5,7 @@ const generated = [
   "src/mcp/openapi.json",
   "src/mcp/mcp-tools.ts",
   "packages/client/src/types.ts",
+  "packages/cli/src/commands.ts",
 ];
 
 function run(label: string, command: string): void {
@@ -15,6 +16,7 @@ function run(label: string, command: string): void {
 try {
   run("regenerating MCP artifacts", "pnpm run mcp:generate");
   run("regenerating client types", "pnpm run client:generate");
+  run("regenerating CLI commands", "pnpm run cli:generate");
 
   console.log("[contract-check] verifying generated artifacts are committed");
   const diff = execSync(`git diff -- ${generated.join(" ")}`, {

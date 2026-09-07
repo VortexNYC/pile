@@ -37,6 +37,86 @@ describe("CLI integration", () => {
     vi.unstubAllGlobals();
   });
 
+  it("runs a named command for issues list", async () => {
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ issues: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+    const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    const exitCode = await runCli(["issues", "list", "--workspace", "ws-1"], {
+      fetch: mockFetch,
+    });
+
+    expect(exitCode).toBe(0);
+    const [url, init] = mockFetch.mock.calls[0] as [
+      URL,
+      { method: string; headers: Headers },
+    ];
+    expect(url.pathname).toBe("/workspaces/ws-1/issues");
+    expect(init.method).toBe("GET");
+    expect(init.headers.get("Authorization")).toBe("Bearer test-api-key");
+    spy.mockRestore();
+  });
+
+  it("runs a named command with body flags", async () => {
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ id: "i1" }), {
+        status: 201,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+    const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    const exitCode = await runCli(
+      ["issues", "create", "--workspace", "ws-1", "--title", "Hello"],
+      { fetch: mockFetch }
+    );
+
+    expect(exitCode).toBe(0);
+    const [url, init] = mockFetch.mock.calls[0] as [
+      URL,
+      { method: string; body?: string },
+    ];
+    expect(url.pathname).toBe("/workspaces/ws-1/issues");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({ title: "Hello" });
+    spy.mockRestore();
+  });
+
+  it("runs a nested command with positional params", async () => {
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ id: "c1" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+    const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    const exitCode = await runCli(
+      [
+        "issues",
+        "comments",
+        "get",
+        "issue-1",
+        "comment-1",
+        "--workspace",
+        "ws-1",
+      ],
+      { fetch: mockFetch }
+    );
+
+    expect(exitCode).toBe(0);
+    const [url, init] = mockFetch.mock.calls[0] as [URL, { method: string }];
+    expect(url.pathname).toBe(
+      "/workspaces/ws-1/issues/issue-1/comments/comment-1"
+    );
+    expect(init.method).toBe("GET");
+    spy.mockRestore();
+  });
+
   it("makes an authorized GET request and prints JSON", async () => {
     const mockFetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ workspaces: [] }), {
