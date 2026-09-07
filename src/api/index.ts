@@ -27,6 +27,11 @@ import { registerMigrateRoutes } from "./migrate.js";
 import { registerNotificationRoutes } from "./notifications.js";
 import { registerReactionRoutes } from "./reactions.js";
 import { registerSavedViewRoutes } from "./saved-views.js";
+import {
+  handleSlackEvents,
+  handleSlackOAuth,
+  registerSlackRoutes,
+} from "./slack.js";
 import { registerStateRoutes } from "./states.js";
 import { registerTeamRoutes } from "./teams.js";
 import { registerTemplateRoutes } from "./templates.js";
@@ -79,9 +84,21 @@ registerTeamRoutes(app);
 registerTemplateRoutes(app);
 registerMigrateRoutes(app);
 registerHardeningRoutes(app);
+registerSlackRoutes(app);
 registerHealthRoutes(app);
 
 app.openapi(githubWebhookRoute, processGithubWebhook);
+
+app.get("/slack/oauth", async (c) => await handleSlackOAuth(c));
+app.post(
+  "/slack/events",
+  async (c) =>
+    await handleSlackEvents({
+      env: c.env,
+      req: c.req,
+      waitUntil: (task) => c.executionCtx.waitUntil(task),
+    })
+);
 
 app.openapi(
   createRoute({

@@ -1013,3 +1013,39 @@ export const agentActivities = sqliteTable(
     ),
   ]
 );
+
+export const slackInstallations = sqliteTable(
+  "slack_installations" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    teamId: text("team_id" as string).notNull(),
+    teamName: text("team_name" as string),
+    enterpriseId: text("enterprise_id" as string),
+    isEnterpriseInstall: integer("is_enterprise_install" as string, {
+      mode: "boolean",
+    })
+      .notNull()
+      .default(false),
+    defaultChannelId: text("default_channel_id" as string),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("slack_installations_org_idx" as string).on(table.organizationId),
+    uniqueIndex("slack_installations_team_idx" as string).on(table.teamId),
+  ]
+);
+
+export const chatState = sqliteTable(
+  "chat_state" as string,
+  {
+    key: text("key" as string).primaryKey(),
+    value: text("value" as string).notNull(),
+    expiresAt: integer("expires_at" as string),
+  },
+  (table) => [index("chat_state_expires_idx" as string).on(table.expiresAt)]
+);

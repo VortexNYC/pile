@@ -14,4 +14,9 @@ export interface AppEnv {
   DEVIN_OUTPOST?: string;
   DAYTONA_LABEL_ID?: string;
   TOKEN_HASH_SECRET?: string;
+  SLACK_CLIENT_ID?: string;
+  SLACK_CLIENT_SECRET?: string;
+  SLACK_SIGNING_SECRET?: string;
+  SLACK_ENCRYPTION_KEY?: string;
+  SLACK_REDIRECT_URI?: string;
 }

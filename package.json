@@ -36,10 +36,12 @@
   },
   "dependencies": {
     "@better-auth/api-key": "1.7.2",
+    "@chat-adapter/slack": "^4.40.0",
     "@hono/zod-openapi": "1.6.2",
     "@modelcontextprotocol/server": "^2.0.0",
     "@orama/orama": "3.1.18",
     "better-auth": "^1.7.2",
+    "chat": "^4.40.0",
     "drizzle-orm": "^0.45.2",
     "emoji-regex": "10.6.0",
     "hono": "^4.13.5",

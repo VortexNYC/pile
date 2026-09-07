@@ -40,7 +40,7 @@ This is the durable tracker for the open-source Linear alternative. Operational 
 
 ## Next
 
-- Slack / Zendesk / GitLab / Intercom integrations.
+- Zendesk / GitLab / Intercom integrations.
 
 ## Later
 
@@ -48,5 +48,6 @@ This is the durable tracker for the open-source Linear alternative. Operational 
 - GitHub check run sync.
 - Billing and metering.
 - Full CLI parity.
-- Slack / GitLab / Zendesk / Intercom integrations.
+- Slack: thread/reply sync, unfurls, interactive components.
+- GitLab / Zendesk / Intercom integrations.
 - Frontend (after backend is solid).

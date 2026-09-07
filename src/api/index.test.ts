@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { hmacSha256Hex } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
 import {
   createNotification,
@@ -1472,5 +1473,92 @@ describe("API integration", () => {
       installations: Array<{ id: string; repo: string }>;
     }>();
     expect(afterBody.installations).toHaveLength(0);
+  });
+
+  it("manages Slack installation state and verifies events", async () => {
+    const organizationId = await seedWorkspace();
+    const token = await adminToken(organizationId);
+
+    const statusRes = await app.fetch(
+      request(`/workspaces/${organizationId}/slack`, { token }),
+      env
+    );
+    expect(statusRes.status).toBe(200);
+    const statusBody = await statusRes.json<{ installed: boolean }>();
+    expect(statusBody.installed).toBe(false);
+
+    const installRes = await app.fetch(
+      request(`/workspaces/${organizationId}/slack/install`, {
+        method: "POST",
+        token,
+      }),
+      env
+    );
+    expect(installRes.status).toBe(200);
+    const installBody = await installRes.json<{ url: string }>();
+    const installUrl = new URL(installBody.url);
+    expect(installUrl.hostname).toBe("slack.com");
+    expect(installUrl.searchParams.get("state")).toBe(organizationId);
+    expect(installUrl.searchParams.get("client_id")).toBe(
+      "test-slack-client-id"
+    );
+
+    const channelRes = await app.fetch(
+      request(`/workspaces/${organizationId}/slack/channel`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ channelId: "C123" }),
+      }),
+      env
+    );
+    expect(channelRes.status).toBe(404);
+
+    const deleteRes = await app.fetch(
+      request(`/workspaces/${organizationId}/slack`, {
+        method: "DELETE",
+        token,
+      }),
+      env
+    );
+    expect(deleteRes.status).toBe(404);
+
+    const body = JSON.stringify({
+      type: "url_verification",
+      challenge: "test-challenge",
+    });
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const signature = `v0=${await hmacSha256Hex(
+      "test-slack-signing-secret",
+      `v0:${timestamp}:${body}`
+    )}`;
+    const eventsRes = await app.fetch(
+      new Request("http://localhost/slack/events", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Slack-Request-Timestamp": timestamp,
+          "X-Slack-Signature": signature,
+        },
+        body,
+      }),
+      env
+    );
+    expect(eventsRes.status).toBe(200);
+    const eventsBody = await eventsRes.json<{ challenge: string }>();
+    expect(eventsBody.challenge).toBe("test-challenge");
+
+    const badRes = await app.fetch(
+      new Request("http://localhost/slack/events", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Slack-Request-Timestamp": timestamp,
+          "X-Slack-Signature": "v0=invalid",
+        },
+        body,
+      }),
+      env
+    );
+    expect(badRes.status).toBe(401);
   });
 });

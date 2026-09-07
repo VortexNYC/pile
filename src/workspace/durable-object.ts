@@ -31,6 +31,7 @@ import { comments } from "../global/schema.js";
 import { getDefaultTeam, getTeamById } from "../global/teams.js";
 import { getWorkspaceById } from "../global/workspaces.js";
 import { VortexError } from "../platform/errors.js";
+import { notifySlack } from "../slack/bot.js";
 import type { AppEnv } from "../types/env.js";
 import {
   ISSUE_RESOLUTIONS,
@@ -255,6 +256,11 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const result = await deliverWebhooks(this.env, this.organizationId, event);
     if (result.needsRetry && result.retryAt) {
       await this.ctx.storage.setAlarm(result.retryAt);
+    }
+    try {
+      await notifySlack(this.env, this.organizationId, event);
+    } catch {
+      // Slack delivery is best-effort; failures must not affect webhook retries
     }
   }
 

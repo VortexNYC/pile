@@ -2217,4 +2217,57 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "slack list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/slack",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "slack delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/slack",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "slack install create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/slack/install",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "slack channel create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/slack/channel",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "channelId",
+        flag: "channel-id",
+      },
+    ],
+  },
 };

@@ -9571,6 +9571,189 @@
         "summary": "List readiness"
       }
     },
+    "/workspaces/{organizationId}/slack": {
+      "get": {
+        "tags": [
+          "slack"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Slack installation status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "installed": {
+                      "type": "boolean"
+                    },
+                    "teamId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "teamName": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "defaultChannelId": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "installed",
+                    "teamId",
+                    "teamName",
+                    "defaultChannelId"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List slack"
+      },
+      "delete": {
+        "tags": [
+          "slack"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Slack installation removed"
+          }
+        },
+        "summary": "Delete slack"
+      }
+    },
+    "/workspaces/{organizationId}/slack/install": {
+      "post": {
+        "tags": [
+          "slack"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Slack OAuth install URL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "url"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create slack install"
+      }
+    },
+    "/workspaces/{organizationId}/slack/channel": {
+      "post": {
+        "tags": [
+          "slack"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "channelId": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "channelId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default channel updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "installed": {
+                      "type": "boolean"
+                    },
+                    "teamId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "teamName": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "defaultChannelId": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "installed",
+                    "teamId",
+                    "teamName",
+                    "defaultChannelId"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create slack channel"
+      }
+    },
     "/health": {
       "get": {
         "tags": [

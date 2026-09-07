@@ -271,6 +271,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdSlack",
+    "description": "Delete slack (DELETE /workspaces/{organizationId}/slack)",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/slack",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdStatesId",
     "description": "Delete state (DELETE /workspaces/{organizationId}/states/{id})",
     "method": "DELETE",
@@ -1241,6 +1258,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSlack",
+    "description": "List slack (GET /workspaces/{organizationId}/slack)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/slack",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
         "organizationId"
       ]
     }
@@ -3047,6 +3081,52 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "required": [
             "name"
           ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSlackChannel",
+    "description": "Create slack channel (POST /workspaces/{organizationId}/slack/channel)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/slack/channel",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "channelId": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "channelId"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSlackInstall",
+    "description": "Create slack install (POST /workspaces/{organizationId}/slack/install)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/slack/install",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
         }
       },
       "required": [
