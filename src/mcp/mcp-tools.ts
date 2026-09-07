@@ -830,6 +830,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdIssuesIssueIdLive",
+    "description": "List issue live (GET /workspaces/{organizationId}/issues/{issueId}/live)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/issues/{issueId}/live",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "issueId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "issueId",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdIssuesIssueIdRelations",
     "description": "List issue relations (GET /workspaces/{organizationId}/issues/{issueId}/relations)",
     "method": "GET",

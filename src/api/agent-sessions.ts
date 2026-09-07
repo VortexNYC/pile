@@ -4,6 +4,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { getAgentProvider } from "../agents/index.js";
 import {
   addAgentActivity,
+  getActiveAgentSessionForIssue,
   getAgentSession,
   getAgentSessionWithActivities,
   listAgentActivities,
@@ -105,6 +106,29 @@ const listSessionsRoute = createRoute({
       content: {
         "application/json": {
           schema: z.object({ sessions: z.array(agentSessionSchema) }),
+        },
+      },
+    },
+  },
+});
+
+const issueLiveRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/issues/{issueId}/live",
+  tags: ["agent-sessions"],
+  middleware: [rls("read", "agent:read")],
+  request: {
+    params: z.object({ organizationId: z.string(), issueId: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Live agent state for issue",
+      content: {
+        "application/json": {
+          schema: z.object({
+            session: agentSessionSchema.nullable(),
+            activities: z.array(agentActivitySchema),
+          }),
         },
       },
     },
@@ -220,6 +244,20 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     });
     return c.json({
       sessions: rows.map((row) => toSessionResponse(row, undefined)),
+    });
+  });
+
+  app.openapi(issueLiveRoute, async (c) => {
+    const { organizationId, issueId } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const live = await getActiveAgentSessionForIssue(
+      db,
+      organizationId,
+      issueId
+    );
+    return c.json({
+      session: live ? toSessionResponse(live.session, live.activities) : null,
+      activities: live?.activities.map(toActivityResponse) ?? [],
     });
   });
 

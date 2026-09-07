@@ -164,3 +164,20 @@ export async function getAgentSessionWithActivities(
   const activities = await listAgentActivities(db, id);
   return { ...session, activities };
 }
+
+export async function getActiveAgentSessionForIssue(
+  db: D1Client,
+  organizationId: string,
+  issueId: string
+) {
+  const sessions = await listAgentSessions(db, organizationId, {
+    issueId,
+    limit: 20,
+  });
+  const active = sessions.find(
+    (s) => !["completed", "failed", "canceled"].includes(s.status)
+  );
+  if (!active) return null;
+  const activities = await listAgentActivities(db, active.id, { limit: 50 });
+  return { session: active, activities };
+}

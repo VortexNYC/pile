@@ -165,6 +165,43 @@ describe("agent sessions API", () => {
     expect(patched.result).toBe("done");
   });
 
+  it("shows live agent state for an issue", async () => {
+    const db = createD1(env.D1);
+    const { createAgentSession, addAgentActivity } =
+      await import("../global/agent-sessions.js");
+    const session = await createAgentSession(db, {
+      organizationId,
+      issueId: "issue-live",
+      agentId: "mock",
+      provider: "mock",
+      actorId: "user-1",
+      actorType: "user",
+      status: "running",
+    });
+    await addAgentActivity(db, {
+      sessionId: session.id,
+      actorId: "user-1",
+      type: "status",
+      message: "Running tests",
+    });
+
+    const res = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/issue-live/live`, {
+        token,
+      }),
+      env
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json<{
+      session: { id: string; status: string } | null;
+      activities: Array<{ type: string; message: string }>;
+    }>();
+    expect(body.session?.id).toBe(session.id);
+    expect(body.session?.status).toBe("running");
+    expect(body.activities).toHaveLength(1);
+    expect(body.activities[0]?.type).toBe("status");
+  });
+
   it("uses scoped agent:read and agent:write permissions", async () => {
     const db = createD1(env.D1);
     const { createAgentSession } = await import("../global/agent-sessions.js");

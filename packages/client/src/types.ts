@@ -751,6 +751,82 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/issues/{issueId}/live": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List issue live */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    issueId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Live agent state for issue */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            session: {
+                                id: string;
+                                organizationId: string;
+                                issueId: string;
+                                agentId: string;
+                                provider: string;
+                                actorId: string;
+                                /** @enum {string} */
+                                actorType: "user" | "agent";
+                                /** @enum {string} */
+                                status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                                result: string | null;
+                                url: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                activities?: {
+                                    id: string;
+                                    sessionId: string;
+                                    actorId: string | null;
+                                    /** @enum {string} */
+                                    type: "thought" | "response" | "error" | "elicitation" | "action" | "status";
+                                    message: string;
+                                    payload?: unknown;
+                                    createdAt: string;
+                                }[];
+                            } | null;
+                            activities: {
+                                id: string;
+                                sessionId: string;
+                                actorId: string | null;
+                                /** @enum {string} */
+                                type: "thought" | "response" | "error" | "elicitation" | "action" | "status";
+                                message: string;
+                                payload?: unknown;
+                                createdAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/agent/sessions/{sessionId}": {
         parameters: {
             query?: never;
