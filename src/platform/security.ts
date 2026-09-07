@@ -89,7 +89,11 @@ export const csrfMiddleware = createMiddleware<AppContext>(async (c, next) => {
     return;
   }
 
-  if (UNSAFE_METHODS.has(c.req.method)) {
+  // CSRF targets ambient cookie auth. Bearer-token requests carry explicit
+  // credentials and cannot be forged cross-origin, so skip the origin check.
+  const hasBearer = Boolean(c.req.header("authorization")?.trim());
+
+  if (UNSAFE_METHODS.has(c.req.method) && !hasBearer) {
     const origin = c.req.header("origin") ?? c.req.header("referer") ?? "";
     if (!isAllowedOrigin(origin, c.env, c.req.path)) {
       throw new VortexError({
