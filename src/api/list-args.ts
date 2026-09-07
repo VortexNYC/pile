@@ -32,6 +32,8 @@ export const listIssuesQuerySchema = z.object({
   parentId: z.string().optional(),
   hasParent: booleanQueryParam,
   isParent: booleanQueryParam,
+  isDraft: booleanQueryParam,
+  includeSnoozed: booleanQueryParam,
   assigneeId: z.string().optional(),
   projectId: z.string().optional(),
   cycleId: z.string().optional(),
@@ -92,6 +94,12 @@ export function toListArgs(query: ListIssuesQuery): ListIssuesArgs {
   }
   if (query.isParent !== undefined) {
     args.isParent = query.isParent;
+  }
+  if (query.isDraft !== undefined) {
+    args.isDraft = query.isDraft;
+  }
+  if (query.includeSnoozed !== undefined) {
+    args.includeSnoozed = query.includeSnoozed;
   }
   if (query.assigneeId) {
     args.assigneeId = query.assigneeId;

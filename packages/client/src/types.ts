@@ -319,6 +319,8 @@ export interface paths {
                     parentId?: string;
                     hasParent?: "true" | "false";
                     isParent?: "true" | "false";
+                    isDraft?: "true" | "false";
+                    includeSnoozed?: "true" | "false";
                     assigneeId?: string;
                     projectId?: string;
                     cycleId?: string;
@@ -374,6 +376,10 @@ export interface paths {
                         resolution?: "duplicate" | "not_planned" | "intended_behavior" | "not_reproducible" | "obsolete" | "resolved" | null;
                         parentId?: string | null;
                         subIssueSortOrder?: number | null;
+                        estimate?: number | null;
+                        isDraft?: boolean;
+                        templateId?: string;
+                        snoozedUntil?: string | null;
                         assigneeId?: string;
                         projectId?: string;
                         cycleId?: string;
@@ -395,6 +401,159 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/issue-analytics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List issue analytics */
+        get: {
+            parameters: {
+                query?: {
+                    groupBy?: "status" | "priority" | "assigneeId" | "teamId" | "projectId" | "cycleId";
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Issue counts and estimate totals grouped by a field */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            groups: {
+                                group: string | null;
+                                count: number;
+                                estimateTotal: number;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/issue-analytics/burndown": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List issue analytic burndown */
+        get: {
+            parameters: {
+                query: {
+                    cycleId: string;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Daily scope/remaining burndown series for a cycle */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            total: number;
+                            totalEstimate: number;
+                            series: {
+                                date: string;
+                                scope: number;
+                                remaining: number;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/triage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List triage */
+        get: {
+            parameters: {
+                query?: {
+                    limit?: number | null;
+                    cursor?: string;
+                    teamId?: string;
+                    status?: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
+                    priority?: "low" | "medium" | "high" | "urgent";
+                    parentId?: string;
+                    hasParent?: "true" | "false";
+                    isParent?: "true" | "false";
+                    isDraft?: "true" | "false";
+                    includeSnoozed?: "true" | "false";
+                    assigneeId?: string;
+                    projectId?: string;
+                    cycleId?: string;
+                    labelId?: string;
+                    search?: string;
+                    identifier?: string;
+                    view?: string;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Triage inbox: issues awaiting triage */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            issues: components["schemas"]["Issue"][];
+                            nextCursor?: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -483,6 +642,10 @@ export interface paths {
                         resolution?: "duplicate" | "not_planned" | "intended_behavior" | "not_reproducible" | "obsolete" | "resolved" | null;
                         parentId?: string | null;
                         subIssueSortOrder?: number | null;
+                        estimate?: number | null;
+                        isDraft?: boolean;
+                        templateId?: string;
+                        snoozedUntil?: string | null;
                         assigneeId?: string;
                         projectId?: string;
                         cycleId?: string;
@@ -582,6 +745,10 @@ export interface paths {
                             resolution?: "duplicate" | "not_planned" | "intended_behavior" | "not_reproducible" | "obsolete" | "resolved" | null;
                             parentId?: string | null;
                             subIssueSortOrder?: number | null;
+                            estimate?: number | null;
+                            isDraft?: boolean;
+                            templateId?: string;
+                            snoozedUntil?: string | null;
                             assigneeId?: string;
                             projectId?: string;
                             cycleId?: string;
@@ -1555,6 +1722,10 @@ export interface paths {
                                 organizationId: string;
                                 projectId: string | null;
                                 name: string;
+                                number: number | null;
+                                /** @enum {string} */
+                                status: "upcoming" | "active" | "completed";
+                                autoRollover: boolean;
                                 startDate: string | null;
                                 endDate: string | null;
                                 createdAt: string;
@@ -1581,6 +1752,10 @@ export interface paths {
                     "application/json": {
                         projectId?: string;
                         name: string;
+                        number?: number;
+                        /** @enum {string} */
+                        status?: "upcoming" | "active" | "completed";
+                        autoRollover?: boolean;
                         startDate?: string;
                         endDate?: string;
                     };
@@ -1598,6 +1773,10 @@ export interface paths {
                             organizationId: string;
                             projectId: string | null;
                             name: string;
+                            number: number | null;
+                            /** @enum {string} */
+                            status: "upcoming" | "active" | "completed";
+                            autoRollover: boolean;
                             startDate: string | null;
                             endDate: string | null;
                             createdAt: string;
@@ -1644,6 +1823,10 @@ export interface paths {
                             organizationId: string;
                             projectId: string | null;
                             name: string;
+                            number: number | null;
+                            /** @enum {string} */
+                            status: "upcoming" | "active" | "completed";
+                            autoRollover: boolean;
                             startDate: string | null;
                             endDate: string | null;
                             createdAt: string;
@@ -1695,6 +1878,10 @@ export interface paths {
                     "application/json": {
                         projectId?: string;
                         name?: string;
+                        number?: number;
+                        /** @enum {string} */
+                        status?: "upcoming" | "active" | "completed";
+                        autoRollover?: boolean;
                         startDate?: string;
                         endDate?: string;
                     };
@@ -1712,6 +1899,10 @@ export interface paths {
                             organizationId: string;
                             projectId: string | null;
                             name: string;
+                            number: number | null;
+                            /** @enum {string} */
+                            status: "upcoming" | "active" | "completed";
+                            autoRollover: boolean;
                             startDate: string | null;
                             endDate: string | null;
                             createdAt: string;
@@ -1721,6 +1912,102 @@ export interface paths {
                 };
             };
         };
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/cycles/{id}/capacity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List cycle capacity */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Cycle capacity: issue counts and estimate totals by status */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            issueCount: number;
+                            estimateTotal: number;
+                            byStatus: {
+                                [key: string]: {
+                                    count: number;
+                                    estimateTotal: number;
+                                };
+                            };
+                        };
+                    };
+                };
+                /** @description Cycle not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/cycles/rollover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create cycle rollover */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Close ended cycles and roll unfinished issues into the next cycle */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            completedCycles: string[];
+                            rolledOver: number;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/workspaces/{organizationId}/labels": {
@@ -3802,6 +4089,10 @@ export interface paths {
                 query?: {
                     /** @description Only unread notifications */
                     unreadOnly?: string;
+                    /** @description Only snoozed notifications */
+                    snoozedOnly?: string;
+                    /** @description Include snoozed notifications */
+                    includeSnoozed?: string;
                     /** @description Max notifications to return */
                     limit?: string;
                 };
@@ -3828,6 +4119,7 @@ export interface paths {
                                 issueId: string;
                                 type: string;
                                 read: boolean;
+                                snoozedUntil: string | null;
                                 metadata?: unknown;
                                 createdAt: string;
                                 updatedAt: string;
@@ -3925,6 +4217,130 @@ export interface paths {
                             issueId: string;
                             type: string;
                             read: boolean;
+                            snoozedUntil: string | null;
+                            metadata?: unknown;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Notification not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/notifications/{id}/unread": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update notification unread */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Notification marked unread */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            recipientId: string;
+                            recipientType: string;
+                            issueId: string;
+                            type: string;
+                            read: boolean;
+                            snoozedUntil: string | null;
+                            metadata?: unknown;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Notification not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/notifications/{id}/snooze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update notification snooze */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @description ISO timestamp to snooze until, or null to unsnooze */
+                        until: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Notification snoozed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            recipientId: string;
+                            recipientType: string;
+                            issueId: string;
+                            type: string;
+                            read: boolean;
+                            snoozedUntil: string | null;
                             metadata?: unknown;
                             createdAt: string;
                             updatedAt: string;
@@ -4222,6 +4638,8 @@ export interface paths {
                                 organizationId: string;
                                 ownerId: string;
                                 name: string;
+                                shared: boolean;
+                                isFavorite?: boolean;
                                 filter?: unknown;
                                 search: string | null;
                                 sort: {
@@ -4253,6 +4671,7 @@ export interface paths {
                 content: {
                     "application/json": {
                         name: string;
+                        shared?: boolean;
                         filter?: unknown;
                         search?: string;
                         sort?: {
@@ -4276,6 +4695,8 @@ export interface paths {
                             organizationId: string;
                             ownerId: string;
                             name: string;
+                            shared: boolean;
+                            isFavorite?: boolean;
                             filter?: unknown;
                             search: string | null;
                             sort: {
@@ -4291,6 +4712,174 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/saved-views/{id}/favorite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create saved view favorite */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description View favorited */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            ownerId: string;
+                            name: string;
+                            shared: boolean;
+                            isFavorite?: boolean;
+                            filter?: unknown;
+                            search: string | null;
+                            sort: {
+                                field: string;
+                                /** @enum {string} */
+                                direction?: "asc" | "desc";
+                            } | null;
+                            columns: string[] | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Saved view not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        /** Delete saved view favorite */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description View unfavorited */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Saved view not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/me/view-preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List me view preferences */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Per-user view preferences */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            defaultViewId: string | null;
+                        };
+                    };
+                };
+            };
+        };
+        /** Update me view preferences */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        defaultViewId: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description View preferences updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            defaultViewId: string | null;
+                        };
+                    };
+                };
+                /** @description Saved view not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4328,6 +4917,8 @@ export interface paths {
                             organizationId: string;
                             ownerId: string;
                             name: string;
+                            shared: boolean;
+                            isFavorite?: boolean;
                             filter?: unknown;
                             search: string | null;
                             sort: {
@@ -4391,6 +4982,7 @@ export interface paths {
                 content: {
                     "application/json": {
                         name?: string;
+                        shared?: boolean;
                         filter?: unknown;
                         search?: string;
                         sort?: {
@@ -4414,6 +5006,8 @@ export interface paths {
                             organizationId: string;
                             ownerId: string;
                             name: string;
+                            shared: boolean;
+                            isFavorite?: boolean;
                             filter?: unknown;
                             search: string | null;
                             sort: {
@@ -4473,6 +5067,8 @@ export interface paths {
                                 isDefault: boolean;
                                 isPublic: boolean;
                                 parentAutoClose: boolean;
+                                triageAssigneeId: string | null;
+                                defaultTemplateId: string | null;
                                 subIssueAutoClose: boolean;
                                 createdAt: string;
                                 updatedAt: string;
@@ -4500,6 +5096,8 @@ export interface paths {
                         name: string;
                         isPublic?: boolean;
                         parentAutoClose?: boolean;
+                        triageAssigneeId?: string | null;
+                        defaultTemplateId?: string | null;
                         subIssueAutoClose?: boolean;
                     };
                 };
@@ -4520,6 +5118,8 @@ export interface paths {
                             isDefault: boolean;
                             isPublic: boolean;
                             parentAutoClose: boolean;
+                            triageAssigneeId: string | null;
+                            defaultTemplateId: string | null;
                             subIssueAutoClose: boolean;
                             createdAt: string;
                             updatedAt: string;
@@ -4569,6 +5169,8 @@ export interface paths {
                             isDefault: boolean;
                             isPublic: boolean;
                             parentAutoClose: boolean;
+                            triageAssigneeId: string | null;
+                            defaultTemplateId: string | null;
                             subIssueAutoClose: boolean;
                             createdAt: string;
                             updatedAt: string;
@@ -4628,6 +5230,8 @@ export interface paths {
                         name?: string;
                         isPublic?: boolean;
                         parentAutoClose?: boolean;
+                        triageAssigneeId?: string | null;
+                        defaultTemplateId?: string | null;
                         subIssueAutoClose?: boolean;
                     };
                 };
@@ -4648,6 +5252,8 @@ export interface paths {
                             isDefault: boolean;
                             isPublic: boolean;
                             parentAutoClose: boolean;
+                            triageAssigneeId: string | null;
+                            defaultTemplateId: string | null;
                             subIssueAutoClose: boolean;
                             createdAt: string;
                             updatedAt: string;
@@ -5362,6 +5968,9 @@ export interface components {
             resolution: "duplicate" | "not_planned" | "intended_behavior" | "not_reproducible" | "obsolete" | "resolved" | null;
             parentId: string | null;
             subIssueSortOrder: number | null;
+            estimate: number | null;
+            isDraft: boolean;
+            snoozedUntil: string | null;
             assigneeId: string | null;
             projectId: string | null;
             cycleId: string | null;

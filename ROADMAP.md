@@ -37,6 +37,14 @@ This is the durable tracker for the open-source Linear alternative. Operational 
   - Inbound `issue_comment` and `pull_request_review_comment` sync
 - Workspace `key` and issue `identifier` (`KEY-123`)
 - Blume docs site: `packages/docs` with OpenAPI reference, `llms.txt`, search, and the Vortex intro.
+- Issue estimates, drafts, and Linear two-level sub-issue depth enforcement.
+- Triage inbox (`GET /workspaces/{id}/triage`), triage auto-assignee per team, issue snoozing.
+- Notification inbox: unread, snooze/unsnooze, per-recipient unread badge.
+- Saved views: workspace sharing, per-user favorites, per-user default view.
+- Issue templates: `templateId` on create + per-team `defaultTemplateId` defaults.
+- Cycles: status/number/auto-rollover, scheduled cron rollover, capacity endpoint.
+- Issue analytics: `groupBy` aggregates and per-cycle burndown series.
+- One-command Cloudflare self-host (`pnpm run selfhost`) + Deploy-to-Cloudflare button for forks.
 
 ## Next
 

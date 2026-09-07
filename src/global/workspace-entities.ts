@@ -124,6 +124,9 @@ export async function createCycle(
   values: {
     projectId?: string | null;
     name: string;
+    number?: number | null;
+    status?: "upcoming" | "active" | "completed";
+    autoRollover?: boolean;
     startDate?: string | null;
     endDate?: string | null;
   }
@@ -135,6 +138,9 @@ export async function createCycle(
     organizationId,
     projectId: values.projectId ?? null,
     name: values.name,
+    number: values.number ?? null,
+    status: values.status ?? "upcoming",
+    autoRollover: values.autoRollover ?? true,
     startDate: values.startDate ?? null,
     endDate: values.endDate ?? null,
     createdAt: ts,
@@ -150,6 +156,9 @@ export async function updateCycle(
   values: Partial<{
     projectId: string | null;
     name: string;
+    number: number | null;
+    status: "upcoming" | "active" | "completed";
+    autoRollover: boolean;
     startDate: string | null;
     endDate: string | null;
   }>

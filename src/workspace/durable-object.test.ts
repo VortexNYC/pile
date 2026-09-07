@@ -331,4 +331,123 @@ describe("WorkspaceDO", () => {
     expect(updatedParent?.status).toBe("done");
     expect(updatedParent?.resolution).toBe("resolved");
   });
+
+  it("enforces Linear two-level sub-issue depth", async () => {
+    const stub = getStub();
+    const parent = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Depth parent" })
+    );
+    const child = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Depth child", parentId: parent.id })
+    );
+    await expect(
+      withWorkspace(stub, (instance) =>
+        instance.createIssue({ title: "Grandchild", parentId: child.id })
+      )
+    ).rejects.toThrow(/one level/);
+  });
+
+  it("supports estimate, drafts, and snoozed filtering", async () => {
+    const stub = getStub();
+    const issue = await withWorkspace(stub, (instance) =>
+      instance.createIssue({
+        title: "Estimated draft",
+        estimate: 5,
+        isDraft: true,
+      })
+    );
+    expect(issue.estimate).toBe(5);
+    expect(issue.isDraft).toBe(true);
+
+    const drafts = await withWorkspace(stub, (instance) =>
+      instance.listIssues({ isDraft: true })
+    );
+    expect(drafts.some((i) => i.id === issue.id)).toBe(true);
+    const nonDrafts = await withWorkspace(stub, (instance) =>
+      instance.listIssues({ isDraft: false })
+    );
+    expect(nonDrafts.some((i) => i.id === issue.id)).toBe(false);
+
+    const snoozed = await withWorkspace(stub, (instance) =>
+      instance.updateIssue(issue.id, {
+        snoozedUntil: new Date(Date.now() + 86400000).toISOString(),
+      })
+    );
+    expect(snoozed?.snoozedUntil).toBeTruthy();
+
+    const hidden = await withWorkspace(stub, (instance) =>
+      instance.listIssues({ isDraft: true })
+    );
+    expect(hidden.some((i) => i.id === issue.id)).toBe(false);
+    const included = await withWorkspace(stub, (instance) =>
+      instance.listIssues({ isDraft: true, includeSnoozed: true })
+    );
+    expect(included.some((i) => i.id === issue.id)).toBe(true);
+  });
+
+  it("auto-assigns triage issues to the team triage owner", async () => {
+    const stub = getStub();
+    const db = createD1(env.D1);
+    const team = await createDefaultTeam(db, WORKSPACE_ID, "TRI", "user-1");
+    await updateTeam(db, team.id, WORKSPACE_ID, {
+      triageAssigneeId: "user-1",
+    });
+    const issue = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Triage me", teamId: team.id, status: "triage" })
+    );
+    expect(issue.assigneeId).toBe("user-1");
+  });
+
+  it("rolls unfinished issues to the next cycle and reports capacity", async () => {
+    const stub = getStub();
+    const db = createD1(env.D1);
+    const { createCycle } = await import("../global/workspace-entities.js");
+    const past = new Date(Date.now() - 86400000 * 7);
+    const ended = await createCycle(db, WORKSPACE_ID, {
+      name: "Ended",
+      startDate: new Date(past.getTime() - 86400000 * 7).toISOString(),
+      endDate: past.toISOString(),
+    });
+    const next = await createCycle(db, WORKSPACE_ID, {
+      name: "Next",
+      startDate: new Date().toISOString(),
+      endDate: new Date(Date.now() + 86400000 * 7).toISOString(),
+    });
+    const issue = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Carry over", cycleId: ended?.id ?? "" })
+    );
+    const done = await withWorkspace(stub, (instance) =>
+      instance.createIssue({
+        title: "Done in cycle",
+        cycleId: ended?.id ?? "",
+        status: "done",
+      })
+    );
+
+    const result = await withWorkspace(stub, (instance) =>
+      instance.rolloverCycles()
+    );
+    expect(result.completedCycles).toContain(ended?.id);
+    expect(result.rolledOver).toBeGreaterThanOrEqual(1);
+
+    const moved = await withWorkspace(stub, (instance) =>
+      instance.getIssue(issue.id)
+    );
+    expect(moved?.cycleId).toBe(next?.id);
+    const stayed = await withWorkspace(stub, (instance) =>
+      instance.getIssue(done.id)
+    );
+    expect(stayed?.cycleId).toBe(ended?.id);
+
+    const capacity = await withWorkspace(stub, (instance) =>
+      instance.cycleCapacity(next?.id ?? "")
+    );
+    expect(capacity.issueCount).toBeGreaterThanOrEqual(1);
+
+    const stats = await withWorkspace(stub, (instance) =>
+      instance.issueStats("status")
+    );
+    expect(stats.length).toBeGreaterThan(0);
+    expect(stats.reduce((sum, g) => sum + g.count, 0)).toBeGreaterThan(0);
+  });
 });

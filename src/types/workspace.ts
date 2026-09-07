@@ -34,6 +34,10 @@ export interface IssueInput {
   resolution?: IssueResolution | null;
   parentId?: string | null;
   subIssueSortOrder?: number | null;
+  estimate?: number | null;
+  isDraft?: boolean;
+  templateId?: string;
+  snoozedUntil?: string | null;
   assigneeId?: string | null;
   projectId?: string | null;
   cycleId?: string | null;
@@ -59,6 +63,8 @@ export interface ListIssuesArgs {
   parentId?: string | null;
   hasParent?: boolean;
   isParent?: boolean;
+  isDraft?: boolean;
+  includeSnoozed?: boolean;
   assigneeId?: string;
   projectId?: string;
   cycleId?: string;
@@ -78,6 +84,9 @@ export interface Issue {
   resolution: IssueResolution | null;
   parentId: Id | null;
   subIssueSortOrder: number | null;
+  estimate: number | null;
+  isDraft: boolean;
+  snoozedUntil: string | null;
   assigneeId: Id | null;
   projectId: Id | null;
   cycleId: Id | null;

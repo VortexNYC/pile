@@ -2,6 +2,7 @@ import { relations, sql } from "drizzle-orm";
 import {
   index,
   integer,
+  primaryKey,
   sqliteTable,
   text,
   uniqueIndex,
@@ -137,6 +138,15 @@ export const cycles = sqliteTable(
       .references(() => organization.id),
     projectId: text("project_id" as string).references(() => projects.id),
     name: text("name" as string).notNull(),
+    number: integer("number" as string),
+    status: text("status" as string, {
+      enum: ["upcoming", "active", "completed"] as const,
+    })
+      .notNull()
+      .default("upcoming"),
+    autoRollover: integer("auto_rollover" as string, { mode: "boolean" })
+      .notNull()
+      .default(true),
     startDate: text("start_date" as string),
     endDate: text("end_date" as string),
     createdAt: text("created_at" as string)
@@ -574,6 +584,7 @@ export const notifications = sqliteTable(
     read: integer("read" as string, { mode: "boolean" })
       .notNull()
       .default(false),
+    snoozedUntil: text("snoozed_until" as string),
     metadata: text("metadata" as string),
     createdAt: text("created_at" as string)
       .notNull()
@@ -924,6 +935,9 @@ export const savedViews = sqliteTable(
       .references(() => organization.id),
     ownerId: text("owner_id" as string).notNull(),
     name: text("name" as string).notNull(),
+    shared: integer("shared" as string, { mode: "boolean" })
+      .notNull()
+      .default(false),
     filter: text("filter" as string).notNull(),
     search: text("search" as string),
     sort: text("sort" as string),
@@ -941,6 +955,53 @@ export const savedViews = sqliteTable(
       table.organizationId,
       table.ownerId
     ),
+  ]
+);
+
+export const viewFavorites = sqliteTable(
+  "view_favorites" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    viewId: text("view_id" as string)
+      .notNull()
+      .references(() => savedViews.id, { onDelete: "cascade" }),
+    userId: text("user_id" as string).notNull(),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("view_favorites_view_user_idx" as string).on(
+      table.viewId,
+      table.userId
+    ),
+    index("view_favorites_user_idx" as string).on(
+      table.organizationId,
+      table.userId
+    ),
+  ]
+);
+
+export const userWorkspacePreferences = sqliteTable(
+  "user_workspace_preferences" as string,
+  {
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: text("user_id" as string).notNull(),
+    defaultViewId: text("default_view_id" as string).references(
+      () => savedViews.id,
+      { onDelete: "set null" }
+    ),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    primaryKey({ columns: [table.organizationId, table.userId] }),
   ]
 );
 

@@ -7,6 +7,7 @@ import { createD1 } from "../global/db.js";
 import { deleteIssueReferences } from "../global/issue-data.js";
 import { createRepoBranch } from "../global/repo-branches.js";
 import { getSavedView } from "../global/saved-views.js";
+import { getTemplate } from "../global/templates.js";
 import { repoBranches } from "../global/schema.js";
 import {
   canAccessTeam,
@@ -34,6 +35,60 @@ import {
   listIssuesQuerySchema,
   toListArgs,
 } from "./list-args.js";
+
+function stripUndefined<T extends Record<string, unknown>>(obj: T): T {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([, value]) => value !== undefined)
+  ) as T;
+}
+
+const templateDataSchema = z
+  .object({
+    title: z.string().optional(),
+    description: z.string().optional(),
+    status: z.enum(ISSUE_STATUSES).optional(),
+    priority: z.enum(ISSUE_PRIORITIES).optional(),
+    estimate: z.number().int().min(0).optional(),
+    assigneeId: z.string().optional(),
+    projectId: z.string().optional(),
+    cycleId: z.string().optional(),
+    labelIds: z.string().optional(),
+  })
+  .partial();
+
+async function resolveTemplateDefaults(
+  db: ReturnType<typeof createD1>,
+  organizationId: string,
+  templateId: string | null,
+  teamId: string | null
+): Promise<Partial<z.infer<typeof createIssueSchema>>> {
+  let resolvedTemplateId = templateId;
+  if (!resolvedTemplateId && teamId) {
+    const team = await getTeamById(db, teamId, organizationId);
+    resolvedTemplateId = team?.defaultTemplateId ?? null;
+  }
+  if (!resolvedTemplateId) return {};
+  const template = await getTemplate(db, organizationId, resolvedTemplateId);
+  if (!template) {
+    throw new VortexError({
+      code: "NOT_FOUND",
+      status: 404,
+      message: "Template not found",
+    });
+  }
+  if (!template.templateData) return {};
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(template.templateData);
+  } catch {
+    throw new VortexError({
+      code: "INTERNAL_ERROR",
+      status: 500,
+      message: "Template has invalid data",
+    });
+  }
+  return templateDataSchema.parse(parsed);
+}
 
 async function getStub(env: WorkerEnv, organizationId: string) {
   const stub = env.WORKSPACE_DURABLE_OBJECT.get(
@@ -138,6 +193,10 @@ const createIssueSchema = z.object({
   resolution: z.enum(ISSUE_RESOLUTIONS).nullable().optional(),
   parentId: z.string().nullable().optional(),
   subIssueSortOrder: z.number().nullable().optional(),
+  estimate: z.number().int().min(0).nullable().optional(),
+  isDraft: z.boolean().optional(),
+  templateId: z.string().optional(),
+  snoozedUntil: z.string().nullable().optional(),
   assigneeId: z.string().optional(),
   projectId: z.string().optional(),
   cycleId: z.string().optional(),
@@ -160,6 +219,9 @@ const issueApiSchema = z
     resolution: z.enum(ISSUE_RESOLUTIONS).nullable(),
     parentId: z.string().nullable(),
     subIssueSortOrder: z.number().nullable(),
+    estimate: z.number().nullable(),
+    isDraft: z.boolean(),
+    snoozedUntil: z.string().nullable(),
     assigneeId: z.string().nullable(),
     projectId: z.string().nullable(),
     cycleId: z.string().nullable(),
@@ -187,6 +249,102 @@ const listIssuesRoute = createRoute({
   responses: {
     200: {
       description: "Issues list",
+      content: {
+        "application/json": {
+          schema: z.object({
+            issues: z.array(issueApiSchema),
+            nextCursor: z.string().optional(),
+          }),
+        },
+      },
+    },
+  },
+});
+
+const issueAnalyticsRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/issue-analytics",
+  tags: ["issues"],
+  middleware: [rls("read")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+    query: z.object({
+      groupBy: z
+        .enum([
+          "status",
+          "priority",
+          "assigneeId",
+          "teamId",
+          "projectId",
+          "cycleId",
+        ])
+        .optional()
+        .default("status"),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Issue counts and estimate totals grouped by a field",
+      content: {
+        "application/json": {
+          schema: z.object({
+            groups: z.array(
+              z.object({
+                group: z.string().nullable(),
+                count: z.number(),
+                estimateTotal: z.number(),
+              })
+            ),
+          }),
+        },
+      },
+    },
+  },
+});
+
+const burndownRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/issue-analytics/burndown",
+  tags: ["issues"],
+  middleware: [rls("read")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+    query: z.object({ cycleId: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Daily scope/remaining burndown series for a cycle",
+      content: {
+        "application/json": {
+          schema: z.object({
+            total: z.number(),
+            totalEstimate: z.number(),
+            series: z.array(
+              z.object({
+                date: z.string(),
+                scope: z.number(),
+                remaining: z.number(),
+              })
+            ),
+          }),
+        },
+      },
+    },
+  },
+});
+
+const listTriageRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/triage",
+  tags: ["issues"],
+  middleware: [rls("read")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+    query: listIssuesQuerySchema,
+  },
+  responses: {
+    200: {
+      description: "Triage inbox: issues awaiting triage",
       content: {
         "application/json": {
           schema: z.object({
@@ -418,6 +576,55 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     return c.json({ issues, nextCursor });
   });
 
+  app.openapi(issueAnalyticsRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const { groupBy } = c.req.valid("query");
+    const identity = c.get("workspaceIdentity");
+    const db = createD1(c.env.D1);
+    const stub = await getStub(c.env, organizationId);
+    const visibleTeamIds = await loadVisibleTeamIds(
+      db,
+      organizationId,
+      identity
+    );
+    const groups = await stub.issueStats(groupBy, visibleTeamIds);
+    return c.json({ groups });
+  });
+
+  app.openapi(burndownRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const { cycleId } = c.req.valid("query");
+    const stub = await getStub(c.env, organizationId);
+    const result = await stub.burndown(cycleId);
+    return c.json(result);
+  });
+
+  app.openapi(listTriageRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const query = c.req.valid("query");
+    const identity = c.get("workspaceIdentity");
+    const db = createD1(c.env.D1);
+    const stub = await getStub(c.env, organizationId);
+    const visibleTeamIds = await loadVisibleTeamIds(
+      db,
+      organizationId,
+      identity
+    );
+    const args = toListArgs(query);
+    args.status = "triage";
+    args.isDraft = false;
+    args.teamIds = visibleTeamIds;
+    const issues = await stub.listIssues(args);
+    const nextCursor =
+      issues.length === query.limit && issues.length > 0
+        ? encodeCursor({
+            createdAt: issues[issues.length - 1].createdAt,
+            id: issues[issues.length - 1].id,
+          })
+        : undefined;
+    return c.json({ issues, nextCursor });
+  });
+
   app.openapi(createIssueRoute, async (c) => {
     const input = c.req.valid("json");
     const { organizationId } = c.req.valid("param");
@@ -437,15 +644,23 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       await assertIssueAccess(db, parent, identity);
       teamId ??= parent.teamId;
     }
+    const templateDefaults = await resolveTemplateDefaults(
+      db,
+      organizationId,
+      input.templateId ?? null,
+      teamId ?? null
+    );
+    const merged = { ...templateDefaults, ...stripUndefined(input) };
     const resolvedTeamId = await assertTeamAccess(
       db,
       organizationId,
       teamId,
       identity
     );
-    validateIssueState(input.status ?? "backlog", input.resolution);
+    validateIssueState(merged.status ?? "backlog", merged.resolution);
+    const { templateId: _templateId, ...issueInput } = merged;
     const issue = await stub.createIssue(
-      { ...input, teamId: resolvedTeamId },
+      { ...issueInput, teamId: resolvedTeamId },
       identity.id
     );
     if (issue.repo && issue.branch) {

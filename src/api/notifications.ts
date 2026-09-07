@@ -7,6 +7,8 @@ import {
   getUnreadNotificationCount,
   markAllNotificationsRead,
   markNotificationRead,
+  markNotificationUnread,
+  snoozeNotification,
 } from "../global/notifications.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
@@ -19,6 +21,7 @@ const notificationSchema = z.object({
   issueId: z.string(),
   type: z.string(),
   read: z.boolean(),
+  snoozedUntil: z.string().nullable(),
   metadata: z.unknown().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -36,6 +39,14 @@ const listNotificationsRoute = createRoute({
         .string()
         .optional()
         .openapi({ description: "Only unread notifications" }),
+      snoozedOnly: z
+        .string()
+        .optional()
+        .openapi({ description: "Only snoozed notifications" }),
+      includeSnoozed: z
+        .string()
+        .optional()
+        .openapi({ description: "Include snoozed notifications" }),
       limit: z
         .string()
         .optional()
@@ -95,6 +106,63 @@ const markReadRoute = createRoute({
   },
 });
 
+const markUnreadRoute = createRoute({
+  method: "patch",
+  path: "/workspaces/{organizationId}/notifications/{id}/unread",
+  tags: ["notifications"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Notification marked unread",
+      content: {
+        "application/json": { schema: notificationSchema },
+      },
+    },
+    404: {
+      description: "Notification not found",
+    },
+  },
+});
+
+const snoozeRoute = createRoute({
+  method: "patch",
+  path: "/workspaces/{organizationId}/notifications/{id}/snooze",
+  tags: ["notifications"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            until: z
+              .string()
+              .nullable()
+              .openapi({
+                description:
+                  "ISO timestamp to snooze until, or null to unsnooze",
+              }),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Notification snoozed",
+      content: {
+        "application/json": { schema: notificationSchema },
+      },
+    },
+    404: {
+      description: "Notification not found",
+    },
+  },
+});
+
 const markAllReadRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/notifications/mark-all-read",
@@ -116,6 +184,7 @@ function toNotificationResponse(row: {
   issueId: string;
   type: string;
   read: boolean;
+  snoozedUntil: string | null;
   metadata: string | null;
   createdAt: string;
   updatedAt: string;
@@ -139,6 +208,10 @@ export function registerNotificationRoutes(app: OpenAPIHono<AppContext>) {
       identity.type,
       {
         unreadOnly: query.unreadOnly === "true" || query.unreadOnly === "1",
+        snoozedOnly:
+          query.snoozedOnly === "true" || query.snoozedOnly === "1",
+        includeSnoozed:
+          query.includeSnoozed === "true" || query.includeSnoozed === "1",
         limit: query.limit ? Number(query.limit) : undefined,
       }
     );
@@ -168,6 +241,42 @@ export function registerNotificationRoutes(app: OpenAPIHono<AppContext>) {
       identity.id,
       identity.type,
       id
+    );
+    if (!updated) {
+      return c.json({ message: "Notification not found" }, 404);
+    }
+    return c.json(toNotificationResponse(updated));
+  });
+
+  app.openapi(markUnreadRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const identity = c.var.workspaceIdentity;
+    const updated = await markNotificationUnread(
+      db,
+      organizationId,
+      identity.id,
+      identity.type,
+      id
+    );
+    if (!updated) {
+      return c.json({ message: "Notification not found" }, 404);
+    }
+    return c.json(toNotificationResponse(updated));
+  });
+
+  app.openapi(snoozeRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const { until } = c.req.valid("json");
+    const db = createD1(c.env.D1);
+    const identity = c.var.workspaceIdentity;
+    const updated = await snoozeNotification(
+      db,
+      organizationId,
+      identity.id,
+      identity.type,
+      id,
+      until
     );
     if (!updated) {
       return c.json({ message: "Notification not found" }, 404);

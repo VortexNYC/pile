@@ -161,6 +161,14 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "is-parent",
       },
       {
+        name: "isDraft",
+        flag: "is-draft",
+      },
+      {
+        name: "includeSnoozed",
+        flag: "include-snoozed",
+      },
+      {
         name: "assigneeId",
         flag: "assignee",
       },
@@ -235,6 +243,22 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "sub-issue-sort-order",
       },
       {
+        name: "estimate",
+        flag: "estimate",
+      },
+      {
+        name: "isDraft",
+        flag: "is-draft",
+      },
+      {
+        name: "templateId",
+        flag: "template",
+      },
+      {
+        name: "snoozedUntil",
+        flag: "snoozed-until",
+      },
+      {
         name: "assigneeId",
         flag: "assignee",
       },
@@ -259,6 +283,121 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "branch",
       },
     ],
+  },
+  "issue analytics list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/issue-analytics",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "groupBy",
+        flag: "group-by",
+      },
+    ],
+    body: [],
+  },
+  "issue analytics burndown list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/issue-analytics/burndown",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "cycleId",
+        flag: "cycle",
+      },
+    ],
+    body: [],
+  },
+  "triage list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/triage",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "limit",
+        flag: "limit",
+      },
+      {
+        name: "cursor",
+        flag: "cursor",
+      },
+      {
+        name: "teamId",
+        flag: "team",
+      },
+      {
+        name: "status",
+        flag: "status",
+      },
+      {
+        name: "priority",
+        flag: "priority",
+      },
+      {
+        name: "parentId",
+        flag: "parent",
+      },
+      {
+        name: "hasParent",
+        flag: "has-parent",
+      },
+      {
+        name: "isParent",
+        flag: "is-parent",
+      },
+      {
+        name: "isDraft",
+        flag: "is-draft",
+      },
+      {
+        name: "includeSnoozed",
+        flag: "include-snoozed",
+      },
+      {
+        name: "assigneeId",
+        flag: "assignee",
+      },
+      {
+        name: "projectId",
+        flag: "project",
+      },
+      {
+        name: "cycleId",
+        flag: "cycle",
+      },
+      {
+        name: "labelId",
+        flag: "label",
+      },
+      {
+        name: "search",
+        flag: "search",
+      },
+      {
+        name: "identifier",
+        flag: "identifier",
+      },
+      {
+        name: "view",
+        flag: "view",
+      },
+    ],
+    body: [],
   },
   "issues get": {
     method: "GET",
@@ -322,6 +461,22 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "subIssueSortOrder",
         flag: "sub-issue-sort-order",
+      },
+      {
+        name: "estimate",
+        flag: "estimate",
+      },
+      {
+        name: "isDraft",
+        flag: "is-draft",
+      },
+      {
+        name: "templateId",
+        flag: "template",
+      },
+      {
+        name: "snoozedUntil",
+        flag: "snoozed-until",
       },
       {
         name: "assigneeId",
@@ -762,6 +917,18 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "name",
       },
       {
+        name: "number",
+        flag: "number",
+      },
+      {
+        name: "status",
+        flag: "status",
+      },
+      {
+        name: "autoRollover",
+        flag: "auto-rollover",
+      },
+      {
         name: "startDate",
         flag: "start-date",
       },
@@ -811,6 +978,18 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "name",
       },
       {
+        name: "number",
+        flag: "number",
+      },
+      {
+        name: "status",
+        flag: "status",
+      },
+      {
+        name: "autoRollover",
+        flag: "auto-rollover",
+      },
+      {
         name: "startDate",
         flag: "start-date",
       },
@@ -831,6 +1010,34 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "id",
         flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "cycles capacity list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/cycles/{id}/capacity",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "cycles rollover create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/cycles/rollover",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
       },
     ],
     query: [],
@@ -1733,6 +1940,14 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "unread-only",
       },
       {
+        name: "snoozedOnly",
+        flag: "snoozed-only",
+      },
+      {
+        name: "includeSnoozed",
+        flag: "include-snoozed",
+      },
+      {
         name: "limit",
         flag: "limit",
       },
@@ -1766,6 +1981,43 @@ export const COMMANDS: Record<string, CommandDef> = {
     ],
     query: [],
     body: [],
+  },
+  "notifications unread update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/notifications/{id}/unread",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "notifications snooze update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/notifications/{id}/snooze",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "until",
+        flag: "until",
+      },
+    ],
   },
   "notifications mark all read create": {
     method: "POST",
@@ -1865,6 +2117,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "name",
       },
       {
+        name: "shared",
+        flag: "shared",
+      },
+      {
         name: "filter",
         flag: "filter",
       },
@@ -1879,6 +2135,67 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "columns",
         flag: "columns",
+      },
+    ],
+  },
+  "saved views favorite create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/saved-views/{id}/favorite",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "saved views favorite delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/saved-views/{id}/favorite",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "me view preferences list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/me/view-preferences",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "me view preferences update": {
+    method: "PUT",
+    path: "/workspaces/{organizationId}/me/view-preferences",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "defaultViewId",
+        flag: "default-view-id",
       },
     ],
   },
@@ -1916,6 +2233,10 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "name",
         flag: "name",
+      },
+      {
+        name: "shared",
+        flag: "shared",
       },
       {
         name: "filter",
@@ -1991,6 +2312,14 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "parent-auto-close",
       },
       {
+        name: "triageAssigneeId",
+        flag: "triage-assignee-id",
+      },
+      {
+        name: "defaultTemplateId",
+        flag: "default-template-id",
+      },
+      {
         name: "subIssueAutoClose",
         flag: "sub-issue-auto-close",
       },
@@ -2042,6 +2371,14 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "parentAutoClose",
         flag: "parent-auto-close",
+      },
+      {
+        name: "triageAssigneeId",
+        flag: "triage-assignee-id",
+      },
+      {
+        name: "defaultTemplateId",
+        flag: "default-template-id",
       },
       {
         name: "subIssueAutoClose",

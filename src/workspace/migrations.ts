@@ -80,6 +80,14 @@ const v4 = `ALTER TABLE issues ADD COLUMN parent_id TEXT`;
 
 const v5 = `ALTER TABLE issues ADD COLUMN sub_issue_sort_order REAL`;
 
+const v6 = `ALTER TABLE issues ADD COLUMN estimate INTEGER
+--> statement-breakpoint
+ALTER TABLE issues ADD COLUMN is_draft INTEGER NOT NULL DEFAULT 0
+--> statement-breakpoint
+ALTER TABLE issues ADD COLUMN snoozed_until TEXT
+--> statement-breakpoint
+CREATE INDEX idx_issues_triage ON issues (organization_id, status, snoozed_until)`;
+
 export const workspaceMigrations = {
   journal: {
     entries: [
@@ -88,6 +96,7 @@ export const workspaceMigrations = {
       { idx: 2, when: 2, tag: "v3", breakpoints: false },
       { idx: 3, when: 3, tag: "v4", breakpoints: false },
       { idx: 4, when: 4, tag: "v5", breakpoints: false },
+      { idx: 5, when: 5, tag: "v6", breakpoints: true },
     ],
   },
   migrations: {
@@ -96,5 +105,6 @@ export const workspaceMigrations = {
     m0002: v3,
     m0003: v4,
     m0004: v5,
+    m0005: v6,
   },
 } satisfies Parameters<typeof migrate>[1];

@@ -112,6 +112,7 @@ interface LinearIssue {
   description?: string | null;
   state: { id: string; name: string; type: string } | null;
   priority?: number | null;
+  estimate?: number | null;
   assignee?: { id: string } | null;
   project?: { id: string } | null;
   cycle?: { id: string } | null;
@@ -341,6 +342,7 @@ class LinearClient {
                 type
               }
               priority
+              estimate
               assignee {
                 id
               }
@@ -641,6 +643,7 @@ export async function migrateLinear(
           li.state ? (stateMap.get(li.state.id) ?? null) : null
         ),
         priority: mapPriority(li.priority),
+        estimate: li.estimate ?? undefined,
         assigneeId: li.assignee?.id ?? undefined,
         projectId: li.project?.id ? projectMap.get(li.project.id) : undefined,
         cycleId: li.cycle?.id ? cycleMap.get(li.cycle.id) : undefined,

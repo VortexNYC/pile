@@ -27,6 +27,8 @@ const teamSchema = z.object({
   isDefault: z.boolean(),
   isPublic: z.boolean(),
   parentAutoClose: z.boolean(),
+  triageAssigneeId: z.string().nullable(),
+  defaultTemplateId: z.string().nullable(),
   subIssueAutoClose: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -42,6 +44,8 @@ function serializeTeam(record: TeamRecord) {
     isDefault: record.isDefault,
     isPublic: record.isPublic,
     parentAutoClose: record.parentAutoClose,
+    triageAssigneeId: record.triageAssigneeId,
+    defaultTemplateId: record.defaultTemplateId,
     subIssueAutoClose: record.subIssueAutoClose,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
@@ -53,6 +57,8 @@ const createTeamBodySchema = z.object({
   name: z.string().min(1),
   isPublic: z.boolean().optional(),
   parentAutoClose: z.boolean().optional(),
+  triageAssigneeId: z.string().nullable().optional(),
+  defaultTemplateId: z.string().nullable().optional(),
   subIssueAutoClose: z.boolean().optional(),
 });
 
@@ -61,6 +67,8 @@ const updateTeamBodySchema = z.object({
   name: z.string().min(1).optional(),
   isPublic: z.boolean().optional(),
   parentAutoClose: z.boolean().optional(),
+  triageAssigneeId: z.string().nullable().optional(),
+  defaultTemplateId: z.string().nullable().optional(),
   subIssueAutoClose: z.boolean().optional(),
 });
 
@@ -272,6 +280,8 @@ export function registerTeamRoutes(app: OpenAPIHono<AppContext>) {
       ownerId: identity.id,
       isPublic: body.isPublic,
       parentAutoClose: body.parentAutoClose,
+      triageAssigneeId: body.triageAssigneeId,
+      defaultTemplateId: body.defaultTemplateId,
       subIssueAutoClose: body.subIssueAutoClose,
     });
     return c.json(serializeTeam(record), 201);

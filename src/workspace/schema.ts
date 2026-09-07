@@ -46,6 +46,11 @@ export const workspaceIssues = sqliteTable(
     identifier: text("identifier" as string),
     parentId: text("parent_id" as string),
     subIssueSortOrder: real("sub_issue_sort_order" as string),
+    estimate: integer("estimate" as string),
+    isDraft: integer("is_draft" as string, { mode: "boolean" })
+      .notNull()
+      .default(false),
+    snoozedUntil: text("snoozed_until" as string),
     repo: text("repo" as string),
     branch: text("branch" as string),
     prUrl: text("pr_url" as string),

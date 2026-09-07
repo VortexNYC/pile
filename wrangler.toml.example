@@ -4,14 +4,15 @@ compatibility_date = "2026-07-30"
 compatibility_flags = ["nodejs_compat"]
 
 [vars]
+# Set this to your Worker's URL after first deploy (https://<name>.<subdomain>.workers.dev)
 BETTER_AUTH_URL = "https://your-domain.com"
-DEVIN_OUTPOST = "user:daytona-linux"
-DEVIN_MODEL = "swe-1-7-medium"
+ALLOWED_ORIGINS = "https://your-domain.com"
+SLACK_REDIRECT_URI = "https://your-domain.com/slack/oauth"
 
 [[d1_databases]]
 binding = "D1"
 database_name = "issuetracker-global"
-database_id = "<your-d1-database-id>"
+# database_id intentionally omitted — `wrangler deploy` auto-provisions it
 migrations_dir = "migrations"
 
 [[r2_buckets]]
@@ -21,6 +22,9 @@ bucket_name = "issuetracker-attachments"
 [[durable_objects.bindings]]
 name = "WORKSPACE_DURABLE_OBJECT"
 class_name = "WorkspaceDO"
+
+[triggers]
+crons = ["*/30 * * * *"]
 
 [[migrations]]
 tag = "v1"

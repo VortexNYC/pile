@@ -60,6 +60,9 @@ const cycleSchema = z.object({
   organizationId: z.string(),
   projectId: z.string().nullable(),
   name: z.string(),
+  number: z.number().nullable(),
+  status: z.enum(["upcoming", "active", "completed"]),
+  autoRollover: z.boolean(),
   startDate: z.string().nullable(),
   endDate: z.string().nullable(),
   createdAt: z.string(),
@@ -69,6 +72,9 @@ const cycleSchema = z.object({
 const cycleBodySchema = z.object({
   projectId: z.string().optional(),
   name: z.string().min(1),
+  number: z.number().int().optional(),
+  status: z.enum(["upcoming", "active", "completed"]).optional(),
+  autoRollover: z.boolean().optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
 });
@@ -311,6 +317,58 @@ const updateCycleRoute = createRoute({
       description: "Cycle updated",
       content: {
         "application/json": { schema: cycleSchema },
+      },
+    },
+  },
+});
+
+const cycleCapacityRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/cycles/{id}/capacity",
+  tags: ["cycles"],
+  middleware: [rls("read")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Cycle capacity: issue counts and estimate totals by status",
+      content: {
+        "application/json": {
+          schema: z.object({
+            issueCount: z.number(),
+            estimateTotal: z.number(),
+            byStatus: z.record(
+              z.string(),
+              z.object({ count: z.number(), estimateTotal: z.number() })
+            ),
+          }),
+        },
+      },
+    },
+    404: { description: "Cycle not found" },
+  },
+});
+
+const rolloverCyclesRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/cycles/rollover",
+  tags: ["cycles"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+  },
+  responses: {
+    200: {
+      description:
+        "Close ended cycles and roll unfinished issues into the next cycle",
+      content: {
+        "application/json": {
+          schema: z.object({
+            completedCycles: z.array(z.string()),
+            rolledOver: z.number(),
+          }),
+        },
       },
     },
   },
@@ -787,6 +845,35 @@ export function registerWorkspaceEntityRoutes(app: OpenAPIHono<AppContext>) {
     const db = createD1(c.env.D1);
     await deleteCycle(db, organizationId, id);
     return c.body(null, 204);
+  });
+
+  app.openapi(cycleCapacityRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const cycle = await getCycle(db, organizationId, id);
+    if (!cycle) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Cycle not found",
+      });
+    }
+    const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(
+      c.env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const capacity = await stub.cycleCapacity(id);
+    return c.json(capacity);
+  });
+
+  app.openapi(rolloverCyclesRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(
+      c.env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const result = await stub.rolloverCycles();
+    return c.json(result);
   });
 
   app.openapi(listLabelsRoute, async (c) => {

@@ -271,6 +271,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdSavedviewsIdFavorite",
+    "description": "Delete saved view favorite (DELETE /workspaces/{organizationId}/saved-views/{id}/favorite)",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/saved-views/{id}/favorite",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdSlack",
     "description": "Delete slack (DELETE /workspaces/{organizationId}/slack)",
     "method": "DELETE",
@@ -534,6 +555,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdCyclesIdCapacity",
+    "description": "List cycle capacity (GET /workspaces/{organizationId}/cycles/{id}/capacity)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/cycles/{id}/capacity",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdExport",
     "description": "List export (GET /workspaces/{organizationId}/export)",
     "method": "GET",
@@ -626,6 +668,56 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdIssueanalytics",
+    "description": "List issue analytics (GET /workspaces/{organizationId}/issue-analytics)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/issue-analytics",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "groupBy": {
+          "type": "string",
+          "enum": [
+            "status",
+            "priority",
+            "assigneeId",
+            "teamId",
+            "projectId",
+            "cycleId"
+          ],
+          "default": "status"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdIssueanalyticsBurndown",
+    "description": "List issue analytic burndown (GET /workspaces/{organizationId}/issue-analytics/burndown)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/issue-analytics/burndown",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "cycleId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "cycleId",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdIssues",
     "description": "List issues (GET /workspaces/{organizationId}/issues)",
     "method": "GET",
@@ -679,6 +771,20 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           ]
         },
         "isParent": {
+          "type": "string",
+          "enum": [
+            "true",
+            "false"
+          ]
+        },
+        "isDraft": {
+          "type": "string",
+          "enum": [
+            "true",
+            "false"
+          ]
+        },
+        "includeSnoozed": {
           "type": "string",
           "enum": [
             "true",
@@ -1069,6 +1175,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdMeViewpreferences",
+    "description": "List me view preferences (GET /workspaces/{organizationId}/me/view-preferences)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/me/view-preferences",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdNotifications",
     "description": "List notifications (GET /workspaces/{organizationId}/notifications)",
     "method": "GET",
@@ -1082,6 +1205,14 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         "unreadOnly": {
           "type": "string",
           "description": "Only unread notifications"
+        },
+        "snoozedOnly": {
+          "type": "string",
+          "description": "Only snoozed notifications"
+        },
+        "includeSnoozed": {
+          "type": "string",
+          "description": "Include snoozed notifications"
         },
         "limit": {
           "type": "string",
@@ -1432,6 +1563,107 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdTriage",
+    "description": "List triage (GET /workspaces/{organizationId}/triage)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/triage",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 1,
+          "maximum": 100
+        },
+        "cursor": {
+          "type": "string"
+        },
+        "teamId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "triage",
+            "backlog",
+            "todo",
+            "in_progress",
+            "done",
+            "canceled"
+          ]
+        },
+        "priority": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "urgent"
+          ]
+        },
+        "parentId": {
+          "type": "string"
+        },
+        "hasParent": {
+          "type": "string",
+          "enum": [
+            "true",
+            "false"
+          ]
+        },
+        "isParent": {
+          "type": "string",
+          "enum": [
+            "true",
+            "false"
+          ]
+        },
+        "isDraft": {
+          "type": "string",
+          "enum": [
+            "true",
+            "false"
+          ]
+        },
+        "includeSnoozed": {
+          "type": "string",
+          "enum": [
+            "true",
+            "false"
+          ]
+        },
+        "assigneeId": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "cycleId": {
+          "type": "string"
+        },
+        "labelId": {
+          "type": "string"
+        },
+        "search": {
+          "type": "string"
+        },
+        "identifier": {
+          "type": "string"
+        },
+        "view": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdWebhooksubscriptions",
     "description": "List webhook subscriptions (GET /workspaces/{organizationId}/webhook-subscriptions)",
     "method": "GET",
@@ -1574,6 +1806,20 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string",
               "minLength": 1
             },
+            "number": {
+              "type": "integer"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "upcoming",
+                "active",
+                "completed"
+              ]
+            },
+            "autoRollover": {
+              "type": "boolean"
+            },
             "startDate": {
               "type": "string"
             },
@@ -1702,6 +1948,21 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "number",
               "nullable": true
             },
+            "estimate": {
+              "type": "integer",
+              "nullable": true,
+              "minimum": 0
+            },
+            "isDraft": {
+              "type": "boolean"
+            },
+            "templateId": {
+              "type": "string"
+            },
+            "snoozedUntil": {
+              "type": "string",
+              "nullable": true
+            },
             "assigneeId": {
               "type": "string"
             },
@@ -1821,6 +2082,61 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "patchWorkspacesOrganizationIdNotificationsIdSnooze",
+    "description": "Update notification snooze (PATCH /workspaces/{organizationId}/notifications/{id}/snooze)",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/notifications/{id}/snooze",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "until": {
+              "type": "string",
+              "nullable": true,
+              "description": "ISO timestamp to snooze until, or null to unsnooze"
+            }
+          },
+          "required": [
+            "until"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "patchWorkspacesOrganizationIdNotificationsIdUnread",
+    "description": "Update notification unread (PATCH /workspaces/{organizationId}/notifications/{id}/unread)",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/notifications/{id}/unread",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "patchWorkspacesOrganizationIdProjectsId",
     "description": "Update project (PATCH /workspaces/{organizationId}/projects/{id})",
     "method": "PATCH",
@@ -1915,6 +2231,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "name": {
               "type": "string",
               "minLength": 1
+            },
+            "shared": {
+              "type": "boolean"
             },
             "filter": {
               "nullable": true
@@ -2027,6 +2346,14 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "parentAutoClose": {
               "type": "boolean"
+            },
+            "triageAssigneeId": {
+              "type": "string",
+              "nullable": true
+            },
+            "defaultTemplateId": {
+              "type": "string",
+              "nullable": true
             },
             "subIssueAutoClose": {
               "type": "boolean"
@@ -2268,6 +2595,20 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string",
               "minLength": 1
             },
+            "number": {
+              "type": "integer"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "upcoming",
+                "active",
+                "completed"
+              ]
+            },
+            "autoRollover": {
+              "type": "boolean"
+            },
             "startDate": {
               "type": "string"
             },
@@ -2278,6 +2619,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "required": [
             "name"
           ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdCyclesRollover",
+    "description": "Create cycle rollover (POST /workspaces/{organizationId}/cycles/rollover)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/cycles/rollover",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
         }
       },
       "required": [
@@ -2454,6 +2812,21 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "number",
               "nullable": true
             },
+            "estimate": {
+              "type": "integer",
+              "nullable": true,
+              "minimum": 0
+            },
+            "isDraft": {
+              "type": "boolean"
+            },
+            "templateId": {
+              "type": "string"
+            },
+            "snoozedUntil": {
+              "type": "string",
+              "nullable": true
+            },
             "assigneeId": {
               "type": "string"
             },
@@ -2558,6 +2931,21 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 },
                 "subIssueSortOrder": {
                   "type": "number",
+                  "nullable": true
+                },
+                "estimate": {
+                  "type": "integer",
+                  "nullable": true,
+                  "minimum": 0
+                },
+                "isDraft": {
+                  "type": "boolean"
+                },
+                "templateId": {
+                  "type": "string"
+                },
+                "snoozedUntil": {
+                  "type": "string",
                   "nullable": true
                 },
                 "assigneeId": {
@@ -3046,6 +3434,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string",
               "minLength": 1
             },
+            "shared": {
+              "type": "boolean"
+            },
             "filter": {
               "nullable": true
             },
@@ -3084,6 +3475,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSavedviewsIdFavorite",
+    "description": "Create saved view favorite (POST /workspaces/{organizationId}/saved-views/{id}/favorite)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/saved-views/{id}/favorite",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
         "organizationId"
       ]
     }
@@ -3206,6 +3618,14 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "parentAutoClose": {
               "type": "boolean"
+            },
+            "triageAssigneeId": {
+              "type": "string",
+              "nullable": true
+            },
+            "defaultTemplateId": {
+              "type": "string",
+              "nullable": true
             },
             "subIssueAutoClose": {
               "type": "boolean"
@@ -3375,6 +3795,35 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           },
           "required": [
             "url"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "putWorkspacesOrganizationIdMeViewpreferences",
+    "description": "Update me view preferences (PUT /workspaces/{organizationId}/me/view-preferences)",
+    "method": "PUT",
+    "path": "/workspaces/{organizationId}/me/view-preferences",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "defaultViewId": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          "required": [
+            "defaultViewId"
           ]
         }
       },

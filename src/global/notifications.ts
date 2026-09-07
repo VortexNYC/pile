@@ -1,4 +1,4 @@
-import { and, count, eq, inArray } from "drizzle-orm";
+import { and, count, eq, gt, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 
 import type { D1Client } from "./db.js";
 import {
@@ -54,8 +54,14 @@ export async function getNotificationsForRecipient(
   organizationId: string,
   recipientId: string,
   recipientType: RecipientType,
-  options: { unreadOnly?: boolean; limit?: number } = {}
+  options: {
+    unreadOnly?: boolean;
+    snoozedOnly?: boolean;
+    includeSnoozed?: boolean;
+    limit?: number;
+  } = {}
 ) {
+  const nowIso = new Date().toISOString();
   const conditions = [
     eq(notifications.organizationId, organizationId),
     eq(notifications.recipientId, recipientId),
@@ -63,6 +69,14 @@ export async function getNotificationsForRecipient(
   ];
   if (options.unreadOnly) {
     conditions.push(eq(notifications.read, false));
+  }
+  if (options.snoozedOnly) {
+    conditions.push(isNotNull(notifications.snoozedUntil));
+    conditions.push(gt(notifications.snoozedUntil, nowIso));
+  } else if (!options.includeSnoozed) {
+    conditions.push(
+      sql`(${notifications.snoozedUntil} IS NULL OR ${notifications.snoozedUntil} < ${nowIso})`
+    );
   }
   return db
     .select()
@@ -79,6 +93,7 @@ export async function getUnreadNotificationCount(
   recipientId: string,
   recipientType: RecipientType
 ) {
+  const nowIso = new Date().toISOString();
   const result = await db
     .select({ count: count() })
     .from(notifications)
@@ -87,11 +102,83 @@ export async function getUnreadNotificationCount(
         eq(notifications.organizationId, organizationId),
         eq(notifications.recipientId, recipientId),
         eq(notifications.recipientType, recipientType),
-        eq(notifications.read, false)
+        eq(notifications.read, false),
+        or(
+          isNull(notifications.snoozedUntil),
+          lt(notifications.snoozedUntil, nowIso)
+        )
       )
     )
     .get();
   return result?.count ?? 0;
+}
+
+async function updateNotificationForRecipient(
+  db: D1Client,
+  organizationId: string,
+  recipientId: string,
+  recipientType: RecipientType,
+  notificationId: string,
+  values: { read?: boolean; snoozedUntil?: string | null }
+) {
+  const existing = await db
+    .select()
+    .from(notifications)
+    .where(
+      and(
+        eq(notifications.id, notificationId),
+        eq(notifications.organizationId, organizationId),
+        eq(notifications.recipientId, recipientId),
+        eq(notifications.recipientType, recipientType)
+      )
+    )
+    .get();
+  if (!existing) return null;
+
+  await db
+    .update(notifications)
+    .set({ ...values, updatedAt: new Date().toISOString() })
+    .where(eq(notifications.id, notificationId));
+  return db
+    .select()
+    .from(notifications)
+    .where(eq(notifications.id, notificationId))
+    .get();
+}
+
+export async function markNotificationUnread(
+  db: D1Client,
+  organizationId: string,
+  recipientId: string,
+  recipientType: RecipientType,
+  notificationId: string
+) {
+  return updateNotificationForRecipient(
+    db,
+    organizationId,
+    recipientId,
+    recipientType,
+    notificationId,
+    { read: false }
+  );
+}
+
+export async function snoozeNotification(
+  db: D1Client,
+  organizationId: string,
+  recipientId: string,
+  recipientType: RecipientType,
+  notificationId: string,
+  until: string | null
+) {
+  return updateNotificationForRecipient(
+    db,
+    organizationId,
+    recipientId,
+    recipientType,
+    notificationId,
+    { snoozedUntil: until }
+  );
 }
 
 export async function markNotificationRead(

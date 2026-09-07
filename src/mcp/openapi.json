@@ -67,6 +67,17 @@
             "type": "number",
             "nullable": true
           },
+          "estimate": {
+            "type": "number",
+            "nullable": true
+          },
+          "isDraft": {
+            "type": "boolean"
+          },
+          "snoozedUntil": {
+            "type": "string",
+            "nullable": true
+          },
           "assigneeId": {
             "type": "string",
             "nullable": true
@@ -125,6 +136,9 @@
           "resolution",
           "parentId",
           "subIssueSortOrder",
+          "estimate",
+          "isDraft",
+          "snoozedUntil",
           "assigneeId",
           "projectId",
           "cycleId",
@@ -698,6 +712,30 @@
           },
           {
             "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "required": false,
+            "name": "isDraft",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "required": false,
+            "name": "includeSnoozed",
+            "in": "query"
+          },
+          {
+            "schema": {
               "type": "string"
             },
             "required": false,
@@ -852,6 +890,21 @@
                     "type": "number",
                     "nullable": true
                   },
+                  "estimate": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "isDraft": {
+                    "type": "boolean"
+                  },
+                  "templateId": {
+                    "type": "string"
+                  },
+                  "snoozedUntil": {
+                    "type": "string",
+                    "nullable": true
+                  },
                   "assigneeId": {
                     "type": "string"
                   },
@@ -891,6 +944,367 @@
           }
         },
         "summary": "Create issue"
+      }
+    },
+    "/workspaces/{organizationId}/issue-analytics": {
+      "get": {
+        "tags": [
+          "issues"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "status",
+                "priority",
+                "assigneeId",
+                "teamId",
+                "projectId",
+                "cycleId"
+              ],
+              "default": "status"
+            },
+            "required": false,
+            "name": "groupBy",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Issue counts and estimate totals grouped by a field",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "groups": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "group": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "count": {
+                            "type": "number"
+                          },
+                          "estimateTotal": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "group",
+                          "count",
+                          "estimateTotal"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "groups"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List issue analytics"
+      }
+    },
+    "/workspaces/{organizationId}/issue-analytics/burndown": {
+      "get": {
+        "tags": [
+          "issues"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "cycleId",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Daily scope/remaining burndown series for a cycle",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "total": {
+                      "type": "number"
+                    },
+                    "totalEstimate": {
+                      "type": "number"
+                    },
+                    "series": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "date": {
+                            "type": "string"
+                          },
+                          "scope": {
+                            "type": "number"
+                          },
+                          "remaining": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "date",
+                          "scope",
+                          "remaining"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "total",
+                    "totalEstimate",
+                    "series"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List issue analytic burndown"
+      }
+    },
+    "/workspaces/{organizationId}/triage": {
+      "get": {
+        "tags": [
+          "issues"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "nullable": true,
+              "minimum": 1,
+              "maximum": 100
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "teamId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "triage",
+                "backlog",
+                "todo",
+                "in_progress",
+                "done",
+                "canceled"
+              ]
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "low",
+                "medium",
+                "high",
+                "urgent"
+              ]
+            },
+            "required": false,
+            "name": "priority",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "parentId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "required": false,
+            "name": "hasParent",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "required": false,
+            "name": "isParent",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "required": false,
+            "name": "isDraft",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "required": false,
+            "name": "includeSnoozed",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "assigneeId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "projectId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "cycleId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "labelId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "search",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "identifier",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "view",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Triage inbox: issues awaiting triage",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Issue"
+                      }
+                    },
+                    "nextCursor": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "issues"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List triage"
       }
     },
     "/workspaces/{organizationId}/issues/{id}": {
@@ -1007,6 +1421,21 @@
                   },
                   "subIssueSortOrder": {
                     "type": "number",
+                    "nullable": true
+                  },
+                  "estimate": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "isDraft": {
+                    "type": "boolean"
+                  },
+                  "templateId": {
+                    "type": "string"
+                  },
+                  "snoozedUntil": {
+                    "type": "string",
                     "nullable": true
                   },
                   "assigneeId": {
@@ -1207,6 +1636,21 @@
                       },
                       "subIssueSortOrder": {
                         "type": "number",
+                        "nullable": true
+                      },
+                      "estimate": {
+                        "type": "integer",
+                        "nullable": true,
+                        "minimum": 0
+                      },
+                      "isDraft": {
+                        "type": "boolean"
+                      },
+                      "templateId": {
+                        "type": "string"
+                      },
+                      "snoozedUntil": {
+                        "type": "string",
                         "nullable": true
                       },
                       "assigneeId": {
@@ -3333,6 +3777,21 @@
                           "name": {
                             "type": "string"
                           },
+                          "number": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "upcoming",
+                              "active",
+                              "completed"
+                            ]
+                          },
+                          "autoRollover": {
+                            "type": "boolean"
+                          },
                           "startDate": {
                             "type": "string",
                             "nullable": true
@@ -3353,6 +3812,9 @@
                           "organizationId",
                           "projectId",
                           "name",
+                          "number",
+                          "status",
+                          "autoRollover",
                           "startDate",
                           "endDate",
                           "createdAt",
@@ -3398,6 +3860,20 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "number": {
+                    "type": "integer"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "upcoming",
+                      "active",
+                      "completed"
+                    ]
+                  },
+                  "autoRollover": {
+                    "type": "boolean"
+                  },
                   "startDate": {
                     "type": "string"
                   },
@@ -3433,6 +3909,21 @@
                     "name": {
                       "type": "string"
                     },
+                    "number": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "upcoming",
+                        "active",
+                        "completed"
+                      ]
+                    },
+                    "autoRollover": {
+                      "type": "boolean"
+                    },
                     "startDate": {
                       "type": "string",
                       "nullable": true
@@ -3453,6 +3944,9 @@
                     "organizationId",
                     "projectId",
                     "name",
+                    "number",
+                    "status",
+                    "autoRollover",
                     "startDate",
                     "endDate",
                     "createdAt",
@@ -3510,6 +4004,21 @@
                     "name": {
                       "type": "string"
                     },
+                    "number": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "upcoming",
+                        "active",
+                        "completed"
+                      ]
+                    },
+                    "autoRollover": {
+                      "type": "boolean"
+                    },
                     "startDate": {
                       "type": "string",
                       "nullable": true
@@ -3530,6 +4039,9 @@
                     "organizationId",
                     "projectId",
                     "name",
+                    "number",
+                    "status",
+                    "autoRollover",
                     "startDate",
                     "endDate",
                     "createdAt",
@@ -3577,6 +4089,20 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "number": {
+                    "type": "integer"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "upcoming",
+                      "active",
+                      "completed"
+                    ]
+                  },
+                  "autoRollover": {
+                    "type": "boolean"
+                  },
                   "startDate": {
                     "type": "string"
                   },
@@ -3609,6 +4135,21 @@
                     "name": {
                       "type": "string"
                     },
+                    "number": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "upcoming",
+                        "active",
+                        "completed"
+                      ]
+                    },
+                    "autoRollover": {
+                      "type": "boolean"
+                    },
                     "startDate": {
                       "type": "string",
                       "nullable": true
@@ -3629,6 +4170,9 @@
                     "organizationId",
                     "projectId",
                     "name",
+                    "number",
+                    "status",
+                    "autoRollover",
                     "startDate",
                     "endDate",
                     "createdAt",
@@ -3669,6 +4213,123 @@
           }
         },
         "summary": "Delete cycle"
+      }
+    },
+    "/workspaces/{organizationId}/cycles/{id}/capacity": {
+      "get": {
+        "tags": [
+          "cycles"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cycle capacity: issue counts and estimate totals by status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "issueCount": {
+                      "type": "number"
+                    },
+                    "estimateTotal": {
+                      "type": "number"
+                    },
+                    "byStatus": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "count": {
+                            "type": "number"
+                          },
+                          "estimateTotal": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "count",
+                          "estimateTotal"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "issueCount",
+                    "estimateTotal",
+                    "byStatus"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Cycle not found"
+          }
+        },
+        "summary": "List cycle capacity"
+      }
+    },
+    "/workspaces/{organizationId}/cycles/rollover": {
+      "post": {
+        "tags": [
+          "cycles"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Close ended cycles and roll unfinished issues into the next cycle",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "completedCycles": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "rolledOver": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "completedCycles",
+                    "rolledOver"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create cycle rollover"
       }
     },
     "/workspaces/{organizationId}/labels": {
@@ -7413,6 +8074,26 @@
           {
             "schema": {
               "type": "string",
+              "description": "Only snoozed notifications"
+            },
+            "required": false,
+            "description": "Only snoozed notifications",
+            "name": "snoozedOnly",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Include snoozed notifications"
+            },
+            "required": false,
+            "description": "Include snoozed notifications",
+            "name": "includeSnoozed",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
               "description": "Max notifications to return"
             },
             "required": false,
@@ -7455,6 +8136,10 @@
                           "read": {
                             "type": "boolean"
                           },
+                          "snoozedUntil": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "metadata": {
                             "nullable": true
                           },
@@ -7473,6 +8158,7 @@
                           "issueId",
                           "type",
                           "read",
+                          "snoozedUntil",
                           "createdAt",
                           "updatedAt"
                         ]
@@ -7580,6 +8266,10 @@
                     "read": {
                       "type": "boolean"
                     },
+                    "snoozedUntil": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "metadata": {
                       "nullable": true
                     },
@@ -7598,6 +8288,7 @@
                     "issueId",
                     "type",
                     "read",
+                    "snoozedUntil",
                     "createdAt",
                     "updatedAt"
                   ]
@@ -7610,6 +8301,203 @@
           }
         },
         "summary": "Mark notification as read"
+      }
+    },
+    "/workspaces/{organizationId}/notifications/{id}/unread": {
+      "patch": {
+        "tags": [
+          "notifications"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Notification marked unread",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "recipientId": {
+                      "type": "string"
+                    },
+                    "recipientType": {
+                      "type": "string"
+                    },
+                    "issueId": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string"
+                    },
+                    "read": {
+                      "type": "boolean"
+                    },
+                    "snoozedUntil": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "metadata": {
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "recipientId",
+                    "recipientType",
+                    "issueId",
+                    "type",
+                    "read",
+                    "snoozedUntil",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Notification not found"
+          }
+        },
+        "summary": "Update notification unread"
+      }
+    },
+    "/workspaces/{organizationId}/notifications/{id}/snooze": {
+      "patch": {
+        "tags": [
+          "notifications"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "until": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "ISO timestamp to snooze until, or null to unsnooze"
+                  }
+                },
+                "required": [
+                  "until"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Notification snoozed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "recipientId": {
+                      "type": "string"
+                    },
+                    "recipientType": {
+                      "type": "string"
+                    },
+                    "issueId": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string"
+                    },
+                    "read": {
+                      "type": "boolean"
+                    },
+                    "snoozedUntil": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "metadata": {
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "recipientId",
+                    "recipientType",
+                    "issueId",
+                    "type",
+                    "read",
+                    "snoozedUntil",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Notification not found"
+          }
+        },
+        "summary": "Update notification snooze"
       }
     },
     "/workspaces/{organizationId}/notifications/mark-all-read": {
@@ -8054,6 +8942,12 @@
                           "name": {
                             "type": "string"
                           },
+                          "shared": {
+                            "type": "boolean"
+                          },
+                          "isFavorite": {
+                            "type": "boolean"
+                          },
                           "filter": {
                             "nullable": true
                           },
@@ -8100,6 +8994,7 @@
                           "organizationId",
                           "ownerId",
                           "name",
+                          "shared",
                           "search",
                           "sort",
                           "columns",
@@ -8142,6 +9037,9 @@
                   "name": {
                     "type": "string",
                     "minLength": 1
+                  },
+                  "shared": {
+                    "type": "boolean"
                   },
                   "filter": {
                     "nullable": true
@@ -8202,6 +9100,12 @@
                     "name": {
                       "type": "string"
                     },
+                    "shared": {
+                      "type": "boolean"
+                    },
+                    "isFavorite": {
+                      "type": "boolean"
+                    },
                     "filter": {
                       "nullable": true
                     },
@@ -8248,6 +9152,7 @@
                     "organizationId",
                     "ownerId",
                     "name",
+                    "shared",
                     "search",
                     "sort",
                     "columns",
@@ -8260,6 +9165,248 @@
           }
         },
         "summary": "Create saved view"
+      }
+    },
+    "/workspaces/{organizationId}/saved-views/{id}/favorite": {
+      "post": {
+        "tags": [
+          "saved-views"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "View favorited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "ownerId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "shared": {
+                      "type": "boolean"
+                    },
+                    "isFavorite": {
+                      "type": "boolean"
+                    },
+                    "filter": {
+                      "nullable": true
+                    },
+                    "search": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "sort": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "field": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "direction": {
+                          "type": "string",
+                          "enum": [
+                            "asc",
+                            "desc"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "field"
+                      ]
+                    },
+                    "columns": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "ownerId",
+                    "name",
+                    "shared",
+                    "search",
+                    "sort",
+                    "columns",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Saved view not found"
+          }
+        },
+        "summary": "Create saved view favorite"
+      },
+      "delete": {
+        "tags": [
+          "saved-views"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "View unfavorited"
+          },
+          "404": {
+            "description": "Saved view not found"
+          }
+        },
+        "summary": "Delete saved view favorite"
+      }
+    },
+    "/workspaces/{organizationId}/me/view-preferences": {
+      "get": {
+        "tags": [
+          "saved-views"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Per-user view preferences",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "defaultViewId": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "defaultViewId"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List me view preferences"
+      },
+      "put": {
+        "tags": [
+          "saved-views"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "defaultViewId": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "defaultViewId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "View preferences updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "defaultViewId": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "defaultViewId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Saved view not found"
+          }
+        },
+        "summary": "Update me view preferences"
       }
     },
     "/workspaces/{organizationId}/saved-views/{id}": {
@@ -8305,6 +9452,12 @@
                     "name": {
                       "type": "string"
                     },
+                    "shared": {
+                      "type": "boolean"
+                    },
+                    "isFavorite": {
+                      "type": "boolean"
+                    },
                     "filter": {
                       "nullable": true
                     },
@@ -8351,6 +9504,7 @@
                     "organizationId",
                     "ownerId",
                     "name",
+                    "shared",
                     "search",
                     "sort",
                     "columns",
@@ -8398,6 +9552,9 @@
                   "name": {
                     "type": "string",
                     "minLength": 1
+                  },
+                  "shared": {
+                    "type": "boolean"
                   },
                   "filter": {
                     "nullable": true
@@ -8457,6 +9614,12 @@
                     "name": {
                       "type": "string"
                     },
+                    "shared": {
+                      "type": "boolean"
+                    },
+                    "isFavorite": {
+                      "type": "boolean"
+                    },
                     "filter": {
                       "nullable": true
                     },
@@ -8503,6 +9666,7 @@
                     "organizationId",
                     "ownerId",
                     "name",
+                    "shared",
                     "search",
                     "sort",
                     "columns",
@@ -8601,6 +9765,14 @@
                           "parentAutoClose": {
                             "type": "boolean"
                           },
+                          "triageAssigneeId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "defaultTemplateId": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "subIssueAutoClose": {
                             "type": "boolean"
                           },
@@ -8620,6 +9792,8 @@
                           "isDefault",
                           "isPublic",
                           "parentAutoClose",
+                          "triageAssigneeId",
+                          "defaultTemplateId",
                           "subIssueAutoClose",
                           "createdAt",
                           "updatedAt"
@@ -8671,6 +9845,14 @@
                   "parentAutoClose": {
                     "type": "boolean"
                   },
+                  "triageAssigneeId": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "defaultTemplateId": {
+                    "type": "string",
+                    "nullable": true
+                  },
                   "subIssueAutoClose": {
                     "type": "boolean"
                   }
@@ -8715,6 +9897,14 @@
                     "parentAutoClose": {
                       "type": "boolean"
                     },
+                    "triageAssigneeId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "defaultTemplateId": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "subIssueAutoClose": {
                       "type": "boolean"
                     },
@@ -8734,6 +9924,8 @@
                     "isDefault",
                     "isPublic",
                     "parentAutoClose",
+                    "triageAssigneeId",
+                    "defaultTemplateId",
                     "subIssueAutoClose",
                     "createdAt",
                     "updatedAt"
@@ -8801,6 +9993,14 @@
                     "parentAutoClose": {
                       "type": "boolean"
                     },
+                    "triageAssigneeId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "defaultTemplateId": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "subIssueAutoClose": {
                       "type": "boolean"
                     },
@@ -8820,6 +10020,8 @@
                     "isDefault",
                     "isPublic",
                     "parentAutoClose",
+                    "triageAssigneeId",
+                    "defaultTemplateId",
                     "subIssueAutoClose",
                     "createdAt",
                     "updatedAt"
@@ -8876,6 +10078,14 @@
                   "parentAutoClose": {
                     "type": "boolean"
                   },
+                  "triageAssigneeId": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "defaultTemplateId": {
+                    "type": "string",
+                    "nullable": true
+                  },
                   "subIssueAutoClose": {
                     "type": "boolean"
                   }
@@ -8916,6 +10126,14 @@
                     "parentAutoClose": {
                       "type": "boolean"
                     },
+                    "triageAssigneeId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "defaultTemplateId": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "subIssueAutoClose": {
                       "type": "boolean"
                     },
@@ -8935,6 +10153,8 @@
                     "isDefault",
                     "isPublic",
                     "parentAutoClose",
+                    "triageAssigneeId",
+                    "defaultTemplateId",
                     "subIssueAutoClose",
                     "createdAt",
                     "updatedAt"

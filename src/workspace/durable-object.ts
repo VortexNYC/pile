@@ -5,12 +5,15 @@ import {
   desc,
   eq,
   exists,
+  gte,
   inArray,
   isNotNull,
   isNull,
   like,
   lt,
+  ne,
   not,
+  notInArray,
   or,
   sql,
 } from "drizzle-orm";
@@ -27,7 +30,7 @@ import {
   notifyIssueDeleted,
   notifyIssueUpdated,
 } from "../global/notify-issue.js";
-import { comments } from "../global/schema.js";
+import { comments, cycles, issueHistory } from "../global/schema.js";
 import { getDefaultTeam, getTeamById } from "../global/teams.js";
 import { getWorkspaceById } from "../global/workspaces.js";
 import { VortexError } from "../platform/errors.js";
@@ -308,6 +311,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       input.parentId ?? null,
       id
     );
+    if (parent?.parentId) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: "Sub-issues can only be nested one level",
+      });
+    }
     let teamId = input.teamId;
     let priority = input.priority;
     let projectId = input.projectId;
@@ -332,6 +342,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         input.teamId ? "Team not found" : "Workspace has no default team"
       );
     }
+    const resolvedAssigneeId =
+      input.assigneeId ??
+      (status === "triage" ? (team.triageAssigneeId ?? null) : null);
 
     const key = team.key || workspace?.key || "general";
     const last = await this.db
@@ -355,7 +368,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         resolution,
         parentId: parent?.id ?? null,
         subIssueSortOrder: input.subIssueSortOrder ?? null,
-        assigneeId: input.assigneeId ?? null,
+        estimate: input.estimate ?? null,
+        isDraft: input.isDraft ?? false,
+        snoozedUntil: input.snoozedUntil ?? null,
+        assigneeId: resolvedAssigneeId,
         projectId: resolvedProjectId,
         cycleId: resolvedCycleId,
         labelIds: input.labelIds ?? null,
@@ -392,6 +408,226 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       actorId
     );
     return issue;
+  }
+
+  async rolloverCycles(): Promise<{
+    completedCycles: string[];
+    rolledOver: number;
+  }> {
+    await this.ready;
+    const d1 = createD1(this.env.D1);
+    const nowIso = new Date().toISOString();
+
+    const ended = await d1
+      .select()
+      .from(cycles)
+      .where(
+        and(
+          eq(cycles.organizationId, this.organizationId),
+          ne(cycles.status, "completed"),
+          isNotNull(cycles.endDate),
+          lt(cycles.endDate, nowIso)
+        )
+      )
+      .all();
+    if (ended.length === 0) return { completedCycles: [], rolledOver: 0 };
+
+    const nextCycle = await d1
+      .select()
+      .from(cycles)
+      .where(
+        and(
+          eq(cycles.organizationId, this.organizationId),
+          ne(cycles.status, "completed"),
+          or(isNull(cycles.endDate), gte(cycles.endDate, nowIso)),
+          notInArray(
+            cycles.id,
+            ended.map((cycle) => cycle.id)
+          )
+        )
+      )
+      .orderBy(asc(cycles.startDate))
+      .get();
+
+    await Promise.all(
+      ended.map((cycle) =>
+        d1
+          .update(cycles)
+          .set({ status: "completed", updatedAt: nowIso })
+          .where(eq(cycles.id, cycle.id))
+      )
+    );
+    const completedCycles = ended.map((cycle) => cycle.id);
+
+    const moves = await Promise.all(
+      ended.map(async (cycle) => {
+        if (!cycle.autoRollover || !nextCycle || nextCycle.id === cycle.id) {
+          return [];
+        }
+        const unfinished = await this.db
+          .select({ id: workspaceIssues.id })
+          .from(workspaceIssues)
+          .where(
+            and(
+              eq(workspaceIssues.cycleId, cycle.id),
+              not(inArray(workspaceIssues.status, ["done", "canceled"]))
+            )
+          )
+          .all();
+        return unfinished.map((row) => row.id);
+      })
+    );
+    const issueIds = moves.flat();
+    if (issueIds.length > 0 && nextCycle) {
+      await this.db
+        .update(workspaceIssues)
+        .set({ cycleId: nextCycle.id, updatedAt: nowIso })
+        .where(inArray(workspaceIssues.id, issueIds));
+    }
+    return { completedCycles, rolledOver: issueIds.length };
+  }
+
+  async cycleCapacity(cycleId: string): Promise<{
+    issueCount: number;
+    estimateTotal: number;
+    byStatus: Record<string, { count: number; estimateTotal: number }>;
+  }> {
+    await this.ready;
+    const rows = await this.db
+      .select({
+        status: workspaceIssues.status,
+        count: sql<number>`count(*)`,
+        estimateTotal: sql<number>`coalesce(sum(${workspaceIssues.estimate}), 0)`,
+      })
+      .from(workspaceIssues)
+      .where(eq(workspaceIssues.cycleId, cycleId))
+      .groupBy(workspaceIssues.status)
+      .all();
+    const byStatus: Record<string, { count: number; estimateTotal: number }> =
+      {};
+    let issueCount = 0;
+    let estimateTotal = 0;
+    for (const row of rows) {
+      byStatus[row.status] = {
+        count: row.count,
+        estimateTotal: row.estimateTotal,
+      };
+      issueCount += row.count;
+      estimateTotal += row.estimateTotal;
+    }
+    return { issueCount, estimateTotal, byStatus };
+  }
+
+  async issueStats(
+    groupBy:
+      | "status"
+      | "priority"
+      | "assigneeId"
+      | "teamId"
+      | "projectId"
+      | "cycleId",
+    teamIds?: string[]
+  ): Promise<
+    { group: string | null; count: number; estimateTotal: number }[]
+  > {
+    await this.ready;
+    const columns = {
+      status: workspaceIssues.status,
+      priority: workspaceIssues.priority,
+      assigneeId: workspaceIssues.assigneeId,
+      teamId: workspaceIssues.teamId,
+      projectId: workspaceIssues.projectId,
+      cycleId: workspaceIssues.cycleId,
+    };
+    const column = columns[groupBy];
+    const conditions = teamIds?.length
+      ? [inArray(workspaceIssues.teamId, teamIds)]
+      : [];
+    return this.db
+      .select({
+        group: column,
+        count: sql<number>`count(*)`,
+        estimateTotal: sql<number>`coalesce(sum(${workspaceIssues.estimate}), 0)`,
+      })
+      .from(workspaceIssues)
+      .where(conditions.length ? and(...conditions) : undefined)
+      .groupBy(column)
+      .all();
+  }
+
+  async burndown(cycleId: string): Promise<{
+    total: number;
+    totalEstimate: number;
+    series: { date: string; scope: number; remaining: number }[];
+  }> {
+    await this.ready;
+    const rows = await this.db
+      .select({
+        id: workspaceIssues.id,
+        createdAt: workspaceIssues.createdAt,
+        estimate: workspaceIssues.estimate,
+      })
+      .from(workspaceIssues)
+      .where(eq(workspaceIssues.cycleId, cycleId))
+      .all();
+    if (rows.length === 0) {
+      return { total: 0, totalEstimate: 0, series: [] };
+    }
+    const d1 = createD1(this.env.D1);
+    const history = await d1
+      .select({
+        issueId: issueHistory.issueId,
+        createdAt: issueHistory.createdAt,
+      })
+      .from(issueHistory)
+      .where(
+        and(
+          eq(issueHistory.organizationId, this.organizationId),
+          eq(issueHistory.field, "status"),
+          inArray(issueHistory.toValue, ["done", "canceled"]),
+          inArray(
+            issueHistory.issueId,
+            rows.map((row) => row.id)
+          )
+        )
+      )
+      .all();
+
+    const doneAt = new Map<string, string>();
+    for (const entry of history) {
+      const prev = doneAt.get(entry.issueId);
+      if (!prev || entry.createdAt < prev) doneAt.set(entry.issueId, entry.createdAt);
+    }
+
+    const dayMs = 24 * 60 * 60 * 1000;
+    const today = Date.now();
+    const start = Math.max(
+      Math.min(...rows.map((row) => Date.parse(row.createdAt))),
+      today - 730 * dayMs
+    );
+    const series: { date: string; scope: number; remaining: number }[] = [];
+    for (let t = start; t <= today; t += dayMs) {
+      const dayEnd = new Date(t + dayMs - 1).toISOString();
+      const scope = rows.filter(
+        (row) => Date.parse(row.createdAt) <= t + dayMs
+      ).length;
+      const remaining = rows.filter((row) => {
+        const done = doneAt.get(row.id);
+        return (
+          Date.parse(row.createdAt) <= t + dayMs && !(done && done <= dayEnd)
+        );
+      }).length;
+      series.push({
+        date: new Date(t).toISOString().slice(0, 10),
+        scope,
+        remaining,
+      });
+    }
+    return {
+      total: rows.length,
+      totalEstimate: rows.reduce((sum, row) => sum + (row.estimate ?? 0), 0),
+      series,
+    };
   }
 
   async getIssue(id: string): Promise<Issue | undefined> {
@@ -478,6 +714,18 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         .limit(1);
       conditions.push(
         args.isParent ? exists(childSubquery) : not(exists(childSubquery))
+      );
+    }
+    if (args.isDraft !== undefined) {
+      conditions.push(eq(workspaceIssues.isDraft, args.isDraft));
+    }
+    if (!args.includeSnoozed) {
+      const nowIso = new Date().toISOString();
+      conditions.push(
+        or(
+          isNull(workspaceIssues.snoozedUntil),
+          lt(workspaceIssues.snoozedUntil, nowIso)
+        )
       );
     }
     if (args.assigneeId) {
@@ -573,6 +821,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       { key: "resolution", field: "resolution" },
       { key: "parentId", field: "parent_id" },
       { key: "subIssueSortOrder", field: "sub_issue_sort_order" },
+      { key: "estimate", field: "estimate" },
+      { key: "isDraft", field: "is_draft" },
+      { key: "snoozedUntil", field: "snoozed_until" },
       { key: "assigneeId", field: "assignee_id" },
       { key: "projectId", field: "project_id" },
       { key: "cycleId", field: "cycle_id" },
@@ -589,6 +840,26 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         const parent = await this.getIssue(patch.parentId);
         if (!parent) {
           throw VortexError.fromCode("BAD_REQUEST", "Parent issue not found");
+        }
+        if (parent.parentId) {
+          throw new VortexError({
+            code: "BAD_REQUEST",
+            status: 400,
+            message: "Sub-issues can only be nested one level",
+          });
+        }
+        const hasChildren = await this.db
+          .select({ id: workspaceIssues.id })
+          .from(workspaceIssues)
+          .where(eq(workspaceIssues.parentId, id))
+          .limit(1)
+          .get();
+        if (hasChildren) {
+          throw new VortexError({
+            code: "BAD_REQUEST",
+            status: 400,
+            message: "An issue with sub-issues cannot become a sub-issue",
+          });
         }
         if (
           await wouldCreateCycle(
@@ -633,6 +904,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (newParentId !== undefined) set.parentId = newParentId;
     if (patch.subIssueSortOrder !== undefined)
       set.subIssueSortOrder = patch.subIssueSortOrder;
+    if (patch.estimate !== undefined) set.estimate = patch.estimate;
+    if (patch.isDraft !== undefined) set.isDraft = patch.isDraft;
+    if (patch.snoozedUntil !== undefined)
+      set.snoozedUntil = patch.snoozedUntil;
     if (patch.assigneeId !== undefined) set.assigneeId = patch.assigneeId;
     if (patch.projectId !== undefined) set.projectId = patch.projectId;
     if (patch.cycleId !== undefined) set.cycleId = patch.cycleId;

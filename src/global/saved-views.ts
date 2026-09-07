@@ -1,13 +1,14 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 
 import type { FilterCondition } from "../workspace/filter.js";
 import type { D1Client } from "./db.js";
-import { savedViews } from "./schema.js";
+import { savedViews, userWorkspacePreferences, viewFavorites } from "./schema.js";
 
 export interface SavedViewInput {
   organizationId: string;
   ownerId: string;
   name: string;
+  shared?: boolean;
   filter: FilterCondition;
   search?: string | null;
   sort?: SavedViewSort | null;
@@ -24,6 +25,7 @@ export interface SavedViewRecord {
   organizationId: string;
   ownerId: string;
   name: string;
+  shared: boolean;
   filter: string;
   search: string | null;
   sort: string | null;
@@ -43,6 +45,7 @@ export function createSavedView(
     organizationId: input.organizationId,
     ownerId: input.ownerId,
     name: input.name,
+    shared: input.shared ?? false,
     filter: JSON.stringify(input.filter),
     search: input.search ?? null,
     sort: input.sort ? JSON.stringify(input.sort) : null,
@@ -55,13 +58,16 @@ export function createSavedView(
 
 export function listSavedViews(
   db: D1Client,
-  organizationId: string
+  organizationId: string,
+  userId?: string
 ): Promise<SavedViewRecord[]> {
-  return db
-    .select()
-    .from(savedViews)
-    .where(eq(savedViews.organizationId, organizationId))
-    .all();
+  const condition = userId
+    ? and(
+        eq(savedViews.organizationId, organizationId),
+        or(eq(savedViews.ownerId, userId), eq(savedViews.shared, true))
+      )
+    : eq(savedViews.organizationId, organizationId);
+  return db.select().from(savedViews).where(condition).all();
 }
 
 export function getSavedView(
@@ -80,6 +86,7 @@ export function getSavedView(
 
 export interface SavedViewUpdate {
   name?: string;
+  shared?: boolean;
   filter?: FilterCondition;
   search?: string | null;
   sort?: SavedViewSort | null;
@@ -92,10 +99,11 @@ export function updateSavedView(
   organizationId: string,
   update: SavedViewUpdate
 ): Promise<SavedViewRecord | undefined> {
-  const set: Partial<Record<string, string | null>> = {
+  const set: Partial<Record<string, string | boolean | null>> = {
     updatedAt: new Date().toISOString(),
   };
   if (update.name !== undefined) set.name = update.name;
+  if (update.shared !== undefined) set.shared = update.shared;
   if (update.filter !== undefined) set.filter = JSON.stringify(update.filter);
   if (update.search !== undefined) set.search = update.search ?? null;
   if (update.sort !== undefined) {
@@ -126,4 +134,95 @@ export function deleteSavedView(
     )
     .returning()
     .get();
+}
+
+export function favoriteView(
+  db: D1Client,
+  organizationId: string,
+  viewId: string,
+  userId: string
+) {
+  return db
+    .insert(viewFavorites)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId,
+      viewId,
+      userId,
+      createdAt: new Date().toISOString(),
+    })
+    .onConflictDoNothing({ target: [viewFavorites.viewId, viewFavorites.userId] });
+}
+
+export function unfavoriteView(
+  db: D1Client,
+  viewId: string,
+  userId: string
+) {
+  return db
+    .delete(viewFavorites)
+    .where(and(eq(viewFavorites.viewId, viewId), eq(viewFavorites.userId, userId)))
+    .run();
+}
+
+export function listFavoriteViewIds(
+  db: D1Client,
+  organizationId: string,
+  userId: string
+): Promise<{ viewId: string }[]> {
+  return db
+    .select({ viewId: viewFavorites.viewId })
+    .from(viewFavorites)
+    .where(
+      and(
+        eq(viewFavorites.organizationId, organizationId),
+        eq(viewFavorites.userId, userId)
+      )
+    )
+    .all();
+}
+
+export function getUserViewPreferences(
+  db: D1Client,
+  organizationId: string,
+  userId: string
+) {
+  return db
+    .select()
+    .from(userWorkspacePreferences)
+    .where(
+      and(
+        eq(userWorkspacePreferences.organizationId, organizationId),
+        eq(userWorkspacePreferences.userId, userId)
+      )
+    )
+    .get();
+}
+
+export async function setDefaultView(
+  db: D1Client,
+  organizationId: string,
+  userId: string,
+  defaultViewId: string | null
+) {
+  const existing = await getUserViewPreferences(db, organizationId, userId);
+  if (existing) {
+    await db
+      .update(userWorkspacePreferences)
+      .set({ defaultViewId, updatedAt: new Date().toISOString() })
+      .where(
+        and(
+          eq(userWorkspacePreferences.organizationId, organizationId),
+          eq(userWorkspacePreferences.userId, userId)
+        )
+      );
+  } else {
+    await db.insert(userWorkspacePreferences).values({
+      organizationId,
+      userId,
+      defaultViewId,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+  return getUserViewPreferences(db, organizationId, userId);
 }

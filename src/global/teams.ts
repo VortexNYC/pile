@@ -17,6 +17,8 @@ const teamMetadataSchema = z.object({
   isPublic: z.boolean(),
   parentAutoClose: z.boolean(),
   subIssueAutoClose: z.boolean(),
+  triageAssigneeId: z.string().nullable().optional(),
+  defaultTemplateId: z.string().nullable().optional(),
 });
 
 export interface TeamRecord {
@@ -29,6 +31,8 @@ export interface TeamRecord {
   isPublic: boolean;
   parentAutoClose: boolean;
   subIssueAutoClose: boolean;
+  triageAssigneeId: string | null;
+  defaultTemplateId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -49,6 +53,8 @@ function teamRecordFromRow(row: typeof team.$inferSelect): TeamRecord {
     isPublic: false,
     parentAutoClose: false,
     subIssueAutoClose: false,
+    triageAssigneeId: null,
+    defaultTemplateId: null,
   };
   return {
     id: row.id,
@@ -60,6 +66,8 @@ function teamRecordFromRow(row: typeof team.$inferSelect): TeamRecord {
     isPublic: metadata.isPublic,
     parentAutoClose: metadata.parentAutoClose,
     subIssueAutoClose: metadata.subIssueAutoClose,
+    triageAssigneeId: metadata.triageAssigneeId ?? null,
+    defaultTemplateId: metadata.defaultTemplateId ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -72,6 +80,8 @@ function teamMetadataString(values: {
   isPublic: boolean;
   parentAutoClose: boolean;
   subIssueAutoClose: boolean;
+  triageAssigneeId?: string | null;
+  defaultTemplateId?: string | null;
 }) {
   return JSON.stringify(values);
 }
@@ -133,6 +143,8 @@ interface CreateTeamInput {
   isPublic?: boolean;
   parentAutoClose?: boolean;
   subIssueAutoClose?: boolean;
+  triageAssigneeId?: string | null;
+  defaultTemplateId?: string | null;
 }
 
 export async function createTeam(
@@ -147,6 +159,8 @@ export async function createTeam(
     isPublic: values.isPublic ?? false,
     parentAutoClose: values.parentAutoClose ?? false,
     subIssueAutoClose: values.subIssueAutoClose ?? false,
+    triageAssigneeId: values.triageAssigneeId,
+    defaultTemplateId: values.defaultTemplateId,
   });
   await db.insert(team).values({
     id,
@@ -183,6 +197,8 @@ export async function createDefaultTeam(
 }
 
 interface UpdateTeamInput {
+  triageAssigneeId?: string | null;
+  defaultTemplateId?: string | null;
   key?: string;
   name?: string;
   isPublic?: boolean;
@@ -206,6 +222,12 @@ export async function updateTeam(
     isPublic: input.isPublic ?? existing.isPublic,
     parentAutoClose: input.parentAutoClose ?? existing.parentAutoClose,
     subIssueAutoClose: input.subIssueAutoClose ?? existing.subIssueAutoClose,
+    triageAssigneeId: input.triageAssigneeId === undefined
+      ? existing.triageAssigneeId
+      : input.triageAssigneeId,
+    defaultTemplateId: input.defaultTemplateId === undefined
+      ? existing.defaultTemplateId
+      : input.defaultTemplateId,
   });
 
   await db

@@ -5,8 +5,13 @@ import { createD1 } from "../global/db.js";
 import {
   createSavedView,
   deleteSavedView,
+  favoriteView,
   getSavedView,
+  getUserViewPreferences,
+  listFavoriteViewIds,
   listSavedViews,
+  setDefaultView,
+  unfavoriteView,
   updateSavedView,
   type SavedViewRecord,
 } from "../global/saved-views.js";
@@ -28,6 +33,8 @@ const savedViewSchema = z.object({
   organizationId: z.string(),
   ownerId: z.string(),
   name: z.string(),
+  shared: z.boolean(),
+  isFavorite: z.boolean().optional(),
   filter: z.unknown(),
   search: z.string().nullable(),
   sort: savedViewSortSchema.nullable(),
@@ -78,17 +85,19 @@ function parseSavedViewColumns(value: string) {
   return z.array(z.string()).parse(parsed);
 }
 
-function serializeSavedView(record: SavedViewRecord) {
+function serializeSavedView(record: SavedViewRecord, isFavorite?: boolean) {
   const filter = parseSavedViewFilter(record.filter);
   return {
     id: record.id,
     organizationId: record.organizationId,
     ownerId: record.ownerId,
     name: record.name,
+    shared: record.shared,
     filter,
     search: record.search,
     sort: record.sort ? parseSavedViewSort(record.sort) : null,
     columns: record.columns ? parseSavedViewColumns(record.columns) : null,
+    ...(isFavorite === undefined ? {} : { isFavorite }),
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   };
@@ -100,6 +109,7 @@ function unknownToFilter(value: unknown): FilterCondition {
 
 const createSavedViewBodySchema = z.object({
   name: z.string().min(1),
+  shared: z.boolean().optional(),
   filter: z.unknown(),
   search: z.string().optional(),
   sort: savedViewSortSchema.optional(),
@@ -108,6 +118,7 @@ const createSavedViewBodySchema = z.object({
 
 const updateSavedViewBodySchema = z.object({
   name: z.string().min(1).optional(),
+  shared: z.boolean().optional(),
   filter: z.unknown().optional(),
   search: z.string().optional(),
   sort: savedViewSortSchema.optional().nullable(),
@@ -200,6 +211,87 @@ const updateSavedViewRoute = createRoute({
   },
 });
 
+const favoriteRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/saved-views/{id}/favorite",
+  tags: ["saved-views"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "View favorited",
+      content: {
+        "application/json": { schema: savedViewSchema },
+      },
+    },
+    404: { description: "Saved view not found" },
+  },
+});
+
+const unfavoriteRoute = createRoute({
+  method: "delete",
+  path: "/workspaces/{organizationId}/saved-views/{id}/favorite",
+  tags: ["saved-views"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+  },
+  responses: {
+    204: { description: "View unfavorited" },
+    404: { description: "Saved view not found" },
+  },
+});
+
+const viewPreferencesRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/me/view-preferences",
+  tags: ["saved-views"],
+  middleware: [rls("read")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Per-user view preferences",
+      content: {
+        "application/json": {
+          schema: z.object({ defaultViewId: z.string().nullable() }),
+        },
+      },
+    },
+  },
+});
+
+const updateViewPreferencesRoute = createRoute({
+  method: "put",
+  path: "/workspaces/{organizationId}/me/view-preferences",
+  tags: ["saved-views"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({ defaultViewId: z.string().nullable() }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "View preferences updated",
+      content: {
+        "application/json": {
+          schema: z.object({ defaultViewId: z.string().nullable() }),
+        },
+      },
+    },
+    404: { description: "Saved view not found" },
+  },
+});
+
 const deleteSavedViewRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/saved-views/{id}",
@@ -223,8 +315,18 @@ export function registerSavedViewRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listSavedViewsRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
     const db = createD1(c.env.D1);
-    const records = await listSavedViews(db, organizationId);
-    return c.json({ views: records.map(serializeSavedView) });
+    const identity = getIdentity(c);
+    const records = await listSavedViews(db, organizationId, identity.id);
+    const favorites = new Set(
+      (await listFavoriteViewIds(db, organizationId, identity.id)).map(
+        (row) => row.viewId
+      )
+    );
+    return c.json({
+      views: records.map((record) =>
+        serializeSavedView(record, favorites.has(record.id))
+      ),
+    });
   });
 
   app.openapi(createSavedViewRoute, async (c) => {
@@ -236,12 +338,81 @@ export function registerSavedViewRoutes(app: OpenAPIHono<AppContext>) {
       organizationId,
       ownerId: identity.id,
       name: body.name,
+      shared: body.shared,
       filter: unknownToFilter(body.filter),
       search: body.search,
       sort: body.sort,
       columns: body.columns,
     });
     return c.json(serializeSavedView(record), 201);
+  });
+
+  app.openapi(favoriteRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const identity = getIdentity(c);
+    const db = createD1(c.env.D1);
+    const record = await getSavedView(db, id, organizationId);
+    if (!record) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Saved view not found",
+      });
+    }
+    await favoriteView(db, organizationId, id, identity.id);
+    return c.json(serializeSavedView(record, true));
+  });
+
+  app.openapi(unfavoriteRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const identity = getIdentity(c);
+    const db = createD1(c.env.D1);
+    const record = await getSavedView(db, id, organizationId);
+    if (!record) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Saved view not found",
+      });
+    }
+    await unfavoriteView(db, id, identity.id);
+    return c.body(null, 204);
+  });
+
+  app.openapi(viewPreferencesRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const identity = getIdentity(c);
+    const db = createD1(c.env.D1);
+    const prefs = await getUserViewPreferences(
+      db,
+      organizationId,
+      identity.id
+    );
+    return c.json({ defaultViewId: prefs?.defaultViewId ?? null });
+  });
+
+  app.openapi(updateViewPreferencesRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const { defaultViewId } = c.req.valid("json");
+    const identity = getIdentity(c);
+    const db = createD1(c.env.D1);
+    if (defaultViewId !== null) {
+      const record = await getSavedView(db, defaultViewId, organizationId);
+      if (!record) {
+        throw new VortexError({
+          code: "NOT_FOUND",
+          status: 404,
+          message: "Saved view not found",
+        });
+      }
+    }
+    const prefs = await setDefaultView(
+      db,
+      organizationId,
+      identity.id,
+      defaultViewId
+    );
+    return c.json({ defaultViewId: prefs?.defaultViewId ?? null });
   });
 
   app.openapi(getSavedViewRoute, async (c) => {
@@ -283,6 +454,7 @@ export function registerSavedViewRoutes(app: OpenAPIHono<AppContext>) {
     }
     const record = await updateSavedView(db, id, organizationId, {
       name: body.name,
+      shared: body.shared,
       filter:
         body.filter === undefined ? undefined : unknownToFilter(body.filter),
       search: body.search,
