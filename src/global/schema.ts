@@ -73,6 +73,35 @@ export const githubInstallations = sqliteTable(
   ]
 );
 
+export const issueApprovals = sqliteTable(
+  "issue_approvals" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    issueId: text("issue_id" as string).notNull(),
+    requestedById: text("requested_by_id" as string).notNull(),
+    approverId: text("approver_id" as string).notNull(),
+    status: text("status" as string, {
+      enum: ["pending", "approved", "rejected"],
+    })
+      .notNull()
+      .default("pending"),
+    comment: text("comment" as string),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    resolvedAt: text("resolved_at" as string),
+  },
+  (table) => [
+    index("issue_approvals_issue_idx" as string).on(table.issueId),
+    index("issue_approvals_organization_idx" as string).on(
+      table.organizationId
+    ),
+  ]
+);
+
 export const projects = sqliteTable(
   "projects" as string,
   {

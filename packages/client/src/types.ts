@@ -1099,6 +1099,226 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/issues/{issueId}/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List issue approvals */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    issueId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Approvals for issue */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            approvals: {
+                                id: string;
+                                organizationId: string;
+                                issueId: string;
+                                requestedById: string;
+                                approverId: string;
+                                /** @enum {string} */
+                                status: "pending" | "approved" | "rejected";
+                                comment: string | null;
+                                createdAt: string;
+                                resolvedAt: string | null;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create issue approval */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    issueId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        approverId: string;
+                        comment?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Approval requested */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            issueId: string;
+                            requestedById: string;
+                            approverId: string;
+                            /** @enum {string} */
+                            status: "pending" | "approved" | "rejected";
+                            comment: string | null;
+                            createdAt: string;
+                            resolvedAt: string | null;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/approvals/{id}/respond": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create approval respond */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        status: "approved" | "rejected";
+                    };
+                };
+            };
+            responses: {
+                /** @description Approval resolved */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            issueId: string;
+                            requestedById: string;
+                            approverId: string;
+                            /** @enum {string} */
+                            status: "pending" | "approved" | "rejected";
+                            comment: string | null;
+                            createdAt: string;
+                            resolvedAt: string | null;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/issues/{issueId}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List issue activity */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    issueId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Unified issue activity feed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            activity: ({
+                                /** @enum {string} */
+                                kind: "history";
+                                id: string;
+                                issueId: string;
+                                field: string;
+                                fromValue: string | null;
+                                toValue: string | null;
+                                actorId: string | null;
+                                createdAt: string;
+                            } | {
+                                /** @enum {string} */
+                                kind: "comment";
+                                id: string;
+                                issueId: string;
+                                body: string;
+                                authorId: string | null;
+                                externalAuthor: string | null;
+                                createdAt: string;
+                            } | {
+                                /** @enum {string} */
+                                kind: "agent";
+                                id: string;
+                                issueId: string;
+                                sessionId: string;
+                                type: string;
+                                message: string;
+                                actorId: string | null;
+                                createdAt: string;
+                            })[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/projects": {
         parameters: {
             query?: never;

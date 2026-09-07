@@ -1264,6 +1264,96 @@ describe("API integration", () => {
     expect(deleteRoadmap.status).toBe(204);
   });
 
+  it("manages issue approvals and unified activity", async () => {
+    const organizationId = await seedWorkspace();
+    const token = await adminToken(organizationId);
+
+    const teamRes = await app.fetch(
+      request(`/workspaces/${organizationId}/teams`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ name: "Engineering" }),
+      }),
+      env
+    );
+    const team = await teamRes.json<{ id: string }>();
+
+    const issueRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ title: "Approval test", teamId: team.id }),
+      }),
+      env
+    );
+    const issue = await issueRes.json<{ id: string }>();
+
+    const createRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${issue.id}/approvals`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          approverId: "user-1",
+          comment: "Please review",
+        }),
+      }),
+      env
+    );
+    expect(createRes.status).toBe(201);
+    const approval = await createRes.json<{ id: string; status: string }>();
+    expect(approval.status).toBe("pending");
+
+    const listRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${issue.id}/approvals`, {
+        token,
+      }),
+      env
+    );
+    expect(listRes.status).toBe(200);
+    const list = await listRes.json<{
+      approvals: Array<{ id: string; status: string }>;
+    }>();
+    expect(list.approvals).toHaveLength(1);
+
+    const respondRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/approvals/${approval.id}/respond`,
+        {
+          method: "POST",
+          token,
+          body: JSON.stringify({ status: "approved" }),
+        }
+      ),
+      env
+    );
+    expect(respondRes.status).toBe(200);
+    const resolved = await respondRes.json<{ status: string }>();
+    expect(resolved.status).toBe("approved");
+
+    const commentRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${issue.id}/comments`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ body: "hello" }),
+      }),
+      env
+    );
+    expect(commentRes.status).toBe(201);
+
+    const activityRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${issue.id}/activity`, {
+        token,
+      }),
+      env
+    );
+    expect(activityRes.status).toBe(200);
+    const activity = await activityRes.json<{
+      activity: Array<{ kind: string }>;
+    }>();
+    expect(activity.activity.some((a) => a.kind === "comment")).toBe(true);
+    expect(activity.activity.some((a) => a.kind === "history")).toBe(true);
+  });
+
   it("manages GitHub installations and user mappings", async () => {
     const organizationId = await seedWorkspace();
     const token = await adminToken(organizationId);

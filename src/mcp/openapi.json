@@ -2408,6 +2408,489 @@
         "summary": "Poll agent session"
       }
     },
+    "/workspaces/{organizationId}/issues/{issueId}/approvals": {
+      "post": {
+        "tags": [
+          "approvals"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "issueId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "approverId": {
+                    "type": "string"
+                  },
+                  "comment": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "approverId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Approval requested",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "issueId": {
+                      "type": "string"
+                    },
+                    "requestedById": {
+                      "type": "string"
+                    },
+                    "approverId": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "approved",
+                        "rejected"
+                      ]
+                    },
+                    "comment": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "resolvedAt": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "issueId",
+                    "requestedById",
+                    "approverId",
+                    "status",
+                    "comment",
+                    "createdAt",
+                    "resolvedAt"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create issue approval"
+      },
+      "get": {
+        "tags": [
+          "approvals"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "issueId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Approvals for issue",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "approvals": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "issueId": {
+                            "type": "string"
+                          },
+                          "requestedById": {
+                            "type": "string"
+                          },
+                          "approverId": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "approved",
+                              "rejected"
+                            ]
+                          },
+                          "comment": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "resolvedAt": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "issueId",
+                          "requestedById",
+                          "approverId",
+                          "status",
+                          "comment",
+                          "createdAt",
+                          "resolvedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "approvals"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List issue approvals"
+      }
+    },
+    "/workspaces/{organizationId}/approvals/{id}/respond": {
+      "post": {
+        "tags": [
+          "approvals"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "approved",
+                      "rejected"
+                    ]
+                  }
+                },
+                "required": [
+                  "status"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Approval resolved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "issueId": {
+                      "type": "string"
+                    },
+                    "requestedById": {
+                      "type": "string"
+                    },
+                    "approverId": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "approved",
+                        "rejected"
+                      ]
+                    },
+                    "comment": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "resolvedAt": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "issueId",
+                    "requestedById",
+                    "approverId",
+                    "status",
+                    "comment",
+                    "createdAt",
+                    "resolvedAt"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create approval respond"
+      }
+    },
+    "/workspaces/{organizationId}/issues/{issueId}/activity": {
+      "get": {
+        "tags": [
+          "activities"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "issueId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unified issue activity feed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "activity": {
+                      "type": "array",
+                      "items": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "history"
+                                ]
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "issueId": {
+                                "type": "string"
+                              },
+                              "field": {
+                                "type": "string"
+                              },
+                              "fromValue": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "toValue": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "actorId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "id",
+                              "issueId",
+                              "field",
+                              "fromValue",
+                              "toValue",
+                              "actorId",
+                              "createdAt"
+                            ]
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "comment"
+                                ]
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "issueId": {
+                                "type": "string"
+                              },
+                              "body": {
+                                "type": "string"
+                              },
+                              "authorId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "externalAuthor": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "id",
+                              "issueId",
+                              "body",
+                              "authorId",
+                              "externalAuthor",
+                              "createdAt"
+                            ]
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "agent"
+                                ]
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "issueId": {
+                                "type": "string"
+                              },
+                              "sessionId": {
+                                "type": "string"
+                              },
+                              "type": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "actorId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "id",
+                              "issueId",
+                              "sessionId",
+                              "type",
+                              "message",
+                              "actorId",
+                              "createdAt"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "activity"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List issue activity"
+      }
+    },
     "/workspaces/{organizationId}/projects": {
       "get": {
         "tags": [

@@ -742,6 +742,48 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdIssuesIssueIdActivity",
+    "description": "List issue activity (GET /workspaces/{organizationId}/issues/{issueId}/activity)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/issues/{issueId}/activity",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "issueId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "issueId",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdIssuesIssueIdApprovals",
+    "description": "List issue approvals (GET /workspaces/{organizationId}/issues/{issueId}/approvals)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/issues/{issueId}/approvals",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "issueId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "issueId",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdIssuesIssueIdAttachments",
     "description": "List issue attachments (GET /workspaces/{organizationId}/issues/{issueId}/attachments)",
     "method": "GET",
@@ -2070,6 +2112,42 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdApprovalsIdRespond",
+    "description": "Create approval respond (POST /workspaces/{organizationId}/approvals/{id}/respond)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/approvals/{id}/respond",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "approved",
+                "rejected"
+              ]
+            }
+          },
+          "required": [
+            "status"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdCommentsCommentIdReactions",
     "description": "Create comment reaction (POST /workspaces/{organizationId}/comments/{commentId}/reactions)",
     "method": "POST",
@@ -2506,6 +2584,41 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdIssuesIssueIdApprovals",
+    "description": "Create issue approval (POST /workspaces/{organizationId}/issues/{issueId}/approvals)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/issues/{issueId}/approvals",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "issueId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "approverId": {
+              "type": "string"
+            },
+            "comment": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "approverId"
+          ]
+        }
+      },
+      "required": [
+        "issueId",
         "organizationId"
       ]
     }
