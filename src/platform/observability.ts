@@ -5,6 +5,7 @@ import type { AppContext } from "./middleware.js";
 export const observabilityMiddleware = createMiddleware<AppContext>(
   async (c, next) => {
     const requestId = crypto.randomUUID();
+    c.header("X-Request-Id", requestId);
     const start = Date.now();
     try {
       await next();
@@ -18,7 +19,11 @@ export const observabilityMiddleware = createMiddleware<AppContext>(
         status,
         durationMs: duration,
       };
-      console.log(JSON.stringify(log));
+      if (status >= 500) {
+        console.error(JSON.stringify(log));
+      } else {
+        console.log(JSON.stringify(log));
+      }
     }
   }
 );

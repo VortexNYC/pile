@@ -17,6 +17,7 @@ import { registerApprovalRoutes } from "./approvals.js";
 import { registerAttachmentRoutes } from "./attachments.js";
 import { registerCommentRoutes } from "./comments.js";
 import { registerGithubRoutes } from "./github.js";
+import { registerHardeningRoutes } from "./hardening.js";
 import { registerIssueHistoryRoutes } from "./issue-history.js";
 import { registerIssueRelationRoutes } from "./issue-relations.js";
 import { registerIssueSubscriberRoutes } from "./issue-subscribers.js";
@@ -77,6 +78,7 @@ registerSavedViewRoutes(app);
 registerTeamRoutes(app);
 registerTemplateRoutes(app);
 registerMigrateRoutes(app);
+registerHardeningRoutes(app);
 registerHealthRoutes(app);
 
 app.openapi(githubWebhookRoute, processGithubWebhook);

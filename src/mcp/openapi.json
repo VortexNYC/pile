@@ -9465,6 +9465,112 @@
         "summary": "Migrate from Linear"
       }
     },
+    "/workspaces/{organizationId}/export": {
+      "get": {
+        "tags": [
+          "hardening"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workspace export",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "exportedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "organizationId",
+                    "exportedAt"
+                  ],
+                  "additionalProperties": {
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "List export"
+      }
+    },
+    "/workspaces/{organizationId}/readiness": {
+      "get": {
+        "tags": [
+          "hardening"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workspace readiness",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ready": {
+                      "type": "boolean"
+                    },
+                    "checks": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "ok": {
+                            "type": "boolean"
+                          },
+                          "required": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "ok",
+                          "required"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "ready",
+                    "checks"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List readiness"
+      }
+    },
     "/health": {
       "get": {
         "tags": [

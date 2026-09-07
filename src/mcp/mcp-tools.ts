@@ -517,6 +517,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdExport",
+    "description": "List export (GET /workspaces/{organizationId}/export)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/export",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdGithubInstallations",
     "description": "List github installations (GET /workspaces/{organizationId}/github/installations)",
     "method": "GET",
@@ -1110,6 +1127,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdReadiness",
+    "description": "List readiness (GET /workspaces/{organizationId}/readiness)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/readiness",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
         "organizationId"
       ]
     }

@@ -125,8 +125,10 @@ describe("API integration", () => {
       env
     );
     expect(list.status).toBe(200);
-    const listBody = await list.json<{ states: unknown[] }>();
-    expect(listBody.states).toHaveLength(1);
+    const listBody = await list.json<{
+      states: Array<{ id: string; name: string }>;
+    }>();
+    expect(listBody.states.some((s) => s.id === state.id)).toBe(true);
 
     const get = await app.fetch(
       request("/workspaces/" + organizationId + "/states/" + state.id, {
@@ -1352,6 +1354,59 @@ describe("API integration", () => {
     }>();
     expect(activity.activity.some((a) => a.kind === "comment")).toBe(true);
     expect(activity.activity.some((a) => a.kind === "history")).toBe(true);
+  });
+
+  it("exports workspace data and reports readiness", async () => {
+    const organizationId = await seedWorkspace();
+    const token = await adminToken(organizationId);
+
+    const teamRes = await app.fetch(
+      request(`/workspaces/${organizationId}/teams`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ key: "ENG", name: "Engineering" }),
+      }),
+      env
+    );
+    const team = await teamRes.json<{ id: string }>();
+
+    const issueRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ title: "Export test", teamId: team.id }),
+      }),
+      env
+    );
+    const issue = await issueRes.json<{ id: string }>();
+
+    const exportRes = await app.fetch(
+      request(`/workspaces/${organizationId}/export`, { token }),
+      env
+    );
+    expect(exportRes.status).toBe(200);
+    const exportBody = await exportRes.json<{
+      organizationId: string;
+      issues: Array<{ id: string }>;
+      comments: unknown[];
+      teams: Array<{ id: string }>;
+    }>();
+    expect(exportBody.organizationId).toBe(organizationId);
+    expect(exportBody.issues).toHaveLength(1);
+    expect(exportBody.issues[0]?.id).toBe(issue.id);
+    expect(exportBody.teams.some((t) => t.id === team.id)).toBe(true);
+
+    const readinessRes = await app.fetch(
+      request(`/workspaces/${organizationId}/readiness`, { token }),
+      env
+    );
+    expect(readinessRes.status).toBe(200);
+    const readiness = await readinessRes.json<{
+      ready: boolean;
+      checks: Array<{ name: string; ok: boolean; required: boolean }>;
+    }>();
+    expect(readiness.ready).toBe(true);
+    expect(readiness.checks.find((c) => c.name === "issues")?.ok).toBe(true);
   });
 
   it("manages GitHub installations and user mappings", async () => {

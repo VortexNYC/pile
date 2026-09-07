@@ -6,6 +6,7 @@ import type { AppEnv } from "../platform/env.js";
 import type { D1Client } from "./db.js";
 import { member, organization } from "./schema.js";
 import { createDefaultTeam } from "./teams.js";
+import { createState } from "./workspace-entities.js";
 
 const workspaceMetadataSchema = z
   .object({
@@ -116,6 +117,18 @@ export async function createWorkspace(
     values.ownerId
   );
   const teamId = defaultTeam.id;
+
+  const defaultStates = [
+    { linearId: "backlog", name: "Backlog", type: "backlog" },
+    { linearId: "todo", name: "Todo", type: "unstarted" },
+    { linearId: "in-progress", name: "In Progress", type: "started" },
+    { linearId: "in-review", name: "In Review", type: "started" },
+    { linearId: "done", name: "Done", type: "completed" },
+    { linearId: "canceled", name: "Canceled", type: "canceled" },
+  ];
+  await Promise.all(
+    defaultStates.map((state) => createState(db, orgId, state))
+  );
 
   await db
     .update(organization)
