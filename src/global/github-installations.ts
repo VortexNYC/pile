@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import type { D1Client } from "./db.js";
 import { githubInstallations, repoBranches } from "./schema.js";
@@ -9,6 +9,14 @@ export function findGithubInstallation(db: D1Client, repo: string) {
     .from(githubInstallations)
     .where(eq(githubInstallations.repo, repo))
     .get();
+}
+
+export function listGithubInstallations(db: D1Client, organizationId: string) {
+  return db
+    .select()
+    .from(githubInstallations)
+    .where(eq(githubInstallations.organizationId, organizationId))
+    .all();
 }
 
 export async function createGithubInstallation(
@@ -28,6 +36,21 @@ export async function deleteGithubInstallation(db: D1Client, repo: string) {
   await db
     .delete(githubInstallations)
     .where(eq(githubInstallations.repo, repo));
+}
+
+export async function deleteGithubInstallationById(
+  db: D1Client,
+  organizationId: string,
+  id: string
+) {
+  await db
+    .delete(githubInstallations)
+    .where(
+      and(
+        eq(githubInstallations.organizationId, organizationId),
+        eq(githubInstallations.id, id)
+      )
+    );
 }
 
 export async function deleteGithubInstallationsByInstallationId(

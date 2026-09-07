@@ -10,6 +10,7 @@ import {
 } from "../global/notifications.js";
 import {
   apikey as apikeyTable,
+  githubInstallations as githubInstallationsTable,
   member as memberTable,
   user as userTable,
 } from "../global/schema.js";
@@ -1261,5 +1262,70 @@ describe("API integration", () => {
       env
     );
     expect(deleteRoadmap.status).toBe(204);
+  });
+
+  it("manages GitHub installations and user mappings", async () => {
+    const organizationId = await seedWorkspace();
+    const token = await adminToken(organizationId);
+
+    const userRes = await app.fetch(
+      request(`/workspaces/${organizationId}/github/users`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ userId: "user-1", githubLogin: "shlomo" }),
+      }),
+      env
+    );
+    expect(userRes.status).toBe(201);
+
+    const listUsersRes = await app.fetch(
+      request(`/workspaces/${organizationId}/github/users`, { token }),
+      env
+    );
+    expect(listUsersRes.status).toBe(200);
+    const usersBody = await listUsersRes.json<{
+      users: Array<{ githubLogin: string; userId: string }>;
+    }>();
+    expect(usersBody.users).toHaveLength(1);
+    expect(usersBody.users[0]?.githubLogin).toBe("shlomo");
+
+    const db = createD1(env.D1);
+    const installationId = crypto.randomUUID();
+    await db.insert(githubInstallationsTable).values({
+      id: installationId,
+      organizationId,
+      installationId: "12345",
+      repo: "vortex/app",
+    });
+
+    const listInstallsRes = await app.fetch(
+      request(`/workspaces/${organizationId}/github/installations`, { token }),
+      env
+    );
+    expect(listInstallsRes.status).toBe(200);
+    const installsBody = await listInstallsRes.json<{
+      installations: Array<{ id: string; repo: string }>;
+    }>();
+    expect(installsBody.installations).toHaveLength(1);
+    expect(installsBody.installations[0]?.repo).toBe("vortex/app");
+
+    const deleteRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/github/installations/${installationId}`,
+        { method: "DELETE", token }
+      ),
+      env
+    );
+    expect(deleteRes.status).toBe(204);
+
+    const afterRes = await app.fetch(
+      request(`/workspaces/${organizationId}/github/installations`, { token }),
+      env
+    );
+    expect(afterRes.status).toBe(200);
+    const afterBody = await afterRes.json<{
+      installations: Array<{ id: string; repo: string }>;
+    }>();
+    expect(afterBody.installations).toHaveLength(0);
   });
 });

@@ -6,8 +6,13 @@ import { getInstallationToken } from "../global/github-auth.js";
 import {
   createGithubInstallation,
   deleteGithubInstallation,
+  deleteGithubInstallationById,
+  listGithubInstallations,
 } from "../global/github-installations.js";
-import { createGithubUserMapping } from "../global/github-users.js";
+import {
+  createGithubUserMapping,
+  listGithubUsers,
+} from "../global/github-users.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
@@ -29,6 +34,15 @@ const githubUserSchema = z.object({
   organizationId: z.string(),
   userId: z.string(),
   githubLogin: z.string(),
+  createdAt: z.string(),
+});
+
+const githubInstallationSchema = z.object({
+  id: z.string(),
+  organizationId: z.string(),
+  installationId: z.string(),
+  repo: z.string(),
+  createdAt: z.string(),
 });
 
 const githubUserRoute = createRoute({
@@ -82,6 +96,61 @@ const githubInstallRoute = createRoute({
   },
 });
 
+const githubUsersRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/github/users",
+  tags: ["github"],
+  middleware: [rls("read")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "GitHub user mappings",
+      content: {
+        "application/json": {
+          schema: z.object({ users: z.array(githubUserSchema) }),
+        },
+      },
+    },
+  },
+});
+
+const githubInstallationsRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/github/installations",
+  tags: ["github"],
+  middleware: [rls("read")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "GitHub installations",
+      content: {
+        "application/json": {
+          schema: z.object({
+            installations: z.array(githubInstallationSchema),
+          }),
+        },
+      },
+    },
+  },
+});
+
+const githubInstallationDeleteRoute = createRoute({
+  method: "delete",
+  path: "/workspaces/{organizationId}/github/installations/{id}",
+  tags: ["github"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+  },
+  responses: {
+    204: { description: "Installation removed" },
+  },
+});
+
 export function registerGithubRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(githubUserRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
@@ -94,6 +163,13 @@ export function registerGithubRoutes(app: OpenAPIHono<AppContext>) {
       githubLogin
     );
     return c.json(mapping, 201);
+  });
+
+  app.openapi(githubUsersRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const users = await listGithubUsers(db, organizationId);
+    return c.json({ users });
   });
 
   app.openapi(githubInstallRoute, async (c) => {
@@ -159,5 +235,28 @@ export function registerGithubRoutes(app: OpenAPIHono<AppContext>) {
     );
 
     return c.json({ repos: parsed.data.repositories });
+  });
+
+  app.openapi(githubInstallationsRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const installations = await listGithubInstallations(db, organizationId);
+    return c.json({ installations });
+  });
+
+  app.openapi(githubInstallationDeleteRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const existing = await listGithubInstallations(db, organizationId);
+    const match = existing.find((row) => row.id === id);
+    if (!match) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Installation not found",
+      });
+    }
+    await deleteGithubInstallationById(db, organizationId, id);
+    return c.body(null, 204);
   });
 }

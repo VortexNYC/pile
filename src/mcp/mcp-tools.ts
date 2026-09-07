@@ -32,6 +32,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdGithubInstallationsId",
+    "description": "Delete github installation (DELETE /workspaces/{organizationId}/github/installations/{id})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/github/installations/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdInitiativesId",
     "description": "Delete initiative (DELETE /workspaces/{organizationId}/initiatives/{id})",
     "method": "DELETE",
@@ -491,6 +512,40 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdGithubInstallations",
+    "description": "List github installations (GET /workspaces/{organizationId}/github/installations)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/github/installations",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdGithubUsers",
+    "description": "List github users (GET /workspaces/{organizationId}/github/users)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/github/users",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
         "organizationId"
       ]
     }

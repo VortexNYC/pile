@@ -5328,13 +5328,17 @@
                     },
                     "githubLogin": {
                       "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
                     }
                   },
                   "required": [
                     "id",
                     "organizationId",
                     "userId",
-                    "githubLogin"
+                    "githubLogin",
+                    "createdAt"
                   ]
                 }
               }
@@ -5342,6 +5346,69 @@
           }
         },
         "summary": "Sync GitHub users"
+      },
+      "get": {
+        "tags": [
+          "github"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "GitHub user mappings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "users": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "userId": {
+                            "type": "string"
+                          },
+                          "githubLogin": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "userId",
+                          "githubLogin",
+                          "createdAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "users"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List github users"
       }
     },
     "/workspaces/{organizationId}/github/install": {
@@ -5408,6 +5475,102 @@
           }
         },
         "summary": "Install GitHub app"
+      }
+    },
+    "/workspaces/{organizationId}/github/installations": {
+      "get": {
+        "tags": [
+          "github"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "GitHub installations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "installations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "installationId": {
+                            "type": "string"
+                          },
+                          "repo": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "installationId",
+                          "repo",
+                          "createdAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "installations"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List github installations"
+      }
+    },
+    "/workspaces/{organizationId}/github/installations/{id}": {
+      "delete": {
+        "tags": [
+          "github"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Installation removed"
+          }
+        },
+        "summary": "Delete github installation"
       }
     },
     "/workspaces/{organizationId}/issues/{issueId}/history": {

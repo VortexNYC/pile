@@ -3,6 +3,14 @@ import { and, eq } from "drizzle-orm";
 import type { D1Client } from "./db.js";
 import { githubUsers } from "./schema.js";
 
+export function listGithubUsers(db: D1Client, organizationId: string) {
+  return db
+    .select()
+    .from(githubUsers)
+    .where(eq(githubUsers.organizationId, organizationId))
+    .all();
+}
+
 export function findUserByGithubLogin(
   db: D1Client,
   organizationId: string,
@@ -33,5 +41,13 @@ export async function createGithubUserMapping(
     userId,
     githubLogin,
   });
-  return { id, organizationId, userId, githubLogin };
+  const row = await db
+    .select()
+    .from(githubUsers)
+    .where(eq(githubUsers.id, id))
+    .get();
+  if (!row) {
+    throw new Error("Failed to create GitHub user mapping");
+  }
+  return row;
 }
