@@ -13,7 +13,7 @@ BETTER_AUTH_URL = "https://issuetracker.example.workers.dev"
 ALLOWED_ORIGINS = "https://issuetracker.example.workers.dev"
 SLACK_REDIRECT_URI = "https://issuetracker.example.workers.dev/slack/oauth"
 # Optional: agent dispatch defaults
-# DEVIN_OUTPOST = "user:daytona-linux"
+# DEVIN_OUTPOST = "linux"
 # DEVIN_MODEL = "swe-1-7-medium"
 
 [[d1_databases]]
@@ -43,7 +43,7 @@ name = "issuetracker"
 BETTER_AUTH_URL = "https://issuetracker.shlomo-31b.workers.dev"
 ALLOWED_ORIGINS = "https://issuetracker.shlomo-31b.workers.dev"
 SLACK_REDIRECT_URI = "https://issuetracker.shlomo-31b.workers.dev/slack/oauth"
-DEVIN_OUTPOST = "user:daytona-linux"
+DEVIN_OUTPOST = "linux"
 DEVIN_MODEL = "swe-1-7-medium"
 
 [[env.production.d1_databases]]
