@@ -38,7 +38,9 @@ function daytonaConfig(env: WorkerEnv) {
  */
 export async function provisionOutpostWorker(
   env: WorkerEnv,
-  devinSessionId: string
+  devinSessionId: string,
+  organizationId?: string,
+  trackerSessionId?: string
 ): Promise<void> {
   const fleetId = devinSessionId.startsWith("devin-")
     ? devinSessionId
@@ -65,6 +67,8 @@ export async function provisionOutpostWorker(
       labels: {
         "vortex.outpost": "1",
         "vortex.session": fleetId,
+        ...(organizationId ? { "vortex.org": organizationId } : {}),
+        ...(trackerSessionId ? { "vortex.tracker_session": trackerSessionId } : {}),
       },
       autoStopInterval: 0,
       autoDeleteInterval: 0,
@@ -124,6 +128,14 @@ export async function sweepOutpostWorkers(env: WorkerEnv): Promise<void> {
       s.state !== "archived"
   );
 
+  const statusMap: Record<string, "waiting" | "completed" | "failed" | "canceled"> = {
+    blocked: "waiting",
+    exit: "completed",
+    error: "failed",
+    suspended: "canceled",
+  };
+  const terminal = new Set(["exit", "error", "suspended"]);
+
   await Promise.all(
     workers.map(async (sandbox) => {
       const sessionId = sandbox.labels?.["vortex.session"];
@@ -134,7 +146,31 @@ export async function sweepOutpostWorkers(env: WorkerEnv): Promise<void> {
       );
       if (!sessionRes.ok) return;
       const session = devinSessionSchema.parse(await sessionRes.json());
-      if (["exit", "error", "suspended", "blocked"].includes(session.status)) {
+
+      const mapped = statusMap[session.status];
+      const trackerSessionId = sandbox.labels?.["vortex.tracker_session"];
+      const sandboxOrg = sandbox.labels?.["vortex.org"];
+      if (mapped && trackerSessionId && sandboxOrg) {
+        try {
+          const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+            env.WORKSPACE_DURABLE_OBJECT.idFromName(sandboxOrg)
+          );
+          await stub.setOrganizationId(sandboxOrg);
+          await stub.updateAgentSession(trackerSessionId, { status: mapped });
+          await stub.addAgentActivity({
+            sessionId: trackerSessionId,
+            type: "status",
+            message: `Devin session ${session.status} (synced by outpost sweeper)`,
+          });
+        } catch (err) {
+          console.error("outpost status write-back failed", {
+            session: sessionId,
+            err,
+          });
+        }
+      }
+
+      if (terminal.has(session.status)) {
         const del = await fetch(`${config.apiUrl}/sandbox/${sandbox.id}`, {
           method: "DELETE",
           headers: { Authorization: `Bearer ${config.apiKey}` },

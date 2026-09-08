@@ -103,7 +103,12 @@ export async function dispatchAgent(
   });
 
   if (providerSession.id) {
-    const provision = provisionOutpostWorker(env, providerSession.id).catch(
+    const provision = provisionOutpostWorker(
+      env,
+      providerSession.id,
+      organizationId,
+      session.id
+    ).catch(
       (err) => console.error("outpost provisioning failed", err)
     );
     if (ctx) ctx.waitUntil(provision);
