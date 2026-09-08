@@ -24,6 +24,43 @@ const devinSessionSchema = z.object({
   tags: z.array(z.string()).optional(),
 });
 
+export interface AgentProviderConfigRow {
+  token: string | null;
+  providerOrgId: string | null;
+  outpost: string | null;
+  outpostId: string | null;
+  outpostToken: string | null;
+  computeApiKey: string | null;
+  computeApiUrl: string | null;
+  computeSnapshot: string | null;
+  computeVolumeId: string | null;
+}
+
+/**
+ * Merge a workspace's provider config over the deployment-level env. Each
+ * field falls back to the env value when the workspace hasn't set it, so a
+ * workspace can BYO only the pieces it owns (e.g. its own Devin token while
+ * running on classic hosted Devin).
+ */
+export function resolveAgentEnv(
+  env: WorkerEnv,
+  config: AgentProviderConfigRow | undefined
+): WorkerEnv {
+  if (!config) return env;
+  return {
+    ...env,
+    DEVIN_TOKEN: config.token ?? env.DEVIN_TOKEN,
+    DEVIN_ORG_ID: config.providerOrgId ?? env.DEVIN_ORG_ID,
+    DEVIN_OUTPOST: config.outpost ?? env.DEVIN_OUTPOST,
+    DEVIN_OUTPOST_ID: config.outpostId ?? env.DEVIN_OUTPOST_ID,
+    DEVIN_OUTPOST_TOKEN: config.outpostToken ?? env.DEVIN_OUTPOST_TOKEN,
+    DAYTONA_API_KEY: config.computeApiKey ?? env.DAYTONA_API_KEY,
+    DAYTONA_API_URL: config.computeApiUrl ?? env.DAYTONA_API_URL,
+    DAYTONA_SNAPSHOT: config.computeSnapshot ?? env.DAYTONA_SNAPSHOT,
+    DAYTONA_VOLUME_ID: config.computeVolumeId ?? env.DAYTONA_VOLUME_ID,
+  };
+}
+
 function daytonaConfig(env: WorkerEnv) {
   const apiKey = env.DAYTONA_API_KEY;
   const apiUrl = env.DAYTONA_API_URL ?? "https://app.daytona.io/api";
@@ -141,16 +178,33 @@ export async function sweepOutpostWorkers(env: WorkerEnv): Promise<void> {
     workers.map(async (sandbox) => {
       const sessionId = sandbox.labels?.["vortex.session"];
       if (!sessionId) return;
+      const trackerSessionId = sandbox.labels?.["vortex.tracker_session"];
+      const sandboxOrg = sandbox.labels?.["vortex.org"];
+
+      let token = env.DEVIN_TOKEN;
+      let sessionOrgId = orgId;
+      if (sandboxOrg) {
+        try {
+          const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+            env.WORKSPACE_DURABLE_OBJECT.idFromName(sandboxOrg)
+          );
+          await stub.setOrganizationId(sandboxOrg);
+          const cfg = await stub.getAgentProviderConfig("devin");
+          if (cfg?.token) token = cfg.token;
+          if (cfg?.providerOrgId) sessionOrgId = cfg.providerOrgId;
+        } catch (err) {
+          console.error("outpost sweep: config lookup failed", err);
+        }
+      }
+
       const sessionRes = await fetch(
-        `https://api.devin.ai/v3/organizations/${orgId}/sessions/${sessionId.replace(/^devin-/, "")}`,
-        { headers: { Authorization: `Bearer ${env.DEVIN_TOKEN}` } }
+        `https://api.devin.ai/v3/organizations/${sessionOrgId}/sessions/${sessionId.replace(/^devin-/, "")}`,
+        { headers: { Authorization: `Bearer ${token}` } }
       );
       if (!sessionRes.ok) return;
       const session = devinSessionSchema.parse(await sessionRes.json());
 
       const mapped = statusMap[session.status];
-      const trackerSessionId = sandbox.labels?.["vortex.tracker_session"];
-      const sandboxOrg = sandbox.labels?.["vortex.org"];
       if (mapped && trackerSessionId && sandboxOrg) {
         try {
           const stub = env.WORKSPACE_DURABLE_OBJECT.get(

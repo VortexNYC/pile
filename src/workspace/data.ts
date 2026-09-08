@@ -10,6 +10,7 @@ import type { FilterCondition } from "./filter.js";
 import type { workspaceSchema } from "./schema-map.js";
 import {
   workspaceAgentActivities,
+  workspaceAgentProviderConfigs,
   workspaceAgentSessions,
   workspaceAttachments,
   workspaceIssueApprovals,
@@ -1238,4 +1239,124 @@ export async function resolveIssueApproval(
       )
     );
   return getIssueApproval(db, organizationId, id);
+}
+
+
+// ---- agent_provider_configs ----
+
+export interface AgentProviderConfigInput {
+  agentId: string;
+  token?: string | null;
+  providerOrgId?: string | null;
+  outpost?: string | null;
+  outpostId?: string | null;
+  outpostToken?: string | null;
+  computeApiKey?: string | null;
+  computeApiUrl?: string | null;
+  computeSnapshot?: string | null;
+  computeVolumeId?: string | null;
+  config?: Record<string, unknown> | null;
+}
+
+export async function upsertAgentProviderConfig(
+  db: WorkspaceDb,
+  organizationId: string,
+  input: AgentProviderConfigInput
+) {
+  const existing = await db
+    .select()
+    .from(workspaceAgentProviderConfigs)
+    .where(
+      and(
+        eq(workspaceAgentProviderConfigs.organizationId, organizationId),
+        eq(workspaceAgentProviderConfigs.agentId, input.agentId)
+      )
+    )
+    .get();
+  const now = new Date().toISOString();
+  const fields = {
+    token: input.token,
+    providerOrgId: input.providerOrgId,
+    outpost: input.outpost,
+    outpostId: input.outpostId,
+    outpostToken: input.outpostToken,
+    computeApiKey: input.computeApiKey,
+    computeApiUrl: input.computeApiUrl,
+    computeSnapshot: input.computeSnapshot,
+    computeVolumeId: input.computeVolumeId,
+    config: input.config === undefined ? undefined : input.config === null ? null : JSON.stringify(input.config),
+  };
+  if (existing) {
+    const set: Record<string, string | null> = { updatedAt: now };
+    for (const [k, v] of Object.entries(fields)) {
+      if (v !== undefined) set[k] = v;
+    }
+    await db
+      .update(workspaceAgentProviderConfigs)
+      .set(set)
+      .where(eq(workspaceAgentProviderConfigs.id, existing.id));
+    return existing.id;
+  }
+  const id = crypto.randomUUID();
+  await db.insert(workspaceAgentProviderConfigs).values({
+    id,
+    organizationId,
+    agentId: input.agentId,
+    token: fields.token ?? null,
+    providerOrgId: fields.providerOrgId ?? null,
+    outpost: fields.outpost ?? null,
+    outpostId: fields.outpostId ?? null,
+    outpostToken: fields.outpostToken ?? null,
+    computeApiKey: fields.computeApiKey ?? null,
+    computeApiUrl: fields.computeApiUrl ?? null,
+    computeSnapshot: fields.computeSnapshot ?? null,
+    computeVolumeId: fields.computeVolumeId ?? null,
+    config: fields.config ?? null,
+    createdAt: now,
+    updatedAt: now,
+  });
+  return id;
+}
+
+export async function getAgentProviderConfig(
+  db: WorkspaceDb,
+  organizationId: string,
+  agentId: string
+) {
+  return db
+    .select()
+    .from(workspaceAgentProviderConfigs)
+    .where(
+      and(
+        eq(workspaceAgentProviderConfigs.organizationId, organizationId),
+        eq(workspaceAgentProviderConfigs.agentId, agentId)
+      )
+    )
+    .get();
+}
+
+export async function listAgentProviderConfigs(
+  db: WorkspaceDb,
+  organizationId: string
+) {
+  return db
+    .select()
+    .from(workspaceAgentProviderConfigs)
+    .where(eq(workspaceAgentProviderConfigs.organizationId, organizationId))
+    .all();
+}
+
+export async function deleteAgentProviderConfig(
+  db: WorkspaceDb,
+  organizationId: string,
+  agentId: string
+) {
+  await db
+    .delete(workspaceAgentProviderConfigs)
+    .where(
+      and(
+        eq(workspaceAgentProviderConfigs.organizationId, organizationId),
+        eq(workspaceAgentProviderConfigs.agentId, agentId)
+      )
+    );
 }

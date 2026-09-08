@@ -1023,6 +1023,23 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.addAgentActivity(this.db, input);
   }
 
+  // ---- agent provider configs ----
+  upsertAgentProviderConfig(input: data.AgentProviderConfigInput) {
+    return data.upsertAgentProviderConfig(this.db, this.organizationId, input);
+  }
+
+  getAgentProviderConfig(agentId: string) {
+    return data.getAgentProviderConfig(this.db, this.organizationId, agentId);
+  }
+
+  listAgentProviderConfigs() {
+    return data.listAgentProviderConfigs(this.db, this.organizationId);
+  }
+
+  deleteAgentProviderConfig(agentId: string) {
+    return data.deleteAgentProviderConfig(this.db, this.organizationId, agentId);
+  }
+
   listAgentActivities(sessionId: string, options: { limit?: number } = {}) {
     return data.listAgentActivities(this.db, sessionId, options);
   }

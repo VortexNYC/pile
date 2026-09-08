@@ -316,6 +316,28 @@ CREATE INDEX IF NOT EXISTS outbound_webhook_deliveries_organization_idx ON outbo
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS outbound_webhook_deliveries_subscription_idx ON outbound_webhook_deliveries (subscription_id)`;
 
+
+
+const v10 = `CREATE TABLE IF NOT EXISTS agent_provider_configs (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  agent_id TEXT NOT NULL,
+  token TEXT,
+  provider_org_id TEXT,
+  outpost TEXT,
+  outpost_id TEXT,
+  outpost_token TEXT,
+  compute_api_key TEXT,
+  compute_api_url TEXT,
+  compute_snapshot TEXT,
+  compute_volume_id TEXT,
+  config TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS agent_provider_configs_org_agent_idx ON agent_provider_configs (organization_id, agent_id)`;
+
 export const workspaceMigrations = {
   journal: {
     entries: [
@@ -328,6 +350,7 @@ export const workspaceMigrations = {
       { idx: 6, when: 6, tag: "v7", breakpoints: true },
       { idx: 7, when: 7, tag: "v8", breakpoints: true },
       { idx: 8, when: 8, tag: "v9", breakpoints: true },
+      { idx: 9, when: 9, tag: "v10", breakpoints: true },
     ],
   },
   migrations: {
@@ -340,5 +363,6 @@ export const workspaceMigrations = {
     m0006: v7,
     m0007: v8,
     m0008: v9,
+    m0009: v10,
   },
 } satisfies Parameters<typeof migrate>[1];

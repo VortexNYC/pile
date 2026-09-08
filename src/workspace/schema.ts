@@ -451,3 +451,30 @@ export const workspaceOutboundWebhookDeliveries = sqliteTable(
     ),
   ]
 );
+
+export const workspaceAgentProviderConfigs = sqliteTable(
+  "agent_provider_configs" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    agentId: text("agent_id" as string).notNull(),
+    token: text("token" as string),
+    providerOrgId: text("provider_org_id" as string),
+    outpost: text("outpost" as string),
+    outpostId: text("outpost_id" as string),
+    outpostToken: text("outpost_token" as string),
+    computeApiKey: text("compute_api_key" as string),
+    computeApiUrl: text("compute_api_url" as string),
+    computeSnapshot: text("compute_snapshot" as string),
+    computeVolumeId: text("compute_volume_id" as string),
+    config: text("config" as string),
+    createdAt: text("created_at" as string).notNull(),
+    updatedAt: text("updated_at" as string).notNull(),
+  },
+  (table) => [
+    uniqueIndex("agent_provider_configs_org_agent_idx" as string).on(
+      table.organizationId,
+      table.agentId
+    ),
+  ]
+);

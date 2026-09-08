@@ -29,6 +29,7 @@ import {
   type IssueStatus,
 } from "../types/workspace.js";
 import { filterConditionSchema } from "../workspace/filter.js";
+import { resolveAgentEnv } from "../agents/outpost.js";
 import { agentSessionSchema } from "./agent-sessions.js";
 
 function getExecutionCtx(c: {
@@ -946,9 +947,13 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     }
     await assertIssueAccess(db, issue, identity);
 
+    const resolvedAgentId = agentId ?? "devin";
+    const providerConfig = await stub.getAgentProviderConfig(resolvedAgentId);
+    const effectiveEnv = resolveAgentEnv(c.env, providerConfig ?? undefined);
+
     const session = await dispatchAgent(
-      c.env,
-      agentId ?? "devin",
+      effectiveEnv,
+      resolvedAgentId,
       organizationId,
       {
         id: issue.id,

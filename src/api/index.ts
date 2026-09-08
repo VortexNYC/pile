@@ -12,6 +12,7 @@ import {
 import { observabilityMiddleware } from "../platform/observability.js";
 import { securityMiddleware } from "../platform/security.js";
 import { registerActivityRoutes } from "./activities.js";
+import { registerAgentProviderRoutes } from "./agent-providers.js";
 import { registerAgentSessionRoutes } from "./agent-sessions.js";
 import { registerApprovalRoutes } from "./approvals.js";
 import { registerAttachmentRoutes } from "./attachments.js";
@@ -65,6 +66,7 @@ registerWorkspaceRoutes(app);
 registerTokenRoutes(app);
 registerIssueRoutes(app);
 registerAgentSessionRoutes(app);
+registerAgentProviderRoutes(app);
 registerApprovalRoutes(app);
 registerActivityRoutes(app);
 registerWorkspaceEntityRoutes(app);
