@@ -4,13 +4,11 @@ import type { D1Client } from "./db.js";
 import {
   agentActivities,
   agentSessions,
-  comments,
   cycles,
   githubInstallations,
   githubUsers,
   initiatives,
   issueApprovals,
-  issueHistory,
   issueRelations,
   issueSubscribers,
   labels,
@@ -34,13 +32,11 @@ export async function exportWorkspaceData(
   organizationId: string
 ) {
   const [
-    workspaceComments,
     workspaceCycles,
     workspaceGithubInstallations,
     workspaceGithubUsers,
     workspaceInitiatives,
     workspaceApprovals,
-    workspaceHistory,
     workspaceRelations,
     workspaceSubscribers,
     workspaceLabels,
@@ -58,10 +54,6 @@ export async function exportWorkspaceData(
     workspaceWebhookSubscriptions,
     workspaceAgentSessions,
   ] = await Promise.all([
-    db
-      .select()
-      .from(comments)
-      .where(eq(comments.organizationId, organizationId)),
     db.select().from(cycles).where(eq(cycles.organizationId, organizationId)),
     db
       .select()
@@ -79,10 +71,6 @@ export async function exportWorkspaceData(
       .select()
       .from(issueApprovals)
       .where(eq(issueApprovals.organizationId, organizationId)),
-    db
-      .select()
-      .from(issueHistory)
-      .where(eq(issueHistory.organizationId, organizationId)),
     db
       .select()
       .from(issueRelations)
@@ -157,13 +145,11 @@ export async function exportWorkspaceData(
   return {
     organizationId,
     exportedAt: new Date().toISOString(),
-    comments: workspaceComments,
     cycles: workspaceCycles,
     githubInstallations: workspaceGithubInstallations,
     githubUsers: workspaceGithubUsers,
     initiatives: workspaceInitiatives,
     approvals: workspaceApprovals,
-    history: workspaceHistory,
     relations: workspaceRelations,
     subscribers: workspaceSubscribers,
     labels: workspaceLabels,

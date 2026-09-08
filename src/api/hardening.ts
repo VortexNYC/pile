@@ -76,9 +76,11 @@ export function registerHardeningRoutes(app: OpenAPIHono<AppContext>) {
     const doId = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId);
     const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(doId);
     const issues = await stub.listIssues({ limit: 10000 });
+    const history = await stub.listWorkspaceIssueHistory();
+    const comments = await stub.listWorkspaceComments();
 
     const data = await exportWorkspaceData(db, organizationId);
-    return c.json({ ...data, issues });
+    return c.json({ ...data, issues, history, comments });
   });
 
   app.openapi(readinessRoute, async (c) => {

@@ -88,6 +88,39 @@ ALTER TABLE issues ADD COLUMN snoozed_until TEXT
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_issues_triage ON issues (organization_id, status, snoozed_until)`;
 
+const v7 = `CREATE TABLE IF NOT EXISTS issue_history (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  issue_id TEXT NOT NULL,
+  linear_id TEXT,
+  field TEXT NOT NULL,
+  from_value TEXT,
+  to_value TEXT,
+  actor_id TEXT,
+  created_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS issue_history_issue_idx ON issue_history (organization_id, issue_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS issue_history_created_idx ON issue_history (organization_id, created_at)`;
+
+const v8 = `CREATE TABLE IF NOT EXISTS comments (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  issue_id TEXT NOT NULL,
+  author_id TEXT,
+  body TEXT NOT NULL,
+  external_id TEXT,
+  external_source TEXT,
+  external_author TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS comments_issue_idx ON comments (organization_id, issue_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS comments_external_idx ON comments (organization_id, external_source, external_id)`;
+
 export const workspaceMigrations = {
   journal: {
     entries: [
@@ -97,6 +130,8 @@ export const workspaceMigrations = {
       { idx: 3, when: 3, tag: "v4", breakpoints: false },
       { idx: 4, when: 4, tag: "v5", breakpoints: false },
       { idx: 5, when: 5, tag: "v6", breakpoints: true },
+      { idx: 6, when: 6, tag: "v7", breakpoints: true },
+      { idx: 7, when: 7, tag: "v8", breakpoints: true },
     ],
   },
   migrations: {
@@ -106,5 +141,7 @@ export const workspaceMigrations = {
     m0003: v4,
     m0004: v5,
     m0005: v6,
+    m0006: v7,
+    m0007: v8,
   },
 } satisfies Parameters<typeof migrate>[1];

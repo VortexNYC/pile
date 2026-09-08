@@ -1,7 +1,5 @@
 import { createAttachment, setAttachmentR2Key } from "../global/attachments.js";
-import { createComment } from "../global/comments.js";
 import { createD1 } from "../global/db.js";
-import { createIssueHistory } from "../global/issue-history.js";
 import { createIssueRelation } from "../global/issue-relations.js";
 import { createIssueSubscriber } from "../global/issue-subscribers.js";
 import { createLinearUser } from "../global/linear-users.js";
@@ -677,7 +675,7 @@ export async function migrateLinear(
       }
 
       for (const lc of li.comments.nodes) {
-        await createComment(db, organizationId, {
+        await stub.createComment({
           issueId: li.id,
           authorId: lc.user?.id ?? "unknown",
           body: lc.body,
@@ -769,7 +767,7 @@ export async function migrateLinear(
 
         for (const change of changes) {
           if (change.from !== null || change.to !== null) {
-            await createIssueHistory(db, organizationId, {
+            await stub.createIssueHistory({
               issueId: li.id,
               linearId: lh.id,
               field: change.field,

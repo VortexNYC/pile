@@ -23,14 +23,17 @@ import { alias } from "drizzle-orm/sqlite-core";
 import { z } from "zod";
 
 import { createD1 } from "../global/db.js";
-import { createIssueHistory } from "../global/issue-history.js";
 import {
   notifyCommentCreated,
   notifyIssueCreated,
   notifyIssueDeleted,
   notifyIssueUpdated,
 } from "../global/notify-issue.js";
-import { comments, cycles, issueHistory } from "../global/schema.js";
+import {
+  comments as globalComments,
+  cycles,
+  issueHistory as globalIssueHistory,
+} from "../global/schema.js";
 import { getDefaultTeam, getTeamById } from "../global/teams.js";
 import { getWorkspaceById } from "../global/workspaces.js";
 import { VortexError } from "../platform/errors.js";
@@ -48,7 +51,11 @@ import {
 } from "../types/workspace.js";
 import { filterToSql } from "./filter.js";
 import { workspaceMigrations } from "./migrations.js";
-import { workspaceIssues } from "./schema.js";
+import {
+  workspaceComments,
+  workspaceIssueHistory,
+  workspaceIssues,
+} from "./schema.js";
 import {
   commentToSearchDocument,
   createWorkspaceSearchIndex,
@@ -205,17 +212,17 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (this.searchIndex) return this.searchIndex;
 
     const index = await createWorkspaceSearchIndex();
+    await this.ensureCommentsBackfilled();
     const [issues, commentRows] = await Promise.all([
       this.db.select().from(workspaceIssues).all(),
-      createD1(this.env.D1)
+      this.db
         .select({
-          id: comments.id,
-          issueId: comments.issueId,
-          body: comments.body,
-          createdAt: comments.createdAt,
+          id: workspaceComments.id,
+          issueId: workspaceComments.issueId,
+          body: workspaceComments.body,
+          createdAt: workspaceComments.createdAt,
         })
-        .from(comments)
-        .where(eq(comments.organizationId, this.organizationId))
+        .from(workspaceComments)
         .all(),
     ]);
 
@@ -274,6 +281,173 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     }
   }
 
+  private historyBackfillDone = false;
+  private commentsBackfillDone = false;
+
+  // One-time copies of legacy D1 workspace rows into this DO. New rows are
+  // written locally; D1 keeps only pre-move data.
+  private async ensureIssueHistoryBackfilled(): Promise<void> {
+    if (this.historyBackfillDone) return;
+    this.historyBackfillDone = true;
+    const local = await this.db
+      .select({ id: workspaceIssueHistory.id })
+      .from(workspaceIssueHistory)
+      .limit(1)
+      .get();
+    if (local) return;
+    const d1 = createD1(this.env.D1);
+    const legacy = await d1
+      .select()
+      .from(globalIssueHistory)
+      .where(eq(globalIssueHistory.organizationId, this.organizationId))
+      .all();
+    if (legacy.length === 0) return;
+    await this.db.insert(workspaceIssueHistory).values(
+      legacy.map((row) => ({
+        id: row.id,
+        organizationId: row.organizationId,
+        issueId: row.issueId,
+        linearId: row.linearId,
+        field: row.field,
+        fromValue: row.fromValue,
+        toValue: row.toValue,
+        actorId: row.actorId,
+        createdAt: row.createdAt,
+      }))
+    );
+  }
+
+  private async ensureCommentsBackfilled(): Promise<void> {
+    if (this.commentsBackfillDone) return;
+    this.commentsBackfillDone = true;
+    const local = await this.db
+      .select({ id: workspaceComments.id })
+      .from(workspaceComments)
+      .limit(1)
+      .get();
+    if (local) return;
+    const d1 = createD1(this.env.D1);
+    const legacy = await d1
+      .select()
+      .from(globalComments)
+      .where(eq(globalComments.organizationId, this.organizationId))
+      .all();
+    if (legacy.length === 0) return;
+    await this.db.insert(workspaceComments).values(
+      legacy.map((row) => ({
+        id: row.id,
+        organizationId: row.organizationId,
+        issueId: row.issueId,
+        authorId: row.authorId,
+        body: row.body,
+        externalId: row.externalId,
+        externalSource: row.externalSource,
+        externalAuthor: row.externalAuthor,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+      }))
+    );
+  }
+
+  async listComments(issueId: string) {
+    await this.ready;
+    await this.ensureCommentsBackfilled();
+    return this.db
+      .select()
+      .from(workspaceComments)
+      .where(eq(workspaceComments.issueId, issueId))
+      .all();
+  }
+
+  async getComment(id: string) {
+    await this.ready;
+    await this.ensureCommentsBackfilled();
+    return this.db
+      .select()
+      .from(workspaceComments)
+      .where(eq(workspaceComments.id, id))
+      .get();
+  }
+
+  async findCommentByExternalId(externalSource: string, externalId: string) {
+    await this.ready;
+    await this.ensureCommentsBackfilled();
+    return this.db
+      .select({ id: workspaceComments.id })
+      .from(workspaceComments)
+      .where(
+        and(
+          eq(workspaceComments.externalSource, externalSource),
+          eq(workspaceComments.externalId, externalId)
+        )
+      )
+      .get();
+  }
+
+  async createComment(values: {
+    issueId: string;
+    authorId?: string | null;
+    body: string;
+    externalId?: string;
+    externalSource?: string;
+    externalAuthor?: string;
+    createdAt?: string;
+    updatedAt?: string;
+  }) {
+    await this.ready;
+    const id = crypto.randomUUID();
+    const ts = new Date().toISOString();
+    await this.db.insert(workspaceComments).values({
+      id,
+      organizationId: this.organizationId,
+      issueId: values.issueId,
+      authorId: values.authorId ?? null,
+      body: values.body,
+      externalId: values.externalId ?? null,
+      externalSource: values.externalSource ?? null,
+      externalAuthor: values.externalAuthor ?? null,
+      createdAt: values.createdAt ?? ts,
+      updatedAt: values.updatedAt ?? ts,
+    });
+    return this.getComment(id);
+  }
+
+  async updateComment(
+    id: string,
+    values: {
+      body: string;
+      externalId?: string;
+      externalSource?: string;
+      externalAuthor?: string;
+      updatedAt?: string;
+    }
+  ) {
+    await this.ready;
+    const ts = new Date().toISOString();
+    await this.db
+      .update(workspaceComments)
+      .set({
+        body: values.body,
+        externalId: values.externalId,
+        externalSource: values.externalSource,
+        externalAuthor: values.externalAuthor,
+        updatedAt: values.updatedAt ?? ts,
+      })
+      .where(eq(workspaceComments.id, id));
+    return this.getComment(id);
+  }
+
+  async deleteComment(id: string) {
+    await this.ready;
+    await this.db.delete(workspaceComments).where(eq(workspaceComments.id, id));
+  }
+
+  async listWorkspaceComments() {
+    await this.ready;
+    await this.ensureCommentsBackfilled();
+    return this.db.select().from(workspaceComments).all();
+  }
+
   private async recordIssueHistory(
     issueId: string,
     entries: ReadonlyArray<{
@@ -283,17 +457,62 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     }>,
     actorId?: string
   ) {
-    const db = createD1(this.env.D1);
-    await Promise.all(
-      entries.map((entry) =>
-        createIssueHistory(db, this.organizationId, {
-          issueId,
-          linearId: null,
-          actorId: actorId ?? null,
-          ...entry,
-        })
-      )
+    if (entries.length === 0) return;
+    const ts = new Date().toISOString();
+    await this.db.insert(workspaceIssueHistory).values(
+      entries.map((entry) => ({
+        id: crypto.randomUUID(),
+        organizationId: this.organizationId,
+        issueId,
+        linearId: null,
+        field: entry.field,
+        fromValue: entry.fromValue,
+        toValue: entry.toValue,
+        actorId: actorId ?? null,
+        createdAt: ts,
+      }))
     );
+  }
+
+  // Full history insert used by the Linear importer (keeps source timestamps).
+  async createIssueHistory(values: {
+    issueId: string;
+    linearId: string | null;
+    field: string;
+    fromValue?: string | null;
+    toValue?: string | null;
+    actorId?: string | null;
+    createdAt?: string;
+  }): Promise<void> {
+    await this.ready;
+    await this.db.insert(workspaceIssueHistory).values({
+      id: crypto.randomUUID(),
+      organizationId: this.organizationId,
+      issueId: values.issueId,
+      linearId: values.linearId,
+      field: values.field,
+      fromValue: values.fromValue ?? null,
+      toValue: values.toValue ?? null,
+      actorId: values.actorId ?? null,
+      createdAt: values.createdAt ?? new Date().toISOString(),
+    });
+  }
+
+  async listIssueHistory(issueId: string) {
+    await this.ready;
+    await this.ensureIssueHistoryBackfilled();
+    return this.db
+      .select()
+      .from(workspaceIssueHistory)
+      .where(eq(workspaceIssueHistory.issueId, issueId))
+      .orderBy(workspaceIssueHistory.createdAt)
+      .all();
+  }
+
+  async listWorkspaceIssueHistory() {
+    await this.ready;
+    await this.ensureIssueHistoryBackfilled();
+    return this.db.select().from(workspaceIssueHistory).all();
   }
 
   async createIssue(input: IssueInput, actorId?: string): Promise<Issue> {
@@ -402,9 +621,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       organizationId: this.organizationId,
       issue,
     });
-    this.ctx.waitUntil(
-      notifyIssueCreated(this.env, this.organizationId, issue, actorId)
-    );
+    await notifyIssueCreated(this.env, this.organizationId, issue, actorId);
     await this.recordIssueHistory(
       issue.id,
       [{ field: "created", fromValue: null, toValue: issue.title }],
@@ -630,20 +847,19 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (rows.length === 0) {
       return { total: 0, totalEstimate: 0, series: [] };
     }
-    const d1 = createD1(this.env.D1);
-    const history = await d1
+    await this.ensureIssueHistoryBackfilled();
+    const history = await this.db
       .select({
-        issueId: issueHistory.issueId,
-        createdAt: issueHistory.createdAt,
+        issueId: workspaceIssueHistory.issueId,
+        createdAt: workspaceIssueHistory.createdAt,
       })
-      .from(issueHistory)
+      .from(workspaceIssueHistory)
       .where(
         and(
-          eq(issueHistory.organizationId, this.organizationId),
-          eq(issueHistory.field, "status"),
-          inArray(issueHistory.toValue, ["done", "canceled"]),
+          eq(workspaceIssueHistory.field, "status"),
+          inArray(workspaceIssueHistory.toValue, ["done", "canceled"]),
           inArray(
-            issueHistory.issueId,
+            workspaceIssueHistory.issueId,
             rows.map((row) => row.id)
           )
         )
@@ -1060,9 +1276,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       organizationId: this.organizationId,
       issue,
     });
-    this.ctx.waitUntil(
-      notifyIssueUpdated(this.env, this.organizationId, issue, actorId)
-    );
+    await notifyIssueUpdated(this.env, this.organizationId, issue, actorId);
 
     if (issue.status !== old.status) {
       await this.applyStatusAutomation(issue, old, actorId);
@@ -1155,6 +1369,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       .get();
     if (!deleted) return false;
 
+    await this.db
+      .delete(workspaceIssueHistory)
+      .where(eq(workspaceIssueHistory.issueId, id));
+    await this.db
+      .delete(workspaceComments)
+      .where(eq(workspaceComments.issueId, id));
+
     const index = await this.ensureSearchIndex();
     await removeIssueDocuments(index, id);
 
@@ -1164,9 +1385,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       issueId: id,
     });
     if (old) {
-      this.ctx.waitUntil(
-        notifyIssueDeleted(this.env, this.organizationId, old, actorId)
-      );
+      await notifyIssueDeleted(this.env, this.organizationId, old, actorId);
     }
     return true;
   }

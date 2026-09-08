@@ -5,9 +5,7 @@ import {
   listAgentActivities,
   listAgentSessions,
 } from "../global/agent-sessions.js";
-import { listComments } from "../global/comments.js";
 import { createD1 } from "../global/db.js";
-import { listIssueHistory } from "../global/issue-history.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 
@@ -68,8 +66,10 @@ export function registerActivityRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId, issueId } = c.req.valid("param");
     const db = createD1(c.env.D1);
 
-    const history = await listIssueHistory(db, organizationId, issueId);
-    const comments = await listComments(db, organizationId, issueId);
+    const doId = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId);
+    const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(doId);
+    const history = await stub.listIssueHistory(issueId);
+    const comments = await stub.listComments(issueId);
     const sessions = await listAgentSessions(db, organizationId, { issueId });
     const agentActivities = (
       await Promise.all(

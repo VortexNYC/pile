@@ -2,7 +2,6 @@ import { env, runInDurableObject } from "cloudflare:test";
 import { eq } from "drizzle-orm";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import { createComment } from "../global/comments.js";
 import { createD1 } from "../global/db.js";
 import {
   member,
@@ -168,11 +167,13 @@ describe("deliverWebhooks", () => {
     const issue = await withWorkspace(stub, (instance) =>
       instance.createIssue({ title: "Comment webhook test issue" })
     );
-    const comment = await createComment(db, WORKSPACE_ID, {
-      issueId: issue.id,
-      authorId: "user-1",
-      body: "A comment",
-    });
+    const comment = await withWorkspace(stub, (instance) =>
+      instance.createComment({
+        issueId: issue.id,
+        authorId: "user-1",
+        body: "A comment",
+      })
+    );
     if (!comment) {
       throw new Error("Comment not created");
     }

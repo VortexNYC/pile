@@ -84,3 +84,55 @@ export const workspaceIssues = sqliteTable(
     ),
   ]
 );
+
+export const workspaceIssueHistory = sqliteTable(
+  "issue_history" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    issueId: text("issue_id" as string).notNull(),
+    linearId: text("linear_id" as string),
+    field: text("field" as string).notNull(),
+    fromValue: text("from_value" as string),
+    toValue: text("to_value" as string),
+    actorId: text("actor_id" as string),
+    createdAt: text("created_at" as string).notNull(),
+  },
+  (table) => [
+    index("issue_history_issue_idx" as string).on(
+      table.organizationId,
+      table.issueId
+    ),
+    index("issue_history_created_idx" as string).on(
+      table.organizationId,
+      table.createdAt
+    ),
+  ]
+);
+
+export const workspaceComments = sqliteTable(
+  "comments" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    issueId: text("issue_id" as string).notNull(),
+    authorId: text("author_id" as string),
+    body: text("body" as string).notNull(),
+    externalId: text("external_id" as string),
+    externalSource: text("external_source" as string),
+    externalAuthor: text("external_author" as string),
+    createdAt: text("created_at" as string).notNull(),
+    updatedAt: text("updated_at" as string).notNull(),
+  },
+  (table) => [
+    index("comments_issue_idx" as string).on(
+      table.organizationId,
+      table.issueId
+    ),
+    index("comments_external_idx" as string).on(
+      table.organizationId,
+      table.externalSource,
+      table.externalId
+    ),
+  ]
+);

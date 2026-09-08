@@ -1,8 +1,6 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
-import { createD1 } from "../global/db.js";
-import { listIssueHistory } from "../global/issue-history.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 
@@ -41,8 +39,10 @@ const listIssueHistoryRoute = createRoute({
 export function registerIssueHistoryRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listIssueHistoryRoute, async (c) => {
     const { organizationId, issueId } = c.req.valid("param");
-    const db = createD1(c.env.D1);
-    const items = await listIssueHistory(db, organizationId, issueId);
+    const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(
+      c.env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    const items = await stub.listIssueHistory(issueId);
     return c.json({ history: items });
   });
 }

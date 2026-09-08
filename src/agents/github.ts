@@ -1,12 +1,6 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 
-import {
-  createComment,
-  deleteComment,
-  findCommentByExternalId,
-  updateComment,
-} from "../global/comments.js";
 import { hmacSha256Hex, timingSafeEqualHex } from "../global/crypto.js";
 import { findOrCreateCycleByName } from "../global/cycles.js";
 import { createD1, type D1Client } from "../global/db.js";
@@ -461,12 +455,15 @@ async function processIssueComment(
 
   const organizationId = mapping.organizationId;
   const issueId = mapping.issueId;
+  const doId = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId);
+  const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(doId);
+  await stub.setOrganizationId(organizationId);
   const externalId = comment.id.toString();
   const externalSource = "github";
   const externalAuthor = comment.user.login;
 
   if (action === "created") {
-    await createComment(db, organizationId, {
+    await stub.createComment({
       issueId,
       body: comment.body,
       externalId,
@@ -478,14 +475,12 @@ async function processIssueComment(
   }
 
   if (action === "edited") {
-    const existing = await findCommentByExternalId(
-      db,
-      organizationId,
+    const existing = await stub.findCommentByExternalId(
       externalSource,
       externalId
     );
     if (existing) {
-      await updateComment(db, organizationId, existing.id, {
+      await stub.updateComment(existing.id, {
         body: comment.body,
         updatedAt: comment.updated_at,
       });
@@ -493,14 +488,12 @@ async function processIssueComment(
   }
 
   if (action === "deleted") {
-    const existing = await findCommentByExternalId(
-      db,
-      organizationId,
+    const existing = await stub.findCommentByExternalId(
       externalSource,
       externalId
     );
     if (existing) {
-      await deleteComment(db, organizationId, existing.id);
+      await stub.deleteComment(existing.id);
     }
   }
 
@@ -560,6 +553,7 @@ async function processPullRequestReviewComment(
     workspaceRecord.organizationId
   );
   const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(doId);
+  await stub.setOrganizationId(workspaceRecord.organizationId);
   const issue = await stub.getIssueByBranch(repo, branch);
   if (!issue) {
     if (deliveryId) {
@@ -575,7 +569,7 @@ async function processPullRequestReviewComment(
   const externalAuthor = comment.user.login;
 
   if (action === "created") {
-    await createComment(db, organizationId, {
+    await stub.createComment({
       issueId,
       body: `[${comment.path}] ${comment.body}`,
       externalId,
@@ -587,14 +581,12 @@ async function processPullRequestReviewComment(
   }
 
   if (action === "edited") {
-    const existing = await findCommentByExternalId(
-      db,
-      organizationId,
+    const existing = await stub.findCommentByExternalId(
       externalSource,
       externalId
     );
     if (existing) {
-      await updateComment(db, organizationId, existing.id, {
+      await stub.updateComment(existing.id, {
         body: `[${comment.path}] ${comment.body}`,
         updatedAt: comment.updated_at,
       });
@@ -602,14 +594,12 @@ async function processPullRequestReviewComment(
   }
 
   if (action === "deleted") {
-    const existing = await findCommentByExternalId(
-      db,
-      organizationId,
+    const existing = await stub.findCommentByExternalId(
       externalSource,
       externalId
     );
     if (existing) {
-      await deleteComment(db, organizationId, existing.id);
+      await stub.deleteComment(existing.id);
     }
   }
 

@@ -2,7 +2,6 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 import emojiRegex from "emoji-regex";
 
-import { getComment } from "../global/comments.js";
 import { createD1 } from "../global/db.js";
 import {
   createReaction,
@@ -205,7 +204,9 @@ export function registerReactionRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId, commentId } = c.req.valid("param");
     const identity = c.get("workspaceIdentity");
     const db = createD1(c.env.D1);
-    const comment = await getComment(db, organizationId, commentId);
+    const comment = await (
+      await getStub(c.env, organizationId)
+    ).getComment(commentId);
     if (!comment) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -225,7 +226,9 @@ export function registerReactionRoutes(app: OpenAPIHono<AppContext>) {
     const { emoji } = c.req.valid("json");
     const identity = c.get("workspaceIdentity");
     const db = createD1(c.env.D1);
-    const comment = await getComment(db, organizationId, commentId);
+    const comment = await (
+      await getStub(c.env, organizationId)
+    ).getComment(commentId);
     if (!comment) {
       throw new VortexError({
         code: "NOT_FOUND",
