@@ -14,7 +14,7 @@ An open-source, agent-native issue tracker built on Cloudflare Workers, D1, and 
 ## Features
 
 - Workspace-scoped issue tracking
-- Generic agent provider interface with Devin adapter
+- Generic agent provider interface with Devin adapter (Devin Cloud hosted sessions, Devin outposts for self-hosted workers, per-workspace BYO credentials — see docs/agent-providers.md)
 - `POST /workspaces/:workspaceId/dispatch` to start a Devin session
 - `GET/POST/PATCH /workspaces/:workspaceId/issues` for issue CRUD
 - `POST /github` to sync PR state from GitHub `pull_request` webhooks
