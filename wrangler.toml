@@ -48,6 +48,11 @@ DAYTONA_SNAPSHOT = "vortex-outpost-worker"
 DAYTONA_VOLUME_ID = "0f79e741-e373-496b-a83f-7252cd5b9f12"
 DEVIN_MODEL = "swe-1-7-medium"
 
+[[env.production.services]]
+binding = "FLUE_WORKER"
+service = "flue-cf-teammate"
+environment = "production"
+
 [[env.production.d1_databases]]
 binding = "D1"
 database_name = "issuetracker-global"

@@ -40,9 +40,11 @@ export class FlueAgentProvider implements AgentProvider {
         ? (JSON.parse(this.env.AGENT_PROVIDER_CONFIG) as unknown)
         : {}
     );
-    const res = await fetch(
-      `${config.endpoint.replace(/\/$/, "")}/dispatch/issuetracker`,
-      {
+    const target =
+      config.endpoint === "service-binding"
+        ? "https://flue-cf-teammate.internal/dispatch/issuetracker"
+        : `${config.endpoint.replace(/\/$/, "")}/dispatch/issuetracker`;
+    const request = new Request(target, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -59,8 +61,10 @@ export class FlueAgentProvider implements AgentProvider {
             description: issue.description,
           },
         }),
-      }
-    );
+      });
+    const res = this.env.FLUE_WORKER
+      ? await this.env.FLUE_WORKER.fetch(request)
+      : await fetch(request);
     if (!res.ok) {
       const text = await res.text();
       throw new VortexError({
