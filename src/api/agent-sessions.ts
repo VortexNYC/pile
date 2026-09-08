@@ -44,6 +44,7 @@ export const agentSessionSchema = z.object({
   status: agentSessionStatusSchema,
   result: z.string().nullable(),
   url: z.string().nullable(),
+  providerSessionId: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
   activities: z
@@ -313,7 +314,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     }
 
     const provider = getAgentProvider(session.agentId, c.env);
-    const polled = await provider.poll(sessionId);
+    const polled = await provider.poll(session.providerSessionId ?? sessionId);
 
     const updated = await stub.updateAgentSession(sessionId, {
       status: agentSessionStatusSchema.parse(polled.status),

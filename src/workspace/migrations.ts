@@ -335,6 +335,8 @@ const v10 = `CREATE TABLE IF NOT EXISTS agent_provider_configs (
 --> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS agent_provider_configs_org_agent_idx ON agent_provider_configs (organization_id, agent_id)`;
 
+const v11 = `ALTER TABLE agent_sessions ADD COLUMN provider_session_id TEXT`;
+
 export const workspaceMigrations = {
   journal: {
     entries: [
@@ -348,6 +350,7 @@ export const workspaceMigrations = {
       { idx: 7, when: 7, tag: "v8", breakpoints: true },
       { idx: 8, when: 8, tag: "v9", breakpoints: true },
       { idx: 9, when: 9, tag: "v10", breakpoints: true },
+      { idx: 10, when: 10, tag: "v11", breakpoints: true },
     ],
   },
   migrations: {
@@ -361,5 +364,6 @@ export const workspaceMigrations = {
     m0007: v8,
     m0008: v9,
     m0009: v10,
+    m0010: v11,
   },
 } satisfies Parameters<typeof migrate>[1];

@@ -827,6 +827,7 @@ export interface paths {
                             status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
                             result: string | null;
                             url: string | null;
+                            providerSessionId: string | null;
                             createdAt: string;
                             updatedAt: string;
                             activities?: {
@@ -892,6 +893,7 @@ export interface paths {
                                 status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
                                 result: string | null;
                                 url: string | null;
+                                providerSessionId: string | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 activities?: {
@@ -958,6 +960,7 @@ export interface paths {
                                 status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
                                 result: string | null;
                                 url: string | null;
+                                providerSessionId: string | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 activities?: {
@@ -1033,6 +1036,7 @@ export interface paths {
                             status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
                             result: string | null;
                             url: string | null;
+                            providerSessionId: string | null;
                             createdAt: string;
                             updatedAt: string;
                             activities?: {
@@ -1103,6 +1107,7 @@ export interface paths {
                             status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
                             result: string | null;
                             url: string | null;
+                            providerSessionId: string | null;
                             createdAt: string;
                             updatedAt: string;
                             activities?: {
@@ -1236,6 +1241,7 @@ export interface paths {
                             status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
                             result: string | null;
                             url: string | null;
+                            providerSessionId: string | null;
                             createdAt: string;
                             updatedAt: string;
                             activities?: {

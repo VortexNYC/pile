@@ -1803,6 +1803,10 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "providerSessionId": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -1867,6 +1871,7 @@
                     "status",
                     "result",
                     "url",
+                    "providerSessionId",
                     "createdAt",
                     "updatedAt"
                   ]
@@ -1966,6 +1971,10 @@
                             "type": "string",
                             "nullable": true
                           },
+                          "providerSessionId": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "createdAt": {
                             "type": "string"
                           },
@@ -2030,6 +2039,7 @@
                           "status",
                           "result",
                           "url",
+                          "providerSessionId",
                           "createdAt",
                           "updatedAt"
                         ]
@@ -2126,6 +2136,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "providerSessionId": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -2190,6 +2204,7 @@
                         "status",
                         "result",
                         "url",
+                        "providerSessionId",
                         "createdAt",
                         "updatedAt"
                       ]
@@ -2328,6 +2343,10 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "providerSessionId": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -2392,6 +2411,7 @@
                     "status",
                     "result",
                     "url",
+                    "providerSessionId",
                     "createdAt",
                     "updatedAt"
                   ]
@@ -2507,6 +2527,10 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "providerSessionId": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -2571,6 +2595,7 @@
                     "status",
                     "result",
                     "url",
+                    "providerSessionId",
                     "createdAt",
                     "updatedAt"
                   ]
@@ -2777,6 +2802,10 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "providerSessionId": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -2841,6 +2870,7 @@
                     "status",
                     "result",
                     "url",
+                    "providerSessionId",
                     "createdAt",
                     "updatedAt"
                   ]

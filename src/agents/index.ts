@@ -81,6 +81,7 @@ export async function dispatchAgent(
       .parse(providerSession.status),
     result: providerSession.result ?? null,
     url: providerSession.url ?? null,
+    providerSessionId: providerSession.id,
   });
 
   await stub.addAgentActivity({

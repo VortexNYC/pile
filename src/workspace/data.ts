@@ -889,6 +889,7 @@ export interface AgentSessionInput {
     | "canceled";
   result?: string | null;
   url?: string | null;
+  providerSessionId?: string | null;
 }
 
 export async function createAgentSession(
@@ -908,6 +909,7 @@ export async function createAgentSession(
     status: input.status ?? "created",
     result: input.result ?? null,
     url: input.url ?? null,
+    providerSessionId: input.providerSessionId ?? null,
     createdAt: ts,
     updatedAt: ts,
   });
@@ -976,6 +978,7 @@ export async function updateAgentSession(
       | "canceled";
     result: string | null;
     url: string | null;
+    providerSessionId: string | null;
   }>
 ) {
   const existing = await getAgentSession(db, organizationId, id);
@@ -986,6 +989,8 @@ export async function updateAgentSession(
   if (input.status !== undefined) set.status = input.status;
   if (input.result !== undefined) set.result = input.result;
   if (input.url !== undefined) set.url = input.url;
+  if (input.providerSessionId !== undefined)
+    set.providerSessionId = input.providerSessionId;
   await db
     .update(workspaceAgentSessions)
     .set(set)

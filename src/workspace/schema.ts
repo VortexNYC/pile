@@ -378,6 +378,7 @@ export const workspaceAgentSessions = sqliteTable(
       .default("created"),
     result: text("result" as string),
     url: text("url" as string),
+    providerSessionId: text("provider_session_id" as string),
     createdAt: text("created_at" as string).notNull(),
     updatedAt: text("updated_at" as string).notNull(),
   },
