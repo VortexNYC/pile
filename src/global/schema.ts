@@ -675,6 +675,7 @@ export const account = sqliteTable(
     }),
     scope: text("scope" as string),
     password: text("password" as string),
+    issuer: text("issuer" as string),
     createdAt: integer("created_at" as string, { mode: "timestamp_ms" })
       .notNull()
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`),

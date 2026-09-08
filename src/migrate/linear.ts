@@ -156,10 +156,11 @@ class LinearClient {
     });
 
     if (!res.ok) {
+      const detail = await res.text().catch(() => "");
       throw new VortexError({
         code: "AGENT_ERROR",
         status: 502,
-        message: `Linear request failed: ${res.status}`,
+        message: `Linear request failed: ${res.status}: ${detail.slice(0, 500)}`,
       });
     }
 
@@ -325,7 +326,7 @@ class LinearClient {
     }>(
       `query GetIssues($teamId: String!, $after: String) {
         team(id: $teamId) {
-          issues(first: 100, after: $after) {
+          issues(first: 50, after: $after) {
             nodes {
               id
               title
