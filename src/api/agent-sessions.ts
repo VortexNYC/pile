@@ -73,6 +73,37 @@ const agentActivitySchema = z.object({
   createdAt: z.string(),
 });
 
+function toStreamParts(a: AgentActivity): Record<string, unknown>[] {
+  if (a.type === "thought") {
+    return [
+      { type: "reasoning-start", id: a.id },
+      { type: "reasoning-delta", id: a.id, delta: a.message },
+      { type: "reasoning-end", id: a.id },
+    ];
+  }
+  if (a.type === "response") {
+    return [
+      { type: "text-start", id: a.id },
+      { type: "text-delta", id: a.id, delta: a.message },
+      { type: "text-end", id: a.id },
+    ];
+  }
+  if (a.type === "error") {
+    return [{ type: "error", errorText: a.message }];
+  }
+  return [
+    {
+      type: `data-${a.type}`,
+      id: a.id,
+      data: {
+        message: a.message,
+        payload: a.payload ?? null,
+        createdAt: a.createdAt,
+      },
+    },
+  ];
+}
+
 function toActivityResponse(row: AgentActivity) {
   return {
     ...row,
@@ -337,36 +368,52 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         return c.json({ message: "Session not found" }, 404);
       }
 
-      const lines: string[] = [];
-      const emit = (part: Record<string, unknown>) =>
-        lines.push(`data: ${JSON.stringify(part)}\n\n`);
-      emit({ type: "start", messageId: sessionId });
-      for (const a of session.activities) {
-        if (a.type === "thought") {
-          emit({ type: "reasoning-start", id: a.id });
-          emit({ type: "reasoning-delta", id: a.id, delta: a.message });
-          emit({ type: "reasoning-end", id: a.id });
-        } else if (a.type === "response") {
-          emit({ type: "text-start", id: a.id });
-          emit({ type: "text-delta", id: a.id, delta: a.message });
-          emit({ type: "text-end", id: a.id });
-        } else if (a.type === "error") {
-          emit({ type: "error", errorText: a.message });
-        } else {
-          emit({
-            type: `data-${a.type}`,
-            id: a.id,
-            data: {
-              message: a.message,
-              payload: a.payload ?? null,
-              createdAt: a.createdAt,
-            },
-          });
-        }
-      }
-      emit({ type: "finish" });
+      const emitPart = toStreamParts;
 
-      return new Response(lines.join(""), {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream<Uint8Array>({
+        async start(controller) {
+          const enqueue = (part: Record<string, unknown>) =>
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify(part)}\n\n`)
+            );
+
+          enqueue({ type: "start", messageId: sessionId });
+          const seen = new Set<string>();
+          let status = session.status;
+          for (const a of session.activities) {
+            seen.add(a.id);
+            for (const part of emitPart(a)) enqueue(part);
+          }
+
+          // Live tail: poll the DO until the session reaches a terminal
+          // status or the connection budget (90s) runs out. Consumers
+          // reconnect for a continued tail.
+          const deadline = Date.now() + 90_000;
+          const terminal = new Set(["completed", "failed", "canceled"]);
+          const tick = async (): Promise<void> => {
+            if (terminal.has(status) || Date.now() >= deadline) return;
+            await new Promise((r) => setTimeout(r, 2_000));
+            const fresh = await stub
+              .getAgentSessionWithActivities(sessionId)
+              .catch(() => null);
+            if (!fresh) return;
+            status = fresh.status;
+            for (const a of fresh.activities) {
+              if (seen.has(a.id)) continue;
+              seen.add(a.id);
+              for (const part of emitPart(a)) enqueue(part);
+            }
+            return tick();
+          };
+          await tick();
+          enqueue({ type: "data-session-status", data: { status } });
+          enqueue({ type: "finish" });
+          controller.close();
+        },
+      });
+
+      return new Response(stream, {
         headers: {
           "content-type": "text/event-stream",
           "cache-control": "no-cache",

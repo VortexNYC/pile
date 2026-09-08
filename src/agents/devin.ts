@@ -136,4 +136,30 @@ export class DevinAgentProvider implements AgentProvider {
       url,
     };
   }
+
+  async cancel(sessionId: string): Promise<void> {
+    const orgId = this.env.DEVIN_ORG_ID;
+    if (!orgId) {
+      throw new VortexError({
+        code: "CONFIG_ERROR",
+        status: 500,
+        message: "DEVIN_ORG_ID is not configured",
+      });
+    }
+    const res = await fetch(
+      `https://api.devin.ai/v3/organizations/${orgId}/sessions/${sessionId}`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${this.env.DEVIN_TOKEN}` },
+      }
+    );
+    if (!res.ok && res.status !== 404) {
+      const text = await res.text();
+      throw new VortexError({
+        code: "AGENT_ERROR",
+        status: 502,
+        message: `Devin terminate failed: ${res.status} ${text}`,
+      });
+    }
+  }
 }
