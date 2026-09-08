@@ -51,7 +51,6 @@ DEVIN_MODEL = "swe-1-7-medium"
 [[env.production.services]]
 binding = "FLUE_WORKER"
 service = "flue-cf-teammate"
-environment = "production"
 
 [[env.production.d1_databases]]
 binding = "D1"
