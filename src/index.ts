@@ -1,5 +1,7 @@
 import { ne } from "drizzle-orm";
 
+import { drainOutpostQueue, sweepOutpostWorkers } from "./agents/outpost.js";
+
 import app from "./api/index.js";
 import { createD1 } from "./global/db.js";
 import { cycles } from "./global/schema.js";
@@ -12,6 +14,11 @@ async function scheduled(
   env: WorkerEnv,
   ctx: ExecutionContext
 ) {
+  ctx.waitUntil(
+    drainOutpostQueue(env)
+      .then(() => sweepOutpostWorkers(env))
+      .catch((err) => console.error("outpost sweep failed", err))
+  );
   const d1 = createD1(env.D1);
   // Only wake DOs for orgs that have a non-completed cycle; orgs without
   // cycles never need a rollover pass.

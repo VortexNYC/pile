@@ -8,6 +8,7 @@ import { VortexError } from "../platform/errors.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { Issue } from "../types/workspace.js";
 import { DevinAgentProvider } from "./devin.js";
+import { provisionOutpostWorker } from "./outpost.js";
 import type { AgentProvider } from "./provider.js";
 
 const providers: Record<string, (env: AppEnv) => AgentProvider> = {
@@ -44,7 +45,8 @@ export async function dispatchAgent(
     description: string | null;
   },
   actor: WorkspaceIdentity,
-  model?: string
+  model?: string,
+  ctx?: { waitUntil: (promise: Promise<unknown>) => void }
 ): Promise<InferSelectModel<typeof workspaceAgentSessions>> {
   const provider = getAgentProvider(agentId, env);
   const issueInput: Issue = {
@@ -99,6 +101,14 @@ export async function dispatchAgent(
     type: "status",
     message: `Session created by ${actor.type} ${actor.id}`,
   });
+
+  if (providerSession.id) {
+    const provision = provisionOutpostWorker(env, providerSession.id).catch(
+      (err) => console.error("outpost provisioning failed", err)
+    );
+    if (ctx) ctx.waitUntil(provision);
+    else await provision;
+  }
 
   return session;
 }

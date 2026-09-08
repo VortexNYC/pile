@@ -58,7 +58,7 @@ export class DevinAgentProvider implements AgentProvider {
         },
         body: JSON.stringify({
           prompt: buildPrompt(issue),
-          platform: this.env.DEVIN_OUTPOST ?? "user:daytona-linux",
+          platform: this.env.DEVIN_OUTPOST ?? "vortex-daytona",
           model,
           title: issue.title,
           tags: [`vortex:${organizationId}`, `issue:${issue.id}`],

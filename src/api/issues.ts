@@ -30,6 +30,16 @@ import {
 } from "../types/workspace.js";
 import { filterConditionSchema } from "../workspace/filter.js";
 import { agentSessionSchema } from "./agent-sessions.js";
+
+function getExecutionCtx(c: {
+  executionCtx?: { waitUntil: (promise: Promise<unknown>) => void };
+}): { waitUntil: (promise: Promise<unknown>) => void } | undefined {
+  try {
+    return c.executionCtx;
+  } catch {
+    return undefined;
+  }
+}
 import {
   encodeCursor,
   listIssuesQuerySchema,
@@ -947,7 +957,8 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         description: issue.description,
       },
       identity,
-      model
+      model,
+      getExecutionCtx(c)
     );
 
     if (issue.repo && issue.branch) {

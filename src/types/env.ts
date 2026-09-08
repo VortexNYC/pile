@@ -12,6 +12,11 @@ export interface AppEnv {
   DISPATCH_SECRET?: string;
   DEVIN_ORG_ID?: string;
   DEVIN_OUTPOST?: string;
+  DEVIN_OUTPOST_ID?: string;
+  DEVIN_OUTPOST_TOKEN?: string;
+  DAYTONA_API_KEY?: string;
+  DAYTONA_API_URL?: string;
+  DAYTONA_SNAPSHOT?: string;
   DAYTONA_LABEL_ID?: string;
   TOKEN_HASH_SECRET?: string;
   SLACK_CLIENT_ID?: string;
