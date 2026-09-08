@@ -102,7 +102,9 @@ export async function dispatchAgent(
     message: `Session created by ${actor.type} ${actor.id}`,
   });
 
-  if (providerSession.id) {
+  // Outpost provisioning is Devin-specific — only the Devin provider's
+  // sessions can be claimed by `devin worker` on a compute sandbox.
+  if (agentId === "devin" && providerSession.id) {
     const provision = provisionOutpostWorker(
       env,
       providerSession.id,
