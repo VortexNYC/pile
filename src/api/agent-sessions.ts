@@ -1,17 +1,16 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
-
-import { getAgentProvider } from "../agents/index.js";
 import type { InferSelectModel } from "drizzle-orm";
 
-import { getWorkspaceStub } from "./stub.js";
+import { getAgentProvider } from "../agents/index.js";
+import { VortexError } from "../platform/errors.js";
+import type { AppContext } from "../platform/middleware.js";
+import { rls } from "../platform/rls.js";
 import type {
   workspaceAgentActivities,
   workspaceAgentSessions,
 } from "../workspace/schema.js";
-import { VortexError } from "../platform/errors.js";
-import type { AppContext } from "../platform/middleware.js";
-import { rls } from "../platform/rls.js";
+import { getWorkspaceStub } from "./stub.js";
 
 const agentActivityTypeSchema = z.enum([
   "thought",

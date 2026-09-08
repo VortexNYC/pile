@@ -194,9 +194,7 @@ export const workspaceIssueApprovals = sqliteTable(
     createdAt: text("created_at" as string).notNull(),
     resolvedAt: text("resolved_at" as string),
   },
-  (table) => [
-    index("issue_approvals_issue_idx" as string).on(table.issueId),
-  ]
+  (table) => [index("issue_approvals_issue_idx" as string).on(table.issueId)]
 );
 
 export const workspaceReactions = sqliteTable(
@@ -254,7 +252,9 @@ export const workspaceNotifications = sqliteTable(
     id: text("id" as string).primaryKey(),
     organizationId: text("organization_id" as string).notNull(),
     recipientId: text("recipient_id" as string).notNull(),
-    recipientType: text("recipient_type" as string).notNull().default("user"),
+    recipientType: text("recipient_type" as string)
+      .notNull()
+      .default("user"),
     issueId: text("issue_id" as string).notNull(),
     type: text("type" as string).notNull(),
     read: integer("read" as string, { mode: "boolean" })
@@ -330,9 +330,7 @@ export const workspaceUserPreferences = sqliteTable(
     defaultViewId: text("default_view_id" as string),
     updatedAt: text("updated_at" as string).notNull(),
   },
-  (table) => [
-    primaryKey({ columns: [table.organizationId, table.userId] }),
-  ]
+  (table) => [primaryKey({ columns: [table.organizationId, table.userId] })]
 );
 
 export const workspaceLinearUsers = sqliteTable(
@@ -367,7 +365,14 @@ export const workspaceAgentSessions = sqliteTable(
       enum: ["user", "agent"],
     }).notNull(),
     status: text("status" as string, {
-      enum: ["created", "running", "waiting", "completed", "failed", "canceled"],
+      enum: [
+        "created",
+        "running",
+        "waiting",
+        "completed",
+        "failed",
+        "canceled",
+      ],
     })
       .notNull()
       .default("created"),
@@ -413,8 +418,12 @@ export const workspaceWebhookSubscriptions = sqliteTable(
     id: text("id" as string).primaryKey(),
     organizationId: text("organization_id" as string).notNull(),
     url: text("url" as string).notNull(),
-    events: text("events" as string).notNull().default("*"),
-    secret: text("secret" as string).notNull().default(""),
+    events: text("events" as string)
+      .notNull()
+      .default("*"),
+    secret: text("secret" as string)
+      .notNull()
+      .default(""),
     createdAt: text("created_at" as string).notNull(),
   },
   (table) => [
@@ -433,7 +442,9 @@ export const workspaceOutboundWebhookDeliveries = sqliteTable(
     event: text("event" as string).notNull(),
     payload: text("payload" as string).notNull(),
     url: text("url" as string).notNull(),
-    status: text("status" as string).notNull().default("pending"),
+    status: text("status" as string)
+      .notNull()
+      .default("pending"),
     statusCode: integer("status_code" as string, { mode: "number" }),
     error: text("error" as string),
     attemptCount: integer("attempt_count" as string, { mode: "number" })

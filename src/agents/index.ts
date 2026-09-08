@@ -1,12 +1,12 @@
 import type { InferSelectModel } from "drizzle-orm";
 import { z } from "zod";
 
-import type { workspaceAgentSessions } from "../workspace/schema.js";
 import type { AppEnv } from "../platform/env.js";
-import type { WorkerEnv } from "../platform/middleware.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
+import type { WorkerEnv } from "../platform/middleware.js";
 import type { Issue } from "../types/workspace.js";
+import type { workspaceAgentSessions } from "../workspace/schema.js";
 import { DevinAgentProvider } from "./devin.js";
 import { FlueAgentProvider } from "./flue.js";
 import { provisionOutpostWorker } from "./outpost.js";
@@ -40,41 +40,12 @@ export async function dispatchAgent(
   env: WorkerEnv,
   agentId: string,
   organizationId: string,
-  issue: {
-    id: string;
-    teamId: string;
-    title: string;
-    description: string | null;
-  },
+  issue: Issue,
   actor: WorkspaceIdentity,
   model?: string,
   ctx?: { waitUntil: (promise: Promise<unknown>) => void }
 ): Promise<InferSelectModel<typeof workspaceAgentSessions>> {
   const provider = getAgentProvider(agentId, env);
-  const issueInput: Issue = {
-    ...issue,
-    organizationId,
-    status: "backlog",
-    priority: "medium",
-    resolution: null,
-    parentId: null,
-    subIssueSortOrder: null,
-    estimate: null,
-    isDraft: false,
-    snoozedUntil: null,
-    assigneeId: null,
-    projectId: null,
-    cycleId: null,
-    labelIds: null,
-    number: null,
-    identifier: null,
-    repo: null,
-    branch: null,
-    prUrl: null,
-    prState: null,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
   const stub = env.WORKSPACE_DURABLE_OBJECT.get(
     env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
   );
@@ -92,14 +63,21 @@ export async function dispatchAgent(
 
   const providerSession = await provider.dispatch(
     organizationId,
-    issueInput,
+    issue,
     model,
     { sessionId: session.id }
   );
 
   await stub.updateAgentSession(session.id, {
     status: z
-      .enum(["created", "running", "waiting", "completed", "failed", "canceled"])
+      .enum([
+        "created",
+        "running",
+        "waiting",
+        "completed",
+        "failed",
+        "canceled",
+      ])
       .parse(providerSession.status),
     result: providerSession.result ?? null,
     url: providerSession.url ?? null,
@@ -119,9 +97,7 @@ export async function dispatchAgent(
       providerSession.id,
       organizationId,
       session.id
-    ).catch(
-      (err) => console.error("outpost provisioning failed", err)
-    );
+    ).catch((err) => console.error("outpost provisioning failed", err));
     if (ctx) ctx.waitUntil(provision);
     else await provision;
   }

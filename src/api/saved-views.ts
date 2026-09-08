@@ -1,15 +1,15 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
-import { getWorkspaceStub } from "./stub.js";
-import type { SavedViewRecord } from "../workspace/data.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
+import type { SavedViewRecord } from "../workspace/data.js";
 import {
   filterConditionSchema,
   type FilterCondition,
 } from "../workspace/filter.js";
+import { getWorkspaceStub } from "./stub.js";
 
 const savedViewSortSchema = z.object({
   field: z.string().min(1),

@@ -42,7 +42,11 @@ function headersToRecord(headers: unknown): Record<string, string> {
     if (json !== null && typeof json === "object" && !Array.isArray(json)) {
       read(json as Record<string, HeaderValue>);
     }
-  } else if (headers !== null && typeof headers === "object" && !Array.isArray(headers)) {
+  } else if (
+    headers !== null &&
+    typeof headers === "object" &&
+    !Array.isArray(headers)
+  ) {
     read(headers as Record<string, HeaderValue>);
   }
   return out;
@@ -95,7 +99,9 @@ export class SlackFetchAdapterError extends Error {
 
 function appendParams(url: URL, params: unknown): void {
   if (params === null || typeof params !== "object") return;
-  for (const [key, value] of Object.entries(params as Record<string, unknown>)) {
+  for (const [key, value] of Object.entries(
+    params as Record<string, unknown>
+  )) {
     if (value === undefined || value === null) continue;
     url.searchParams.set(key, String(value));
   }
@@ -157,13 +163,15 @@ export const workerdFetchAdapter: AxiosAdapter = async (config) => {
   try {
     response = await fetch(request);
   } catch (error) {
-    const isAbort = error instanceof DOMException && error.name === "AbortError";
+    const isAbort =
+      error instanceof DOMException && error.name === "AbortError";
     const isTimeout =
       error instanceof DOMException &&
       (error.name === "TimeoutError" || error.name === "AbortError");
     throw new SlackFetchAdapterError(
       isTimeout
-        ? (config.timeoutErrorMessage ?? `timeout of ${config.timeout}ms exceeded`)
+        ? (config.timeoutErrorMessage ??
+            `timeout of ${config.timeout}ms exceeded`)
         : error instanceof Error
           ? error.message
           : "Network Error",
@@ -205,7 +213,8 @@ export const workerdFetchAdapter: AxiosAdapter = async (config) => {
   };
 
   const validateStatus =
-    config.validateStatus ?? ((status: number) => status >= 200 && status < 300);
+    config.validateStatus ??
+    ((status: number) => status >= 200 && status < 300);
   if (!validateStatus(response.status)) {
     throw new SlackFetchAdapterError(
       `Request failed with status code ${response.status}`,

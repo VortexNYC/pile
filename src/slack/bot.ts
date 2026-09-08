@@ -7,10 +7,10 @@ import { z } from "zod";
 import { D1StateAdapter } from "../global/chat-state.js";
 import { createD1, type D1Client } from "../global/db.js";
 import { slackInstallations } from "../global/schema.js";
-import { workerdFetchAdapter } from "./fetch-adapter.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { AppEnv } from "../types/env.js";
 import type { RealtimeEvent } from "../types/workspace.js";
+import { workerdFetchAdapter } from "./fetch-adapter.js";
 
 export function isSlackConfigured(env: AppEnv): boolean {
   return Boolean(

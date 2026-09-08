@@ -1001,9 +1001,7 @@ export const userWorkspacePreferences = sqliteTable(
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
   },
-  (table) => [
-    primaryKey({ columns: [table.organizationId, table.userId] }),
-  ]
+  (table) => [primaryKey({ columns: [table.organizationId, table.userId] })]
 );
 
 export const agentSessions = sqliteTable(

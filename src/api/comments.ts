@@ -299,7 +299,9 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
     const { body } = c.req.valid("json");
     const identity = c.var.workspaceIdentity;
     const db = createD1(c.env.D1);
-    const existing = await (await getStub(c.env, organizationId)).getComment(id);
+    const existing = await (
+      await getStub(c.env, organizationId)
+    ).getComment(id);
     if (!existing || existing.issueId !== issueId) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -340,7 +342,9 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId, issueId, id } = c.req.valid("param");
     const identity = c.var.workspaceIdentity;
     const db = createD1(c.env.D1);
-    const existing = await (await getStub(c.env, organizationId)).getComment(id);
+    const existing = await (
+      await getStub(c.env, organizationId)
+    ).getComment(id);
     if (!existing || existing.issueId !== issueId) {
       throw new VortexError({
         code: "NOT_FOUND",

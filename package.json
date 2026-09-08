@@ -1,7 +1,7 @@
 {
   "name": "issuetracker",
   "version": "0.1.0",
-  "description": "Vortex Issue Tracker \u2014 an open-source, agent-native issue tracker on Cloudflare Workers.",
+  "description": "Vortex Issue Tracker — an open-source, agent-native issue tracker on Cloudflare Workers.",
   "keywords": [
     "agent",
     "cloudflare",

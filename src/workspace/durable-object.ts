@@ -23,7 +23,6 @@ import { alias } from "drizzle-orm/sqlite-core";
 import { z } from "zod";
 
 import { createD1 } from "../global/db.js";
-import { getWorkspaceMembership } from "../global/workspaces.js";
 import {
   attachments as globalAttachments,
   agentActivities as globalAgentActivities,
@@ -46,6 +45,7 @@ import {
   webhookSubscriptions as globalWebhookSubs,
 } from "../global/schema.js";
 import { getDefaultTeam, getTeamById } from "../global/teams.js";
+import { getWorkspaceMembership } from "../global/workspaces.js";
 import { getWorkspaceById } from "../global/workspaces.js";
 import { VortexError } from "../platform/errors.js";
 import { notifySlack } from "../slack/bot.js";
@@ -60,9 +60,10 @@ import {
   type ListIssuesArgs,
   type RealtimeEvent,
 } from "../types/workspace.js";
+import * as data from "./data.js";
 import { filterToSql } from "./filter.js";
 import { workspaceMigrations } from "./migrations.js";
-import * as data from "./data.js";
+import { workspaceSchema } from "./schema-map.js";
 import {
   workspaceAgentActivities,
   workspaceAgentSessions,
@@ -82,7 +83,6 @@ import {
   workspaceViewFavorites,
   workspaceWebhookSubscriptions,
 } from "./schema.js";
-import { workspaceSchema } from "./schema-map.js";
 import {
   commentToSearchDocument,
   createWorkspaceSearchIndex,
@@ -279,10 +279,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         .from(globalAgentSessions)
         .where(eq(globalAgentSessions.organizationId, org))
         .all(),
-      d1
-        .select()
-        .from(globalAgentActivities)
-        .all(),
+      d1.select().from(globalAgentActivities).all(),
       d1
         .select()
         .from(globalWebhookSubs)
@@ -343,9 +340,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       sessionIds.has(row.sessionId)
     );
     if (ownedActivities.length > 0) {
-      await this.db
-        .insert(workspaceAgentActivities)
-        .values(ownedActivities);
+      await this.db.insert(workspaceAgentActivities).values(ownedActivities);
     }
     if (subRows.length > 0) {
       await this.db.insert(workspaceWebhookSubscriptions).values(subRows);
@@ -489,7 +484,6 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       await this.ctx.storage.setAlarm(result.retryAt);
     }
   }
-
 
   async listComments(issueId: string) {
     await this.ready;
@@ -725,7 +719,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     );
   }
 
-  unreadNotificationCount(recipientId: string, recipientType: data.RecipientType) {
+  unreadNotificationCount(
+    recipientId: string,
+    recipientType: data.RecipientType
+  ) {
     return data.getUnreadNotificationCount(
       this.db,
       this.organizationId,
@@ -778,7 +775,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     );
   }
 
-  markAllNotificationsRead(recipientId: string, recipientType: data.RecipientType) {
+  markAllNotificationsRead(
+    recipientId: string,
+    recipientType: data.RecipientType
+  ) {
     return data.markAllNotificationsRead(
       this.db,
       this.organizationId,
@@ -992,7 +992,11 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.getLinearUser(this.db, this.organizationId, linearId);
   }
 
-  createLinearUser(values: { linearId: string; name?: string; email?: string }) {
+  createLinearUser(values: {
+    linearId: string;
+    name?: string;
+    email?: string;
+  }) {
     return data.createLinearUser(this.db, this.organizationId, values);
   }
 
@@ -1037,7 +1041,11 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   deleteAgentProviderConfig(agentId: string) {
-    return data.deleteAgentProviderConfig(this.db, this.organizationId, agentId);
+    return data.deleteAgentProviderConfig(
+      this.db,
+      this.organizationId,
+      agentId
+    );
   }
 
   listAgentActivities(sessionId: string, options: { limit?: number } = {}) {
@@ -1045,11 +1053,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   getAgentSessionWithActivities(id: string) {
-    return data.getAgentSessionWithActivities(
-      this.db,
-      this.organizationId,
-      id
-    );
+    return data.getAgentSessionWithActivities(this.db, this.organizationId, id);
   }
 
   getActiveAgentSessionForIssue(issueId: string) {
@@ -1469,9 +1473,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       | "projectId"
       | "cycleId",
     teamIds?: string[]
-  ): Promise<
-    { group: string | null; count: number; estimateTotal: number }[]
-  > {
+  ): Promise<{ group: string | null; count: number; estimateTotal: number }[]> {
     await this.ready;
     if (teamIds && teamIds.length === 0) return [];
     const columns = {
@@ -1549,7 +1551,8 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     for (const entry of history) {
       // Last terminal transition wins so a reopened issue burns back down.
       const prev = doneAt.get(entry.issueId);
-      if (!prev || entry.createdAt > prev) doneAt.set(entry.issueId, entry.createdAt);
+      if (!prev || entry.createdAt > prev)
+        doneAt.set(entry.issueId, entry.createdAt);
     }
     const currentStatus = new Map(
       (
@@ -1572,9 +1575,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       Date.now(),
       window?.endDate ? Date.parse(window.endDate) : Number.MAX_SAFE_INTEGER
     );
-    const earliest = Math.min(
-      ...rows.map((row) => Date.parse(row.createdAt))
-    );
+    const earliest = Math.min(...rows.map((row) => Date.parse(row.createdAt)));
     const start = Math.max(
       windowStart > 0 ? Math.min(windowStart, today) : earliest,
       today - 730 * dayMs
@@ -1883,8 +1884,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       set.subIssueSortOrder = patch.subIssueSortOrder;
     if (patch.estimate !== undefined) set.estimate = patch.estimate;
     if (patch.isDraft !== undefined) set.isDraft = patch.isDraft;
-    if (patch.snoozedUntil !== undefined)
-      set.snoozedUntil = patch.snoozedUntil;
+    if (patch.snoozedUntil !== undefined) set.snoozedUntil = patch.snoozedUntil;
     if (
       patch.snoozedUntil === undefined &&
       patch.status !== undefined &&

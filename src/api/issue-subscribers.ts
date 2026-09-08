@@ -1,10 +1,10 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
-import { getWorkspaceStub } from "./stub.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
+import { getWorkspaceStub } from "./stub.js";
 
 const issueSubscriberSchema = z.object({
   id: z.string(),

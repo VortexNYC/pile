@@ -5,11 +5,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
 import { createD1 } from "./db.js";
-import {
-  member,
-  organization,
-  user as userTable,
-} from "./schema.js";
+import { member, organization, user as userTable } from "./schema.js";
 import { createDefaultTeam } from "./teams.js";
 
 declare module "cloudflare:test" {

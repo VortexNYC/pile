@@ -3,7 +3,17 @@
 // all per-workspace content (comments, history, subscribers, relations,
 // approvals, reactions, attachments, notifications, saved views, agent
 // sessions, webhook subs, linear users).
-import { and, desc, eq, gt, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gt,
+  isNotNull,
+  isNull,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 import type { DrizzleSqliteDODatabase } from "drizzle-orm/durable-sqlite";
 
 import type { FilterCondition } from "./filter.js";
@@ -213,7 +223,10 @@ export interface CreateReactionInput {
   emoji: string;
 }
 
-export async function createReaction(db: WorkspaceDb, input: CreateReactionInput) {
+export async function createReaction(
+  db: WorkspaceDb,
+  input: CreateReactionInput
+) {
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   await db.insert(workspaceReactions).values({
@@ -248,7 +261,11 @@ export function listReactions(
     .all();
 }
 
-export function getReaction(db: WorkspaceDb, organizationId: string, id: string) {
+export function getReaction(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
   return db
     .select()
     .from(workspaceReactions)
@@ -374,8 +391,7 @@ export interface SavedViewInput {
   columns?: string[] | null;
 }
 
-export type SavedViewRecord =
-  typeof workspaceSavedViews.$inferSelect;
+export type SavedViewRecord = typeof workspaceSavedViews.$inferSelect;
 
 export interface SavedViewSort {
   field: string;
@@ -516,7 +532,11 @@ export function favoriteView(
     });
 }
 
-export function unfavoriteView(db: WorkspaceDb, viewId: string, userId: string) {
+export function unfavoriteView(
+  db: WorkspaceDb,
+  viewId: string,
+  userId: string
+) {
   return db
     .delete(workspaceViewFavorites)
     .where(
@@ -924,7 +944,9 @@ export function listAgentSessions(
   organizationId: string,
   options: { issueId?: string; limit?: number } = {}
 ) {
-  const conditions = [eq(workspaceAgentSessions.organizationId, organizationId)];
+  const conditions = [
+    eq(workspaceAgentSessions.organizationId, organizationId),
+  ];
   if (options.issueId) {
     conditions.push(eq(workspaceAgentSessions.issueId, options.issueId));
   }
@@ -1049,7 +1071,10 @@ export async function getActiveAgentSessionForIssue(
 
 // ---- webhook subscriptions + outbound deliveries ----
 
-export function listWebhookSubscriptions(db: WorkspaceDb, organizationId: string) {
+export function listWebhookSubscriptions(
+  db: WorkspaceDb,
+  organizationId: string
+) {
   return db
     .select()
     .from(workspaceWebhookSubscriptions)
@@ -1241,7 +1266,6 @@ export async function resolveIssueApproval(
   return getIssueApproval(db, organizationId, id);
 }
 
-
 // ---- agent_provider_configs ----
 
 export interface AgentProviderConfigInput {
@@ -1284,7 +1308,12 @@ export async function upsertAgentProviderConfig(
     computeApiUrl: input.computeApiUrl,
     computeSnapshot: input.computeSnapshot,
     computeVolumeId: input.computeVolumeId,
-    config: input.config === undefined ? undefined : input.config === null ? null : JSON.stringify(input.config),
+    config:
+      input.config === undefined
+        ? undefined
+        : input.config === null
+          ? null
+          : JSON.stringify(input.config),
   };
   if (existing) {
     const set: Record<string, string | null> = { updatedAt: now };

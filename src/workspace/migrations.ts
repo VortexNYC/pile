@@ -121,7 +121,6 @@ CREATE INDEX IF NOT EXISTS comments_issue_idx ON comments (organization_id, issu
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS comments_external_idx ON comments (organization_id, external_source, external_id)`;
 
-
 const v9 = `CREATE TABLE IF NOT EXISTS issue_subscribers (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
@@ -315,8 +314,6 @@ CREATE TABLE IF NOT EXISTS outbound_webhook_deliveries (
 CREATE INDEX IF NOT EXISTS outbound_webhook_deliveries_organization_idx ON outbound_webhook_deliveries (organization_id)
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS outbound_webhook_deliveries_subscription_idx ON outbound_webhook_deliveries (subscription_id)`;
-
-
 
 const v10 = `CREATE TABLE IF NOT EXISTS agent_provider_configs (
   id TEXT PRIMARY KEY,

@@ -3,11 +3,10 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { eq, and } from "drizzle-orm";
 
 import { dispatchAgent } from "../agents/index.js";
+import { resolveAgentEnv } from "../agents/outpost.js";
 import { createD1 } from "../global/db.js";
 import { deleteIssueReferences } from "../global/issue-data.js";
 import { createRepoBranch } from "../global/repo-branches.js";
-import { getTemplate } from "../global/templates.js";
-import { getCycle } from "../global/workspace-entities.js";
 import { repoBranches } from "../global/schema.js";
 import {
   canAccessTeam,
@@ -15,6 +14,8 @@ import {
   getTeamById,
   getVisibleTeamIds,
 } from "../global/teams.js";
+import { getTemplate } from "../global/templates.js";
+import { getCycle } from "../global/workspace-entities.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
@@ -29,7 +30,6 @@ import {
   type IssueStatus,
 } from "../types/workspace.js";
 import { filterConditionSchema } from "../workspace/filter.js";
-import { resolveAgentEnv } from "../agents/outpost.js";
 import { agentSessionSchema } from "./agent-sessions.js";
 
 function getExecutionCtx(c: {
@@ -556,7 +556,9 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
     if (query.view) {
-      const view = await (await getStub(c.env, organizationId)).getSavedView(query.view);
+      const view = await (
+        await getStub(c.env, organizationId)
+      ).getSavedView(query.view);
       if (
         !view ||
         (view.ownerId !== identity.id &&
@@ -648,9 +650,8 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     const args = toListArgs(query);
     args.status = "triage";
     args.isDraft = false;
-    args.hideSnoozed = query.includeSnoozed === undefined
-      ? true
-      : args.hideSnoozed;
+    args.hideSnoozed =
+      query.includeSnoozed === undefined ? true : args.hideSnoozed;
     args.teamIds = visibleTeamIds;
     const issues = await stub.listIssues(args);
     const nextCursor =
@@ -955,12 +956,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       effectiveEnv,
       resolvedAgentId,
       organizationId,
-      {
-        id: issue.id,
-        teamId: issue.teamId,
-        title: issue.title,
-        description: issue.description,
-      },
+      issue,
       identity,
       model,
       getExecutionCtx(c)

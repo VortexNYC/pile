@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { SlackFetchAdapterError, workerdFetchAdapter } from "./fetch-adapter.js";
+import {
+  SlackFetchAdapterError,
+  workerdFetchAdapter,
+} from "./fetch-adapter.js";
 
 type AdapterConfig = Parameters<typeof workerdFetchAdapter>[0];
 
@@ -62,9 +65,7 @@ describe("workerdFetchAdapter", () => {
       })
     );
 
-    const error = await workerdFetchAdapter(config()).catch(
-      (e: unknown) => e
-    );
+    const error = await workerdFetchAdapter(config()).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(SlackFetchAdapterError);
     const axiosError = error as SlackFetchAdapterError;
     expect(axiosError.isAxiosError).toBe(true);
@@ -74,9 +75,7 @@ describe("workerdFetchAdapter", () => {
 
   it("rejects ERR_NETWORK when fetch throws", async () => {
     fetchMock.mockRejectedValue(new TypeError("fetch failed"));
-    const error = await workerdFetchAdapter(config()).catch(
-      (e: unknown) => e
-    );
+    const error = await workerdFetchAdapter(config()).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(SlackFetchAdapterError);
     expect((error as SlackFetchAdapterError).code).toBe("ERR_NETWORK");
   });

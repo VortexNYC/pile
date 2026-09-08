@@ -3,11 +3,7 @@ import { eq } from "drizzle-orm";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { createD1 } from "../global/db.js";
-import {
-  member,
-  organization,
-  user as userTable,
-} from "../global/schema.js";
+import { member, organization, user as userTable } from "../global/schema.js";
 import { createDefaultTeam } from "../global/teams.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { WorkspaceDO } from "./durable-object.js";
@@ -106,10 +102,10 @@ describe("deliverWebhooks", () => {
 
     await withWorkspace(stub, (instance) =>
       instance.deliverWebhooks({
-      type: "issue.created",
-      organizationId: WORKSPACE_ID,
-      issue,
-    })
+        type: "issue.created",
+        organizationId: WORKSPACE_ID,
+        issue,
+      })
     );
 
     const deliveries = await withWorkspace(stub, (instance) =>
@@ -141,13 +137,15 @@ describe("deliverWebhooks", () => {
 
     await withWorkspace(stub, (instance) =>
       instance.deliverWebhooks({
-      type: "issue.created",
-      organizationId: WORKSPACE_ID,
-      issue,
-    })
+        type: "issue.created",
+        organizationId: WORKSPACE_ID,
+        issue,
+      })
     );
 
-    const result = await withWorkspace(stub, (instance) => instance.retryWebhookDeliveries());
+    const result = await withWorkspace(stub, (instance) =>
+      instance.retryWebhookDeliveries()
+    );
     expect(result.hasMore).toBe(true);
     expect(typeof result.retryAt).toBe("number");
 
@@ -188,11 +186,11 @@ describe("deliverWebhooks", () => {
 
     await withWorkspace(stub, (instance) =>
       instance.deliverWebhooks({
-      type: "comment.created",
-      organizationId: WORKSPACE_ID,
-      issue,
-      comment,
-    })
+        type: "comment.created",
+        organizationId: WORKSPACE_ID,
+        issue,
+        comment,
+      })
     );
 
     const deliveries = await withWorkspace(stub, (instance) =>

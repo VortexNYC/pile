@@ -1,9 +1,9 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
-import { getWorkspaceStub } from "./stub.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
+import { getWorkspaceStub } from "./stub.js";
 
 const notificationSchema = z.object({
   id: z.string(),
@@ -130,14 +130,9 @@ const snoozeRoute = createRoute({
       content: {
         "application/json": {
           schema: z.object({
-            until: z
-              .string()
-              .datetime()
-              .nullable()
-              .openapi({
-                description:
-                  "ISO timestamp to snooze until, or null to unsnooze",
-              }),
+            until: z.string().datetime().nullable().openapi({
+              description: "ISO timestamp to snooze until, or null to unsnooze",
+            }),
           }),
         },
       },
@@ -199,8 +194,7 @@ export function registerNotificationRoutes(app: OpenAPIHono<AppContext>) {
       identity.type,
       {
         unreadOnly: query.unreadOnly === "true" || query.unreadOnly === "1",
-        snoozedOnly:
-          query.snoozedOnly === "true" || query.snoozedOnly === "1",
+        snoozedOnly: query.snoozedOnly === "true" || query.snoozedOnly === "1",
         includeSnoozed:
           query.includeSnoozed === "true" || query.includeSnoozed === "1",
         limit: query.limit ? Number(query.limit) : undefined,
@@ -213,7 +207,10 @@ export function registerNotificationRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
     const identity = c.var.workspaceIdentity;
-    const count = await stub.unreadNotificationCount(identity.id, identity.type);
+    const count = await stub.unreadNotificationCount(
+      identity.id,
+      identity.type
+    );
     return c.json({ count });
   });
 
@@ -221,7 +218,11 @@ export function registerNotificationRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId, id } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
     const identity = c.var.workspaceIdentity;
-    const updated = await stub.markNotificationRead(identity.id, identity.type, id);
+    const updated = await stub.markNotificationRead(
+      identity.id,
+      identity.type,
+      id
+    );
     if (!updated) {
       return c.json({ message: "Notification not found" }, 404);
     }
@@ -232,7 +233,11 @@ export function registerNotificationRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId, id } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
     const identity = c.var.workspaceIdentity;
-    const updated = await stub.markNotificationUnread(identity.id, identity.type, id);
+    const updated = await stub.markNotificationUnread(
+      identity.id,
+      identity.type,
+      id
+    );
     if (!updated) {
       return c.json({ message: "Notification not found" }, 404);
     }

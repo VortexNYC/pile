@@ -54,7 +54,11 @@ function redact(row: ProviderConfigRow) {
   if (row.config) {
     try {
       const value: unknown = JSON.parse(row.config);
-      if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+      if (
+        value !== null &&
+        typeof value === "object" &&
+        !Array.isArray(value)
+      ) {
         parsedConfig = value as Record<string, unknown>;
       }
     } catch {

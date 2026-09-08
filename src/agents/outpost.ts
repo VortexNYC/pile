@@ -109,14 +109,19 @@ export async function provisionOutpostWorker(
         "vortex.outpost": "1",
         "vortex.session": fleetId,
         ...(organizationId ? { "vortex.org": organizationId } : {}),
-        ...(trackerSessionId ? { "vortex.tracker_session": trackerSessionId } : {}),
+        ...(trackerSessionId
+          ? { "vortex.tracker_session": trackerSessionId }
+          : {}),
       },
       autoStopInterval: 0,
       autoDeleteInterval: 0,
       ...(env.DAYTONA_VOLUME_ID
         ? {
             volumes: [
-              { volumeId: env.DAYTONA_VOLUME_ID, mountPath: "/home/daytona/cache" },
+              {
+                volumeId: env.DAYTONA_VOLUME_ID,
+                mountPath: "/home/daytona/cache",
+              },
             ],
           }
         : {}),
@@ -169,7 +174,10 @@ export async function sweepOutpostWorkers(env: WorkerEnv): Promise<void> {
       s.state !== "archived"
   );
 
-  const statusMap: Record<string, "waiting" | "completed" | "failed" | "canceled"> = {
+  const statusMap: Record<
+    string,
+    "waiting" | "completed" | "failed" | "canceled"
+  > = {
     blocked: "waiting",
     exit: "completed",
     error: "failed",
@@ -301,7 +309,12 @@ export async function drainOutpostQueue(env: WorkerEnv): Promise<void> {
         }
       }
 
-      return provisionOutpostWorker(env, fleetId, organizationId, trackerSessionId);
+      return provisionOutpostWorker(
+        env,
+        fleetId,
+        organizationId,
+        trackerSessionId
+      );
     })
   );
 }

@@ -2,6 +2,7 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
 import { createD1 } from "../global/db.js";
+import { getVisibleTeamIds } from "../global/teams.js";
 import {
   createCycle,
   createInitiative,
@@ -31,7 +32,6 @@ import {
   updateProject,
   updateRoadmap,
 } from "../global/workspace-entities.js";
-import { getVisibleTeamIds } from "../global/teams.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";

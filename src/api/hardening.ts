@@ -4,12 +4,7 @@ import { eq } from "drizzle-orm";
 
 import { createD1 } from "../global/db.js";
 import { exportWorkspaceData } from "../global/export.js";
-import {
-  githubInstallations,
-  member,
-  states,
-  team,
-} from "../global/schema.js";
+import { githubInstallations, member, states, team } from "../global/schema.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 

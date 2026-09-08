@@ -48,7 +48,7 @@ curl -X PUT "$BASE/workspaces/$ORG/agent/providers/devin" \
 ```
 
 3. Run workers wherever you like: `devin worker start --outpost=<outpostId>
-   --token=<outpostToken>`. Each worker serves one session at a time — run N
+--token=<outpostToken>`. Each worker serves one session at a time — run N
    workers for N concurrent sessions, or let a compute integration provision a
    worker per session (see below).
 
@@ -62,12 +62,12 @@ worker sandbox per session on your own compute provider (Daytona is the
 reference integration): snapshot image → `devin worker start --session=<id>`
 → sandbox deleted when the session ends. Fields:
 
-| field | maps to |
-|---|---|
-| `computeApiKey` | `DAYTONA_API_KEY` |
-| `computeApiUrl` | `DAYTONA_API_URL` (default `https://app.daytona.io/api`) |
-| `computeSnapshot` | `DAYTONA_SNAPSHOT` |
-| `computeVolumeId` | `DAYTONA_VOLUME_ID` |
+| field             | maps to                                                  |
+| ----------------- | -------------------------------------------------------- |
+| `computeApiKey`   | `DAYTONA_API_KEY`                                        |
+| `computeApiUrl`   | `DAYTONA_API_URL` (default `https://app.daytona.io/api`) |
+| `computeSnapshot` | `DAYTONA_SNAPSHOT`                                       |
+| `computeVolumeId` | `DAYTONA_VOLUME_ID`                                      |
 
 If unset, the outpost queue still works — sessions wait for whatever workers
 you've started manually. Everything above falls back to deployment-level env
@@ -77,11 +77,11 @@ each workspace brings its own.
 
 ## API
 
-| route | perm | notes |
-|---|---|---|
-| `GET /workspaces/{org}/agent/providers` | `agent:read` | secrets redacted (`hasToken` etc.) |
-| `PUT /workspaces/{org}/agent/providers/{agentId}` | `admin` | upsert; unset fields keep existing values |
-| `DELETE /workspaces/{org}/agent/providers/{agentId}` | `admin` | revert to deployment defaults |
+| route                                                | perm         | notes                                     |
+| ---------------------------------------------------- | ------------ | ----------------------------------------- |
+| `GET /workspaces/{org}/agent/providers`              | `agent:read` | secrets redacted (`hasToken` etc.)        |
+| `PUT /workspaces/{org}/agent/providers/{agentId}`    | `admin`      | upsert; unset fields keep existing values |
+| `DELETE /workspaces/{org}/agent/providers/{agentId}` | `admin`      | revert to deployment defaults             |
 
 ## Custom agents
 

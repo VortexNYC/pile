@@ -394,7 +394,11 @@ describe("WorkspaceDO", () => {
       triageAssigneeId: "user-1",
     });
     const issue = await withWorkspace(stub, (instance) =>
-      instance.createIssue({ title: "Triage me", teamId: team.id, status: "triage" })
+      instance.createIssue({
+        title: "Triage me",
+        teamId: team.id,
+        status: "triage",
+      })
     );
     expect(issue.assigneeId).toBe("user-1");
   });

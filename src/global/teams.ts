@@ -222,12 +222,14 @@ export async function updateTeam(
     isPublic: input.isPublic ?? existing.isPublic,
     parentAutoClose: input.parentAutoClose ?? existing.parentAutoClose,
     subIssueAutoClose: input.subIssueAutoClose ?? existing.subIssueAutoClose,
-    triageAssigneeId: input.triageAssigneeId === undefined
-      ? existing.triageAssigneeId
-      : input.triageAssigneeId,
-    defaultTemplateId: input.defaultTemplateId === undefined
-      ? existing.defaultTemplateId
-      : input.defaultTemplateId,
+    triageAssigneeId:
+      input.triageAssigneeId === undefined
+        ? existing.triageAssigneeId
+        : input.triageAssigneeId,
+    defaultTemplateId:
+      input.defaultTemplateId === undefined
+        ? existing.defaultTemplateId
+        : input.defaultTemplateId,
   });
 
   await db
