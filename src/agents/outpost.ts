@@ -21,6 +21,7 @@ const outpostQueueSchema = z.object({
 const devinSessionSchema = z.object({
   session_id: z.string(),
   status: z.string(),
+  tags: z.array(z.string()).optional(),
 });
 
 function daytonaConfig(env: WorkerEnv) {
@@ -204,9 +205,46 @@ export async function drainOutpostQueue(env: WorkerEnv): Promise<void> {
     return;
   }
   const queue = outpostQueueSchema.parse(await res.json());
+  const orgId = env.DEVIN_ORG_ID;
+  if (!orgId) return;
+
   await Promise.all(
-    queue.items.map((item) =>
-      provisionOutpostWorker(env, item.metadata.session_id)
-    )
+    queue.items.map(async (item) => {
+      const fleetId = item.metadata.session_id;
+
+      // Recover org + tracker session from the Devin session tags so the
+      // sweeper can write status back for drained sessions too.
+      let organizationId: string | undefined;
+      let trackerSessionId: string | undefined;
+      const sessionRes = await fetch(
+        `https://api.devin.ai/v3/organizations/${orgId}/sessions/${fleetId.replace(/^devin-/, "")}`,
+        { headers: { Authorization: `Bearer ${env.DEVIN_TOKEN}` } }
+      );
+      if (sessionRes.ok) {
+        const session = devinSessionSchema.parse(await sessionRes.json());
+        organizationId = session.tags
+          ?.find((t) => t.startsWith("vortex:"))
+          ?.slice("vortex:".length);
+        const issueId = session.tags
+          ?.find((t) => t.startsWith("issue:"))
+          ?.slice("issue:".length);
+        if (organizationId && issueId) {
+          try {
+            const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+              env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+            );
+            await stub.setOrganizationId(organizationId);
+            const sessions = await stub.listAgentSessions({ issueId });
+            trackerSessionId = sessions.find((s) =>
+              s.url?.includes(fleetId.replace(/^devin-/, ""))
+            )?.id;
+          } catch (err) {
+            console.error("outpost drain: tracker session lookup failed", err);
+          }
+        }
+      }
+
+      return provisionOutpostWorker(env, fleetId, organizationId, trackerSessionId);
+    })
   );
 }
