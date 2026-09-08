@@ -391,6 +391,182 @@ export const workspaceDocumentHistory = sqliteTable(
   ]
 );
 
+// Per-user notification delivery preferences (Linear
+// notificationDeliveryPreferences).
+export const workspaceNotificationPreferences = sqliteTable(
+  "notification_preferences" as string,
+  {
+    organizationId: text("organization_id" as string).notNull(),
+    userId: text("user_id" as string).notNull(),
+    inApp: integer("in_app" as string, { mode: "boolean" })
+      .notNull()
+      .default(true),
+    webhook: integer("webhook" as string, { mode: "boolean" })
+      .notNull()
+      .default(true),
+    email: integer("email" as string, { mode: "boolean" })
+      .notNull()
+      .default(false),
+    // Comma-separated event types the user wants suppressed entirely.
+    mutedTypes: text("muted_types" as string),
+    updatedAt: text("updated_at" as string).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.organizationId, table.userId] })]
+);
+
+// Audit log: who did what to which entity, workspace-scoped (Linear's
+// auditEntries equivalent).
+export const workspaceAuditLog = sqliteTable(
+  "audit_log" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    actorId: text("actor_id" as string),
+    actorType: text("actor_type" as string),
+    action: text("action" as string).notNull(),
+    entityType: text("entity_type" as string).notNull(),
+    entityId: text("entity_id" as string).notNull(),
+    // JSON: { field: { from, to } } for updates, or the created payload.
+    changes: text("changes" as string),
+    createdAt: text("created_at" as string).notNull(),
+  },
+  (table) => [
+    index("audit_log_organization_idx" as string).on(
+      table.organizationId,
+      table.createdAt
+    ),
+    index("audit_log_entity_idx" as string).on(
+      table.organizationId,
+      table.entityType,
+      table.entityId
+    ),
+  ]
+);
+
+// Customers: Linear's customer model — organizations you build for, their
+// tier/status, and needs linked to issues/projects.
+export const workspaceCustomers = sqliteTable(
+  "customers" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    name: text("name" as string).notNull(),
+    url: text("url" as string),
+    logoUrl: text("logo_url" as string),
+    externalId: text("external_id" as string),
+    tierId: text("tier_id" as string),
+    statusId: text("status_id" as string),
+    ownerId: text("owner_id" as string),
+    createdAt: text("created_at" as string).notNull(),
+    updatedAt: text("updated_at" as string).notNull(),
+  },
+  (table) => [
+    index("customers_organization_idx" as string).on(table.organizationId),
+  ]
+);
+
+export const workspaceCustomerTiers = sqliteTable(
+  "customer_tiers" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    name: text("name" as string).notNull(),
+    color: text("color" as string),
+    position: integer("position" as string).notNull().default(0),
+    createdAt: text("created_at" as string).notNull(),
+  },
+  (table) => [
+    index("customer_tiers_organization_idx" as string).on(
+      table.organizationId
+    ),
+  ]
+);
+
+export const workspaceCustomerStatuses = sqliteTable(
+  "customer_statuses" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    name: text("name" as string).notNull(),
+    color: text("color" as string),
+    position: integer("position" as string).notNull().default(0),
+    createdAt: text("created_at" as string).notNull(),
+  },
+  (table) => [
+    index("customer_statuses_organization_idx" as string).on(
+      table.organizationId
+    ),
+  ]
+);
+
+export const workspaceCustomerNeeds = sqliteTable(
+  "customer_needs" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    customerId: text("customer_id" as string).notNull(),
+    issueId: text("issue_id" as string),
+    projectId: text("project_id" as string),
+    priority: text("priority" as string),
+    note: text("note" as string),
+    createdAt: text("created_at" as string).notNull(),
+  },
+  (table) => [
+    index("customer_needs_customer_idx" as string).on(
+      table.organizationId,
+      table.customerId
+    ),
+    index("customer_needs_issue_idx" as string).on(
+      table.organizationId,
+      table.issueId
+    ),
+  ]
+);
+
+// Releases: Linear's release pipelines (named ordered stage lists) and
+// releases (versioned targets attached to projects).
+export const workspaceReleasePipelines = sqliteTable(
+  "release_pipelines" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    name: text("name" as string).notNull(),
+    // JSON array of stage names, e.g. ["alpha","beta","ga"].
+    stages: text("stages" as string).notNull().default("[]"),
+    createdAt: text("created_at" as string).notNull(),
+  },
+  (table) => [
+    index("release_pipelines_organization_idx" as string).on(
+      table.organizationId
+    ),
+  ]
+);
+
+export const workspaceReleases = sqliteTable(
+  "releases" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    name: text("name" as string).notNull(),
+    version: text("version" as string),
+    projectId: text("project_id" as string),
+    pipelineId: text("pipeline_id" as string),
+    stage: text("stage" as string),
+    status: text("status" as string).notNull().default("planned"),
+    targetDate: text("target_date" as string),
+    createdById: text("created_by_id" as string),
+    createdAt: text("created_at" as string).notNull(),
+    updatedAt: text("updated_at" as string).notNull(),
+  },
+  (table) => [
+    index("releases_organization_idx" as string).on(table.organizationId),
+    index("releases_project_idx" as string).on(
+      table.organizationId,
+      table.projectId
+    ),
+  ]
+);
+
 export const workspaceLinearUsers = sqliteTable(
   "linear_users" as string,
   {

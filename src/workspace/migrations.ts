@@ -373,6 +373,115 @@ CREATE TABLE IF NOT EXISTS document_content_history (
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS document_history_document_idx ON document_content_history (document_id, created_at)`;
 
+const v13 = `CREATE TABLE IF NOT EXISTS audit_log (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  actor_id TEXT,
+  actor_type TEXT,
+  action TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  changes TEXT,
+  created_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS audit_log_organization_idx ON audit_log (organization_id, created_at)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS audit_log_entity_idx ON audit_log (organization_id, entity_type, entity_id)`;
+
+const v14 = `CREATE TABLE IF NOT EXISTS notification_preferences (
+  organization_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  in_app INTEGER NOT NULL DEFAULT 1,
+  webhook INTEGER NOT NULL DEFAULT 1,
+  email INTEGER NOT NULL DEFAULT 0,
+  muted_types TEXT,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (organization_id, user_id)
+)`;
+
+const v15 = `CREATE TABLE IF NOT EXISTS customers (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  url TEXT,
+  logo_url TEXT,
+  external_id TEXT,
+  tier_id TEXT,
+  status_id TEXT,
+  owner_id TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS customers_organization_idx ON customers (organization_id)
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS customer_tiers (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  color TEXT,
+  position INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS customer_tiers_organization_idx ON customer_tiers (organization_id)
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS customer_statuses (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  color TEXT,
+  position INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS customer_statuses_organization_idx ON customer_statuses (organization_id)
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS customer_needs (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  customer_id TEXT NOT NULL,
+  issue_id TEXT,
+  project_id TEXT,
+  priority TEXT,
+  note TEXT,
+  created_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS customer_needs_customer_idx ON customer_needs (organization_id, customer_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS customer_needs_issue_idx ON customer_needs (organization_id, issue_id)`;
+
+const v16 = `CREATE TABLE IF NOT EXISTS release_pipelines (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  stages TEXT NOT NULL DEFAULT '[]',
+  created_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS release_pipelines_organization_idx ON release_pipelines (organization_id)
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS releases (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  version TEXT,
+  project_id TEXT,
+  pipeline_id TEXT,
+  stage TEXT,
+  status TEXT NOT NULL DEFAULT 'planned',
+  target_date TEXT,
+  created_by_id TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS releases_organization_idx ON releases (organization_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS releases_project_idx ON releases (organization_id, project_id)`;
+
 export const workspaceMigrations = {
   journal: {
     entries: [
@@ -388,6 +497,10 @@ export const workspaceMigrations = {
       { idx: 9, when: 9, tag: "v10", breakpoints: true },
       { idx: 10, when: 10, tag: "v11", breakpoints: true },
       { idx: 11, when: 11, tag: "v12", breakpoints: true },
+      { idx: 12, when: 12, tag: "v13", breakpoints: true },
+      { idx: 13, when: 13, tag: "v14", breakpoints: true },
+      { idx: 14, when: 14, tag: "v15", breakpoints: true },
+      { idx: 15, when: 15, tag: "v16", breakpoints: true },
     ],
   },
   migrations: {
@@ -403,5 +516,9 @@ export const workspaceMigrations = {
     m0009: v10,
     m0010: v11,
     m0011: v12,
+    m0012: v13,
+    m0013: v14,
+    m0014: v15,
+    m0015: v16,
   },
 } satisfies Parameters<typeof migrate>[1];

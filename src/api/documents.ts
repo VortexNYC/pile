@@ -293,10 +293,11 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
     if (!doc) return notFound();
     const history = await stub.listDocumentHistory(id);
     return c.json({
-      history: history.map((h) => ({
-        ...h,
-        content: JSON.parse(h.content) as Record<string, unknown>[],
-      })),
+      history: history.map((h) =>
+        Object.assign({}, h, {
+          content: JSON.parse(h.content) as Record<string, unknown>[],
+        })
+      ),
     });
   });
 }

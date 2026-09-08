@@ -25,12 +25,20 @@ import {
   workspaceAgentProviderConfigs,
   workspaceAgentSessions,
   workspaceAttachments,
+  workspaceAuditLog,
+  workspaceCustomerNeeds,
+  workspaceCustomers,
+  workspaceCustomerStatuses,
+  workspaceCustomerTiers,
   workspaceIssueApprovals,
   workspaceIssueRelations,
   workspaceIssueSubscribers,
   workspaceLinearUsers,
+  workspaceNotificationPreferences,
   workspaceNotifications,
   workspaceReactions,
+  workspaceReleasePipelines,
+  workspaceReleases,
   workspaceSavedViews,
   workspaceUserPreferences,
   workspaceViewFavorites,
@@ -1604,4 +1612,567 @@ export function listDocumentHistory(
     )
     .orderBy(desc(workspaceDocumentHistory.createdAt))
     .all();
+}
+
+// ---- audit log ----
+
+export interface AuditEntryInput {
+  organizationId: string;
+  actorId?: string | null;
+  actorType?: string | null;
+  action: string;
+  entityType: string;
+  entityId: string;
+  changes?: Record<string, { from: unknown; to: unknown }> | null;
+}
+
+export function recordAuditEntry(db: WorkspaceDb, input: AuditEntryInput) {
+  return db
+    .insert(workspaceAuditLog)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId: input.organizationId,
+      actorId: input.actorId ?? null,
+      actorType: input.actorType ?? null,
+      action: input.action,
+      entityType: input.entityType,
+      entityId: input.entityId,
+      changes: input.changes ? JSON.stringify(input.changes) : null,
+      createdAt: new Date().toISOString(),
+    })
+    .returning()
+    .get();
+}
+
+export function listAuditLog(
+  db: WorkspaceDb,
+  organizationId: string,
+  args: { entityType?: string; entityId?: string; limit?: number } = {}
+) {
+  const conditions = [eq(workspaceAuditLog.organizationId, organizationId)];
+  if (args.entityType !== undefined) {
+    conditions.push(eq(workspaceAuditLog.entityType, args.entityType));
+  }
+  if (args.entityId !== undefined) {
+    conditions.push(eq(workspaceAuditLog.entityId, args.entityId));
+  }
+  return db
+    .select()
+    .from(workspaceAuditLog)
+    .where(and(...conditions))
+    .orderBy(desc(workspaceAuditLog.createdAt))
+    .limit(args.limit ?? 200)
+    .all();
+}
+
+// ---- notification preferences ----
+
+export interface NotificationPreferenceInput {
+  inApp?: boolean;
+  webhook?: boolean;
+  email?: boolean;
+  mutedTypes?: string[] | null;
+}
+
+export function getNotificationPreferences(
+  db: WorkspaceDb,
+  organizationId: string,
+  userId: string
+) {
+  return db
+    .select()
+    .from(workspaceNotificationPreferences)
+    .where(
+      and(
+        eq(workspaceNotificationPreferences.organizationId, organizationId),
+        eq(workspaceNotificationPreferences.userId, userId)
+      )
+    )
+    .get();
+}
+
+export function upsertNotificationPreferences(
+  db: WorkspaceDb,
+  organizationId: string,
+  userId: string,
+  input: NotificationPreferenceInput
+) {
+  const now = new Date().toISOString();
+  const existing = getNotificationPreferences(db, organizationId, userId);
+  const mutedTypes =
+    input.mutedTypes !== undefined
+      ? input.mutedTypes
+        ? input.mutedTypes.join(",")
+        : null
+      : existing?.mutedTypes ?? null;
+  const values = {
+    inApp: input.inApp ?? existing?.inApp ?? true,
+    webhook: input.webhook ?? existing?.webhook ?? true,
+    email: input.email ?? existing?.email ?? false,
+    mutedTypes,
+    updatedAt: now,
+  };
+  if (existing) {
+    db.update(workspaceNotificationPreferences)
+      .set(values)
+      .where(
+        and(
+          eq(workspaceNotificationPreferences.organizationId, organizationId),
+          eq(workspaceNotificationPreferences.userId, userId)
+        )
+      )
+      .run();
+    return { organizationId, userId, ...values };
+  }
+  db.insert(workspaceNotificationPreferences)
+    .values({ organizationId, userId, ...values })
+    .run();
+  return { organizationId, userId, ...values };
+}
+
+// ---- customers ----
+
+export interface CustomerInput {
+  organizationId: string;
+  name: string;
+  url?: string | null;
+  logoUrl?: string | null;
+  externalId?: string | null;
+  tierId?: string | null;
+  statusId?: string | null;
+  ownerId?: string | null;
+}
+
+export function createCustomer(db: WorkspaceDb, input: CustomerInput) {
+  const now = new Date().toISOString();
+  return db
+    .insert(workspaceCustomers)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId: input.organizationId,
+      name: input.name,
+      url: input.url ?? null,
+      logoUrl: input.logoUrl ?? null,
+      externalId: input.externalId ?? null,
+      tierId: input.tierId ?? null,
+      statusId: input.statusId ?? null,
+      ownerId: input.ownerId ?? null,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning()
+    .get();
+}
+
+export function listCustomers(db: WorkspaceDb, organizationId: string) {
+  return db
+    .select()
+    .from(workspaceCustomers)
+    .where(eq(workspaceCustomers.organizationId, organizationId))
+    .all();
+}
+
+export function getCustomer(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  return db
+    .select()
+    .from(workspaceCustomers)
+    .where(
+      and(
+        eq(workspaceCustomers.id, id),
+        eq(workspaceCustomers.organizationId, organizationId)
+      )
+    )
+    .get();
+}
+
+export function updateCustomer(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string,
+  patch: Partial<Omit<CustomerInput, "organizationId">>
+) {
+  const updates: Record<string, unknown> = {
+    updatedAt: new Date().toISOString(),
+  };
+  for (const key of [
+    "name",
+    "url",
+    "logoUrl",
+    "externalId",
+    "tierId",
+    "statusId",
+    "ownerId",
+  ] as const) {
+    if (patch[key] !== undefined) updates[key] = patch[key];
+  }
+  return db
+    .update(workspaceCustomers)
+    .set(updates)
+    .where(
+      and(
+        eq(workspaceCustomers.id, id),
+        eq(workspaceCustomers.organizationId, organizationId)
+      )
+    )
+    .returning()
+    .get();
+}
+
+export function deleteCustomer(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  db.delete(workspaceCustomerNeeds)
+    .where(
+      and(
+        eq(workspaceCustomerNeeds.customerId, id),
+        eq(workspaceCustomerNeeds.organizationId, organizationId)
+      )
+    )
+    .run();
+  return (
+    db
+      .delete(workspaceCustomers)
+      .where(
+        and(
+          eq(workspaceCustomers.id, id),
+          eq(workspaceCustomers.organizationId, organizationId)
+        )
+      )
+      .returning()
+      .all().length > 0
+  );
+}
+
+// ---- customer tiers / statuses ----
+
+export function createCustomerTier(
+  db: WorkspaceDb,
+  organizationId: string,
+  input: { name: string; color?: string | null; position?: number }
+) {
+  return db
+    .insert(workspaceCustomerTiers)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId,
+      name: input.name,
+      color: input.color ?? null,
+      position: input.position ?? 0,
+      createdAt: new Date().toISOString(),
+    })
+    .returning()
+    .get();
+}
+
+export function listCustomerTiers(db: WorkspaceDb, organizationId: string) {
+  return db
+    .select()
+    .from(workspaceCustomerTiers)
+    .where(eq(workspaceCustomerTiers.organizationId, organizationId))
+    .all();
+}
+
+export function deleteCustomerTier(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  return (
+    db
+      .delete(workspaceCustomerTiers)
+      .where(
+        and(
+          eq(workspaceCustomerTiers.id, id),
+          eq(workspaceCustomerTiers.organizationId, organizationId)
+        )
+      )
+      .returning()
+      .all().length > 0
+  );
+}
+
+export function createCustomerStatus(
+  db: WorkspaceDb,
+  organizationId: string,
+  input: { name: string; color?: string | null; position?: number }
+) {
+  return db
+    .insert(workspaceCustomerStatuses)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId,
+      name: input.name,
+      color: input.color ?? null,
+      position: input.position ?? 0,
+      createdAt: new Date().toISOString(),
+    })
+    .returning()
+    .get();
+}
+
+export function listCustomerStatuses(db: WorkspaceDb, organizationId: string) {
+  return db
+    .select()
+    .from(workspaceCustomerStatuses)
+    .where(eq(workspaceCustomerStatuses.organizationId, organizationId))
+    .all();
+}
+
+export function deleteCustomerStatus(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  return (
+    db
+      .delete(workspaceCustomerStatuses)
+      .where(
+        and(
+          eq(workspaceCustomerStatuses.id, id),
+          eq(workspaceCustomerStatuses.organizationId, organizationId)
+        )
+      )
+      .returning()
+      .all().length > 0
+  );
+}
+
+// ---- customer needs ----
+
+export interface CustomerNeedInput {
+  customerId: string;
+  issueId?: string | null;
+  projectId?: string | null;
+  priority?: string | null;
+  note?: string | null;
+}
+
+export function createCustomerNeed(
+  db: WorkspaceDb,
+  organizationId: string,
+  input: CustomerNeedInput
+) {
+  return db
+    .insert(workspaceCustomerNeeds)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId,
+      customerId: input.customerId,
+      issueId: input.issueId ?? null,
+      projectId: input.projectId ?? null,
+      priority: input.priority ?? null,
+      note: input.note ?? null,
+      createdAt: new Date().toISOString(),
+    })
+    .returning()
+    .get();
+}
+
+export function listCustomerNeeds(
+  db: WorkspaceDb,
+  organizationId: string,
+  args: { customerId?: string; issueId?: string; projectId?: string } = {}
+) {
+  const conditions = [eq(workspaceCustomerNeeds.organizationId, organizationId)];
+  if (args.customerId !== undefined)
+    conditions.push(eq(workspaceCustomerNeeds.customerId, args.customerId));
+  if (args.issueId !== undefined)
+    conditions.push(eq(workspaceCustomerNeeds.issueId, args.issueId));
+  if (args.projectId !== undefined)
+    conditions.push(eq(workspaceCustomerNeeds.projectId, args.projectId));
+  return db
+    .select()
+    .from(workspaceCustomerNeeds)
+    .where(and(...conditions))
+    .all();
+}
+
+export function deleteCustomerNeed(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  return (
+    db
+      .delete(workspaceCustomerNeeds)
+      .where(
+        and(
+          eq(workspaceCustomerNeeds.id, id),
+          eq(workspaceCustomerNeeds.organizationId, organizationId)
+        )
+      )
+      .returning()
+      .all().length > 0
+  );
+}
+
+// ---- release pipelines / releases ----
+
+export function createReleasePipeline(
+  db: WorkspaceDb,
+  organizationId: string,
+  input: { name: string; stages?: string[] }
+) {
+  return db
+    .insert(workspaceReleasePipelines)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId,
+      name: input.name,
+      stages: JSON.stringify(input.stages ?? []),
+      createdAt: new Date().toISOString(),
+    })
+    .returning()
+    .get();
+}
+
+export function listReleasePipelines(db: WorkspaceDb, organizationId: string) {
+  return db
+    .select()
+    .from(workspaceReleasePipelines)
+    .where(eq(workspaceReleasePipelines.organizationId, organizationId))
+    .all();
+}
+
+export function deleteReleasePipeline(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  return (
+    db
+      .delete(workspaceReleasePipelines)
+      .where(
+        and(
+          eq(workspaceReleasePipelines.id, id),
+          eq(workspaceReleasePipelines.organizationId, organizationId)
+        )
+      )
+      .returning()
+      .all().length > 0
+  );
+}
+
+export interface ReleaseInput {
+  organizationId: string;
+  name: string;
+  version?: string | null;
+  projectId?: string | null;
+  pipelineId?: string | null;
+  stage?: string | null;
+  status?: string;
+  targetDate?: string | null;
+  createdById?: string | null;
+}
+
+export function createRelease(db: WorkspaceDb, input: ReleaseInput) {
+  const now = new Date().toISOString();
+  return db
+    .insert(workspaceReleases)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId: input.organizationId,
+      name: input.name,
+      version: input.version ?? null,
+      projectId: input.projectId ?? null,
+      pipelineId: input.pipelineId ?? null,
+      stage: input.stage ?? null,
+      status: input.status ?? "planned",
+      targetDate: input.targetDate ?? null,
+      createdById: input.createdById ?? null,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning()
+    .get();
+}
+
+export function listReleases(
+  db: WorkspaceDb,
+  organizationId: string,
+  args: { projectId?: string } = {}
+) {
+  const conditions = [eq(workspaceReleases.organizationId, organizationId)];
+  if (args.projectId !== undefined)
+    conditions.push(eq(workspaceReleases.projectId, args.projectId));
+  return db
+    .select()
+    .from(workspaceReleases)
+    .where(and(...conditions))
+    .all();
+}
+
+export function getRelease(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  return db
+    .select()
+    .from(workspaceReleases)
+    .where(
+      and(
+        eq(workspaceReleases.id, id),
+        eq(workspaceReleases.organizationId, organizationId)
+      )
+    )
+    .get();
+}
+
+export function updateRelease(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string,
+  patch: Partial<Omit<ReleaseInput, "organizationId">>
+) {
+  const updates: Record<string, unknown> = {
+    updatedAt: new Date().toISOString(),
+  };
+  for (const key of [
+    "name",
+    "version",
+    "projectId",
+    "pipelineId",
+    "stage",
+    "status",
+    "targetDate",
+  ] as const) {
+    if (patch[key] !== undefined) updates[key] = patch[key];
+  }
+  return db
+    .update(workspaceReleases)
+    .set(updates)
+    .where(
+      and(
+        eq(workspaceReleases.id, id),
+        eq(workspaceReleases.organizationId, organizationId)
+      )
+    )
+    .returning()
+    .get();
+}
+
+export function deleteRelease(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  return (
+    db
+      .delete(workspaceReleases)
+      .where(
+        and(
+          eq(workspaceReleases.id, id),
+          eq(workspaceReleases.organizationId, organizationId)
+        )
+      )
+      .returning()
+      .all().length > 0
+  );
 }

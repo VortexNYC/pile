@@ -680,15 +680,44 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   ): Promise<void> {
     const recipients = await this.resolveIssueRecipients(issue, actorId);
     await Promise.all(
-      recipients.map((recipientId) =>
-        data.createNotification(this.db, {
+      recipients.map(async (recipientId) => {
+        const prefs = data.getNotificationPreferences(
+          this.db,
+          this.organizationId,
+          recipientId
+        );
+        if (prefs && !prefs.inApp) return;
+        const muted = prefs?.mutedTypes?.split(",") ?? [];
+        if (muted.includes(type)) return;
+        await data.createNotification(this.db, {
           organizationId: this.organizationId,
           recipientId,
           recipientType: "user",
           issueId: issue.id,
           type,
-        })
-      )
+        });
+      })
+    );
+  }
+
+  // ---- notification preferences ----
+  getNotificationPreferences(userId: string) {
+    return data.getNotificationPreferences(
+      this.db,
+      this.organizationId,
+      userId
+    );
+  }
+
+  upsertNotificationPreferences(
+    userId: string,
+    input: data.NotificationPreferenceInput
+  ) {
+    return data.upsertNotificationPreferences(
+      this.db,
+      this.organizationId,
+      userId,
+      input
     );
   }
 
@@ -976,10 +1005,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   // ---- documents ----
   createDocument(input: Omit<data.DocumentInput, "organizationId">) {
-    return data.createDocument(this.db, {
+    const doc = data.createDocument(this.db, {
       ...input,
       organizationId: this.organizationId,
     });
+    this.audit("document.created", "document", doc.id, input.createdById);
+    return doc;
   }
 
   listDocuments(args: data.ListDocumentsArgs = {}) {
@@ -991,21 +1022,172 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   updateDocument(id: string, update: data.DocumentUpdate, actorId: string) {
-    return data.updateDocument(
+    const doc = data.updateDocument(
       this.db,
       this.organizationId,
       id,
       update,
       actorId
     );
+    if (doc) {
+      const changes: Record<string, { from: unknown; to: unknown }> = {};
+      for (const [key, value] of Object.entries(update)) {
+        if (key === "content") {
+          changes.content = { from: null, to: "<updated>" };
+        } else {
+          changes[key] = { from: null, to: value };
+        }
+      }
+      this.audit("document.updated", "document", id, actorId, changes);
+    }
+    return doc;
   }
 
-  deleteDocument(id: string) {
-    return data.deleteDocument(this.db, this.organizationId, id);
+  deleteDocument(id: string, actorId?: string) {
+    const deleted = data.deleteDocument(this.db, this.organizationId, id);
+    if (deleted) this.audit("document.deleted", "document", id, actorId);
+    return deleted;
   }
 
   listDocumentHistory(documentId: string) {
     return data.listDocumentHistory(this.db, this.organizationId, documentId);
+  }
+
+  // ---- customers ----
+  createCustomer(input: Omit<data.CustomerInput, "organizationId">) {
+    const customer = data.createCustomer(this.db, {
+      ...input,
+      organizationId: this.organizationId,
+    });
+    this.audit("customer.created", "customer", customer.id, input.ownerId);
+    return customer;
+  }
+
+  listCustomers() {
+    return data.listCustomers(this.db, this.organizationId);
+  }
+
+  getCustomer(id: string) {
+    return data.getCustomer(this.db, this.organizationId, id);
+  }
+
+  updateCustomer(
+    id: string,
+    patch: Partial<Omit<data.CustomerInput, "organizationId">>,
+    actorId?: string
+  ) {
+    const customer = data.updateCustomer(
+      this.db,
+      this.organizationId,
+      id,
+      patch
+    );
+    if (customer) this.audit("customer.updated", "customer", id, actorId);
+    return customer;
+  }
+
+  deleteCustomer(id: string, actorId?: string) {
+    const deleted = data.deleteCustomer(this.db, this.organizationId, id);
+    if (deleted) this.audit("customer.deleted", "customer", id, actorId);
+    return deleted;
+  }
+
+  createCustomerTier(input: {
+    name: string;
+    color?: string | null;
+    position?: number;
+  }) {
+    return data.createCustomerTier(this.db, this.organizationId, input);
+  }
+
+  listCustomerTiers() {
+    return data.listCustomerTiers(this.db, this.organizationId);
+  }
+
+  deleteCustomerTier(id: string) {
+    return data.deleteCustomerTier(this.db, this.organizationId, id);
+  }
+
+  createCustomerStatus(input: {
+    name: string;
+    color?: string | null;
+    position?: number;
+  }) {
+    return data.createCustomerStatus(this.db, this.organizationId, input);
+  }
+
+  listCustomerStatuses() {
+    return data.listCustomerStatuses(this.db, this.organizationId);
+  }
+
+  deleteCustomerStatus(id: string) {
+    return data.deleteCustomerStatus(this.db, this.organizationId, id);
+  }
+
+  createCustomerNeed(input: data.CustomerNeedInput, actorId?: string) {
+    const need = data.createCustomerNeed(
+      this.db,
+      this.organizationId,
+      input
+    );
+    this.audit("customer_need.created", "customer", need.customerId, actorId);
+    return need;
+  }
+
+  listCustomerNeeds(
+    args: { customerId?: string; issueId?: string; projectId?: string } = {}
+  ) {
+    return data.listCustomerNeeds(this.db, this.organizationId, args);
+  }
+
+  deleteCustomerNeed(id: string) {
+    return data.deleteCustomerNeed(this.db, this.organizationId, id);
+  }
+
+  // ---- releases ----
+  createReleasePipeline(input: { name: string; stages?: string[] }) {
+    return data.createReleasePipeline(this.db, this.organizationId, input);
+  }
+
+  listReleasePipelines() {
+    return data.listReleasePipelines(this.db, this.organizationId);
+  }
+
+  deleteReleasePipeline(id: string) {
+    return data.deleteReleasePipeline(this.db, this.organizationId, id);
+  }
+
+  createRelease(input: Omit<data.ReleaseInput, "organizationId">) {
+    const release = data.createRelease(this.db, {
+      ...input,
+      organizationId: this.organizationId,
+    });
+    this.audit("release.created", "release", release.id, input.createdById);
+    return release;
+  }
+
+  listReleases(args: { projectId?: string } = {}) {
+    return data.listReleases(this.db, this.organizationId, args);
+  }
+
+  getRelease(id: string) {
+    return data.getRelease(this.db, this.organizationId, id);
+  }
+
+  updateRelease(
+    id: string,
+    patch: Partial<Omit<data.ReleaseInput, "organizationId">>,
+    actorId?: string
+  ) {
+    const release = data.updateRelease(this.db, this.organizationId, id, patch);
+    if (release) this.audit("release.updated", "release", id, actorId);
+    return release;
+  }
+
+  deleteRelease(id: string, actorId?: string) {
+    const deleted = data.deleteRelease(this.db, this.organizationId, id);
+    if (deleted) this.audit("release.deleted", "release", id, actorId);
+    return deleted;
   }
 
   setDefaultView(userId: string, defaultViewId: string | null) {
@@ -1166,6 +1348,27 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   retryWebhookDeliveries() {
     return retryWebhookDeliveries(this.db, this.env, this.organizationId);
+  }
+
+  private audit(
+    action: string,
+    entityType: string,
+    entityId: string,
+    actorId?: string | null,
+    changes?: Record<string, { from: unknown; to: unknown }> | null
+  ) {
+    data.recordAuditEntry(this.db, {
+      organizationId: this.organizationId,
+      actorId,
+      action,
+      entityType,
+      entityId,
+      changes: changes ?? null,
+    });
+  }
+
+  listAuditLog(args: { entityType?: string; entityId?: string; limit?: number } = {}) {
+    return data.listAuditLog(this.db, this.organizationId, args);
   }
 
   private async recordIssueHistory(
@@ -1345,6 +1548,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       [{ field: "created", fromValue: null, toValue: issue.title }],
       actorId
     );
+    this.audit("issue.created", "issue", issue.id, actorId);
     return issue;
   }
 
@@ -1995,6 +2199,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       await this.applyStatusAutomation(issue, old, actorId);
     }
 
+    const changes: Record<string, { from: unknown; to: unknown }> = {};
+    for (const key of Object.keys(patch) as (keyof Issue)[]) {
+      if (issue[key] !== old[key]) {
+        changes[key] = { from: old[key], to: issue[key] };
+      }
+    }
+    this.audit("issue.updated", "issue", issue.id, actorId, changes);
     return issue;
   }
 
@@ -2148,6 +2359,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (old) {
       await this.notifyIssueEvent(old, "issue_deleted", actorId);
     }
+    this.audit("issue.deleted", "issue", id, actorId, {
+      title: { from: old?.title, to: null },
+    });
     return true;
   }
 

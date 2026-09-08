@@ -183,6 +183,78 @@ function toNotificationResponse(row: {
   };
 }
 
+
+const preferencesSchema = z.object({
+  organizationId: z.string(),
+  userId: z.string(),
+  inApp: z.boolean(),
+  webhook: z.boolean(),
+  email: z.boolean(),
+  mutedTypes: z.array(z.string()).nullable(),
+  updatedAt: z.string(),
+});
+
+const preferencesBodySchema = z.object({
+  inApp: z.boolean().optional(),
+  webhook: z.boolean().optional(),
+  email: z.boolean().optional(),
+  mutedTypes: z.array(z.string()).nullable().optional(),
+});
+
+const getPreferencesRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/notification-preferences",
+  tags: ["notifications"],
+  middleware: [rls("read")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "My notification delivery preferences",
+      content: {
+        "application/json": { schema: preferencesSchema },
+      },
+    },
+  },
+});
+
+const putPreferencesRoute = createRoute({
+  method: "put",
+  path: "/workspaces/{organizationId}/notification-preferences",
+  tags: ["notifications"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+    body: {
+      content: { "application/json": { schema: preferencesBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Preferences updated",
+      content: {
+        "application/json": { schema: preferencesSchema },
+      },
+    },
+  },
+});
+
+function toPreferencesResponse(row: {
+  organizationId: string;
+  userId: string;
+  inApp: boolean;
+  webhook: boolean;
+  email: boolean;
+  mutedTypes: string | null;
+  updatedAt: string;
+}) {
+  return {
+    ...row,
+    mutedTypes: row.mutedTypes ? row.mutedTypes.split(",") : null,
+  };
+}
+
 export function registerNotificationRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listNotificationsRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
@@ -267,5 +339,37 @@ export function registerNotificationRoutes(app: OpenAPIHono<AppContext>) {
     const identity = c.var.workspaceIdentity;
     await stub.markAllNotificationsRead(identity.id, identity.type);
     return c.body(null, 204);
+  });
+
+  app.openapi(getPreferencesRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const identity = c.var.workspaceIdentity;
+    const prefs = await stub.getNotificationPreferences(identity.id);
+    return c.json(
+      toPreferencesResponse(
+        prefs ?? {
+          organizationId,
+          userId: identity.id,
+          inApp: true,
+          webhook: true,
+          email: false,
+          mutedTypes: null,
+          updatedAt: "",
+        }
+      )
+    );
+  });
+
+  app.openapi(putPreferencesRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const identity = c.var.workspaceIdentity;
+    const prefs = await stub.upsertNotificationPreferences(
+      identity.id,
+      input
+    );
+    return c.json(toPreferencesResponse(prefs));
   });
 }

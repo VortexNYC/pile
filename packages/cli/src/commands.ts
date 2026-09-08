@@ -1752,6 +1752,509 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "audit log list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/audit-log",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "entityType",
+        flag: "entity-type",
+      },
+      {
+        name: "entityId",
+        flag: "entity-id",
+      },
+      {
+        name: "limit",
+        flag: "limit",
+      },
+    ],
+    body: [],
+  },
+  "customers list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/customers",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "customers create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/customers",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "url",
+        flag: "url",
+      },
+      {
+        name: "logoUrl",
+        flag: "logo-url",
+      },
+      {
+        name: "externalId",
+        flag: "external-id",
+      },
+      {
+        name: "tierId",
+        flag: "tier-id",
+      },
+      {
+        name: "statusId",
+        flag: "status-id",
+      },
+      {
+        name: "ownerId",
+        flag: "owner-id",
+      },
+    ],
+  },
+  "customers get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/customers/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "customers update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/customers/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "url",
+        flag: "url",
+      },
+      {
+        name: "logoUrl",
+        flag: "logo-url",
+      },
+      {
+        name: "externalId",
+        flag: "external-id",
+      },
+      {
+        name: "tierId",
+        flag: "tier-id",
+      },
+      {
+        name: "statusId",
+        flag: "status-id",
+      },
+      {
+        name: "ownerId",
+        flag: "owner-id",
+      },
+    ],
+  },
+  "customers delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/customers/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "customer tiers list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/customer-tiers",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "customer tiers create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/customer-tiers",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "color",
+        flag: "color",
+      },
+      {
+        name: "position",
+        flag: "position",
+      },
+    ],
+  },
+  "customer tiers delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/customer-tiers/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "customer statuses list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/customer-statuses",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "customer statuses create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/customer-statuses",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "color",
+        flag: "color",
+      },
+      {
+        name: "position",
+        flag: "position",
+      },
+    ],
+  },
+  "customer statuses delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/customer-statuses/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "customer needs list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/customer-needs",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "customerId",
+        flag: "customer-id",
+      },
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+      {
+        name: "projectId",
+        flag: "project",
+      },
+    ],
+    body: [],
+  },
+  "customer needs create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/customer-needs",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "customerId",
+        flag: "customer-id",
+      },
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+      {
+        name: "projectId",
+        flag: "project",
+      },
+      {
+        name: "priority",
+        flag: "priority",
+      },
+      {
+        name: "note",
+        flag: "note",
+      },
+    ],
+  },
+  "customer needs delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/customer-needs/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "release pipelines list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/release-pipelines",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "release pipelines create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/release-pipelines",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "stages",
+        flag: "stages",
+      },
+    ],
+  },
+  "release pipelines delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/release-pipelines/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "releases list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/releases",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "projectId",
+        flag: "project",
+      },
+    ],
+    body: [],
+  },
+  "releases create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/releases",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "version",
+        flag: "version",
+      },
+      {
+        name: "projectId",
+        flag: "project",
+      },
+      {
+        name: "pipelineId",
+        flag: "pipeline-id",
+      },
+      {
+        name: "stage",
+        flag: "stage",
+      },
+      {
+        name: "status",
+        flag: "status",
+      },
+      {
+        name: "targetDate",
+        flag: "target-date",
+      },
+    ],
+  },
+  "releases update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/releases/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "version",
+        flag: "version",
+      },
+      {
+        name: "projectId",
+        flag: "project",
+      },
+      {
+        name: "pipelineId",
+        flag: "pipeline-id",
+      },
+      {
+        name: "stage",
+        flag: "stage",
+      },
+      {
+        name: "status",
+        flag: "status",
+      },
+      {
+        name: "targetDate",
+        flag: "target-date",
+      },
+    ],
+  },
+  "releases delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/releases/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "issues relations": {
     method: "POST",
     path: "/workspaces/{organizationId}/issues/{issueId}/relations",
@@ -2314,6 +2817,47 @@ export const COMMANDS: Record<string, CommandDef> = {
     ],
     query: [],
     body: [],
+  },
+  "notification preferences list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/notification-preferences",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "notification preferences update": {
+    method: "PUT",
+    path: "/workspaces/{organizationId}/notification-preferences",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "inApp",
+        flag: "in-app",
+      },
+      {
+        name: "webhook",
+        flag: "webhook",
+      },
+      {
+        name: "email",
+        flag: "email",
+      },
+      {
+        name: "mutedTypes",
+        flag: "muted-types",
+      },
+    ],
   },
   "issues reactions": {
     method: "POST",

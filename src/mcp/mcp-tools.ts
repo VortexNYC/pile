@@ -32,6 +32,90 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdCustomerneedsId",
+    "description": "Delete customer need (DELETE /workspaces/{organizationId}/customer-needs/{id})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/customer-needs/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "deleteWorkspacesOrganizationIdCustomersId",
+    "description": "Delete customer (DELETE /workspaces/{organizationId}/customers/{id})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/customers/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "deleteWorkspacesOrganizationIdCustomerstatusesId",
+    "description": "Delete customer statuse (DELETE /workspaces/{organizationId}/customer-statuses/{id})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/customer-statuses/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "deleteWorkspacesOrganizationIdCustomertiersId",
+    "description": "Delete customer tier (DELETE /workspaces/{organizationId}/customer-tiers/{id})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/customer-tiers/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdCyclesId",
     "description": "Delete cycle (DELETE /workspaces/{organizationId}/cycles/{id})",
     "method": "DELETE",
@@ -254,6 +338,48 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "description": "Delete relation (DELETE /workspaces/{organizationId}/relations/{id})",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/relations/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "deleteWorkspacesOrganizationIdReleasepipelinesId",
+    "description": "Delete release pipeline (DELETE /workspaces/{organizationId}/release-pipelines/{id})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/release-pipelines/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "deleteWorkspacesOrganizationIdReleasesId",
+    "description": "Delete release (DELETE /workspaces/{organizationId}/releases/{id})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/releases/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -555,6 +681,32 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdAuditlog",
+    "description": "List audit log (GET /workspaces/{organizationId}/audit-log)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/audit-log",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "entityType": {
+          "type": "string"
+        },
+        "entityId": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdCommentsCommentIdReactions",
     "description": "List comment reactions (GET /workspaces/{organizationId}/comments/{commentId}/reactions)",
     "method": "GET",
@@ -571,6 +723,104 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "commentId",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdCustomerneeds",
+    "description": "List customer needs (GET /workspaces/{organizationId}/customer-needs)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/customer-needs",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "customerId": {
+          "type": "string"
+        },
+        "issueId": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdCustomers",
+    "description": "List customers (GET /workspaces/{organizationId}/customers)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/customers",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdCustomersId",
+    "description": "Get customer (GET /workspaces/{organizationId}/customers/{id})",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/customers/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdCustomerstatuses",
+    "description": "List customer statuses (GET /workspaces/{organizationId}/customer-statuses)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/customer-statuses",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdCustomertiers",
+    "description": "List customer tiers (GET /workspaces/{organizationId}/customer-tiers)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/customer-tiers",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
         "organizationId"
       ]
     }
@@ -1325,6 +1575,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdNotificationpreferences",
+    "description": "List notification preferences (GET /workspaces/{organizationId}/notification-preferences)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/notification-preferences",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdNotifications",
     "description": "List notifications (GET /workspaces/{organizationId}/notifications)",
     "method": "GET",
@@ -1421,6 +1688,43 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "type": "object",
       "properties": {
         "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdReleasepipelines",
+    "description": "List release pipelines (GET /workspaces/{organizationId}/release-pipelines)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/release-pipelines",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdReleases",
+    "description": "List releases (GET /workspaces/{organizationId}/releases)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/releases",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "projectId": {
           "type": "string"
         }
       },
@@ -1916,6 +2220,54 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "patchWorkspacesOrganizationIdCustomersId",
+    "description": "Update customer (PATCH /workspaces/{organizationId}/customers/{id})",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/customers/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "url": {
+              "type": "string"
+            },
+            "logoUrl": {
+              "type": "string"
+            },
+            "externalId": {
+              "type": "string"
+            },
+            "tierId": {
+              "type": "string"
+            },
+            "statusId": {
+              "type": "string"
+            },
+            "ownerId": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "patchWorkspacesOrganizationIdCyclesId",
     "description": "Update cycle (PATCH /workspaces/{organizationId}/cycles/{id})",
     "method": "PATCH",
@@ -2373,6 +2725,54 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "patchWorkspacesOrganizationIdReleasesId",
+    "description": "Update release (PATCH /workspaces/{organizationId}/releases/{id})",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/releases/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "version": {
+              "type": "string"
+            },
+            "projectId": {
+              "type": "string"
+            },
+            "pipelineId": {
+              "type": "string"
+            },
+            "stage": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "targetDate": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "patchWorkspacesOrganizationIdRoadmapsId",
     "description": "Update roadmap (PATCH /workspaces/{organizationId}/roadmaps/{id})",
     "method": "PATCH",
@@ -2785,6 +3185,164 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "commentId",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdCustomerneeds",
+    "description": "Create customer need (POST /workspaces/{organizationId}/customer-needs)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/customer-needs",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "customerId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "issueId": {
+              "type": "string"
+            },
+            "projectId": {
+              "type": "string"
+            },
+            "priority": {
+              "type": "string"
+            },
+            "note": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "customerId"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdCustomers",
+    "description": "Create customer (POST /workspaces/{organizationId}/customers)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/customers",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "url": {
+              "type": "string"
+            },
+            "logoUrl": {
+              "type": "string"
+            },
+            "externalId": {
+              "type": "string"
+            },
+            "tierId": {
+              "type": "string"
+            },
+            "statusId": {
+              "type": "string"
+            },
+            "ownerId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdCustomerstatuses",
+    "description": "Create customer statuse (POST /workspaces/{organizationId}/customer-statuses)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/customer-statuses",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "color": {
+              "type": "string"
+            },
+            "position": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "name"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdCustomertiers",
+    "description": "Create customer tier (POST /workspaces/{organizationId}/customer-tiers)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/customer-tiers",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "color": {
+              "type": "string"
+            },
+            "position": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "name"
+          ]
+        }
+      },
+      "required": [
         "organizationId"
       ]
     }
@@ -3676,6 +4234,88 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdReleasepipelines",
+    "description": "Create release pipeline (POST /workspaces/{organizationId}/release-pipelines)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/release-pipelines",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "stages": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "name"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdReleases",
+    "description": "Create release (POST /workspaces/{organizationId}/releases)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/releases",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "version": {
+              "type": "string"
+            },
+            "projectId": {
+              "type": "string"
+            },
+            "pipelineId": {
+              "type": "string"
+            },
+            "stage": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "targetDate": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdRoadmaps",
     "description": "Create roadmap (POST /workspaces/{organizationId}/roadmaps)",
     "method": "POST",
@@ -4185,6 +4825,44 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "required": [
             "defaultViewId"
           ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "putWorkspacesOrganizationIdNotificationpreferences",
+    "description": "Update notification preferences (PUT /workspaces/{organizationId}/notification-preferences)",
+    "method": "PUT",
+    "path": "/workspaces/{organizationId}/notification-preferences",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "inApp": {
+              "type": "boolean"
+            },
+            "webhook": {
+              "type": "boolean"
+            },
+            "email": {
+              "type": "boolean"
+            },
+            "mutedTypes": {
+              "type": "array",
+              "nullable": true,
+              "items": {
+                "type": "string"
+              }
+            }
+          }
         }
       },
       "required": [
