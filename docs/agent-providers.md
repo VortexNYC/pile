@@ -75,6 +75,88 @@ vars (`DEVIN_TOKEN`, `DEVIN_OUTPOST`, `DAYTONA_*`), so a self-hosted
 deployment can set one provider for all workspaces; on a hosted deployment
 each workspace brings its own.
 
+## Cursor Cloud Agents
+
+The `cursor` provider targets Cursor's Cloud Agents v1 API
+(`POST https://api.cursor.com/v1/agents`). `token` is a Cursor API key
+(user or enterprise service account).
+
+```bash
+curl -X PUT "$BASE/workspaces/$ORG/agent/providers/cursor" \
+  -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+  -d '{
+    "token": "<cursor api key>",
+    "config": {
+      "repoUrl": "https://github.com/org/repo",
+      "startingRef": "main",
+      "autoCreatePR": true
+    }
+  }'
+```
+
+Dispatch → durable agent + run (`providerSessionId` is `bc-…/run-…`); poll maps
+`CREATING/RUNNING/FINISHED/ERROR/CANCELLED/EXPIRED` onto tracker statuses and
+lifts `git.branches[].prUrl` into `url`. `config.repoUrl` is the default repo;
+an issue's `repo` field overrides it. Model per dispatch via `model`.
+
+**Self-hosted (BYOM).** Cursor's equivalent of a Devin outpost — workers you
+run that execute tool calls while the agent loop stays in Cursor's cloud:
+
+- `config.env: {"type":"machine","name":"<worker name>"}` — a *My Machines*
+  worker (`agent worker --name <name> --api-key <user key> start`), bound to
+  the repos in its `--worker-dir` checkouts. Personal/user API key.
+- `config.env: {"type":"pool","name":"<pool>"}` — a *Team Pool* worker
+  (`agent worker --pool <name> start`). Requires a Cursor Enterprise
+  **service account** key — personal keys can't start pool workers.
+
+Workers need outbound HTTPS only. There is no `metadata` field on v1 agents —
+tracker context rides inside the prompt. v1 has no webhooks yet; status is
+polled (same as Devin). The legacy v0 API does support HMAC-signed
+`statusChange` webhooks if push is ever required.
+
+## cf-agent (Cloudflare Agents SDK workers)
+
+The `cf-agent` provider targets any worker exposing the Agents SDK router shape
+(`GET {agentsPath}/{agent}/{conversation}` → `messages` + `settlements`) plus a
+dispatch route. The flue worker is the reference implementation; `flue` is a
+registered alias of the same provider.
+
+```bash
+curl -X PUT "$BASE/workspaces/$ORG/agent/providers/cf-agent" \
+  -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+  -d '{
+    "token": "<bearer expected by the agent worker's dispatch route>",
+    "config": {
+      "endpoint": "https://my-agent.workers.dev",
+      "agent": "engineering",
+      "dispatchPath": "/dispatch/issuetracker",
+      "agentsPath": "/agents"
+    }
+  }'
+```
+
+`config.endpoint: "service-binding"` routes over the deployment's
+`FLUE_WORKER` binding instead of the public URL — required for same-account
+`workers.dev` targets, which Cloudflare blocks over the edge (error 1042).
+Write-back is push-style: the worker PATCHes the session and POSTs activities;
+`poll` is the recovery path (maps conversation `settlements` onto
+`completed/failed/canceled`).
+
+## Watching a session
+
+`GET /workspaces/{org}/agent/sessions/{id}/stream` replays the activity log as
+a Vercel AI SDK **UI-message-stream** (`x-vercel-ai-ui-message-stream: v1`)
+SSE feed: `thought`→`reasoning-*`, `response`→`text-*`, `error`→`error`,
+other types→`data-{type}` parts — consumable by any `useChat`-compatible
+client.
+
+## Not dispatchable
+
+**OpenAI Codex cloud** has no public dispatch/status API — tasks start only
+from the ChatGPT/Codex UI, the GitHub/GitLab apps, Slack, or the `codex` CLI.
+There is no provider adapter to write; use Codex's own Linear-style
+integrations instead.
+
 ## API
 
 | route                                                | perm         | notes                                     |
