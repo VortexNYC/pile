@@ -1200,6 +1200,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/agent/sessions/{sessionId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create agent session cancel */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    sessionId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Session canceled */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            issueId: string;
+                            agentId: string;
+                            provider: string;
+                            actorId: string;
+                            /** @enum {string} */
+                            actorType: "user" | "agent";
+                            /** @enum {string} */
+                            status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                            result: string | null;
+                            url: string | null;
+                            providerSessionId: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                            activities?: {
+                                id: string;
+                                sessionId: string;
+                                actorId: string | null;
+                                /** @enum {string} */
+                                type: "thought" | "response" | "error" | "elicitation" | "action" | "status";
+                                message: string;
+                                payload?: unknown;
+                                createdAt: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Session not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/agent/sessions/{sessionId}/poll": {
         parameters: {
             query?: never;

@@ -693,6 +693,22 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "agent sessions cancel create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/cancel",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "sessionId",
+        flag: "session",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "agent sessions poll create": {
     method: "POST",
     path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/poll",

@@ -2526,6 +2526,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdAgentSessionsSessionIdCancel",
+    "description": "Create agent session cancel (POST /workspaces/{organizationId}/agent/sessions/{sessionId}/cancel)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/agent/sessions/{sessionId}/cancel",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "sessionId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdAgentSessionsSessionIdPoll",
     "description": "Poll agent session (POST /workspaces/{organizationId}/agent/sessions/{sessionId}/poll)",
     "method": "POST",
