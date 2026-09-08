@@ -5,18 +5,20 @@ import { VortexError } from "../platform/errors.js";
 import type { Issue } from "../types/workspace.js";
 import type { AgentProvider, AgentProviderSession } from "./provider.js";
 
-const flueDispatchResponseSchema = z.object({
+const dispatchResponseSchema = z.object({
   ok: z.boolean(),
   conversationId: z.string(),
   url: z.string().optional(),
 });
 
-const flueConfigSchema = z.object({
+const cfAgentConfigSchema = z.object({
   endpoint: z.string(),
   agent: z.string().optional(),
+  dispatchPath: z.string().default("/dispatch/issuetracker"),
+  agentsPath: z.string().default("/agents"),
 });
 
-const flueSnapshotSchema = z.object({
+const agentSnapshotSchema = z.object({
   messages: z
     .array(
       z.object({
@@ -41,17 +43,25 @@ const flueSnapshotSchema = z.object({
 });
 
 /**
- * Flue adapter: dispatch POSTs a task envelope to the flue worker's
- * /dispatch/issuetracker route, which starts a conversation on a Flue agent
- * and writes status/result back to the tracker session when submit_report
- * fires. Provider config on the workspace carries:
- *   token            — bearer expected by the flue /dispatch/issuetracker route
- *   config.endpoint  — flue worker base URL
- *   config.agent     — target agent slug (default "engineering" on flue side)
+ * Cloudflare-Agents-SDK provider: targets any worker that exposes the Agents
+ * SDK agent-router shape (GET /agents/{agent}/{conversation} → messages +
+ * settlements) plus a dispatch route. The flue worker is the reference
+ * implementation: its /dispatch/issuetracker route starts a conversation and
+ * writes status/result back to the tracker session when submit_report fires.
+ *
+ * Workspace provider config (`PUT /agent/providers/cf-agent` or `/flue`):
+ *   token               — bearer expected by the worker's dispatch route
+ *   config.endpoint     — worker base URL, or "service-binding" to use the
+ *                         deployment's FLUE_WORKER binding (same-account)
+ *   config.agent        — target agent slug (default "engineering")
+ *   config.dispatchPath — override the dispatch route (default /dispatch/issuetracker)
+ *   config.agentsPath   — override the agent-router prefix (default /agents)
  */
-export class FlueAgentProvider implements AgentProvider {
-  readonly id = "flue";
-  constructor(private env: AppEnv) {}
+export class CfAgentProvider implements AgentProvider {
+  constructor(
+    private env: AppEnv,
+    readonly id: string
+  ) {}
 
   async dispatch(
     organizationId: string,
@@ -59,15 +69,15 @@ export class FlueAgentProvider implements AgentProvider {
     _model?: string,
     sessionContext?: { sessionId: string }
   ): Promise<AgentProviderSession> {
-    const config = flueConfigSchema.parse(
+    const config = cfAgentConfigSchema.parse(
       this.env.AGENT_PROVIDER_CONFIG
         ? (JSON.parse(this.env.AGENT_PROVIDER_CONFIG) as unknown)
         : {}
     );
     const target =
       config.endpoint === "service-binding"
-        ? "https://flue-cf-teammate.internal/dispatch/issuetracker"
-        : `${config.endpoint.replace(/\/$/, "")}/dispatch/issuetracker`;
+        ? `https://cf-agent.internal${config.dispatchPath}`
+        : `${config.endpoint.replace(/\/$/, "")}${config.dispatchPath}`;
     const request = new Request(target, {
       method: "POST",
       headers: {
@@ -102,7 +112,7 @@ export class FlueAgentProvider implements AgentProvider {
         message: `Flue dispatch failed: ${res.status} ${text.slice(0, 500)}`,
       });
     }
-    const body = flueDispatchResponseSchema.parse(await res.json());
+    const body = dispatchResponseSchema.parse(await res.json());
     return {
       id: body.conversationId,
       agentId: this.id,
@@ -117,7 +127,7 @@ export class FlueAgentProvider implements AgentProvider {
     // recovery path: read the conversation snapshot and map its settlements
     // onto a session status so a crashed run cannot leave the tracker stuck
     // on "running" forever.
-    const config = flueConfigSchema.parse(
+    const config = cfAgentConfigSchema.parse(
       this.env.AGENT_PROVIDER_CONFIG
         ? (JSON.parse(this.env.AGENT_PROVIDER_CONFIG) as unknown)
         : {}
@@ -125,10 +135,10 @@ export class FlueAgentProvider implements AgentProvider {
     const agent = config.agent ?? "engineering";
     const base =
       config.endpoint === "service-binding"
-        ? "https://flue-cf-teammate.internal"
+        ? "https://cf-agent.internal"
         : config.endpoint.replace(/\/$/, "");
     const request = new Request(
-      `${base}/agents/${agent}/${encodeURIComponent(sessionId)}`,
+      `${base}${config.agentsPath}/${agent}/${encodeURIComponent(sessionId)}`,
       { headers: { accept: "application/json" } }
     );
     const res = this.env.FLUE_WORKER
@@ -150,7 +160,7 @@ export class FlueAgentProvider implements AgentProvider {
         message: `Flue poll failed: ${res.status} ${text.slice(0, 500)}`,
       });
     }
-    const snapshot = flueSnapshotSchema.parse(await res.json());
+    const snapshot = agentSnapshotSchema.parse(await res.json());
     const settlement = snapshot.settlements.at(-1);
     if (!settlement) {
       return {

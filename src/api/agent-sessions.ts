@@ -304,6 +304,58 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     return c.json(toSessionResponse(updated, activities));
   });
 
+  // Vercel AI SDK UI-message-stream (SSE) replay of the activity log, so any
+  // useChat-compatible consumer can read a session's history live.
+  app.get(
+    "/workspaces/:organizationId/agent/sessions/:sessionId/stream",
+    async (c) => {
+      const organizationId = c.req.param("organizationId");
+      const sessionId = c.req.param("sessionId");
+      const stub = getWorkspaceStub(c.env, organizationId);
+      const session = await stub.getAgentSessionWithActivities(sessionId);
+      if (!session) {
+        return c.json({ message: "Session not found" }, 404);
+      }
+
+      const lines: string[] = [];
+      const emit = (part: Record<string, unknown>) =>
+        lines.push(`data: ${JSON.stringify(part)}\n\n`);
+      emit({ type: "start", messageId: sessionId });
+      for (const a of session.activities) {
+        if (a.type === "thought") {
+          emit({ type: "reasoning-start", id: a.id });
+          emit({ type: "reasoning-delta", id: a.id, delta: a.message });
+          emit({ type: "reasoning-end", id: a.id });
+        } else if (a.type === "response") {
+          emit({ type: "text-start", id: a.id });
+          emit({ type: "text-delta", id: a.id, delta: a.message });
+          emit({ type: "text-end", id: a.id });
+        } else if (a.type === "error") {
+          emit({ type: "error", errorText: a.message });
+        } else {
+          emit({
+            type: `data-${a.type}`,
+            id: a.id,
+            data: {
+              message: a.message,
+              payload: a.payload ?? null,
+              createdAt: a.createdAt,
+            },
+          });
+        }
+      }
+      emit({ type: "finish" });
+
+      return new Response(lines.join(""), {
+        headers: {
+          "content-type": "text/event-stream",
+          "cache-control": "no-cache",
+          "x-vercel-ai-ui-message-stream": "v1",
+        },
+      });
+    }
+  );
+
   app.openapi(pollSessionRoute, async (c) => {
     const { organizationId, sessionId } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);

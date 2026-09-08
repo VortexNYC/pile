@@ -8,13 +8,16 @@ import type { WorkerEnv } from "../platform/middleware.js";
 import type { Issue } from "../types/workspace.js";
 import type { workspaceAgentSessions } from "../workspace/schema.js";
 import { DevinAgentProvider } from "./devin.js";
-import { FlueAgentProvider } from "./flue.js";
+import { CfAgentProvider } from "./cf-agent.js";
+import { CursorAgentProvider } from "./cursor.js";
 import { provisionOutpostWorker } from "./outpost.js";
 import type { AgentProvider } from "./provider.js";
 
 const providers: Record<string, (env: AppEnv) => AgentProvider> = {
   devin: (env) => new DevinAgentProvider(env),
-  flue: (env) => new FlueAgentProvider(env),
+  "cf-agent": (env) => new CfAgentProvider(env, "cf-agent"),
+  cursor: (env) => new CursorAgentProvider(env),
+  flue: (env) => new CfAgentProvider(env, "flue"),
 };
 
 export function getAgentProvider(agentId: string, env: AppEnv): AgentProvider {
