@@ -8,11 +8,13 @@ import { VortexError } from "../platform/errors.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { Issue } from "../types/workspace.js";
 import { DevinAgentProvider } from "./devin.js";
+import { FlueAgentProvider } from "./flue.js";
 import { provisionOutpostWorker } from "./outpost.js";
 import type { AgentProvider } from "./provider.js";
 
 const providers: Record<string, (env: AppEnv) => AgentProvider> = {
   devin: (env) => new DevinAgentProvider(env),
+  flue: (env) => new FlueAgentProvider(env),
 };
 
 export function getAgentProvider(agentId: string, env: AppEnv): AgentProvider {
@@ -73,22 +75,29 @@ export async function dispatchAgent(
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
-  const providerSession = await provider.dispatch(
-    organizationId,
-    issueInput,
-    model
-  );
-
   const stub = env.WORKSPACE_DURABLE_OBJECT.get(
     env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
   );
   await stub.setOrganizationId(organizationId);
   const session = await stub.createAgentSession({
     issueId: issue.id,
-    agentId: providerSession.agentId,
+    agentId,
     provider: agentId,
     actorId: actor.id,
     actorType: actor.type,
+    status: "created",
+    result: null,
+    url: null,
+  });
+
+  const providerSession = await provider.dispatch(
+    organizationId,
+    issueInput,
+    model,
+    { sessionId: session.id }
+  );
+
+  await stub.updateAgentSession(session.id, {
     status: z
       .enum(["created", "running", "waiting", "completed", "failed", "canceled"])
       .parse(providerSession.status),

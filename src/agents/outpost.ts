@@ -25,6 +25,7 @@ const devinSessionSchema = z.object({
 });
 
 export interface AgentProviderConfigRow {
+  config?: string | null;
   token: string | null;
   providerOrgId: string | null;
   outpost: string | null;
@@ -50,6 +51,7 @@ export function resolveAgentEnv(
   return {
     ...env,
     DEVIN_TOKEN: config.token ?? env.DEVIN_TOKEN,
+    AGENT_PROVIDER_TOKEN: config.token ?? env.AGENT_PROVIDER_TOKEN,
     DEVIN_ORG_ID: config.providerOrgId ?? env.DEVIN_ORG_ID,
     DEVIN_OUTPOST: config.outpost ?? env.DEVIN_OUTPOST,
     DEVIN_OUTPOST_ID: config.outpostId ?? env.DEVIN_OUTPOST_ID,
@@ -58,6 +60,7 @@ export function resolveAgentEnv(
     DAYTONA_API_URL: config.computeApiUrl ?? env.DAYTONA_API_URL,
     DAYTONA_SNAPSHOT: config.computeSnapshot ?? env.DAYTONA_SNAPSHOT,
     DAYTONA_VOLUME_ID: config.computeVolumeId ?? env.DAYTONA_VOLUME_ID,
+    AGENT_PROVIDER_CONFIG: config.config ?? env.AGENT_PROVIDER_CONFIG,
   };
 }
 
