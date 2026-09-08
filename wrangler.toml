@@ -30,7 +30,7 @@ name = "WORKSPACE_DURABLE_OBJECT"
 class_name = "WorkspaceDO"
 
 [triggers]
-crons = ["*/30 * * * *"]
+crons = ["*/5 * * * *"]
 
 [[migrations]]
 tag = "v1"
@@ -45,6 +45,7 @@ ALLOWED_ORIGINS = "https://issuetracker.shlomo-31b.workers.dev"
 SLACK_REDIRECT_URI = "https://issuetracker.shlomo-31b.workers.dev/slack/oauth"
 DEVIN_OUTPOST = "vortex-daytona"
 DAYTONA_SNAPSHOT = "vortex-outpost-worker"
+DAYTONA_VOLUME_ID = "0f79e741-e373-496b-a83f-7252cd5b9f12"
 DEVIN_MODEL = "swe-1-7-medium"
 
 [[env.production.d1_databases]]

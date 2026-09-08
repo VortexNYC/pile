@@ -17,6 +17,7 @@ export interface AppEnv {
   DAYTONA_API_KEY?: string;
   DAYTONA_API_URL?: string;
   DAYTONA_SNAPSHOT?: string;
+  DAYTONA_VOLUME_ID?: string;
   DAYTONA_LABEL_ID?: string;
   TOKEN_HASH_SECRET?: string;
   SLACK_CLIENT_ID?: string;

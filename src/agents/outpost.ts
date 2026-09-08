@@ -68,6 +68,13 @@ export async function provisionOutpostWorker(
       },
       autoStopInterval: 0,
       autoDeleteInterval: 0,
+      ...(env.DAYTONA_VOLUME_ID
+        ? {
+            volumes: [
+              { volumeId: env.DAYTONA_VOLUME_ID, mountPath: "/home/daytona/cache" },
+            ],
+          }
+        : {}),
     }),
   });
 
