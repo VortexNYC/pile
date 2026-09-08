@@ -1266,6 +1266,151 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/agent/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List agent providers */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Agent provider configs (secrets redacted) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            agentId: string;
+                            hasToken: boolean;
+                            providerOrgId: string | null;
+                            outpost: string | null;
+                            hasOutpostToken: boolean;
+                            hasComputeApiKey: boolean;
+                            computeApiUrl: string | null;
+                            computeSnapshot: string | null;
+                            computeVolumeId: string | null;
+                            config: {
+                                [key: string]: unknown;
+                            } | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        }[];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/agent/providers/{agentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update agent provider */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    agentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        token?: string | null;
+                        providerOrgId?: string | null;
+                        outpost?: string | null;
+                        outpostId?: string | null;
+                        outpostToken?: string | null;
+                        computeApiKey?: string | null;
+                        computeApiUrl?: string | null;
+                        computeSnapshot?: string | null;
+                        computeVolumeId?: string | null;
+                        config?: {
+                            [key: string]: unknown;
+                        } | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Provider config saved (secrets redacted) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            agentId: string;
+                            hasToken: boolean;
+                            providerOrgId: string | null;
+                            outpost: string | null;
+                            hasOutpostToken: boolean;
+                            hasComputeApiKey: boolean;
+                            computeApiUrl: string | null;
+                            computeSnapshot: string | null;
+                            computeVolumeId: string | null;
+                            config: {
+                                [key: string]: unknown;
+                            } | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Delete agent provider */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    agentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Provider config deleted */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/issues/{issueId}/approvals": {
         parameters: {
             query?: never;

@@ -2855,6 +2855,282 @@
         "summary": "Poll agent session"
       }
     },
+    "/workspaces/{organizationId}/agent/providers": {
+      "get": {
+        "tags": [
+          "agent-providers"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Agent provider configs (secrets redacted)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "agentId": {
+                        "type": "string"
+                      },
+                      "hasToken": {
+                        "type": "boolean"
+                      },
+                      "providerOrgId": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "outpost": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "hasOutpostToken": {
+                        "type": "boolean"
+                      },
+                      "hasComputeApiKey": {
+                        "type": "boolean"
+                      },
+                      "computeApiUrl": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "computeSnapshot": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "computeVolumeId": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "config": {
+                        "type": "object",
+                        "nullable": true,
+                        "additionalProperties": {
+                          "nullable": true
+                        }
+                      },
+                      "createdAt": {
+                        "type": "string"
+                      },
+                      "updatedAt": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "agentId",
+                      "hasToken",
+                      "providerOrgId",
+                      "outpost",
+                      "hasOutpostToken",
+                      "hasComputeApiKey",
+                      "computeApiUrl",
+                      "computeSnapshot",
+                      "computeVolumeId",
+                      "config",
+                      "createdAt",
+                      "updatedAt"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "List agent providers"
+      }
+    },
+    "/workspaces/{organizationId}/agent/providers/{agentId}": {
+      "put": {
+        "tags": [
+          "agent-providers"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "agentId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "providerOrgId": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "outpost": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "outpostId": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "outpostToken": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "computeApiKey": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "computeApiUrl": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "computeSnapshot": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "computeVolumeId": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "config": {
+                    "type": "object",
+                    "nullable": true,
+                    "additionalProperties": {
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Provider config saved (secrets redacted)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "agentId": {
+                      "type": "string"
+                    },
+                    "hasToken": {
+                      "type": "boolean"
+                    },
+                    "providerOrgId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "outpost": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "hasOutpostToken": {
+                      "type": "boolean"
+                    },
+                    "hasComputeApiKey": {
+                      "type": "boolean"
+                    },
+                    "computeApiUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "computeSnapshot": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "computeVolumeId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "config": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "agentId",
+                    "hasToken",
+                    "providerOrgId",
+                    "outpost",
+                    "hasOutpostToken",
+                    "hasComputeApiKey",
+                    "computeApiUrl",
+                    "computeSnapshot",
+                    "computeVolumeId",
+                    "config",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Update agent provider"
+      },
+      "delete": {
+        "tags": [
+          "agent-providers"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "agentId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Provider config deleted"
+          }
+        },
+        "summary": "Delete agent provider"
+      }
+    },
     "/workspaces/{organizationId}/issues/{issueId}/approvals": {
       "post": {
         "tags": [

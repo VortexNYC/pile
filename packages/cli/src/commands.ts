@@ -709,6 +709,91 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "agent providers list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/agent/providers",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "agent providers update": {
+    method: "PUT",
+    path: "/workspaces/{organizationId}/agent/providers/{agentId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "agentId",
+        flag: "agent-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "token",
+        flag: "token",
+      },
+      {
+        name: "providerOrgId",
+        flag: "provider-org-id",
+      },
+      {
+        name: "outpost",
+        flag: "outpost",
+      },
+      {
+        name: "outpostId",
+        flag: "outpost-id",
+      },
+      {
+        name: "outpostToken",
+        flag: "outpost-token",
+      },
+      {
+        name: "computeApiKey",
+        flag: "compute-api-key",
+      },
+      {
+        name: "computeApiUrl",
+        flag: "compute-api-url",
+      },
+      {
+        name: "computeSnapshot",
+        flag: "compute-snapshot",
+      },
+      {
+        name: "computeVolumeId",
+        flag: "compute-volume-id",
+      },
+      {
+        name: "config",
+        flag: "config",
+      },
+    ],
+  },
+  "agent providers delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/agent/providers/{agentId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "agentId",
+        flag: "agent-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "issues approvals": {
     method: "POST",
     path: "/workspaces/{organizationId}/issues/{issueId}/approvals",

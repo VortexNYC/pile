@@ -11,6 +11,27 @@ export interface McpToolDefinition {
 
 export const MCP_TOOLS: readonly McpToolDefinition[] = [
   {
+    "name": "deleteWorkspacesOrganizationIdAgentProvidersAgentId",
+    "description": "Delete agent provider (DELETE /workspaces/{organizationId}/agent/providers/{agentId})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/agent/providers/{agentId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "agentId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "agentId",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdCyclesId",
     "description": "Delete cycle (DELETE /workspaces/{organizationId}/cycles/{id})",
     "method": "DELETE",
@@ -448,6 +469,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdAgentProviders",
+    "description": "List agent providers (GET /workspaces/{organizationId}/agent/providers)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/agent/providers",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
       ]
     }
   },
@@ -3803,6 +3841,75 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "putWorkspacesOrganizationIdAgentProvidersAgentId",
+    "description": "Update agent provider (PUT /workspaces/{organizationId}/agent/providers/{agentId})",
+    "method": "PUT",
+    "path": "/workspaces/{organizationId}/agent/providers/{agentId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "agentId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "token": {
+              "type": "string",
+              "nullable": true
+            },
+            "providerOrgId": {
+              "type": "string",
+              "nullable": true
+            },
+            "outpost": {
+              "type": "string",
+              "nullable": true
+            },
+            "outpostId": {
+              "type": "string",
+              "nullable": true
+            },
+            "outpostToken": {
+              "type": "string",
+              "nullable": true
+            },
+            "computeApiKey": {
+              "type": "string",
+              "nullable": true
+            },
+            "computeApiUrl": {
+              "type": "string",
+              "nullable": true
+            },
+            "computeSnapshot": {
+              "type": "string",
+              "nullable": true
+            },
+            "computeVolumeId": {
+              "type": "string",
+              "nullable": true
+            },
+            "config": {
+              "type": "object",
+              "nullable": true,
+              "additionalProperties": {
+                "nullable": true
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "agentId",
         "organizationId"
       ]
     }
