@@ -144,11 +144,19 @@ Write-back is push-style: the worker PATCHes the session and POSTs activities;
 
 ## Watching a session
 
-`GET /workspaces/{org}/agent/sessions/{id}/stream` replays the activity log as
+`GET /workspaces/{org}/agent/sessions/{id}/stream` streams the activity log as
 a Vercel AI SDK **UI-message-stream** (`x-vercel-ai-ui-message-stream: v1`)
 SSE feed: `thought`→`reasoning-*`, `response`→`text-*`, `error`→`error`,
 other types→`data-{type}` parts — consumable by any `useChat`-compatible
-client.
+client. The stream **live-tails**: after replaying history it emits new
+activities as they land (2s DO poll), closes with `data-session-status` +
+`finish` when the session reaches a terminal status or a ~90s budget expires
+— reconnect for a continued tail.
+
+`POST /workspaces/{org}/agent/sessions/{id}/cancel` cancels a session:
+provider-side termination when the provider supports it (Cursor `runs/{id}/
+cancel`, Devin `DELETE /sessions/{id}`), then the local session is marked
+`canceled` either way.
 
 ## Not dispatchable
 
