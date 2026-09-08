@@ -67,7 +67,7 @@ export async function provisionOutpostWorker(
         "vortex.session": fleetId,
       },
       autoStopInterval: 0,
-      autoDeleteInterval: -1,
+      autoDeleteInterval: 0,
     }),
   });
 
