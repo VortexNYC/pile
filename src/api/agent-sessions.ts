@@ -3,6 +3,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 import type { InferSelectModel } from "drizzle-orm";
 
 import { getAgentProvider } from "../agents/index.js";
+import { resolveAgentEnv } from "../agents/outpost.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
@@ -365,7 +366,9 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       return c.json({ message: "Session not found" }, 404);
     }
 
-    const provider = getAgentProvider(session.agentId, c.env);
+    const providerConfig = await stub.getAgentProviderConfig(session.agentId);
+    const effectiveEnv = resolveAgentEnv(c.env, providerConfig ?? undefined);
+    const provider = getAgentProvider(session.agentId, effectiveEnv);
     const polled = await provider.poll(session.providerSessionId ?? sessionId);
 
     const updated = await stub.updateAgentSession(sessionId, {
