@@ -165,4 +165,21 @@ export class CursorAgentProvider implements AgentProvider {
       url: prUrl,
     };
   }
+
+  async cancel(sessionId: string): Promise<void> {
+    const [agentId, runId] = sessionId.split("/");
+    const res = await fetch(
+      `${this.api}/v1/agents/${agentId}/runs/${runId}/cancel`,
+      { method: "POST", headers: { Authorization: this.auth } }
+    );
+    // 409 = run already terminal — fine, we're canceling anyway.
+    if (!res.ok && res.status !== 409) {
+      const text = await res.text();
+      throw new VortexError({
+        code: "AGENT_ERROR",
+        status: 502,
+        message: `Cursor cancel failed: ${res.status} ${text.slice(0, 500)}`,
+      });
+    }
+  }
 }

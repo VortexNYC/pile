@@ -24,4 +24,10 @@ export interface AgentProvider {
     sessionContext?: AgentDispatchContext
   ): Promise<AgentProviderSession>;
   poll(sessionId: string): Promise<AgentProviderSession>;
+  /**
+   * Terminate the provider-side run. Optional — providers that can't cancel
+   * remotely simply omit this and the tracker marks the session canceled
+   * locally.
+   */
+  cancel?(sessionId: string): Promise<void>;
 }

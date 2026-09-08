@@ -93,6 +93,11 @@ export async function dispatchAgent(
     message: `Session created by ${actor.type} ${actor.id}`,
   });
 
+  // Dispatch starts work — move the issue to in_progress.
+  await stub
+    .updateIssue(issue.id, { status: "in_progress" }, actor.id)
+    .catch((err) => console.error("issue status transition failed", err));
+
   // Outpost provisioning is Devin-specific — only the Devin provider's
   // sessions can be claimed by `devin worker` on a compute sandbox.
   if (agentId === "devin" && providerSession.id) {

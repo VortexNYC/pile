@@ -213,6 +213,25 @@ const patchSessionRoute = createRoute({
   },
 });
 
+const cancelSessionRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/cancel",
+  tags: ["agent-sessions"],
+  middleware: [rls("write", "agent:write")],
+  request: {
+    params: z.object({ organizationId: z.string(), sessionId: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Session canceled",
+      content: {
+        "application/json": { schema: agentSessionSchema },
+      },
+    },
+    404: { description: "Session not found" },
+  },
+});
+
 const pollSessionRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/poll",
@@ -356,6 +375,41 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
   );
+
+  app.openapi(cancelSessionRoute, async (c) => {
+    const { organizationId, sessionId } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+
+    const session = await stub.getAgentSession(sessionId);
+    if (!session) {
+      return c.json({ message: "Session not found" }, 404);
+    }
+    if (session.status === "canceled") {
+      const activities = await stub.listAgentActivities(sessionId);
+      return c.json(toSessionResponse(session, activities));
+    }
+
+    const providerConfig = await stub.getAgentProviderConfig(session.agentId);
+    const effectiveEnv = resolveAgentEnv(c.env, providerConfig ?? undefined);
+    const provider = getAgentProvider(session.agentId, effectiveEnv);
+    if (provider.cancel) {
+      const remote = session.providerSessionId ?? sessionId;
+      await provider
+        .cancel(remote)
+        .catch((err) => console.error("provider cancel failed", err));
+    }
+
+    const updated = await stub.updateAgentSession(sessionId, {
+      status: "canceled",
+    });
+    await stub.addAgentActivity({
+      sessionId,
+      type: "status",
+      message: "Session canceled",
+    });
+    const activities = await stub.listAgentActivities(sessionId);
+    return c.json(toSessionResponse(updated ?? session, activities));
+  });
 
   app.openapi(pollSessionRoute, async (c) => {
     const { organizationId, sessionId } = c.req.valid("param");
