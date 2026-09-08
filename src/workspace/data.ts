@@ -20,6 +20,8 @@ import type { FilterCondition } from "./filter.js";
 import type { workspaceSchema } from "./schema-map.js";
 import {
   workspaceAgentActivities,
+  workspaceDocumentHistory,
+  workspaceDocuments,
   workspaceAgentProviderConfigs,
   workspaceAgentSessions,
   workspaceAttachments,
@@ -1393,4 +1395,213 @@ export async function deleteAgentProviderConfig(
         eq(workspaceAgentProviderConfigs.agentId, agentId)
       )
     );
+}
+
+// ---- documents ----
+
+export interface DocumentInput {
+  organizationId: string;
+  title: string;
+  icon?: string | null;
+  content?: unknown[]; // BlockNote blocks
+  projectId?: string | null;
+  issueId?: string | null;
+  initiativeId?: string | null;
+  parentDocumentId?: string | null;
+  createdById: string;
+}
+
+export function createDocument(db: WorkspaceDb, input: DocumentInput) {
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+  const content = JSON.stringify(input.content ?? []);
+  const doc = db
+    .insert(workspaceDocuments)
+    .values({
+      id,
+      organizationId: input.organizationId,
+      title: input.title,
+      icon: input.icon ?? null,
+      content,
+      projectId: input.projectId ?? null,
+      issueId: input.issueId ?? null,
+      initiativeId: input.initiativeId ?? null,
+      parentDocumentId: input.parentDocumentId ?? null,
+      createdById: input.createdById,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning()
+    .get();
+  db.insert(workspaceDocumentHistory)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId: input.organizationId,
+      documentId: id,
+      content,
+      actorId: input.createdById,
+      createdAt: now,
+    })
+    .run();
+  return doc;
+}
+
+export interface ListDocumentsArgs {
+  projectId?: string;
+  issueId?: string;
+  initiativeId?: string;
+  parentDocumentId?: string | null;
+  includeTrashed?: boolean;
+}
+
+export function listDocuments(
+  db: WorkspaceDb,
+  organizationId: string,
+  args: ListDocumentsArgs = {}
+) {
+  const conditions = [eq(workspaceDocuments.organizationId, organizationId)];
+  if (!args.includeTrashed) {
+    conditions.push(isNull(workspaceDocuments.trashedAt));
+  }
+  if (args.projectId !== undefined) {
+    conditions.push(eq(workspaceDocuments.projectId, args.projectId));
+  }
+  if (args.issueId !== undefined) {
+    conditions.push(eq(workspaceDocuments.issueId, args.issueId));
+  }
+  if (args.initiativeId !== undefined) {
+    conditions.push(eq(workspaceDocuments.initiativeId, args.initiativeId));
+  }
+  if (args.parentDocumentId !== undefined) {
+    conditions.push(
+      args.parentDocumentId === null
+        ? isNull(workspaceDocuments.parentDocumentId)
+        : eq(workspaceDocuments.parentDocumentId, args.parentDocumentId)
+    );
+  }
+  return db
+    .select()
+    .from(workspaceDocuments)
+    .where(and(...conditions))
+    .all();
+}
+
+export function getDocument(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  return db
+    .select()
+    .from(workspaceDocuments)
+    .where(
+      and(
+        eq(workspaceDocuments.id, id),
+        eq(workspaceDocuments.organizationId, organizationId)
+      )
+    )
+    .get();
+}
+
+export interface DocumentUpdate {
+  title?: string;
+  icon?: string | null;
+  content?: unknown[];
+  projectId?: string | null;
+  issueId?: string | null;
+  initiativeId?: string | null;
+  parentDocumentId?: string | null;
+  trashedAt?: string | null;
+}
+
+export function updateDocument(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string,
+  update: DocumentUpdate,
+  actorId: string
+) {
+  const patch: Record<string, unknown> = {
+    updatedAt: new Date().toISOString(),
+    updatedById: actorId,
+  };
+  if (update.title !== undefined) patch.title = update.title;
+  if (update.icon !== undefined) patch.icon = update.icon;
+  if (update.projectId !== undefined) patch.projectId = update.projectId;
+  if (update.issueId !== undefined) patch.issueId = update.issueId;
+  if (update.initiativeId !== undefined)
+    patch.initiativeId = update.initiativeId;
+  if (update.parentDocumentId !== undefined)
+    patch.parentDocumentId = update.parentDocumentId;
+  if (update.trashedAt !== undefined) patch.trashedAt = update.trashedAt;
+  if (update.content !== undefined) {
+    const content = JSON.stringify(update.content);
+    patch.content = content;
+    db.insert(workspaceDocumentHistory)
+      .values({
+        id: crypto.randomUUID(),
+        organizationId,
+        documentId: id,
+        content,
+        actorId,
+        createdAt: new Date().toISOString(),
+      })
+      .run();
+  }
+  return db
+    .update(workspaceDocuments)
+    .set(patch)
+    .where(
+      and(
+        eq(workspaceDocuments.id, id),
+        eq(workspaceDocuments.organizationId, organizationId)
+      )
+    )
+    .returning()
+    .get();
+}
+
+export function deleteDocument(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  db.delete(workspaceDocumentHistory)
+    .where(
+      and(
+        eq(workspaceDocumentHistory.documentId, id),
+        eq(workspaceDocumentHistory.organizationId, organizationId)
+      )
+    )
+    .run();
+  return (
+    db
+      .delete(workspaceDocuments)
+      .where(
+        and(
+          eq(workspaceDocuments.id, id),
+          eq(workspaceDocuments.organizationId, organizationId)
+        )
+      )
+      .returning()
+      .all().length > 0
+  );
+}
+
+export function listDocumentHistory(
+  db: WorkspaceDb,
+  organizationId: string,
+  documentId: string
+) {
+  return db
+    .select()
+    .from(workspaceDocumentHistory)
+    .where(
+      and(
+        eq(workspaceDocumentHistory.documentId, documentId),
+        eq(workspaceDocumentHistory.organizationId, organizationId)
+      )
+    )
+    .orderBy(desc(workspaceDocumentHistory.createdAt))
+    .all();
 }

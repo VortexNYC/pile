@@ -974,6 +974,40 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.getUserViewPreferences(this.db, this.organizationId, userId);
   }
 
+  // ---- documents ----
+  createDocument(input: Omit<data.DocumentInput, "organizationId">) {
+    return data.createDocument(this.db, {
+      ...input,
+      organizationId: this.organizationId,
+    });
+  }
+
+  listDocuments(args: data.ListDocumentsArgs = {}) {
+    return data.listDocuments(this.db, this.organizationId, args);
+  }
+
+  getDocument(id: string) {
+    return data.getDocument(this.db, this.organizationId, id);
+  }
+
+  updateDocument(id: string, update: data.DocumentUpdate, actorId: string) {
+    return data.updateDocument(
+      this.db,
+      this.organizationId,
+      id,
+      update,
+      actorId
+    );
+  }
+
+  deleteDocument(id: string) {
+    return data.deleteDocument(this.db, this.organizationId, id);
+  }
+
+  listDocumentHistory(documentId: string) {
+    return data.listDocumentHistory(this.db, this.organizationId, documentId);
+  }
+
   setDefaultView(userId: string, defaultViewId: string | null) {
     return data.setDefaultView(
       this.db,

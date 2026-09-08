@@ -53,6 +53,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdDocumentsId",
+    "description": "Delete document (DELETE /workspaces/{organizationId}/documents/{id})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/documents/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdGithubInstallationsId",
     "description": "Delete github installation (DELETE /workspaces/{organizationId}/github/installations/{id})",
     "method": "DELETE",
@@ -597,6 +618,80 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "description": "List cycle capacity (GET /workspaces/{organizationId}/cycles/{id}/capacity)",
     "method": "GET",
     "path": "/workspaces/{organizationId}/cycles/{id}/capacity",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdDocuments",
+    "description": "List documents (GET /workspaces/{organizationId}/documents)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/documents",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "issueId": {
+          "type": "string"
+        },
+        "initiativeId": {
+          "type": "string"
+        },
+        "parentDocumentId": {
+          "type": "string"
+        },
+        "includeTrashed": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdDocumentsId",
+    "description": "Get document (GET /workspaces/{organizationId}/documents/{id})",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/documents/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdDocumentsIdHistory",
+    "description": "List document history (GET /workspaces/{organizationId}/documents/{id}/history)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/documents/{id}/history",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1874,6 +1969,65 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "patchWorkspacesOrganizationIdDocumentsId",
+    "description": "Update document (PATCH /workspaces/{organizationId}/documents/{id})",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/documents/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1
+            },
+            "icon": {
+              "type": "string",
+              "nullable": true
+            },
+            "content": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                }
+              }
+            },
+            "projectId": {
+              "type": "string",
+              "nullable": true
+            },
+            "issueId": {
+              "type": "string",
+              "nullable": true
+            },
+            "initiativeId": {
+              "type": "string",
+              "nullable": true
+            },
+            "parentDocumentId": {
+              "type": "string",
+              "nullable": true
+            }
+          }
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "patchWorkspacesOrganizationIdInitiativesId",
     "description": "Update initiative (PATCH /workspaces/{organizationId}/initiatives/{id})",
     "method": "PATCH",
@@ -2700,6 +2854,80 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdDocuments",
+    "description": "Create document (POST /workspaces/{organizationId}/documents)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/documents",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1
+            },
+            "icon": {
+              "type": "string"
+            },
+            "content": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                }
+              }
+            },
+            "projectId": {
+              "type": "string"
+            },
+            "issueId": {
+              "type": "string"
+            },
+            "initiativeId": {
+              "type": "string"
+            },
+            "parentDocumentId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "title"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdDocumentsIdRestore",
+    "description": "Create document restore (POST /workspaces/{organizationId}/documents/{id}/restore)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/documents/{id}/restore",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
         "organizationId"
       ]
     }

@@ -333,6 +333,64 @@ export const workspaceUserPreferences = sqliteTable(
   (table) => [primaryKey({ columns: [table.organizationId, table.userId] })]
 );
 
+// Documents: Linear-style block documents. `content` is a BlockNote document
+// (JSON array of blocks) — the de-facto open-source block schema (TipTap/
+// ProseMirror underneath), renderable by BlockNote/shadcn editors and
+// convertible to markdown.
+export const workspaceDocuments = sqliteTable(
+  "documents" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    title: text("title" as string).notNull(),
+    icon: text("icon" as string),
+    // BlockNote JSON (stringified array of blocks).
+    content: text("content" as string).notNull().default("[]"),
+    projectId: text("project_id" as string),
+    issueId: text("issue_id" as string),
+    initiativeId: text("initiative_id" as string),
+    parentDocumentId: text("parent_document_id" as string),
+    createdById: text("created_by_id" as string).notNull(),
+    updatedById: text("updated_by_id" as string),
+    createdAt: text("created_at" as string).notNull(),
+    updatedAt: text("updated_at" as string).notNull(),
+    trashedAt: text("trashed_at" as string),
+  },
+  (table) => [
+    index("documents_organization_idx" as string).on(table.organizationId),
+    index("documents_project_idx" as string).on(
+      table.organizationId,
+      table.projectId
+    ),
+    index("documents_issue_idx" as string).on(
+      table.organizationId,
+      table.issueId
+    ),
+    index("documents_parent_idx" as string).on(
+      table.organizationId,
+      table.parentDocumentId
+    ),
+  ]
+);
+
+export const workspaceDocumentHistory = sqliteTable(
+  "document_content_history" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    documentId: text("document_id" as string).notNull(),
+    content: text("content" as string).notNull(),
+    actorId: text("actor_id" as string).notNull(),
+    createdAt: text("created_at" as string).notNull(),
+  },
+  (table) => [
+    index("document_history_document_idx" as string).on(
+      table.documentId,
+      table.createdAt
+    ),
+  ]
+);
+
 export const workspaceLinearUsers = sqliteTable(
   "linear_users" as string,
   {

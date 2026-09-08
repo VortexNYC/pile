@@ -3159,6 +3159,393 @@ export interface paths {
         };
         trace?: never;
     };
+    "/workspaces/{organizationId}/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List documents */
+        get: {
+            parameters: {
+                query?: {
+                    projectId?: string;
+                    issueId?: string;
+                    initiativeId?: string;
+                    parentDocumentId?: string;
+                    includeTrashed?: string;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Document list */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            documents: {
+                                id: string;
+                                organizationId: string;
+                                title: string;
+                                icon: string | null;
+                                content: {
+                                    [key: string]: unknown;
+                                }[];
+                                projectId: string | null;
+                                issueId: string | null;
+                                initiativeId: string | null;
+                                parentDocumentId: string | null;
+                                createdById: string;
+                                updatedById: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                trashedAt: string | null;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create document */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        title: string;
+                        icon?: string;
+                        content?: {
+                            [key: string]: unknown;
+                        }[];
+                        projectId?: string;
+                        issueId?: string;
+                        initiativeId?: string;
+                        parentDocumentId?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Document created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            title: string;
+                            icon: string | null;
+                            content: {
+                                [key: string]: unknown;
+                            }[];
+                            projectId: string | null;
+                            issueId: string | null;
+                            initiativeId: string | null;
+                            parentDocumentId: string | null;
+                            createdById: string;
+                            updatedById: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                            trashedAt: string | null;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/documents/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get document */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Document */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            title: string;
+                            icon: string | null;
+                            content: {
+                                [key: string]: unknown;
+                            }[];
+                            projectId: string | null;
+                            issueId: string | null;
+                            initiativeId: string | null;
+                            parentDocumentId: string | null;
+                            createdById: string;
+                            updatedById: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                            trashedAt: string | null;
+                        };
+                    };
+                };
+                /** @description Document not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        /** Delete document */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Document deleted */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Document not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /** Update document */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        title?: string;
+                        icon?: string | null;
+                        content?: {
+                            [key: string]: unknown;
+                        }[];
+                        projectId?: string | null;
+                        issueId?: string | null;
+                        initiativeId?: string | null;
+                        parentDocumentId?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Document updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            title: string;
+                            icon: string | null;
+                            content: {
+                                [key: string]: unknown;
+                            }[];
+                            projectId: string | null;
+                            issueId: string | null;
+                            initiativeId: string | null;
+                            parentDocumentId: string | null;
+                            createdById: string;
+                            updatedById: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                            trashedAt: string | null;
+                        };
+                    };
+                };
+                /** @description Document not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/documents/{id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create document restore */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Document restored */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            title: string;
+                            icon: string | null;
+                            content: {
+                                [key: string]: unknown;
+                            }[];
+                            projectId: string | null;
+                            issueId: string | null;
+                            initiativeId: string | null;
+                            parentDocumentId: string | null;
+                            createdById: string;
+                            updatedById: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                            trashedAt: string | null;
+                        };
+                    };
+                };
+                /** @description Document not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/documents/{id}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List document history */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Document content history, newest first */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            history: {
+                                id: string;
+                                documentId: string;
+                                content: {
+                                    [key: string]: unknown;
+                                }[];
+                                actorId: string;
+                                createdAt: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Document not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/issues/{issueId}/relations": {
         parameters: {
             query?: never;

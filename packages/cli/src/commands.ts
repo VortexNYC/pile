@@ -1569,6 +1569,189 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "documents list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/documents",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "projectId",
+        flag: "project",
+      },
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+      {
+        name: "initiativeId",
+        flag: "initiative",
+      },
+      {
+        name: "parentDocumentId",
+        flag: "parent-document-id",
+      },
+      {
+        name: "includeTrashed",
+        flag: "include-trashed",
+      },
+    ],
+    body: [],
+  },
+  "documents create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/documents",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "title",
+        flag: "title",
+      },
+      {
+        name: "icon",
+        flag: "icon",
+      },
+      {
+        name: "content",
+        flag: "content",
+      },
+      {
+        name: "projectId",
+        flag: "project",
+      },
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+      {
+        name: "initiativeId",
+        flag: "initiative",
+      },
+      {
+        name: "parentDocumentId",
+        flag: "parent-document-id",
+      },
+    ],
+  },
+  "documents get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/documents/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "documents update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/documents/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "title",
+        flag: "title",
+      },
+      {
+        name: "icon",
+        flag: "icon",
+      },
+      {
+        name: "content",
+        flag: "content",
+      },
+      {
+        name: "projectId",
+        flag: "project",
+      },
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+      {
+        name: "initiativeId",
+        flag: "initiative",
+      },
+      {
+        name: "parentDocumentId",
+        flag: "parent-document-id",
+      },
+    ],
+  },
+  "documents delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/documents/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "documents restore create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/documents/{id}/restore",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "documents history": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/documents/{id}/history",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "issues relations": {
     method: "POST",
     path: "/workspaces/{organizationId}/issues/{issueId}/relations",

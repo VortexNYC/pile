@@ -337,6 +337,42 @@ CREATE UNIQUE INDEX IF NOT EXISTS agent_provider_configs_org_agent_idx ON agent_
 
 const v11 = `ALTER TABLE agent_sessions ADD COLUMN provider_session_id TEXT`;
 
+const v12 = `CREATE TABLE IF NOT EXISTS documents (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  icon TEXT,
+  content TEXT NOT NULL DEFAULT '[]',
+  project_id TEXT,
+  issue_id TEXT,
+  initiative_id TEXT,
+  parent_document_id TEXT,
+  created_by_id TEXT NOT NULL,
+  updated_by_id TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  trashed_at TEXT
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS documents_organization_idx ON documents (organization_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS documents_project_idx ON documents (organization_id, project_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS documents_issue_idx ON documents (organization_id, issue_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS documents_parent_idx ON documents (organization_id, parent_document_id)
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS document_content_history (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  document_id TEXT NOT NULL,
+  content TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  created_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS document_history_document_idx ON document_content_history (document_id, created_at)`;
+
 export const workspaceMigrations = {
   journal: {
     entries: [
@@ -351,6 +387,7 @@ export const workspaceMigrations = {
       { idx: 8, when: 8, tag: "v9", breakpoints: true },
       { idx: 9, when: 9, tag: "v10", breakpoints: true },
       { idx: 10, when: 10, tag: "v11", breakpoints: true },
+      { idx: 11, when: 11, tag: "v12", breakpoints: true },
     ],
   },
   migrations: {
@@ -365,5 +402,6 @@ export const workspaceMigrations = {
     m0008: v9,
     m0009: v10,
     m0010: v11,
+    m0011: v12,
   },
 } satisfies Parameters<typeof migrate>[1];
