@@ -121,6 +121,201 @@ CREATE INDEX IF NOT EXISTS comments_issue_idx ON comments (organization_id, issu
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS comments_external_idx ON comments (organization_id, external_source, external_id)`;
 
+
+const v9 = `CREATE TABLE IF NOT EXISTS issue_subscribers (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  issue_id TEXT NOT NULL,
+  linear_user_id TEXT NOT NULL,
+  created_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS issue_subscribers_issue_idx ON issue_subscribers (organization_id, issue_id)
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS issue_relations (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  from_issue_id TEXT NOT NULL,
+  to_issue_id TEXT NOT NULL,
+  type TEXT NOT NULL,
+  created_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS issue_relations_from_idx ON issue_relations (organization_id, from_issue_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS issue_relations_to_idx ON issue_relations (organization_id, to_issue_id)
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS issue_approvals (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  issue_id TEXT NOT NULL,
+  requested_by_id TEXT NOT NULL,
+  approver_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  comment TEXT,
+  created_at TEXT NOT NULL,
+  resolved_at TEXT
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS issue_approvals_issue_idx ON issue_approvals (issue_id)
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS reactions (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  target_type TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  emoji TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS reactions_target_idx ON reactions (organization_id, target_type, target_id)
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS reactions_unique_idx ON reactions (organization_id, target_type, target_id, actor_id, emoji)
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS attachments (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  issue_id TEXT NOT NULL,
+  linear_id TEXT NOT NULL,
+  url TEXT NOT NULL,
+  title TEXT,
+  subtitle TEXT,
+  r2_key TEXT,
+  created_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS attachments_issue_idx ON attachments (organization_id, issue_id)
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS notifications (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  recipient_id TEXT NOT NULL,
+  recipient_type TEXT NOT NULL DEFAULT 'user',
+  issue_id TEXT NOT NULL,
+  type TEXT NOT NULL,
+  read INTEGER NOT NULL DEFAULT 0,
+  snoozed_until TEXT,
+  metadata TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS notifications_recipient_idx ON notifications (organization_id, recipient_id, recipient_type, read)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS notifications_issue_idx ON notifications (organization_id, issue_id)
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS saved_views (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  owner_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  shared INTEGER NOT NULL DEFAULT 0,
+  filter TEXT NOT NULL,
+  search TEXT,
+  sort TEXT,
+  columns TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS saved_views_organization_idx ON saved_views (organization_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS saved_views_owner_idx ON saved_views (organization_id, owner_id)
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS view_favorites (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  view_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  created_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS view_favorites_view_user_idx ON view_favorites (view_id, user_id)
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS user_workspace_preferences (
+  organization_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  default_view_id TEXT,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (organization_id, user_id)
+)
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS linear_users (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  linear_id TEXT NOT NULL,
+  name TEXT,
+  email TEXT,
+  created_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS linear_users_organization_idx ON linear_users (organization_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS linear_users_linear_idx ON linear_users (organization_id, linear_id)
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS agent_sessions (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  issue_id TEXT NOT NULL,
+  agent_id TEXT NOT NULL,
+  provider TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  actor_type TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'created',
+  result TEXT,
+  url TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS agent_sessions_organization_idx ON agent_sessions (organization_id, created_at, id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS agent_sessions_issue_idx ON agent_sessions (issue_id)
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS agent_activities (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL,
+  actor_id TEXT,
+  type TEXT NOT NULL,
+  message TEXT NOT NULL,
+  payload TEXT,
+  created_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS agent_activities_session_idx ON agent_activities (session_id, created_at)
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS webhook_subscriptions (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  url TEXT NOT NULL,
+  events TEXT NOT NULL DEFAULT '*',
+  secret TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS webhook_subscriptions_organization_idx ON webhook_subscriptions (organization_id)
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS outbound_webhook_deliveries (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  subscription_id TEXT NOT NULL,
+  event TEXT NOT NULL,
+  payload TEXT NOT NULL,
+  url TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  status_code INTEGER,
+  error TEXT,
+  attempt_count INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS outbound_webhook_deliveries_organization_idx ON outbound_webhook_deliveries (organization_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS outbound_webhook_deliveries_subscription_idx ON outbound_webhook_deliveries (subscription_id)`;
+
 export const workspaceMigrations = {
   journal: {
     entries: [
@@ -132,6 +327,7 @@ export const workspaceMigrations = {
       { idx: 5, when: 5, tag: "v6", breakpoints: true },
       { idx: 6, when: 6, tag: "v7", breakpoints: true },
       { idx: 7, when: 7, tag: "v8", breakpoints: true },
+      { idx: 8, when: 8, tag: "v9", breakpoints: true },
     ],
   },
   migrations: {
@@ -143,5 +339,6 @@ export const workspaceMigrations = {
     m0005: v6,
     m0006: v7,
     m0007: v8,
+    m0008: v9,
   },
 } satisfies Parameters<typeof migrate>[1];

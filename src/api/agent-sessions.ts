@@ -2,18 +2,13 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
 import { getAgentProvider } from "../agents/index.js";
-import {
-  addAgentActivity,
-  getActiveAgentSessionForIssue,
-  getAgentSession,
-  getAgentSessionWithActivities,
-  listAgentActivities,
-  listAgentSessions,
-  updateAgentSession,
-  type AgentActivity,
-  type AgentSession,
-} from "../global/agent-sessions.js";
-import { createD1 } from "../global/db.js";
+import type { InferSelectModel } from "drizzle-orm";
+
+import { getWorkspaceStub } from "./stub.js";
+import type {
+  workspaceAgentActivities,
+  workspaceAgentSessions,
+} from "../workspace/schema.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
@@ -26,6 +21,9 @@ const agentActivityTypeSchema = z.enum([
   "action",
   "status",
 ]);
+
+type AgentSession = InferSelectModel<typeof workspaceAgentSessions>;
+type AgentActivity = InferSelectModel<typeof workspaceAgentActivities>;
 
 const agentSessionStatusSchema = z.enum([
   "created",
@@ -237,8 +235,8 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listSessionsRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
     const query = c.req.valid("query");
-    const db = createD1(c.env.D1);
-    const rows = await listAgentSessions(db, organizationId, {
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const rows = await stub.listAgentSessions({
       issueId: query.issueId,
       limit: query.limit ? Number(query.limit) : undefined,
     });
@@ -249,12 +247,8 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(issueLiveRoute, async (c) => {
     const { organizationId, issueId } = c.req.valid("param");
-    const db = createD1(c.env.D1);
-    const live = await getActiveAgentSessionForIssue(
-      db,
-      organizationId,
-      issueId
-    );
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const live = await stub.getActiveAgentSessionForIssue(issueId);
     return c.json({
       session: live ? toSessionResponse(live.session, live.activities) : null,
       activities: live?.activities.map(toActivityResponse) ?? [],
@@ -263,12 +257,8 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(getSessionRoute, async (c) => {
     const { organizationId, sessionId } = c.req.valid("param");
-    const db = createD1(c.env.D1);
-    const session = await getAgentSessionWithActivities(
-      db,
-      organizationId,
-      sessionId
-    );
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const session = await stub.getAgentSessionWithActivities(sessionId);
     if (!session) {
       return c.json({ message: "Session not found" }, 404);
     }
@@ -279,14 +269,14 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId, sessionId } = c.req.valid("param");
     const body = c.req.valid("json");
     const identity = c.var.workspaceIdentity;
-    const db = createD1(c.env.D1);
+    const stub = getWorkspaceStub(c.env, organizationId);
 
-    const session = await getAgentSession(db, organizationId, sessionId);
+    const session = await stub.getAgentSession(sessionId);
     if (!session) {
       return c.json({ message: "Session not found" }, 404);
     }
 
-    const activity = await addAgentActivity(db, {
+    const activity = await stub.addAgentActivity({
       sessionId,
       actorId: identity.id,
       type: body.type,
@@ -299,9 +289,9 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(patchSessionRoute, async (c) => {
     const { organizationId, sessionId } = c.req.valid("param");
     const body = c.req.valid("json");
-    const db = createD1(c.env.D1);
+    const stub = getWorkspaceStub(c.env, organizationId);
 
-    const updated = await updateAgentSession(db, organizationId, sessionId, {
+    const updated = await stub.updateAgentSession(sessionId, {
       status: body.status,
       result: body.result,
       url: body.url,
@@ -310,15 +300,15 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       return c.json({ message: "Session not found" }, 404);
     }
 
-    const activities = await listAgentActivities(db, sessionId);
+    const activities = await stub.listAgentActivities(sessionId);
     return c.json(toSessionResponse(updated, activities));
   });
 
   app.openapi(pollSessionRoute, async (c) => {
     const { organizationId, sessionId } = c.req.valid("param");
-    const db = createD1(c.env.D1);
+    const stub = getWorkspaceStub(c.env, organizationId);
 
-    const session = await getAgentSession(db, organizationId, sessionId);
+    const session = await stub.getAgentSession(sessionId);
     if (!session) {
       return c.json({ message: "Session not found" }, 404);
     }
@@ -326,8 +316,8 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     const provider = getAgentProvider(session.agentId, c.env);
     const polled = await provider.poll(sessionId);
 
-    const updated = await updateAgentSession(db, organizationId, sessionId, {
-      status: polled.status as AgentSession["status"],
+    const updated = await stub.updateAgentSession(sessionId, {
+      status: agentSessionStatusSchema.parse(polled.status),
       result: polled.result ?? undefined,
       url: polled.url ?? undefined,
     });
@@ -339,7 +329,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
 
-    const activities = await listAgentActivities(db, sessionId);
+    const activities = await stub.listAgentActivities(sessionId);
     return c.json(toSessionResponse(updated, activities));
   });
 }

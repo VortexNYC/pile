@@ -3,12 +3,6 @@ import { createRoute, z } from "@hono/zod-openapi";
 import emojiRegex from "emoji-regex";
 
 import { createD1 } from "../global/db.js";
-import {
-  createReaction,
-  deleteReaction,
-  getReaction,
-  listReactions,
-} from "../global/reactions.js";
 import { canAccessTeam } from "../global/teams.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
@@ -178,7 +172,7 @@ export function registerReactionRoutes(app: OpenAPIHono<AppContext>) {
     const stub = await getStub(c.env, organizationId);
     const issue = await getIssue(stub, id);
     await assertIssueAccess(db, issue, identity);
-    const rows = await listReactions(db, organizationId, "issue", id);
+    const rows = await stub.listReactions("issue", id);
     return c.json({ reactions: rows });
   });
 
@@ -190,8 +184,7 @@ export function registerReactionRoutes(app: OpenAPIHono<AppContext>) {
     const stub = await getStub(c.env, organizationId);
     const issue = await getIssue(stub, id);
     await assertIssueAccess(db, issue, identity);
-    const reaction = await createReaction(db, {
-      organizationId,
+    const reaction = await stub.createReaction({
       targetType: "issue",
       targetId: id,
       actorId: identity.id,
@@ -217,7 +210,7 @@ export function registerReactionRoutes(app: OpenAPIHono<AppContext>) {
     const stub = await getStub(c.env, organizationId);
     const issue = await getIssue(stub, comment.issueId);
     await assertIssueAccess(db, issue, identity);
-    const rows = await listReactions(db, organizationId, "comment", commentId);
+    const rows = await stub.listReactions("comment", commentId);
     return c.json({ reactions: rows });
   });
 
@@ -239,8 +232,7 @@ export function registerReactionRoutes(app: OpenAPIHono<AppContext>) {
     const stub = await getStub(c.env, organizationId);
     const issue = await getIssue(stub, comment.issueId);
     await assertIssueAccess(db, issue, identity);
-    const reaction = await createReaction(db, {
-      organizationId,
+    const reaction = await stub.createReaction({
       targetType: "comment",
       targetId: commentId,
       actorId: identity.id,
@@ -252,8 +244,8 @@ export function registerReactionRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(deleteReactionRoute, async (c) => {
     const { organizationId, reactionId } = c.req.valid("param");
     const identity = c.get("workspaceIdentity");
-    const db = createD1(c.env.D1);
-    const reaction = await getReaction(db, organizationId, reactionId);
+    const stub = await getStub(c.env, organizationId);
+    const reaction = await stub.getReaction(reactionId);
     if (!reaction) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -271,7 +263,7 @@ export function registerReactionRoutes(app: OpenAPIHono<AppContext>) {
         message: "Cannot delete this reaction",
       });
     }
-    await deleteReaction(db, organizationId, reactionId);
+    await stub.deleteReaction(reactionId);
     return c.body(null, 204);
   });
 }

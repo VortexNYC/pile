@@ -6,7 +6,6 @@ import { dispatchAgent } from "../agents/index.js";
 import { createD1 } from "../global/db.js";
 import { deleteIssueReferences } from "../global/issue-data.js";
 import { createRepoBranch } from "../global/repo-branches.js";
-import { getSavedView } from "../global/saved-views.js";
 import { getTemplate } from "../global/templates.js";
 import { getCycle } from "../global/workspace-entities.js";
 import { repoBranches } from "../global/schema.js";
@@ -546,7 +545,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
     if (query.view) {
-      const view = await getSavedView(db, query.view, organizationId);
+      const view = await (await getStub(c.env, organizationId)).getSavedView(query.view);
       if (
         !view ||
         (view.ownerId !== identity.id &&

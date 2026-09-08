@@ -1,12 +1,7 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
-import { createD1 } from "../global/db.js";
-import {
-  createLinearUser,
-  getLinearUser,
-  listLinearUsers,
-} from "../global/linear-users.js";
+import { getWorkspaceStub } from "./stub.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
@@ -91,22 +86,22 @@ export function registerLinearUserRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(createLinearUserRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
     const input = c.req.valid("json");
-    const db = createD1(c.env.D1);
-    const item = await createLinearUser(db, organizationId, input);
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const item = await stub.createLinearUser(input);
     return c.json(item, 201);
   });
 
   app.openapi(listLinearUsersRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
-    const db = createD1(c.env.D1);
-    const items = await listLinearUsers(db, organizationId);
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const items = await stub.listLinearUsers();
     return c.json({ linearUsers: items });
   });
 
   app.openapi(getLinearUserRoute, async (c) => {
     const { organizationId, linearId } = c.req.valid("param");
-    const db = createD1(c.env.D1);
-    const item = await getLinearUser(db, organizationId, linearId);
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const item = await stub.getLinearUser(linearId);
     if (!item) {
       throw new VortexError({
         code: "NOT_FOUND",

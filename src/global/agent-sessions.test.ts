@@ -1,22 +1,39 @@
-import { env } from "cloudflare:test";
+import { env, runInDurableObject } from "cloudflare:test";
+import { eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 
-import {
-  addAgentActivity,
-  createAgentSession,
-  getAgentSession,
-  getAgentSessionWithActivities,
-  listAgentActivities,
-  listAgentSessions,
-  updateAgentSession,
-} from "./agent-sessions.js";
+import type { WorkerEnv } from "../platform/middleware.js";
+import type { WorkspaceDO } from "../workspace/durable-object.js";
 import { createD1 } from "./db.js";
-import { user as userTable } from "./schema.js";
-import { createWorkspace } from "./workspaces.js";
+import {
+  member,
+  organization,
+  user as userTable,
+} from "./schema.js";
+import { createDefaultTeam } from "./teams.js";
+
+declare module "cloudflare:test" {
+  interface ProvidedEnv extends WorkerEnv {}
+}
+
+const WORKSPACE_ID = `agent-session-test-${crypto.randomUUID()}`;
+
+function getStub() {
+  const id = env.WORKSPACE_DURABLE_OBJECT.idFromName(WORKSPACE_ID);
+  return env.WORKSPACE_DURABLE_OBJECT.get(id);
+}
+
+async function withWorkspace<T>(
+  callback: (instance: WorkspaceDO) => T | Promise<T>
+): Promise<T> {
+  const stub = getStub();
+  return runInDurableObject(stub, async (instance) => {
+    await instance.setOrganizationId(WORKSPACE_ID);
+    return callback(instance);
+  });
+}
 
 describe("agent sessions", () => {
-  let organizationId: string;
-
   beforeAll(async () => {
     const db = createD1(env.D1);
     const now = new Date();
@@ -32,98 +49,100 @@ describe("agent sessions", () => {
         updatedAt: now,
       })
       .onConflictDoNothing({ target: [userTable.email] });
-    const workspace = await createWorkspace(db, env, {
-      name: "Agent session tests",
-      slug: `agent-sessions-${crypto.randomUUID()}`,
-      ownerId: "user-1",
-    });
-    organizationId = workspace!.id;
+    await db
+      .insert(organization)
+      .values({
+        id: WORKSPACE_ID,
+        name: "Agent session tests",
+        slug: WORKSPACE_ID,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing();
+    await db
+      .insert(member)
+      .values({
+        id: crypto.randomUUID(),
+        organizationId: WORKSPACE_ID,
+        userId: "user-1",
+        role: "owner",
+        createdAt: now,
+      })
+      .onConflictDoNothing();
+    const existing = await db
+      .select()
+      .from(organization)
+      .where(eq(organization.id, WORKSPACE_ID))
+      .get();
+    if (existing) {
+      await createDefaultTeam(db, WORKSPACE_ID, "AST", "user-1");
+    }
   });
 
   it("creates and retrieves a session", async () => {
-    const db = createD1(env.D1);
-    const session = await createAgentSession(db, {
-      organizationId,
-      issueId: "issue-1",
-      agentId: "devin",
-      provider: "devin",
-      actorId: "user-1",
-      actorType: "user",
-    });
+    const session = await withWorkspace((instance) =>
+      instance.createAgentSession({
+        issueId: "issue-1",
+        agentId: "devin",
+        provider: "devin",
+        actorId: "user-1",
+        actorType: "user",
+      })
+    );
 
-    expect(session.organizationId).toBe(organizationId);
+    expect(session.organizationId).toBe(WORKSPACE_ID);
     expect(session.issueId).toBe("issue-1");
     expect(session.status).toBe("created");
 
-    const found = await getAgentSession(db, organizationId, session.id);
+    const found = await withWorkspace((instance) =>
+      instance.getAgentSession(session.id)
+    );
     expect(found).not.toBeNull();
     expect(found?.id).toBe(session.id);
   });
 
-  it("lists sessions for a workspace", async () => {
-    const db = createD1(env.D1);
-    await createAgentSession(db, {
-      organizationId,
-      issueId: "issue-list",
-      agentId: "mock",
-      provider: "mock",
-      actorId: "user-1",
-      actorType: "user",
-    });
-
-    const sessions = await listAgentSessions(db, organizationId);
-    expect(sessions.length).toBeGreaterThanOrEqual(1);
-    expect(sessions[0]?.organizationId).toBe(organizationId);
-  });
-
-  it("updates session state", async () => {
-    const db = createD1(env.D1);
-    const session = await createAgentSession(db, {
-      organizationId,
-      issueId: "issue-update",
-      agentId: "mock",
-      provider: "mock",
-      actorId: "user-1",
-      actorType: "user",
-    });
-
-    const updated = await updateAgentSession(db, organizationId, session.id, {
-      status: "completed",
-      result: "done",
-    });
-    expect(updated?.status).toBe("completed");
-    expect(updated?.result).toBe("done");
-  });
-
-  it("adds and lists activities", async () => {
-    const db = createD1(env.D1);
-    const session = await createAgentSession(db, {
-      organizationId,
-      issueId: "issue-activity",
-      agentId: "mock",
-      provider: "mock",
-      actorId: "user-1",
-      actorType: "user",
-    });
-
-    await addAgentActivity(db, {
-      sessionId: session.id,
-      actorId: "user-1",
-      type: "thought",
-      message: "Thinking...",
-      payload: { step: 1 },
-    });
-
-    const activities = await listAgentActivities(db, session.id);
-    expect(activities.length).toBe(1);
-    expect(activities[0]?.type).toBe("thought");
-    expect(activities[0]?.message).toBe("Thinking...");
-
-    const withActivities = await getAgentSessionWithActivities(
-      db,
-      organizationId,
-      session.id
+  it("lists sessions and updates status", async () => {
+    const session = await withWorkspace((instance) =>
+      instance.createAgentSession({
+        issueId: "issue-2",
+        agentId: "devin",
+        provider: "devin",
+        actorId: "user-1",
+        actorType: "user",
+      })
     );
-    expect(withActivities?.activities.length).toBe(1);
+    const listed = await withWorkspace((instance) =>
+      instance.listAgentSessions({ issueId: "issue-2" })
+    );
+    expect(listed.map((row) => row.id)).toContain(session.id);
+
+    const updated = await withWorkspace((instance) =>
+      instance.updateAgentSession(session.id, { status: "completed" })
+    );
+    expect(updated?.status).toBe("completed");
+  });
+
+  it("records activities and returns session with activities", async () => {
+    const session = await withWorkspace((instance) =>
+      instance.createAgentSession({
+        issueId: "issue-3",
+        agentId: "devin",
+        provider: "devin",
+        actorId: "user-1",
+        actorType: "user",
+      })
+    );
+    await withWorkspace((instance) =>
+      instance.addAgentActivity({
+        sessionId: session.id,
+        type: "thought",
+        message: "thinking",
+      })
+    );
+    const full = await withWorkspace((instance) =>
+      instance.getAgentSessionWithActivities(session.id)
+    );
+    expect(full?.activities).toHaveLength(1);
+    expect(full?.activities[0]?.message).toBe("thinking");
   });
 });

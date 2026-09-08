@@ -1,11 +1,6 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
-import {
-  listAgentActivities,
-  listAgentSessions,
-} from "../global/agent-sessions.js";
-import { createD1 } from "../global/db.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 
@@ -64,16 +59,15 @@ const issueActivityRoute = createRoute({
 export function registerActivityRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(issueActivityRoute, async (c) => {
     const { organizationId, issueId } = c.req.valid("param");
-    const db = createD1(c.env.D1);
 
     const doId = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId);
     const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(doId);
     const history = await stub.listIssueHistory(issueId);
     const comments = await stub.listComments(issueId);
-    const sessions = await listAgentSessions(db, organizationId, { issueId });
+    const sessions = await stub.listAgentSessions({ issueId });
     const agentActivities = (
       await Promise.all(
-        sessions.map((session) => listAgentActivities(db, session.id))
+        sessions.map((session) => stub.listAgentActivities(session.id))
       )
     ).flat();
 

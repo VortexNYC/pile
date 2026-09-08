@@ -1,13 +1,13 @@
 import { and, eq, lt, ne } from "drizzle-orm";
 
 import { hmacSha256Hex } from "../global/crypto.js";
-import { createD1 } from "../global/db.js";
-import {
-  outboundWebhookDeliveries,
-  webhookSubscriptions,
-} from "../global/schema.js";
 import type { AppEnv } from "../types/env.js";
 import type { RealtimeEvent } from "../types/workspace.js";
+import type { WorkspaceDb } from "./data.js";
+import {
+  workspaceOutboundWebhookDeliveries,
+  workspaceWebhookSubscriptions,
+} from "./schema.js";
 
 const MAX_ATTEMPTS = 5;
 
@@ -39,6 +39,7 @@ async function buildHeaders(
 }
 
 async function attemptDelivery(
+  db: WorkspaceDb,
   env: AppEnv,
   row: {
     id: string;
@@ -53,11 +54,10 @@ async function attemptDelivery(
   statusCode?: number;
   error?: string;
 }> {
-  const db = createD1(env.D1);
   const subscription = await db
-    .select({ secret: webhookSubscriptions.secret })
-    .from(webhookSubscriptions)
-    .where(eq(webhookSubscriptions.id, row.subscriptionId))
+    .select({ secret: workspaceWebhookSubscriptions.secret })
+    .from(workspaceWebhookSubscriptions)
+    .where(eq(workspaceWebhookSubscriptions.id, row.subscriptionId))
     .get();
 
   const headers = await buildHeaders(
@@ -91,15 +91,15 @@ async function attemptDelivery(
 }
 
 export async function deliverWebhooks(
+  db: WorkspaceDb,
   env: AppEnv,
   organizationId: string,
   event: RealtimeEvent
 ): Promise<{ needsRetry: boolean; retryAt?: number }> {
-  const db = createD1(env.D1);
   const subscriptions = await db
     .select()
-    .from(webhookSubscriptions)
-    .where(eq(webhookSubscriptions.organizationId, organizationId))
+    .from(workspaceWebhookSubscriptions)
+    .where(eq(workspaceWebhookSubscriptions.organizationId, organizationId))
     .all();
 
   if (subscriptions.length === 0) {
@@ -116,7 +116,8 @@ export async function deliverWebhooks(
       )
       .map(async (sub) => {
         const deliveryId = crypto.randomUUID();
-        await db.insert(outboundWebhookDeliveries).values({
+        const ts = new Date().toISOString();
+        await db.insert(workspaceOutboundWebhookDeliveries).values({
           id: deliveryId,
           organizationId,
           subscriptionId: sub.id,
@@ -125,9 +126,11 @@ export async function deliverWebhooks(
           url: sub.url,
           status: "pending",
           attemptCount: 1,
+          createdAt: ts,
+          updatedAt: ts,
         });
 
-        const result = await attemptDelivery(env, {
+        const result = await attemptDelivery(db, env, {
           id: deliveryId,
           subscriptionId: sub.id,
           url: sub.url,
@@ -137,14 +140,14 @@ export async function deliverWebhooks(
         });
 
         await db
-          .update(outboundWebhookDeliveries)
+          .update(workspaceOutboundWebhookDeliveries)
           .set({
             status: result.status,
             statusCode: result.statusCode ?? null,
             error: result.error ?? null,
             updatedAt: new Date().toISOString(),
           })
-          .where(eq(outboundWebhookDeliveries.id, deliveryId));
+          .where(eq(workspaceOutboundWebhookDeliveries.id, deliveryId));
 
         return result;
       })
@@ -166,18 +169,18 @@ export async function deliverWebhooks(
 }
 
 export async function retryWebhookDeliveries(
+  db: WorkspaceDb,
   env: AppEnv,
   organizationId: string
 ): Promise<{ hasMore: boolean; retryAt?: number }> {
-  const db = createD1(env.D1);
   const remaining = await db
     .select()
-    .from(outboundWebhookDeliveries)
+    .from(workspaceOutboundWebhookDeliveries)
     .where(
       and(
-        eq(outboundWebhookDeliveries.organizationId, organizationId),
-        ne(outboundWebhookDeliveries.status, "delivered"),
-        lt(outboundWebhookDeliveries.attemptCount, MAX_ATTEMPTS)
+        eq(workspaceOutboundWebhookDeliveries.organizationId, organizationId),
+        ne(workspaceOutboundWebhookDeliveries.status, "delivered"),
+        lt(workspaceOutboundWebhookDeliveries.attemptCount, MAX_ATTEMPTS)
       )
     )
     .all();
@@ -189,11 +192,11 @@ export async function retryWebhookDeliveries(
     remaining.map(async (row) => {
       const attemptCount = row.attemptCount + 1;
       await db
-        .update(outboundWebhookDeliveries)
+        .update(workspaceOutboundWebhookDeliveries)
         .set({ attemptCount })
-        .where(eq(outboundWebhookDeliveries.id, row.id));
+        .where(eq(workspaceOutboundWebhookDeliveries.id, row.id));
 
-      const result = await attemptDelivery(env, {
+      const result = await attemptDelivery(db, env, {
         id: row.id,
         subscriptionId: row.subscriptionId,
         url: row.url,
@@ -203,14 +206,14 @@ export async function retryWebhookDeliveries(
       });
 
       await db
-        .update(outboundWebhookDeliveries)
+        .update(workspaceOutboundWebhookDeliveries)
         .set({
           status: result.status,
           statusCode: result.statusCode ?? null,
           error: result.error ?? null,
           updatedAt: new Date().toISOString(),
         })
-        .where(eq(outboundWebhookDeliveries.id, row.id));
+        .where(eq(workspaceOutboundWebhookDeliveries.id, row.id));
 
       return { attemptCount, result };
     })

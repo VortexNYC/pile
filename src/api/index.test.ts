@@ -6,10 +6,6 @@ import { z } from "zod";
 import { hmacSha256Hex } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
 import {
-  createNotification,
-  getNotificationsForRecipient,
-} from "../global/notifications.js";
-import {
   apikey as apikeyTable,
   githubInstallations as githubInstallationsTable,
   member as memberTable,
@@ -953,9 +949,10 @@ describe("API integration", () => {
     expect(issue.status).toBe(201);
     const issueData = await issue.json<{ id: string }>();
 
-    const userNotes = await getNotificationsForRecipient(
-      db,
-      organizationId,
+    const doStub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    const userNotes = await doStub.listNotificationsForRecipient(
       userId,
       "user"
     );
@@ -963,8 +960,7 @@ describe("API integration", () => {
     expect(userNotes[0].type).toBe("issue_created");
     expect(userNotes[0].issueId).toBe(issueData.id);
 
-    await createNotification(db, {
-      organizationId,
+    await doStub.createNotification({
       recipientId: tokenRecord.referenceId,
       recipientType: "user",
       issueId: issueData.id,
@@ -1021,14 +1017,12 @@ describe("API integration", () => {
     expect(comment.status).toBe(201);
     await comment.json();
 
-    const assigneeNotes = await getNotificationsForRecipient(
-      db,
-      organizationId,
+    const assigneeNotes = await doStub.listNotificationsForRecipient(
       userId,
       "user"
     );
     const commentNotes = assigneeNotes.filter(
-      (n) => n.type === "comment_created"
+      (n: { type: string }) => n.type === "comment_created"
     );
     expect(commentNotes.length).toBe(1);
     expect(commentNotes[0].issueId).toBe(issueData.id);

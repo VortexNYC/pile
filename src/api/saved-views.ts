@@ -1,20 +1,8 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
-import { createD1 } from "../global/db.js";
-import {
-  createSavedView,
-  deleteSavedView,
-  favoriteView,
-  getSavedView,
-  getUserViewPreferences,
-  listFavoriteViewIds,
-  listSavedViews,
-  setDefaultView,
-  unfavoriteView,
-  updateSavedView,
-  type SavedViewRecord,
-} from "../global/saved-views.js";
+import { getWorkspaceStub } from "./stub.js";
+import type { SavedViewRecord } from "../workspace/data.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
@@ -331,13 +319,11 @@ function getIdentity(c: {
 export function registerSavedViewRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listSavedViewsRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
-    const db = createD1(c.env.D1);
     const identity = getIdentity(c);
-    const records = await listSavedViews(db, organizationId, identity.id);
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const records = await stub.listSavedViews(identity.id);
     const favorites = new Set(
-      (await listFavoriteViewIds(db, organizationId, identity.id)).map(
-        (row) => row.viewId
-      )
+      (await stub.listFavoriteViewIds(identity.id)).map((row) => row.viewId)
     );
     return c.json({
       views: records.map((record) =>
@@ -350,9 +336,8 @@ export function registerSavedViewRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId } = c.req.valid("param");
     const body = c.req.valid("json");
     const identity = getIdentity(c);
-    const db = createD1(c.env.D1);
-    const record = await createSavedView(db, {
-      organizationId,
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const record = await stub.createSavedView({
       ownerId: identity.id,
       name: body.name,
       shared: body.shared,
@@ -367,8 +352,8 @@ export function registerSavedViewRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(favoriteRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
     const identity = getIdentity(c);
-    const db = createD1(c.env.D1);
-    const record = await getSavedView(db, id, organizationId);
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const record = await stub.getSavedView(id);
     if (!record) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -377,15 +362,15 @@ export function registerSavedViewRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
     assertViewAccess(record, identity);
-    await favoriteView(db, organizationId, id, identity.id);
+    await stub.favoriteView(id, identity.id);
     return c.json(serializeSavedView(record, true));
   });
 
   app.openapi(unfavoriteRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
     const identity = getIdentity(c);
-    const db = createD1(c.env.D1);
-    const record = await getSavedView(db, id, organizationId);
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const record = await stub.getSavedView(id);
     if (!record) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -394,19 +379,15 @@ export function registerSavedViewRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
     assertViewAccess(record, identity);
-    await unfavoriteView(db, id, identity.id);
+    await stub.unfavoriteView(id, identity.id);
     return c.body(null, 204);
   });
 
   app.openapi(viewPreferencesRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
     const identity = getIdentity(c);
-    const db = createD1(c.env.D1);
-    const prefs = await getUserViewPreferences(
-      db,
-      organizationId,
-      identity.id
-    );
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const prefs = await stub.getUserViewPreferences(identity.id);
     return c.json({ defaultViewId: prefs?.defaultViewId ?? null });
   });
 
@@ -414,9 +395,9 @@ export function registerSavedViewRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId } = c.req.valid("param");
     const { defaultViewId } = c.req.valid("json");
     const identity = getIdentity(c);
-    const db = createD1(c.env.D1);
+    const stub = getWorkspaceStub(c.env, organizationId);
     if (defaultViewId !== null) {
-      const record = await getSavedView(db, defaultViewId, organizationId);
+      const record = await stub.getSavedView(defaultViewId);
       if (!record) {
         throw new VortexError({
           code: "NOT_FOUND",
@@ -426,19 +407,14 @@ export function registerSavedViewRoutes(app: OpenAPIHono<AppContext>) {
       }
       assertViewAccess(record, identity);
     }
-    const prefs = await setDefaultView(
-      db,
-      organizationId,
-      identity.id,
-      defaultViewId
-    );
+    const prefs = await stub.setDefaultView(identity.id, defaultViewId);
     return c.json({ defaultViewId: prefs?.defaultViewId ?? null });
   });
 
   app.openapi(getSavedViewRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
-    const db = createD1(c.env.D1);
-    const record = await getSavedView(db, id, organizationId);
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const record = await stub.getSavedView(id);
     if (!record) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -454,8 +430,8 @@ export function registerSavedViewRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId, id } = c.req.valid("param");
     const body = c.req.valid("json");
     const identity = getIdentity(c);
-    const db = createD1(c.env.D1);
-    const existing = await getSavedView(db, id, organizationId);
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const existing = await stub.getSavedView(id);
     if (!existing) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -473,7 +449,7 @@ export function registerSavedViewRoutes(app: OpenAPIHono<AppContext>) {
         message: "Cannot modify another user's saved view",
       });
     }
-    const record = await updateSavedView(db, id, organizationId, {
+    const record = await stub.updateSavedView(id, {
       name: body.name,
       shared: body.shared,
       filter:
@@ -495,8 +471,8 @@ export function registerSavedViewRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(deleteSavedViewRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
     const identity = getIdentity(c);
-    const db = createD1(c.env.D1);
-    const existing = await getSavedView(db, id, organizationId);
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const existing = await stub.getSavedView(id);
     if (!existing) {
       return c.body(null, 204);
     }
@@ -510,7 +486,7 @@ export function registerSavedViewRoutes(app: OpenAPIHono<AppContext>) {
         message: "Cannot delete another user's saved view",
       });
     }
-    await deleteSavedView(db, id, organizationId);
+    await stub.deleteSavedView(id);
     return c.body(null, 204);
   });
 }

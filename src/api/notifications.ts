@@ -1,15 +1,7 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
-import { createD1 } from "../global/db.js";
-import {
-  getNotificationsForRecipient,
-  getUnreadNotificationCount,
-  markAllNotificationsRead,
-  markNotificationRead,
-  markNotificationUnread,
-  snoozeNotification,
-} from "../global/notifications.js";
+import { getWorkspaceStub } from "./stub.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 
@@ -200,11 +192,9 @@ export function registerNotificationRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listNotificationsRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
     const query = c.req.valid("query");
-    const db = createD1(c.env.D1);
+    const stub = getWorkspaceStub(c.env, organizationId);
     const identity = c.var.workspaceIdentity;
-    const rows = await getNotificationsForRecipient(
-      db,
-      organizationId,
+    const rows = await stub.listNotificationsForRecipient(
       identity.id,
       identity.type,
       {
@@ -221,28 +211,17 @@ export function registerNotificationRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(unreadCountRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
-    const db = createD1(c.env.D1);
+    const stub = getWorkspaceStub(c.env, organizationId);
     const identity = c.var.workspaceIdentity;
-    const count = await getUnreadNotificationCount(
-      db,
-      organizationId,
-      identity.id,
-      identity.type
-    );
+    const count = await stub.unreadNotificationCount(identity.id, identity.type);
     return c.json({ count });
   });
 
   app.openapi(markReadRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
-    const db = createD1(c.env.D1);
+    const stub = getWorkspaceStub(c.env, organizationId);
     const identity = c.var.workspaceIdentity;
-    const updated = await markNotificationRead(
-      db,
-      organizationId,
-      identity.id,
-      identity.type,
-      id
-    );
+    const updated = await stub.markNotificationRead(identity.id, identity.type, id);
     if (!updated) {
       return c.json({ message: "Notification not found" }, 404);
     }
@@ -251,15 +230,9 @@ export function registerNotificationRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(markUnreadRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
-    const db = createD1(c.env.D1);
+    const stub = getWorkspaceStub(c.env, organizationId);
     const identity = c.var.workspaceIdentity;
-    const updated = await markNotificationUnread(
-      db,
-      organizationId,
-      identity.id,
-      identity.type,
-      id
-    );
+    const updated = await stub.markNotificationUnread(identity.id, identity.type, id);
     if (!updated) {
       return c.json({ message: "Notification not found" }, 404);
     }
@@ -269,11 +242,9 @@ export function registerNotificationRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(snoozeRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
     const { until } = c.req.valid("json");
-    const db = createD1(c.env.D1);
+    const stub = getWorkspaceStub(c.env, organizationId);
     const identity = c.var.workspaceIdentity;
-    const updated = await snoozeNotification(
-      db,
-      organizationId,
+    const updated = await stub.snoozeNotification(
       identity.id,
       identity.type,
       id,
@@ -287,14 +258,9 @@ export function registerNotificationRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(markAllReadRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
-    const db = createD1(c.env.D1);
+    const stub = getWorkspaceStub(c.env, organizationId);
     const identity = c.var.workspaceIdentity;
-    await markAllNotificationsRead(
-      db,
-      organizationId,
-      identity.id,
-      identity.type
-    );
+    await stub.markAllNotificationsRead(identity.id, identity.type);
     return c.body(null, 204);
   });
 }

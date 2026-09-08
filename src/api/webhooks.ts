@@ -1,15 +1,7 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
-import { createD1 } from "../global/db.js";
-import {
-  createWebhookSubscription,
-  deleteWebhookSubscription,
-  findWebhookSubscriptionByWorkspace,
-  listWebhookDeliveries,
-  listWebhookSubscriptions,
-  updateWebhookSubscription,
-} from "../global/webhook-subscriptions.js";
+import { getWorkspaceStub } from "./stub.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
@@ -176,26 +168,22 @@ export function registerWebhookRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(createWebhookSubscriptionRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
     const input = c.req.valid("json");
-    const db = createD1(c.env.D1);
-    const item = await createWebhookSubscription(db, organizationId, input);
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const item = await stub.createWebhookSubscription(input);
     return c.json(item, 201);
   });
 
   app.openapi(listWebhookSubscriptionsRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
-    const db = createD1(c.env.D1);
-    const items = await listWebhookSubscriptions(db, organizationId);
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const items = await stub.listWebhookSubscriptions();
     return c.json({ subscriptions: items });
   });
 
   app.openapi(getWebhookSubscriptionRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
-    const db = createD1(c.env.D1);
-    const item = await findWebhookSubscriptionByWorkspace(
-      db,
-      organizationId,
-      id
-    );
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const item = await stub.findWebhookSubscriptionByWorkspace(id);
     if (!item) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -209,8 +197,8 @@ export function registerWebhookRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(updateWebhookSubscriptionRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
     const input = c.req.valid("json");
-    const db = createD1(c.env.D1);
-    const item = await updateWebhookSubscription(db, organizationId, id, input);
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const item = await stub.updateWebhookSubscription(id, input);
     if (!item) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -223,8 +211,8 @@ export function registerWebhookRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(deleteWebhookSubscriptionRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
-    const db = createD1(c.env.D1);
-    const deleted = await deleteWebhookSubscription(db, organizationId, id);
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const deleted = await stub.deleteWebhookSubscription(id);
     if (!deleted) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -237,8 +225,8 @@ export function registerWebhookRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(listWebhookDeliveriesRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
-    const db = createD1(c.env.D1);
-    const items = await listWebhookDeliveries(db, organizationId, id);
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const items = await stub.listWebhookDeliveries(id);
     return c.json({ deliveries: items });
   });
 }

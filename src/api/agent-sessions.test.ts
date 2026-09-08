@@ -124,10 +124,10 @@ describe("agent sessions API", () => {
   });
 
   it("appends an activity and updates session state", async () => {
-    const db = createD1(env.D1);
-    const { createAgentSession } = await import("../global/agent-sessions.js");
-    const session = await createAgentSession(db, {
-      organizationId,
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    const session = await stub.createAgentSession({
       issueId: "issue-patch",
       agentId: "mock",
       provider: "mock",
@@ -166,11 +166,10 @@ describe("agent sessions API", () => {
   });
 
   it("shows live agent state for an issue", async () => {
-    const db = createD1(env.D1);
-    const { createAgentSession, addAgentActivity } =
-      await import("../global/agent-sessions.js");
-    const session = await createAgentSession(db, {
-      organizationId,
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    const session = await stub.createAgentSession({
       issueId: "issue-live",
       agentId: "mock",
       provider: "mock",
@@ -178,7 +177,7 @@ describe("agent sessions API", () => {
       actorType: "user",
       status: "running",
     });
-    await addAgentActivity(db, {
+    await stub.addAgentActivity({
       sessionId: session.id,
       actorId: "user-1",
       type: "status",
@@ -203,10 +202,10 @@ describe("agent sessions API", () => {
   });
 
   it("uses scoped agent:read and agent:write permissions", async () => {
-    const db = createD1(env.D1);
-    const { createAgentSession } = await import("../global/agent-sessions.js");
-    const session = await createAgentSession(db, {
-      organizationId,
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    const session = await stub.createAgentSession({
       issueId: "issue-scoped",
       agentId: "mock",
       provider: "mock",

@@ -1,13 +1,7 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
-import {
-  createIssueApproval,
-  getIssueApproval,
-  listIssueApprovals,
-  resolveIssueApproval,
-} from "../global/approvals.js";
-import { createD1 } from "../global/db.js";
+import { getWorkspaceStub } from "./stub.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
@@ -99,8 +93,8 @@ export function registerApprovalRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(createApprovalRoute, async (c) => {
     const { organizationId, issueId } = c.req.valid("param");
     const { approverId, comment } = c.req.valid("json");
-    const db = createD1(c.env.D1);
-    const item = await createIssueApproval(db, organizationId, {
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const item = await stub.createIssueApproval({
       issueId,
       requestedById: c.get("workspaceIdentity").id,
       approverId,
@@ -111,16 +105,16 @@ export function registerApprovalRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(listApprovalsRoute, async (c) => {
     const { organizationId, issueId } = c.req.valid("param");
-    const db = createD1(c.env.D1);
-    const items = await listIssueApprovals(db, organizationId, issueId);
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const items = await stub.listIssueApprovals(issueId);
     return c.json({ approvals: items });
   });
 
   app.openapi(respondApprovalRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
     const { status } = c.req.valid("json");
-    const db = createD1(c.env.D1);
-    const item = await getIssueApproval(db, organizationId, id);
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const item = await stub.getIssueApproval(id);
     if (!item) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -138,7 +132,7 @@ export function registerApprovalRoutes(app: OpenAPIHono<AppContext>) {
         message: "Only the approver or an admin can resolve this approval",
       });
     }
-    const resolved = await resolveIssueApproval(db, organizationId, id, status);
+    const resolved = await stub.resolveIssueApproval(id, status);
     return c.json(resolved ?? item);
   });
 }

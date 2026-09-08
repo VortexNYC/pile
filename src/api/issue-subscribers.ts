@@ -1,13 +1,7 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
-import { createD1 } from "../global/db.js";
-import {
-  createIssueSubscriber,
-  deleteIssueSubscriber,
-  getIssueSubscriber,
-  listIssueSubscribers,
-} from "../global/issue-subscribers.js";
+import { getWorkspaceStub } from "./stub.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
@@ -87,16 +81,16 @@ const deleteIssueSubscriberRoute = createRoute({
 export function registerIssueSubscriberRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listIssueSubscribersRoute, async (c) => {
     const { organizationId, issueId } = c.req.valid("param");
-    const db = createD1(c.env.D1);
-    const items = await listIssueSubscribers(db, organizationId, issueId);
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const items = await stub.listIssueSubscribers(issueId);
     return c.json({ subscribers: items });
   });
 
   app.openapi(createIssueSubscriberRoute, async (c) => {
     const { organizationId, issueId } = c.req.valid("param");
     const input = c.req.valid("json");
-    const db = createD1(c.env.D1);
-    const item = await createIssueSubscriber(db, organizationId, {
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const item = await stub.createIssueSubscriber({
       issueId,
       linearUserId: input.linearUserId,
     });
@@ -105,8 +99,8 @@ export function registerIssueSubscriberRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(deleteIssueSubscriberRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
-    const db = createD1(c.env.D1);
-    const existing = await getIssueSubscriber(db, organizationId, id);
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const existing = await stub.getIssueSubscriber(id);
     if (!existing) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -114,7 +108,7 @@ export function registerIssueSubscriberRoutes(app: OpenAPIHono<AppContext>) {
         message: "Subscriber not found",
       });
     }
-    await deleteIssueSubscriber(db, organizationId, id);
+    await stub.deleteIssueSubscriber(id);
     return c.body(null, 204);
   });
 }

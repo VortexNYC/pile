@@ -1,8 +1,4 @@
-import { createAttachment, setAttachmentR2Key } from "../global/attachments.js";
 import { createD1 } from "../global/db.js";
-import { createIssueRelation } from "../global/issue-relations.js";
-import { createIssueSubscriber } from "../global/issue-subscribers.js";
-import { createLinearUser } from "../global/linear-users.js";
 import { createTemplate } from "../global/templates.js";
 import { createUser, findUserByEmail } from "../global/users.js";
 import {
@@ -521,10 +517,14 @@ export async function migrateLinear(
       client.getTemplates(teamId),
     ]);
 
+  const doId = env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId);
+  const stub = env.WORKSPACE_DURABLE_OBJECT.get(doId);
+  await stub.setOrganizationId(organizationId);
+
   let membershipCount = 0;
 
   for (const lu of linearUsers) {
-    await createLinearUser(db, organizationId, {
+    await stub.createLinearUser({
       linearId: lu.id,
       name: lu.name,
       email: lu.email,
@@ -604,10 +604,6 @@ export async function migrateLinear(
       cycleMap.set(cycle.id, created.id);
     }
   }
-
-  const doId = env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId);
-  const stub = env.WORKSPACE_DURABLE_OBJECT.get(doId);
-  await stub.setOrganizationId(organizationId);
 
   let issueCount = 0;
   let commentCount = 0;
@@ -690,7 +686,7 @@ export async function migrateLinear(
       }
 
       for (const la of li.attachments.nodes) {
-        const created = await createAttachment(db, organizationId, {
+        const created = await stub.createAttachment({
           issueId: li.id,
           linearId: la.id,
           url: la.url,
@@ -711,7 +707,7 @@ export async function migrateLinear(
             await env.ATTACHMENTS_BUCKET.put(r2Key, dl.body, {
               httpMetadata: { contentType: ct },
             });
-            await setAttachmentR2Key(db, organizationId, created.id, r2Key);
+            await stub.setAttachmentR2Key(created.id, r2Key);
           }
         }
       }
@@ -782,7 +778,7 @@ export async function migrateLinear(
       }
 
       for (const sub of li.subscribers.nodes) {
-        await createIssueSubscriber(db, organizationId, {
+        await stub.createIssueSubscriber({
           issueId: li.id,
           linearUserId: sub.id,
         });
@@ -799,7 +795,7 @@ export async function migrateLinear(
       continue;
     }
     try {
-      await createIssueRelation(db, organizationId, rel);
+      await stub.createIssueRelation(rel);
       relationCount++;
     } catch {
       // Skip invalid or malformed relation edges.

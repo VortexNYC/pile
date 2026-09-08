@@ -9,7 +9,6 @@ import {
   member,
   states,
   team,
-  webhookSubscriptions,
 } from "../global/schema.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
@@ -75,12 +74,59 @@ export function registerHardeningRoutes(app: OpenAPIHono<AppContext>) {
 
     const doId = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId);
     const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(doId);
-    const issues = await stub.listIssues({ limit: 10000 });
-    const history = await stub.listWorkspaceIssueHistory();
-    const comments = await stub.listWorkspaceComments();
+    const [
+      issues,
+      history,
+      comments,
+      subscribers,
+      relations,
+      approvals,
+      reactions,
+      attachments,
+      notifications,
+      savedViews,
+      linearUsers,
+      agentSessions,
+      agentActivities,
+      subscriptions,
+      deliveries,
+    ] = await Promise.all([
+      stub.listIssues({ limit: 10000 }),
+      stub.listWorkspaceIssueHistory(),
+      stub.listWorkspaceComments(),
+      stub.listWorkspaceIssueSubscribers(),
+      stub.listWorkspaceIssueRelations(),
+      stub.listWorkspaceIssueApprovals(),
+      stub.listWorkspaceReactions(),
+      stub.listWorkspaceAttachments(),
+      stub.listWorkspaceNotifications(),
+      stub.listSavedViews(),
+      stub.listLinearUsers(),
+      stub.listWorkspaceAgentSessions(),
+      stub.listWorkspaceAgentActivities(),
+      stub.listWebhookSubscriptions(),
+      stub.listWorkspaceOutboundDeliveries(),
+    ]);
 
     const data = await exportWorkspaceData(db, organizationId);
-    return c.json({ ...data, issues, history, comments });
+    return c.json({
+      ...data,
+      issues,
+      history,
+      comments,
+      subscribers,
+      relations,
+      approvals,
+      reactions,
+      attachments,
+      notifications,
+      savedViews,
+      linearUsers,
+      agentSessions,
+      agentActivities,
+      webhookSubscriptions: subscriptions,
+      outboundDeliveries: deliveries,
+    });
   });
 
   app.openapi(readinessRoute, async (c) => {
@@ -96,7 +142,7 @@ export function registerHardeningRoutes(app: OpenAPIHono<AppContext>) {
       workspaceTeams,
       workspaceMembers,
       workspaceGithubInstallations,
-      workspaceWebhookSubscriptions,
+      subscriptions,
     ] = await Promise.all([
       stub.listIssues({ limit: 1 }),
       db.select().from(states).where(eq(states.organizationId, organizationId)),
@@ -106,10 +152,7 @@ export function registerHardeningRoutes(app: OpenAPIHono<AppContext>) {
         .select()
         .from(githubInstallations)
         .where(eq(githubInstallations.organizationId, organizationId)),
-      db
-        .select()
-        .from(webhookSubscriptions)
-        .where(eq(webhookSubscriptions.organizationId, organizationId)),
+      stub.listWebhookSubscriptions(),
     ]);
 
     const checks = [
@@ -124,7 +167,7 @@ export function registerHardeningRoutes(app: OpenAPIHono<AppContext>) {
       },
       {
         name: "webhooks",
-        ok: workspaceWebhookSubscriptions.length > 0,
+        ok: subscriptions.length > 0,
         required: false,
       },
     ];

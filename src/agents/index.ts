@@ -1,10 +1,9 @@
-import {
-  addAgentActivity,
-  createAgentSession,
-  type AgentSession,
-} from "../global/agent-sessions.js";
-import { createD1 } from "../global/db.js";
+import type { InferSelectModel } from "drizzle-orm";
+import { z } from "zod";
+
+import type { workspaceAgentSessions } from "../workspace/schema.js";
 import type { AppEnv } from "../platform/env.js";
+import type { WorkerEnv } from "../platform/middleware.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { Issue } from "../types/workspace.js";
@@ -35,7 +34,7 @@ export function registerAgentProvider(
 }
 
 export async function dispatchAgent(
-  env: AppEnv,
+  env: WorkerEnv,
   agentId: string,
   organizationId: string,
   issue: {
@@ -46,7 +45,7 @@ export async function dispatchAgent(
   },
   actor: WorkspaceIdentity,
   model?: string
-): Promise<AgentSession> {
+): Promise<InferSelectModel<typeof workspaceAgentSessions>> {
   const provider = getAgentProvider(agentId, env);
   const issueInput: Issue = {
     ...issue,
@@ -78,20 +77,24 @@ export async function dispatchAgent(
     model
   );
 
-  const db = createD1(env.D1);
-  const session = await createAgentSession(db, {
-    organizationId,
+  const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+    env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+  );
+  await stub.setOrganizationId(organizationId);
+  const session = await stub.createAgentSession({
     issueId: issue.id,
     agentId: providerSession.agentId,
     provider: agentId,
     actorId: actor.id,
     actorType: actor.type,
-    status: providerSession.status as AgentSession["status"],
+    status: z
+      .enum(["created", "running", "waiting", "completed", "failed", "canceled"])
+      .parse(providerSession.status),
     result: providerSession.result ?? null,
     url: providerSession.url ?? null,
   });
 
-  await addAgentActivity(db, {
+  await stub.addAgentActivity({
     sessionId: session.id,
     type: "status",
     message: `Session created by ${actor.type} ${actor.id}`,

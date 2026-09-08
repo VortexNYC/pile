@@ -6,15 +6,11 @@ import { createD1 } from "../global/db.js";
 import {
   member,
   organization,
-  outboundWebhookDeliveries,
   user as userTable,
-  webhookSubscriptions,
 } from "../global/schema.js";
 import { createDefaultTeam } from "../global/teams.js";
-import { createWebhookSubscription } from "../global/webhook-subscriptions.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { WorkspaceDO } from "./durable-object.js";
-import { deliverWebhooks, retryWebhookDeliveries } from "./webhooks.js";
 
 declare module "cloudflare:test" {
   interface ProvidedEnv extends WorkerEnv {}
@@ -77,13 +73,15 @@ async function withWorkspace<T>(
 }
 
 async function cleanupWorkspace() {
-  const db = createD1(env.D1);
-  await db
-    .delete(outboundWebhookDeliveries)
-    .where(eq(outboundWebhookDeliveries.organizationId, WORKSPACE_ID));
-  await db
-    .delete(webhookSubscriptions)
-    .where(eq(webhookSubscriptions.organizationId, WORKSPACE_ID));
+  const stub = getStub();
+  const subs = await withWorkspace(stub, (instance) =>
+    instance.listWebhookSubscriptions()
+  );
+  for (const sub of subs) {
+    await withWorkspace(stub, (instance) =>
+      instance.deleteWebhookSubscription(sub.id)
+    );
+  }
 }
 
 describe("deliverWebhooks", () => {
@@ -91,31 +89,32 @@ describe("deliverWebhooks", () => {
   beforeEach(cleanupWorkspace);
 
   it("records a failed delivery for a matching subscription", async () => {
-    const db = createD1(env.D1);
     const stub = getStub();
     const issue = await withWorkspace(stub, (instance) =>
       instance.createIssue({ title: "Webhook test issue" })
     );
 
-    const sub = await createWebhookSubscription(db, WORKSPACE_ID, {
-      url: "http://127.0.0.1:1/webhook",
-      events: "issue.created",
-    });
+    const sub = await withWorkspace(stub, (instance) =>
+      instance.createWebhookSubscription({
+        url: "http://127.0.0.1:1/webhook",
+        events: "issue.created",
+      })
+    );
     if (!sub) {
       throw new Error("Webhook subscription not created");
     }
 
-    await deliverWebhooks(env, WORKSPACE_ID, {
+    await withWorkspace(stub, (instance) =>
+      instance.deliverWebhooks({
       type: "issue.created",
       organizationId: WORKSPACE_ID,
       issue,
-    });
+    })
+    );
 
-    const deliveries = await db
-      .select()
-      .from(outboundWebhookDeliveries)
-      .where(eq(outboundWebhookDeliveries.subscriptionId, sub.id))
-      .all();
+    const deliveries = await withWorkspace(stub, (instance) =>
+      instance.listWebhookDeliveries(sub.id)
+    );
 
     expect(deliveries.length).toBe(1);
     expect(deliveries[0].status).toBe("failed");
@@ -125,36 +124,36 @@ describe("deliverWebhooks", () => {
   });
 
   it("retries failed deliveries and increments attemptCount", async () => {
-    const db = createD1(env.D1);
-
     const stub = getStub();
     const issue = await withWorkspace(stub, (instance) =>
       instance.createIssue({ title: "Webhook retry test issue" })
     );
 
-    const sub = await createWebhookSubscription(db, WORKSPACE_ID, {
-      url: "http://127.0.0.1:1/webhook",
-      events: "issue.created",
-    });
+    const sub = await withWorkspace(stub, (instance) =>
+      instance.createWebhookSubscription({
+        url: "http://127.0.0.1:1/webhook",
+        events: "issue.created",
+      })
+    );
     if (!sub) {
       throw new Error("Webhook subscription not created");
     }
 
-    await deliverWebhooks(env, WORKSPACE_ID, {
+    await withWorkspace(stub, (instance) =>
+      instance.deliverWebhooks({
       type: "issue.created",
       organizationId: WORKSPACE_ID,
       issue,
-    });
+    })
+    );
 
-    const result = await retryWebhookDeliveries(env, WORKSPACE_ID);
+    const result = await withWorkspace(stub, (instance) => instance.retryWebhookDeliveries());
     expect(result.hasMore).toBe(true);
     expect(typeof result.retryAt).toBe("number");
 
-    const deliveries = await db
-      .select()
-      .from(outboundWebhookDeliveries)
-      .where(eq(outboundWebhookDeliveries.subscriptionId, sub.id))
-      .all();
+    const deliveries = await withWorkspace(stub, (instance) =>
+      instance.listWebhookDeliveries(sub.id)
+    );
 
     expect(deliveries.length).toBe(1);
     expect(deliveries[0].status).toBe("failed");
@@ -162,7 +161,6 @@ describe("deliverWebhooks", () => {
   });
 
   it("delivers comment.created events to matching subscriptions", async () => {
-    const db = createD1(env.D1);
     const stub = getStub();
     const issue = await withWorkspace(stub, (instance) =>
       instance.createIssue({ title: "Comment webhook test issue" })
@@ -178,26 +176,28 @@ describe("deliverWebhooks", () => {
       throw new Error("Comment not created");
     }
 
-    const sub = await createWebhookSubscription(db, WORKSPACE_ID, {
-      url: "http://127.0.0.1:1/webhook",
-      events: "comment.created",
-    });
+    const sub = await withWorkspace(stub, (instance) =>
+      instance.createWebhookSubscription({
+        url: "http://127.0.0.1:1/webhook",
+        events: "comment.created",
+      })
+    );
     if (!sub) {
       throw new Error("Webhook subscription not created");
     }
 
-    await deliverWebhooks(env, WORKSPACE_ID, {
+    await withWorkspace(stub, (instance) =>
+      instance.deliverWebhooks({
       type: "comment.created",
       organizationId: WORKSPACE_ID,
       issue,
       comment,
-    });
+    })
+    );
 
-    const deliveries = await db
-      .select()
-      .from(outboundWebhookDeliveries)
-      .where(eq(outboundWebhookDeliveries.subscriptionId, sub.id))
-      .all();
+    const deliveries = await withWorkspace(stub, (instance) =>
+      instance.listWebhookDeliveries(sub.id)
+    );
 
     expect(deliveries.length).toBe(1);
     expect(deliveries[0].event).toBe("comment.created");

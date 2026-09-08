@@ -2,13 +2,6 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
 import { createD1 } from "../global/db.js";
-import {
-  createIssueRelation,
-  deleteIssueRelation,
-  getIssueRelation,
-  listInverseIssueRelations,
-  listIssueRelations,
-} from "../global/issue-relations.js";
 import { canAccessTeam } from "../global/teams.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
@@ -149,11 +142,11 @@ export function registerIssueRelationRoutes(app: OpenAPIHono<AppContext>) {
     await assertIssueAccess(db, issue, identity);
     const outgoing =
       direction === undefined || direction === "outgoing"
-        ? await listIssueRelations(db, organizationId, issueId)
+        ? await stub.listIssueRelations(issueId)
         : [];
     const incoming =
       direction === undefined || direction === "incoming"
-        ? await listInverseIssueRelations(db, organizationId, issueId)
+        ? await stub.listInverseIssueRelations(issueId)
         : [];
     return c.json({
       relations: outgoing,
@@ -174,7 +167,7 @@ export function registerIssueRelationRoutes(app: OpenAPIHono<AppContext>) {
     const toIssue = await getIssue(stub, toIssueId);
     await assertIssueAccess(db, fromIssue, identity);
     await assertIssueAccess(db, toIssue, identity);
-    const relation = await createIssueRelation(db, organizationId, {
+    const relation = await stub.createIssueRelation({
       fromIssueId: issueId,
       toIssueId,
       type,
@@ -186,7 +179,8 @@ export function registerIssueRelationRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId, id } = c.req.valid("param");
     const identity = c.get("workspaceIdentity");
     const db = createD1(c.env.D1);
-    const existing = await getIssueRelation(db, organizationId, id);
+    const stub0 = await getStub(c.env, organizationId);
+    const existing = await stub0.getIssueRelation(id);
     if (!existing) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -197,7 +191,7 @@ export function registerIssueRelationRoutes(app: OpenAPIHono<AppContext>) {
     const stub = await getStub(c.env, organizationId);
     const issue = await getIssue(stub, existing.fromIssueId);
     await assertIssueAccess(db, issue, identity);
-    await deleteIssueRelation(db, organizationId, id);
+    await stub.deleteIssueRelation(id);
     return c.body(null, 204);
   });
 }

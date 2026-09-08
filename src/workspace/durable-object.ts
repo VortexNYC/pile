@@ -23,16 +23,27 @@ import { alias } from "drizzle-orm/sqlite-core";
 import { z } from "zod";
 
 import { createD1 } from "../global/db.js";
+import { getWorkspaceMembership } from "../global/workspaces.js";
 import {
-  notifyCommentCreated,
-  notifyIssueCreated,
-  notifyIssueDeleted,
-  notifyIssueUpdated,
-} from "../global/notify-issue.js";
-import {
+  attachments as globalAttachments,
+  agentActivities as globalAgentActivities,
+  agentSessions as globalAgentSessions,
   comments as globalComments,
   cycles,
+  githubUsers,
+  issueApprovals as globalIssueApprovals,
   issueHistory as globalIssueHistory,
+  issueRelations as globalIssueRelations,
+  issueSubscribers as globalIssueSubscribers,
+  linearUsers as globalLinearUsers,
+  notifications as globalNotifications,
+  outboundWebhookDeliveries as globalOutboundDeliveries,
+  reactions as globalReactions,
+  savedViews as globalSavedViews,
+  user as globalUser,
+  userWorkspacePreferences as globalUserPrefs,
+  viewFavorites as globalViewFavorites,
+  webhookSubscriptions as globalWebhookSubs,
 } from "../global/schema.js";
 import { getDefaultTeam, getTeamById } from "../global/teams.js";
 import { getWorkspaceById } from "../global/workspaces.js";
@@ -51,11 +62,27 @@ import {
 } from "../types/workspace.js";
 import { filterToSql } from "./filter.js";
 import { workspaceMigrations } from "./migrations.js";
+import * as data from "./data.js";
 import {
+  workspaceAgentActivities,
+  workspaceAgentSessions,
+  workspaceAttachments,
   workspaceComments,
+  workspaceIssueApprovals,
   workspaceIssueHistory,
+  workspaceIssueRelations,
   workspaceIssues,
+  workspaceIssueSubscribers,
+  workspaceLinearUsers,
+  workspaceNotifications,
+  workspaceOutboundWebhookDeliveries,
+  workspaceReactions,
+  workspaceSavedViews,
+  workspaceUserPreferences,
+  workspaceViewFavorites,
+  workspaceWebhookSubscriptions,
 } from "./schema.js";
+import { workspaceSchema } from "./schema-map.js";
 import {
   commentToSearchDocument,
   createWorkspaceSearchIndex,
@@ -137,7 +164,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   private readonly ready: Promise<void>;
   private searchIndex: WorkspaceSearchIndex | null = null;
   private readonly db = drizzle(this.ctx.storage, {
-    schema: { workspaceIssues },
+    schema: workspaceSchema,
   });
 
   constructor(ctx: DurableObjectState, env: AppEnv) {
@@ -147,12 +174,186 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   private async initialize() {
-    const [stored] = await Promise.all([
+    const [stored, , backfilled] = await Promise.all([
       this.ctx.storage.get<string>("organizationId"),
       this.runMigrations(),
+      this.ctx.storage.get<boolean>("workspaceDataBackfilled"),
     ]);
     if (stored) {
       this.organizationId = stored;
+    }
+    if (!backfilled) {
+      await this.backfillLegacyData();
+      await this.ctx.storage.put("workspaceDataBackfilled", true);
+    }
+  }
+
+  // One-time copy of legacy D1 workspace-content rows into this DO. After
+  // this runs the workspace is fully self-contained; D1 keeps only registry
+  // data (orgs, members, teams, config) and lookup indexes.
+  private async backfillLegacyData(): Promise<void> {
+    const d1 = createD1(this.env.D1);
+    const org = this.organizationId;
+    const ts = new Date().toISOString();
+
+    const [
+      history,
+      commentRows,
+      subscribers,
+      relations,
+      approvals,
+      reactionRows,
+      attachmentRows,
+      notificationRows,
+      viewRows,
+      favoriteRows,
+      prefRows,
+      linearRows,
+      sessionRows,
+      activityRows,
+      subRows,
+      deliveryRows,
+    ] = await Promise.all([
+      d1
+        .select()
+        .from(globalIssueHistory)
+        .where(eq(globalIssueHistory.organizationId, org))
+        .all(),
+      d1
+        .select()
+        .from(globalComments)
+        .where(eq(globalComments.organizationId, org))
+        .all(),
+      d1
+        .select()
+        .from(globalIssueSubscribers)
+        .where(eq(globalIssueSubscribers.organizationId, org))
+        .all(),
+      d1
+        .select()
+        .from(globalIssueRelations)
+        .where(eq(globalIssueRelations.organizationId, org))
+        .all(),
+      d1
+        .select()
+        .from(globalIssueApprovals)
+        .where(eq(globalIssueApprovals.organizationId, org))
+        .all(),
+      d1
+        .select()
+        .from(globalReactions)
+        .where(eq(globalReactions.organizationId, org))
+        .all(),
+      d1
+        .select()
+        .from(globalAttachments)
+        .where(eq(globalAttachments.organizationId, org))
+        .all(),
+      d1
+        .select()
+        .from(globalNotifications)
+        .where(eq(globalNotifications.organizationId, org))
+        .all(),
+      d1
+        .select()
+        .from(globalSavedViews)
+        .where(eq(globalSavedViews.organizationId, org))
+        .all(),
+      d1
+        .select()
+        .from(globalViewFavorites)
+        .where(eq(globalViewFavorites.organizationId, org))
+        .all(),
+      d1
+        .select()
+        .from(globalUserPrefs)
+        .where(eq(globalUserPrefs.organizationId, org))
+        .all(),
+      d1
+        .select()
+        .from(globalLinearUsers)
+        .where(eq(globalLinearUsers.organizationId, org))
+        .all(),
+      d1
+        .select()
+        .from(globalAgentSessions)
+        .where(eq(globalAgentSessions.organizationId, org))
+        .all(),
+      d1
+        .select()
+        .from(globalAgentActivities)
+        .all(),
+      d1
+        .select()
+        .from(globalWebhookSubs)
+        .where(eq(globalWebhookSubs.organizationId, org))
+        .all(),
+      d1
+        .select()
+        .from(globalOutboundDeliveries)
+        .where(eq(globalOutboundDeliveries.organizationId, org))
+        .all(),
+    ]);
+
+    const sessionIds = new Set(sessionRows.map((row) => row.id));
+
+    if (history.length > 0) {
+      await this.db.insert(workspaceIssueHistory).values(history);
+    }
+    if (commentRows.length > 0) {
+      await this.db.insert(workspaceComments).values(commentRows);
+    }
+    if (subscribers.length > 0) {
+      await this.db.insert(workspaceIssueSubscribers).values(subscribers);
+    }
+    if (relations.length > 0) {
+      await this.db.insert(workspaceIssueRelations).values(relations);
+    }
+    if (approvals.length > 0) {
+      await this.db.insert(workspaceIssueApprovals).values(approvals);
+    }
+    if (reactionRows.length > 0) {
+      await this.db.insert(workspaceReactions).values(reactionRows);
+    }
+    if (attachmentRows.length > 0) {
+      await this.db.insert(workspaceAttachments).values(attachmentRows);
+    }
+    if (notificationRows.length > 0) {
+      await this.db.insert(workspaceNotifications).values(notificationRows);
+    }
+    if (viewRows.length > 0) {
+      await this.db.insert(workspaceSavedViews).values(viewRows);
+    }
+    if (favoriteRows.length > 0) {
+      await this.db.insert(workspaceViewFavorites).values(favoriteRows);
+    }
+    if (prefRows.length > 0) {
+      for (const row of prefRows) {
+        row.updatedAt = row.updatedAt ?? ts;
+      }
+      await this.db.insert(workspaceUserPreferences).values(prefRows);
+    }
+    if (linearRows.length > 0) {
+      await this.db.insert(workspaceLinearUsers).values(linearRows);
+    }
+    if (sessionRows.length > 0) {
+      await this.db.insert(workspaceAgentSessions).values(sessionRows);
+    }
+    const ownedActivities = activityRows.filter((row) =>
+      sessionIds.has(row.sessionId)
+    );
+    if (ownedActivities.length > 0) {
+      await this.db
+        .insert(workspaceAgentActivities)
+        .values(ownedActivities);
+    }
+    if (subRows.length > 0) {
+      await this.db.insert(workspaceWebhookSubscriptions).values(subRows);
+    }
+    if (deliveryRows.length > 0) {
+      await this.db
+        .insert(workspaceOutboundWebhookDeliveries)
+        .values(deliveryRows);
     }
   }
 
@@ -212,7 +413,6 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (this.searchIndex) return this.searchIndex;
 
     const index = await createWorkspaceSearchIndex();
-    await this.ensureCommentsBackfilled();
     const [issues, commentRows] = await Promise.all([
       this.db.select().from(workspaceIssues).all(),
       this.db
@@ -263,7 +463,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   private async sendWebhookEvent(event: RealtimeEvent) {
-    const result = await deliverWebhooks(this.env, this.organizationId, event);
+    const result = await deliverWebhooks(
+      this.db,
+      this.env,
+      this.organizationId,
+      event
+    );
     if (result.needsRetry && result.retryAt) {
       await this.ctx.storage.setAlarm(result.retryAt);
     }
@@ -275,83 +480,19 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   async alarm() {
-    const result = await retryWebhookDeliveries(this.env, this.organizationId);
+    const result = await retryWebhookDeliveries(
+      this.db,
+      this.env,
+      this.organizationId
+    );
     if (result.hasMore && result.retryAt) {
       await this.ctx.storage.setAlarm(result.retryAt);
     }
   }
 
-  private historyBackfillDone = false;
-  private commentsBackfillDone = false;
-
-  // One-time copies of legacy D1 workspace rows into this DO. New rows are
-  // written locally; D1 keeps only pre-move data.
-  private async ensureIssueHistoryBackfilled(): Promise<void> {
-    if (this.historyBackfillDone) return;
-    this.historyBackfillDone = true;
-    const local = await this.db
-      .select({ id: workspaceIssueHistory.id })
-      .from(workspaceIssueHistory)
-      .limit(1)
-      .get();
-    if (local) return;
-    const d1 = createD1(this.env.D1);
-    const legacy = await d1
-      .select()
-      .from(globalIssueHistory)
-      .where(eq(globalIssueHistory.organizationId, this.organizationId))
-      .all();
-    if (legacy.length === 0) return;
-    await this.db.insert(workspaceIssueHistory).values(
-      legacy.map((row) => ({
-        id: row.id,
-        organizationId: row.organizationId,
-        issueId: row.issueId,
-        linearId: row.linearId,
-        field: row.field,
-        fromValue: row.fromValue,
-        toValue: row.toValue,
-        actorId: row.actorId,
-        createdAt: row.createdAt,
-      }))
-    );
-  }
-
-  private async ensureCommentsBackfilled(): Promise<void> {
-    if (this.commentsBackfillDone) return;
-    this.commentsBackfillDone = true;
-    const local = await this.db
-      .select({ id: workspaceComments.id })
-      .from(workspaceComments)
-      .limit(1)
-      .get();
-    if (local) return;
-    const d1 = createD1(this.env.D1);
-    const legacy = await d1
-      .select()
-      .from(globalComments)
-      .where(eq(globalComments.organizationId, this.organizationId))
-      .all();
-    if (legacy.length === 0) return;
-    await this.db.insert(workspaceComments).values(
-      legacy.map((row) => ({
-        id: row.id,
-        organizationId: row.organizationId,
-        issueId: row.issueId,
-        authorId: row.authorId,
-        body: row.body,
-        externalId: row.externalId,
-        externalSource: row.externalSource,
-        externalAuthor: row.externalAuthor,
-        createdAt: row.createdAt,
-        updatedAt: row.updatedAt,
-      }))
-    );
-  }
 
   async listComments(issueId: string) {
     await this.ready;
-    await this.ensureCommentsBackfilled();
     return this.db
       .select()
       .from(workspaceComments)
@@ -361,7 +502,6 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   async getComment(id: string) {
     await this.ready;
-    await this.ensureCommentsBackfilled();
     return this.db
       .select()
       .from(workspaceComments)
@@ -371,7 +511,6 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   async findCommentByExternalId(externalSource: string, externalId: string) {
     await this.ready;
-    await this.ensureCommentsBackfilled();
     return this.db
       .select({ id: workspaceComments.id })
       .from(workspaceComments)
@@ -444,8 +583,534 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   async listWorkspaceComments() {
     await this.ready;
-    await this.ensureCommentsBackfilled();
     return this.db.select().from(workspaceComments).all();
+  }
+
+  // Recipients live partly in the registry (memberships, GitHub/user
+  // mappings) and partly in workspace tables (subscribers, linear_users).
+  private async resolveIssueRecipients(
+    issue: { id: string; assigneeId: string | null },
+    excludeRecipientId?: string
+  ): Promise<string[]> {
+    const recipients = new Set<string>();
+    const d1 = createD1(this.env.D1);
+    const org = this.organizationId;
+
+    if (issue.assigneeId) {
+      const membership = await getWorkspaceMembership(
+        d1,
+        org,
+        issue.assigneeId
+      );
+      if (membership) {
+        recipients.add(issue.assigneeId);
+      } else {
+        const github = await d1
+          .select({ userId: githubUsers.userId })
+          .from(githubUsers)
+          .where(
+            and(
+              eq(githubUsers.organizationId, org),
+              eq(githubUsers.githubLogin, issue.assigneeId)
+            )
+          )
+          .get();
+        if (github) {
+          recipients.add(github.userId);
+        } else {
+          const linear = await this.db
+            .select({ email: workspaceLinearUsers.email })
+            .from(workspaceLinearUsers)
+            .where(
+              and(
+                eq(workspaceLinearUsers.organizationId, org),
+                eq(workspaceLinearUsers.linearId, issue.assigneeId)
+              )
+            )
+            .get();
+          if (linear?.email) {
+            const matchedUser = await d1
+              .select({ id: globalUser.id })
+              .from(globalUser)
+              .where(eq(globalUser.email, linear.email))
+              .get();
+            if (matchedUser) {
+              recipients.add(matchedUser.id);
+            }
+          }
+        }
+      }
+    }
+
+    const subscribers = await this.db
+      .select({ linearUserId: workspaceIssueSubscribers.linearUserId })
+      .from(workspaceIssueSubscribers)
+      .where(eq(workspaceIssueSubscribers.issueId, issue.id))
+      .all();
+
+    if (subscribers.length > 0) {
+      const linearIds = subscribers.map((sub) => sub.linearUserId);
+      const linearRows = await this.db
+        .select({ email: workspaceLinearUsers.email })
+        .from(workspaceLinearUsers)
+        .where(inArray(workspaceLinearUsers.linearId, linearIds))
+        .all();
+      const emails = linearRows
+        .map((row) => row.email)
+        .filter(
+          (email): email is string =>
+            typeof email === "string" && email.length > 0
+        );
+      if (emails.length > 0) {
+        const matchedUsers = await d1
+          .select({ id: globalUser.id })
+          .from(globalUser)
+          .where(inArray(globalUser.email, emails))
+          .all();
+        for (const matchedUser of matchedUsers) {
+          recipients.add(matchedUser.id);
+        }
+      }
+    }
+
+    if (excludeRecipientId) {
+      recipients.delete(excludeRecipientId);
+    }
+    return [...recipients];
+  }
+
+  private async notifyIssueEvent(
+    issue: { id: string; assigneeId: string | null },
+    type: data.NotificationType,
+    actorId?: string
+  ): Promise<void> {
+    const recipients = await this.resolveIssueRecipients(issue, actorId);
+    await Promise.all(
+      recipients.map((recipientId) =>
+        data.createNotification(this.db, {
+          organizationId: this.organizationId,
+          recipientId,
+          recipientType: "user",
+          issueId: issue.id,
+          type,
+        })
+      )
+    );
+  }
+
+  // ---- notifications ----
+  createNotification(input: Omit<data.NotificationInput, "organizationId">) {
+    return data.createNotification(this.db, {
+      ...input,
+      organizationId: this.organizationId,
+    });
+  }
+
+  listNotificationsForRecipient(
+    recipientId: string,
+    recipientType: data.RecipientType,
+    options: {
+      unreadOnly?: boolean;
+      snoozedOnly?: boolean;
+      includeSnoozed?: boolean;
+      limit?: number;
+    } = {}
+  ) {
+    return data.getNotificationsForRecipient(
+      this.db,
+      this.organizationId,
+      recipientId,
+      recipientType,
+      options
+    );
+  }
+
+  unreadNotificationCount(recipientId: string, recipientType: data.RecipientType) {
+    return data.getUnreadNotificationCount(
+      this.db,
+      this.organizationId,
+      recipientId,
+      recipientType
+    );
+  }
+
+  markNotificationRead(
+    recipientId: string,
+    recipientType: data.RecipientType,
+    notificationId: string
+  ) {
+    return data.markNotificationRead(
+      this.db,
+      this.organizationId,
+      recipientId,
+      recipientType,
+      notificationId
+    );
+  }
+
+  markNotificationUnread(
+    recipientId: string,
+    recipientType: data.RecipientType,
+    notificationId: string
+  ) {
+    return data.markNotificationUnread(
+      this.db,
+      this.organizationId,
+      recipientId,
+      recipientType,
+      notificationId
+    );
+  }
+
+  snoozeNotification(
+    recipientId: string,
+    recipientType: data.RecipientType,
+    notificationId: string,
+    until: string | null
+  ) {
+    return data.snoozeNotification(
+      this.db,
+      this.organizationId,
+      recipientId,
+      recipientType,
+      notificationId,
+      until
+    );
+  }
+
+  markAllNotificationsRead(recipientId: string, recipientType: data.RecipientType) {
+    return data.markAllNotificationsRead(
+      this.db,
+      this.organizationId,
+      recipientId,
+      recipientType
+    );
+  }
+
+  listWorkspaceNotifications() {
+    return this.db.select().from(workspaceNotifications).all();
+  }
+
+  // ---- issue subscribers ----
+  listIssueSubscribers(issueId: string) {
+    return data.listIssueSubscribers(this.db, this.organizationId, issueId);
+  }
+
+  getIssueSubscriber(id: string) {
+    return data.getIssueSubscriber(this.db, this.organizationId, id);
+  }
+
+  createIssueSubscriber(values: { issueId: string; linearUserId: string }) {
+    return data.createIssueSubscriber(this.db, this.organizationId, values);
+  }
+
+  deleteIssueSubscriber(id: string) {
+    return data.deleteIssueSubscriber(this.db, this.organizationId, id);
+  }
+
+  listWorkspaceIssueSubscribers() {
+    return this.db.select().from(workspaceIssueSubscribers).all();
+  }
+
+  // ---- issue relations ----
+  listIssueRelations(fromIssueId: string) {
+    return data.listIssueRelations(this.db, this.organizationId, fromIssueId);
+  }
+
+  listInverseIssueRelations(toIssueId: string) {
+    return data.listInverseIssueRelations(
+      this.db,
+      this.organizationId,
+      toIssueId
+    );
+  }
+
+  getIssueRelation(id: string) {
+    return data.getIssueRelation(this.db, this.organizationId, id);
+  }
+
+  createIssueRelation(values: {
+    fromIssueId: string;
+    toIssueId: string;
+    type: string;
+  }) {
+    return data.createIssueRelation(this.db, this.organizationId, values);
+  }
+
+  deleteIssueRelation(id: string) {
+    return data.deleteIssueRelation(this.db, this.organizationId, id);
+  }
+
+  listWorkspaceIssueRelations() {
+    return this.db.select().from(workspaceIssueRelations).all();
+  }
+
+  // ---- issue approvals ----
+  listIssueApprovals(issueId: string) {
+    return data.listIssueApprovals(this.db, this.organizationId, issueId);
+  }
+
+  getIssueApproval(id: string) {
+    return data.getIssueApproval(this.db, this.organizationId, id);
+  }
+
+  createIssueApproval(input: {
+    issueId: string;
+    requestedById: string;
+    approverId: string;
+    comment?: string;
+  }) {
+    return data.createIssueApproval(this.db, this.organizationId, input);
+  }
+
+  resolveIssueApproval(id: string, status: "approved" | "rejected") {
+    return data.resolveIssueApproval(this.db, this.organizationId, id, status);
+  }
+
+  listWorkspaceIssueApprovals() {
+    return this.db.select().from(workspaceIssueApprovals).all();
+  }
+
+  // ---- reactions ----
+  createReaction(input: {
+    targetType: string;
+    targetId: string;
+    actorId: string;
+    emoji: string;
+  }) {
+    return data.createReaction(this.db, {
+      ...input,
+      organizationId: this.organizationId,
+    });
+  }
+
+  listReactions(targetType: string, targetId: string) {
+    return data.listReactions(
+      this.db,
+      this.organizationId,
+      targetType,
+      targetId
+    );
+  }
+
+  getReaction(id: string) {
+    return data.getReaction(this.db, this.organizationId, id);
+  }
+
+  deleteReaction(id: string) {
+    return data.deleteReaction(this.db, this.organizationId, id);
+  }
+
+  listWorkspaceReactions() {
+    return this.db.select().from(workspaceReactions).all();
+  }
+
+  // ---- attachments ----
+  listAttachments(issueId: string) {
+    return data.listAttachments(this.db, this.organizationId, issueId);
+  }
+
+  getAttachment(id: string) {
+    return data.getAttachment(this.db, this.organizationId, id);
+  }
+
+  createAttachment(values: {
+    issueId: string;
+    linearId: string;
+    url: string;
+    title?: string | null;
+    subtitle?: string | null;
+    r2Key?: string | null;
+    createdAt?: string;
+  }) {
+    return data.createAttachment(this.db, this.organizationId, values);
+  }
+
+  setAttachmentR2Key(id: string, r2Key: string) {
+    return data.setAttachmentR2Key(this.db, this.organizationId, id, r2Key);
+  }
+
+  listWorkspaceAttachments() {
+    return this.db.select().from(workspaceAttachments).all();
+  }
+
+  // ---- saved views / favorites / prefs ----
+  createSavedView(input: Omit<data.SavedViewInput, "organizationId">) {
+    return data.createSavedView(this.db, {
+      ...input,
+      organizationId: this.organizationId,
+    });
+  }
+
+  listSavedViews(userId?: string) {
+    return data.listSavedViews(this.db, this.organizationId, userId);
+  }
+
+  getSavedView(id: string) {
+    return data.getSavedView(this.db, id, this.organizationId);
+  }
+
+  updateSavedView(id: string, update: data.SavedViewUpdate) {
+    return data.updateSavedView(this.db, id, this.organizationId, update);
+  }
+
+  deleteSavedView(id: string) {
+    return data.deleteSavedView(this.db, id, this.organizationId);
+  }
+
+  favoriteView(viewId: string, userId: string) {
+    return data.favoriteView(this.db, this.organizationId, viewId, userId);
+  }
+
+  unfavoriteView(viewId: string, userId: string) {
+    return data.unfavoriteView(this.db, viewId, userId);
+  }
+
+  listFavoriteViewIds(userId: string) {
+    return data.listFavoriteViewIds(this.db, this.organizationId, userId);
+  }
+
+  getUserViewPreferences(userId: string) {
+    return data.getUserViewPreferences(this.db, this.organizationId, userId);
+  }
+
+  setDefaultView(userId: string, defaultViewId: string | null) {
+    return data.setDefaultView(
+      this.db,
+      this.organizationId,
+      userId,
+      defaultViewId
+    );
+  }
+
+  // ---- linear_users ----
+  listLinearUsers() {
+    return data.listLinearUsers(this.db, this.organizationId);
+  }
+
+  getLinearUser(linearId: string) {
+    return data.getLinearUser(this.db, this.organizationId, linearId);
+  }
+
+  createLinearUser(values: { linearId: string; name?: string; email?: string }) {
+    return data.createLinearUser(this.db, this.organizationId, values);
+  }
+
+  // ---- agent sessions ----
+  createAgentSession(input: Omit<data.AgentSessionInput, "organizationId">) {
+    return data.createAgentSession(this.db, {
+      ...input,
+      organizationId: this.organizationId,
+    });
+  }
+
+  getAgentSession(id: string) {
+    return data.getAgentSession(this.db, this.organizationId, id);
+  }
+
+  listAgentSessions(options: { issueId?: string; limit?: number } = {}) {
+    return data.listAgentSessions(this.db, this.organizationId, options);
+  }
+
+  updateAgentSession(
+    id: string,
+    input: Parameters<typeof data.updateAgentSession>[3]
+  ) {
+    return data.updateAgentSession(this.db, this.organizationId, id, input);
+  }
+
+  addAgentActivity(input: data.AgentActivityInput) {
+    return data.addAgentActivity(this.db, input);
+  }
+
+  listAgentActivities(sessionId: string, options: { limit?: number } = {}) {
+    return data.listAgentActivities(this.db, sessionId, options);
+  }
+
+  getAgentSessionWithActivities(id: string) {
+    return data.getAgentSessionWithActivities(
+      this.db,
+      this.organizationId,
+      id
+    );
+  }
+
+  getActiveAgentSessionForIssue(issueId: string) {
+    return data.getActiveAgentSessionForIssue(
+      this.db,
+      this.organizationId,
+      issueId
+    );
+  }
+
+  listWorkspaceAgentSessions() {
+    return this.db.select().from(workspaceAgentSessions).all();
+  }
+
+  listWorkspaceAgentActivities() {
+    return this.db.select().from(workspaceAgentActivities).all();
+  }
+
+  // ---- webhook subscriptions / outbound deliveries ----
+  listWebhookSubscriptions() {
+    return data.listWebhookSubscriptions(this.db, this.organizationId);
+  }
+
+  getWebhookSubscription(id: string) {
+    return data.getWebhookSubscription(this.db, id);
+  }
+
+  findWebhookSubscriptionByWorkspace(id: string) {
+    return data.findWebhookSubscriptionByWorkspace(
+      this.db,
+      this.organizationId,
+      id
+    );
+  }
+
+  createWebhookSubscription(values: {
+    url: string;
+    events?: string;
+    secret?: string;
+  }) {
+    return data.createWebhookSubscription(this.db, this.organizationId, values);
+  }
+
+  updateWebhookSubscription(
+    id: string,
+    values: { url?: string; events?: string; secret?: string }
+  ) {
+    return data.updateWebhookSubscription(
+      this.db,
+      this.organizationId,
+      id,
+      values
+    );
+  }
+
+  deleteWebhookSubscription(id: string) {
+    return data.deleteWebhookSubscription(this.db, this.organizationId, id);
+  }
+
+  listWebhookDeliveries(subscriptionId: string) {
+    return data.listWebhookDeliveries(
+      this.db,
+      this.organizationId,
+      subscriptionId
+    );
+  }
+
+  listWorkspaceOutboundDeliveries() {
+    return this.db.select().from(workspaceOutboundWebhookDeliveries).all();
+  }
+
+  // For tests / recovery: redeliver pending outbound deliveries.
+  deliverWebhooks(event: RealtimeEvent) {
+    return deliverWebhooks(this.db, this.env, this.organizationId, event);
+  }
+
+  retryWebhookDeliveries() {
+    return retryWebhookDeliveries(this.db, this.env, this.organizationId);
   }
 
   private async recordIssueHistory(
@@ -500,7 +1165,6 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   async listIssueHistory(issueId: string) {
     await this.ready;
-    await this.ensureIssueHistoryBackfilled();
     return this.db
       .select()
       .from(workspaceIssueHistory)
@@ -511,7 +1175,6 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   async listWorkspaceIssueHistory() {
     await this.ready;
-    await this.ensureIssueHistoryBackfilled();
     return this.db.select().from(workspaceIssueHistory).all();
   }
 
@@ -621,7 +1284,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       organizationId: this.organizationId,
       issue,
     });
-    await notifyIssueCreated(this.env, this.organizationId, issue, actorId);
+    await this.notifyIssueEvent(issue, "issue_created", actorId);
     await this.recordIssueHistory(
       issue.id,
       [{ field: "created", fromValue: null, toValue: issue.title }],
@@ -847,7 +1510,6 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (rows.length === 0) {
       return { total: 0, totalEstimate: 0, series: [] };
     }
-    await this.ensureIssueHistoryBackfilled();
     const history = await this.db
       .select({
         issueId: workspaceIssueHistory.issueId,
@@ -1276,7 +1938,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       organizationId: this.organizationId,
       issue,
     });
-    await notifyIssueUpdated(this.env, this.organizationId, issue, actorId);
+    await this.notifyIssueEvent(issue, "issue_updated", actorId);
 
     if (issue.status !== old.status) {
       await this.applyStatusAutomation(issue, old, actorId);
@@ -1369,12 +2031,60 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       .get();
     if (!deleted) return false;
 
+    const commentIds = (
+      await this.db
+        .select({ id: workspaceComments.id })
+        .from(workspaceComments)
+        .where(eq(workspaceComments.issueId, id))
+        .all()
+    ).map((row) => row.id);
     await this.db
       .delete(workspaceIssueHistory)
       .where(eq(workspaceIssueHistory.issueId, id));
     await this.db
       .delete(workspaceComments)
       .where(eq(workspaceComments.issueId, id));
+    await this.db
+      .delete(workspaceIssueSubscribers)
+      .where(eq(workspaceIssueSubscribers.issueId, id));
+    await this.db
+      .delete(workspaceIssueRelations)
+      .where(
+        or(
+          eq(workspaceIssueRelations.fromIssueId, id),
+          eq(workspaceIssueRelations.toIssueId, id)
+        )
+      );
+    await this.db
+      .delete(workspaceIssueApprovals)
+      .where(eq(workspaceIssueApprovals.issueId, id));
+    const reactionTargets = [id, ...commentIds];
+    if (reactionTargets.length > 0) {
+      await this.db
+        .delete(workspaceReactions)
+        .where(inArray(workspaceReactions.targetId, reactionTargets));
+    }
+    await this.db
+      .delete(workspaceAttachments)
+      .where(eq(workspaceAttachments.issueId, id));
+    await this.db
+      .delete(workspaceNotifications)
+      .where(eq(workspaceNotifications.issueId, id));
+    const sessionIds = (
+      await this.db
+        .select({ id: workspaceAgentSessions.id })
+        .from(workspaceAgentSessions)
+        .where(eq(workspaceAgentSessions.issueId, id))
+        .all()
+    ).map((row) => row.id);
+    if (sessionIds.length > 0) {
+      await this.db
+        .delete(workspaceAgentActivities)
+        .where(inArray(workspaceAgentActivities.sessionId, sessionIds));
+      await this.db
+        .delete(workspaceAgentSessions)
+        .where(inArray(workspaceAgentSessions.id, sessionIds));
+    }
 
     const index = await this.ensureSearchIndex();
     await removeIssueDocuments(index, id);
@@ -1385,7 +2095,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       issueId: id,
     });
     if (old) {
-      await notifyIssueDeleted(this.env, this.organizationId, old, actorId);
+      await this.notifyIssueEvent(old, "issue_deleted", actorId);
     }
     return true;
   }
@@ -1402,7 +2112,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       issue,
       comment,
     });
-    await notifyCommentCreated(this.env, this.organizationId, issue, actorId);
+    await this.notifyIssueEvent(issue, "comment_created", actorId);
   }
 
   async emitCommentUpdated(comment: Comment, issue: Issue): Promise<void> {
