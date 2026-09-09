@@ -44,6 +44,29 @@ export function createAuth(env: AppEnv) {
             },
           },
         },
+        sendInvitationEmail: async (data) => {
+          if (!env.EMAIL || !env.EMAIL_FROM || !env.BETTER_AUTH_URL) {
+            return;
+          }
+          try {
+            const { EmailMessage } = await import("cloudflare:email");
+            const url = `${env.BETTER_AUTH_URL}/api/auth/organization/accept-invitation?id=${encodeURIComponent(data.id)}`;
+            const raw = [
+              `From: ${env.EMAIL_FROM}`,
+              `To: ${data.email}`,
+              `Subject: Invitation to join the workspace`,
+              "MIME-Version: 1.0",
+              'Content-Type: text/plain; charset="utf-8"',
+              "",
+              `You have been invited to join the workspace. Accept here: ${url}`,
+            ].join("\r\n");
+            await env.EMAIL.send(
+              new EmailMessage(env.EMAIL_FROM, data.email, raw)
+            );
+          } catch {
+            // Email is best-effort.
+          }
+        },
       }),
     ],
   });

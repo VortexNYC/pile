@@ -172,6 +172,52 @@ app.openapi(githubWebhookRoute, async (c) =>
   c.json(await processGithubWebhook(c))
 );
 
+app.get("/api/auth/organization/accept-invitation", (c) => {
+  const { id, invitationId } = z
+    .object({
+      id: z.string().optional(),
+      invitationId: z.string().optional(),
+    })
+    .parse(c.req.query());
+  const inviteId = id ?? invitationId;
+  if (!inviteId) {
+    return c.text("Missing invitation id", 400);
+  }
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Accept Invitation</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 480px; margin: 4rem auto; padding: 1rem; text-align: center; }
+    button { padding: 0.75rem 1.5rem; font-size: 1rem; cursor: pointer; }
+    #status { margin-top: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>Accept Invitation</h1>
+  <p>Click below to accept the invitation and join the workspace.</p>
+  <button id="accept">Accept Invitation</button>
+  <p id="status"></p>
+  <script>
+    document.getElementById("accept").addEventListener("click", async () => {
+      const res = await fetch("/api/auth/organization/accept-invitation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invitationId: ${JSON.stringify(inviteId)} }),
+      });
+      const text = await res.text();
+      document.getElementById("status").textContent = res.ok
+        ? "Invitation accepted. You can close this window."
+        : "Error: " + text;
+    });
+  </script>
+</body>
+</html>`;
+  return c.html(html);
+});
+
 app.all("/api/auth/*", (c) => {
   return createAuth(c.env).handler(c.req.raw);
 });

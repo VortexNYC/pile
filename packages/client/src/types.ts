@@ -8980,8 +8980,10 @@ export interface paths {
                         /** @enum {string} */
                         entityType: "issues" | "projects";
                         teamId?: string;
-                        status?: string;
-                        priority?: string;
+                        /** @enum {string} */
+                        status?: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
+                        /** @enum {string} */
+                        priority?: "low" | "medium" | "high" | "urgent";
                         assigneeId?: string;
                         projectId?: string;
                     };

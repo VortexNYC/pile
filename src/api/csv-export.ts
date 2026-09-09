@@ -7,13 +7,14 @@ import { listProjects } from "../global/workspace-entities.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
+import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "../types/workspace.js";
 import { getWorkspaceStub } from "./stub.js";
 
 const exportRequestSchema = z.object({
   entityType: z.enum(["issues", "projects"]),
   teamId: z.string().optional(),
-  status: z.string().optional(),
-  priority: z.string().optional(),
+  status: z.enum(ISSUE_STATUSES).optional(),
+  priority: z.enum(ISSUE_PRIORITIES).optional(),
   assigneeId: z.string().optional(),
   projectId: z.string().optional(),
 });

@@ -5215,10 +5215,24 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string"
             },
             "status": {
-              "type": "string"
+              "type": "string",
+              "enum": [
+                "triage",
+                "backlog",
+                "todo",
+                "in_progress",
+                "done",
+                "canceled"
+              ]
             },
             "priority": {
-              "type": "string"
+              "type": "string",
+              "enum": [
+                "low",
+                "medium",
+                "high",
+                "urgent"
+              ]
             },
             "assigneeId": {
               "type": "string"

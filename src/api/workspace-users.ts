@@ -1,12 +1,48 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
+import { isAPIError } from "better-auth/api";
 import { and, eq, notInArray } from "drizzle-orm";
 
 import { createD1 } from "../global/db.js";
 import { invitation, member, user as userTable } from "../global/schema.js";
+import { createAuth } from "../platform/auth.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
+
+function mapAuthError(error: unknown): never {
+  if (isAPIError(error)) {
+    const status = error.statusCode;
+    const code =
+      status === 401
+        ? "UNAUTHORIZED"
+        : status === 403
+          ? "FORBIDDEN"
+          : status === 404
+            ? "NOT_FOUND"
+            : status === 400
+              ? "BAD_REQUEST"
+              : "INTERNAL_ERROR";
+    throw new VortexError({ code, status, message: error.message });
+  }
+  throw error;
+}
+
+function toInvitationResponse(
+  row: typeof invitation.$inferSelect
+): z.infer<typeof invitationSchema> {
+  return {
+    id: row.id,
+    organizationId: row.organizationId,
+    email: row.email,
+    role: row.role,
+    status: row.status,
+    teamId: row.teamId ?? null,
+    expiresAt: row.expiresAt.getTime(),
+    inviterId: row.inviterId,
+    createdAt: row.createdAt.getTime(),
+  };
+}
 
 const userSchema = z.object({
   id: z.string(),
@@ -115,52 +151,15 @@ export function registerWorkspaceUserRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(leaveOrganizationRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
-    const identity = c.var.workspaceIdentity;
-    const db = createD1(c.env.D1);
-    const me = await db
-      .select({ role: member.role })
-      .from(member)
-      .where(
-        and(
-          eq(member.organizationId, organizationId),
-          eq(member.userId, identity.id)
-        )
-      )
-      .get();
-    if (!me) {
-      throw new VortexError({
-        code: "NOT_FOUND",
-        status: 404,
-        message: "Member not found",
+    const auth = createAuth(c.env);
+    try {
+      await auth.api.leaveOrganization({
+        headers: c.req.raw.headers,
+        body: { organizationId },
       });
+    } catch (error) {
+      mapAuthError(error);
     }
-    if (me.role === "owner") {
-      const owners = await db
-        .select({ id: member.id })
-        .from(member)
-        .where(
-          and(
-            eq(member.organizationId, organizationId),
-            eq(member.role, "owner")
-          )
-        )
-        .all();
-      if (owners.length <= 1) {
-        throw new VortexError({
-          code: "BAD_REQUEST",
-          status: 400,
-          message: "Cannot leave workspace as the only owner",
-        });
-      }
-    }
-    await db
-      .delete(member)
-      .where(
-        and(
-          eq(member.organizationId, organizationId),
-          eq(member.userId, identity.id)
-        )
-      );
     return c.body(null, 204);
   });
 
@@ -184,42 +183,38 @@ export function registerWorkspaceUserRoutes(app: OpenAPIHono<AppContext>) {
         message: "Invitation not found",
       });
     }
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7);
-    await db
-      .update(invitation)
-      .set({
-        status: "pending",
-        expiresAt,
-      })
-      .where(eq(invitation.id, id));
 
-    if (c.env.EMAIL && c.env.EMAIL_FROM && c.env.BETTER_AUTH_URL) {
-      try {
-        const acceptUrl = `${c.env.BETTER_AUTH_URL}/api/auth/organization/accept-invitation?invitationId=${encodeURIComponent(invite.id)}`;
-        const raw = [
-          `From: ${c.env.EMAIL_FROM}`,
-          `To: ${invite.email}`,
-          `Subject: Invitation to join the workspace`,
-          "MIME-Version: 1.0",
-          'Content-Type: text/plain; charset="utf-8"',
-          "",
-          `You have been invited to join the workspace. Accept here: ${acceptUrl}`,
-        ].join("\r\n");
-        const { EmailMessage } = await import("cloudflare:email");
-        await c.env.EMAIL.send(
-          new EmailMessage(c.env.EMAIL_FROM, invite.email, raw)
-        );
-      } catch {
-        // Email is best-effort.
-      }
+    const auth = createAuth(c.env);
+    let result: unknown;
+    try {
+      result = await auth.api.createInvitation({
+        headers: c.req.raw.headers,
+        body: {
+          email: invite.email,
+          organizationId,
+          role: invite.role,
+          resend: true,
+          teamId: invite.teamId ?? undefined,
+        },
+      });
+    } catch (error) {
+      mapAuthError(error);
     }
 
+    const parsed = z.object({ id: z.string() }).safeParse(result);
+    const invitationId = parsed.success ? parsed.data.id : id;
     const updated = await db
       .select()
       .from(invitation)
-      .where(eq(invitation.id, id))
+      .where(eq(invitation.id, invitationId))
       .get();
-    return c.json(updated!);
+    if (!updated) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Invitation not found",
+      });
+    }
+    return c.json(toInvitationResponse(updated));
   });
 }
