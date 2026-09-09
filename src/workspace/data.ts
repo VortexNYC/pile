@@ -1825,7 +1825,7 @@ export function upsertNotificationPreferences(
       ? input.mutedTypes
         ? input.mutedTypes.join(",")
         : null
-      : existing?.mutedTypes ?? null;
+      : (existing?.mutedTypes ?? null);
   const values = {
     inApp: input.inApp ?? existing?.inApp ?? true,
     webhook: input.webhook ?? existing?.webhook ?? true,
@@ -2005,7 +2005,10 @@ export function getExternalLink(
     .select()
     .from(externalLinks)
     .where(
-      and(eq(externalLinks.organizationId, organizationId), eq(externalLinks.id, id))
+      and(
+        eq(externalLinks.organizationId, organizationId),
+        eq(externalLinks.id, id)
+      )
     )
     .get();
 }
@@ -2044,7 +2047,10 @@ export async function updateExternalLink(
       label: input.label === undefined ? existing.label : input.label,
     })
     .where(
-      and(eq(externalLinks.organizationId, organizationId), eq(externalLinks.id, id))
+      and(
+        eq(externalLinks.organizationId, organizationId),
+        eq(externalLinks.id, id)
+      )
     );
   return getExternalLink(db, organizationId, id);
 }
@@ -2059,7 +2065,10 @@ export async function deleteExternalLink(
   await db
     .delete(externalLinks)
     .where(
-      and(eq(externalLinks.organizationId, organizationId), eq(externalLinks.id, id))
+      and(
+        eq(externalLinks.organizationId, organizationId),
+        eq(externalLinks.id, id)
+      )
     );
   return true;
 }
@@ -2166,7 +2175,10 @@ export interface GitAutomationStateInput {
   prState: string;
 }
 
-export function listGitAutomationStates(db: WorkspaceDb, organizationId: string) {
+export function listGitAutomationStates(
+  db: WorkspaceDb,
+  organizationId: string
+) {
   return db
     .select()
     .from(gitAutomationStates)
@@ -2311,8 +2323,7 @@ export async function updateGitAutomationTargetBranch(
     .update(gitAutomationTargetBranches)
     .set({
       name: input.name ?? existing.name,
-      pattern:
-        input.pattern === undefined ? existing.pattern : input.pattern,
+      pattern: input.pattern === undefined ? existing.pattern : input.pattern,
     })
     .where(
       and(
@@ -2559,7 +2570,9 @@ export function listCustomerNeeds(
   organizationId: string,
   args: { customerId?: string; issueId?: string; projectId?: string } = {}
 ) {
-  const conditions = [eq(workspaceCustomerNeeds.organizationId, organizationId)];
+  const conditions = [
+    eq(workspaceCustomerNeeds.organizationId, organizationId),
+  ];
   if (args.customerId !== undefined)
     conditions.push(eq(workspaceCustomerNeeds.customerId, args.customerId));
   if (args.issueId !== undefined)
@@ -2865,12 +2878,7 @@ export function updateDocumentSpace(
   }
 ) {
   const updates: Record<string, unknown> = {};
-  for (const key of [
-    "name",
-    "description",
-    "icon",
-    "publicSharing",
-  ] as const) {
+  for (const key of ["name", "description", "icon", "publicSharing"] as const) {
     if (patch[key] !== undefined) updates[key] = patch[key];
   }
   return db
@@ -3105,10 +3113,7 @@ export function revokeDocumentPermission(
   );
 }
 
-export function listDocumentPermissions(
-  db: WorkspaceDb,
-  documentId: string
-) {
+export function listDocumentPermissions(db: WorkspaceDb, documentId: string) {
   return db
     .select()
     .from(workspaceDocumentPermissions)
@@ -3168,7 +3173,9 @@ export function listDocumentLinks(
   organizationId: string,
   args: { documentId?: string; targetType?: string; targetId?: string } = {}
 ) {
-  const conditions = [eq(workspaceDocumentLinks.organizationId, organizationId)];
+  const conditions = [
+    eq(workspaceDocumentLinks.organizationId, organizationId),
+  ];
   if (args.documentId !== undefined)
     conditions.push(eq(workspaceDocumentLinks.documentId, args.documentId));
   if (args.targetType !== undefined)

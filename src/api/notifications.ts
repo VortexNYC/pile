@@ -183,7 +183,6 @@ function toNotificationResponse(row: {
   };
 }
 
-
 const preferencesSchema = z.object({
   organizationId: z.string(),
   userId: z.string(),
@@ -366,10 +365,7 @@ export function registerNotificationRoutes(app: OpenAPIHono<AppContext>) {
     const input = c.req.valid("json");
     const stub = getWorkspaceStub(c.env, organizationId);
     const identity = c.var.workspaceIdentity;
-    const prefs = await stub.upsertNotificationPreferences(
-      identity.id,
-      input
-    );
+    const prefs = await stub.upsertNotificationPreferences(identity.id, input);
     return c.json(toPreferencesResponse(prefs));
   });
 }

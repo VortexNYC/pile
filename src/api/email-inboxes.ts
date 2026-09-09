@@ -133,7 +133,12 @@ export function registerEmailInboxRoutes(app: OpenAPIHono<AppContext>) {
     const row = await db
       .select()
       .from(emailInboxes)
-      .where(and(eq(emailInboxes.id, id), eq(emailInboxes.organizationId, organizationId)))
+      .where(
+        and(
+          eq(emailInboxes.id, id),
+          eq(emailInboxes.organizationId, organizationId)
+        )
+      )
       .get();
     if (!row) {
       throw new VortexError({
@@ -144,7 +149,12 @@ export function registerEmailInboxRoutes(app: OpenAPIHono<AppContext>) {
     }
     await db
       .delete(emailInboxes)
-      .where(and(eq(emailInboxes.id, id), eq(emailInboxes.organizationId, organizationId)));
+      .where(
+        and(
+          eq(emailInboxes.id, id),
+          eq(emailInboxes.organizationId, organizationId)
+        )
+      );
     return c.body(null, 204);
   });
 }

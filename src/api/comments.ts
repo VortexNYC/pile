@@ -2,7 +2,6 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
 import { createD1 } from "../global/db.js";
-import { resolveMentions } from "./mentions.js";
 import { getInstallationToken } from "../global/github-auth.js";
 import { findGithubInstallation } from "../global/github-installations.js";
 import { findRepoIssueByIssueId } from "../global/repo-issues.js";
@@ -11,6 +10,7 @@ import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
+import { resolveMentions } from "./mentions.js";
 
 async function getStub(env: WorkerEnv, organizationId: string) {
   const stub = env.WORKSPACE_DURABLE_OBJECT.get(

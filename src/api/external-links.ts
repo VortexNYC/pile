@@ -2,8 +2,8 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
 import { createD1 } from "../global/db.js";
-import { getProject } from "../global/workspace-entities.js";
 import { canAccessTeam } from "../global/teams.js";
+import { getProject } from "../global/workspace-entities.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
@@ -44,7 +44,9 @@ const listRoute = createRoute({
     200: {
       description: "External links",
       content: {
-        "application/json": { schema: z.object({ links: z.array(linkSchema) }) },
+        "application/json": {
+          schema: z.object({ links: z.array(linkSchema) }),
+        },
       },
     },
   },
@@ -126,28 +128,48 @@ async function checkEntityAccess(
     case "issue": {
       const issue = await stub.getIssue(entityId);
       if (!issue)
-        throw new VortexError({ code: "NOT_FOUND", status: 404, message: "Issue not found" });
+        throw new VortexError({
+          code: "NOT_FOUND",
+          status: 404,
+          message: "Issue not found",
+        });
       const allowed = await canAccessTeam(db, issue.teamId, identity);
       if (!allowed)
-        throw new VortexError({ code: "NOT_FOUND", status: 404, message: "Entity not found" });
+        throw new VortexError({
+          code: "NOT_FOUND",
+          status: 404,
+          message: "Entity not found",
+        });
       return;
     }
     case "project": {
       const project = await getProject(db, organizationId, entityId);
       if (!project)
-        throw new VortexError({ code: "NOT_FOUND", status: 404, message: "Project not found" });
+        throw new VortexError({
+          code: "NOT_FOUND",
+          status: 404,
+          message: "Project not found",
+        });
       return;
     }
     case "customer": {
       const customer = await stub.getCustomer(entityId);
       if (!customer)
-        throw new VortexError({ code: "NOT_FOUND", status: 404, message: "Customer not found" });
+        throw new VortexError({
+          code: "NOT_FOUND",
+          status: 404,
+          message: "Customer not found",
+        });
       return;
     }
     case "document": {
       const doc = await stub.getDocument(entityId);
       if (!doc)
-        throw new VortexError({ code: "NOT_FOUND", status: 404, message: "Document not found" });
+        throw new VortexError({
+          code: "NOT_FOUND",
+          status: 404,
+          message: "Document not found",
+        });
       return;
     }
     default:
@@ -176,7 +198,14 @@ export function registerExternalLinkRoutes(app: OpenAPIHono<AppContext>) {
     const input = c.req.valid("json");
     const identity = c.var.workspaceIdentity;
     const db = createD1(c.env.D1);
-    await checkEntityAccess(c.env, db, organizationId, input.entityType, input.entityId, identity);
+    await checkEntityAccess(
+      c.env,
+      db,
+      organizationId,
+      input.entityType,
+      input.entityId,
+      identity
+    );
     const stub = getWorkspaceStub(c.env, organizationId);
     const link = await stub.createExternalLink(
       {

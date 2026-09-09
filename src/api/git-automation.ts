@@ -95,7 +95,9 @@ const updateStateRoute = createRoute({
   middleware: [rls("write")],
   request: {
     params: orgIdParam.merge(z.object({ id: z.string() })),
-    body: { content: { "application/json": { schema: stateBodySchema.partial() } } },
+    body: {
+      content: { "application/json": { schema: stateBodySchema.partial() } },
+    },
   },
   responses: {
     200: {
@@ -239,8 +241,7 @@ export function registerGitAutomationRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(deleteStateRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
-    if (!(await stub.deleteGitAutomationState(id)))
-      notFound("State not found");
+    if (!(await stub.deleteGitAutomationState(id))) notFound("State not found");
     return c.body(null, 204);
   });
 

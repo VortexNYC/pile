@@ -1,6 +1,6 @@
-import { and, eq } from "drizzle-orm";
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
+import { and, eq } from "drizzle-orm";
 
 import { createD1 } from "../global/db.js";
 import { emojis } from "../global/schema.js";
@@ -33,7 +33,9 @@ const listRoute = createRoute({
     200: {
       description: "Emojis",
       content: {
-        "application/json": { schema: z.object({ emojis: z.array(emojiSchema) }) },
+        "application/json": {
+          schema: z.object({ emojis: z.array(emojiSchema) }),
+        },
       },
     },
   },

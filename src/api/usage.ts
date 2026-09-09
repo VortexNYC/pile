@@ -106,9 +106,7 @@ export function registerUsageRoutes(app: OpenAPIHono<AppContext>) {
     const existing = await db
       .select()
       .from(usageRecords)
-      .where(
-        eq(usageRecords.organizationId, organizationId)
-      )
+      .where(eq(usageRecords.organizationId, organizationId))
       .all();
     const match = existing.find(
       (r) =>

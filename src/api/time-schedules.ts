@@ -122,7 +122,12 @@ export function registerTimeScheduleRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId, id } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
     const ts = await stub.getTimeSchedule(id);
-    if (!ts) throw new VortexError({ code: "NOT_FOUND", status: 404, message: "Time schedule not found" });
+    if (!ts)
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Time schedule not found",
+      });
     return c.json(ts);
   });
 
@@ -132,7 +137,12 @@ export function registerTimeScheduleRoutes(app: OpenAPIHono<AppContext>) {
     const identity = c.var.workspaceIdentity;
     const stub = getWorkspaceStub(c.env, organizationId);
     const ts = await stub.updateTimeSchedule(id, input, identity.id);
-    if (!ts) throw new VortexError({ code: "NOT_FOUND", status: 404, message: "Time schedule not found" });
+    if (!ts)
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Time schedule not found",
+      });
     return c.json(ts);
   });
 
@@ -141,7 +151,12 @@ export function registerTimeScheduleRoutes(app: OpenAPIHono<AppContext>) {
     const identity = c.var.workspaceIdentity;
     const stub = getWorkspaceStub(c.env, organizationId);
     const ok = await stub.deleteTimeSchedule(id, identity.id);
-    if (!ok) throw new VortexError({ code: "NOT_FOUND", status: 404, message: "Time schedule not found" });
+    if (!ok)
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Time schedule not found",
+      });
     return c.body(null, 204);
   });
 }

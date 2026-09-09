@@ -494,8 +494,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(deleteTierRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
-    if (!(await stub.deleteCustomerTier(id)))
-      return notFound("Tier not found");
+    if (!(await stub.deleteCustomerTier(id))) return notFound("Tier not found");
     return c.body(null, 204);
   });
 
@@ -573,8 +572,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(deleteNeedRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
-    if (!(await stub.deleteCustomerNeed(id)))
-      return notFound("Need not found");
+    if (!(await stub.deleteCustomerNeed(id))) return notFound("Need not found");
     return c.body(null, 204);
   });
 }

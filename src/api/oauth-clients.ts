@@ -152,7 +152,9 @@ const deleteOAuthClientRoute = createRoute({
   },
 });
 
-function toClient(row: typeof apikey.$inferSelect): z.infer<typeof oauthClientSchema> {
+function toClient(
+  row: typeof apikey.$inferSelect
+): z.infer<typeof oauthClientSchema> {
   const parsed = parseMetadata(row.metadata);
   const createdAt =
     row.createdAt instanceof Date
@@ -290,7 +292,13 @@ export function registerOAuthClientRoutes(app: OpenAPIHono<AppContext>) {
         metadata: JSON.stringify(next),
       })
       .where(eq(apikey.id, id));
-    return c.json(toClient({ ...row, name: input.name ?? row.name, metadata: JSON.stringify(next) }));
+    return c.json(
+      toClient({
+        ...row,
+        name: input.name ?? row.name,
+        metadata: JSON.stringify(next),
+      })
+    );
   });
 
   app.openapi(deleteOAuthClientRoute, async (c) => {

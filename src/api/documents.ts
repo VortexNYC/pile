@@ -7,10 +7,7 @@ import { teamMember } from "../global/schema.js";
 import { createAuth } from "../platform/auth.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
-import type {
-  AppContext,
-  WorkerEnv,
-} from "../platform/middleware.js";
+import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 import { resolveMentions } from "./mentions.js";
 import { getWorkspaceStub } from "./stub.js";
@@ -173,7 +170,11 @@ async function assertDocAccess(
             .all()
         ).map((row) => row.teamId)
       : [];
-  const level = await stub.documentAccessLevel(documentId, identity.id, teamIds);
+  const level = await stub.documentAccessLevel(
+    documentId,
+    identity.id,
+    teamIds
+  );
   if (level === null || (required === "edit" && level === "view")) {
     if (level === null) return notFound();
     throw new VortexError({
@@ -326,7 +327,6 @@ const historyRoute = createRoute({
     404: { description: "Document not found" },
   },
 });
-
 
 const spaceSchema = z.object({
   id: z.string(),
@@ -643,7 +643,6 @@ const searchRoute = createRoute({
   },
 });
 
-
 const permissionSchema = z.object({
   // User id, API-key id, or Better Auth team id (actorType="team").
   actorId: z.string(),
@@ -730,7 +729,6 @@ const listBacklinksRoute = createRoute({
   },
 });
 
-
 const issueDocumentsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/issues/{issueId}/documents",
@@ -750,7 +748,6 @@ const issueDocumentsRoute = createRoute({
     },
   },
 });
-
 
 const restoreVersionRoute = createRoute({
   method: "post",
@@ -971,8 +968,7 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId, token } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
     const share = await stub.getDocumentShareByToken(token);
-    if (!share || share.organizationId !== organizationId)
-      return notFound();
+    if (!share || share.organizationId !== organizationId) return notFound();
     if (share.expiresAt && share.expiresAt < new Date().toISOString())
       return notFound();
     const doc = await stub.getDocument(share.documentId);

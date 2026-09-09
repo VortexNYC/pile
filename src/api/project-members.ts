@@ -1,5 +1,6 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
+
 import { createD1 } from "../global/db.js";
 import {
   addProjectMember,
@@ -165,7 +166,12 @@ export function registerProjectMemberRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId, id } = c.req.valid("param");
     const input = c.req.valid("json");
     const db = createD1(c.env.D1);
-    const row = await updateProjectMemberRole(db, organizationId, id, input.role);
+    const row = await updateProjectMemberRole(
+      db,
+      organizationId,
+      id,
+      input.role
+    );
     if (!row) {
       throw new VortexError({
         code: "NOT_FOUND",

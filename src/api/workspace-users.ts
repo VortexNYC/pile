@@ -1,6 +1,6 @@
-import { and, eq, notInArray } from "drizzle-orm";
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
+import { and, eq, notInArray } from "drizzle-orm";
 
 import { createD1 } from "../global/db.js";
 import { invitation, member, user as userTable } from "../global/schema.js";
@@ -40,7 +40,9 @@ const availableUsersRoute = createRoute({
     200: {
       description: "Users not in this workspace",
       content: {
-        "application/json": { schema: z.object({ users: z.array(userSchema) }) },
+        "application/json": {
+          schema: z.object({ users: z.array(userSchema) }),
+        },
       },
     },
   },
@@ -97,7 +99,9 @@ export function registerWorkspaceUserRoutes(app: OpenAPIHono<AppContext>) {
         image: userTable.image,
       })
       .from(userTable)
-      .where(memberIds.length > 0 ? notInArray(userTable.id, memberIds) : undefined)
+      .where(
+        memberIds.length > 0 ? notInArray(userTable.id, memberIds) : undefined
+      )
       .all();
     const filtered = q
       ? rows.filter(
@@ -117,7 +121,10 @@ export function registerWorkspaceUserRoutes(app: OpenAPIHono<AppContext>) {
       .select({ role: member.role })
       .from(member)
       .where(
-        and(eq(member.organizationId, organizationId), eq(member.userId, identity.id))
+        and(
+          eq(member.organizationId, organizationId),
+          eq(member.userId, identity.id)
+        )
       )
       .get();
     if (!me) {
@@ -149,7 +156,10 @@ export function registerWorkspaceUserRoutes(app: OpenAPIHono<AppContext>) {
     await db
       .delete(member)
       .where(
-        and(eq(member.organizationId, organizationId), eq(member.userId, identity.id))
+        and(
+          eq(member.organizationId, organizationId),
+          eq(member.userId, identity.id)
+        )
       );
     return c.body(null, 204);
   });
@@ -160,7 +170,12 @@ export function registerWorkspaceUserRoutes(app: OpenAPIHono<AppContext>) {
     const invite = await db
       .select()
       .from(invitation)
-      .where(and(eq(invitation.id, id), eq(invitation.organizationId, organizationId)))
+      .where(
+        and(
+          eq(invitation.id, id),
+          eq(invitation.organizationId, organizationId)
+        )
+      )
       .get();
     if (!invite) {
       throw new VortexError({

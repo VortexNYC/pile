@@ -7,9 +7,9 @@ import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { Issue } from "../types/workspace.js";
 import type { workspaceAgentSessions } from "../workspace/schema.js";
-import { DevinAgentProvider } from "./devin.js";
 import { CfAgentProvider } from "./cf-agent.js";
 import { CursorAgentProvider } from "./cursor.js";
+import { DevinAgentProvider } from "./devin.js";
 import { provisionOutpostWorker } from "./outpost.js";
 import type { AgentProvider } from "./provider.js";
 

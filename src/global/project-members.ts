@@ -78,7 +78,10 @@ export async function updateProjectMemberRole(
     .update(projectMembers)
     .set({ role, updatedAt: now() })
     .where(
-      and(eq(projectMembers.organizationId, organizationId), eq(projectMembers.id, id))
+      and(
+        eq(projectMembers.organizationId, organizationId),
+        eq(projectMembers.id, id)
+      )
     );
   return db
     .select()
@@ -95,6 +98,9 @@ export async function removeProjectMember(
   await db
     .delete(projectMembers)
     .where(
-      and(eq(projectMembers.organizationId, organizationId), eq(projectMembers.id, id))
+      and(
+        eq(projectMembers.organizationId, organizationId),
+        eq(projectMembers.id, id)
+      )
     );
 }

@@ -102,10 +102,10 @@ an issue's `repo` field overrides it. Model per dispatch via `model`.
 **Self-hosted (BYOM).** Cursor's equivalent of a Devin outpost — workers you
 run that execute tool calls while the agent loop stays in Cursor's cloud:
 
-- `config.env: {"type":"machine","name":"<worker name>"}` — a *My Machines*
+- `config.env: {"type":"machine","name":"<worker name>"}` — a _My Machines_
   worker (`agent worker --name <name> --api-key <user key> start`), bound to
   the repos in its `--worker-dir` checkouts. Personal/user API key.
-- `config.env: {"type":"pool","name":"<pool>"}` — a *Team Pool* worker
+- `config.env: {"type":"pool","name":"<pool>"}` — a _Team Pool_ worker
   (`agent worker --pool <name> start`). Requires a Cursor Enterprise
   **service account** key — personal keys can't start pool workers.
 

@@ -46,7 +46,11 @@ export function blocksToMarkdown(raw: string): string {
       lines.push(`${indent}- [${checked}] ${text}`);
     } else if (type === "codeBlock") {
       const lang = (block.props?.language as string | undefined) ?? "";
-      lines.push(`${indent}\`\`\`${lang}`, `${indent}${text}`, `${indent}\`\`\``);
+      lines.push(
+        `${indent}\`\`\`${lang}`,
+        `${indent}${text}`,
+        `${indent}\`\`\``
+      );
     } else if (type === "quote") {
       lines.push(`${indent}> ${text}`);
     } else if (text) {

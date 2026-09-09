@@ -30,9 +30,7 @@ function r2Key(organizationId: string, id: string, filename: string) {
 
 function base64ToBytes(value: string) {
   const binary = atob(value);
-  return new Uint8Array(
-    Array.from(binary, (char) => char.charCodeAt(0))
-  );
+  return new Uint8Array(Array.from(binary, (char) => char.charCodeAt(0)));
 }
 
 const uploadRoute = createRoute({
@@ -138,9 +136,7 @@ export function registerFileRoutes(app: OpenAPIHono<AppContext>) {
     const arrayBuffer = await response.arrayBuffer();
     const id = crypto.randomUUID();
     const filename =
-      input.filename ||
-      new URL(input.url).pathname.split("/").pop() ||
-      "image";
+      input.filename || new URL(input.url).pathname.split("/").pop() || "image";
     const contentType =
       response.headers.get("content-type") || "application/octet-stream";
     const key = r2Key(organizationId, id, filename);
@@ -179,7 +175,8 @@ export function registerFileRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
     const headers: Record<string, string> = {
-      "content-type": object.httpMetadata?.contentType || "application/octet-stream",
+      "content-type":
+        object.httpMetadata?.contentType || "application/octet-stream",
     };
     if (object.size) headers["content-length"] = String(object.size);
     return c.body(object.body, { headers });

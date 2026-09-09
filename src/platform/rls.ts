@@ -31,7 +31,10 @@ async function getProjectRole(
     .select({ leadId: projects.leadId })
     .from(projects)
     .where(
-      and(eq(projects.organizationId, organizationId), eq(projects.id, projectId))
+      and(
+        eq(projects.organizationId, organizationId),
+        eq(projects.id, projectId)
+      )
     )
     .get();
   if (project?.leadId === userId) {
@@ -75,7 +78,12 @@ export function rls(...allowed: string[]) {
         });
       }
       const db = createD1(c.env.D1);
-      const role = await getProjectRole(db, organizationId, projectId, identity.id);
+      const role = await getProjectRole(
+        db,
+        organizationId,
+        projectId,
+        identity.id
+      );
       const allowedRoles = expandProjectRoles(allowed);
       if (role && allowedRoles.has(role)) {
         await next();

@@ -605,8 +605,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       const notified = new Set<string>();
       if (values.documentId) {
         await Promise.all(
-          data.listDocumentWatchers(this.db, subjectId).map(
-            async (watcherId) => {
+          data
+            .listDocumentWatchers(this.db, subjectId)
+            .map(async (watcherId) => {
               if (watcherId === values.authorId || notified.has(watcherId))
                 return;
               notified.add(watcherId);
@@ -617,14 +618,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
                 type: "document_commented",
                 metadata: { documentId: subjectId, commentId: id },
               });
-            }
-          )
+            })
         );
       }
       await Promise.all(
         (values.mentions ?? []).map(async (mentionId) => {
-          if (mentionId === values.authorId || notified.has(mentionId))
-            return;
+          if (mentionId === values.authorId || notified.has(mentionId)) return;
           notified.add(mentionId);
           await this.deliverNotification({
             recipientId: mentionId,
@@ -1285,8 +1284,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   async createTimeSchedule(input: data.TimeScheduleInput, actorId?: string) {
-    const ts = await data.createTimeSchedule(this.db, this.organizationId, input);
-    if (ts) this.audit("time_schedule.created", "time_schedule", ts.id, actorId);
+    const ts = await data.createTimeSchedule(
+      this.db,
+      this.organizationId,
+      input
+    );
+    if (ts)
+      this.audit("time_schedule.created", "time_schedule", ts.id, actorId);
     return ts;
   }
 
@@ -1329,7 +1333,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     id: string,
     input: Partial<data.GitAutomationStateInput>
   ) {
-    return data.updateGitAutomationState(this.db, this.organizationId, id, input);
+    return data.updateGitAutomationState(
+      this.db,
+      this.organizationId,
+      id,
+      input
+    );
   }
 
   deleteGitAutomationState(id: string) {
@@ -1345,18 +1354,31 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   createGitAutomationTargetBranch(input: data.GitAutomationTargetBranchInput) {
-    return data.createGitAutomationTargetBranch(this.db, this.organizationId, input);
+    return data.createGitAutomationTargetBranch(
+      this.db,
+      this.organizationId,
+      input
+    );
   }
 
   updateGitAutomationTargetBranch(
     id: string,
     input: Partial<data.GitAutomationTargetBranchInput>
   ) {
-    return data.updateGitAutomationTargetBranch(this.db, this.organizationId, id, input);
+    return data.updateGitAutomationTargetBranch(
+      this.db,
+      this.organizationId,
+      id,
+      input
+    );
   }
 
   deleteGitAutomationTargetBranch(id: string) {
-    return data.deleteGitAutomationTargetBranch(this.db, this.organizationId, id);
+    return data.deleteGitAutomationTargetBranch(
+      this.db,
+      this.organizationId,
+      id
+    );
   }
 
   // ---- issue external links ----
@@ -1370,8 +1392,18 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   async createExternalLink(input: data.ExternalLinkInput, actorId?: string) {
-    const link = await data.createExternalLink(this.db, this.organizationId, input);
-    if (link) this.audit("external_link.created", input.entityType, input.entityId, actorId);
+    const link = await data.createExternalLink(
+      this.db,
+      this.organizationId,
+      input
+    );
+    if (link)
+      this.audit(
+        "external_link.created",
+        input.entityType,
+        input.entityId,
+        actorId
+      );
     return link;
   }
 
@@ -1380,15 +1412,36 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     input: { url?: string; label?: string | null },
     actorId?: string
   ) {
-    const link = await data.updateExternalLink(this.db, this.organizationId, id, input);
-    if (link) this.audit("external_link.updated", link.entityType, link.entityId, actorId);
+    const link = await data.updateExternalLink(
+      this.db,
+      this.organizationId,
+      id,
+      input
+    );
+    if (link)
+      this.audit(
+        "external_link.updated",
+        link.entityType,
+        link.entityId,
+        actorId
+      );
     return link;
   }
 
   async deleteExternalLink(id: string, actorId?: string) {
-    const existing = await data.getExternalLink(this.db, this.organizationId, id);
+    const existing = await data.getExternalLink(
+      this.db,
+      this.organizationId,
+      id
+    );
     const ok = await data.deleteExternalLink(this.db, this.organizationId, id);
-    if (ok && existing) this.audit("external_link.deleted", existing.entityType, existing.entityId, actorId);
+    if (ok && existing)
+      this.audit(
+        "external_link.deleted",
+        existing.entityType,
+        existing.entityId,
+        actorId
+      );
     return ok;
   }
 
@@ -1486,11 +1539,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   createCustomerNeed(input: data.CustomerNeedInput, actorId?: string) {
-    const need = data.createCustomerNeed(
-      this.db,
-      this.organizationId,
-      input
-    );
+    const need = data.createCustomerNeed(this.db, this.organizationId, input);
     this.audit("customer_need.created", "customer", need.customerId, actorId);
     return need;
   }
@@ -1516,7 +1565,8 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       id,
       input
     );
-    if (need) this.audit("customer_need.updated", "customer", need.customerId, actorId);
+    if (need)
+      this.audit("customer_need.updated", "customer", need.customerId, actorId);
     return need;
   }
 
@@ -1627,12 +1677,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   watchDocument(documentId: string, userId: string) {
-    return data.watchDocument(
-      this.db,
-      this.organizationId,
-      documentId,
-      userId
-    );
+    return data.watchDocument(this.db, this.organizationId, documentId, userId);
   }
 
   unwatchDocument(documentId: string, userId: string) {
@@ -1668,12 +1713,8 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     contentFormat: string
   ) {
     const text =
-      contentFormat === "markdown"
-        ? content
-        : blockNoteToPlainText(content);
-    const docRefs = [...text.matchAll(/\[\[([^\]]+)\]\]/g)].map(
-      (m) => m[1]
-    );
+      contentFormat === "markdown" ? content : blockNoteToPlainText(content);
+    const docRefs = [...text.matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => m[1]);
     const issueKeys = [...text.matchAll(/\b([A-Z][A-Z0-9]+-\d+)\b/g)].map(
       (m) => m[1]
     );
@@ -1692,9 +1733,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
             .get()
         )
       ),
-      Promise.all(
-        issueKeys.map((key) => this.getIssueByIdentifier(key))
-      ),
+      Promise.all(issueKeys.map((key) => this.getIssueByIdentifier(key))),
     ]);
     const links: Array<{ targetType: string; targetId: string }> = [];
     for (const target of docTargets) {
@@ -1703,12 +1742,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     for (const issue of issueTargets) {
       if (issue) links.push({ targetType: "issue", targetId: issue.id });
     }
-    data.replaceDocumentLinks(
-      this.db,
-      this.organizationId,
-      documentId,
-      links
-    );
+    data.replaceDocumentLinks(this.db, this.organizationId, documentId, links);
   }
 
   setDocumentPermission(
@@ -2238,7 +2272,6 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       rolledOver: results.reduce((sum, r) => sum + r.moved, 0),
     };
   }
-
 
   async shiftIssueCycle(
     fromCycleId: string,

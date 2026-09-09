@@ -627,7 +627,11 @@ export async function deleteInitiative(
 
 // Project updates
 
-export function listProjectUpdates(db: D1Client, organizationId: string, projectId: string) {
+export function listProjectUpdates(
+  db: D1Client,
+  organizationId: string,
+  projectId: string
+) {
   return db
     .select()
     .from(projectUpdates)
@@ -641,17 +645,28 @@ export function listProjectUpdates(db: D1Client, organizationId: string, project
     .all();
 }
 
-export function getProjectUpdate(db: D1Client, organizationId: string, id: string) {
+export function getProjectUpdate(
+  db: D1Client,
+  organizationId: string,
+  id: string
+) {
   return db
     .select()
     .from(projectUpdates)
     .where(
-      and(eq(projectUpdates.organizationId, organizationId), eq(projectUpdates.id, id))
+      and(
+        eq(projectUpdates.organizationId, organizationId),
+        eq(projectUpdates.id, id)
+      )
     )
     .get();
 }
 
-export function getLatestProjectUpdate(db: D1Client, organizationId: string, projectId: string) {
+export function getLatestProjectUpdate(
+  db: D1Client,
+  organizationId: string,
+  projectId: string
+) {
   return db
     .select()
     .from(projectUpdates)
@@ -694,9 +709,16 @@ export async function createProjectUpdate(
     .update(projects)
     .set({ health: values.health ?? "on_track", updatedAt: ts })
     .where(
-      and(eq(projects.organizationId, organizationId), eq(projects.id, values.projectId))
+      and(
+        eq(projects.organizationId, organizationId),
+        eq(projects.id, values.projectId)
+      )
     );
-  return db.select().from(projectUpdates).where(eq(projectUpdates.id, id)).get();
+  return db
+    .select()
+    .from(projectUpdates)
+    .where(eq(projectUpdates.id, id))
+    .get();
 }
 
 export async function updateProjectUpdate(
@@ -713,26 +735,45 @@ export async function updateProjectUpdate(
     .update(projectUpdates)
     .set({ ...values, updatedAt: now() })
     .where(
-      and(eq(projectUpdates.organizationId, organizationId), eq(projectUpdates.id, id))
+      and(
+        eq(projectUpdates.organizationId, organizationId),
+        eq(projectUpdates.id, id)
+      )
     );
   return db
     .select()
     .from(projectUpdates)
     .where(
-      and(eq(projectUpdates.organizationId, organizationId), eq(projectUpdates.id, id))
+      and(
+        eq(projectUpdates.organizationId, organizationId),
+        eq(projectUpdates.id, id)
+      )
     )
     .get();
 }
 
-export async function deleteProjectUpdate(db: D1Client, organizationId: string, id: string) {
+export async function deleteProjectUpdate(
+  db: D1Client,
+  organizationId: string,
+  id: string
+) {
   await db
     .delete(projectUpdates)
-    .where(and(eq(projectUpdates.organizationId, organizationId), eq(projectUpdates.id, id)));
+    .where(
+      and(
+        eq(projectUpdates.organizationId, organizationId),
+        eq(projectUpdates.id, id)
+      )
+    );
 }
 
 // Project milestones
 
-export function listProjectMilestones(db: D1Client, organizationId: string, projectId: string) {
+export function listProjectMilestones(
+  db: D1Client,
+  organizationId: string,
+  projectId: string
+) {
   return db
     .select()
     .from(projectMilestones)
@@ -746,12 +787,19 @@ export function listProjectMilestones(db: D1Client, organizationId: string, proj
     .all();
 }
 
-export function getProjectMilestone(db: D1Client, organizationId: string, id: string) {
+export function getProjectMilestone(
+  db: D1Client,
+  organizationId: string,
+  id: string
+) {
   return db
     .select()
     .from(projectMilestones)
     .where(
-      and(eq(projectMilestones.organizationId, organizationId), eq(projectMilestones.id, id))
+      and(
+        eq(projectMilestones.organizationId, organizationId),
+        eq(projectMilestones.id, id)
+      )
     )
     .get();
 }
@@ -780,7 +828,11 @@ export async function createProjectMilestone(
     createdAt: ts,
     updatedAt: ts,
   });
-  return db.select().from(projectMilestones).where(eq(projectMilestones.id, id)).get();
+  return db
+    .select()
+    .from(projectMilestones)
+    .where(eq(projectMilestones.id, id))
+    .get();
 }
 
 export async function updateProjectMilestone(
@@ -798,28 +850,45 @@ export async function updateProjectMilestone(
     .update(projectMilestones)
     .set({ ...values, updatedAt: now() })
     .where(
-      and(eq(projectMilestones.organizationId, organizationId), eq(projectMilestones.id, id))
+      and(
+        eq(projectMilestones.organizationId, organizationId),
+        eq(projectMilestones.id, id)
+      )
     );
   return db
     .select()
     .from(projectMilestones)
     .where(
-      and(eq(projectMilestones.organizationId, organizationId), eq(projectMilestones.id, id))
+      and(
+        eq(projectMilestones.organizationId, organizationId),
+        eq(projectMilestones.id, id)
+      )
     )
     .get();
 }
 
-export async function deleteProjectMilestone(db: D1Client, organizationId: string, id: string) {
+export async function deleteProjectMilestone(
+  db: D1Client,
+  organizationId: string,
+  id: string
+) {
   await db
     .delete(projectMilestones)
     .where(
-      and(eq(projectMilestones.organizationId, organizationId), eq(projectMilestones.id, id))
+      and(
+        eq(projectMilestones.organizationId, organizationId),
+        eq(projectMilestones.id, id)
+      )
     );
 }
 
 // Project update reminders
 
-export function getProjectUpdateReminder(db: D1Client, organizationId: string, projectId: string) {
+export function getProjectUpdateReminder(
+  db: D1Client,
+  organizationId: string,
+  projectId: string
+) {
   return db
     .select()
     .from(projectUpdateReminders)
@@ -841,13 +910,20 @@ export async function upsertProjectUpdateReminder(
     nextDueAt?: string | null;
   }
 ) {
-  const existing = await getProjectUpdateReminder(db, organizationId, values.projectId);
+  const existing = await getProjectUpdateReminder(
+    db,
+    organizationId,
+    values.projectId
+  );
   if (existing) {
     await db
       .update(projectUpdateReminders)
       .set({
         cadence: values.cadence ?? existing.cadence,
-        nextDueAt: values.nextDueAt !== undefined ? values.nextDueAt : existing.nextDueAt,
+        nextDueAt:
+          values.nextDueAt !== undefined
+            ? values.nextDueAt
+            : existing.nextDueAt,
         updatedAt: now(),
       })
       .where(
@@ -870,7 +946,11 @@ export async function upsertProjectUpdateReminder(
     createdAt: ts,
     updatedAt: ts,
   });
-  return db.select().from(projectUpdateReminders).where(eq(projectUpdateReminders.id, id)).get();
+  return db
+    .select()
+    .from(projectUpdateReminders)
+    .where(eq(projectUpdateReminders.id, id))
+    .get();
 }
 
 export async function deleteProjectUpdateReminder(

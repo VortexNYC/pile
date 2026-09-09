@@ -37,8 +37,14 @@ const projectUpdateSchema = z.object({
 
 const projectUpdateBodySchema = z.object({
   content: z.string().min(1),
-  contentFormat: z.enum(["text", "markdown", "blocks"]).optional().default("text"),
-  health: z.enum(["on_track", "at_risk", "off_track", "paused"]).optional().default("on_track"),
+  contentFormat: z
+    .enum(["text", "markdown", "blocks"])
+    .optional()
+    .default("text"),
+  health: z
+    .enum(["on_track", "at_risk", "off_track", "paused"])
+    .optional()
+    .default("on_track"),
 });
 
 const projectMilestoneSchema = z.object({
@@ -98,7 +104,9 @@ export function registerProjectDetailRoutes(app: OpenAPIHono<AppContext>) {
       200: {
         description: "Project updates",
         content: {
-          "application/json": { schema: z.object({ updates: z.array(projectUpdateSchema) }) },
+          "application/json": {
+            schema: z.object({ updates: z.array(projectUpdateSchema) }),
+          },
         },
       },
     },
@@ -111,7 +119,9 @@ export function registerProjectDetailRoutes(app: OpenAPIHono<AppContext>) {
     middleware: [rls("project:lead")],
     request: {
       params: z.object({ organizationId: z.string(), projectId: z.string() }),
-      body: { content: { "application/json": { schema: projectUpdateBodySchema } } },
+      body: {
+        content: { "application/json": { schema: projectUpdateBodySchema } },
+      },
     },
     responses: {
       201: {
@@ -152,7 +162,11 @@ export function registerProjectDetailRoutes(app: OpenAPIHono<AppContext>) {
         projectId: z.string(),
         id: z.string(),
       }),
-      body: { content: { "application/json": { schema: projectUpdateBodySchema.partial() } } },
+      body: {
+        content: {
+          "application/json": { schema: projectUpdateBodySchema.partial() },
+        },
+      },
     },
     responses: {
       200: {
@@ -189,7 +203,9 @@ export function registerProjectDetailRoutes(app: OpenAPIHono<AppContext>) {
       200: {
         description: "Project milestones",
         content: {
-          "application/json": { schema: z.object({ milestones: z.array(projectMilestoneSchema) }) },
+          "application/json": {
+            schema: z.object({ milestones: z.array(projectMilestoneSchema) }),
+          },
         },
       },
     },
@@ -202,7 +218,9 @@ export function registerProjectDetailRoutes(app: OpenAPIHono<AppContext>) {
     middleware: [rls("project:lead")],
     request: {
       params: z.object({ organizationId: z.string(), projectId: z.string() }),
-      body: { content: { "application/json": { schema: projectMilestoneBodySchema } } },
+      body: {
+        content: { "application/json": { schema: projectMilestoneBodySchema } },
+      },
     },
     responses: {
       201: {
@@ -243,7 +261,11 @@ export function registerProjectDetailRoutes(app: OpenAPIHono<AppContext>) {
         projectId: z.string(),
         id: z.string(),
       }),
-      body: { content: { "application/json": { schema: projectMilestoneBodySchema.partial() } } },
+      body: {
+        content: {
+          "application/json": { schema: projectMilestoneBodySchema.partial() },
+        },
+      },
     },
     responses: {
       200: {
@@ -279,7 +301,9 @@ export function registerProjectDetailRoutes(app: OpenAPIHono<AppContext>) {
     responses: {
       200: {
         description: "Project update reminder",
-        content: { "application/json": { schema: projectUpdateReminderSchema } },
+        content: {
+          "application/json": { schema: projectUpdateReminderSchema },
+        },
       },
     },
   });
@@ -291,12 +315,18 @@ export function registerProjectDetailRoutes(app: OpenAPIHono<AppContext>) {
     middleware: [rls("project:lead")],
     request: {
       params: z.object({ organizationId: z.string(), projectId: z.string() }),
-      body: { content: { "application/json": { schema: projectUpdateReminderBodySchema } } },
+      body: {
+        content: {
+          "application/json": { schema: projectUpdateReminderBodySchema },
+        },
+      },
     },
     responses: {
       200: {
         description: "Project update reminder set",
-        content: { "application/json": { schema: projectUpdateReminderSchema } },
+        content: {
+          "application/json": { schema: projectUpdateReminderSchema },
+        },
       },
     },
   });
@@ -332,7 +362,9 @@ export function registerProjectDetailRoutes(app: OpenAPIHono<AppContext>) {
     responses: {
       201: {
         description: "Project update reminder created",
-        content: { "application/json": { schema: projectUpdateReminderSchema } },
+        content: {
+          "application/json": { schema: projectUpdateReminderSchema },
+        },
       },
       404: { description: "Project not found" },
     },
@@ -429,7 +461,10 @@ export function registerProjectDetailRoutes(app: OpenAPIHono<AppContext>) {
     const input = c.req.valid("json");
     const db = createD1(c.env.D1);
     assertProjectExists(await getProject(db, organizationId, projectId));
-    const item = await createProjectMilestone(db, organizationId, { ...input, projectId });
+    const item = await createProjectMilestone(db, organizationId, {
+      ...input,
+      projectId,
+    });
     return c.json(item, 201);
   });
 
@@ -488,7 +523,10 @@ export function registerProjectDetailRoutes(app: OpenAPIHono<AppContext>) {
     const input = c.req.valid("json");
     const db = createD1(c.env.D1);
     assertProjectExists(await getProject(db, organizationId, projectId));
-    const item = await upsertProjectUpdateReminder(db, organizationId, { ...input, projectId });
+    const item = await upsertProjectUpdateReminder(db, organizationId, {
+      ...input,
+      projectId,
+    });
     return c.json(item);
   });
 
@@ -516,7 +554,11 @@ export function registerProjectDetailRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId } = c.req.valid("param");
     const db = createD1(c.env.D1);
     const identity = c.var.workspaceIdentity;
-    const fired = await fireDueProjectUpdateReminders(db, organizationId, identity.id);
+    const fired = await fireDueProjectUpdateReminders(
+      db,
+      organizationId,
+      identity.id
+    );
     return c.json({ fired });
   });
 }

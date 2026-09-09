@@ -285,7 +285,9 @@ const listUserTeamsRoute = createRoute({
     200: {
       description: "User teams",
       content: {
-        "application/json": { schema: z.object({ teams: z.array(teamSchema) }) },
+        "application/json": {
+          schema: z.object({ teams: z.array(teamSchema) }),
+        },
       },
     },
   },
@@ -463,7 +465,14 @@ export function registerTeamRoutes(app: OpenAPIHono<AppContext>) {
         message: "Cannot manage this team",
       });
     }
-    await addTeamMember(db, organizationId, id, body.memberId, body.memberType, body.role);
+    await addTeamMember(
+      db,
+      organizationId,
+      id,
+      body.memberId,
+      body.memberType,
+      body.role
+    );
     return c.body(null, 204);
   });
 

@@ -51,7 +51,11 @@ export function registerSearchRoutes(app: OpenAPIHono<AppContext>) {
       env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
     );
     await stub.setOrganizationId(organizationId);
-    const results = await stub.searchAll(input.query, input.teamIds, input.limit);
+    const results = await stub.searchAll(
+      input.query,
+      input.teamIds,
+      input.limit
+    );
     return c.json(results);
   });
 }

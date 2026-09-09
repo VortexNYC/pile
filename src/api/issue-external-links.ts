@@ -35,7 +35,9 @@ const listRoute = createRoute({
     200: {
       description: "External links",
       content: {
-        "application/json": { schema: z.object({ links: z.array(linkSchema) }) },
+        "application/json": {
+          schema: z.object({ links: z.array(linkSchema) }),
+        },
       },
     },
   },
@@ -151,7 +153,13 @@ export function registerIssueExternalLinkRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId, issueId } = c.req.valid("param");
     const identity = c.var.workspaceIdentity;
     const db = createD1(c.env.D1);
-    const stub = await checkIssueAccess(c.env, db, organizationId, issueId, identity);
+    const stub = await checkIssueAccess(
+      c.env,
+      db,
+      organizationId,
+      issueId,
+      identity
+    );
     const links = await stub.listExternalLinks({
       entityType: "issue",
       entityId: issueId,
@@ -164,7 +172,13 @@ export function registerIssueExternalLinkRoutes(app: OpenAPIHono<AppContext>) {
     const input = c.req.valid("json");
     const identity = c.var.workspaceIdentity;
     const db = createD1(c.env.D1);
-    const stub = await checkIssueAccess(c.env, db, organizationId, issueId, identity);
+    const stub = await checkIssueAccess(
+      c.env,
+      db,
+      organizationId,
+      issueId,
+      identity
+    );
     const link = await stub.createExternalLink(
       {
         entityType: "issue",
@@ -181,7 +195,13 @@ export function registerIssueExternalLinkRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId, issueId, id } = c.req.valid("param");
     const identity = c.var.workspaceIdentity;
     const db = createD1(c.env.D1);
-    const stub = await checkIssueAccess(c.env, db, organizationId, issueId, identity);
+    const stub = await checkIssueAccess(
+      c.env,
+      db,
+      organizationId,
+      issueId,
+      identity
+    );
     const link = await stub.getExternalLink(id);
     if (!link || link.entityType !== "issue" || link.entityId !== issueId) {
       throw new VortexError({
@@ -198,9 +218,19 @@ export function registerIssueExternalLinkRoutes(app: OpenAPIHono<AppContext>) {
     const input = c.req.valid("json");
     const identity = c.var.workspaceIdentity;
     const db = createD1(c.env.D1);
-    const stub = await checkIssueAccess(c.env, db, organizationId, issueId, identity);
+    const stub = await checkIssueAccess(
+      c.env,
+      db,
+      organizationId,
+      issueId,
+      identity
+    );
     const existing = await stub.getExternalLink(id);
-    if (!existing || existing.entityType !== "issue" || existing.entityId !== issueId) {
+    if (
+      !existing ||
+      existing.entityType !== "issue" ||
+      existing.entityId !== issueId
+    ) {
       throw new VortexError({
         code: "NOT_FOUND",
         status: 404,
@@ -215,9 +245,19 @@ export function registerIssueExternalLinkRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId, issueId, id } = c.req.valid("param");
     const identity = c.var.workspaceIdentity;
     const db = createD1(c.env.D1);
-    const stub = await checkIssueAccess(c.env, db, organizationId, issueId, identity);
+    const stub = await checkIssueAccess(
+      c.env,
+      db,
+      organizationId,
+      issueId,
+      identity
+    );
     const existing = await stub.getExternalLink(id);
-    if (!existing || existing.entityType !== "issue" || existing.entityId !== issueId) {
+    if (
+      !existing ||
+      existing.entityType !== "issue" ||
+      existing.entityId !== issueId
+    ) {
       throw new VortexError({
         code: "NOT_FOUND",
         status: 404,

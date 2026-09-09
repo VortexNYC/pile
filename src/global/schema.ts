@@ -504,7 +504,10 @@ export const emojis = sqliteTable(
   },
   (table) => [
     index("emojis_organizationId_idx" as string).on(table.organizationId),
-    index("emojis_shortcut_idx" as string).on(table.organizationId, table.shortcut),
+    index("emojis_shortcut_idx" as string).on(
+      table.organizationId,
+      table.shortcut
+    ),
   ]
 );
 
@@ -1038,7 +1041,9 @@ export const teamMember = sqliteTable(
     userId: text("user_id" as string)
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    role: text("role" as string).notNull().default("member"),
+    role: text("role" as string)
+      .notNull()
+      .default("member"),
     membershipKey: text("membership_key" as string).unique(),
     createdAt: integer("created_at" as string, { mode: "timestamp_ms" })
       .notNull()

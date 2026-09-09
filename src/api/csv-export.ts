@@ -2,8 +2,8 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
 import { createD1 } from "../global/db.js";
-import { listProjects } from "../global/workspace-entities.js";
 import { getVisibleTeamIds } from "../global/teams.js";
+import { listProjects } from "../global/workspace-entities.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
@@ -22,7 +22,12 @@ function csvRow(values: (string | number | null | undefined)[]) {
   return values
     .map((value) => {
       const str = String(value ?? "");
-      if (str.includes(",") || str.includes('"') || str.includes("\n") || str.includes("\r")) {
+      if (
+        str.includes(",") ||
+        str.includes('"') ||
+        str.includes("\n") ||
+        str.includes("\r")
+      ) {
         return `"${str.replace(/"/g, '""')}"`;
       }
       return str;
@@ -55,7 +60,11 @@ export function registerCsvExportRoutes(app: OpenAPIHono<AppContext>) {
     const identity = c.var.workspaceIdentity;
 
     if (input.entityType === "issues") {
-      const visibleTeamIds = await getVisibleTeamIds(db, organizationId, identity);
+      const visibleTeamIds = await getVisibleTeamIds(
+        db,
+        organizationId,
+        identity
+      );
       if (input.teamId && !visibleTeamIds.includes(input.teamId)) {
         throw new VortexError({
           code: "FORBIDDEN",
@@ -109,7 +118,16 @@ export function registerCsvExportRoutes(app: OpenAPIHono<AppContext>) {
     }
 
     const projects = await listProjects(db, organizationId);
-    const headers = ["id", "name", "description", "status", "health", "leadId", "createdAt", "updatedAt"];
+    const headers = [
+      "id",
+      "name",
+      "description",
+      "status",
+      "health",
+      "leadId",
+      "createdAt",
+      "updatedAt",
+    ];
     const rows = [csvRow(headers)];
     for (const project of projects) {
       rows.push(

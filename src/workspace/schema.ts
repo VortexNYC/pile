@@ -358,7 +358,9 @@ export const workspaceDocuments = sqliteTable(
       .notNull()
       .default("blocks"),
     // BlockNote JSON or markdown, per contentFormat.
-    content: text("content" as string).notNull().default("[]"),
+    content: text("content" as string)
+      .notNull()
+      .default("[]"),
     // Optional stable slug for public docs-site URLs.
     slug: text("slug" as string),
     projectId: text("project_id" as string),
@@ -465,7 +467,9 @@ export const workspaceDocumentPermissions = sqliteTable(
     organizationId: text("organization_id" as string).notNull(),
     documentId: text("document_id" as string).notNull(),
     actorId: text("actor_id" as string).notNull(),
-    actorType: text("actor_type" as string).notNull().default("user"),
+    actorType: text("actor_type" as string)
+      .notNull()
+      .default("user"),
     level: text("level" as string, { enum: ["view", "edit"] })
       .notNull()
       .default("view"),
@@ -607,13 +611,13 @@ export const workspaceCustomerTiers = sqliteTable(
     organizationId: text("organization_id" as string).notNull(),
     name: text("name" as string).notNull(),
     color: text("color" as string),
-    position: integer("position" as string).notNull().default(0),
+    position: integer("position" as string)
+      .notNull()
+      .default(0),
     createdAt: text("created_at" as string).notNull(),
   },
   (table) => [
-    index("customer_tiers_organization_idx" as string).on(
-      table.organizationId
-    ),
+    index("customer_tiers_organization_idx" as string).on(table.organizationId),
   ]
 );
 
@@ -624,7 +628,9 @@ export const workspaceCustomerStatuses = sqliteTable(
     organizationId: text("organization_id" as string).notNull(),
     name: text("name" as string).notNull(),
     color: text("color" as string),
-    position: integer("position" as string).notNull().default(0),
+    position: integer("position" as string)
+      .notNull()
+      .default(0),
     createdAt: text("created_at" as string).notNull(),
   },
   (table) => [
@@ -667,7 +673,9 @@ export const workspaceReleasePipelines = sqliteTable(
     organizationId: text("organization_id" as string).notNull(),
     name: text("name" as string).notNull(),
     // JSON array of stage names, e.g. ["alpha","beta","ga"].
-    stages: text("stages" as string).notNull().default("[]"),
+    stages: text("stages" as string)
+      .notNull()
+      .default("[]"),
     createdAt: text("created_at" as string).notNull(),
   },
   (table) => [
@@ -687,7 +695,9 @@ export const workspaceReleases = sqliteTable(
     projectId: text("project_id" as string),
     pipelineId: text("pipeline_id" as string),
     stage: text("stage" as string),
-    status: text("status" as string).notNull().default("planned"),
+    status: text("status" as string)
+      .notNull()
+      .default("planned"),
     targetDate: text("target_date" as string),
     createdById: text("created_by_id" as string),
     createdAt: text("created_at" as string).notNull(),

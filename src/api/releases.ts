@@ -48,14 +48,18 @@ const listReleasesRoute = createRoute({
     query: z.object({
       projectId: z.string().optional(),
       teamId: z.string().optional(),
-      status: z.enum(["upcoming", "in_progress", "released", "archived"]).optional(),
+      status: z
+        .enum(["upcoming", "in_progress", "released", "archived"])
+        .optional(),
     }),
   },
   responses: {
     200: {
       description: "Releases list",
       content: {
-        "application/json": { schema: z.object({ releases: z.array(releaseSchema) }) },
+        "application/json": {
+          schema: z.object({ releases: z.array(releaseSchema) }),
+        },
       },
     },
   },
@@ -101,7 +105,9 @@ const updateReleaseRoute = createRoute({
   middleware: [rls("write")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
-    body: { content: { "application/json": { schema: releaseBodySchema.partial() } } },
+    body: {
+      content: { "application/json": { schema: releaseBodySchema.partial() } },
+    },
   },
   responses: {
     200: {
@@ -145,7 +151,8 @@ export function registerReleaseRoutes(app: OpenAPIHono<AppContext>) {
     const query = c.req.valid("query");
     const db = createD1(c.env.D1);
     const conditions = [eq(releases.organizationId, organizationId)];
-    if (query.projectId) conditions.push(eq(releases.projectId, query.projectId));
+    if (query.projectId)
+      conditions.push(eq(releases.projectId, query.projectId));
     if (query.teamId) conditions.push(eq(releases.teamId, query.teamId));
     if (query.status) conditions.push(eq(releases.status, query.status));
     const rows = await db
@@ -190,7 +197,9 @@ export function registerReleaseRoutes(app: OpenAPIHono<AppContext>) {
     const row = await db
       .select()
       .from(releases)
-      .where(and(eq(releases.id, id), eq(releases.organizationId, organizationId)))
+      .where(
+        and(eq(releases.id, id), eq(releases.organizationId, organizationId))
+      )
       .get();
     if (!row) {
       throw new VortexError({
@@ -218,11 +227,15 @@ export function registerReleaseRoutes(app: OpenAPIHono<AppContext>) {
         releasedAt: input.releasedAt ?? undefined,
         updatedAt: now(),
       })
-      .where(and(eq(releases.id, id), eq(releases.organizationId, organizationId)));
+      .where(
+        and(eq(releases.id, id), eq(releases.organizationId, organizationId))
+      );
     const row = await db
       .select()
       .from(releases)
-      .where(and(eq(releases.id, id), eq(releases.organizationId, organizationId)))
+      .where(
+        and(eq(releases.id, id), eq(releases.organizationId, organizationId))
+      )
       .get();
     if (!row) {
       throw new VortexError({
@@ -239,7 +252,9 @@ export function registerReleaseRoutes(app: OpenAPIHono<AppContext>) {
     const db = createD1(c.env.D1);
     await db
       .delete(releases)
-      .where(and(eq(releases.id, id), eq(releases.organizationId, organizationId)));
+      .where(
+        and(eq(releases.id, id), eq(releases.organizationId, organizationId))
+      );
     return c.body(null, 204);
   });
 }
