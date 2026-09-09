@@ -70,6 +70,17 @@ async function createAdminTokenRecord(organizationId: string) {
   return { id: parsed.id, token: parsed.key, referenceId: "user-1" };
 }
 
+function notionPath(input: RequestInfo | URL): string | null {
+  const url =
+    typeof input === "string"
+      ? input
+      : input instanceof URL
+        ? input.toString()
+        : input.url;
+  if (!url.startsWith("https://api.notion.com/v1")) return null;
+  return url.replace("https://api.notion.com/v1", "");
+}
+
 function request(
   path: string,
   init: RequestInit & { token?: string } = {}
@@ -2019,5 +2030,211 @@ describe("API integration", () => {
       env
     );
     expect(badRes.status).toBe(401);
+  });
+
+  it("imports Notion pages into Vortex documents", async () => {
+    const organizationId = await seedWorkspace();
+    const token = await adminToken(organizationId);
+
+    const notionRequests: { method: string; path: string }[] = [];
+    const originalFetch = globalThis.fetch;
+
+    globalThis.fetch = async (
+      input: RequestInfo | URL,
+      init?: RequestInit
+    ): Promise<Response> => {
+      const path = notionPath(input);
+      if (!path) return originalFetch(input, init);
+
+      const method = init?.method ?? "GET";
+      notionRequests.push({ method, path });
+
+      if (method === "GET" && path === "/users/me") {
+        return Response.json({
+          object: "user",
+          id: "bot-1",
+          type: "bot",
+          bot: {
+            owner: { type: "workspace", workspace: true },
+            workspace_name: "Test Notion",
+            workspace_id: "ws-1",
+          },
+        });
+      }
+
+      if (method === "GET" && path === "/pages/page-1") {
+        return Response.json({
+          object: "page",
+          id: "page-1",
+          url: "https://www.notion.so/page-1",
+          icon: { type: "emoji", emoji: "📄" },
+          properties: {
+            title: {
+              title: [{ plain_text: "Hello Notion" }],
+            },
+          },
+          parent: { type: "page_id", page_id: "parent-page-1" },
+          created_by: { id: "notion-user-1" },
+          last_edited_by: { id: "notion-user-1" },
+        });
+      }
+
+      if (method === "GET" && path === "/pages/page-1/markdown") {
+        return Response.json({
+          object: "page_markdown",
+          id: "page-1",
+          markdown: "# Hello Notion\n\nImported body.",
+        });
+      }
+
+      if (method === "POST" && path === "/search") {
+        return Response.json({
+          object: "list",
+          results: [
+            {
+              object: "page",
+              id: "search-page-1",
+              url: "https://www.notion.so/search-page-1",
+              properties: {
+                title: {
+                  title: [{ plain_text: "Search Page" }],
+                },
+              },
+              parent: { type: "workspace" },
+            },
+          ],
+          has_more: false,
+          next_cursor: null,
+        });
+      }
+
+      if (method === "GET" && path === "/pages/search-page-1") {
+        return Response.json({
+          object: "page",
+          id: "search-page-1",
+          url: "https://www.notion.so/search-page-1",
+          properties: {
+            title: {
+              title: [{ plain_text: "Search Page" }],
+            },
+          },
+          parent: { type: "workspace" },
+          created_by: { id: "notion-user-1" },
+          last_edited_by: { id: "notion-user-1" },
+        });
+      }
+
+      if (method === "GET" && path === "/pages/search-page-1/markdown") {
+        return Response.json({
+          object: "page_markdown",
+          id: "search-page-1",
+          markdown: "# Search Page\n\nBody.",
+        });
+      }
+
+      return new Response("Not Found", { status: 404 });
+    };
+
+    try {
+      const userRes = await app.fetch(
+        request(`/workspaces/${organizationId}/notion/users`, {
+          method: "POST",
+          token,
+          body: JSON.stringify({
+            userId: "user-1",
+            notionUserId: "notion-user-1",
+          }),
+        }),
+        env
+      );
+      expect(userRes.status).toBe(201);
+
+      const listUsersRes = await app.fetch(
+        request(`/workspaces/${organizationId}/notion/users`, { token }),
+        env
+      );
+      expect(listUsersRes.status).toBe(200);
+      const usersBody = await listUsersRes.json<{
+        users: Array<{ userId: string; notionUserId: string }>;
+      }>();
+      expect(usersBody.users).toHaveLength(1);
+      expect(usersBody.users[0]?.notionUserId).toBe("notion-user-1");
+
+      const rootRes = await app.fetch(
+        request(`/workspaces/${organizationId}/notion/import`, {
+          method: "POST",
+          token,
+          body: JSON.stringify({ token: "ntn-test", rootPageId: "page-1" }),
+        }),
+        env
+      );
+      expect(rootRes.status).toBe(200);
+      const rootBody = await rootRes.json<{
+        created: number;
+        updated: number;
+        errors: number;
+        workspaceId: string;
+        workspaceName: string | null;
+      }>();
+      expect(rootBody.created).toBe(1);
+      expect(rootBody.updated).toBe(0);
+      expect(rootBody.errors).toBe(0);
+      expect(rootBody.workspaceId).toBe("ws-1");
+
+      const docsRes = await app.fetch(
+        request(`/workspaces/${organizationId}/documents`, { token }),
+        env
+      );
+      expect(docsRes.status).toBe(200);
+      const docsBody = await docsRes.json<{ documents: unknown[] }>();
+      expect(docsBody.documents).toHaveLength(1);
+
+      const searchRes = await app.fetch(
+        request(`/workspaces/${organizationId}/notion/import`, {
+          method: "POST",
+          token,
+          body: JSON.stringify({ token: "ntn-test" }),
+        }),
+        env
+      );
+      expect(searchRes.status).toBe(200);
+      const searchBody = await searchRes.json<{
+        created: number;
+        updated: number;
+        errors: number;
+      }>();
+      expect(searchBody.created).toBe(1);
+      expect(searchBody.updated).toBe(0);
+      expect(searchBody.errors).toBe(0);
+
+      const allDocsRes = await app.fetch(
+        request(`/workspaces/${organizationId}/documents`, { token }),
+        env
+      );
+      expect(allDocsRes.status).toBe(200);
+      const allDocsBody = await allDocsRes.json<{ documents: unknown[] }>();
+      expect(allDocsBody.documents).toHaveLength(2);
+
+      const getDocRes = await app.fetch(
+        request(
+          `/workspaces/${organizationId}/documents/${(allDocsBody.documents[1] as { id: string }).id}`,
+          { token }
+        ),
+        env
+      );
+      expect(getDocRes.status).toBe(200);
+      const doc = await getDocRes.json<{
+        title: string;
+        contentFormat: string;
+        content: string;
+        icon: string | null;
+      }>();
+      expect(doc.title).toBe("Search Page");
+      expect(doc.contentFormat).toBe("markdown");
+      expect(doc.content).toBe("# Search Page\n\nBody.");
+      expect(doc.icon).toBeNull();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

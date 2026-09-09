@@ -77,10 +77,5 @@ export async function upsertNotionPageMapping(
       documentId
     );
   }
-  return createNotionPageMapping(
-    db,
-    organizationId,
-    notionPageId,
-    documentId
-  );
+  return createNotionPageMapping(db, organizationId, notionPageId, documentId);
 }

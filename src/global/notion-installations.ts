@@ -20,14 +20,6 @@ export function findNotionInstallation(
     .get();
 }
 
-export function listNotionInstallations(db: D1Client, organizationId: string) {
-  return db
-    .select()
-    .from(notionInstallations)
-    .where(eq(notionInstallations.organizationId, organizationId))
-    .all();
-}
-
 export async function createNotionInstallation(
   db: D1Client,
   organizationId: string,
@@ -57,7 +49,11 @@ export async function upsertNotionInstallation(
   token: string,
   verificationToken?: string | null
 ) {
-  const existing = await findNotionInstallation(db, organizationId, workspaceId);
+  const existing = await findNotionInstallation(
+    db,
+    organizationId,
+    workspaceId
+  );
   if (existing) {
     await db
       .update(notionInstallations)
@@ -76,19 +72,4 @@ export async function upsertNotionInstallation(
     token,
     verificationToken
   );
-}
-
-export async function deleteNotionInstallation(
-  db: D1Client,
-  organizationId: string,
-  id: string
-) {
-  await db
-    .delete(notionInstallations)
-    .where(
-      and(
-        eq(notionInstallations.organizationId, organizationId),
-        eq(notionInstallations.id, id)
-      )
-    );
 }

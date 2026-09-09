@@ -81,7 +81,10 @@ export async function getNotionWorkspaceInfo(
   );
   const workspaceId = data.bot?.workspace_id;
   if (!workspaceId) {
-    throw new NotionApiError("Notion token is not associated with a workspace", 400);
+    throw new NotionApiError(
+      "Notion token is not associated with a workspace",
+      400
+    );
   }
   return {
     workspaceId,
@@ -128,21 +131,19 @@ export type NotionPage = {
   lastEditedById: string | null;
 };
 
+const propertiesRecordSchema = z.record(z.string(), z.unknown());
+
 function extractTitle(properties: unknown): string {
-  const record =
-    typeof properties === "object" && properties !== null
-      ? (properties as Record<string, unknown>)
-      : {};
+  const record = propertiesRecordSchema.safeParse(properties).success
+    ? propertiesRecordSchema.parse(properties)
+    : {};
   const titleProperty = record.title;
-  const titleArray =
-    Array.isArray(titleArraySchema.safeParse(titleProperty).data?.title)
-      ? titleProperty
-      : null;
-  if (titleArray && Array.isArray(titleArray)) {
-    const texts = titleArray
+  const parsed = titleArraySchema.safeParse(titleProperty);
+  if (parsed.success) {
+    const texts = parsed.data.title
       .map((item) => {
-        const parsed = plainTextSchema.safeParse(item);
-        return parsed.success ? parsed.data.plain_text : "";
+        const text = plainTextSchema.safeParse(item);
+        return text.success ? text.data.plain_text : "";
       })
       .filter(Boolean);
     if (texts.length > 0) return texts.join("");

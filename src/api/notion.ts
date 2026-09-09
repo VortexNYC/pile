@@ -1,9 +1,8 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
-import { eq } from "drizzle-orm";
 import { createRoute, z } from "@hono/zod-openapi";
+import { eq } from "drizzle-orm";
 
 import { createD1 } from "../global/db.js";
-import { notionPageMappings } from "../global/schema.js";
 import {
   getNotionPage,
   getNotionPageMarkdown,
@@ -13,12 +12,16 @@ import {
   type NotionSearchPage,
 } from "../global/notion-client.js";
 import { upsertNotionInstallation } from "../global/notion-installations.js";
-import { findNotionPageMapping, upsertNotionPageMapping } from "../global/notion-page-mappings.js";
+import {
+  findNotionPageMapping,
+  upsertNotionPageMapping,
+} from "../global/notion-page-mappings.js";
 import {
   createNotionUserMapping,
   findNotionUserByNotionId,
   listNotionUsers,
 } from "../global/notion-users.js";
+import { notionPageMappings } from "../global/schema.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
