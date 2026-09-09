@@ -2253,6 +2253,96 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "time schedules list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/time-schedules",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "time schedules create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/time-schedules",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "timeData",
+        flag: "time-data",
+      },
+    ],
+  },
+  "time schedules get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/time-schedules/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "time schedules update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/time-schedules/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "timeData",
+        flag: "time-data",
+      },
+    ],
+  },
+  "time schedules delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/time-schedules/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "issues comments": {
     method: "POST",
     path: "/workspaces/{organizationId}/issues/{issueId}/comments",

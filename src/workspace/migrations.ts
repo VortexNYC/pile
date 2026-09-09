@@ -596,6 +596,17 @@ const v21 = `CREATE TABLE IF NOT EXISTS issue_external_links (
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS issue_external_links_issue_idx ON issue_external_links (organization_id, issue_id)`;
 
+const v22 = `CREATE TABLE IF NOT EXISTS time_schedules (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  time_data TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS time_schedules_organization_idx ON time_schedules (organization_id)`;
+
 export const workspaceMigrations = {
   journal: {
     entries: [
@@ -620,6 +631,7 @@ export const workspaceMigrations = {
       { idx: 18, when: 18, tag: "v19", breakpoints: true },
       { idx: 19, when: 19, tag: "v20", breakpoints: true },
       { idx: 20, when: 20, tag: "v21", breakpoints: true },
+      { idx: 21, when: 21, tag: "v22", breakpoints: true },
     ],
   },
   migrations: {
@@ -644,5 +656,6 @@ export const workspaceMigrations = {
     m0018: v19,
     m0019: v20,
     m0020: v21,
+    m0021: v22,
   },
 } satisfies Parameters<typeof migrate>[1];

@@ -48,6 +48,7 @@ import {
   workspaceReleasePipelines,
   workspaceReleases,
   workspaceSavedViews,
+  timeSchedules,
   workspaceUserPreferences,
   workspaceViewFavorites,
   workspaceWebhookSubscriptions,
@@ -2058,6 +2059,101 @@ export async function deleteIssueExternalLink(
       and(
         eq(issueExternalLinks.organizationId, organizationId),
         eq(issueExternalLinks.id, id)
+      )
+    );
+  return true;
+}
+
+// ---- time schedules ----
+
+export interface TimeScheduleInput {
+  name: string;
+  timeData?: string | null;
+}
+
+export function listTimeSchedules(db: WorkspaceDb, organizationId: string) {
+  return db
+    .select()
+    .from(timeSchedules)
+    .where(eq(timeSchedules.organizationId, organizationId))
+    .orderBy(timeSchedules.createdAt)
+    .all();
+}
+
+export function getTimeSchedule(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  return db
+    .select()
+    .from(timeSchedules)
+    .where(
+      and(
+        eq(timeSchedules.organizationId, organizationId),
+        eq(timeSchedules.id, id)
+      )
+    )
+    .get();
+}
+
+export async function createTimeSchedule(
+  db: WorkspaceDb,
+  organizationId: string,
+  input: TimeScheduleInput
+) {
+  const id = crypto.randomUUID();
+  const ts = new Date().toISOString();
+  await db.insert(timeSchedules).values({
+    id,
+    organizationId,
+    name: input.name,
+    timeData: input.timeData ?? null,
+    createdAt: ts,
+    updatedAt: ts,
+  });
+  return getTimeSchedule(db, organizationId, id);
+}
+
+export async function updateTimeSchedule(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string,
+  input: Partial<TimeScheduleInput>
+) {
+  const existing = await getTimeSchedule(db, organizationId, id);
+  if (!existing) return undefined;
+  const ts = new Date().toISOString();
+  await db
+    .update(timeSchedules)
+    .set({
+      name: input.name ?? existing.name,
+      timeData:
+        input.timeData === undefined ? existing.timeData : input.timeData,
+      updatedAt: ts,
+    })
+    .where(
+      and(
+        eq(timeSchedules.organizationId, organizationId),
+        eq(timeSchedules.id, id)
+      )
+    );
+  return getTimeSchedule(db, organizationId, id);
+}
+
+export async function deleteTimeSchedule(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  const existing = await getTimeSchedule(db, organizationId, id);
+  if (!existing) return false;
+  await db
+    .delete(timeSchedules)
+    .where(
+      and(
+        eq(timeSchedules.organizationId, organizationId),
+        eq(timeSchedules.id, id)
       )
     );
   return true;

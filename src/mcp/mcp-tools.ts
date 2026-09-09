@@ -852,6 +852,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdTimeschedulesId",
+    "description": "Delete time schedule (DELETE /workspaces/{organizationId}/time-schedules/{id})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/time-schedules/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdTokensId",
     "description": "Delete token (DELETE /workspaces/{organizationId}/tokens/{id})",
     "method": "DELETE",
@@ -2939,6 +2960,44 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdTimeschedules",
+    "description": "List time schedules (GET /workspaces/{organizationId}/time-schedules)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/time-schedules",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdTimeschedulesId",
+    "description": "Get time schedule (GET /workspaces/{organizationId}/time-schedules/{id})",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/time-schedules/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdTokens",
     "description": "List tokens (GET /workspaces/{organizationId}/tokens)",
     "method": "GET",
@@ -4484,6 +4543,39 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "id",
         "memberId",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "patchWorkspacesOrganizationIdTimeschedulesId",
+    "description": "Update time schedule (PATCH /workspaces/{organizationId}/time-schedules/{id})",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/time-schedules/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "timeData": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "id",
         "organizationId"
       ]
     }
@@ -7048,6 +7140,38 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           },
           "required": [
             "linearId",
+            "name"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdTimeschedules",
+    "description": "Create time schedule (POST /workspaces/{organizationId}/time-schedules)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/time-schedules",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "timeData": {
+              "type": "string"
+            }
+          },
+          "required": [
             "name"
           ]
         }

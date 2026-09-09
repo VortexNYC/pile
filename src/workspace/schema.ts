@@ -877,3 +877,18 @@ export const issueExternalLinks = sqliteTable(
     ),
   ]
 );
+
+export const timeSchedules = sqliteTable(
+  "time_schedules" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    name: text("name" as string).notNull(),
+    timeData: text("time_data" as string),
+    createdAt: text("created_at" as string).notNull(),
+    updatedAt: text("updated_at" as string).notNull(),
+  },
+  (table) => [
+    index("time_schedules_organization_idx" as string).on(table.organizationId),
+  ]
+);

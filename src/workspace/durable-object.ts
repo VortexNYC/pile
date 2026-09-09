@@ -1274,6 +1274,43 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return doc;
   }
 
+  // ---- time schedules ----
+
+  listTimeSchedules() {
+    return data.listTimeSchedules(this.db, this.organizationId);
+  }
+
+  getTimeSchedule(id: string) {
+    return data.getTimeSchedule(this.db, this.organizationId, id);
+  }
+
+  async createTimeSchedule(input: data.TimeScheduleInput, actorId?: string) {
+    const ts = await data.createTimeSchedule(this.db, this.organizationId, input);
+    if (ts) this.audit("time_schedule.created", "time_schedule", ts.id, actorId);
+    return ts;
+  }
+
+  async updateTimeSchedule(
+    id: string,
+    input: Partial<data.TimeScheduleInput>,
+    actorId?: string
+  ) {
+    const ts = await data.updateTimeSchedule(
+      this.db,
+      this.organizationId,
+      id,
+      input
+    );
+    if (ts) this.audit("time_schedule.updated", "time_schedule", id, actorId);
+    return ts;
+  }
+
+  async deleteTimeSchedule(id: string, actorId?: string) {
+    const ok = await data.deleteTimeSchedule(this.db, this.organizationId, id);
+    if (ok) this.audit("time_schedule.deleted", "time_schedule", id, actorId);
+    return ok;
+  }
+
   // ---- issue external links ----
 
   listIssueExternalLinks(issueId: string) {
