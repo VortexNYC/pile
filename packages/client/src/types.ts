@@ -1741,6 +1741,9 @@ export interface paths {
                                 name: string;
                                 description: string | null;
                                 status: string;
+                                /** @enum {string} */
+                                health: "on_track" | "at_risk" | "off_track" | "paused";
+                                archivedAt: string | null;
                                 startDate: string | null;
                                 endDate: string | null;
                                 createdAt: string;
@@ -1768,6 +1771,9 @@ export interface paths {
                         name: string;
                         description?: string;
                         status?: string;
+                        /** @enum {string} */
+                        health?: "on_track" | "at_risk" | "off_track" | "paused";
+                        archivedAt?: string;
                         startDate?: string;
                         endDate?: string;
                     };
@@ -1786,6 +1792,9 @@ export interface paths {
                             name: string;
                             description: string | null;
                             status: string;
+                            /** @enum {string} */
+                            health: "on_track" | "at_risk" | "off_track" | "paused";
+                            archivedAt: string | null;
                             startDate: string | null;
                             endDate: string | null;
                             createdAt: string;
@@ -1833,6 +1842,9 @@ export interface paths {
                             name: string;
                             description: string | null;
                             status: string;
+                            /** @enum {string} */
+                            health: "on_track" | "at_risk" | "off_track" | "paused";
+                            archivedAt: string | null;
                             startDate: string | null;
                             endDate: string | null;
                             createdAt: string;
@@ -1885,6 +1897,9 @@ export interface paths {
                         name?: string;
                         description?: string;
                         status?: string;
+                        /** @enum {string} */
+                        health?: "on_track" | "at_risk" | "off_track" | "paused";
+                        archivedAt?: string;
                         startDate?: string;
                         endDate?: string;
                     };
@@ -1903,6 +1918,9 @@ export interface paths {
                             name: string;
                             description: string | null;
                             status: string;
+                            /** @enum {string} */
+                            health: "on_track" | "at_risk" | "off_track" | "paused";
+                            archivedAt: string | null;
                             startDate: string | null;
                             endDate: string | null;
                             createdAt: string;
@@ -1912,6 +1930,110 @@ export interface paths {
                 };
             };
         };
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/projects/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create project archive */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Project archived */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            name: string;
+                            description: string | null;
+                            status: string;
+                            /** @enum {string} */
+                            health: "on_track" | "at_risk" | "off_track" | "paused";
+                            archivedAt: string | null;
+                            startDate: string | null;
+                            endDate: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/projects/{id}/unarchive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create project unarchive */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Project unarchived */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            name: string;
+                            description: string | null;
+                            status: string;
+                            /** @enum {string} */
+                            health: "on_track" | "at_risk" | "off_track" | "paused";
+                            archivedAt: string | null;
+                            startDate: string | null;
+                            endDate: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/workspaces/{organizationId}/cycles": {

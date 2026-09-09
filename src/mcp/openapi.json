@@ -3847,6 +3847,19 @@
                           "status": {
                             "type": "string"
                           },
+                          "health": {
+                            "type": "string",
+                            "enum": [
+                              "on_track",
+                              "at_risk",
+                              "off_track",
+                              "paused"
+                            ]
+                          },
+                          "archivedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "startDate": {
                             "type": "string",
                             "nullable": true
@@ -3868,6 +3881,8 @@
                           "name",
                           "description",
                           "status",
+                          "health",
+                          "archivedAt",
                           "startDate",
                           "endDate",
                           "createdAt",
@@ -3916,6 +3931,18 @@
                   "status": {
                     "type": "string"
                   },
+                  "health": {
+                    "type": "string",
+                    "enum": [
+                      "on_track",
+                      "at_risk",
+                      "off_track",
+                      "paused"
+                    ]
+                  },
+                  "archivedAt": {
+                    "type": "string"
+                  },
                   "startDate": {
                     "type": "string"
                   },
@@ -3954,6 +3981,19 @@
                     "status": {
                       "type": "string"
                     },
+                    "health": {
+                      "type": "string",
+                      "enum": [
+                        "on_track",
+                        "at_risk",
+                        "off_track",
+                        "paused"
+                      ]
+                    },
+                    "archivedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "startDate": {
                       "type": "string",
                       "nullable": true
@@ -3975,6 +4015,8 @@
                     "name",
                     "description",
                     "status",
+                    "health",
+                    "archivedAt",
                     "startDate",
                     "endDate",
                     "createdAt",
@@ -4035,6 +4077,19 @@
                     "status": {
                       "type": "string"
                     },
+                    "health": {
+                      "type": "string",
+                      "enum": [
+                        "on_track",
+                        "at_risk",
+                        "off_track",
+                        "paused"
+                      ]
+                    },
+                    "archivedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "startDate": {
                       "type": "string",
                       "nullable": true
@@ -4056,6 +4111,8 @@
                     "name",
                     "description",
                     "status",
+                    "health",
+                    "archivedAt",
                     "startDate",
                     "endDate",
                     "createdAt",
@@ -4106,6 +4163,18 @@
                   "status": {
                     "type": "string"
                   },
+                  "health": {
+                    "type": "string",
+                    "enum": [
+                      "on_track",
+                      "at_risk",
+                      "off_track",
+                      "paused"
+                    ]
+                  },
+                  "archivedAt": {
+                    "type": "string"
+                  },
                   "startDate": {
                     "type": "string"
                   },
@@ -4141,6 +4210,19 @@
                     "status": {
                       "type": "string"
                     },
+                    "health": {
+                      "type": "string",
+                      "enum": [
+                        "on_track",
+                        "at_risk",
+                        "off_track",
+                        "paused"
+                      ]
+                    },
+                    "archivedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "startDate": {
                       "type": "string",
                       "nullable": true
@@ -4162,6 +4244,8 @@
                     "name",
                     "description",
                     "status",
+                    "health",
+                    "archivedAt",
                     "startDate",
                     "endDate",
                     "createdAt",
@@ -4202,6 +4286,198 @@
           }
         },
         "summary": "Delete project"
+      }
+    },
+    "/workspaces/{organizationId}/projects/{id}/archive": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Project archived",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "health": {
+                      "type": "string",
+                      "enum": [
+                        "on_track",
+                        "at_risk",
+                        "off_track",
+                        "paused"
+                      ]
+                    },
+                    "archivedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "startDate": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "endDate": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "name",
+                    "description",
+                    "status",
+                    "health",
+                    "archivedAt",
+                    "startDate",
+                    "endDate",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create project archive"
+      }
+    },
+    "/workspaces/{organizationId}/projects/{id}/unarchive": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Project unarchived",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "health": {
+                      "type": "string",
+                      "enum": [
+                        "on_track",
+                        "at_risk",
+                        "off_track",
+                        "paused"
+                      ]
+                    },
+                    "archivedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "startDate": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "endDate": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "name",
+                    "description",
+                    "status",
+                    "health",
+                    "archivedAt",
+                    "startDate",
+                    "endDate",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create project unarchive"
       }
     },
     "/workspaces/{organizationId}/cycles": {

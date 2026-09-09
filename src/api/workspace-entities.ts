@@ -4,6 +4,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { createD1 } from "../global/db.js";
 import { getVisibleTeamIds } from "../global/teams.js";
 import {
+  archiveProject,
   createCycle,
   createInitiative,
   createLabel,
@@ -26,6 +27,7 @@ import {
   listMemberships,
   listProjects,
   listRoadmaps,
+  unarchiveProject,
   updateCycle,
   updateInitiative,
   updateLabel,
@@ -42,6 +44,8 @@ const projectSchema = z.object({
   name: z.string(),
   description: z.string().nullable(),
   status: z.string(),
+  health: z.enum(["on_track", "at_risk", "off_track", "paused"]),
+  archivedAt: z.string().nullable(),
   startDate: z.string().nullable(),
   endDate: z.string().nullable(),
   createdAt: z.string(),
@@ -52,6 +56,8 @@ const projectBodySchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
   status: z.string().optional(),
+  health: z.enum(["on_track", "at_risk", "off_track", "paused"]).optional(),
+  archivedAt: z.string().optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
 });
@@ -222,6 +228,38 @@ const updateProjectRoute = createRoute({
       content: {
         "application/json": { schema: projectSchema },
       },
+    },
+  },
+});
+
+const archiveProjectRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/projects/{id}/archive",
+  tags: ["projects"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Project archived",
+      content: { "application/json": { schema: projectSchema } },
+    },
+  },
+});
+
+const unarchiveProjectRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/projects/{id}/unarchive",
+  tags: ["projects"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Project unarchived",
+      content: { "application/json": { schema: projectSchema } },
     },
   },
 });
@@ -843,6 +881,34 @@ export function registerWorkspaceEntityRoutes(app: OpenAPIHono<AppContext>) {
     const db = createD1(c.env.D1);
     await deleteProject(db, organizationId, id);
     return c.body(null, 204);
+  });
+
+  app.openapi(archiveProjectRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const item = await archiveProject(db, organizationId, id);
+    if (!item) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Project not found",
+      });
+    }
+    return c.json(item);
+  });
+
+  app.openapi(unarchiveProjectRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const item = await unarchiveProject(db, organizationId, id);
+    if (!item) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Project not found",
+      });
+    }
+    return c.json(item);
   });
 
   app.openapi(listCyclesRoute, async (c) => {

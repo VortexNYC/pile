@@ -3247,6 +3247,18 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "status": {
               "type": "string"
             },
+            "health": {
+              "type": "string",
+              "enum": [
+                "on_track",
+                "at_risk",
+                "off_track",
+                "paused"
+              ]
+            },
+            "archivedAt": {
+              "type": "string"
+            },
             "startDate": {
               "type": "string"
             },
@@ -5114,6 +5126,18 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "status": {
               "type": "string"
             },
+            "health": {
+              "type": "string",
+              "enum": [
+                "on_track",
+                "at_risk",
+                "off_track",
+                "paused"
+              ]
+            },
+            "archivedAt": {
+              "type": "string"
+            },
             "startDate": {
               "type": "string"
             },
@@ -5127,6 +5151,48 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdProjectsIdArchive",
+    "description": "Create project archive (POST /workspaces/{organizationId}/projects/{id}/archive)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/projects/{id}/archive",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdProjectsIdUnarchive",
+    "description": "Create project unarchive (POST /workspaces/{organizationId}/projects/{id}/unarchive)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/projects/{id}/unarchive",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
         "organizationId"
       ]
     }

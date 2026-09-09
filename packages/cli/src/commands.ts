@@ -908,6 +908,14 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "status",
       },
       {
+        name: "health",
+        flag: "health",
+      },
+      {
+        name: "archivedAt",
+        flag: "archived-at",
+      },
+      {
         name: "startDate",
         flag: "start-date",
       },
@@ -961,6 +969,14 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "status",
       },
       {
+        name: "health",
+        flag: "health",
+      },
+      {
+        name: "archivedAt",
+        flag: "archived-at",
+      },
+      {
         name: "startDate",
         flag: "start-date",
       },
@@ -973,6 +989,38 @@ export const COMMANDS: Record<string, CommandDef> = {
   "projects delete": {
     method: "DELETE",
     path: "/workspaces/{organizationId}/projects/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "projects archive create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/projects/{id}/archive",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "projects unarchive create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/projects/{id}/unarchive",
     params: [
       {
         name: "organizationId",

@@ -44,6 +44,8 @@ export async function createProject(
     name: string;
     description?: string | null;
     status?: string | null;
+    health?: "on_track" | "at_risk" | "off_track" | "paused" | null;
+    archivedAt?: string | null;
     startDate?: string | null;
     endDate?: string | null;
   }
@@ -56,6 +58,8 @@ export async function createProject(
     name: values.name,
     description: values.description ?? null,
     status: values.status ?? "active",
+    health: values.health ?? "on_track",
+    archivedAt: values.archivedAt ?? null,
     startDate: values.startDate ?? null,
     endDate: values.endDate ?? null,
     createdAt: ts,
@@ -72,6 +76,8 @@ export async function updateProject(
     name: string;
     description: string | null;
     status: string;
+    health: "on_track" | "at_risk" | "off_track" | "paused";
+    archivedAt: string | null;
     startDate: string | null;
     endDate: string | null;
   }>
@@ -89,6 +95,22 @@ export async function updateProject(
       and(eq(projects.organizationId, organizationId), eq(projects.id, id))
     )
     .get();
+}
+
+export async function archiveProject(
+  db: D1Client,
+  organizationId: string,
+  id: string
+) {
+  return updateProject(db, organizationId, id, { archivedAt: now() });
+}
+
+export async function unarchiveProject(
+  db: D1Client,
+  organizationId: string,
+  id: string
+) {
+  return updateProject(db, organizationId, id, { archivedAt: null });
 }
 
 export async function deleteProject(
@@ -611,6 +633,21 @@ export function getProjectUpdate(db: D1Client, organizationId: string, id: strin
     .get();
 }
 
+export function getLatestProjectUpdate(db: D1Client, organizationId: string, projectId: string) {
+  return db
+    .select()
+    .from(projectUpdates)
+    .where(
+      and(
+        eq(projectUpdates.organizationId, organizationId),
+        eq(projectUpdates.projectId, projectId)
+      )
+    )
+    .orderBy(desc(projectUpdates.createdAt))
+    .limit(1)
+    .get();
+}
+
 export async function createProjectUpdate(
   db: D1Client,
   organizationId: string,
@@ -635,6 +672,12 @@ export async function createProjectUpdate(
     createdAt: ts,
     updatedAt: ts,
   });
+  await db
+    .update(projects)
+    .set({ health: values.health ?? "on_track", updatedAt: ts })
+    .where(
+      and(eq(projects.organizationId, organizationId), eq(projects.id, values.projectId))
+    );
   return db.select().from(projectUpdates).where(eq(projectUpdates.id, id)).get();
 }
 

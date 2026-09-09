@@ -115,6 +115,12 @@ export const projects = sqliteTable(
     status: text("status" as string)
       .notNull()
       .default("active"),
+    health: text("health" as string, {
+      enum: ["on_track", "at_risk", "off_track", "paused"] as const,
+    })
+      .notNull()
+      .default("on_track"),
+    archivedAt: text("archived_at" as string),
     startDate: text("start_date" as string),
     endDate: text("end_date" as string),
     createdAt: text("created_at" as string)
