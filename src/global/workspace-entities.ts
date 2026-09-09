@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import type { D1Client } from "./db.js";
@@ -7,6 +7,9 @@ import {
   initiatives,
   labels,
   member,
+  projectMilestones,
+  projectUpdateReminders,
+  projectUpdates,
   projects,
   roadmaps,
   states,
@@ -578,6 +581,248 @@ export async function deleteInitiative(
       and(
         eq(initiatives.organizationId, organizationId),
         eq(initiatives.id, id)
+      )
+    );
+}
+
+// Project updates
+
+export function listProjectUpdates(db: D1Client, organizationId: string, projectId: string) {
+  return db
+    .select()
+    .from(projectUpdates)
+    .where(
+      and(
+        eq(projectUpdates.organizationId, organizationId),
+        eq(projectUpdates.projectId, projectId)
+      )
+    )
+    .orderBy(desc(projectUpdates.createdAt))
+    .all();
+}
+
+export function getProjectUpdate(db: D1Client, organizationId: string, id: string) {
+  return db
+    .select()
+    .from(projectUpdates)
+    .where(
+      and(eq(projectUpdates.organizationId, organizationId), eq(projectUpdates.id, id))
+    )
+    .get();
+}
+
+export async function createProjectUpdate(
+  db: D1Client,
+  organizationId: string,
+  values: {
+    projectId: string;
+    content: string;
+    contentFormat?: "text" | "markdown" | "blocks";
+    health?: "on_track" | "at_risk" | "off_track" | "paused";
+    createdById?: string;
+  }
+) {
+  const id = crypto.randomUUID();
+  const ts = now();
+  await db.insert(projectUpdates).values({
+    id,
+    organizationId,
+    projectId: values.projectId,
+    content: values.content,
+    contentFormat: values.contentFormat ?? "text",
+    health: values.health ?? "on_track",
+    createdById: values.createdById ?? null,
+    createdAt: ts,
+    updatedAt: ts,
+  });
+  return db.select().from(projectUpdates).where(eq(projectUpdates.id, id)).get();
+}
+
+export async function updateProjectUpdate(
+  db: D1Client,
+  organizationId: string,
+  id: string,
+  values: Partial<{
+    content: string;
+    contentFormat: "text" | "markdown" | "blocks";
+    health: "on_track" | "at_risk" | "off_track" | "paused";
+  }>
+) {
+  await db
+    .update(projectUpdates)
+    .set({ ...values, updatedAt: now() })
+    .where(
+      and(eq(projectUpdates.organizationId, organizationId), eq(projectUpdates.id, id))
+    );
+  return db
+    .select()
+    .from(projectUpdates)
+    .where(
+      and(eq(projectUpdates.organizationId, organizationId), eq(projectUpdates.id, id))
+    )
+    .get();
+}
+
+export async function deleteProjectUpdate(db: D1Client, organizationId: string, id: string) {
+  await db
+    .delete(projectUpdates)
+    .where(and(eq(projectUpdates.organizationId, organizationId), eq(projectUpdates.id, id)));
+}
+
+// Project milestones
+
+export function listProjectMilestones(db: D1Client, organizationId: string, projectId: string) {
+  return db
+    .select()
+    .from(projectMilestones)
+    .where(
+      and(
+        eq(projectMilestones.organizationId, organizationId),
+        eq(projectMilestones.projectId, projectId)
+      )
+    )
+    .orderBy(asc(projectMilestones.targetDate))
+    .all();
+}
+
+export function getProjectMilestone(db: D1Client, organizationId: string, id: string) {
+  return db
+    .select()
+    .from(projectMilestones)
+    .where(
+      and(eq(projectMilestones.organizationId, organizationId), eq(projectMilestones.id, id))
+    )
+    .get();
+}
+
+export async function createProjectMilestone(
+  db: D1Client,
+  organizationId: string,
+  values: {
+    projectId: string;
+    name: string;
+    description?: string | null;
+    targetDate?: string | null;
+    completedAt?: string | null;
+  }
+) {
+  const id = crypto.randomUUID();
+  const ts = now();
+  await db.insert(projectMilestones).values({
+    id,
+    organizationId,
+    projectId: values.projectId,
+    name: values.name,
+    description: values.description ?? null,
+    targetDate: values.targetDate ?? null,
+    completedAt: values.completedAt ?? null,
+    createdAt: ts,
+    updatedAt: ts,
+  });
+  return db.select().from(projectMilestones).where(eq(projectMilestones.id, id)).get();
+}
+
+export async function updateProjectMilestone(
+  db: D1Client,
+  organizationId: string,
+  id: string,
+  values: Partial<{
+    name: string;
+    description: string | null;
+    targetDate: string | null;
+    completedAt: string | null;
+  }>
+) {
+  await db
+    .update(projectMilestones)
+    .set({ ...values, updatedAt: now() })
+    .where(
+      and(eq(projectMilestones.organizationId, organizationId), eq(projectMilestones.id, id))
+    );
+  return db
+    .select()
+    .from(projectMilestones)
+    .where(
+      and(eq(projectMilestones.organizationId, organizationId), eq(projectMilestones.id, id))
+    )
+    .get();
+}
+
+export async function deleteProjectMilestone(db: D1Client, organizationId: string, id: string) {
+  await db
+    .delete(projectMilestones)
+    .where(
+      and(eq(projectMilestones.organizationId, organizationId), eq(projectMilestones.id, id))
+    );
+}
+
+// Project update reminders
+
+export function getProjectUpdateReminder(db: D1Client, organizationId: string, projectId: string) {
+  return db
+    .select()
+    .from(projectUpdateReminders)
+    .where(
+      and(
+        eq(projectUpdateReminders.organizationId, organizationId),
+        eq(projectUpdateReminders.projectId, projectId)
+      )
+    )
+    .get();
+}
+
+export async function upsertProjectUpdateReminder(
+  db: D1Client,
+  organizationId: string,
+  values: {
+    projectId: string;
+    cadence?: "daily" | "weekly" | "biweekly" | "monthly";
+    nextDueAt?: string | null;
+  }
+) {
+  const existing = await getProjectUpdateReminder(db, organizationId, values.projectId);
+  if (existing) {
+    await db
+      .update(projectUpdateReminders)
+      .set({
+        cadence: values.cadence ?? existing.cadence,
+        nextDueAt: values.nextDueAt !== undefined ? values.nextDueAt : existing.nextDueAt,
+        updatedAt: now(),
+      })
+      .where(
+        and(
+          eq(projectUpdateReminders.organizationId, organizationId),
+          eq(projectUpdateReminders.projectId, values.projectId)
+        )
+      );
+    return getProjectUpdateReminder(db, organizationId, values.projectId);
+  }
+
+  const id = crypto.randomUUID();
+  const ts = now();
+  await db.insert(projectUpdateReminders).values({
+    id,
+    organizationId,
+    projectId: values.projectId,
+    cadence: values.cadence ?? "weekly",
+    nextDueAt: values.nextDueAt ?? null,
+    createdAt: ts,
+    updatedAt: ts,
+  });
+  return db.select().from(projectUpdateReminders).where(eq(projectUpdateReminders.id, id)).get();
+}
+
+export async function deleteProjectUpdateReminder(
+  db: D1Client,
+  organizationId: string,
+  projectId: string
+) {
+  await db
+    .delete(projectUpdateReminders)
+    .where(
+      and(
+        eq(projectUpdateReminders.organizationId, organizationId),
+        eq(projectUpdateReminders.projectId, projectId)
       )
     );
 }

@@ -1520,6 +1520,307 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "projects updates list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/projects/{projectId}/updates",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "projectId",
+        flag: "project",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "projects updates create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/projects/{projectId}/updates",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "projectId",
+        flag: "project",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "content",
+        flag: "content",
+      },
+      {
+        name: "contentFormat",
+        flag: "content-format",
+      },
+      {
+        name: "health",
+        flag: "health",
+      },
+    ],
+  },
+  "projects updates get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/projects/{projectId}/updates/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "projectId",
+        flag: "project",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "projects updates update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/projects/{projectId}/updates/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "projectId",
+        flag: "project",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "content",
+        flag: "content",
+      },
+      {
+        name: "contentFormat",
+        flag: "content-format",
+      },
+      {
+        name: "health",
+        flag: "health",
+      },
+    ],
+  },
+  "projects updates delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/projects/{projectId}/updates/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "projectId",
+        flag: "project",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "projects milestones list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/projects/{projectId}/milestones",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "projectId",
+        flag: "project",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "projects milestones create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/projects/{projectId}/milestones",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "projectId",
+        flag: "project",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "description",
+        flag: "description",
+      },
+      {
+        name: "targetDate",
+        flag: "target-date",
+      },
+      {
+        name: "completedAt",
+        flag: "completed-at",
+      },
+    ],
+  },
+  "projects milestones get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/projects/{projectId}/milestones/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "projectId",
+        flag: "project",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "projects milestones update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/projects/{projectId}/milestones/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "projectId",
+        flag: "project",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "description",
+        flag: "description",
+      },
+      {
+        name: "targetDate",
+        flag: "target-date",
+      },
+      {
+        name: "completedAt",
+        flag: "completed-at",
+      },
+    ],
+  },
+  "projects milestones delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/projects/{projectId}/milestones/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "projectId",
+        flag: "project",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "projects reminder list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/projects/{projectId}/reminder",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "projectId",
+        flag: "project",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "projects reminder update": {
+    method: "PUT",
+    path: "/workspaces/{organizationId}/projects/{projectId}/reminder",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "projectId",
+        flag: "project",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "cadence",
+        flag: "cadence",
+      },
+      {
+        name: "nextDueAt",
+        flag: "next-due-at",
+      },
+    ],
+  },
+  "projects reminder delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/projects/{projectId}/reminder",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "projectId",
+        flag: "project",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "issues comments": {
     method: "POST",
     path: "/workspaces/{organizationId}/issues/{issueId}/comments",

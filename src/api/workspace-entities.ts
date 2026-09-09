@@ -949,7 +949,7 @@ export function registerWorkspaceEntityRoutes(app: OpenAPIHono<AppContext>) {
         .filter(
           (other) =>
             other.id !== fromCycle.id &&
-            c.status !== "completed" &&
+            other.status !== "completed" &&
             (fromCycle.projectId === null
               ? other.projectId === null
               : other.projectId === fromCycle.projectId) &&

@@ -1135,3 +1135,97 @@ export const chatState = sqliteTable(
   },
   (table) => [index("chat_state_expires_idx" as string).on(table.expiresAt)]
 );
+
+export const projectUpdates = sqliteTable(
+  "project_updates" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    projectId: text("project_id" as string)
+      .notNull()
+      .references(() => projects.id),
+    content: text("content" as string).notNull(),
+    contentFormat: text("content_format" as string, {
+      enum: ["text", "markdown", "blocks"] as const,
+    })
+      .notNull()
+      .default("text"),
+    health: text("health" as string, {
+      enum: ["on_track", "at_risk", "off_track", "paused"] as const,
+    })
+      .notNull()
+      .default("on_track"),
+    createdById: text("created_by_id" as string),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("project_updates_project_idx" as string).on(table.projectId),
+    index("project_updates_org_idx" as string).on(table.organizationId),
+  ]
+);
+
+export const projectMilestones = sqliteTable(
+  "project_milestones" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    projectId: text("project_id" as string)
+      .notNull()
+      .references(() => projects.id),
+    name: text("name" as string).notNull(),
+    description: text("description" as string),
+    targetDate: text("target_date" as string),
+    completedAt: text("completed_at" as string),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("project_milestones_project_idx" as string).on(table.projectId),
+    index("project_milestones_org_idx" as string).on(table.organizationId),
+  ]
+);
+
+export const projectUpdateReminders = sqliteTable(
+  "project_update_reminders" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    projectId: text("project_id" as string)
+      .notNull()
+      .references(() => projects.id),
+    cadence: text("cadence" as string, {
+      enum: ["daily", "weekly", "biweekly", "monthly"] as const,
+    })
+      .notNull()
+      .default("weekly"),
+    nextDueAt: text("next_due_at" as string),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("project_update_reminders_project_idx" as string).on(table.projectId),
+    uniqueIndex("project_update_reminders_project_unique" as string).on(
+      table.organizationId,
+      table.projectId
+    ),
+  ]
+);

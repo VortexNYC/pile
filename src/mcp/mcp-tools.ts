@@ -405,6 +405,77 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdProjectsProjectIdMilestonesId",
+    "description": "Delete project milestone (DELETE /workspaces/{organizationId}/projects/{projectId}/milestones/{id})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/projects/{projectId}/milestones/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId",
+        "projectId"
+      ]
+    }
+  },
+  {
+    "name": "deleteWorkspacesOrganizationIdProjectsProjectIdReminder",
+    "description": "Delete project reminder (DELETE /workspaces/{organizationId}/projects/{projectId}/reminder)",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/projects/{projectId}/reminder",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "projectId"
+      ]
+    }
+  },
+  {
+    "name": "deleteWorkspacesOrganizationIdProjectsProjectIdUpdatesId",
+    "description": "Delete project update (DELETE /workspaces/{organizationId}/projects/{projectId}/updates/{id})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/projects/{projectId}/updates/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId",
+        "projectId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdReactionsReactionId",
     "description": "Delete reaction (DELETE /workspaces/{organizationId}/reactions/{reactionId})",
     "method": "DELETE",
@@ -1968,6 +2039,119 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdProjectsProjectIdMilestones",
+    "description": "List project milestones (GET /workspaces/{organizationId}/projects/{projectId}/milestones)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/projects/{projectId}/milestones",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "projectId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdProjectsProjectIdMilestonesId",
+    "description": "Get project milestone (GET /workspaces/{organizationId}/projects/{projectId}/milestones/{id})",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/projects/{projectId}/milestones/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId",
+        "projectId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdProjectsProjectIdReminder",
+    "description": "List project reminder (GET /workspaces/{organizationId}/projects/{projectId}/reminder)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/projects/{projectId}/reminder",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "projectId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdProjectsProjectIdUpdates",
+    "description": "List project updates (GET /workspaces/{organizationId}/projects/{projectId}/updates)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/projects/{projectId}/updates",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "projectId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdProjectsProjectIdUpdatesId",
+    "description": "Get project update (GET /workspaces/{organizationId}/projects/{projectId}/updates/{id})",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/projects/{projectId}/updates/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId",
+        "projectId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdReadiness",
     "description": "List readiness (GET /workspaces/{organizationId}/readiness)",
     "method": "GET",
@@ -3075,6 +3259,102 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "id",
         "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "patchWorkspacesOrganizationIdProjectsProjectIdMilestonesId",
+    "description": "Update project milestone (PATCH /workspaces/{organizationId}/projects/{projectId}/milestones/{id})",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/projects/{projectId}/milestones/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": {
+              "type": "string"
+            },
+            "targetDate": {
+              "type": "string"
+            },
+            "completedAt": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "id",
+        "organizationId",
+        "projectId"
+      ]
+    }
+  },
+  {
+    "name": "patchWorkspacesOrganizationIdProjectsProjectIdUpdatesId",
+    "description": "Update project update (PATCH /workspaces/{organizationId}/projects/{projectId}/updates/{id})",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/projects/{projectId}/updates/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string",
+              "minLength": 1
+            },
+            "contentFormat": {
+              "type": "string",
+              "enum": [
+                "text",
+                "markdown",
+                "blocks"
+              ],
+              "default": "text"
+            },
+            "health": {
+              "type": "string",
+              "enum": [
+                "on_track",
+                "at_risk",
+                "off_track",
+                "paused"
+              ],
+              "default": "on_track"
+            }
+          }
+        }
+      },
+      "required": [
+        "id",
+        "organizationId",
+        "projectId"
       ]
     }
   },
@@ -4852,6 +5132,100 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdProjectsProjectIdMilestones",
+    "description": "Create project milestone (POST /workspaces/{organizationId}/projects/{projectId}/milestones)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/projects/{projectId}/milestones",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": {
+              "type": "string"
+            },
+            "targetDate": {
+              "type": "string"
+            },
+            "completedAt": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ]
+        }
+      },
+      "required": [
+        "organizationId",
+        "projectId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdProjectsProjectIdUpdates",
+    "description": "Create project update (POST /workspaces/{organizationId}/projects/{projectId}/updates)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/projects/{projectId}/updates",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string",
+              "minLength": 1
+            },
+            "contentFormat": {
+              "type": "string",
+              "enum": [
+                "text",
+                "markdown",
+                "blocks"
+              ],
+              "default": "text"
+            },
+            "health": {
+              "type": "string",
+              "enum": [
+                "on_track",
+                "at_risk",
+                "off_track",
+                "paused"
+              ],
+              "default": "on_track"
+            }
+          },
+          "required": [
+            "content"
+          ]
+        }
+      },
+      "required": [
+        "organizationId",
+        "projectId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdReleasepipelines",
     "description": "Create release pipeline (POST /workspaces/{organizationId}/release-pipelines)",
     "method": "POST",
@@ -5533,6 +5907,44 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "putWorkspacesOrganizationIdProjectsProjectIdReminder",
+    "description": "Update project reminder (PUT /workspaces/{organizationId}/projects/{projectId}/reminder)",
+    "method": "PUT",
+    "path": "/workspaces/{organizationId}/projects/{projectId}/reminder",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "cadence": {
+              "type": "string",
+              "enum": [
+                "daily",
+                "weekly",
+                "biweekly",
+                "monthly"
+              ]
+            },
+            "nextDueAt": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "organizationId",
+        "projectId"
       ]
     }
   }
