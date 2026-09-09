@@ -113,6 +113,12 @@ When `src/api/comments.ts` creates a comment on an issue whose `repoIssues.sourc
 
 ## Future slices
 
-1. Merge request sync and `fixes KEY-123` / `closes KEY-123` parsing.
-2. MR notes / diff notes.
-3. Label, milestone, and assignee sync.
+1. ✅ Merge request sync and `fixes KEY-123` / `closes KEY-123` parsing.
+2. ✅ MR notes / diff notes.
+3. ✅ Label, milestone, and assignee sync.
+
+## Out of scope for this integration
+
+- Pipeline / CI status sync.
+- Branch/commit push hooks.
+- GitLab OAuth app flow.

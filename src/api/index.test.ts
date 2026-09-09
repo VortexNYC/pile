@@ -1945,6 +1945,215 @@ describe("API integration", () => {
     expect(issueAfterMerge.status).toBe("done");
   });
 
+  it("syncs GitLab labels, milestones, and assignees on issues", async () => {
+    const organizationId = await seedWorkspace();
+    const token = await adminToken(organizationId);
+    const db = createD1(env.D1);
+
+    const projectPath = "vortex/gitlab-attrs";
+    await createGitlabInstallation(
+      db,
+      organizationId,
+      "789",
+      projectPath,
+      "gltoken",
+      "webhook-secret"
+    );
+
+    await app.fetch(
+      request(`/workspaces/${organizationId}/gitlab/users`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ userId: "user-1", gitlabUsername: "shlomo" }),
+      }),
+      env
+    );
+
+    const labelRes = await app.fetch(
+      request(`/workspaces/${organizationId}/labels`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ name: "bug", color: "#ff0000" }),
+      }),
+      env
+    );
+    expect(labelRes.status).toBe(201);
+    const label = await labelRes.json<{ id: string }>();
+
+    const cycleRes = await app.fetch(
+      request(`/workspaces/${organizationId}/cycles`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ name: "Sprint 1" }),
+      }),
+      env
+    );
+    expect(cycleRes.status).toBe(201);
+    const cycle = await cycleRes.json<{ id: string }>();
+
+    const gitlabRequest = (body: unknown) =>
+      request("/gitlab", {
+        method: "POST",
+        body: JSON.stringify(body),
+        headers: { "X-Gitlab-Token": "webhook-secret" },
+      });
+
+    const issuePayload = {
+      object_kind: "issue" as const,
+      event_type: "issue",
+      project: { id: 789, path_with_namespace: projectPath },
+      object_attributes: {
+        id: 30,
+        iid: 50,
+        title: "Issue with attributes",
+        description: "desc",
+        state: "opened",
+        action: "open",
+        url: "https://gitlab.com/vortex/gitlab-attrs/-/issues/50",
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:00:00Z",
+        assignees: [{ username: "shlomo" }],
+        labels: [{ title: "bug" }],
+        milestone: { title: "Sprint 1" },
+      },
+    };
+
+    const createRes = await app.fetch(gitlabRequest(issuePayload), env);
+    expect(createRes.status).toBe(200);
+
+    const issuesRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues`, { token }),
+      env
+    );
+    expect(issuesRes.status).toBe(200);
+    const issuesBody = await issuesRes.json<{
+      issues: Array<{
+        id: string;
+        labelIds: string | null;
+        cycleId: string | null;
+        assigneeId: string | null;
+      }>;
+    }>();
+    expect(issuesBody.issues).toHaveLength(1);
+    expect(issuesBody.issues[0]?.labelIds).toBe(label.id);
+    expect(issuesBody.issues[0]?.cycleId).toBe(cycle.id);
+    expect(issuesBody.issues[0]?.assigneeId).toBe("user-1");
+
+    const issueId = issuesBody.issues[0]!.id;
+
+    const updateRes = await app.fetch(
+      gitlabRequest({
+        ...issuePayload,
+        object_attributes: {
+          ...issuePayload.object_attributes,
+          action: "update",
+          assignees: [],
+          labels: [],
+          milestone: null,
+          updated_at: "2026-01-01T00:01:00Z",
+        },
+      }),
+      env
+    );
+    expect(updateRes.status).toBe(200);
+
+    const issueAfterUpdateRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${issueId}`, { token }),
+      env
+    );
+    expect(issueAfterUpdateRes.status).toBe(200);
+    const issueAfterUpdate = await issueAfterUpdateRes.json<{
+      labelIds: string | null;
+      cycleId: string | null;
+      assigneeId: string | null;
+    }>();
+    expect(issueAfterUpdate.labelIds).toBeNull();
+    expect(issueAfterUpdate.cycleId).toBeNull();
+    expect(issueAfterUpdate.assigneeId).toBeNull();
+  });
+
+  it("syncs GitLab MR diff notes as file-annotated comments", async () => {
+    const organizationId = await seedWorkspace();
+    const token = await adminToken(organizationId);
+    const db = createD1(env.D1);
+
+    const projectPath = "vortex/gitlab-diff";
+    await createGitlabInstallation(
+      db,
+      organizationId,
+      "900",
+      projectPath,
+      "gltoken",
+      "webhook-secret"
+    );
+
+    const issueRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          title: "Review target",
+          repo: projectPath,
+          branch: "feature/diff",
+        }),
+      }),
+      env
+    );
+    expect(issueRes.status).toBe(201);
+    const issue = await issueRes.json<{ id: string }>();
+
+    const diffNotePayload = {
+      object_kind: "note" as const,
+      event_type: "note",
+      project: { id: 900, path_with_namespace: projectPath },
+      object_attributes: {
+        id: 50,
+        note: "This looks wrong",
+        noteable_type: "MergeRequest",
+        noteable_id: 9,
+        action: "created",
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:00:00Z",
+        position: {
+          new_path: "src/agents/gitlab.ts",
+          old_path: "src/agents/gitlab.ts",
+        },
+      },
+      merge_request: {
+        iid: 9,
+        source_branch: "feature/diff",
+        source: { id: 900, path_with_namespace: projectPath },
+        target: { id: 900, path_with_namespace: projectPath },
+      },
+      author: { username: "shlomo", name: "Shlomo" },
+    };
+
+    const diffNoteRes = await app.fetch(
+      request("/gitlab", {
+        method: "POST",
+        body: JSON.stringify(diffNotePayload),
+        headers: { "X-Gitlab-Token": "webhook-secret" },
+      }),
+      env
+    );
+    expect(diffNoteRes.status).toBe(200);
+
+    const commentsRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${issue.id}/comments`, {
+        token,
+      }),
+      env
+    );
+    expect(commentsRes.status).toBe(200);
+    const commentsBody = await commentsRes.json<{
+      comments: Array<{ body: string }>;
+    }>();
+    expect(commentsBody.comments).toHaveLength(1);
+    expect(commentsBody.comments[0]?.body).toBe(
+      "[src/agents/gitlab.ts] This looks wrong"
+    );
+  });
+
   it("manages Slack installation state and verifies events", async () => {
     const organizationId = await seedWorkspace();
     const token = await adminToken(organizationId);
