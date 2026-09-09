@@ -38,6 +38,7 @@ function isPublicPath(pathname: string): boolean {
   return (
     pathname === "/health" ||
     pathname === "/github" ||
+    pathname === "/gitlab" ||
     pathname.startsWith("/slack/") ||
     pathname.startsWith("/api/auth") ||
     pathname.includes("/migrate/") ||

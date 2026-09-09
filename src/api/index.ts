@@ -1,6 +1,7 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 
 import { githubWebhookRoute, processGithubWebhook } from "../agents/github.js";
+import { gitlabWebhookRoute, processGitlabWebhook } from "../agents/gitlab.js";
 import { handleMcpRequest } from "../mcp/server.js";
 import { createAuth } from "../platform/auth.js";
 import { toErrorResponse, VortexError } from "../platform/errors.js";
@@ -28,6 +29,7 @@ import { registerExternalLinkRoutes } from "./external-links.js";
 import { registerFileRoutes } from "./files.js";
 import { registerGitAutomationRoutes } from "./git-automation.js";
 import { registerGithubRoutes } from "./github.js";
+import { registerGitlabRoutes } from "./gitlab.js";
 import { registerHardeningRoutes } from "./hardening.js";
 import { registerIssueExternalLinkRoutes } from "./issue-external-links.js";
 import { registerIssueHistoryRoutes } from "./issue-history.js";
@@ -103,6 +105,7 @@ registerViewPreferenceRoutes(app);
 registerTimeScheduleRoutes(app);
 registerGitAutomationRoutes(app);
 registerFileRoutes(app);
+registerGitlabRoutes(app);
 registerCommentRoutes(app);
 registerDocumentRoutes(app);
 registerEmojiRoutes(app);
@@ -134,6 +137,7 @@ registerSlackRoutes(app);
 registerHealthRoutes(app);
 
 app.openapi(githubWebhookRoute, processGithubWebhook);
+app.openapi(gitlabWebhookRoute, processGitlabWebhook);
 
 app.get("/slack/oauth", async (c) => await handleSlackOAuth(c));
 app.post(

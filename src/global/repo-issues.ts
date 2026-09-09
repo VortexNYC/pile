@@ -3,12 +3,23 @@ import { and, eq } from "drizzle-orm";
 import type { D1Client } from "./db.js";
 import { repoBranches, repoIssues } from "./schema.js";
 
-export function findRepoIssue(db: D1Client, repo: string, issueNumber: number) {
+type RepoSource = "github" | "gitlab";
+
+export function findRepoIssue(
+  db: D1Client,
+  repo: string,
+  issueNumber: number,
+  source: RepoSource = "github"
+) {
   return db
     .select()
     .from(repoIssues)
     .where(
-      and(eq(repoIssues.repo, repo), eq(repoIssues.issueNumber, issueNumber))
+      and(
+        eq(repoIssues.source, source),
+        eq(repoIssues.repo, repo),
+        eq(repoIssues.issueNumber, issueNumber)
+      )
     )
     .get();
 }
@@ -26,24 +37,30 @@ export async function createRepoIssue(
   organizationId: string,
   repo: string,
   issueNumber: number,
-  issueId: string
+  issueId: string,
+  source: RepoSource = "github"
 ) {
   const id = crypto.randomUUID();
   await db
     .insert(repoIssues)
-    .values({ id, organizationId, repo, issueNumber, issueId });
-  return { id, organizationId, repo, issueNumber, issueId };
+    .values({ id, organizationId, source, repo, issueNumber, issueId });
+  return { id, organizationId, source, repo, issueNumber, issueId };
 }
 
 export async function deleteRepoIssue(
   db: D1Client,
   repo: string,
-  issueNumber: number
+  issueNumber: number,
+  source: RepoSource = "github"
 ) {
   await db
     .delete(repoIssues)
     .where(
-      and(eq(repoIssues.repo, repo), eq(repoIssues.issueNumber, issueNumber))
+      and(
+        eq(repoIssues.source, source),
+        eq(repoIssues.repo, repo),
+        eq(repoIssues.issueNumber, issueNumber)
+      )
     );
 }
 
