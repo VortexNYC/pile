@@ -88,6 +88,7 @@ export default defineConfig({
       {
         files: [
           "src/import/confluence.ts",
+          "src/import/github-issues.ts",
           "src/import/jira.ts",
           "src/import/linear.ts",
           "src/import/notion.ts",

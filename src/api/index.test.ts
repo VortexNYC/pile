@@ -3099,4 +3099,94 @@ describe("API integration", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it("imports GitHub issues into Vortex", async () => {
+    const organizationId = await seedWorkspace();
+    const token = await adminToken(organizationId);
+
+    const teamRes = await app.fetch(
+      request(`/workspaces/${organizationId}/teams`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ key: "ENG", name: "Engineering" }),
+      }),
+      env
+    );
+    expect(teamRes.status).toBe(201);
+    const team = await teamRes.json<{ id: string }>();
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input, init) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+      if (!url.startsWith("https://api.github.com")) {
+        return originalFetch(input, init);
+      }
+
+      const path = new URL(url).pathname;
+      if (path === "/repos/testowner/testrepo") {
+        return Response.json({ id: 1, full_name: "testowner/testrepo" });
+      }
+
+      if (path === "/repos/testowner/testrepo/issues") {
+        return Response.json([
+          {
+            number: 42,
+            title: "GitHub issue title",
+            body: "GitHub issue body",
+            state: "open",
+            state_reason: null,
+            user: { login: "gh-user-1" },
+            assignee: null,
+            milestone: null,
+            labels: [{ name: "bug" }],
+            pull_request: undefined,
+          },
+        ]);
+      }
+
+      return new Response("Not Found", { status: 404 });
+    };
+
+    try {
+      const importRes = await app.fetch(
+        request(`/workspaces/${organizationId}/import`, {
+          method: "POST",
+          token,
+          body: JSON.stringify({
+            source: "github-issues",
+            credentials: { token: "gh-token" },
+            options: { owner: "testowner", repo: "testrepo", teamId: team.id },
+          }),
+        }),
+        env
+      );
+      expect(importRes.status).toBe(200);
+      const importBody = await importRes.json<{
+        ok: boolean;
+        counts: Record<string, number>;
+      }>();
+      expect(importBody.ok).toBe(true);
+      expect(importBody.counts.issues).toBe(1);
+
+      const issuesRes = await app.fetch(
+        request(`/workspaces/${organizationId}/issues`, { token }),
+        env
+      );
+      expect(issuesRes.status).toBe(200);
+      const issuesBody = await issuesRes.json<{
+        issues: Array<{ title: string; status: string; repo: string }>;
+      }>();
+      expect(issuesBody.issues).toHaveLength(1);
+      expect(issuesBody.issues[0]?.title).toBe("GitHub issue title");
+      expect(issuesBody.issues[0]?.status).toBe("backlog");
+      expect(issuesBody.issues[0]?.repo).toBe("testowner/testrepo");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

@@ -23791,7 +23791,8 @@
                       "jira",
                       "confluence",
                       "linear",
-                      "notion"
+                      "notion",
+                      "github-issues"
                     ]
                   },
                   "credentials": {

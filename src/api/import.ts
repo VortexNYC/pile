@@ -17,6 +17,11 @@ import {
   linearOptionsSchema,
 } from "../import/linear.js";
 import {
+  githubIssuesCredentialsSchema,
+  githubIssuesImportSource,
+  githubIssuesOptionsSchema,
+} from "../import/github-issues.js";
+import {
   notionCredentialsSchema,
   notionImportSource,
   notionOptionsSchema,
@@ -27,7 +32,13 @@ import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 
 const importBodySchema = z.object({
-  source: z.enum(["jira", "confluence", "linear", "notion"]),
+  source: z.enum([
+    "jira",
+    "confluence",
+    "linear",
+    "notion",
+    "github-issues",
+  ]),
   credentials: z.unknown(),
   options: z.unknown().optional(),
 });
@@ -100,6 +111,19 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
         const credentials = notionCredentialsSchema.parse(body.credentials);
         const options = notionOptionsSchema.parse(body.options ?? {});
         counts = await runImport(notionImportSource, ctx, credentials, options);
+        break;
+      }
+      case "github-issues": {
+        const credentials = githubIssuesCredentialsSchema.parse(
+          body.credentials
+        );
+        const options = githubIssuesOptionsSchema.parse(body.options ?? {});
+        counts = await runImport(
+          githubIssuesImportSource,
+          ctx,
+          credentials,
+          options
+        );
         break;
       }
       default: {
