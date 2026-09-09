@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { hmacSha256Hex } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
+import { createGitlabInstallation } from "../global/gitlab-installations.js";
 import {
   apikey as apikeyTable,
   githubInstallations as githubInstallationsTable,
@@ -1467,6 +1468,278 @@ describe("API integration", () => {
       installations: Array<{ id: string; repo: string }>;
     }>();
     expect(afterBody.installations).toHaveLength(0);
+  });
+
+  it("manages GitLab installations, user mappings, and webhooks", async () => {
+    const organizationId = await seedWorkspace();
+    const token = await adminToken(organizationId);
+    const db = createD1(env.D1);
+
+    const userRes = await app.fetch(
+      request(`/workspaces/${organizationId}/gitlab/users`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ userId: "user-1", gitlabUsername: "shlomo" }),
+      }),
+      env
+    );
+    expect(userRes.status).toBe(201);
+
+    const listUsersRes = await app.fetch(
+      request(`/workspaces/${organizationId}/gitlab/users`, { token }),
+      env
+    );
+    expect(listUsersRes.status).toBe(200);
+    const usersBody = await listUsersRes.json<{
+      users: Array<{ gitlabUsername: string; userId: string }>;
+    }>();
+    expect(usersBody.users).toHaveLength(1);
+    expect(usersBody.users[0]?.gitlabUsername).toBe("shlomo");
+
+    const projectPath = "vortex/gitlab-test";
+    await createGitlabInstallation(
+      db,
+      organizationId,
+      "123",
+      projectPath,
+      "gltoken",
+      "webhook-secret"
+    );
+
+    const listInstallsRes = await app.fetch(
+      request(`/workspaces/${organizationId}/gitlab/installations`, { token }),
+      env
+    );
+    expect(listInstallsRes.status).toBe(200);
+    const installsBody = await listInstallsRes.json<{
+      installations: Array<{ projectPath: string }>;
+    }>();
+    expect(installsBody.installations).toHaveLength(1);
+    expect(installsBody.installations[0]?.projectPath).toBe(projectPath);
+
+    const basePayload = {
+      object_kind: "issue" as const,
+      event_type: "issue",
+      project: { id: 123, path_with_namespace: projectPath },
+      object_attributes: {
+        id: 1,
+        iid: 42,
+        title: "GitLab issue title",
+        description: "GitLab issue body",
+        state: "opened",
+        action: "open",
+        url: "https://gitlab.com/vortex/gitlab-test/-/issues/42",
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:00:00Z",
+        assignees: [{ username: "shlomo" }],
+        labels: [],
+      },
+    };
+
+    const gitlabRequest = (body: unknown, headers?: Record<string, string>) =>
+      request("/gitlab", {
+        method: "POST",
+        body: JSON.stringify(body),
+        headers: {
+          "X-Gitlab-Token": "webhook-secret",
+          ...headers,
+        },
+      });
+
+    const invalidRes = await app.fetch(
+      gitlabRequest(basePayload, { "X-Gitlab-Token": "wrong" }),
+      env
+    );
+    expect(invalidRes.status).toBe(401);
+
+    const malformedRes = await app.fetch(
+      request("/gitlab", {
+        method: "POST",
+        body: "not-json",
+        headers: { "X-Gitlab-Token": "webhook-secret" },
+      }),
+      env
+    );
+    expect(malformedRes.status).toBe(400);
+
+    const unknownProjectRes = await app.fetch(
+      gitlabRequest({
+        object_kind: "issue",
+        project: {
+          id: 999,
+          path_with_namespace: "unknown/project",
+        },
+        object_attributes: {
+          id: 99,
+          iid: 99,
+          title: "Unknown",
+          description: null,
+          state: "opened",
+          action: "open",
+          url: "https://gitlab.com/unknown/project/-/issues/99",
+          created_at: "2026-01-01T00:00:00Z",
+          updated_at: "2026-01-01T00:00:00Z",
+          assignees: [],
+          labels: [],
+        },
+      }),
+      env
+    );
+    expect(unknownProjectRes.status).toBe(200);
+
+    const createRes = await app.fetch(gitlabRequest(basePayload), env);
+    expect(createRes.status).toBe(200);
+
+    const dedupeRes = await app.fetch(gitlabRequest(basePayload), env);
+    expect(dedupeRes.status).toBe(200);
+
+    const issuesRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues`, { token }),
+      env
+    );
+    expect(issuesRes.status).toBe(200);
+    const issuesBody = await issuesRes.json<{
+      issues: Array<{
+        id: string;
+        title: string;
+        status: string;
+        assigneeId: string | null;
+      }>;
+    }>();
+    expect(issuesBody.issues).toHaveLength(1);
+    expect(issuesBody.issues[0]?.title).toBe("GitLab issue title");
+    expect(issuesBody.issues[0]?.status).toBe("backlog");
+    expect(issuesBody.issues[0]?.assigneeId).toBe("user-1");
+
+    const issueId = issuesBody.issues[0]!.id;
+
+    const updateRes = await app.fetch(
+      gitlabRequest({
+        ...basePayload,
+        object_attributes: {
+          ...basePayload.object_attributes,
+          title: "Updated title",
+          action: "update",
+          updated_at: "2026-01-01T00:01:00Z",
+        },
+      }),
+      env
+    );
+    expect(updateRes.status).toBe(200);
+
+    const getRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${issueId}`, { token }),
+      env
+    );
+    expect(getRes.status).toBe(200);
+    const getIssue = await getRes.json<{ title: string }>();
+    expect(getIssue.title).toBe("Updated title");
+
+    const closeRes = await app.fetch(
+      gitlabRequest({
+        ...basePayload,
+        object_attributes: {
+          ...basePayload.object_attributes,
+          state: "closed",
+          action: "close",
+          updated_at: "2026-01-01T00:02:00Z",
+        },
+      }),
+      env
+    );
+    expect(closeRes.status).toBe(200);
+
+    const afterCloseRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${issueId}`, { token }),
+      env
+    );
+    expect(afterCloseRes.status).toBe(200);
+    const closedIssue = await afterCloseRes.json<{ status: string }>();
+    expect(closedIssue.status).toBe("canceled");
+
+    const notePayload = {
+      object_kind: "note" as const,
+      event_type: "note",
+      project: { id: 123, path_with_namespace: projectPath },
+      object_attributes: {
+        id: 10,
+        note: "A GitLab note",
+        noteable_type: "Issue",
+        noteable_id: 42,
+        created_at: "2026-01-01T00:10:00Z",
+        updated_at: "2026-01-01T00:10:00Z",
+        action: "created",
+      },
+      issue: { iid: 42, title: "Updated title" },
+      author: { username: "shlomo", name: "Shlomo" },
+    };
+
+    const noteRes = await app.fetch(gitlabRequest(notePayload), env);
+    expect(noteRes.status).toBe(200);
+
+    const commentsRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${issueId}/comments`, {
+        token,
+      }),
+      env
+    );
+    expect(commentsRes.status).toBe(200);
+    const commentsBody = await commentsRes.json<{
+      comments: Array<{ id: string; body: string }>;
+    }>();
+    expect(commentsBody.comments).toHaveLength(1);
+    expect(commentsBody.comments[0]?.body).toBe("A GitLab note");
+
+    const noteUpdateRes = await app.fetch(
+      gitlabRequest({
+        ...notePayload,
+        object_attributes: {
+          ...notePayload.object_attributes,
+          note: "Updated note",
+          action: "updated",
+          updated_at: "2026-01-01T00:11:00Z",
+        },
+      }),
+      env
+    );
+    expect(noteUpdateRes.status).toBe(200);
+
+    const commentsAfterUpdateRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${issueId}/comments`, {
+        token,
+      }),
+      env
+    );
+    expect(commentsAfterUpdateRes.status).toBe(200);
+    const commentsAfterUpdate = await commentsAfterUpdateRes.json<{
+      comments: Array<{ body: string }>;
+    }>();
+    expect(commentsAfterUpdate.comments[0]?.body).toBe("Updated note");
+
+    const noteDeleteRes = await app.fetch(
+      gitlabRequest({
+        ...notePayload,
+        object_attributes: {
+          ...notePayload.object_attributes,
+          action: "deleted",
+          updated_at: "2026-01-01T00:12:00Z",
+        },
+      }),
+      env
+    );
+    expect(noteDeleteRes.status).toBe(200);
+
+    const commentsAfterDeleteRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${issueId}/comments`, {
+        token,
+      }),
+      env
+    );
+    expect(commentsAfterDeleteRes.status).toBe(200);
+    const commentsAfterDelete = await commentsAfterDeleteRes.json<{
+      comments: Array<unknown>;
+    }>();
+    expect(commentsAfterDelete.comments).toHaveLength(0);
   });
 
   it("manages Slack installation state and verifies events", async () => {
