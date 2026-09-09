@@ -5361,6 +5361,56 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdIssuesIssueIdCommentsIdResolve",
+    "description": "Create issue comment resolve (POST /workspaces/{organizationId}/issues/{issueId}/comments/{id}/resolve)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/issues/{issueId}/comments/{id}/resolve",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "issueId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "issueId",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdIssuesIssueIdCommentsIdUnresolve",
+    "description": "Create issue comment unresolve (POST /workspaces/{organizationId}/issues/{issueId}/comments/{id}/unresolve)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/issues/{issueId}/comments/{id}/unresolve",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "issueId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "issueId",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdIssuesIssueIdRelations",
     "description": "Create issue relation (POST /workspaces/{organizationId}/issues/{issueId}/relations)",
     "method": "POST",

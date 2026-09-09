@@ -149,6 +149,48 @@ const deleteCommentRoute = createRoute({
   },
 });
 
+const resolveIssueCommentRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/issues/{issueId}/comments/{id}/resolve",
+  tags: ["comments"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({
+      organizationId: z.string(),
+      issueId: z.string(),
+      id: z.string(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Comment resolved",
+      content: { "application/json": { schema: commentSchema } },
+    },
+    404: { description: "Comment not found" },
+  },
+});
+
+const unresolveIssueCommentRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/issues/{issueId}/comments/{id}/unresolve",
+  tags: ["comments"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({
+      organizationId: z.string(),
+      issueId: z.string(),
+      id: z.string(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Comment unresolved",
+      content: { "application/json": { schema: commentSchema } },
+    },
+    404: { description: "Comment not found" },
+  },
+});
+
 export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listCommentsRoute, async (c) => {
     const { organizationId, issueId } = c.req.valid("param");
@@ -378,5 +420,71 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
     await issueStub.deleteComment(id);
     await issueStub.emitCommentDeleted(id, issueId);
     return c.body(null, 204);
+  });
+
+  app.openapi(resolveIssueCommentRoute, async (c) => {
+    const { organizationId, issueId, id } = c.req.valid("param");
+    const identity = c.var.workspaceIdentity;
+    const db = createD1(c.env.D1);
+    const stub = await getStub(c.env, organizationId);
+    const existing = await stub.getComment(id);
+    if (!existing || existing.issueId !== issueId) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Comment not found",
+      });
+    }
+    const issue = await stub.getIssue(issueId);
+    if (!issue) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Issue not found",
+      });
+    }
+    const allowed = await canAccessTeam(db, issue.teamId, identity);
+    if (!allowed) {
+      throw new VortexError({
+        code: "FORBIDDEN",
+        status: 403,
+        message: "Cannot resolve this comment",
+      });
+    }
+    const item = await stub.resolveComment(id, identity.id);
+    return c.json(item!);
+  });
+
+  app.openapi(unresolveIssueCommentRoute, async (c) => {
+    const { organizationId, issueId, id } = c.req.valid("param");
+    const identity = c.var.workspaceIdentity;
+    const db = createD1(c.env.D1);
+    const stub = await getStub(c.env, organizationId);
+    const existing = await stub.getComment(id);
+    if (!existing || existing.issueId !== issueId) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Comment not found",
+      });
+    }
+    const issue = await stub.getIssue(issueId);
+    if (!issue) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Issue not found",
+      });
+    }
+    const allowed = await canAccessTeam(db, issue.teamId, identity);
+    if (!allowed) {
+      throw new VortexError({
+        code: "FORBIDDEN",
+        status: 403,
+        message: "Cannot unresolve this comment",
+      });
+    }
+    const item = await stub.unresolveComment(id);
+    return c.json(item!);
   });
 }

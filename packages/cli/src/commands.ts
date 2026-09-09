@@ -2310,6 +2310,46 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "issues comments resolve create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/issues/{issueId}/comments/{id}/resolve",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "issues comments unresolve create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/issues/{issueId}/comments/{id}/unresolve",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "documents list": {
     method: "GET",
     path: "/workspaces/{organizationId}/documents",

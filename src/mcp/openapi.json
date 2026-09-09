@@ -9680,6 +9680,232 @@
         "summary": "Delete issue comment"
       }
     },
+    "/workspaces/{organizationId}/issues/{issueId}/comments/{id}/resolve": {
+      "post": {
+        "tags": [
+          "comments"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "issueId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Comment resolved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "issueId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "documentId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "authorId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "body": {
+                      "type": "string"
+                    },
+                    "externalId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "externalSource": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "externalAuthor": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resolvedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resolvedById": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "issueId",
+                    "documentId",
+                    "authorId",
+                    "body",
+                    "externalId",
+                    "externalSource",
+                    "externalAuthor",
+                    "resolvedAt",
+                    "resolvedById",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Comment not found"
+          }
+        },
+        "summary": "Create issue comment resolve"
+      }
+    },
+    "/workspaces/{organizationId}/issues/{issueId}/comments/{id}/unresolve": {
+      "post": {
+        "tags": [
+          "comments"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "issueId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Comment unresolved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "issueId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "documentId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "authorId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "body": {
+                      "type": "string"
+                    },
+                    "externalId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "externalSource": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "externalAuthor": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resolvedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resolvedById": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "issueId",
+                    "documentId",
+                    "authorId",
+                    "body",
+                    "externalId",
+                    "externalSource",
+                    "externalAuthor",
+                    "resolvedAt",
+                    "resolvedById",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Comment not found"
+          }
+        },
+        "summary": "Create issue comment unresolve"
+      }
+    },
     "/workspaces/{organizationId}/documents": {
       "get": {
         "tags": [
