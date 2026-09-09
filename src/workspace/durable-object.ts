@@ -1097,6 +1097,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.setAttachmentR2Key(this.db, this.organizationId, id, r2Key);
   }
 
+  deleteAttachment(id: string) {
+    return data.deleteAttachment(this.db, this.organizationId, id);
+  }
+
   listWorkspaceAttachments() {
     return this.db.select().from(workspaceAttachments).all();
   }

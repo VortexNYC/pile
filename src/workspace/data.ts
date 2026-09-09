@@ -395,6 +395,21 @@ export async function setAttachmentR2Key(
     );
 }
 
+export async function deleteAttachment(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  await db
+    .delete(workspaceAttachments)
+    .where(
+      and(
+        eq(workspaceAttachments.organizationId, organizationId),
+        eq(workspaceAttachments.id, id)
+      )
+    );
+}
+
 // ---- saved_views / favorites / prefs ----
 
 export interface SavedViewInput {

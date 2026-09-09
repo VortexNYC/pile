@@ -334,6 +334,31 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdIssuesIssueIdAttachmentsId",
+    "description": "Delete issue attachment (DELETE /workspaces/{organizationId}/issues/{issueId}/attachments/{id})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/issues/{issueId}/attachments/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "issueId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "issueId",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdIssuesIssueIdCommentsId",
     "description": "Delete issue comment (DELETE /workspaces/{organizationId}/issues/{issueId}/comments/{id})",
     "method": "DELETE",
@@ -1765,6 +1790,31 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
+        "issueId",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdIssuesIssueIdAttachmentsId",
+    "description": "Get issue attachment (GET /workspaces/{organizationId}/issues/{issueId}/attachments/{id})",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/issues/{issueId}/attachments/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "issueId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
         "issueId",
         "organizationId"
       ]
@@ -5318,6 +5368,45 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           },
           "required": [
             "approverId"
+          ]
+        }
+      },
+      "required": [
+        "issueId",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdIssuesIssueIdAttachments",
+    "description": "Create issue attachment (POST /workspaces/{organizationId}/issues/{issueId}/attachments)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/issues/{issueId}/attachments",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "issueId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "title": {
+              "type": "string"
+            },
+            "subtitle": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "url"
           ]
         }
       },

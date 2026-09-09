@@ -3548,7 +3548,7 @@ export const COMMANDS: Record<string, CommandDef> = {
     body: [],
   },
   "issues attachments": {
-    method: "GET",
+    method: "POST",
     path: "/workspaces/{organizationId}/issues/{issueId}/attachments",
     params: [
       {
@@ -3558,6 +3558,59 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "issueId",
         flag: "issue",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "url",
+        flag: "url",
+      },
+      {
+        name: "title",
+        flag: "title",
+      },
+      {
+        name: "subtitle",
+        flag: "subtitle",
+      },
+    ],
+  },
+  "issues attachments get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/issues/{issueId}/attachments/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "issues attachments delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/issues/{issueId}/attachments/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+      {
+        name: "id",
+        flag: "id",
       },
     ],
     query: [],
