@@ -119,6 +119,9 @@ export class CfAgentProvider implements AgentProvider {
       issueId: issue.id,
       status: "running",
       url: body.url,
+      prUrl: null,
+      prState: null,
+      branch: null,
     };
   }
 
@@ -148,7 +151,6 @@ export class CfAgentProvider implements AgentProvider {
       return {
         id: sessionId,
         agentId: this.id,
-        issueId: "",
         status: "running",
       };
     }
@@ -166,7 +168,6 @@ export class CfAgentProvider implements AgentProvider {
       return {
         id: sessionId,
         agentId: this.id,
-        issueId: "",
         status: "running",
       };
     }
@@ -186,9 +187,8 @@ export class CfAgentProvider implements AgentProvider {
     return {
       id: sessionId,
       agentId: this.id,
-      issueId: "",
       status,
-      result: lastText || undefined,
+      ...(lastText ? { result: lastText } : {}),
     };
   }
 }

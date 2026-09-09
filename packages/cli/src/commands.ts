@@ -784,6 +784,18 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "url",
         flag: "url",
       },
+      {
+        name: "prUrl",
+        flag: "pr-url",
+      },
+      {
+        name: "prState",
+        flag: "pr-state",
+      },
+      {
+        name: "branch",
+        flag: "branch",
+      },
     ],
   },
   "agent sessions activities": {

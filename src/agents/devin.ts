@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import type { AppEnv } from "../platform/env.js";
 import { VortexError } from "../platform/errors.js";
-import type { Issue } from "../types/workspace.js";
+import type { AgentSessionStatus, Issue } from "../types/workspace.js";
 import type { AgentProvider, AgentProviderSession } from "./provider.js";
 
 const devinCreateResponseSchema = z.object({
@@ -24,6 +24,15 @@ const devinSessionSchema = z.object({
   is_archived: z.boolean().default(false),
   pull_requests: z.array(prSchema).optional(),
 });
+
+const STATUS_MAP: Record<string, AgentSessionStatus> = {
+  blocked: "waiting",
+  exit: "completed",
+  error: "failed",
+  suspended: "canceled",
+  running: "running",
+  created: "created",
+};
 
 function buildPrompt(issue: Issue): string {
   return `# ${issue.title}\n\n${issue.description ?? ""}\n\nDo not attempt to update the issue tracker yourself — an external system will poll your session and write the PR URL and final status back automatically.`;
@@ -124,16 +133,17 @@ export class DevinAgentProvider implements AgentProvider {
 
     const data = devinSessionSchema.parse(await res.json());
     const firstPr = data.pull_requests?.[0];
-    const url = firstPr?.url ?? firstPr?.pr_url;
+    const prUrl = firstPr?.url ?? firstPr?.pr_url;
     const prState = firstPr?.pr_state;
 
     return {
       id: data.session_id,
       agentId: this.id,
-      issueId: "",
-      status: data.status,
-      result: prState,
-      url,
+      status: STATUS_MAP[data.status] ?? "running",
+      result: (data.status_detail ?? prState) || undefined,
+      url: `https://app.devin.ai/sessions/${data.session_id}`,
+      prUrl: prUrl ?? null,
+      prState: prState ?? null,
     };
   }
 

@@ -52,11 +52,17 @@ describe("agent providers", () => {
   });
 
   it("registers and dispatches a mock provider", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)
+    );
+    await stub.setOrganizationId(actor.organizationId);
+    const issue = await stub.createIssue({ title: "Mock dispatch test" });
+
     const provider = new MockAgentProvider("mock", {
       dispatch: () => ({
         id: "test-1",
         agentId: "mock",
-        issueId: "issue-1",
+        issueId: issue.id,
         status: "created",
       }),
     });
@@ -66,38 +72,12 @@ describe("agent providers", () => {
       env,
       "mock",
       actor.organizationId,
-      {
-        id: "issue-1",
-        organizationId: actor.organizationId,
-        teamId: "team-1",
-        title: "Test",
-        description: null,
-        status: "backlog",
-        priority: "medium",
-        resolution: null,
-        parentId: null,
-        subIssueSortOrder: null,
-        estimate: null,
-        isDraft: false,
-        snoozedUntil: null,
-        assigneeId: null,
-        projectId: null,
-        cycleId: null,
-        labelIds: null,
-        number: null,
-        identifier: null,
-        repo: null,
-        branch: null,
-        prUrl: null,
-        prState: null,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      },
+      issue,
       actor
     );
 
     expect(session.agentId).toBe("mock");
-    expect(session.issueId).toBe("issue-1");
+    expect(session.issueId).toBe(issue.id);
     expect(session.provider).toBe("mock");
     expect(session.actorId).toBe("user-1");
   });
@@ -107,7 +87,6 @@ describe("agent providers", () => {
       poll: (sessionId) => ({
         id: sessionId,
         agentId: "mock",
-        issueId: "issue-1",
         status: "completed",
         result: "done",
       }),
@@ -119,5 +98,123 @@ describe("agent providers", () => {
 
     expect(session.id).toBe("session-1");
     expect(session.status).toBe("completed");
+  });
+
+  it("blocks a second dispatch while an active session exists", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)
+    );
+    await stub.setOrganizationId(actor.organizationId);
+    const issue = await stub.createIssue({ title: "Duplicate dispatch test" });
+
+    const provider = new MockAgentProvider("mock", {
+      dispatch: () => ({
+        id: "dup-1",
+        agentId: "mock",
+        status: "created",
+      }),
+    });
+    registerAgentProvider("mock-dup", () => provider);
+
+    await dispatchAgent(env, "mock-dup", actor.organizationId, issue, actor);
+    await expect(
+      dispatchAgent(env, "mock-dup", actor.organizationId, issue, actor)
+    ).rejects.toThrow("active agent session");
+  });
+
+  it("moves the issue to in_progress on dispatch", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)
+    );
+    await stub.setOrganizationId(actor.organizationId);
+    const issue = await stub.createIssue({ title: "Status transition test" });
+
+    const provider = new MockAgentProvider("mock", {
+      dispatch: () => ({
+        id: "run-1",
+        agentId: "mock",
+        status: "running",
+      }),
+    });
+    registerAgentProvider("mock-run", () => provider);
+
+    const session = await dispatchAgent(
+      env,
+      "mock-run",
+      actor.organizationId,
+      issue,
+      actor
+    );
+
+    expect(session.status).toBe("running");
+    const updated = await stub.getIssue(issue.id);
+    expect(updated?.status).toBe("in_progress");
+  });
+
+  it("writes PR fields and creates a comment when a session completes", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)
+    );
+    await stub.setOrganizationId(actor.organizationId);
+    const issue = await stub.createIssue({ title: "PR writeback test" });
+
+    const provider = new MockAgentProvider("mock", {
+      dispatch: () => ({
+        id: "pr-1",
+        agentId: "mock",
+        status: "created",
+      }),
+    });
+    registerAgentProvider("mock-pr", () => provider);
+
+    const session = await dispatchAgent(
+      env,
+      "mock-pr",
+      actor.organizationId,
+      issue,
+      actor
+    );
+
+    const prUrl = "https://github.com/vortexnyc/issuetracker/pull/42";
+    await stub.applyAgentSessionResult(session.id, {
+      status: "completed",
+      result: "Done",
+      prUrl,
+      prState: "open",
+    });
+
+    const updated = await stub.getIssue(issue.id);
+    expect(updated?.prUrl).toBe(prUrl);
+    expect(updated?.prState).toBe("open");
+    expect(updated?.status).toBe("in_progress");
+
+    const comments = await stub.listComments(issue.id);
+    expect(comments.length).toBe(1);
+    expect(comments[0]?.body).toContain(prUrl);
+  });
+
+  it("marks the session failed without changing the issue status", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)
+    );
+    await stub.setOrganizationId(actor.organizationId);
+    const issue = await stub.createIssue({ title: "Failure test" });
+
+    const provider = new MockAgentProvider("mock", {
+      dispatch: () => {
+        throw new Error("provider dispatch failed");
+      },
+    });
+    registerAgentProvider("mock-fail", () => provider);
+
+    await expect(
+      dispatchAgent(env, "mock-fail", actor.organizationId, issue, actor)
+    ).rejects.toThrow("provider dispatch failed");
+
+    const updated = await stub.getIssue(issue.id);
+    expect(updated?.status).toBe("backlog");
+
+    const sessions = await stub.listAgentSessions({ issueId: issue.id });
+    expect(sessions[0]?.status).toBe("failed");
   });
 });

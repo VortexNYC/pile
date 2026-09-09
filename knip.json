@@ -1,12 +1,10 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "ignore": [
-    "migrations/**",
-    "drizzle/**",
-    "src/mcp/openapi.json",
-    "src/mcp/mcp-tools.ts",
-    "packages/client/src/types.ts"
+  "ignore": ["packages/client/src/types.ts", "packages/docs/blume.config.ts"],
+  "ignoreDependencies": [
+    "cloudflare",
+    "@secretlint/secretlint-rule-preset-recommend"
   ],
-  "ignoreDependencies": ["cloudflare"],
+  "ignoreBinaries": ["entire"],
   "ignoreExportsUsedInFile": true
 }

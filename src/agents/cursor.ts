@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import type { AppEnv } from "../platform/env.js";
 import { VortexError } from "../platform/errors.js";
-import type { Issue } from "../types/workspace.js";
+import type { AgentSessionStatus, Issue } from "../types/workspace.js";
 import type { AgentProvider, AgentProviderSession } from "./provider.js";
 
 const cursorConfigSchema = z.object({
@@ -47,7 +47,7 @@ const runSchema = z.object({
     .optional(),
 });
 
-const STATUS_MAP: Record<string, string> = {
+const STATUS_MAP: Record<string, AgentSessionStatus> = {
   CREATING: "created",
   RUNNING: "running",
   FINISHED: "completed",
@@ -155,14 +155,15 @@ export class CursorAgentProvider implements AgentProvider {
       });
     }
     const run = runSchema.parse(await res.json());
-    const prUrl = run.git?.branches?.find((b) => b.prUrl)?.prUrl;
+    const branch = run.git?.branches?.find((b) => b.prUrl);
+    const prUrl = branch?.prUrl;
     return {
       id: sessionId,
       agentId: this.id,
-      issueId: "",
       status: STATUS_MAP[run.status] ?? "running",
       result: run.result,
-      url: prUrl,
+      prUrl: prUrl ?? null,
+      branch: branch?.branch ?? null,
     };
   }
 

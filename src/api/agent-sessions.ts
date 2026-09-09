@@ -4,9 +4,9 @@ import type { InferSelectModel } from "drizzle-orm";
 
 import { getAgentProvider } from "../agents/index.js";
 import { resolveAgentEnv } from "../agents/outpost.js";
-import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
+import type { AgentSessionStatus } from "../types/workspace.js";
 import type {
   workspaceAgentActivities,
   workspaceAgentSessions,
@@ -228,6 +228,9 @@ const patchSessionRoute = createRoute({
             status: agentSessionStatusSchema.optional(),
             result: z.string().optional(),
             url: z.string().optional(),
+            prUrl: z.string().optional(),
+            prState: z.string().optional(),
+            branch: z.string().optional(),
           }),
         },
       },
@@ -340,19 +343,29 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(patchSessionRoute, async (c) => {
     const { organizationId, sessionId } = c.req.valid("param");
     const body = c.req.valid("json");
+    const identity = c.var.workspaceIdentity;
     const stub = getWorkspaceStub(c.env, organizationId);
 
-    const updated = await stub.updateAgentSession(sessionId, {
-      status: body.status,
-      result: body.result,
-      url: body.url,
-    });
-    if (!updated) {
+    const session = await stub.getAgentSession(sessionId);
+    if (!session) {
       return c.json({ message: "Session not found" }, 404);
     }
 
+    const updated = await stub.applyAgentSessionResult(
+      sessionId,
+      {
+        status: (body.status ?? session.status) as AgentSessionStatus,
+        result: body.result,
+        url: body.url,
+        prUrl: body.prUrl,
+        prState: body.prState,
+        branch: body.branch,
+      },
+      identity.id
+    );
+
     const activities = await stub.listAgentActivities(sessionId);
-    return c.json(toSessionResponse(updated, activities));
+    return c.json(toSessionResponse(updated ?? session, activities));
   });
 
   // Vercel AI SDK UI-message-stream (SSE) replay of the activity log, so any
@@ -425,6 +438,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(cancelSessionRoute, async (c) => {
     const { organizationId, sessionId } = c.req.valid("param");
+    const identity = c.var.workspaceIdentity;
     const stub = getWorkspaceStub(c.env, organizationId);
 
     const session = await stub.getAgentSession(sessionId);
@@ -446,20 +460,18 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         .catch((err) => console.error("provider cancel failed", err));
     }
 
-    const updated = await stub.updateAgentSession(sessionId, {
-      status: "canceled",
-    });
-    await stub.addAgentActivity({
+    const updated = await stub.applyAgentSessionResult(
       sessionId,
-      type: "status",
-      message: "Session canceled",
-    });
+      { status: "canceled" },
+      identity.id
+    );
     const activities = await stub.listAgentActivities(sessionId);
     return c.json(toSessionResponse(updated ?? session, activities));
   });
 
   app.openapi(pollSessionRoute, async (c) => {
     const { organizationId, sessionId } = c.req.valid("param");
+    const identity = c.var.workspaceIdentity;
     const stub = getWorkspaceStub(c.env, organizationId);
 
     const session = await stub.getAgentSession(sessionId);
@@ -472,20 +484,21 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     const provider = getAgentProvider(session.agentId, effectiveEnv);
     const polled = await provider.poll(session.providerSessionId ?? sessionId);
 
-    const updated = await stub.updateAgentSession(sessionId, {
-      status: agentSessionStatusSchema.parse(polled.status),
-      result: polled.result ?? undefined,
-      url: polled.url ?? undefined,
-    });
-    if (!updated) {
-      throw new VortexError({
-        code: "INTERNAL_ERROR",
-        status: 500,
-        message: "Session disappeared during poll",
-      });
-    }
+    const updated = await stub.applyAgentSessionResult(
+      sessionId,
+      {
+        status: polled.status,
+        result: polled.result,
+        url: polled.url,
+        providerSessionId: polled.id,
+        prUrl: polled.prUrl,
+        prState: polled.prState,
+        branch: polled.branch,
+      },
+      identity.id
+    );
 
     const activities = await stub.listAgentActivities(sessionId);
-    return c.json(toSessionResponse(updated, activities));
+    return c.json(toSessionResponse(updated ?? session, activities));
   });
 }

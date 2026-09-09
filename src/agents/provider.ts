@@ -1,12 +1,10 @@
-import type { Issue } from "../types/workspace.js";
+import type { AgentSessionResult, Issue } from "../types/workspace.js";
 
-export interface AgentProviderSession {
+export interface AgentProviderSession extends AgentSessionResult {
   id: string;
   agentId: string;
-  issueId: string;
-  status: string;
-  result?: string;
-  url?: string;
+  /** Issue id is set when dispatch creates a session; polls may omit it. */
+  issueId?: string;
 }
 
 export interface AgentDispatchContext {

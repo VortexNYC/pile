@@ -53,6 +53,9 @@ import { notifySlack } from "../slack/bot.js";
 import type { AppEnv } from "../types/env.js";
 import {
   ISSUE_RESOLUTIONS,
+  type AgentSession,
+  type AgentSessionResult,
+  type AgentSessionStatus,
   type Comment,
   type Issue,
   type IssueInput,
@@ -1884,11 +1887,23 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   // ---- agent sessions ----
-  createAgentSession(input: Omit<data.AgentSessionInput, "organizationId">) {
-    return data.createAgentSession(this.db, {
+  async createAgentSession(
+    input: Omit<data.AgentSessionInput, "organizationId">
+  ) {
+    const session = await data.createAgentSession(this.db, {
       ...input,
       organizationId: this.organizationId,
     });
+    const issue = await this.getIssue(session.issueId);
+    if (issue) {
+      await this.emit({
+        type: "agent_session.created",
+        organizationId: this.organizationId,
+        session,
+        issue,
+      });
+    }
+    return session;
   }
 
   getAgentSession(id: string) {
@@ -1945,6 +1960,237 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       this.organizationId,
       issueId
     );
+  }
+
+  async applyAgentSessionResult(
+    sessionId: string,
+    result: AgentSessionResult,
+    actorId?: string
+  ): Promise<AgentSession | undefined> {
+    await this.ready;
+    const oldSession = await this.getAgentSession(sessionId);
+    if (!oldSession) return undefined;
+
+    const issue = await this.getIssue(oldSession.issueId);
+    if (!issue) {
+      const set: Record<string, string | null> = {
+        updatedAt: new Date().toISOString(),
+      };
+      if (result.status !== undefined) set.status = result.status;
+      if (result.result !== undefined) set.result = result.result;
+      if (result.url !== undefined) set.url = result.url;
+      if (result.providerSessionId !== undefined)
+        set.providerSessionId = result.providerSessionId;
+      const rows = await this.db
+        .update(workspaceAgentSessions)
+        .set(set)
+        .where(eq(workspaceAgentSessions.id, sessionId))
+        .returning()
+        .all();
+      return rows[0] as AgentSession | undefined;
+    }
+
+    const terminal = new Set<AgentSessionStatus>([
+      "completed",
+      "failed",
+      "canceled",
+    ]);
+    const oldStatus = oldSession.status as AgentSessionStatus;
+    const newStatus = result.status;
+    const becameTerminal = !terminal.has(oldStatus) && terminal.has(newStatus);
+
+    const set: Record<string, string | null> = {
+      updatedAt: new Date().toISOString(),
+    };
+    if (result.status !== undefined) set.status = result.status;
+    if (result.result !== undefined) set.result = result.result;
+    if (result.url !== undefined) set.url = result.url;
+    if (result.providerSessionId !== undefined)
+      set.providerSessionId = result.providerSessionId;
+
+    const updatedSession = await this.db
+      .update(workspaceAgentSessions)
+      .set(set)
+      .where(eq(workspaceAgentSessions.id, sessionId))
+      .returning()
+      .get();
+    if (!updatedSession) return undefined;
+
+    const statusChanged = updatedSession.status !== oldSession.status;
+    const resultChanged = updatedSession.result !== oldSession.result;
+    const shouldRecordActivity =
+      statusChanged ||
+      (resultChanged && (newStatus === "completed" || newStatus === "failed"));
+
+    if (shouldRecordActivity) {
+      const activityType =
+        newStatus === "completed"
+          ? "response"
+          : newStatus === "failed"
+            ? "error"
+            : "status";
+      const activityMessage =
+        newStatus === "completed"
+          ? (result.result ?? "Session completed")
+          : newStatus === "failed"
+            ? (result.result ?? "Session failed")
+            : `Session ${newStatus}`;
+      await this.addAgentActivity({
+        sessionId,
+        actorId,
+        type: activityType,
+        message: activityMessage,
+      });
+    }
+
+    const issueSet: Record<string, string | null> = {
+      updatedAt: new Date().toISOString(),
+    };
+    const historyEntries: Array<{
+      field: string;
+      fromValue: string | null;
+      toValue: string | null;
+    }> = [];
+
+    if (result.prUrl !== undefined && result.prUrl !== issue.prUrl) {
+      issueSet.prUrl = result.prUrl;
+      historyEntries.push({
+        field: "pr_url",
+        fromValue: issue.prUrl,
+        toValue: result.prUrl,
+      });
+    }
+    if (result.prState !== undefined && result.prState !== issue.prState) {
+      issueSet.prState = result.prState;
+      historyEntries.push({
+        field: "pr_state",
+        fromValue: issue.prState,
+        toValue: result.prState,
+      });
+    }
+    if (result.branch !== undefined && result.branch !== issue.branch) {
+      issueSet.branch = result.branch;
+      historyEntries.push({
+        field: "branch",
+        fromValue: issue.branch,
+        toValue: result.branch,
+      });
+    }
+
+    const notStartedStatuses: IssueStatus[] = ["triage", "backlog", "todo"];
+    const terminalIssueStatuses = new Set<IssueStatus>(["done", "canceled"]);
+    if (
+      (newStatus === "created" ||
+        newStatus === "running" ||
+        newStatus === "waiting") &&
+      notStartedStatuses.includes(issue.status) &&
+      !terminalIssueStatuses.has(issue.status)
+    ) {
+      issueSet.status = "in_progress";
+      historyEntries.push({
+        field: "status",
+        fromValue: issue.status,
+        toValue: "in_progress",
+      });
+    }
+
+    if (
+      newStatus === "completed" &&
+      !terminalIssueStatuses.has(issue.status) &&
+      result.prState
+    ) {
+      const prStateStatusMap: Record<string, IssueStatus | undefined> = {
+        merged: "done",
+        closed: "canceled",
+      };
+      const statusFromPr = prStateStatusMap[result.prState];
+      if (statusFromPr && statusFromPr !== issue.status) {
+        issueSet.status = statusFromPr;
+        historyEntries.push({
+          field: "status",
+          fromValue: issue.status,
+          toValue: statusFromPr,
+        });
+      }
+    }
+
+    let updatedIssue: Issue | undefined;
+    if (Object.keys(issueSet).length > 1) {
+      updatedIssue = await this.db
+        .update(workspaceIssues)
+        .set(issueSet)
+        .where(eq(workspaceIssues.id, issue.id))
+        .returning()
+        .get();
+      if (updatedIssue) {
+        if (historyEntries.length > 0) {
+          await this.recordIssueHistory(issue.id, historyEntries, actorId);
+        }
+        await this.emit({
+          type: "issue.updated",
+          organizationId: this.organizationId,
+          issue: updatedIssue,
+        });
+        if (
+          result.prUrl !== undefined ||
+          result.prState !== undefined ||
+          result.branch !== undefined
+        ) {
+          await this.emit({
+            type: "pr.updated",
+            organizationId: this.organizationId,
+            issue: updatedIssue,
+          });
+        }
+        if (updatedIssue.status !== issue.status) {
+          await this.applyStatusAutomation(updatedIssue, issue, actorId);
+        }
+      }
+    }
+
+    if (
+      newStatus === "completed" &&
+      oldStatus !== "completed" &&
+      (result.result || result.prUrl)
+    ) {
+      const commentBody = result.prUrl
+        ? `Agent ${oldSession.agentId} completed${result.result ? `: ${result.result}` : ""}\n\n${result.prUrl}`
+        : `Agent ${oldSession.agentId} completed: ${result.result}`;
+      const comment = await this.createComment({
+        issueId: issue.id,
+        body: commentBody,
+        externalAuthor: oldSession.agentId,
+        externalSource: "agent",
+        externalId: oldSession.id,
+      });
+      if (comment) {
+        await this.emitCommentCreated(comment, updatedIssue ?? issue, actorId);
+      }
+    }
+
+    await this.emit({
+      type: "agent_session.updated",
+      organizationId: this.organizationId,
+      session: updatedSession,
+      issue: updatedIssue ?? issue,
+    });
+
+    if (becameTerminal) {
+      const terminalEventType: RealtimeEvent["type"] =
+        newStatus === "completed"
+          ? "agent_session.completed"
+          : newStatus === "failed"
+            ? "agent_session.failed"
+            : "agent_session.canceled";
+      await this.emit({
+        type: terminalEventType,
+        organizationId: this.organizationId,
+        session: updatedSession,
+        issue: updatedIssue ?? issue,
+      });
+    }
+
+    return updatedSession;
   }
 
   listWorkspaceAgentSessions() {
