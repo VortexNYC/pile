@@ -8385,6 +8385,44 @@
         "summary": "Delete project reminder"
       }
     },
+    "/workspaces/{organizationId}/project-update-reminders/fire-due": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Due reminders fired",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "fired": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "fired"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create project update reminder fire due"
+      }
+    },
     "/workspaces/{organizationId}/issues/{issueId}/comments": {
       "get": {
         "tags": [

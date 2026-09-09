@@ -1,4 +1,4 @@
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, lte } from "drizzle-orm";
 import { z } from "zod";
 
 import type { D1Client } from "./db.js";
@@ -885,4 +885,65 @@ export async function deleteProjectUpdateReminder(
         eq(projectUpdateReminders.projectId, projectId)
       )
     );
+}
+
+function advanceCadence(date: Date, cadence: string) {
+  const next = new Date(date.getTime());
+  if (cadence === "daily") {
+    next.setDate(next.getDate() + 1);
+  } else if (cadence === "weekly") {
+    next.setDate(next.getDate() + 7);
+  } else if (cadence === "biweekly") {
+    next.setDate(next.getDate() + 14);
+  } else if (cadence === "monthly") {
+    next.setMonth(next.getMonth() + 1);
+  }
+  return next.toISOString();
+}
+
+export async function fireDueProjectUpdateReminders(
+  db: D1Client,
+  organizationId: string,
+  actorId: string
+) {
+  const ts = now();
+  const due = await db
+    .select()
+    .from(projectUpdateReminders)
+    .where(
+      and(
+        eq(projectUpdateReminders.organizationId, organizationId),
+        lte(projectUpdateReminders.nextDueAt, ts)
+      )
+    )
+    .all();
+
+  await Promise.all(
+    due.map(async (reminder) => {
+      if (!reminder.nextDueAt) return;
+      const latest = await getLatestProjectUpdate(
+        db,
+        organizationId,
+        reminder.projectId
+      );
+      const health = latest?.health ?? "on_track";
+      await createProjectUpdate(db, organizationId, {
+        projectId: reminder.projectId,
+        content: `Project update due for ${reminder.cadence} cadence.`,
+        contentFormat: "text",
+        health,
+        createdById: actorId,
+      });
+      let next = new Date(reminder.nextDueAt);
+      while (next.toISOString() <= ts) {
+        next = new Date(advanceCadence(next, reminder.cadence));
+      }
+      await db
+        .update(projectUpdateReminders)
+        .set({ nextDueAt: next.toISOString(), updatedAt: ts })
+        .where(eq(projectUpdateReminders.id, reminder.id));
+    })
+  );
+
+  return due.length;
 }

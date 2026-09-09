@@ -8,6 +8,7 @@ import {
   deleteProjectMilestone,
   deleteProjectUpdate,
   deleteProjectUpdateReminder,
+  fireDueProjectUpdateReminders,
   getProject,
   getProjectMilestone,
   getProjectUpdate,
@@ -311,6 +312,26 @@ export function registerProjectDetailRoutes(app: OpenAPIHono<AppContext>) {
     responses: { 204: { description: "Project update reminder deleted" } },
   });
 
+  const fireDueProjectUpdateRemindersRoute = createRoute({
+    method: "post",
+    path: "/workspaces/{organizationId}/project-update-reminders/fire-due",
+    tags: ["projects"],
+    middleware: [rls("write")],
+    request: {
+      params: z.object({ organizationId: z.string() }),
+    },
+    responses: {
+      200: {
+        description: "Due reminders fired",
+        content: {
+          "application/json": {
+            schema: z.object({ fired: z.number().int() }),
+          },
+        },
+      },
+    },
+  });
+
   app.openapi(listProjectUpdatesRoute, async (c) => {
     const { organizationId, projectId } = c.req.valid("param");
     const db = createD1(c.env.D1);
@@ -450,5 +471,13 @@ export function registerProjectDetailRoutes(app: OpenAPIHono<AppContext>) {
     const db = createD1(c.env.D1);
     await deleteProjectUpdateReminder(db, organizationId, projectId);
     return c.body(null, 204);
+  });
+
+  app.openapi(fireDueProjectUpdateRemindersRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const identity = c.var.workspaceIdentity;
+    const fired = await fireDueProjectUpdateReminders(db, organizationId, identity.id);
+    return c.json({ fired });
   });
 }

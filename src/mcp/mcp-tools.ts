@@ -5552,6 +5552,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdProjectupdateremindersFiredue",
+    "description": "Create project update reminder fire due (POST /workspaces/{organizationId}/project-update-reminders/fire-due)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/project-update-reminders/fire-due",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdPushSend",
     "description": "Create push send (POST /workspaces/{organizationId}/push/send)",
     "method": "POST",
