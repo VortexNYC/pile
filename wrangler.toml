@@ -15,16 +15,15 @@ SLACK_REDIRECT_URI = "https://issuetracker.example.workers.dev/slack/oauth"
 # Optional: agent dispatch defaults
 # DEVIN_OUTPOST = "vortex-daytona"
 # DEVIN_MODEL = "swe-1-7-medium"
-# EMAIL_FROM = "notifications@yourdomain.com"
+EMAIL_FROM = "notifications@vortex.nyc"
 
 [[d1_databases]]
 binding = "D1"
 database_name = "issuetracker-global"
 migrations_dir = "migrations"
 
-# Cloudflare Email Service — sending requires a verified domain.
-# [[send_email]]
-# name = "EMAIL"
+[[send_email]]
+name = "EMAIL"
 
 [[r2_buckets]]
 binding = "ATTACHMENTS_BUCKET"
@@ -52,7 +51,7 @@ DEVIN_OUTPOST = "vortex-daytona"
 DAYTONA_SNAPSHOT = "vortex-outpost-worker"
 DAYTONA_VOLUME_ID = "0f79e741-e373-496b-a83f-7252cd5b9f12"
 DEVIN_MODEL = "swe-1-7-medium"
-# EMAIL_FROM = "notifications@yourdomain.com"
+EMAIL_FROM = "notifications@vortex.nyc"
 
 [[env.production.services]]
 binding = "FLUE_WORKER"
