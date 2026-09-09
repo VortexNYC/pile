@@ -23823,6 +23823,9 @@
                     "source": {
                       "type": "string"
                     },
+                    "jobId": {
+                      "type": "string"
+                    },
                     "counts": {
                       "type": "object",
                       "additionalProperties": {
@@ -23833,6 +23836,7 @@
                   "required": [
                     "ok",
                     "source",
+                    "jobId",
                     "counts"
                   ]
                 }
@@ -23841,6 +23845,72 @@
           }
         },
         "summary": "Create import"
+      }
+    },
+    "/workspaces/{organizationId}/import/{jobId}": {
+      "get": {
+        "tags": [
+          "import"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "jobId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Import job status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "counts": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "number"
+                      }
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "source",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Import job not found"
+          }
+        },
+        "summary": "Get import"
       }
     },
     "/workspaces/{organizationId}/notion/users": {

@@ -1937,6 +1937,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdImportJobId",
+    "description": "Get import (GET /workspaces/{organizationId}/import/{jobId})",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/import/{jobId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "jobId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "jobId",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdInitiatives",
     "description": "List initiatives (GET /workspaces/{organizationId}/initiatives)",
     "method": "GET",

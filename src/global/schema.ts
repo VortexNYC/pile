@@ -57,6 +57,39 @@ export const repoIssues = sqliteTable(
   ]
 );
 
+export const importJobs = sqliteTable(
+  "import_jobs" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    source: text("source" as string).notNull(),
+    status: text("status" as string, {
+      enum: ["pending", "running", "completed", "failed", "paused"],
+    })
+      .notNull()
+      .default("pending"),
+    options: text("options" as string),
+    counts: text("counts" as string),
+    cursor: text("cursor" as string),
+    error: text("error" as string),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    completedAt: text("completed_at" as string),
+  },
+  (table) => [
+    index("import_jobs_organization_idx" as string).on(
+      table.organizationId,
+      table.createdAt
+    ),
+  ]
+);
+
 export const githubInstallations = sqliteTable(
   "github_installations" as string,
   {

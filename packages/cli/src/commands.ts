@@ -5843,6 +5843,22 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "import get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/import/{jobId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "jobId",
+        flag: "job-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "notion users": {
     method: "POST",
     path: "/workspaces/{organizationId}/notion/users",
