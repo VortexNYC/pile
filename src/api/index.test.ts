@@ -1,8 +1,15 @@
+import type {
+  EmailMessage,
+  EmailReplyMessageBuilder,
+  EmailSendResult,
+  ForwardableEmailMessage,
+} from "@cloudflare/workers-types";
 import { env } from "cloudflare:test";
 import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { handleInboundEmail } from "../email/inbound.js";
 import { hmacSha256Hex } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
 import {
@@ -11,6 +18,7 @@ import {
   member as memberTable,
   user as userTable,
 } from "../global/schema.js";
+import { getDefaultTeam } from "../global/teams.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
@@ -87,6 +95,58 @@ function request(
     ...init,
     headers,
   });
+}
+
+class MockEmailMessage implements ForwardableEmailMessage {
+  readonly to: string;
+  readonly from: string;
+  readonly headers = new Headers();
+  readonly raw: ReadableStream<Uint8Array>;
+  readonly rawSize: number;
+  readonly canBeForwarded = false;
+  rejected?: string;
+
+  constructor(values: {
+    to: string;
+    from: string;
+    subject: string;
+    body: string;
+    messageId?: string;
+  }) {
+    this.to = values.to;
+    this.from = values.from;
+    const rawHeaders = [
+      `From: ${values.from}`,
+      `To: ${values.to}`,
+      `Subject: ${values.subject}`,
+      ...(values.messageId ? [`Message-ID: <${values.messageId}>`] : []),
+      'Content-Type: text/plain; charset="utf-8"',
+      "",
+      values.body,
+    ].join("\r\n");
+    this.rawSize = rawHeaders.length;
+    const bytes = new TextEncoder().encode(rawHeaders);
+    this.raw = new ReadableStream({
+      start(controller) {
+        controller.enqueue(bytes);
+        controller.close();
+      },
+    });
+  }
+
+  setReject(reason: string): void {
+    this.rejected = reason;
+  }
+
+  forward(): Promise<EmailSendResult> {
+    return Promise.resolve({ messageId: crypto.randomUUID() });
+  }
+
+  reply(message: EmailMessage): Promise<EmailSendResult>;
+  reply(builder: EmailReplyMessageBuilder): Promise<EmailSendResult>;
+  reply(): Promise<EmailSendResult> {
+    return Promise.resolve({ messageId: crypto.randomUUID() });
+  }
 }
 
 describe("API integration", () => {
@@ -1554,5 +1614,125 @@ describe("API integration", () => {
       env
     );
     expect(badRes.status).toBe(401);
+  });
+});
+
+describe("Inbound email", () => {
+  it("creates an issue from an inbound email", async () => {
+    const organizationId = await seedWorkspace();
+    const token = await adminToken(organizationId);
+    const db = createD1(env.D1);
+    const team = await getDefaultTeam(db, organizationId);
+    if (!team) throw new Error("No default team");
+
+    const address = `${crypto.randomUUID()}@example.com`;
+    const inboxRes = await app.fetch(
+      request(`/workspaces/${organizationId}/email-inboxes`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          address,
+          teamId: team.id,
+          enabled: true,
+        }),
+      }),
+      env
+    );
+    expect(inboxRes.status).toBe(201);
+
+    const message = new MockEmailMessage({
+      to: address,
+      from: "user-1@example.com",
+      subject: "Bug in production",
+      body: "The checkout flow is broken.",
+    });
+    await handleInboundEmail(message, env);
+    expect(message.rejected).toBeUndefined();
+
+    const issuesRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues`, { token }),
+      env
+    );
+    expect(issuesRes.status).toBe(200);
+    const { issues } = await issuesRes.json<{
+      issues: Array<{ title: string; description: string }>;
+    }>();
+    expect(issues.length).toBe(1);
+    expect(issues[0].title).toBe("Bug in production");
+    expect(issues[0].description).toContain("The checkout flow is broken.");
+  });
+
+  it("creates a comment when the subject references an existing issue", async () => {
+    const organizationId = await seedWorkspace();
+    const token = await adminToken(organizationId);
+    const db = createD1(env.D1);
+    const team = await getDefaultTeam(db, organizationId);
+    if (!team) throw new Error("No default team");
+
+    const address = `${crypto.randomUUID()}@example.com`;
+    const inboxRes = await app.fetch(
+      request(`/workspaces/${organizationId}/email-inboxes`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          address,
+          teamId: team.id,
+          enabled: true,
+        }),
+      }),
+      env
+    );
+    expect(inboxRes.status).toBe(201);
+
+    const newMessage = new MockEmailMessage({
+      to: address,
+      from: "user-1@example.com",
+      subject: "Bug in production",
+      body: "The checkout flow is broken.",
+    });
+    await handleInboundEmail(newMessage, env);
+
+    const issuesRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues`, { token }),
+      env
+    );
+    const { issues } = await issuesRes.json<{
+      issues: Array<{ id: string; identifier: string }>;
+    }>();
+    expect(issues.length).toBe(1);
+    const issue = issues[0];
+
+    const reply = new MockEmailMessage({
+      to: address,
+      from: "user-1@example.com",
+      subject: `Re: ${issue.identifier} follow-up`,
+      body: "Here is the screenshot.",
+    });
+    await handleInboundEmail(reply, env);
+    expect(reply.rejected).toBeUndefined();
+
+    const commentsRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${issue.id}/comments`, {
+        token,
+      }),
+      env
+    );
+    expect(commentsRes.status).toBe(200);
+    const { comments } = await commentsRes.json<{
+      comments: Array<{ body: string }>;
+    }>();
+    expect(comments.length).toBe(1);
+    expect(comments[0].body).toBe("Here is the screenshot.");
+  });
+
+  it("rejects email to an unknown or disabled inbox", async () => {
+    const message = new MockEmailMessage({
+      to: "unknown@example.com",
+      from: "user-1@example.com",
+      subject: "Test",
+      body: "Body",
+    });
+    await handleInboundEmail(message, env);
+    expect(message.rejected).toBe("No route");
   });
 });

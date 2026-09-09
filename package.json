@@ -55,6 +55,7 @@
     "emoji-regex": "10.6.0",
     "hono": "^4.13.5",
     "jose": "^6.2.10",
+    "postal-mime": "3.0.0",
     "zod": "^4.5.4"
   },
   "devDependencies": {

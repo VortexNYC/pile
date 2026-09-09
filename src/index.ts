@@ -1,7 +1,9 @@
+import type { ForwardableEmailMessage } from "@cloudflare/workers-types";
 import { ne } from "drizzle-orm";
 
 import { drainOutpostQueue, sweepOutpostWorkers } from "./agents/outpost.js";
 import app from "./api/index.js";
+import { handleInboundEmail } from "./email/inbound.js";
 import { createD1 } from "./global/db.js";
 import { cycles } from "./global/schema.js";
 import type { WorkerEnv } from "./platform/middleware.js";
@@ -52,7 +54,20 @@ async function scheduled(
   );
 }
 
+async function email(message: ForwardableEmailMessage, env: WorkerEnv) {
+  try {
+    await handleInboundEmail(message, env);
+  } catch (error) {
+    console.error("inbound email failed", {
+      to: message.to,
+      from: message.from,
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 export default {
   fetch: app.fetch.bind(app),
   scheduled,
+  email,
 } satisfies ExportedHandler<WorkerEnv>;

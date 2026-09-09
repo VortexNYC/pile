@@ -1,7 +1,1 @@
-import type { WorkerEnv } from "../platform/middleware.js";
-
-export function getWorkspaceStub(env: WorkerEnv, organizationId: string) {
-  return env.WORKSPACE_DURABLE_OBJECT.get(
-    env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
-  );
-}
+export { getWorkspaceStub } from "../platform/stub.js";
