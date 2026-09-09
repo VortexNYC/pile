@@ -2039,6 +2039,31 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "project update reminders create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/project-update-reminders",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "cadence",
+        flag: "cadence",
+      },
+      {
+        name: "nextDueAt",
+        flag: "next-due-at",
+      },
+      {
+        name: "projectId",
+        flag: "project",
+      },
+    ],
+  },
   "project update reminders fire due create": {
     method: "POST",
     path: "/workspaces/{organizationId}/project-update-reminders/fire-due",
@@ -2165,6 +2190,51 @@ export const COMMANDS: Record<string, CommandDef> = {
   "email inboxes delete": {
     method: "DELETE",
     path: "/workspaces/{organizationId}/email-inboxes/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "available users list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/available-users",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "q",
+        flag: "q",
+      },
+    ],
+    body: [],
+  },
+  "leave create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/leave",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "invitations resend create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/invitations/{id}/resend",
     params: [
       {
         name: "organizationId",
@@ -2522,6 +2592,69 @@ export const COMMANDS: Record<string, CommandDef> = {
     ],
     query: [],
     body: [],
+  },
+  "files list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/files",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "key",
+        flag: "key",
+      },
+    ],
+    body: [],
+  },
+  "files create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/files",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "filename",
+        flag: "filename",
+      },
+      {
+        name: "contentType",
+        flag: "content-type",
+      },
+      {
+        name: "contentBase64",
+        flag: "content-base64",
+      },
+    ],
+  },
+  "images from url create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/images/from-url",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "url",
+        flag: "url",
+      },
+      {
+        name: "filename",
+        flag: "filename",
+      },
+    ],
   },
   "issues comments": {
     method: "POST",

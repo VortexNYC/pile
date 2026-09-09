@@ -1165,6 +1165,26 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdAvailableusers",
+    "description": "List available users (GET /workspaces/{organizationId}/available-users)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/available-users",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "q": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdCommentsCommentIdReactions",
     "description": "List comment reactions (GET /workspaces/{organizationId}/comments/{commentId}/reactions)",
     "method": "GET",
@@ -1655,6 +1675,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdFiles",
+    "description": "List files (GET /workspaces/{organizationId}/files)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/files",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
         "organizationId"
       ]
     }
@@ -5680,6 +5721,43 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdFiles",
+    "description": "Create file (POST /workspaces/{organizationId}/files)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/files",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "filename": {
+              "type": "string",
+              "minLength": 1
+            },
+            "contentType": {
+              "type": "string"
+            },
+            "contentBase64": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "filename",
+            "contentBase64"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdGitautomationstates",
     "description": "Create git automation state (POST /workspaces/{organizationId}/git-automation-states)",
     "method": "POST",
@@ -5804,6 +5882,38 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdImagesFromurl",
+    "description": "Create image from url (POST /workspaces/{organizationId}/images/from-url)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/images/from-url",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "filename": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "url"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdInitiatives",
     "description": "Create initiative (POST /workspaces/{organizationId}/initiatives)",
     "method": "POST",
@@ -5843,6 +5953,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdInvitationsIdResend",
+    "description": "Create invitation resend (POST /workspaces/{organizationId}/invitations/{id}/resend)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/invitations/{id}/resend",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
         "organizationId"
       ]
     }
@@ -6448,6 +6579,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdLeave",
+    "description": "Create leave (POST /workspaces/{organizationId}/leave)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/leave",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdLinearusers",
     "description": "Create linear user (POST /workspaces/{organizationId}/linear-users)",
     "method": "POST",
@@ -6847,6 +6995,46 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "organizationId",
         "projectId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdProjectupdatereminders",
+    "description": "Create project update reminder (POST /workspaces/{organizationId}/project-update-reminders)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/project-update-reminders",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "cadence": {
+              "type": "string",
+              "enum": [
+                "daily",
+                "weekly",
+                "biweekly",
+                "monthly"
+              ]
+            },
+            "nextDueAt": {
+              "type": "string"
+            },
+            "projectId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "projectId"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
       ]
     }
   },

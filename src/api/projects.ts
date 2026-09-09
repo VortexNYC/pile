@@ -312,6 +312,32 @@ export function registerProjectDetailRoutes(app: OpenAPIHono<AppContext>) {
     responses: { 204: { description: "Project update reminder deleted" } },
   });
 
+  const createProjectUpdateReminderRoute = createRoute({
+    method: "post",
+    path: "/workspaces/{organizationId}/project-update-reminders",
+    tags: ["projects"],
+    middleware: [rls("write")],
+    request: {
+      params: z.object({ organizationId: z.string() }),
+      body: {
+        content: {
+          "application/json": {
+            schema: projectUpdateReminderBodySchema.merge(
+              z.object({ projectId: z.string() })
+            ),
+          },
+        },
+      },
+    },
+    responses: {
+      201: {
+        description: "Project update reminder created",
+        content: { "application/json": { schema: projectUpdateReminderSchema } },
+      },
+      404: { description: "Project not found" },
+    },
+  });
+
   const fireDueProjectUpdateRemindersRoute = createRoute({
     method: "post",
     path: "/workspaces/{organizationId}/project-update-reminders/fire-due",
@@ -471,6 +497,19 @@ export function registerProjectDetailRoutes(app: OpenAPIHono<AppContext>) {
     const db = createD1(c.env.D1);
     await deleteProjectUpdateReminder(db, organizationId, projectId);
     return c.body(null, 204);
+  });
+
+  app.openapi(createProjectUpdateReminderRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const db = createD1(c.env.D1);
+    assertProjectExists(await getProject(db, organizationId, input.projectId));
+    const item = await upsertProjectUpdateReminder(db, organizationId, {
+      projectId: input.projectId,
+      cadence: input.cadence,
+      nextDueAt: input.nextDueAt,
+    });
+    return c.json(item, 201);
   });
 
   app.openapi(fireDueProjectUpdateRemindersRoute, async (c) => {
