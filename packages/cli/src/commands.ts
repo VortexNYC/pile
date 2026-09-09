@@ -810,6 +810,317 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "agent skills list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/agent-skills",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "agent skills create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/agent-skills",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "description",
+        flag: "description",
+      },
+      {
+        name: "inputSchema",
+        flag: "input-schema",
+      },
+      {
+        name: "outputSchema",
+        flag: "output-schema",
+      },
+      {
+        name: "invoke",
+        flag: "invoke",
+      },
+      {
+        name: "enabled",
+        flag: "enabled",
+      },
+    ],
+  },
+  "agent skills get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/agent-skills/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "agent skills update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/agent-skills/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "description",
+        flag: "description",
+      },
+      {
+        name: "inputSchema",
+        flag: "input-schema",
+      },
+      {
+        name: "outputSchema",
+        flag: "output-schema",
+      },
+      {
+        name: "invoke",
+        flag: "invoke",
+      },
+      {
+        name: "enabled",
+        flag: "enabled",
+      },
+    ],
+  },
+  "agent skills delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/agent-skills/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "agent skills invoke create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/agent-skills/{id}/invoke",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "input",
+        flag: "input",
+      },
+    ],
+  },
+  "agent conversations list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/agent-conversations",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "contextType",
+        flag: "context-type",
+      },
+      {
+        name: "contextId",
+        flag: "context-id",
+      },
+    ],
+    body: [],
+  },
+  "agent conversations create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/agent-conversations",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "title",
+        flag: "title",
+      },
+      {
+        name: "contextType",
+        flag: "context-type",
+      },
+      {
+        name: "contextId",
+        flag: "context-id",
+      },
+    ],
+  },
+  "agent conversations get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/agent-conversations/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "agent conversations update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/agent-conversations/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "title",
+        flag: "title",
+      },
+      {
+        name: "contextType",
+        flag: "context-type",
+      },
+      {
+        name: "contextId",
+        flag: "context-id",
+      },
+      {
+        name: "status",
+        flag: "status",
+      },
+    ],
+  },
+  "agent conversations delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/agent-conversations/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "agent conversations messages list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/agent-conversations/{id}/messages",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "agent conversations messages create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/agent-conversations/{id}/messages",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "authorId",
+        flag: "author-id",
+      },
+      {
+        name: "authorType",
+        flag: "author-type",
+      },
+      {
+        name: "content",
+        flag: "content",
+      },
+      {
+        name: "contentFormat",
+        flag: "content-format",
+      },
+      {
+        name: "toolCalls",
+        flag: "tool-calls",
+      },
+      {
+        name: "toolOutputs",
+        flag: "tool-outputs",
+      },
+    ],
+  },
   "issues approvals": {
     method: "POST",
     path: "/workspaces/{organizationId}/issues/{issueId}/approvals",

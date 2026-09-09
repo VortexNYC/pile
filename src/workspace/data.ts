@@ -5,6 +5,7 @@
 // sessions, webhook subs, linear users).
 import {
   and,
+  asc,
   desc,
   eq,
   gt,
@@ -49,6 +50,9 @@ import {
   workspaceViewFavorites,
   workspaceWebhookSubscriptions,
   workspaceOutboundWebhookDeliveries,
+  workspaceAgentSkills,
+  workspaceAgentConversations,
+  workspaceAgentMessages,
 } from "./schema.js";
 
 export type WorkspaceDb = DrizzleSqliteDODatabase<typeof workspaceSchema>;
@@ -2628,5 +2632,257 @@ export function listDocumentLinks(
     .select()
     .from(workspaceDocumentLinks)
     .where(and(...conditions))
+    .all();
+}
+
+export interface AgentSkillInput {
+  name: string;
+  description?: string;
+  inputSchema?: string;
+  outputSchema?: string;
+  invoke: { type: "http"; method: string; url: string; headers?: Record<string, string> } | { type: "mcp"; serverUrl: string; tool: string };
+  enabled?: boolean;
+  createdById?: string;
+}
+
+export function createAgentSkill(
+  db: WorkspaceDb,
+  organizationId: string,
+  input: AgentSkillInput
+) {
+  const now = new Date().toISOString();
+  return db
+    .insert(workspaceAgentSkills)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId,
+      name: input.name,
+      description: input.description,
+      inputSchema: input.inputSchema,
+      outputSchema: input.outputSchema,
+      invoke: JSON.stringify(input.invoke),
+      enabled: input.enabled ?? true,
+      createdById: input.createdById,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning()
+    .get();
+}
+
+export function getAgentSkill(
+  db: WorkspaceDb,
+  organizationId: string,
+  skillId: string
+) {
+  return db
+    .select()
+    .from(workspaceAgentSkills)
+    .where(
+      and(
+        eq(workspaceAgentSkills.id, skillId),
+        eq(workspaceAgentSkills.organizationId, organizationId)
+      )
+    )
+    .get();
+}
+
+export function listAgentSkills(db: WorkspaceDb, organizationId: string) {
+  return db
+    .select()
+    .from(workspaceAgentSkills)
+    .where(eq(workspaceAgentSkills.organizationId, organizationId))
+    .orderBy(desc(workspaceAgentSkills.createdAt))
+    .all();
+}
+
+export function updateAgentSkill(
+  db: WorkspaceDb,
+  organizationId: string,
+  skillId: string,
+  input: Partial<AgentSkillInput>
+) {
+  const now = new Date().toISOString();
+  const set: Record<string, unknown> = { updatedAt: now };
+  if (input.name !== undefined) set.name = input.name;
+  if (input.description !== undefined) set.description = input.description;
+  if (input.inputSchema !== undefined) set.inputSchema = input.inputSchema;
+  if (input.outputSchema !== undefined) set.outputSchema = input.outputSchema;
+  if (input.invoke !== undefined) set.invoke = JSON.stringify(input.invoke);
+  if (input.enabled !== undefined) set.enabled = input.enabled;
+  return db
+    .update(workspaceAgentSkills)
+    .set(set)
+    .where(
+      and(
+        eq(workspaceAgentSkills.id, skillId),
+        eq(workspaceAgentSkills.organizationId, organizationId)
+      )
+    )
+    .returning()
+    .get();
+}
+
+export function deleteAgentSkill(
+  db: WorkspaceDb,
+  organizationId: string,
+  skillId: string
+) {
+  return db
+    .delete(workspaceAgentSkills)
+    .where(
+      and(
+        eq(workspaceAgentSkills.id, skillId),
+        eq(workspaceAgentSkills.organizationId, organizationId)
+      )
+    )
+    .run();
+}
+
+export interface AgentConversationInput {
+  title?: string;
+  contextType?: "issue" | "document" | "project" | "workspace";
+  contextId?: string;
+}
+
+export function createAgentConversation(
+  db: WorkspaceDb,
+  organizationId: string,
+  input: AgentConversationInput
+) {
+  const now = new Date().toISOString();
+  return db
+    .insert(workspaceAgentConversations)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId,
+      title: input.title,
+      contextType: input.contextType,
+      contextId: input.contextId,
+      status: "open",
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning()
+    .get();
+}
+
+export function getAgentConversation(
+  db: WorkspaceDb,
+  organizationId: string,
+  conversationId: string
+) {
+  return db
+    .select()
+    .from(workspaceAgentConversations)
+    .where(
+      and(
+        eq(workspaceAgentConversations.id, conversationId),
+        eq(workspaceAgentConversations.organizationId, organizationId)
+      )
+    )
+    .get();
+}
+
+export function listAgentConversations(
+  db: WorkspaceDb,
+  organizationId: string,
+  context?: { contextType?: "issue" | "document" | "project" | "workspace"; contextId?: string }
+) {
+  const conditions = [eq(workspaceAgentConversations.organizationId, organizationId)];
+  if (context?.contextType !== undefined)
+    conditions.push(eq(workspaceAgentConversations.contextType, context.contextType));
+  if (context?.contextId !== undefined)
+    conditions.push(eq(workspaceAgentConversations.contextId, context.contextId));
+  return db
+    .select()
+    .from(workspaceAgentConversations)
+    .where(and(...conditions))
+    .orderBy(desc(workspaceAgentConversations.updatedAt))
+    .all();
+}
+
+export function updateAgentConversation(
+  db: WorkspaceDb,
+  organizationId: string,
+  conversationId: string,
+  input: Partial<AgentConversationInput> & { status?: "open" | "closed" }
+) {
+  const now = new Date().toISOString();
+  const set: Record<string, unknown> = { updatedAt: now };
+  if (input.title !== undefined) set.title = input.title;
+  if (input.contextType !== undefined) set.contextType = input.contextType;
+  if (input.contextId !== undefined) set.contextId = input.contextId;
+  if (input.status !== undefined) set.status = input.status;
+  return db
+    .update(workspaceAgentConversations)
+    .set(set)
+    .where(
+      and(
+        eq(workspaceAgentConversations.id, conversationId),
+        eq(workspaceAgentConversations.organizationId, organizationId)
+      )
+    )
+    .returning()
+    .get();
+}
+
+export function deleteAgentConversation(
+  db: WorkspaceDb,
+  organizationId: string,
+  conversationId: string
+) {
+  return db
+    .delete(workspaceAgentConversations)
+    .where(
+      and(
+        eq(workspaceAgentConversations.id, conversationId),
+        eq(workspaceAgentConversations.organizationId, organizationId)
+      )
+    )
+    .run();
+}
+
+export interface AgentMessageInput {
+  conversationId: string;
+  authorId: string;
+  authorType: "user" | "agent";
+  content: string;
+  contentFormat?: "text" | "markdown" | "blocks";
+  toolCalls?: string;
+  toolOutputs?: string;
+}
+
+export function createAgentMessage(
+  db: WorkspaceDb,
+  input: AgentMessageInput
+) {
+  const now = new Date().toISOString();
+  return db
+    .insert(workspaceAgentMessages)
+    .values({
+      id: crypto.randomUUID(),
+      conversationId: input.conversationId,
+      authorId: input.authorId,
+      authorType: input.authorType,
+      content: input.content,
+      contentFormat: input.contentFormat ?? "text",
+      toolCalls: input.toolCalls,
+      toolOutputs: input.toolOutputs,
+      createdAt: now,
+    })
+    .returning()
+    .get();
+}
+
+export function listAgentMessages(
+  db: WorkspaceDb,
+  conversationId: string
+) {
+  return db
+    .select()
+    .from(workspaceAgentMessages)
+    .where(eq(workspaceAgentMessages.conversationId, conversationId))
+    .orderBy(asc(workspaceAgentMessages.createdAt))
     .all();
 }

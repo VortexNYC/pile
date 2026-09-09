@@ -1489,6 +1489,636 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/agent-skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List agent skills */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description List agent skills */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            skills: {
+                                id: string;
+                                organizationId: string;
+                                name: string;
+                                description: string | null;
+                                inputSchema: string | null;
+                                outputSchema: string | null;
+                                invoke: string;
+                                enabled: boolean;
+                                createdById: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create agent skill */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        name: string;
+                        description?: string;
+                        inputSchema?: string;
+                        outputSchema?: string;
+                        invoke: {
+                            /** @enum {string} */
+                            type: "http";
+                            /** @default POST */
+                            method?: string;
+                            /** Format: uri */
+                            url: string;
+                            headers?: {
+                                [key: string]: string;
+                            };
+                        } | {
+                            /** @enum {string} */
+                            type: "mcp";
+                            serverUrl: string;
+                            tool: string;
+                        };
+                        /** @default true */
+                        enabled?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description Skill created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            name: string;
+                            description: string | null;
+                            inputSchema: string | null;
+                            outputSchema: string | null;
+                            invoke: string;
+                            enabled: boolean;
+                            createdById: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/agent-skills/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get agent skill */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Skill */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            name: string;
+                            description: string | null;
+                            inputSchema: string | null;
+                            outputSchema: string | null;
+                            invoke: string;
+                            enabled: boolean;
+                            createdById: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        /** Delete agent skill */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Deleted */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /** Update agent skill */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        name?: string;
+                        description?: string;
+                        inputSchema?: string;
+                        outputSchema?: string;
+                        invoke?: {
+                            /** @enum {string} */
+                            type: "http";
+                            /** @default POST */
+                            method?: string;
+                            /** Format: uri */
+                            url: string;
+                            headers?: {
+                                [key: string]: string;
+                            };
+                        } | {
+                            /** @enum {string} */
+                            type: "mcp";
+                            serverUrl: string;
+                            tool: string;
+                        };
+                        /** @default true */
+                        enabled?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description Skill updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            name: string;
+                            description: string | null;
+                            inputSchema: string | null;
+                            outputSchema: string | null;
+                            invoke: string;
+                            enabled: boolean;
+                            createdById: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/agent-skills/{id}/invoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create agent skill invoke */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        input: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Invocation result */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                            status?: number;
+                            body?: unknown;
+                            error?: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/agent-conversations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List agent conversations */
+        get: {
+            parameters: {
+                query?: {
+                    contextType?: "issue" | "document" | "project" | "workspace";
+                    contextId?: string;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Conversations */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            conversations: {
+                                id: string;
+                                organizationId: string;
+                                title: string | null;
+                                /** @enum {string|null} */
+                                contextType: "issue" | "document" | "project" | "workspace" | null;
+                                contextId: string | null;
+                                /** @enum {string} */
+                                status: "open" | "closed";
+                                createdAt: string;
+                                updatedAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create agent conversation */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        title?: string;
+                        /** @enum {string} */
+                        contextType?: "issue" | "document" | "project" | "workspace";
+                        contextId?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Conversation created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            title: string | null;
+                            /** @enum {string|null} */
+                            contextType: "issue" | "document" | "project" | "workspace" | null;
+                            contextId: string | null;
+                            /** @enum {string} */
+                            status: "open" | "closed";
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/agent-conversations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get agent conversation */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Conversation */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            conversation: {
+                                id: string;
+                                organizationId: string;
+                                title: string | null;
+                                /** @enum {string|null} */
+                                contextType: "issue" | "document" | "project" | "workspace" | null;
+                                contextId: string | null;
+                                /** @enum {string} */
+                                status: "open" | "closed";
+                                createdAt: string;
+                                updatedAt: string;
+                            };
+                            messages: {
+                                id: string;
+                                conversationId: string;
+                                authorId: string;
+                                /** @enum {string} */
+                                authorType: "user" | "agent";
+                                content: string;
+                                /** @enum {string} */
+                                contentFormat: "text" | "markdown" | "blocks";
+                                toolCalls: string | null;
+                                toolOutputs: string | null;
+                                createdAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        /** Delete agent conversation */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Deleted */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /** Update agent conversation */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        title?: string;
+                        /** @enum {string} */
+                        contextType?: "issue" | "document" | "project" | "workspace";
+                        contextId?: string;
+                        /** @enum {string} */
+                        status?: "open" | "closed";
+                    };
+                };
+            };
+            responses: {
+                /** @description Conversation updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            title: string | null;
+                            /** @enum {string|null} */
+                            contextType: "issue" | "document" | "project" | "workspace" | null;
+                            contextId: string | null;
+                            /** @enum {string} */
+                            status: "open" | "closed";
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/agent-conversations/{id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List agent conversation messages */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Messages */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            messages: {
+                                id: string;
+                                conversationId: string;
+                                authorId: string;
+                                /** @enum {string} */
+                                authorType: "user" | "agent";
+                                content: string;
+                                /** @enum {string} */
+                                contentFormat: "text" | "markdown" | "blocks";
+                                toolCalls: string | null;
+                                toolOutputs: string | null;
+                                createdAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create agent conversation message */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        authorId: string;
+                        /** @enum {string} */
+                        authorType: "user" | "agent";
+                        content: string;
+                        /**
+                         * @default text
+                         * @enum {string}
+                         */
+                        contentFormat?: "text" | "markdown" | "blocks";
+                        toolCalls?: string;
+                        toolOutputs?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Message created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            conversationId: string;
+                            authorId: string;
+                            /** @enum {string} */
+                            authorType: "user" | "agent";
+                            content: string;
+                            /** @enum {string} */
+                            contentFormat: "text" | "markdown" | "blocks";
+                            toolCalls: string | null;
+                            toolOutputs: string | null;
+                            createdAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/issues/{issueId}/approvals": {
         parameters: {
             query?: never;

@@ -585,6 +585,49 @@ CREATE INDEX IF NOT EXISTS document_links_target_idx ON document_links (organiza
 
 const v20 = `ALTER TABLE document_content_history ADD COLUMN content_format TEXT NOT NULL DEFAULT 'blocks'`;
 
+const v21 = `CREATE TABLE IF NOT EXISTS agent_skills (
+  id TEXT PRIMARY KEY NOT NULL,
+  organization_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT,
+  input_schema TEXT,
+  output_schema TEXT,
+  invoke TEXT NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  created_by_id TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS agent_skills_org_idx ON agent_skills (organization_id);
+CREATE UNIQUE INDEX IF NOT EXISTS agent_skills_org_name_idx ON agent_skills (organization_id, name);
+
+CREATE TABLE IF NOT EXISTS agent_conversations (
+  id TEXT PRIMARY KEY NOT NULL,
+  organization_id TEXT NOT NULL,
+  title TEXT,
+  context_type TEXT,
+  context_id TEXT,
+  status TEXT NOT NULL DEFAULT 'open',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS agent_conversations_org_idx ON agent_conversations (organization_id);
+CREATE INDEX IF NOT EXISTS agent_conversations_context_idx ON agent_conversations (context_type, context_id);
+
+CREATE TABLE IF NOT EXISTS agent_messages (
+  id TEXT PRIMARY KEY NOT NULL,
+  conversation_id TEXT NOT NULL,
+  author_id TEXT NOT NULL,
+  author_type TEXT NOT NULL,
+  content TEXT NOT NULL,
+  content_format TEXT NOT NULL DEFAULT 'text',
+  tool_calls TEXT,
+  tool_outputs TEXT,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (conversation_id) REFERENCES agent_conversations(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS agent_messages_conversation_idx ON agent_messages (conversation_id, created_at)`;
+
 export const workspaceMigrations = {
   journal: {
     entries: [
@@ -608,6 +651,7 @@ export const workspaceMigrations = {
       { idx: 17, when: 17, tag: "v18", breakpoints: true },
       { idx: 18, when: 18, tag: "v19", breakpoints: true },
       { idx: 19, when: 19, tag: "v20", breakpoints: true },
+      { idx: 20, when: 20, tag: "v21", breakpoints: true },
     ],
   },
   migrations: {
@@ -631,5 +675,6 @@ export const workspaceMigrations = {
     m0017: v18,
     m0018: v19,
     m0019: v20,
+    m0020: v21,
   },
 } satisfies Parameters<typeof migrate>[1];
