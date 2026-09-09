@@ -38,6 +38,7 @@ import { registerNotificationRoutes } from "./notifications.js";
 import { registerOAuthClientRoutes } from "./oauth-clients.js";
 import { registerPushRoutes } from "./push.js";
 import { registerReactionRoutes } from "./reactions.js";
+import { registerRealtimeRoutes } from "./realtime.js";
 import { registerSavedViewRoutes } from "./saved-views.js";
 import {
   handleSlackEvents,
@@ -103,6 +104,7 @@ registerLinearUserRoutes(app);
 registerNotificationRoutes(app);
 registerPushRoutes(app);
 registerReactionRoutes(app);
+registerRealtimeRoutes(app);
 registerSavedViewRoutes(app);
 registerTeamRoutes(app);
 registerTemplateRoutes(app);

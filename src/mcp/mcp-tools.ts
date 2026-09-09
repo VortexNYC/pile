@@ -2350,6 +2350,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdRealtime",
+    "description": "List realtime (GET /workspaces/{organizationId}/realtime)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/realtime",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdReleases",
     "description": "List releases (GET /workspaces/{organizationId}/releases)",
     "method": "GET",

@@ -4173,6 +4173,18 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "realtime list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/realtime",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "saved views list": {
     method: "GET",
     path: "/workspaces/{organizationId}/saved-views",

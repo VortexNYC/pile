@@ -17614,6 +17614,35 @@
         "summary": "Delete reaction"
       }
     },
+    "/workspaces/{organizationId}/realtime": {
+      "get": {
+        "tags": [
+          "realtime"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "101": {
+            "description": "Switching Protocols to WebSocket"
+          },
+          "200": {
+            "description": "Realtime endpoint (non-upgrade request)"
+          },
+          "426": {
+            "description": "Upgrade Required"
+          }
+        },
+        "summary": "List realtime"
+      }
+    },
     "/workspaces/{organizationId}/saved-views": {
       "get": {
         "tags": [
