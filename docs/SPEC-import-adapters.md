@@ -2,21 +2,22 @@
 
 ## Objective
 
-Make Vortex the easiest place to land engineering data from Linear, Jira, Notion, Confluence, or any other source. A single `POST /workspaces/{id}/import` endpoint accepts a `source` name and source-specific credentials, runs the import inside the workspace Durable Object, and returns a summary of what was imported.
+Make Vortex the easiest place to land engineering data from Linear, Jira, Notion, Confluence, GitHub, or any other source. A single `POST /workspaces/{id}/import` endpoint accepts a `source` name and source-specific credentials, runs the import inside the workspace Durable Object, and returns a summary of what was imported along with a persistent `jobId`.
 
-This spec covers the framework plus the first two new adapters: **Jira** (issues) and **Confluence** (pages). Linear and Notion already exist as separate routes and will be folded into the framework in a later pass.
+This spec covers the shared framework plus all adapters folded into it: Jira, Confluence, Linear, Notion, and GitHub Issues.
 
 ## Capability map
 
-| Module              | Responsibility                                                                    | Depends on                                                         |
-| ------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `import-core`       | Shared `ImportSource` contract, runner, and `POST /workspaces/{id}/import` route  | —                                                                  |
-| `import-jira`       | Jira Cloud issue import: projects, statuses, users, issues, comments, attachments | `import-core`                                                      |
-| `import-confluence` | Confluence Cloud page import: spaces, pages, ADF-to-markdown conversion           | `import-core`, `import-jira` (Atlassian credentials are identical) |
-| `import-notion`     | Existing Notion page import, folded into framework later                          | `import-core`                                                      |
-| `import-linear`     | Existing Linear migration, folded into framework later                            | `import-core`                                                      |
+| Module                | Responsibility                                                                    | Depends on                                                         |
+| --------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `import-core`         | Shared `ImportSource` contract, runner, `POST /workspaces/{id}/import` route, and `import_jobs` persistence | —                                                                  |
+| `import-jira`         | Jira Cloud issue import: projects, statuses, users, issues, comments, attachments | `import-core`                                                      |
+| `import-confluence`   | Confluence Cloud page import: spaces, pages, ADF-to-markdown conversion           | `import-core`, `import-jira` (Atlassian credentials are identical) |
+| `import-notion`       | Notion page and database import into documents and issues                         | `import-core`                                                      |
+| `import-linear`       | Linear issue migration                                                            | `import-core`                                                      |
+| `import-github-issues`| GitHub repository issue import into Vortex issues                                 | `import-core`                                                      |
 
-Build order: `import-core` → `import-jira` → `import-confluence` → `import-notion`/`import-linear`.
+Build order: `import-core` → adapters (Jira, Confluence, Linear, Notion, GitHub Issues).
 
 ## Tech stack
 
@@ -43,13 +44,17 @@ pnpm run scan:secrets
 src/
   import/
     types.ts           # ImportSource contract, ImportContext, summary types
-    runner.ts          # runImport(source, ctx, credentials, options)
+    runner.ts          # runImport(source, ctx, credentials, options) → { counts, job }
     jira.ts            # JiraCloud adapter
     confluence.ts      # ConfluenceCloud adapter
+    linear.ts          # Linear adapter
+    notion.ts          # Notion page/database adapter
+    github-issues.ts   # GitHub Issues adapter
   global/
+    import-jobs.ts     # D1 helpers for import_jobs table
     adf-to-markdown.ts # Atlassian Document Format → markdown converter
   api/
-    import.ts          # POST /workspaces/{id}/import
+    import.ts          # POST /workspaces/{id}/import + GET /workspaces/{id}/import/{jobId}
 ```
 
 ## Code style
@@ -77,10 +82,11 @@ src/
 ### Core
 
 - `POST /workspaces/{id}/import` with `rls("admin")`.
-- Body: `{ source: "jira" | "confluence"; credentials: ...; options?: ... }` (discriminated union).
+- Body: `{ source: "jira" | "confluence" | "linear" | "notion" | "github-issues"; credentials: ...; options?: ... }` (discriminated union).
 - `ImportContext` carries `env`, `organizationId`, `importerId`, `db`, `stub`.
 - `ImportSource` interface: `validate(credentials)` and `run(ctx, credentials, options)`.
-- `runImport` wraps validation, emits `import.started`/`import.completed` events, and returns `{ source, counts, errors }`.
+- `runImport` creates an `import_jobs` row, runs validation, updates the job to `running`, executes the adapter, then marks it `completed` or `failed` with `counts` and `error`. It returns `{ counts, job }`.
+- `GET /workspaces/{id}/import/{jobId}` returns the current status and counts for an import job.
 
 ### Jira adapter
 
@@ -148,7 +154,8 @@ Behavior:
 - `pnpm run check` passes with no errors and `knip` reports no unused exports.
 - Adapters are isolated; adding a new source requires only a new adapter file and a route schema branch.
 
-## Open questions
+## Notes
 
-1. Should existing `/migrate/linear` and `/notion/import` be deprecated in favor of `/import`? Phase 2.
-2. Should we persist import jobs with status/pagination for large workspaces? Out of scope for first slice; imports are synchronous.
+- Existing `/migrate/linear` and `/notion/import` have been folded into `/import`; the old routes are removed.
+- Import jobs are persisted in D1 with `pending | running | completed | failed | paused` status and a `GET` endpoint for status polling.
+- Cursor-based pagination/resume and approval gates are future enhancements on top of the `import_jobs` table.
