@@ -22,12 +22,15 @@ async function getStub(env: WorkerEnv, organizationId: string) {
 const commentSchema = z.object({
   id: z.string(),
   organizationId: z.string(),
-  issueId: z.string(),
+  issueId: z.string().nullable(),
+  documentId: z.string().nullable(),
   authorId: z.string().nullable(),
   body: z.string(),
   externalId: z.string().nullable(),
   externalSource: z.string().nullable(),
   externalAuthor: z.string().nullable(),
+  resolvedAt: z.string().nullable(),
+  resolvedById: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

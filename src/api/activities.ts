@@ -18,7 +18,7 @@ const activitySchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("comment"),
     id: z.string(),
-    issueId: z.string(),
+    issueId: z.string().nullable(),
     body: z.string(),
     authorId: z.string().nullable(),
     externalAuthor: z.string().nullable(),

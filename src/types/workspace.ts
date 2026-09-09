@@ -104,12 +104,15 @@ export interface Issue {
 export interface Comment {
   id: Id;
   organizationId: Id;
-  issueId: Id;
+  issueId: Id | null;
+  documentId: Id | null;
   authorId: Id | null;
   body: string;
   externalId: string | null;
   externalSource: string | null;
   externalAuthor: string | null;
+  resolvedAt: Timestamp | null;
+  resolvedById: Id | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -156,4 +159,14 @@ export type RealtimeEvent =
       organizationId: string;
       issueId: Id;
       commentId: Id;
+    }
+  | {
+      type: "document.updated";
+      organizationId: string;
+      documentId: Id;
+    }
+  | {
+      type: "document.deleted";
+      organizationId: string;
+      documentId: Id;
     };

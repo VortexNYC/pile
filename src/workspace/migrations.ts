@@ -482,6 +482,76 @@ CREATE INDEX IF NOT EXISTS releases_organization_idx ON releases (organization_i
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS releases_project_idx ON releases (organization_id, project_id)`;
 
+const v17 = `CREATE TABLE IF NOT EXISTS document_spaces (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT,
+  icon TEXT,
+  public_sharing INTEGER NOT NULL DEFAULT 1,
+  created_by_id TEXT NOT NULL,
+  created_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS document_spaces_organization_idx ON document_spaces (organization_id)
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS document_shares (
+  token TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  document_id TEXT NOT NULL,
+  include_children INTEGER NOT NULL DEFAULT 0,
+  created_by_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  expires_at TEXT
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS document_shares_document_idx ON document_shares (organization_id, document_id)
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS document_watchers (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  document_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  created_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS document_watchers_doc_user_idx ON document_watchers (document_id, user_id)
+--> statement-breakpoint
+ALTER TABLE documents ADD COLUMN space_id TEXT
+--> statement-breakpoint
+ALTER TABLE documents ADD COLUMN is_template INTEGER NOT NULL DEFAULT 0
+--> statement-breakpoint
+-- Rebuild comments so issue_id is nullable (doc comments) and add
+-- document_id + resolve columns.
+CREATE TABLE comments_new (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  issue_id TEXT,
+  document_id TEXT,
+  author_id TEXT,
+  body TEXT NOT NULL,
+  external_id TEXT,
+  external_source TEXT,
+  external_author TEXT,
+  resolved_at TEXT,
+  resolved_by_id TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)
+--> statement-breakpoint
+INSERT INTO comments_new (id, organization_id, issue_id, document_id, author_id, body, external_id, external_source, external_author, created_at, updated_at)
+  SELECT id, organization_id, issue_id, NULL, author_id, body, external_id, external_source, external_author, created_at, updated_at FROM comments
+--> statement-breakpoint
+DROP TABLE comments
+--> statement-breakpoint
+ALTER TABLE comments_new RENAME TO comments
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS comments_issue_idx ON comments (organization_id, issue_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS comments_document_idx ON comments (organization_id, document_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS comments_external_idx ON comments (organization_id, external_source, external_id)`;
+
 export const workspaceMigrations = {
   journal: {
     entries: [
@@ -501,6 +571,7 @@ export const workspaceMigrations = {
       { idx: 13, when: 13, tag: "v14", breakpoints: true },
       { idx: 14, when: 14, tag: "v15", breakpoints: true },
       { idx: 15, when: 15, tag: "v16", breakpoints: true },
+      { idx: 16, when: 16, tag: "v17", breakpoints: true },
     ],
   },
   migrations: {
@@ -520,5 +591,6 @@ export const workspaceMigrations = {
     m0013: v14,
     m0014: v15,
     m0015: v16,
+    m0016: v17,
   },
 } satisfies Parameters<typeof migrate>[1];

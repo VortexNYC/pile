@@ -116,12 +116,15 @@ export const workspaceComments = sqliteTable(
   {
     id: text("id" as string).primaryKey(),
     organizationId: text("organization_id" as string).notNull(),
-    issueId: text("issue_id" as string).notNull(),
+    issueId: text("issue_id" as string),
+    documentId: text("document_id" as string),
     authorId: text("author_id" as string),
     body: text("body" as string).notNull(),
     externalId: text("external_id" as string),
     externalSource: text("external_source" as string),
     externalAuthor: text("external_author" as string),
+    resolvedAt: text("resolved_at" as string),
+    resolvedById: text("resolved_by_id" as string),
     createdAt: text("created_at" as string).notNull(),
     updatedAt: text("updated_at" as string).notNull(),
   },
@@ -129,6 +132,10 @@ export const workspaceComments = sqliteTable(
     index("comments_issue_idx" as string).on(
       table.organizationId,
       table.issueId
+    ),
+    index("comments_document_idx" as string).on(
+      table.organizationId,
+      table.documentId
     ),
     index("comments_external_idx" as string).on(
       table.organizationId,
@@ -350,6 +357,10 @@ export const workspaceDocuments = sqliteTable(
     issueId: text("issue_id" as string),
     initiativeId: text("initiative_id" as string),
     parentDocumentId: text("parent_document_id" as string),
+    spaceId: text("space_id" as string),
+    isTemplate: integer("is_template" as string, { mode: "boolean" })
+      .notNull()
+      .default(false),
     createdById: text("created_by_id" as string).notNull(),
     updatedById: text("updated_by_id" as string),
     createdAt: text("created_at" as string).notNull(),
@@ -369,6 +380,70 @@ export const workspaceDocuments = sqliteTable(
     index("documents_parent_idx" as string).on(
       table.organizationId,
       table.parentDocumentId
+    ),
+  ]
+);
+
+// Document spaces: Confluence/Docmost-style top-level containers.
+export const workspaceDocumentSpaces = sqliteTable(
+  "document_spaces" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    name: text("name" as string).notNull(),
+    description: text("description" as string),
+    icon: text("icon" as string),
+    publicSharing: integer("public_sharing" as string, { mode: "boolean" })
+      .notNull()
+      .default(true),
+    createdById: text("created_by_id" as string).notNull(),
+    createdAt: text("created_at" as string).notNull(),
+  },
+  (table) => [
+    index("document_spaces_organization_idx" as string).on(
+      table.organizationId
+    ),
+  ]
+);
+
+// Public share links for documents (GitBook/Docmost "publish").
+export const workspaceDocumentShares = sqliteTable(
+  "document_shares" as string,
+  {
+    token: text("token" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    documentId: text("document_id" as string).notNull(),
+    includeChildren: integer("include_children" as string, {
+      mode: "boolean",
+    })
+      .notNull()
+      .default(false),
+    createdById: text("created_by_id" as string).notNull(),
+    createdAt: text("created_at" as string).notNull(),
+    expiresAt: text("expires_at" as string),
+  },
+  (table) => [
+    index("document_shares_document_idx" as string).on(
+      table.organizationId,
+      table.documentId
+    ),
+  ]
+);
+
+// Watch a document → included in notification fanout on doc changes.
+export const workspaceDocumentWatchers = sqliteTable(
+  "document_watchers" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    documentId: text("document_id" as string).notNull(),
+    userId: text("user_id" as string).notNull(),
+    createdAt: text("created_at" as string).notNull(),
+  },
+  (table) => [
+    uniqueIndex("document_watchers_doc_user_idx" as string).on(
+      table.documentId,
+      table.userId
     ),
   ]
 );

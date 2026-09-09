@@ -25,6 +25,7 @@ export const searchSchema = {
   projectId: "string",
   cycleId: "string",
   labelIds: "string",
+  documentId: "string",
   createdAt: "number",
 } as const;
 
@@ -57,6 +58,7 @@ export function issueToSearchDocument(issue: Issue): SearchDocument {
     projectId: issue.projectId ?? "",
     cycleId: issue.cycleId ?? "",
     labelIds: issue.labelIds ?? "",
+    documentId: "",
     createdAt: timestampToNumber(issue.createdAt),
   };
 }
@@ -87,8 +89,77 @@ export function commentToSearchDocument(
     projectId: "",
     cycleId: "",
     labelIds: "",
+    documentId: "",
     createdAt: timestampToNumber(comment.createdAt),
   };
+}
+
+export interface DocumentForSearch {
+  id: string;
+  title: string;
+  content: string; // BlockNote JSON; text is extracted for indexing
+  createdAt: string;
+}
+
+function walkBlockNoteNodes(nodes: unknown): string[] {
+  if (!Array.isArray(nodes)) return [];
+  const out: string[] = [];
+  for (const node of nodes) {
+    if (typeof node === "object" && node !== null) {
+      const rec = node as Record<string, unknown>;
+      if (typeof rec.text === "string") out.push(rec.text);
+      if (Array.isArray(rec.content))
+        out.push(...walkBlockNoteNodes(rec.content));
+      if (Array.isArray(rec.children))
+        out.push(...walkBlockNoteNodes(rec.children));
+    }
+  }
+  return out;
+}
+
+function blockNoteToPlainText(content: string): string {
+  try {
+    return walkBlockNoteNodes(
+      JSON.parse(content) as Array<Record<string, unknown>>
+    ).join(" ");
+  } catch {
+    return "";
+  }
+}
+
+export function documentToSearchDocument(
+  doc: DocumentForSearch
+): SearchDocument {
+  return {
+    id: doc.id,
+    kind: "document",
+    issueId: "",
+    teamId: "",
+    identifier: "",
+    title: doc.title,
+    description: "",
+    body: blockNoteToPlainText(doc.content),
+    status: "",
+    priority: "",
+    assigneeId: "",
+    projectId: "",
+    cycleId: "",
+    labelIds: "",
+    documentId: doc.id,
+    createdAt: timestampToNumber(doc.createdAt),
+  };
+}
+
+export async function indexDocumentSearchDocument(
+  index: WorkspaceSearchIndex,
+  doc: DocumentForSearch
+) {
+  try {
+    await remove(index, doc.id);
+  } catch {
+    // Document may not exist; ignore.
+  }
+  await insert(index, documentToSearchDocument(doc));
 }
 
 export async function indexIssueDocument(
@@ -164,3 +235,16 @@ export async function searchIssues(
 }
 
 export { insertMultiple };
+
+export async function searchDocuments(
+  index: WorkspaceSearchIndex,
+  query: string,
+  limit = 50
+): Promise<string[]> {
+  const result = await search(index, {
+    term: query,
+    where: { kind: "document" },
+    limit,
+  });
+  return result.hits.map((hit) => hit.document.documentId);
+}

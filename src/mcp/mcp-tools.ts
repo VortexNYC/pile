@@ -158,6 +158,73 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdDocumentsIdShareToken",
+    "description": "Delete document share (DELETE /workspaces/{organizationId}/documents/{id}/share/{token})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/documents/{id}/share/{token}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "token": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId",
+        "token"
+      ]
+    }
+  },
+  {
+    "name": "deleteWorkspacesOrganizationIdDocumentsIdWatch",
+    "description": "Delete document watch (DELETE /workspaces/{organizationId}/documents/{id}/watch)",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/documents/{id}/watch",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "deleteWorkspacesOrganizationIdDocumentspacesId",
+    "description": "Delete document space (DELETE /workspaces/{organizationId}/document-spaces/{id})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/document-spaces/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdGithubInstallationsId",
     "description": "Delete github installation (DELETE /workspaces/{organizationId}/github/installations/{id})",
     "method": "DELETE",
@@ -593,6 +660,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getShareddocumentsOrganizationIdToken",
+    "description": "GET /shared-documents/{organizationId}/{token} (GET /shared-documents/{organizationId}/{token})",
+    "method": "GET",
+    "path": "/shared-documents/{organizationId}/{token}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "token": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "token"
+      ]
+    }
+  },
+  {
     "name": "getWorkspaces",
     "description": "List workspaces (GET /workspaces)",
     "method": "GET",
@@ -907,6 +995,12 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         "parentDocumentId": {
           "type": "string"
         },
+        "spaceId": {
+          "type": "string"
+        },
+        "isTemplate": {
+          "type": "string"
+        },
         "includeTrashed": {
           "type": "string"
         }
@@ -921,6 +1015,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "description": "Get document (GET /workspaces/{organizationId}/documents/{id})",
     "method": "GET",
     "path": "/workspaces/{organizationId}/documents/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdDocumentsIdComments",
+    "description": "List document comments (GET /workspaces/{organizationId}/documents/{id}/comments)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/documents/{id}/comments",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -955,6 +1070,45 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "id",
         "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdDocumentspaces",
+    "description": "List document spaces (GET /workspaces/{organizationId}/document-spaces)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/document-spaces",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdDocumentsSearch",
+    "description": "List document search (GET /workspaces/{organizationId}/documents/search)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/documents/search",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "q": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "organizationId",
+        "q"
       ]
     }
   },
@@ -2369,6 +2523,54 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "parentDocumentId": {
               "type": "string",
               "nullable": true
+            },
+            "spaceId": {
+              "type": "string",
+              "nullable": true
+            },
+            "isTemplate": {
+              "type": "boolean"
+            }
+          }
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "patchWorkspacesOrganizationIdDocumentspacesId",
+    "description": "Update document space (PATCH /workspaces/{organizationId}/document-spaces/{id})",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/document-spaces/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": {
+              "type": "string",
+              "nullable": true
+            },
+            "icon": {
+              "type": "string",
+              "nullable": true
+            },
+            "publicSharing": {
+              "type": "boolean"
             }
           }
         }
@@ -3190,6 +3392,48 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdCommentsCommentIdResolve",
+    "description": "Create comment resolve (POST /workspaces/{organizationId}/comments/{commentId}/resolve)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/comments/{commentId}/resolve",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "commentId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "commentId",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdCommentsCommentIdUnresolve",
+    "description": "Create comment unresolve (POST /workspaces/{organizationId}/comments/{commentId}/unresolve)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/comments/{commentId}/unresolve",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "commentId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "commentId",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdCustomerneeds",
     "description": "Create customer need (POST /workspaces/{organizationId}/customer-needs)",
     "method": "POST",
@@ -3457,6 +3701,12 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "parentDocumentId": {
               "type": "string"
+            },
+            "spaceId": {
+              "type": "string"
+            },
+            "isTemplate": {
+              "type": "boolean"
             }
           },
           "required": [
@@ -3465,6 +3715,39 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdDocumentsIdComments",
+    "description": "Create document comment (POST /workspaces/{organizationId}/documents/{id}/comments)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/documents/{id}/comments",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "body": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "body"
+          ]
+        }
+      },
+      "required": [
+        "id",
         "organizationId"
       ]
     }
@@ -3486,6 +3769,97 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdDocumentsIdShare",
+    "description": "Create document share (POST /workspaces/{organizationId}/documents/{id}/share)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/documents/{id}/share",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "includeChildren": {
+              "type": "boolean"
+            },
+            "expiresAt": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdDocumentsIdWatch",
+    "description": "Create document watch (POST /workspaces/{organizationId}/documents/{id}/watch)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/documents/{id}/watch",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdDocumentspaces",
+    "description": "Create document space (POST /workspaces/{organizationId}/document-spaces)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/document-spaces",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": {
+              "type": "string"
+            },
+            "icon": {
+              "type": "string"
+            },
+            "publicSharing": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "name"
+          ]
+        }
+      },
+      "required": [
         "organizationId"
       ]
     }

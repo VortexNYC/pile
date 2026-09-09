@@ -69,6 +69,7 @@ import {
   workspaceAgentSessions,
   workspaceAttachments,
   workspaceComments,
+  workspaceDocuments,
   workspaceIssueApprovals,
   workspaceIssueHistory,
   workspaceIssueRelations,
@@ -88,9 +89,12 @@ import {
   createWorkspaceSearchIndex,
   indexCommentDocument,
   indexIssueDocument,
+  indexDocumentSearchDocument,
+  documentToSearchDocument,
   insertMultiple as insertSearchDocs,
   issueToSearchDocument,
   removeIssueDocuments,
+  searchDocuments,
   searchIssues,
   type CommentForSearch,
   type WorkspaceSearchIndex,
@@ -408,7 +412,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (this.searchIndex) return this.searchIndex;
 
     const index = await createWorkspaceSearchIndex();
-    const [issues, commentRows] = await Promise.all([
+    const [issues, commentRows, documentRows] = await Promise.all([
       this.db.select().from(workspaceIssues).all(),
       this.db
         .select({
@@ -419,6 +423,16 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         })
         .from(workspaceComments)
         .all(),
+      this.db
+        .select({
+          id: workspaceDocuments.id,
+          title: workspaceDocuments.title,
+          content: workspaceDocuments.content,
+          createdAt: workspaceDocuments.createdAt,
+        })
+        .from(workspaceDocuments)
+        .where(isNull(workspaceDocuments.trashedAt))
+        .all(),
     ]);
 
     const issueById = new Map(issues.map((issue) => [issue.id, issue]));
@@ -427,6 +441,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       docs.push(issueToSearchDocument(issue));
     }
     for (const comment of commentRows) {
+      if (!comment.issueId) continue;
       const issue = issueById.get(comment.issueId);
       docs.push(
         commentToSearchDocument({
@@ -437,6 +452,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           createdAt: comment.createdAt,
         })
       );
+    }
+    for (const doc of documentRows) {
+      docs.push(documentToSearchDocument(doc));
     }
     if (docs.length > 0) {
       await insertSearchDocs(index, docs);
@@ -494,6 +512,41 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       .all();
   }
 
+  async listDocumentComments(documentId: string) {
+    await this.ready;
+    return this.db
+      .select()
+      .from(workspaceComments)
+      .where(eq(workspaceComments.documentId, documentId))
+      .all();
+  }
+
+  async resolveComment(id: string, actorId: string) {
+    await this.ready;
+    await this.db
+      .update(workspaceComments)
+      .set({
+        resolvedAt: new Date().toISOString(),
+        resolvedById: actorId,
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(workspaceComments.id, id));
+    return this.getComment(id);
+  }
+
+  async unresolveComment(id: string) {
+    await this.ready;
+    await this.db
+      .update(workspaceComments)
+      .set({
+        resolvedAt: null,
+        resolvedById: null,
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(workspaceComments.id, id));
+    return this.getComment(id);
+  }
+
   async getComment(id: string) {
     await this.ready;
     return this.db
@@ -518,7 +571,8 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   async createComment(values: {
-    issueId: string;
+    issueId?: string | null;
+    documentId?: string | null;
     authorId?: string | null;
     body: string;
     externalId?: string;
@@ -533,7 +587,8 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     await this.db.insert(workspaceComments).values({
       id,
       organizationId: this.organizationId,
-      issueId: values.issueId,
+      issueId: values.issueId ?? null,
+      documentId: values.documentId ?? null,
       authorId: values.authorId ?? null,
       body: values.body,
       externalId: values.externalId ?? null,
@@ -1004,12 +1059,20 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   // ---- documents ----
-  createDocument(input: Omit<data.DocumentInput, "organizationId">) {
+  async createDocument(input: Omit<data.DocumentInput, "organizationId">) {
     const doc = data.createDocument(this.db, {
       ...input,
       organizationId: this.organizationId,
     });
     this.audit("document.created", "document", doc.id, input.createdById);
+    if (this.searchIndex) {
+      await indexDocumentSearchDocument(this.searchIndex, doc);
+    }
+    await this.emit({
+      type: "document.updated",
+      organizationId: this.organizationId,
+      documentId: doc.id,
+    });
     return doc;
   }
 
@@ -1021,7 +1084,11 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.getDocument(this.db, this.organizationId, id);
   }
 
-  updateDocument(id: string, update: data.DocumentUpdate, actorId: string) {
+  async updateDocument(
+    id: string,
+    update: data.DocumentUpdate,
+    actorId: string
+  ) {
     const doc = data.updateDocument(
       this.db,
       this.organizationId,
@@ -1039,13 +1106,49 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         }
       }
       this.audit("document.updated", "document", id, actorId, changes);
+      if (this.searchIndex) {
+        await indexDocumentSearchDocument(this.searchIndex, doc);
+      }
+      await Promise.all(
+        data.listDocumentWatchers(this.db, id).map(async (watcherId) => {
+          if (watcherId === actorId) return;
+          await data.createNotification(this.db, {
+            organizationId: this.organizationId,
+            recipientId: watcherId,
+            recipientType: "user",
+            issueId: doc.issueId ?? doc.id,
+            type: "document_updated",
+            metadata: { documentId: doc.id },
+          });
+        })
+      );
+      await this.emit({
+        type: "document.updated",
+        organizationId: this.organizationId,
+        documentId: doc.id,
+      });
     }
     return doc;
   }
 
-  deleteDocument(id: string, actorId?: string) {
+  async deleteDocument(id: string, actorId?: string) {
     const deleted = data.deleteDocument(this.db, this.organizationId, id);
-    if (deleted) this.audit("document.deleted", "document", id, actorId);
+    if (deleted) {
+      this.audit("document.deleted", "document", id, actorId);
+      if (this.searchIndex) {
+        const { remove } = await import("@orama/orama");
+        try {
+          await remove(this.searchIndex, id);
+        } catch {
+          // Not indexed; ignore.
+        }
+      }
+      await this.emit({
+        type: "document.deleted",
+        organizationId: this.organizationId,
+        documentId: id,
+      });
+    }
     return deleted;
   }
 
@@ -1188,6 +1291,84 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const deleted = data.deleteRelease(this.db, this.organizationId, id);
     if (deleted) this.audit("release.deleted", "release", id, actorId);
     return deleted;
+  }
+
+  // ---- document spaces / shares / watchers ----
+  createDocumentSpace(input: {
+    name: string;
+    description?: string | null;
+    icon?: string | null;
+    publicSharing?: boolean;
+    createdById: string;
+  }) {
+    return data.createDocumentSpace(this.db, this.organizationId, input);
+  }
+
+  listDocumentSpaces() {
+    return data.listDocumentSpaces(this.db, this.organizationId);
+  }
+
+  getDocumentSpace(id: string) {
+    return data.getDocumentSpace(this.db, this.organizationId, id);
+  }
+
+  updateDocumentSpace(
+    id: string,
+    patch: {
+      name?: string;
+      description?: string | null;
+      icon?: string | null;
+      publicSharing?: boolean;
+    }
+  ) {
+    return data.updateDocumentSpace(this.db, this.organizationId, id, patch);
+  }
+
+  deleteDocumentSpace(id: string) {
+    return data.deleteDocumentSpace(this.db, this.organizationId, id);
+  }
+
+  createDocumentShare(input: {
+    documentId: string;
+    includeChildren?: boolean;
+    createdById: string;
+    expiresAt?: string | null;
+  }) {
+    return data.createDocumentShare(this.db, this.organizationId, input);
+  }
+
+  getDocumentShare(documentId: string) {
+    return data.getDocumentShare(this.db, this.organizationId, documentId);
+  }
+
+  getDocumentShareByToken(token: string) {
+    return data.getDocumentShareByToken(this.db, token);
+  }
+
+  deleteDocumentShare(token: string) {
+    return data.deleteDocumentShare(this.db, this.organizationId, token);
+  }
+
+  watchDocument(documentId: string, userId: string) {
+    return data.watchDocument(
+      this.db,
+      this.organizationId,
+      documentId,
+      userId
+    );
+  }
+
+  unwatchDocument(documentId: string, userId: string) {
+    return data.unwatchDocument(this.db, documentId, userId);
+  }
+
+  listDocumentWatchers(documentId: string) {
+    return data.listDocumentWatchers(this.db, documentId);
+  }
+
+  async searchDocuments(query: string, limit = 50): Promise<string[]> {
+    const index = await this.ensureSearchIndex();
+    return searchDocuments(index, query, limit);
   }
 
   setDefaultView(userId: string, defaultViewId: string | null) {

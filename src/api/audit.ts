@@ -56,13 +56,19 @@ export function registerAuditRoutes(app: OpenAPIHono<AppContext>) {
       limit: query.limit,
     });
     return c.json({
-      entries: rows.map((r) =>
-        Object.assign({}, r, {
-          changes: r.changes
-            ? (JSON.parse(r.changes) as Record<string, unknown>)
-            : null,
-        })
-      ),
+      entries: rows.map((r) => ({
+        id: r.id,
+        organizationId: r.organizationId,
+        actorId: r.actorId,
+        actorType: r.actorType,
+        action: r.action,
+        entityType: r.entityType,
+        entityId: r.entityId,
+        changes: r.changes
+          ? (JSON.parse(r.changes) as Record<string, unknown>)
+          : null,
+        createdAt: r.createdAt,
+      })),
     });
   });
 }

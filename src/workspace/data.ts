@@ -22,6 +22,9 @@ import {
   workspaceAgentActivities,
   workspaceDocumentHistory,
   workspaceDocuments,
+  workspaceDocumentShares,
+  workspaceDocumentSpaces,
+  workspaceDocumentWatchers,
   workspaceAgentProviderConfigs,
   workspaceAgentSessions,
   workspaceAttachments,
@@ -674,7 +677,8 @@ export type NotificationType =
   | "issue_created"
   | "issue_updated"
   | "issue_deleted"
-  | "comment_created";
+  | "comment_created"
+  | "document_updated";
 
 export type RecipientType = "user" | "agent";
 
@@ -1416,6 +1420,8 @@ export interface DocumentInput {
   issueId?: string | null;
   initiativeId?: string | null;
   parentDocumentId?: string | null;
+  spaceId?: string | null;
+  isTemplate?: boolean;
   createdById: string;
 }
 
@@ -1435,6 +1441,8 @@ export function createDocument(db: WorkspaceDb, input: DocumentInput) {
       issueId: input.issueId ?? null,
       initiativeId: input.initiativeId ?? null,
       parentDocumentId: input.parentDocumentId ?? null,
+      spaceId: input.spaceId ?? null,
+      isTemplate: input.isTemplate ?? false,
       createdById: input.createdById,
       createdAt: now,
       updatedAt: now,
@@ -1459,6 +1467,8 @@ export interface ListDocumentsArgs {
   issueId?: string;
   initiativeId?: string;
   parentDocumentId?: string | null;
+  spaceId?: string;
+  isTemplate?: boolean;
   includeTrashed?: boolean;
 }
 
@@ -1486,6 +1496,12 @@ export function listDocuments(
         ? isNull(workspaceDocuments.parentDocumentId)
         : eq(workspaceDocuments.parentDocumentId, args.parentDocumentId)
     );
+  }
+  if (args.spaceId !== undefined) {
+    conditions.push(eq(workspaceDocuments.spaceId, args.spaceId));
+  }
+  if (args.isTemplate !== undefined) {
+    conditions.push(eq(workspaceDocuments.isTemplate, args.isTemplate));
   }
   return db
     .select()
@@ -1519,6 +1535,8 @@ export interface DocumentUpdate {
   issueId?: string | null;
   initiativeId?: string | null;
   parentDocumentId?: string | null;
+  spaceId?: string | null;
+  isTemplate?: boolean;
   trashedAt?: string | null;
 }
 
@@ -1541,6 +1559,8 @@ export function updateDocument(
     patch.initiativeId = update.initiativeId;
   if (update.parentDocumentId !== undefined)
     patch.parentDocumentId = update.parentDocumentId;
+  if (update.spaceId !== undefined) patch.spaceId = update.spaceId;
+  if (update.isTemplate !== undefined) patch.isTemplate = update.isTemplate;
   if (update.trashedAt !== undefined) patch.trashedAt = update.trashedAt;
   if (update.content !== undefined) {
     const content = JSON.stringify(update.content);
@@ -2175,4 +2195,249 @@ export function deleteRelease(
       .returning()
       .all().length > 0
   );
+}
+
+// ---- document spaces / shares / watchers ----
+
+export function createDocumentSpace(
+  db: WorkspaceDb,
+  organizationId: string,
+  input: {
+    name: string;
+    description?: string | null;
+    icon?: string | null;
+    publicSharing?: boolean;
+    createdById: string;
+  }
+) {
+  return db
+    .insert(workspaceDocumentSpaces)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId,
+      name: input.name,
+      description: input.description ?? null,
+      icon: input.icon ?? null,
+      publicSharing: input.publicSharing ?? true,
+      createdById: input.createdById,
+      createdAt: new Date().toISOString(),
+    })
+    .returning()
+    .get();
+}
+
+export function listDocumentSpaces(db: WorkspaceDb, organizationId: string) {
+  return db
+    .select()
+    .from(workspaceDocumentSpaces)
+    .where(eq(workspaceDocumentSpaces.organizationId, organizationId))
+    .all();
+}
+
+export function getDocumentSpace(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  return db
+    .select()
+    .from(workspaceDocumentSpaces)
+    .where(
+      and(
+        eq(workspaceDocumentSpaces.id, id),
+        eq(workspaceDocumentSpaces.organizationId, organizationId)
+      )
+    )
+    .get();
+}
+
+export function updateDocumentSpace(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string,
+  patch: {
+    name?: string;
+    description?: string | null;
+    icon?: string | null;
+    publicSharing?: boolean;
+  }
+) {
+  const updates: Record<string, unknown> = {};
+  for (const key of [
+    "name",
+    "description",
+    "icon",
+    "publicSharing",
+  ] as const) {
+    if (patch[key] !== undefined) updates[key] = patch[key];
+  }
+  return db
+    .update(workspaceDocumentSpaces)
+    .set(updates)
+    .where(
+      and(
+        eq(workspaceDocumentSpaces.id, id),
+        eq(workspaceDocumentSpaces.organizationId, organizationId)
+      )
+    )
+    .returning()
+    .get();
+}
+
+export function deleteDocumentSpace(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  db.update(workspaceDocuments)
+    .set({ spaceId: null })
+    .where(
+      and(
+        eq(workspaceDocuments.spaceId, id),
+        eq(workspaceDocuments.organizationId, organizationId)
+      )
+    )
+    .run();
+  return (
+    db
+      .delete(workspaceDocumentSpaces)
+      .where(
+        and(
+          eq(workspaceDocumentSpaces.id, id),
+          eq(workspaceDocumentSpaces.organizationId, organizationId)
+        )
+      )
+      .returning()
+      .all().length > 0
+  );
+}
+
+export function createDocumentShare(
+  db: WorkspaceDb,
+  organizationId: string,
+  input: {
+    documentId: string;
+    includeChildren?: boolean;
+    createdById: string;
+    expiresAt?: string | null;
+  }
+) {
+  return db
+    .insert(workspaceDocumentShares)
+    .values({
+      token: crypto.randomUUID().replace(/-/g, ""),
+      organizationId,
+      documentId: input.documentId,
+      includeChildren: input.includeChildren ?? false,
+      createdById: input.createdById,
+      createdAt: new Date().toISOString(),
+      expiresAt: input.expiresAt ?? null,
+    })
+    .returning()
+    .get();
+}
+
+export function getDocumentShare(
+  db: WorkspaceDb,
+  organizationId: string,
+  documentId: string
+) {
+  return db
+    .select()
+    .from(workspaceDocumentShares)
+    .where(
+      and(
+        eq(workspaceDocumentShares.documentId, documentId),
+        eq(workspaceDocumentShares.organizationId, organizationId)
+      )
+    )
+    .get();
+}
+
+export function getDocumentShareByToken(db: WorkspaceDb, token: string) {
+  return db
+    .select()
+    .from(workspaceDocumentShares)
+    .where(eq(workspaceDocumentShares.token, token))
+    .get();
+}
+
+export function deleteDocumentShare(
+  db: WorkspaceDb,
+  organizationId: string,
+  token: string
+) {
+  return (
+    db
+      .delete(workspaceDocumentShares)
+      .where(
+        and(
+          eq(workspaceDocumentShares.token, token),
+          eq(workspaceDocumentShares.organizationId, organizationId)
+        )
+      )
+      .returning()
+      .all().length > 0
+  );
+}
+
+export function watchDocument(
+  db: WorkspaceDb,
+  organizationId: string,
+  documentId: string,
+  userId: string
+) {
+  const existing = db
+    .select()
+    .from(workspaceDocumentWatchers)
+    .where(
+      and(
+        eq(workspaceDocumentWatchers.documentId, documentId),
+        eq(workspaceDocumentWatchers.userId, userId)
+      )
+    )
+    .get();
+  if (existing) return existing;
+  return db
+    .insert(workspaceDocumentWatchers)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId,
+      documentId,
+      userId,
+      createdAt: new Date().toISOString(),
+    })
+    .returning()
+    .get();
+}
+
+export function unwatchDocument(
+  db: WorkspaceDb,
+  documentId: string,
+  userId: string
+) {
+  return (
+    db
+      .delete(workspaceDocumentWatchers)
+      .where(
+        and(
+          eq(workspaceDocumentWatchers.documentId, documentId),
+          eq(workspaceDocumentWatchers.userId, userId)
+        )
+      )
+      .returning()
+      .all().length > 0
+  );
+}
+
+export function listDocumentWatchers(
+  db: WorkspaceDb,
+  documentId: string
+): string[] {
+  return db
+    .select({ userId: workspaceDocumentWatchers.userId })
+    .from(workspaceDocumentWatchers)
+    .where(eq(workspaceDocumentWatchers.documentId, documentId))
+    .all()
+    .map((row) => row.userId);
 }

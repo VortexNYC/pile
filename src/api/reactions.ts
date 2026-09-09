@@ -208,8 +208,10 @@ export function registerReactionRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
     const stub = await getStub(c.env, organizationId);
-    const issue = await getIssue(stub, comment.issueId);
-    await assertIssueAccess(db, issue, identity);
+    if (comment.issueId) {
+      const issue = await getIssue(stub, comment.issueId);
+      await assertIssueAccess(db, issue, identity);
+    }
     const rows = await stub.listReactions("comment", commentId);
     return c.json({ reactions: rows });
   });
@@ -230,8 +232,10 @@ export function registerReactionRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
     const stub = await getStub(c.env, organizationId);
-    const issue = await getIssue(stub, comment.issueId);
-    await assertIssueAccess(db, issue, identity);
+    if (comment.issueId) {
+      const issue = await getIssue(stub, comment.issueId);
+      await assertIssueAccess(db, issue, identity);
+    }
     const reaction = await stub.createReaction({
       targetType: "comment",
       targetId: commentId,

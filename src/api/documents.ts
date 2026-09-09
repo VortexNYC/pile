@@ -21,6 +21,8 @@ const documentSchema = z.object({
   issueId: z.string().nullable(),
   initiativeId: z.string().nullable(),
   parentDocumentId: z.string().nullable(),
+  spaceId: z.string().nullable(),
+  isTemplate: z.boolean(),
   createdById: z.string(),
   updatedById: z.string().nullable(),
   createdAt: z.string(),
@@ -36,6 +38,8 @@ const createDocumentSchema = z.object({
   issueId: z.string().optional(),
   initiativeId: z.string().optional(),
   parentDocumentId: z.string().optional(),
+  spaceId: z.string().optional(),
+  isTemplate: z.boolean().optional(),
 });
 
 const updateDocumentSchema = z.object({
@@ -46,6 +50,8 @@ const updateDocumentSchema = z.object({
   issueId: z.string().nullable().optional(),
   initiativeId: z.string().nullable().optional(),
   parentDocumentId: z.string().nullable().optional(),
+  spaceId: z.string().nullable().optional(),
+  isTemplate: z.boolean().optional(),
 });
 
 const historyEntrySchema = z.object({
@@ -66,6 +72,8 @@ function toResponse(row: {
   issueId: string | null;
   initiativeId: string | null;
   parentDocumentId: string | null;
+  spaceId: string | null;
+  isTemplate: boolean;
   createdById: string;
   updatedById: string | null;
   createdAt: string;
@@ -98,6 +106,11 @@ const listRoute = createRoute({
       issueId: z.string().optional(),
       initiativeId: z.string().optional(),
       parentDocumentId: z.string().optional(),
+      spaceId: z.string().optional(),
+      isTemplate: z
+        .string()
+        .transform((v) => v === "true")
+        .optional(),
       includeTrashed: z
         .string()
         .transform((v) => v === "true")
@@ -224,6 +237,322 @@ const historyRoute = createRoute({
   },
 });
 
+
+const spaceSchema = z.object({
+  id: z.string(),
+  organizationId: z.string(),
+  name: z.string(),
+  description: z.string().nullable(),
+  icon: z.string().nullable(),
+  publicSharing: z.boolean(),
+  createdById: z.string(),
+  createdAt: z.string(),
+});
+
+const shareSchema = z.object({
+  token: z.string(),
+  documentId: z.string(),
+  includeChildren: z.boolean(),
+  createdAt: z.string(),
+  expiresAt: z.string().nullable(),
+});
+
+const docCommentSchema = z.object({
+  id: z.string(),
+  organizationId: z.string(),
+  issueId: z.string().nullable(),
+  documentId: z.string().nullable(),
+  authorId: z.string().nullable(),
+  body: z.string(),
+  resolvedAt: z.string().nullable(),
+  resolvedById: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+const listSpacesRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/document-spaces",
+  tags: ["documents"],
+  middleware: [rls("read")],
+  request: { params: z.object({ organizationId: z.string() }) },
+  responses: {
+    200: {
+      description: "Document spaces",
+      content: {
+        "application/json": {
+          schema: z.object({ spaces: z.array(spaceSchema) }),
+        },
+      },
+    },
+  },
+});
+
+const createSpaceRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/document-spaces",
+  tags: ["documents"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            name: z.string().min(1),
+            description: z.string().optional(),
+            icon: z.string().optional(),
+            publicSharing: z.boolean().optional(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "Space created",
+      content: { "application/json": { schema: spaceSchema } },
+    },
+  },
+});
+
+const updateSpaceRoute = createRoute({
+  method: "patch",
+  path: "/workspaces/{organizationId}/document-spaces/{id}",
+  tags: ["documents"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            name: z.string().min(1).optional(),
+            description: z.string().nullable().optional(),
+            icon: z.string().nullable().optional(),
+            publicSharing: z.boolean().optional(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Space updated",
+      content: { "application/json": { schema: spaceSchema } },
+    },
+    404: { description: "Space not found" },
+  },
+});
+
+const deleteSpaceRoute = createRoute({
+  method: "delete",
+  path: "/workspaces/{organizationId}/document-spaces/{id}",
+  tags: ["documents"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+  },
+  responses: {
+    204: { description: "Space deleted; documents are unlinked" },
+    404: { description: "Space not found" },
+  },
+});
+
+const listDocumentCommentsRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/documents/{id}/comments",
+  tags: ["documents"],
+  middleware: [rls("read")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Document comments",
+      content: {
+        "application/json": {
+          schema: z.object({ comments: z.array(docCommentSchema) }),
+        },
+      },
+    },
+    404: { description: "Document not found" },
+  },
+});
+
+const createDocumentCommentRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/documents/{id}/comments",
+  tags: ["documents"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+    body: {
+      content: {
+        "application/json": { schema: z.object({ body: z.string().min(1) }) },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "Comment created",
+      content: { "application/json": { schema: docCommentSchema } },
+    },
+    404: { description: "Document not found" },
+  },
+});
+
+const resolveCommentRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/comments/{commentId}/resolve",
+  tags: ["documents"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ organizationId: z.string(), commentId: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Comment resolved",
+      content: { "application/json": { schema: docCommentSchema } },
+    },
+    404: { description: "Comment not found" },
+  },
+});
+
+const unresolveCommentRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/comments/{commentId}/unresolve",
+  tags: ["documents"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ organizationId: z.string(), commentId: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Comment unresolved",
+      content: { "application/json": { schema: docCommentSchema } },
+    },
+    404: { description: "Comment not found" },
+  },
+});
+
+const createShareRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/documents/{id}/share",
+  tags: ["documents"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            includeChildren: z.boolean().optional(),
+            expiresAt: z.string().optional(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "Share link created",
+      content: { "application/json": { schema: shareSchema } },
+    },
+    404: { description: "Document not found" },
+  },
+});
+
+const deleteShareRoute = createRoute({
+  method: "delete",
+  path: "/workspaces/{organizationId}/documents/{id}/share/{token}",
+  tags: ["documents"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({
+      organizationId: z.string(),
+      id: z.string(),
+      token: z.string(),
+    }),
+  },
+  responses: {
+    204: { description: "Share revoked" },
+    404: { description: "Share not found" },
+  },
+});
+
+// Public share read — the token is the capability; no workspace auth.
+const readSharedRoute = createRoute({
+  method: "get",
+  path: "/shared-documents/{organizationId}/{token}",
+  tags: ["documents"],
+  request: {
+    params: z.object({ organizationId: z.string(), token: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Shared document",
+      content: {
+        "application/json": {
+          schema: z.object({
+            document: documentSchema,
+            children: z.array(documentSchema).optional(),
+          }),
+        },
+      },
+    },
+    404: { description: "Share not found or expired" },
+  },
+});
+
+const watchRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/documents/{id}/watch",
+  tags: ["documents"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+  },
+  responses: {
+    200: { description: "Watching document" },
+    404: { description: "Document not found" },
+  },
+});
+
+const unwatchRoute = createRoute({
+  method: "delete",
+  path: "/workspaces/{organizationId}/documents/{id}/watch",
+  tags: ["documents"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+  },
+  responses: {
+    204: { description: "Unwatched" },
+  },
+});
+
+const searchRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/documents/search",
+  tags: ["documents"],
+  middleware: [rls("read")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+    query: z.object({ q: z.string().min(1) }),
+  },
+  responses: {
+    200: {
+      description: "Matching documents",
+      content: {
+        "application/json": {
+          schema: z.object({ documents: z.array(documentSchema) }),
+        },
+      },
+    },
+  },
+});
+
 export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
@@ -234,6 +563,8 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
       issueId: query.issueId,
       initiativeId: query.initiativeId,
       parentDocumentId: query.parentDocumentId,
+      spaceId: query.spaceId,
+      isTemplate: query.isTemplate,
       includeTrashed: query.includeTrashed,
     });
     return c.json({ documents: rows.map(toResponse) });
@@ -293,11 +624,158 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
     if (!doc) return notFound();
     const history = await stub.listDocumentHistory(id);
     return c.json({
-      history: history.map((h) =>
-        Object.assign({}, h, {
-          content: JSON.parse(h.content) as Record<string, unknown>[],
-        })
-      ),
+      history: history.map((h) => ({
+        id: h.id,
+        documentId: h.documentId,
+        content: JSON.parse(h.content) as Record<string, unknown>[],
+        actorId: h.actorId,
+        createdAt: h.createdAt,
+      })),
     });
+  });
+
+  app.openapi(listSpacesRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    return c.json({ spaces: await stub.listDocumentSpaces() });
+  });
+
+  app.openapi(createSpaceRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const identity = c.get("workspaceIdentity");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const space = await stub.createDocumentSpace({
+      ...input,
+      createdById: identity.id,
+    });
+    return c.json(space, 201);
+  });
+
+  app.openapi(updateSpaceRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const space = await stub.updateDocumentSpace(id, input);
+    if (!space) return notFound();
+    return c.json(space);
+  });
+
+  app.openapi(deleteSpaceRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    if (!(await stub.deleteDocumentSpace(id))) return notFound();
+    return c.body(null, 204);
+  });
+
+  app.openapi(listDocumentCommentsRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const doc = await stub.getDocument(id);
+    if (!doc) return notFound();
+    return c.json({ comments: await stub.listDocumentComments(id) });
+  });
+
+  app.openapi(createDocumentCommentRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const { body } = c.req.valid("json");
+    const identity = c.get("workspaceIdentity");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const doc = await stub.getDocument(id);
+    if (!doc) return notFound();
+    const comment = await stub.createComment({
+      documentId: id,
+      authorId: identity.id,
+      body,
+    });
+    return c.json(comment, 201);
+  });
+
+  app.openapi(resolveCommentRoute, async (c) => {
+    const { organizationId, commentId } = c.req.valid("param");
+    const identity = c.get("workspaceIdentity");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const comment = await stub.resolveComment(commentId, identity.id);
+    if (!comment) return notFound();
+    return c.json(comment);
+  });
+
+  app.openapi(unresolveCommentRoute, async (c) => {
+    const { organizationId, commentId } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const comment = await stub.unresolveComment(commentId);
+    if (!comment) return notFound();
+    return c.json(comment);
+  });
+
+  app.openapi(createShareRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const identity = c.get("workspaceIdentity");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const doc = await stub.getDocument(id);
+    if (!doc) return notFound();
+    const share = await stub.createDocumentShare({
+      documentId: id,
+      includeChildren: input.includeChildren,
+      expiresAt: input.expiresAt,
+      createdById: identity.id,
+    });
+    return c.json(share, 201);
+  });
+
+  app.openapi(deleteShareRoute, async (c) => {
+    const { organizationId, token } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    if (!(await stub.deleteDocumentShare(token))) return notFound();
+    return c.body(null, 204);
+  });
+
+  app.openapi(readSharedRoute, async (c) => {
+    const { organizationId, token } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const share = await stub.getDocumentShareByToken(token);
+    if (!share || share.organizationId !== organizationId)
+      return notFound();
+    if (share.expiresAt && share.expiresAt < new Date().toISOString())
+      return notFound();
+    const doc = await stub.getDocument(share.documentId);
+    if (!doc || doc.trashedAt) return notFound();
+    const children = share.includeChildren
+      ? await stub.listDocuments({ parentDocumentId: doc.id })
+      : undefined;
+    return c.json({
+      document: toResponse(doc),
+      children: children?.map(toResponse),
+    });
+  });
+
+  app.openapi(watchRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const identity = c.get("workspaceIdentity");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const doc = await stub.getDocument(id);
+    if (!doc) return notFound();
+    await stub.watchDocument(id, identity.id);
+    return c.json({ watching: true });
+  });
+
+  app.openapi(unwatchRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const identity = c.get("workspaceIdentity");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.unwatchDocument(id, identity.id);
+    return c.body(null, 204);
+  });
+
+  app.openapi(searchRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const { q } = c.req.valid("query");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const ids = await stub.searchDocuments(q);
+    const docs = (
+      await Promise.all(ids.map((id) => stub.getDocument(id)))
+    ).filter((d) => d !== undefined);
+    return c.json({ documents: docs.map(toResponse) });
   });
 }

@@ -1596,6 +1596,14 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "parent-document-id",
       },
       {
+        name: "spaceId",
+        flag: "space-id",
+      },
+      {
+        name: "isTemplate",
+        flag: "is-template",
+      },
+      {
         name: "includeTrashed",
         flag: "include-trashed",
       },
@@ -1640,6 +1648,14 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "parentDocumentId",
         flag: "parent-document-id",
+      },
+      {
+        name: "spaceId",
+        flag: "space-id",
+      },
+      {
+        name: "isTemplate",
+        flag: "is-template",
       },
     ],
   },
@@ -1702,6 +1718,14 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "parentDocumentId",
         flag: "parent-document-id",
       },
+      {
+        name: "spaceId",
+        flag: "space-id",
+      },
+      {
+        name: "isTemplate",
+        flag: "is-template",
+      },
     ],
   },
   "documents delete": {
@@ -1750,6 +1774,259 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
     query: [],
+    body: [],
+  },
+  "document spaces list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/document-spaces",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "document spaces create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/document-spaces",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "description",
+        flag: "description",
+      },
+      {
+        name: "icon",
+        flag: "icon",
+      },
+      {
+        name: "publicSharing",
+        flag: "public-sharing",
+      },
+    ],
+  },
+  "document spaces update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/document-spaces/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "description",
+        flag: "description",
+      },
+      {
+        name: "icon",
+        flag: "icon",
+      },
+      {
+        name: "publicSharing",
+        flag: "public-sharing",
+      },
+    ],
+  },
+  "document spaces delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/document-spaces/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "documents comments": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/documents/{id}/comments",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "body",
+        flag: "body",
+      },
+    ],
+  },
+  "comments resolve create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/comments/{commentId}/resolve",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "commentId",
+        flag: "comment",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "comments unresolve create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/comments/{commentId}/unresolve",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "commentId",
+        flag: "comment",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "documents share create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/documents/{id}/share",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "includeChildren",
+        flag: "include-children",
+      },
+      {
+        name: "expiresAt",
+        flag: "expires-at",
+      },
+    ],
+  },
+  "documents share delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/documents/{id}/share/{token}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+      {
+        name: "token",
+        flag: "token",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "shared documents get": {
+    method: "GET",
+    path: "/shared-documents/{organizationId}/{token}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "token",
+        flag: "token",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "documents watch create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/documents/{id}/watch",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "documents watch delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/documents/{id}/watch",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "documents search list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/documents/search",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "q",
+        flag: "q",
+      },
+    ],
     body: [],
   },
   "audit log list": {

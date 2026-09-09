@@ -3717,7 +3717,8 @@
                                 "type": "string"
                               },
                               "issueId": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true
                               },
                               "body": {
                                 "type": "string"
@@ -6172,7 +6173,12 @@
                             "type": "string"
                           },
                           "issueId": {
-                            "type": "string"
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "documentId": {
+                            "type": "string",
+                            "nullable": true
                           },
                           "authorId": {
                             "type": "string",
@@ -6193,6 +6199,14 @@
                             "type": "string",
                             "nullable": true
                           },
+                          "resolvedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "resolvedById": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "createdAt": {
                             "type": "string"
                           },
@@ -6204,11 +6218,14 @@
                           "id",
                           "organizationId",
                           "issueId",
+                          "documentId",
                           "authorId",
                           "body",
                           "externalId",
                           "externalSource",
                           "externalAuthor",
+                          "resolvedAt",
+                          "resolvedById",
                           "createdAt",
                           "updatedAt"
                         ]
@@ -6280,7 +6297,12 @@
                       "type": "string"
                     },
                     "issueId": {
-                      "type": "string"
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "documentId": {
+                      "type": "string",
+                      "nullable": true
                     },
                     "authorId": {
                       "type": "string",
@@ -6301,6 +6323,14 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "resolvedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resolvedById": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -6312,11 +6342,14 @@
                     "id",
                     "organizationId",
                     "issueId",
+                    "documentId",
                     "authorId",
                     "body",
                     "externalId",
                     "externalSource",
                     "externalAuthor",
+                    "resolvedAt",
+                    "resolvedById",
                     "createdAt",
                     "updatedAt"
                   ]
@@ -6374,7 +6407,12 @@
                       "type": "string"
                     },
                     "issueId": {
-                      "type": "string"
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "documentId": {
+                      "type": "string",
+                      "nullable": true
                     },
                     "authorId": {
                       "type": "string",
@@ -6395,6 +6433,14 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "resolvedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resolvedById": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -6406,11 +6452,14 @@
                     "id",
                     "organizationId",
                     "issueId",
+                    "documentId",
                     "authorId",
                     "body",
                     "externalId",
                     "externalSource",
                     "externalAuthor",
+                    "resolvedAt",
+                    "resolvedById",
                     "createdAt",
                     "updatedAt"
                   ]
@@ -6484,7 +6533,12 @@
                       "type": "string"
                     },
                     "issueId": {
-                      "type": "string"
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "documentId": {
+                      "type": "string",
+                      "nullable": true
                     },
                     "authorId": {
                       "type": "string",
@@ -6505,6 +6559,14 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "resolvedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resolvedById": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -6516,11 +6578,14 @@
                     "id",
                     "organizationId",
                     "issueId",
+                    "documentId",
                     "authorId",
                     "body",
                     "externalId",
                     "externalSource",
                     "externalAuthor",
+                    "resolvedAt",
+                    "resolvedById",
                     "createdAt",
                     "updatedAt"
                   ]
@@ -6620,6 +6685,22 @@
               "type": "string"
             },
             "required": false,
+            "name": "spaceId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "isTemplate",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
             "name": "includeTrashed",
             "in": "query"
           }
@@ -6675,6 +6756,13 @@
                             "type": "string",
                             "nullable": true
                           },
+                          "spaceId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "isTemplate": {
+                            "type": "boolean"
+                          },
                           "createdById": {
                             "type": "string"
                           },
@@ -6703,6 +6791,8 @@
                           "issueId",
                           "initiativeId",
                           "parentDocumentId",
+                          "spaceId",
+                          "isTemplate",
                           "createdById",
                           "updatedById",
                           "createdAt",
@@ -6769,6 +6859,12 @@
                   },
                   "parentDocumentId": {
                     "type": "string"
+                  },
+                  "spaceId": {
+                    "type": "string"
+                  },
+                  "isTemplate": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -6824,6 +6920,13 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "spaceId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "isTemplate": {
+                      "type": "boolean"
+                    },
                     "createdById": {
                       "type": "string"
                     },
@@ -6852,6 +6955,8 @@
                     "issueId",
                     "initiativeId",
                     "parentDocumentId",
+                    "spaceId",
+                    "isTemplate",
                     "createdById",
                     "updatedById",
                     "createdAt",
@@ -6935,6 +7040,13 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "spaceId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "isTemplate": {
+                      "type": "boolean"
+                    },
                     "createdById": {
                       "type": "string"
                     },
@@ -6963,6 +7075,8 @@
                     "issueId",
                     "initiativeId",
                     "parentDocumentId",
+                    "spaceId",
+                    "isTemplate",
                     "createdById",
                     "updatedById",
                     "createdAt",
@@ -7039,6 +7153,13 @@
                   "parentDocumentId": {
                     "type": "string",
                     "nullable": true
+                  },
+                  "spaceId": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "isTemplate": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -7091,6 +7212,13 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "spaceId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "isTemplate": {
+                      "type": "boolean"
+                    },
                     "createdById": {
                       "type": "string"
                     },
@@ -7119,6 +7247,8 @@
                     "issueId",
                     "initiativeId",
                     "parentDocumentId",
+                    "spaceId",
+                    "isTemplate",
                     "createdById",
                     "updatedById",
                     "createdAt",
@@ -7237,6 +7367,13 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "spaceId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "isTemplate": {
+                      "type": "boolean"
+                    },
                     "createdById": {
                       "type": "string"
                     },
@@ -7265,6 +7402,8 @@
                     "issueId",
                     "initiativeId",
                     "parentDocumentId",
+                    "spaceId",
+                    "isTemplate",
                     "createdById",
                     "updatedById",
                     "createdAt",
@@ -7362,6 +7501,1241 @@
           }
         },
         "summary": "List document history"
+      }
+    },
+    "/workspaces/{organizationId}/document-spaces": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Document spaces",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "spaces": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "icon": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "publicSharing": {
+                            "type": "boolean"
+                          },
+                          "createdById": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "name",
+                          "description",
+                          "icon",
+                          "publicSharing",
+                          "createdById",
+                          "createdAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "spaces"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List document spaces"
+      },
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "icon": {
+                    "type": "string"
+                  },
+                  "publicSharing": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Space created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "icon": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "publicSharing": {
+                      "type": "boolean"
+                    },
+                    "createdById": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "name",
+                    "description",
+                    "icon",
+                    "publicSharing",
+                    "createdById",
+                    "createdAt"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create document space"
+      }
+    },
+    "/workspaces/{organizationId}/document-spaces/{id}": {
+      "patch": {
+        "tags": [
+          "documents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "description": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "icon": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "publicSharing": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Space updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "icon": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "publicSharing": {
+                      "type": "boolean"
+                    },
+                    "createdById": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "name",
+                    "description",
+                    "icon",
+                    "publicSharing",
+                    "createdById",
+                    "createdAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Space not found"
+          }
+        },
+        "summary": "Update document space"
+      },
+      "delete": {
+        "tags": [
+          "documents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Space deleted; documents are unlinked"
+          },
+          "404": {
+            "description": "Space not found"
+          }
+        },
+        "summary": "Delete document space"
+      }
+    },
+    "/workspaces/{organizationId}/documents/{id}/comments": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Document comments",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "comments": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "issueId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "documentId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "authorId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "body": {
+                            "type": "string"
+                          },
+                          "resolvedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "resolvedById": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "issueId",
+                          "documentId",
+                          "authorId",
+                          "body",
+                          "resolvedAt",
+                          "resolvedById",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "comments"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Document not found"
+          }
+        },
+        "summary": "List document comments"
+      },
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "body": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "body"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Comment created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "issueId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "documentId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "authorId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "body": {
+                      "type": "string"
+                    },
+                    "resolvedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resolvedById": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "issueId",
+                    "documentId",
+                    "authorId",
+                    "body",
+                    "resolvedAt",
+                    "resolvedById",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Document not found"
+          }
+        },
+        "summary": "Create document comment"
+      }
+    },
+    "/workspaces/{organizationId}/comments/{commentId}/resolve": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "commentId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Comment resolved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "issueId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "documentId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "authorId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "body": {
+                      "type": "string"
+                    },
+                    "resolvedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resolvedById": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "issueId",
+                    "documentId",
+                    "authorId",
+                    "body",
+                    "resolvedAt",
+                    "resolvedById",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Comment not found"
+          }
+        },
+        "summary": "Create comment resolve"
+      }
+    },
+    "/workspaces/{organizationId}/comments/{commentId}/unresolve": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "commentId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Comment unresolved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "issueId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "documentId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "authorId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "body": {
+                      "type": "string"
+                    },
+                    "resolvedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resolvedById": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "issueId",
+                    "documentId",
+                    "authorId",
+                    "body",
+                    "resolvedAt",
+                    "resolvedById",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Comment not found"
+          }
+        },
+        "summary": "Create comment unresolve"
+      }
+    },
+    "/workspaces/{organizationId}/documents/{id}/share": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "includeChildren": {
+                    "type": "boolean"
+                  },
+                  "expiresAt": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Share link created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string"
+                    },
+                    "documentId": {
+                      "type": "string"
+                    },
+                    "includeChildren": {
+                      "type": "boolean"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "token",
+                    "documentId",
+                    "includeChildren",
+                    "createdAt",
+                    "expiresAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Document not found"
+          }
+        },
+        "summary": "Create document share"
+      }
+    },
+    "/workspaces/{organizationId}/documents/{id}/share/{token}": {
+      "delete": {
+        "tags": [
+          "documents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "token",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Share revoked"
+          },
+          "404": {
+            "description": "Share not found"
+          }
+        },
+        "summary": "Delete document share"
+      }
+    },
+    "/shared-documents/{organizationId}/{token}": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "token",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Shared document",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "document": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "icon": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "content": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "nullable": true
+                            }
+                          }
+                        },
+                        "projectId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "issueId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "initiativeId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "parentDocumentId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "spaceId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "isTemplate": {
+                          "type": "boolean"
+                        },
+                        "createdById": {
+                          "type": "string"
+                        },
+                        "updatedById": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        },
+                        "trashedAt": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "title",
+                        "icon",
+                        "content",
+                        "projectId",
+                        "issueId",
+                        "initiativeId",
+                        "parentDocumentId",
+                        "spaceId",
+                        "isTemplate",
+                        "createdById",
+                        "updatedById",
+                        "createdAt",
+                        "updatedAt",
+                        "trashedAt"
+                      ]
+                    },
+                    "children": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "icon": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "content": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "nullable": true
+                              }
+                            }
+                          },
+                          "projectId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "issueId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "initiativeId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "parentDocumentId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "spaceId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "isTemplate": {
+                            "type": "boolean"
+                          },
+                          "createdById": {
+                            "type": "string"
+                          },
+                          "updatedById": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          },
+                          "trashedAt": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "title",
+                          "icon",
+                          "content",
+                          "projectId",
+                          "issueId",
+                          "initiativeId",
+                          "parentDocumentId",
+                          "spaceId",
+                          "isTemplate",
+                          "createdById",
+                          "updatedById",
+                          "createdAt",
+                          "updatedAt",
+                          "trashedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "document"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Share not found or expired"
+          }
+        },
+        "summary": "GET /shared-documents/{organizationId}/{token}"
+      }
+    },
+    "/workspaces/{organizationId}/documents/{id}/watch": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Watching document"
+          },
+          "404": {
+            "description": "Document not found"
+          }
+        },
+        "summary": "Create document watch"
+      },
+      "delete": {
+        "tags": [
+          "documents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Unwatched"
+          }
+        },
+        "summary": "Delete document watch"
+      }
+    },
+    "/workspaces/{organizationId}/documents/search": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "q",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching documents",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "documents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "icon": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "content": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "nullable": true
+                              }
+                            }
+                          },
+                          "projectId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "issueId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "initiativeId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "parentDocumentId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "spaceId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "isTemplate": {
+                            "type": "boolean"
+                          },
+                          "createdById": {
+                            "type": "string"
+                          },
+                          "updatedById": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          },
+                          "trashedAt": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "title",
+                          "icon",
+                          "content",
+                          "projectId",
+                          "issueId",
+                          "initiativeId",
+                          "parentDocumentId",
+                          "spaceId",
+                          "isTemplate",
+                          "createdById",
+                          "updatedById",
+                          "createdAt",
+                          "updatedAt",
+                          "trashedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "documents"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List document search"
       }
     },
     "/workspaces/{organizationId}/audit-log": {

@@ -1680,7 +1680,7 @@ export interface paths {
                                 /** @enum {string} */
                                 kind: "comment";
                                 id: string;
-                                issueId: string;
+                                issueId: string | null;
                                 body: string;
                                 authorId: string | null;
                                 externalAuthor: string | null;
@@ -2983,12 +2983,15 @@ export interface paths {
                             comments: {
                                 id: string;
                                 organizationId: string;
-                                issueId: string;
+                                issueId: string | null;
+                                documentId: string | null;
                                 authorId: string | null;
                                 body: string;
                                 externalId: string | null;
                                 externalSource: string | null;
                                 externalAuthor: string | null;
+                                resolvedAt: string | null;
+                                resolvedById: string | null;
                                 createdAt: string;
                                 updatedAt: string;
                             }[];
@@ -3026,12 +3029,15 @@ export interface paths {
                         "application/json": {
                             id: string;
                             organizationId: string;
-                            issueId: string;
+                            issueId: string | null;
+                            documentId: string | null;
                             authorId: string | null;
                             body: string;
                             externalId: string | null;
                             externalSource: string | null;
                             externalAuthor: string | null;
+                            resolvedAt: string | null;
+                            resolvedById: string | null;
                             createdAt: string;
                             updatedAt: string;
                         };
@@ -3075,12 +3081,15 @@ export interface paths {
                         "application/json": {
                             id: string;
                             organizationId: string;
-                            issueId: string;
+                            issueId: string | null;
+                            documentId: string | null;
                             authorId: string | null;
                             body: string;
                             externalId: string | null;
                             externalSource: string | null;
                             externalAuthor: string | null;
+                            resolvedAt: string | null;
+                            resolvedById: string | null;
                             createdAt: string;
                             updatedAt: string;
                         };
@@ -3144,12 +3153,15 @@ export interface paths {
                         "application/json": {
                             id: string;
                             organizationId: string;
-                            issueId: string;
+                            issueId: string | null;
+                            documentId: string | null;
                             authorId: string | null;
                             body: string;
                             externalId: string | null;
                             externalSource: string | null;
                             externalAuthor: string | null;
+                            resolvedAt: string | null;
+                            resolvedById: string | null;
                             createdAt: string;
                             updatedAt: string;
                         };
@@ -3174,6 +3186,8 @@ export interface paths {
                     issueId?: string;
                     initiativeId?: string;
                     parentDocumentId?: string;
+                    spaceId?: string;
+                    isTemplate?: string;
                     includeTrashed?: string;
                 };
                 header?: never;
@@ -3203,6 +3217,8 @@ export interface paths {
                                 issueId: string | null;
                                 initiativeId: string | null;
                                 parentDocumentId: string | null;
+                                spaceId: string | null;
+                                isTemplate: boolean;
                                 createdById: string;
                                 updatedById: string | null;
                                 createdAt: string;
@@ -3237,6 +3253,8 @@ export interface paths {
                         issueId?: string;
                         initiativeId?: string;
                         parentDocumentId?: string;
+                        spaceId?: string;
+                        isTemplate?: boolean;
                     };
                 };
             };
@@ -3259,6 +3277,8 @@ export interface paths {
                             issueId: string | null;
                             initiativeId: string | null;
                             parentDocumentId: string | null;
+                            spaceId: string | null;
+                            isTemplate: boolean;
                             createdById: string;
                             updatedById: string | null;
                             createdAt: string;
@@ -3313,6 +3333,8 @@ export interface paths {
                             issueId: string | null;
                             initiativeId: string | null;
                             parentDocumentId: string | null;
+                            spaceId: string | null;
+                            isTemplate: boolean;
                             createdById: string;
                             updatedById: string | null;
                             createdAt: string;
@@ -3386,6 +3408,8 @@ export interface paths {
                         issueId?: string | null;
                         initiativeId?: string | null;
                         parentDocumentId?: string | null;
+                        spaceId?: string | null;
+                        isTemplate?: boolean;
                     };
                 };
             };
@@ -3408,6 +3432,8 @@ export interface paths {
                             issueId: string | null;
                             initiativeId: string | null;
                             parentDocumentId: string | null;
+                            spaceId: string | null;
+                            isTemplate: boolean;
                             createdById: string;
                             updatedById: string | null;
                             createdAt: string;
@@ -3467,6 +3493,8 @@ export interface paths {
                             issueId: string | null;
                             initiativeId: string | null;
                             parentDocumentId: string | null;
+                            spaceId: string | null;
+                            isTemplate: boolean;
                             createdById: string;
                             updatedById: string | null;
                             createdAt: string;
@@ -3535,6 +3563,724 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/document-spaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List document spaces */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Document spaces */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            spaces: {
+                                id: string;
+                                organizationId: string;
+                                name: string;
+                                description: string | null;
+                                icon: string | null;
+                                publicSharing: boolean;
+                                createdById: string;
+                                createdAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create document space */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        name: string;
+                        description?: string;
+                        icon?: string;
+                        publicSharing?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description Space created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            name: string;
+                            description: string | null;
+                            icon: string | null;
+                            publicSharing: boolean;
+                            createdById: string;
+                            createdAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/document-spaces/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete document space */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Space deleted; documents are unlinked */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Space not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /** Update document space */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        name?: string;
+                        description?: string | null;
+                        icon?: string | null;
+                        publicSharing?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description Space updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            name: string;
+                            description: string | null;
+                            icon: string | null;
+                            publicSharing: boolean;
+                            createdById: string;
+                            createdAt: string;
+                        };
+                    };
+                };
+                /** @description Space not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/documents/{id}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List document comments */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Document comments */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            comments: {
+                                id: string;
+                                organizationId: string;
+                                issueId: string | null;
+                                documentId: string | null;
+                                authorId: string | null;
+                                body: string;
+                                resolvedAt: string | null;
+                                resolvedById: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Document not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        /** Create document comment */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        body: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Comment created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            issueId: string | null;
+                            documentId: string | null;
+                            authorId: string | null;
+                            body: string;
+                            resolvedAt: string | null;
+                            resolvedById: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Document not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/comments/{commentId}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create comment resolve */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    commentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Comment resolved */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            issueId: string | null;
+                            documentId: string | null;
+                            authorId: string | null;
+                            body: string;
+                            resolvedAt: string | null;
+                            resolvedById: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Comment not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/comments/{commentId}/unresolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create comment unresolve */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    commentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Comment unresolved */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            issueId: string | null;
+                            documentId: string | null;
+                            authorId: string | null;
+                            body: string;
+                            resolvedAt: string | null;
+                            resolvedById: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Comment not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/documents/{id}/share": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create document share */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        includeChildren?: boolean;
+                        expiresAt?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Share link created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            token: string;
+                            documentId: string;
+                            includeChildren: boolean;
+                            createdAt: string;
+                            expiresAt: string | null;
+                        };
+                    };
+                };
+                /** @description Document not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/documents/{id}/share/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete document share */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                    token: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Share revoked */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Share not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/shared-documents/{organizationId}/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GET /shared-documents/{organizationId}/{token} */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    token: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Shared document */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            document: {
+                                id: string;
+                                organizationId: string;
+                                title: string;
+                                icon: string | null;
+                                content: {
+                                    [key: string]: unknown;
+                                }[];
+                                projectId: string | null;
+                                issueId: string | null;
+                                initiativeId: string | null;
+                                parentDocumentId: string | null;
+                                spaceId: string | null;
+                                isTemplate: boolean;
+                                createdById: string;
+                                updatedById: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                trashedAt: string | null;
+                            };
+                            children?: {
+                                id: string;
+                                organizationId: string;
+                                title: string;
+                                icon: string | null;
+                                content: {
+                                    [key: string]: unknown;
+                                }[];
+                                projectId: string | null;
+                                issueId: string | null;
+                                initiativeId: string | null;
+                                parentDocumentId: string | null;
+                                spaceId: string | null;
+                                isTemplate: boolean;
+                                createdById: string;
+                                updatedById: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                trashedAt: string | null;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Share not found or expired */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/documents/{id}/watch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create document watch */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Watching document */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Document not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        /** Delete document watch */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Unwatched */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/documents/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List document search */
+        get: {
+            parameters: {
+                query: {
+                    q: string;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Matching documents */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            documents: {
+                                id: string;
+                                organizationId: string;
+                                title: string;
+                                icon: string | null;
+                                content: {
+                                    [key: string]: unknown;
+                                }[];
+                                projectId: string | null;
+                                issueId: string | null;
+                                initiativeId: string | null;
+                                parentDocumentId: string | null;
+                                spaceId: string | null;
+                                isTemplate: boolean;
+                                createdById: string;
+                                updatedById: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                trashedAt: string | null;
+                            }[];
+                        };
+                    };
                 };
             };
         };
