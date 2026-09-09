@@ -3512,6 +3512,15 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "url": {
               "type": "string"
+            },
+            "prUrl": {
+              "type": "string"
+            },
+            "prState": {
+              "type": "string"
+            },
+            "branch": {
+              "type": "string"
             }
           }
         }

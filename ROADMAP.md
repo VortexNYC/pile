@@ -23,8 +23,7 @@ This is the durable tracker for the open-source Linear alternative. Operational 
 - MCP server
 - Real-time DO events
 - Linear user migration
-- Agent dispatch
-- Agent sessions and activities API (#27)
+- Agent dispatch and lifecycle: one active session per issue, provider result/PR writeback, failure handling, lifecycle realtime/webhook events (#27)
 - Issue search and indexing: full-text search across issue title, description, identifier, and comments; applied to `GET /workspaces/{id}/issues?search=` and saved views.
 - Initiatives and roadmaps (#26): `roadmaps` and `initiatives` D1 tables with CRUD, roadmap-to-initiative nesting, date/status, and `GET /workspaces/{id}/roadmaps/{id}/initiatives`.
 - Multi-tenant GitHub App:

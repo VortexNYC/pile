@@ -1,12 +1,8 @@
-import type { InferSelectModel } from "drizzle-orm";
-import { z } from "zod";
-
 import type { AppEnv } from "../platform/env.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { WorkerEnv } from "../platform/middleware.js";
-import type { Issue } from "../types/workspace.js";
-import type { workspaceAgentSessions } from "../workspace/schema.js";
+import type { AgentSession, Issue } from "../types/workspace.js";
 import { CfAgentProvider } from "./cf-agent.js";
 import { CursorAgentProvider } from "./cursor.js";
 import { DevinAgentProvider } from "./devin.js";
@@ -47,12 +43,22 @@ export async function dispatchAgent(
   actor: WorkspaceIdentity,
   model?: string,
   ctx?: { waitUntil: (promise: Promise<unknown>) => void }
-): Promise<InferSelectModel<typeof workspaceAgentSessions>> {
+): Promise<AgentSession> {
   const provider = getAgentProvider(agentId, env);
   const stub = env.WORKSPACE_DURABLE_OBJECT.get(
     env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
   );
   await stub.setOrganizationId(organizationId);
+
+  const active = await stub.getActiveAgentSessionForIssue(issue.id);
+  if (active) {
+    throw new VortexError({
+      code: "CONFLICT",
+      status: 409,
+      message: `An active agent session (${active.session.id}) already exists for this issue`,
+    });
+  }
+
   const session = await stub.createAgentSession({
     issueId: issue.id,
     agentId,
@@ -64,52 +70,58 @@ export async function dispatchAgent(
     url: null,
   });
 
-  const providerSession = await provider.dispatch(
-    organizationId,
-    issue,
-    model,
-    { sessionId: session.id }
-  );
-
-  await stub.updateAgentSession(session.id, {
-    status: z
-      .enum([
-        "created",
-        "running",
-        "waiting",
-        "completed",
-        "failed",
-        "canceled",
-      ])
-      .parse(providerSession.status),
-    result: providerSession.result ?? null,
-    url: providerSession.url ?? null,
-    providerSessionId: providerSession.id,
-  });
-
   await stub.addAgentActivity({
     sessionId: session.id,
-    type: "status",
-    message: `Session created by ${actor.type} ${actor.id}`,
+    actorId: actor.id,
+    type: "thought",
+    message: `Dispatching to ${agentId}…`,
   });
 
-  // Dispatch starts work — move the issue to in_progress.
-  await stub
-    .updateIssue(issue.id, { status: "in_progress" }, actor.id)
-    .catch((err) => console.error("issue status transition failed", err));
-
-  // Outpost provisioning is Devin-specific — only the Devin provider's
-  // sessions can be claimed by `devin worker` on a compute sandbox.
-  if (agentId === "devin" && providerSession.id) {
-    const provision = provisionOutpostWorker(
-      env,
-      providerSession.id,
+  try {
+    const providerSession = await provider.dispatch(
       organizationId,
-      session.id
-    ).catch((err) => console.error("outpost provisioning failed", err));
-    if (ctx) ctx.waitUntil(provision);
-    else await provision;
-  }
+      issue,
+      model,
+      { sessionId: session.id }
+    );
 
-  return session;
+    const updated = await stub.applyAgentSessionResult(
+      session.id,
+      {
+        status: providerSession.status,
+        result: providerSession.result,
+        url: providerSession.url,
+        providerSessionId: providerSession.id,
+        prUrl: providerSession.prUrl,
+        prState: providerSession.prState,
+        branch: providerSession.branch,
+      },
+      actor.id
+    );
+
+    // Outpost provisioning is Devin-specific — only the Devin provider's
+    // sessions can be claimed by `devin worker` on a compute sandbox.
+    if (agentId === "devin" && providerSession.id) {
+      const provision = provisionOutpostWorker(
+        env,
+        providerSession.id,
+        organizationId,
+        session.id
+      ).catch((err) => console.error("outpost provisioning failed", err));
+      if (ctx) ctx.waitUntil(provision);
+      else await provision;
+    }
+
+    return updated ?? session;
+  } catch (error) {
+    await stub.applyAgentSessionResult(
+      session.id,
+      {
+        status: "failed",
+        result: error instanceof Error ? error.message : String(error),
+      },
+      actor.id
+    );
+    throw error;
+  }
 }

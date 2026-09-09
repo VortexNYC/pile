@@ -2924,6 +2924,15 @@
                   },
                   "url": {
                     "type": "string"
+                  },
+                  "prUrl": {
+                    "type": "string"
+                  },
+                  "prState": {
+                    "type": "string"
+                  },
+                  "branch": {
+                    "type": "string"
                   }
                 }
               }

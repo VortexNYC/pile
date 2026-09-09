@@ -1,5 +1,30 @@
+import type { InferSelectModel } from "drizzle-orm";
+
 import type { FilterCondition } from "../workspace/filter.js";
+import { workspaceAgentSessions } from "../workspace/schema.js";
 import type { Id, Timestamp } from "./index.js";
+
+export const AGENT_SESSION_STATUSES = [
+  "created",
+  "running",
+  "waiting",
+  "completed",
+  "failed",
+  "canceled",
+] as const;
+export type AgentSessionStatus = (typeof AGENT_SESSION_STATUSES)[number];
+
+export type AgentSession = InferSelectModel<typeof workspaceAgentSessions>;
+
+export interface AgentSessionResult {
+  status: AgentSessionStatus;
+  result?: string | null;
+  url?: string | null;
+  providerSessionId?: string | null;
+  prUrl?: string | null;
+  prState?: string | null;
+  branch?: string | null;
+}
 
 export const ISSUE_STATUSES = [
   "triage",
@@ -184,4 +209,34 @@ export type RealtimeEvent =
       type: "draft.deleted";
       organizationId: string;
       issueId: Id;
+    }
+  | {
+      type: "agent_session.created";
+      organizationId: string;
+      session: AgentSession;
+      issue: Issue;
+    }
+  | {
+      type: "agent_session.updated";
+      organizationId: string;
+      session: AgentSession;
+      issue: Issue;
+    }
+  | {
+      type: "agent_session.completed";
+      organizationId: string;
+      session: AgentSession;
+      issue: Issue;
+    }
+  | {
+      type: "agent_session.failed";
+      organizationId: string;
+      session: AgentSession;
+      issue: Issue;
+    }
+  | {
+      type: "agent_session.canceled";
+      organizationId: string;
+      session: AgentSession;
+      issue: Issue;
     };

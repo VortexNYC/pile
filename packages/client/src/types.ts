@@ -1346,6 +1346,9 @@ export interface paths {
                         status?: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
                         result?: string;
                         url?: string;
+                        prUrl?: string;
+                        prState?: string;
+                        branch?: string;
                     };
                 };
             };

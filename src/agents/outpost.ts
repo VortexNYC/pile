@@ -1,6 +1,7 @@
 import { z } from "@hono/zod-openapi";
 
 import type { WorkerEnv } from "../platform/middleware.js";
+import type { AgentSessionStatus } from "../types/workspace.js";
 
 const daytonaSandboxSchema = z.object({
   id: z.string(),
@@ -18,10 +19,18 @@ const outpostQueueSchema = z.object({
   ),
 });
 
+const prSchema = z.object({
+  url: z.string().optional(),
+  pr_url: z.string().optional(),
+  pr_state: z.string().optional(),
+});
+
 const devinSessionSchema = z.object({
   session_id: z.string(),
   status: z.string(),
+  status_detail: z.string().nullable().optional(),
   tags: z.array(z.string()).optional(),
+  pull_requests: z.array(prSchema).optional(),
 });
 
 export interface AgentProviderConfigRow {
@@ -174,10 +183,7 @@ export async function sweepOutpostWorkers(env: WorkerEnv): Promise<void> {
       s.state !== "archived"
   );
 
-  const statusMap: Record<
-    string,
-    "waiting" | "completed" | "failed" | "canceled"
-  > = {
+  const statusMap: Record<string, AgentSessionStatus> = {
     blocked: "waiting",
     exit: "completed",
     error: "failed",
@@ -218,16 +224,24 @@ export async function sweepOutpostWorkers(env: WorkerEnv): Promise<void> {
       const mapped = statusMap[session.status];
       if (mapped && trackerSessionId && sandboxOrg) {
         try {
+          const firstPr = session.pull_requests?.[0];
+          const prUrl = firstPr?.url ?? firstPr?.pr_url;
+          const prState = firstPr?.pr_state;
           const stub = env.WORKSPACE_DURABLE_OBJECT.get(
             env.WORKSPACE_DURABLE_OBJECT.idFromName(sandboxOrg)
           );
           await stub.setOrganizationId(sandboxOrg);
-          await stub.updateAgentSession(trackerSessionId, { status: mapped });
-          await stub.addAgentActivity({
-            sessionId: trackerSessionId,
-            type: "status",
-            message: `Devin session ${session.status} (synced by outpost sweeper)`,
-          });
+          await stub.applyAgentSessionResult(
+            trackerSessionId,
+            {
+              status: mapped,
+              result: (session.status_detail ?? prState) || undefined,
+              url: `https://app.devin.ai/sessions/${session.session_id}`,
+              prUrl: prUrl ?? null,
+              prState: prState ?? null,
+            },
+            undefined
+          );
         } catch (err) {
           console.error("outpost status write-back failed", {
             session: sessionId,
