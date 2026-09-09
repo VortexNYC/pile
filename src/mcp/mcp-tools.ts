@@ -2682,6 +2682,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdNotionUsers",
+    "description": "List notion users (GET /workspaces/{organizationId}/notion/users)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/notion/users",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdOauthclients",
     "description": "List oauth clients (GET /workspaces/{organizationId}/oauth-clients)",
     "method": "GET",
@@ -7079,6 +7096,73 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "properties": {
         "organizationId": {
           "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdNotionImport",
+    "description": "Create notion import (POST /workspaces/{organizationId}/notion/import)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/notion/import",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "token": {
+              "type": "string",
+              "minLength": 1
+            },
+            "rootPageId": {
+              "type": "string"
+            },
+            "spaceId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "token"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdNotionUsers",
+    "description": "Create notion user (POST /workspaces/{organizationId}/notion/users)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/notion/users",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "userId": {
+              "type": "string"
+            },
+            "notionUserId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "userId",
+            "notionUserId"
+          ]
         }
       },
       "required": [
