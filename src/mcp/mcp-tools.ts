@@ -1019,11 +1019,38 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         "entityId": {
           "type": "string"
         },
+        "action": {
+          "type": "string"
+        },
+        "actorId": {
+          "type": "string"
+        },
         "limit": {
           "type": "string"
         }
       },
       "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdAuditlogId",
+    "description": "Get audit log (GET /workspaces/{organizationId}/audit-log/{id})",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/audit-log/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
         "organizationId"
       ]
     }

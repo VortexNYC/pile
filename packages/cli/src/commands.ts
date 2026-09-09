@@ -2998,10 +2998,34 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "entity-id",
       },
       {
+        name: "action",
+        flag: "action",
+      },
+      {
+        name: "actorId",
+        flag: "actor",
+      },
+      {
         name: "limit",
         flag: "limit",
       },
     ],
+    body: [],
+  },
+  "audit log get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/audit-log/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
     body: [],
   },
   "customers list": {

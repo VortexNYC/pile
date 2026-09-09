@@ -12855,6 +12855,22 @@
               "type": "string"
             },
             "required": false,
+            "name": "action",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "actorId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
             "name": "limit",
             "in": "query"
           }
@@ -12929,6 +12945,93 @@
           }
         },
         "summary": "List audit log"
+      }
+    },
+    "/workspaces/{organizationId}/audit-log/{id}": {
+      "get": {
+        "tags": [
+          "audit"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audit log entry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "actorId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "actorType": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "action": {
+                      "type": "string"
+                    },
+                    "entityType": {
+                      "type": "string"
+                    },
+                    "entityId": {
+                      "type": "string"
+                    },
+                    "changes": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "actorId",
+                    "actorType",
+                    "action",
+                    "entityType",
+                    "entityId",
+                    "changes",
+                    "createdAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Audit log entry not found"
+          }
+        },
+        "summary": "Get audit log"
       }
     },
     "/workspaces/{organizationId}/customers": {

@@ -1767,8 +1767,20 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     });
   }
 
-  listAuditLog(args: { entityType?: string; entityId?: string; limit?: number } = {}) {
+  listAuditLog(
+    args: {
+      entityType?: string;
+      entityId?: string;
+      action?: string;
+      actorId?: string;
+      limit?: number;
+    } = {}
+  ) {
     return data.listAuditLog(this.db, this.organizationId, args);
+  }
+
+  getAuditLogEntry(id: string) {
+    return data.getAuditLogEntry(this.db, this.organizationId, id);
   }
 
   private async recordIssueHistory(

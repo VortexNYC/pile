@@ -1735,7 +1735,13 @@ export function recordAuditEntry(db: WorkspaceDb, input: AuditEntryInput) {
 export function listAuditLog(
   db: WorkspaceDb,
   organizationId: string,
-  args: { entityType?: string; entityId?: string; limit?: number } = {}
+  args: {
+    entityType?: string;
+    entityId?: string;
+    action?: string;
+    actorId?: string;
+    limit?: number;
+  } = {}
 ) {
   const conditions = [eq(workspaceAuditLog.organizationId, organizationId)];
   if (args.entityType !== undefined) {
@@ -1744,6 +1750,12 @@ export function listAuditLog(
   if (args.entityId !== undefined) {
     conditions.push(eq(workspaceAuditLog.entityId, args.entityId));
   }
+  if (args.action !== undefined) {
+    conditions.push(eq(workspaceAuditLog.action, args.action));
+  }
+  if (args.actorId !== undefined) {
+    conditions.push(eq(workspaceAuditLog.actorId, args.actorId));
+  }
   return db
     .select()
     .from(workspaceAuditLog)
@@ -1751,6 +1763,23 @@ export function listAuditLog(
     .orderBy(desc(workspaceAuditLog.createdAt))
     .limit(args.limit ?? 200)
     .all();
+}
+
+export function getAuditLogEntry(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  return db
+    .select()
+    .from(workspaceAuditLog)
+    .where(
+      and(
+        eq(workspaceAuditLog.organizationId, organizationId),
+        eq(workspaceAuditLog.id, id)
+      )
+    )
+    .get();
 }
 
 // ---- notification preferences ----

@@ -6464,6 +6464,8 @@ export interface paths {
                 query?: {
                     entityType?: string;
                     entityId?: string;
+                    action?: string;
+                    actorId?: string;
                     limit?: string;
                 };
                 header?: never;
@@ -6496,6 +6498,64 @@ export interface paths {
                             }[];
                         };
                     };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/audit-log/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get audit log */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Audit log entry */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            actorId: string | null;
+                            actorType: string | null;
+                            action: string;
+                            entityType: string;
+                            entityId: string;
+                            changes: {
+                                [key: string]: unknown;
+                            } | null;
+                            createdAt: string;
+                        };
+                    };
+                };
+                /** @description Audit log entry not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
                 };
             };
         };
