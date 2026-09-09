@@ -5864,6 +5864,22 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "notion create": {
+    method: "POST",
+    path: "/notion/{organizationId}/{workspaceId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "workspaceId",
+        flag: "workspace-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   export: {
     method: "GET",
     path: "/workspaces/{organizationId}/export",

@@ -23980,6 +23980,46 @@
         "summary": "List notion users"
       }
     },
+    "/notion/{organizationId}/{workspaceId}": {
+      "post": {
+        "tags": [
+          "notion"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "workspaceId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook processed"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "401": {
+            "description": "Invalid signature"
+          },
+          "404": {
+            "description": "Notion installation not found"
+          }
+        },
+        "summary": "POST /notion/{organizationId}/{workspaceId}"
+      }
+    },
     "/workspaces/{organizationId}/export": {
       "get": {
         "tags": [

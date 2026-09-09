@@ -3,6 +3,20 @@ import { and, eq } from "drizzle-orm";
 import type { D1Client } from "./db.js";
 import { notionInstallations } from "./schema.js";
 
+export async function updateNotionInstallationVerificationToken(
+  db: D1Client,
+  id: string,
+  verificationToken: string
+) {
+  await db
+    .update(notionInstallations)
+    .set({
+      verificationToken,
+      updatedAt: new Date().toISOString(),
+    })
+    .where(eq(notionInstallations.id, id));
+}
+
 export function findNotionInstallation(
   db: D1Client,
   organizationId: string,

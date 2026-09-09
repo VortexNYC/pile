@@ -2341,6 +2341,31 @@ describe("API integration", () => {
         });
       }
 
+      if (method === "GET" && path === "/pages/webhook-page-1") {
+        return Response.json({
+          object: "page",
+          id: "webhook-page-1",
+          url: "https://www.notion.so/webhook-page-1",
+          icon: { type: "emoji", emoji: "🔄" },
+          properties: {
+            title: {
+              title: [{ plain_text: "Webhook Page Updated" }],
+            },
+          },
+          parent: { type: "workspace" },
+          created_by: { id: "notion-user-1" },
+          last_edited_by: { id: "notion-user-1" },
+        });
+      }
+
+      if (method === "GET" && path === "/pages/webhook-page-1/markdown") {
+        return Response.json({
+          object: "page_markdown",
+          id: "webhook-page-1",
+          markdown: "# Webhook Page Updated\n\nUpdated body.",
+        });
+      }
+
       return new Response("Not Found", { status: 404 });
     };
 
@@ -2450,6 +2475,85 @@ describe("API integration", () => {
       expect(doc.contentFormat).toBe("markdown");
       expect(doc.content).toBe("# Search Page\n\nBody.");
       expect(doc.icon).toBeNull();
+
+      // --- Notion webhook sync ---
+      const handshakeRes = await app.fetch(
+        new Request(`http://localhost/notion/${organizationId}/ws-1`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            verification_token: "verify-token",
+          }),
+        }),
+        env
+      );
+      expect(handshakeRes.status).toBe(200);
+
+      const createPayload = JSON.stringify({
+        id: "evt-1",
+        timestamp: new Date().toISOString(),
+        workspace_id: "ws-1",
+        type: "page.created",
+        entity: { id: "webhook-page-1", type: "page" },
+      });
+      const createRes = await app.fetch(
+        new Request(`http://localhost/notion/${organizationId}/ws-1`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Notion-Signature": `sha256=${await hmacSha256Hex("verify-token", createPayload)}`,
+          },
+          body: createPayload,
+        }),
+        env
+      );
+      expect(createRes.status).toBe(200);
+
+      const afterCreateRes = await app.fetch(
+        request(`/workspaces/${organizationId}/documents`, { token }),
+        env
+      );
+      expect(afterCreateRes.status).toBe(200);
+      const afterCreateBody = await afterCreateRes.json<{
+        documents: unknown[];
+      }>();
+      expect(afterCreateBody.documents).toHaveLength(3);
+
+      const searchPageDoc = (allDocsBody.documents[1] as { id: string }).id;
+      const deletePayload = JSON.stringify({
+        id: "evt-2",
+        timestamp: new Date().toISOString(),
+        workspace_id: "ws-1",
+        type: "page.deleted",
+        entity: { id: "search-page-1", type: "page" },
+      });
+      const deleteRes = await app.fetch(
+        new Request(`http://localhost/notion/${organizationId}/ws-1`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Notion-Signature": `sha256=${await hmacSha256Hex("verify-token", deletePayload)}`,
+          },
+          body: deletePayload,
+        }),
+        env
+      );
+      expect(deleteRes.status).toBe(200);
+
+      const afterDeleteRes = await app.fetch(
+        request(`/workspaces/${organizationId}/documents/${searchPageDoc}`, {
+          token,
+        }),
+        env
+      );
+      expect(afterDeleteRes.status).toBe(200);
+      const afterDeleteDoc = await afterDeleteRes.json<{
+        id: string;
+        title: string;
+        trashedAt: string | null;
+      }>();
+      expect(afterDeleteDoc.title).toBe("Search Page");
+      expect(afterDeleteDoc.trashedAt).not.toBeNull();
     } finally {
       globalThis.fetch = originalFetch;
     }

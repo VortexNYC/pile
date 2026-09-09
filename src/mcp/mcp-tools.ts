@@ -5048,6 +5048,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postNotionOrganizationIdWorkspaceId",
+    "description": "POST /notion/{organizationId}/{workspaceId} (POST /notion/{organizationId}/{workspaceId})",
+    "method": "POST",
+    "path": "/notion/{organizationId}/{workspaceId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "workspaceId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspaces",
     "description": "Create workspace (POST /workspaces)",
     "method": "POST",

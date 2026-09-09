@@ -37,7 +37,7 @@ export const notionOptionsSchema = z.object({
 
 export type NotionOptions = z.infer<typeof notionOptionsSchema>;
 
-async function resolveUserId(
+export async function resolveNotionUserId(
   ctx: ImportContext,
   notionUserId: string | null,
   fallbackUserId: string
@@ -51,7 +51,7 @@ async function resolveUserId(
   return mapping?.userId ?? fallbackUserId;
 }
 
-async function importNotionPage(
+export async function syncNotionPage(
   ctx: ImportContext,
   token: string,
   notionPage: NotionSearchPage,
@@ -63,7 +63,7 @@ async function importNotionPage(
     getNotionPageMarkdown(token, notionPage.id),
   ]);
 
-  const actorId = await resolveUserId(
+  const actorId = await resolveNotionUserId(
     ctx,
     page.lastEditedById ?? page.createdById,
     ctx.importerId
@@ -94,7 +94,7 @@ async function importNotionPage(
     }
     documentId = updated.id;
   } else {
-    const createdById = await resolveUserId(
+    const createdById = await resolveNotionUserId(
       ctx,
       page.createdById,
       ctx.importerId
@@ -190,7 +190,7 @@ export const notionImportSource: ImportSource<
 
     for (const page of pages) {
       try {
-        const result = await importNotionPage(
+        const result = await syncNotionPage(
           ctx,
           token,
           page,

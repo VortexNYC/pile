@@ -42,7 +42,8 @@ function isPublicPath(pathname: string): boolean {
     pathname.startsWith("/slack/") ||
     pathname.startsWith("/api/auth") ||
     pathname.includes("/migrate/") ||
-    pathname.startsWith("/mcp")
+    pathname.startsWith("/mcp") ||
+    pathname.startsWith("/notion/")
   );
 }
 
