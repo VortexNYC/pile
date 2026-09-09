@@ -85,6 +85,7 @@ import {
   workspaceWebhookSubscriptions,
 } from "./schema.js";
 import {
+  blockNoteToPlainText,
   commentToSearchDocument,
   createWorkspaceSearchIndex,
   indexCommentDocument,
@@ -1065,6 +1066,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       organizationId: this.organizationId,
     });
     this.audit("document.created", "document", doc.id, input.createdById);
+    await this.syncDocumentLinks(doc.id, doc.content, doc.contentFormat);
     if (this.searchIndex) {
       await indexDocumentSearchDocument(this.searchIndex, doc);
     }
@@ -1106,6 +1108,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         }
       }
       this.audit("document.updated", "document", id, actorId, changes);
+      if (update.content !== undefined) {
+        await this.syncDocumentLinks(id, doc.content, doc.contentFormat);
+      }
       if (this.searchIndex) {
         await indexDocumentSearchDocument(this.searchIndex, doc);
       }
@@ -1369,6 +1374,90 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   async searchDocuments(query: string, limit = 50): Promise<string[]> {
     const index = await this.ensureSearchIndex();
     return searchDocuments(index, query, limit);
+  }
+
+  // Extract [[doc slug/id]] and ISSUE-KEY references from content.
+  private async syncDocumentLinks(
+    documentId: string,
+    content: string,
+    contentFormat: string
+  ) {
+    const text =
+      contentFormat === "markdown"
+        ? content
+        : blockNoteToPlainText(content);
+    const docRefs = [...text.matchAll(/\[\[([^\]]+)\]\]/g)].map(
+      (m) => m[1]
+    );
+    const issueKeys = [...text.matchAll(/\b([A-Z][A-Z0-9]+-\d+)\b/g)].map(
+      (m) => m[1]
+    );
+    const [docTargets, issueTargets] = await Promise.all([
+      Promise.all(
+        docRefs.map((ref) =>
+          this.db
+            .select({ id: workspaceDocuments.id })
+            .from(workspaceDocuments)
+            .where(
+              or(
+                eq(workspaceDocuments.slug, ref),
+                eq(workspaceDocuments.id, ref)
+              )
+            )
+            .get()
+        )
+      ),
+      Promise.all(
+        issueKeys.map((key) => this.getIssueByIdentifier(key))
+      ),
+    ]);
+    const links: Array<{ targetType: string; targetId: string }> = [];
+    for (const target of docTargets) {
+      if (target) links.push({ targetType: "document", targetId: target.id });
+    }
+    for (const issue of issueTargets) {
+      if (issue) links.push({ targetType: "issue", targetId: issue.id });
+    }
+    data.replaceDocumentLinks(
+      this.db,
+      this.organizationId,
+      documentId,
+      links
+    );
+  }
+
+  setDocumentPermission(
+    documentId: string,
+    actorId: string,
+    actorType: string,
+    level: "view" | "edit"
+  ) {
+    return data.setDocumentPermission(
+      this.db,
+      this.organizationId,
+      documentId,
+      actorId,
+      actorType,
+      level
+    );
+  }
+
+  revokeDocumentPermission(documentId: string, actorId: string) {
+    return data.revokeDocumentPermission(this.db, documentId, actorId);
+  }
+
+  listDocumentPermissions(documentId: string) {
+    return data.listDocumentPermissions(this.db, documentId);
+  }
+
+  documentAccessLevel(documentId: string, actorId: string) {
+    return data.documentAccessLevel(this.db, documentId, actorId);
+  }
+
+  listDocumentLinks(
+    args: { documentId?: string; targetType?: string; targetId?: string } = {}
+  ) {
+    return data.listDocumentLinks(this.db, this.organizationId, args);
   }
 
   setDefaultView(userId: string, defaultViewId: string | null) {

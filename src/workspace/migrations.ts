@@ -558,6 +558,31 @@ ALTER TABLE documents ADD COLUMN slug TEXT
 --> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS documents_space_slug_idx ON documents (space_id, slug)`;
 
+const v19 = `CREATE TABLE IF NOT EXISTS document_permissions (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  document_id TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  actor_type TEXT NOT NULL DEFAULT 'user',
+  level TEXT NOT NULL DEFAULT 'view',
+  created_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS document_permissions_doc_actor_idx ON document_permissions (document_id, actor_id)
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS document_links (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  document_id TEXT NOT NULL,
+  target_type TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  created_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS document_links_document_idx ON document_links (organization_id, document_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS document_links_target_idx ON document_links (organization_id, target_type, target_id)`;
+
 export const workspaceMigrations = {
   journal: {
     entries: [
@@ -579,6 +604,7 @@ export const workspaceMigrations = {
       { idx: 15, when: 15, tag: "v16", breakpoints: true },
       { idx: 16, when: 16, tag: "v17", breakpoints: true },
       { idx: 17, when: 17, tag: "v18", breakpoints: true },
+      { idx: 18, when: 18, tag: "v19", breakpoints: true },
     ],
   },
   migrations: {
@@ -600,5 +626,6 @@ export const workspaceMigrations = {
     m0015: v16,
     m0016: v17,
     m0017: v18,
+    m0018: v19,
   },
 } satisfies Parameters<typeof migrate>[1];

@@ -2045,6 +2045,103 @@ export const COMMANDS: Record<string, CommandDef> = {
     ],
     body: [],
   },
+  "documents permissions update": {
+    method: "PUT",
+    path: "/workspaces/{organizationId}/documents/{id}/permissions",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "actorId",
+        flag: "actor",
+      },
+      {
+        name: "actorType",
+        flag: "actor-type",
+      },
+      {
+        name: "level",
+        flag: "level",
+      },
+    ],
+  },
+  "documents permissions delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/documents/{id}/permissions/{actorId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+      {
+        name: "actorId",
+        flag: "actor",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "documents links list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/documents/{id}/links",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "documents backlinks list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/documents/{id}/backlinks",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "issues documents list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/issues/{issueId}/documents",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "docs llms.txt list": {
     method: "GET",
     path: "/docs/{organizationId}/{spaceId}/llms.txt",

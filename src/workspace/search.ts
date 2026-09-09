@@ -117,7 +117,7 @@ function walkBlockNoteNodes(nodes: unknown): string[] {
   return out;
 }
 
-function blockNoteToPlainText(content: string): string {
+export function blockNoteToPlainText(content: string): string {
   try {
     return walkBlockNoteNodes(
       JSON.parse(content) as Array<Record<string, unknown>>

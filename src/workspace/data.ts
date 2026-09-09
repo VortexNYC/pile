@@ -21,6 +21,8 @@ import type { workspaceSchema } from "./schema-map.js";
 import {
   workspaceAgentActivities,
   workspaceDocumentHistory,
+  workspaceDocumentLinks,
+  workspaceDocumentPermissions,
   workspaceDocuments,
   workspaceDocumentShares,
   workspaceDocumentSpaces,
@@ -2466,4 +2468,132 @@ export function listDocumentWatchers(
     .where(eq(workspaceDocumentWatchers.documentId, documentId))
     .all()
     .map((row) => row.userId);
+}
+
+// ---- document permissions & links ----
+
+export function setDocumentPermission(
+  db: WorkspaceDb,
+  organizationId: string,
+  documentId: string,
+  actorId: string,
+  actorType: string,
+  level: "view" | "edit"
+) {
+  const existing = db
+    .select()
+    .from(workspaceDocumentPermissions)
+    .where(
+      and(
+        eq(workspaceDocumentPermissions.documentId, documentId),
+        eq(workspaceDocumentPermissions.actorId, actorId)
+      )
+    )
+    .get();
+  if (existing) {
+    db.update(workspaceDocumentPermissions)
+      .set({ level })
+      .where(eq(workspaceDocumentPermissions.id, existing.id))
+      .run();
+    return { ...existing, level };
+  }
+  return db
+    .insert(workspaceDocumentPermissions)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId,
+      documentId,
+      actorId,
+      actorType,
+      level,
+      createdAt: new Date().toISOString(),
+    })
+    .returning()
+    .get();
+}
+
+export function revokeDocumentPermission(
+  db: WorkspaceDb,
+  documentId: string,
+  actorId: string
+) {
+  return (
+    db
+      .delete(workspaceDocumentPermissions)
+      .where(
+        and(
+          eq(workspaceDocumentPermissions.documentId, documentId),
+          eq(workspaceDocumentPermissions.actorId, actorId)
+        )
+      )
+      .returning()
+      .all().length > 0
+  );
+}
+
+export function listDocumentPermissions(
+  db: WorkspaceDb,
+  documentId: string
+) {
+  return db
+    .select()
+    .from(workspaceDocumentPermissions)
+    .where(eq(workspaceDocumentPermissions.documentId, documentId))
+    .all();
+}
+
+// Returns the effective level for an actor, or null when the doc is
+// restricted and the actor is unlisted.
+export function documentAccessLevel(
+  db: WorkspaceDb,
+  documentId: string,
+  actorId: string
+): "view" | "edit" | null {
+  const grants = listDocumentPermissions(db, documentId);
+  if (grants.length === 0) return "edit";
+  const grant = grants.find((g) => g.actorId === actorId);
+  return grant ? grant.level : null;
+}
+
+export function replaceDocumentLinks(
+  db: WorkspaceDb,
+  organizationId: string,
+  documentId: string,
+  links: Array<{ targetType: string; targetId: string }>
+) {
+  db.delete(workspaceDocumentLinks)
+    .where(eq(workspaceDocumentLinks.documentId, documentId))
+    .run();
+  if (links.length === 0) return;
+  db.insert(workspaceDocumentLinks)
+    .values(
+      links.map((link) => ({
+        id: crypto.randomUUID(),
+        organizationId,
+        documentId,
+        targetType: link.targetType,
+        targetId: link.targetId,
+        createdAt: new Date().toISOString(),
+      }))
+    )
+    .run();
+}
+
+export function listDocumentLinks(
+  db: WorkspaceDb,
+  organizationId: string,
+  args: { documentId?: string; targetType?: string; targetId?: string } = {}
+) {
+  const conditions = [eq(workspaceDocumentLinks.organizationId, organizationId)];
+  if (args.documentId !== undefined)
+    conditions.push(eq(workspaceDocumentLinks.documentId, args.documentId));
+  if (args.targetType !== undefined)
+    conditions.push(eq(workspaceDocumentLinks.targetType, args.targetType));
+  if (args.targetId !== undefined)
+    conditions.push(eq(workspaceDocumentLinks.targetId, args.targetId));
+  return db
+    .select()
+    .from(workspaceDocumentLinks)
+    .where(and(...conditions))
+    .all();
 }

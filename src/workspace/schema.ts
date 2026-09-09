@@ -456,6 +456,53 @@ export const workspaceDocumentWatchers = sqliteTable(
   ]
 );
 
+// Per-document access grants. When a doc has no rows it is open to the
+// workspace; any row restricts it to listed actors (+ workspace admins).
+export const workspaceDocumentPermissions = sqliteTable(
+  "document_permissions" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    documentId: text("document_id" as string).notNull(),
+    actorId: text("actor_id" as string).notNull(),
+    actorType: text("actor_type" as string).notNull().default("user"),
+    level: text("level" as string, { enum: ["view", "edit"] })
+      .notNull()
+      .default("view"),
+    createdAt: text("created_at" as string).notNull(),
+  },
+  (table) => [
+    uniqueIndex("document_permissions_doc_actor_idx" as string).on(
+      table.documentId,
+      table.actorId
+    ),
+  ]
+);
+
+// Links extracted from document content (issue identifiers, [[doc]] refs).
+export const workspaceDocumentLinks = sqliteTable(
+  "document_links" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    documentId: text("document_id" as string).notNull(),
+    targetType: text("target_type" as string).notNull(),
+    targetId: text("target_id" as string).notNull(),
+    createdAt: text("created_at" as string).notNull(),
+  },
+  (table) => [
+    index("document_links_document_idx" as string).on(
+      table.organizationId,
+      table.documentId
+    ),
+    index("document_links_target_idx" as string).on(
+      table.organizationId,
+      table.targetType,
+      table.targetId
+    ),
+  ]
+);
+
 export const workspaceDocumentHistory = sqliteTable(
   "document_content_history" as string,
   {

@@ -107,6 +107,31 @@ function notFound(): never {
   });
 }
 
+// Per-doc grants: when a doc has any permission rows, only listed actors
+// (+ workspace admins) get in. Default-open otherwise.
+async function assertDocAccess(
+  stub: {
+    documentAccessLevel(
+      documentId: string,
+      actorId: string
+    ): Promise<"view" | "edit" | null>;
+  },
+  documentId: string,
+  identity: { id: string; permissions: string[] },
+  required: "view" | "edit"
+) {
+  if (identity.permissions.includes("admin")) return;
+  const level = await stub.documentAccessLevel(documentId, identity.id);
+  if (level === null || (required === "edit" && level === "view")) {
+    if (level === null) return notFound();
+    throw new VortexError({
+      code: "FORBIDDEN",
+      status: 403,
+      message: "View-only access to this document",
+    });
+  }
+}
+
 const listRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/documents",
@@ -566,6 +591,113 @@ const searchRoute = createRoute({
   },
 });
 
+
+const permissionSchema = z.object({
+  actorId: z.string(),
+  actorType: z.string().optional(),
+  level: z.enum(["view", "edit"]),
+});
+
+const setPermissionRoute = createRoute({
+  method: "put",
+  path: "/workspaces/{organizationId}/documents/{id}/permissions",
+  tags: ["documents"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+    body: { content: { "application/json": { schema: permissionSchema } } },
+  },
+  responses: {
+    200: { description: "Permission set" },
+    404: { description: "Document not found" },
+  },
+});
+
+const revokePermissionRoute = createRoute({
+  method: "delete",
+  path: "/workspaces/{organizationId}/documents/{id}/permissions/{actorId}",
+  tags: ["documents"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({
+      organizationId: z.string(),
+      id: z.string(),
+      actorId: z.string(),
+    }),
+  },
+  responses: {
+    204: { description: "Permission revoked" },
+  },
+});
+
+const listLinksRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/documents/{id}/links",
+  tags: ["documents"],
+  middleware: [rls("read")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Outgoing links from this document",
+      content: {
+        "application/json": {
+          schema: z.object({
+            links: z.array(
+              z.object({
+                targetType: z.string(),
+                targetId: z.string(),
+              })
+            ),
+          }),
+        },
+      },
+    },
+  },
+});
+
+const listBacklinksRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/documents/{id}/backlinks",
+  tags: ["documents"],
+  middleware: [rls("read")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Documents that link to this document",
+      content: {
+        "application/json": {
+          schema: z.object({ documents: z.array(z.string()) }),
+        },
+      },
+    },
+  },
+});
+
+
+const issueDocumentsRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/issues/{issueId}/documents",
+  tags: ["documents"],
+  middleware: [rls("read")],
+  request: {
+    params: z.object({ organizationId: z.string(), issueId: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Documents that link to this issue",
+      content: {
+        "application/json": {
+          schema: z.object({ documents: z.array(documentSchema) }),
+        },
+      },
+    },
+  },
+});
+
 export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
@@ -598,8 +730,10 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(getRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
+    const identity = c.get("workspaceIdentity");
     const doc = await stub.getDocument(id);
     if (!doc) return notFound();
+    await assertDocAccess(stub, id, identity, "view");
     return c.json(toResponse(doc));
   });
 
@@ -608,6 +742,7 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
     const input = c.req.valid("json");
     const identity = c.get("workspaceIdentity");
     const stub = getWorkspaceStub(c.env, organizationId);
+    await assertDocAccess(stub, id, identity, "edit");
     const doc = await stub.updateDocument(id, input, identity.id);
     if (!doc) return notFound();
     return c.json(toResponse(doc));
@@ -616,7 +751,9 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(deleteRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
-    const deleted = await stub.deleteDocument(id);
+    const identity = c.get("workspaceIdentity");
+    await assertDocAccess(stub, id, identity, "edit");
+    const deleted = await stub.deleteDocument(id, identity.id);
     if (!deleted) return notFound();
     return c.body(null, 204);
   });
@@ -795,6 +932,76 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
     const docs = (
       await Promise.all(ids.map((id) => stub.getDocument(id)))
     ).filter((d) => d !== undefined);
+    return c.json({ documents: docs.map(toResponse) });
+  });
+
+  app.openapi(setPermissionRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const identity = c.get("workspaceIdentity");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    await assertDocAccess(stub, id, identity, "edit");
+    const doc = await stub.getDocument(id);
+    if (!doc) return notFound();
+    const grant = await stub.setDocumentPermission(
+      id,
+      input.actorId,
+      input.actorType ?? "user",
+      input.level
+    );
+    return c.json(grant);
+  });
+
+  app.openapi(revokePermissionRoute, async (c) => {
+    const { organizationId, id, actorId } = c.req.valid("param");
+    const identity = c.get("workspaceIdentity");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    await assertDocAccess(stub, id, identity, "edit");
+    await stub.revokeDocumentPermission(id, actorId);
+    return c.body(null, 204);
+  });
+
+  app.openapi(listLinksRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const links = await stub.listDocumentLinks({ documentId: id });
+    return c.json({
+      links: links.map((l) => ({
+        targetType: l.targetType,
+        targetId: l.targetId,
+      })),
+    });
+  });
+
+  app.openapi(listBacklinksRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const links = await stub.listDocumentLinks({
+      targetType: "document",
+      targetId: id,
+    });
+    return c.json({ documents: links.map((l) => l.documentId) });
+  });
+
+  app.openapi(issueDocumentsRoute, async (c) => {
+    const { organizationId, issueId } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const links = await stub.listDocumentLinks({
+      targetType: "issue",
+      targetId: issueId,
+    });
+    const direct = await stub.listDocuments({ issueId });
+    const linked = await Promise.all(
+      links.map((l) => stub.getDocument(l.documentId))
+    );
+    const seen = new Set<string>();
+    const docs = [...direct, ...linked.filter((d) => d !== undefined)].filter(
+      (d) => {
+        if (seen.has(d.id)) return false;
+        seen.add(d.id);
+        return true;
+      }
+    );
     return c.json({ documents: docs.map(toResponse) });
   });
 }

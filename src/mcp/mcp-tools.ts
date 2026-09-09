@@ -158,6 +158,31 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdDocumentsIdPermissionsActorId",
+    "description": "Delete document permission (DELETE /workspaces/{organizationId}/documents/{id}/permissions/{actorId})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/documents/{id}/permissions/{actorId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "actorId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "actorId",
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdDocumentsIdShareToken",
     "description": "Delete document share (DELETE /workspaces/{organizationId}/documents/{id}/share/{token})",
     "method": "DELETE",
@@ -1078,6 +1103,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdDocumentsIdBacklinks",
+    "description": "List document backlinks (GET /workspaces/{organizationId}/documents/{id}/backlinks)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/documents/{id}/backlinks",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdDocumentsIdComments",
     "description": "List document comments (GET /workspaces/{organizationId}/documents/{id}/comments)",
     "method": "GET",
@@ -1103,6 +1149,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "description": "List document history (GET /workspaces/{organizationId}/documents/{id}/history)",
     "method": "GET",
     "path": "/workspaces/{organizationId}/documents/{id}/history",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdDocumentsIdLinks",
+    "description": "List document links (GET /workspaces/{organizationId}/documents/{id}/links)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/documents/{id}/links",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1568,6 +1635,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
+        "issueId",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdIssuesIssueIdDocuments",
+    "description": "List issue documents (GET /workspaces/{organizationId}/issues/{issueId}/documents)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/issues/{issueId}/documents",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "issueId": {
+          "type": "string"
+        }
+      },
+      "required": [
         "issueId",
         "organizationId"
       ]
@@ -5254,6 +5342,49 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "agentId",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "putWorkspacesOrganizationIdDocumentsIdPermissions",
+    "description": "Update document permissions (PUT /workspaces/{organizationId}/documents/{id}/permissions)",
+    "method": "PUT",
+    "path": "/workspaces/{organizationId}/documents/{id}/permissions",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "actorId": {
+              "type": "string"
+            },
+            "actorType": {
+              "type": "string"
+            },
+            "level": {
+              "type": "string",
+              "enum": [
+                "view",
+                "edit"
+              ]
+            }
+          },
+          "required": [
+            "actorId",
+            "level"
+          ]
+        }
+      },
+      "required": [
+        "id",
         "organizationId"
       ]
     }
