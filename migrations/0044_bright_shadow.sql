@@ -1,0 +1,1 @@
+ALTER TABLE `cycles` ADD `archived_at` text;

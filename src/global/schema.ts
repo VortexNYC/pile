@@ -153,6 +153,7 @@ export const cycles = sqliteTable(
     autoRollover: integer("auto_rollover" as string, { mode: "boolean" })
       .notNull()
       .default(true),
+    archivedAt: text("archived_at" as string),
     startDate: text("start_date" as string),
     endDate: text("end_date" as string),
     createdAt: text("created_at" as string)

@@ -2777,6 +2777,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "autoRollover": {
               "type": "boolean"
             },
+            "archivedAt": {
+              "type": "string"
+            },
             "startDate": {
               "type": "string"
             },
@@ -4070,6 +4073,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "autoRollover": {
               "type": "boolean"
             },
+            "archivedAt": {
+              "type": "string"
+            },
             "startDate": {
               "type": "string"
             },
@@ -4083,6 +4089,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdCyclesIdArchive",
+    "description": "Create cycle archive (POST /workspaces/{organizationId}/cycles/{id}/archive)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/cycles/{id}/archive",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
         "organizationId"
       ]
     }
@@ -4121,6 +4148,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "description": "Create cycle start today (POST /workspaces/{organizationId}/cycles/{id}/start-today)",
     "method": "POST",
     "path": "/workspaces/{organizationId}/cycles/{id}/start-today",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdCyclesIdUnarchive",
+    "description": "Create cycle unarchive (POST /workspaces/{organizationId}/cycles/{id}/unarchive)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/cycles/{id}/unarchive",
     "inputSchema": {
       "type": "object",
       "properties": {

@@ -1078,6 +1078,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "auto-rollover",
       },
       {
+        name: "archivedAt",
+        flag: "archived-at",
+      },
+      {
         name: "startDate",
         flag: "start-date",
       },
@@ -1139,6 +1143,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "auto-rollover",
       },
       {
+        name: "archivedAt",
+        flag: "archived-at",
+      },
+      {
         name: "startDate",
         flag: "start-date",
       },
@@ -1151,6 +1159,38 @@ export const COMMANDS: Record<string, CommandDef> = {
   "cycles delete": {
     method: "DELETE",
     path: "/workspaces/{organizationId}/cycles/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "cycles archive create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/cycles/{id}/archive",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "cycles unarchive create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/cycles/{id}/unarchive",
     params: [
       {
         name: "organizationId",

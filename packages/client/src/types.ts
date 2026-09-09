@@ -2071,6 +2071,7 @@ export interface paths {
                                 /** @enum {string} */
                                 status: "upcoming" | "active" | "completed";
                                 autoRollover: boolean;
+                                archivedAt: string | null;
                                 startDate: string | null;
                                 endDate: string | null;
                                 createdAt: string;
@@ -2101,6 +2102,7 @@ export interface paths {
                         /** @enum {string} */
                         status?: "upcoming" | "active" | "completed";
                         autoRollover?: boolean;
+                        archivedAt?: string;
                         startDate?: string;
                         endDate?: string;
                     };
@@ -2122,6 +2124,7 @@ export interface paths {
                             /** @enum {string} */
                             status: "upcoming" | "active" | "completed";
                             autoRollover: boolean;
+                            archivedAt: string | null;
                             startDate: string | null;
                             endDate: string | null;
                             createdAt: string;
@@ -2172,6 +2175,7 @@ export interface paths {
                             /** @enum {string} */
                             status: "upcoming" | "active" | "completed";
                             autoRollover: boolean;
+                            archivedAt: string | null;
                             startDate: string | null;
                             endDate: string | null;
                             createdAt: string;
@@ -2227,6 +2231,7 @@ export interface paths {
                         /** @enum {string} */
                         status?: "upcoming" | "active" | "completed";
                         autoRollover?: boolean;
+                        archivedAt?: string;
                         startDate?: string;
                         endDate?: string;
                     };
@@ -2248,6 +2253,7 @@ export interface paths {
                             /** @enum {string} */
                             status: "upcoming" | "active" | "completed";
                             autoRollover: boolean;
+                            archivedAt: string | null;
                             startDate: string | null;
                             endDate: string | null;
                             createdAt: string;
@@ -2257,6 +2263,112 @@ export interface paths {
                 };
             };
         };
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/cycles/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create cycle archive */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Cycle archived */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            projectId: string | null;
+                            name: string;
+                            number: number | null;
+                            /** @enum {string} */
+                            status: "upcoming" | "active" | "completed";
+                            autoRollover: boolean;
+                            archivedAt: string | null;
+                            startDate: string | null;
+                            endDate: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/cycles/{id}/unarchive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create cycle unarchive */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Cycle unarchived */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            projectId: string | null;
+                            name: string;
+                            number: number | null;
+                            /** @enum {string} */
+                            status: "upcoming" | "active" | "completed";
+                            autoRollover: boolean;
+                            archivedAt: string | null;
+                            startDate: string | null;
+                            endDate: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/workspaces/{organizationId}/cycles/{id}/capacity": {
@@ -2442,6 +2554,7 @@ export interface paths {
                             /** @enum {string} */
                             status: "upcoming" | "active" | "completed";
                             autoRollover: boolean;
+                            archivedAt: string | null;
                             startDate: string | null;
                             endDate: string | null;
                             createdAt: string;

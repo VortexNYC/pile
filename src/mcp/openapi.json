@@ -4536,6 +4536,10 @@
                           "autoRollover": {
                             "type": "boolean"
                           },
+                          "archivedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "startDate": {
                             "type": "string",
                             "nullable": true
@@ -4559,6 +4563,7 @@
                           "number",
                           "status",
                           "autoRollover",
+                          "archivedAt",
                           "startDate",
                           "endDate",
                           "createdAt",
@@ -4618,6 +4623,9 @@
                   "autoRollover": {
                     "type": "boolean"
                   },
+                  "archivedAt": {
+                    "type": "string"
+                  },
                   "startDate": {
                     "type": "string"
                   },
@@ -4668,6 +4676,10 @@
                     "autoRollover": {
                       "type": "boolean"
                     },
+                    "archivedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "startDate": {
                       "type": "string",
                       "nullable": true
@@ -4691,6 +4703,7 @@
                     "number",
                     "status",
                     "autoRollover",
+                    "archivedAt",
                     "startDate",
                     "endDate",
                     "createdAt",
@@ -4763,6 +4776,10 @@
                     "autoRollover": {
                       "type": "boolean"
                     },
+                    "archivedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "startDate": {
                       "type": "string",
                       "nullable": true
@@ -4786,6 +4803,7 @@
                     "number",
                     "status",
                     "autoRollover",
+                    "archivedAt",
                     "startDate",
                     "endDate",
                     "createdAt",
@@ -4847,6 +4865,9 @@
                   "autoRollover": {
                     "type": "boolean"
                   },
+                  "archivedAt": {
+                    "type": "string"
+                  },
                   "startDate": {
                     "type": "string"
                   },
@@ -4894,6 +4915,10 @@
                     "autoRollover": {
                       "type": "boolean"
                     },
+                    "archivedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "startDate": {
                       "type": "string",
                       "nullable": true
@@ -4917,6 +4942,7 @@
                     "number",
                     "status",
                     "autoRollover",
+                    "archivedAt",
                     "startDate",
                     "endDate",
                     "createdAt",
@@ -4957,6 +4983,206 @@
           }
         },
         "summary": "Delete cycle"
+      }
+    },
+    "/workspaces/{organizationId}/cycles/{id}/archive": {
+      "post": {
+        "tags": [
+          "cycles"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cycle archived",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "projectId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "number": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "upcoming",
+                        "active",
+                        "completed"
+                      ]
+                    },
+                    "autoRollover": {
+                      "type": "boolean"
+                    },
+                    "archivedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "startDate": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "endDate": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "projectId",
+                    "name",
+                    "number",
+                    "status",
+                    "autoRollover",
+                    "archivedAt",
+                    "startDate",
+                    "endDate",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create cycle archive"
+      }
+    },
+    "/workspaces/{organizationId}/cycles/{id}/unarchive": {
+      "post": {
+        "tags": [
+          "cycles"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cycle unarchived",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "projectId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "number": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "upcoming",
+                        "active",
+                        "completed"
+                      ]
+                    },
+                    "autoRollover": {
+                      "type": "boolean"
+                    },
+                    "archivedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "startDate": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "endDate": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "projectId",
+                    "name",
+                    "number",
+                    "status",
+                    "autoRollover",
+                    "archivedAt",
+                    "startDate",
+                    "endDate",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create cycle unarchive"
       }
     },
     "/workspaces/{organizationId}/cycles/{id}/capacity": {
@@ -5210,6 +5436,10 @@
                     "autoRollover": {
                       "type": "boolean"
                     },
+                    "archivedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "startDate": {
                       "type": "string",
                       "nullable": true
@@ -5233,6 +5463,7 @@
                     "number",
                     "status",
                     "autoRollover",
+                    "archivedAt",
                     "startDate",
                     "endDate",
                     "createdAt",

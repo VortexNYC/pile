@@ -309,6 +309,13 @@
       "when": 1788965161966,
       "tag": "0043_natural_runaways",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "6",
+      "when": 1788965509320,
+      "tag": "0044_bright_shadow",
+      "breakpoints": true
     }
   ]
 }

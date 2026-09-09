@@ -4,6 +4,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { createD1 } from "../global/db.js";
 import { getVisibleTeamIds } from "../global/teams.js";
 import {
+  archiveCycle,
   archiveProject,
   createCycle,
   createInitiative,
@@ -27,6 +28,7 @@ import {
   listMemberships,
   listProjects,
   listRoadmaps,
+  unarchiveCycle,
   unarchiveProject,
   updateCycle,
   updateInitiative,
@@ -70,6 +72,7 @@ const cycleSchema = z.object({
   number: z.number().nullable(),
   status: z.enum(["upcoming", "active", "completed"]),
   autoRollover: z.boolean(),
+  archivedAt: z.string().nullable(),
   startDate: z.string().nullable(),
   endDate: z.string().nullable(),
   createdAt: z.string(),
@@ -82,6 +85,7 @@ const cycleBodySchema = z.object({
   number: z.number().int().optional(),
   status: z.enum(["upcoming", "active", "completed"]).optional(),
   autoRollover: z.boolean().optional(),
+  archivedAt: z.string().optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
 });
@@ -456,6 +460,38 @@ const startTodayCycleRoute = createRoute({
   responses: {
     200: {
       description: "Cycle started today",
+      content: { "application/json": { schema: cycleSchema } },
+    },
+  },
+});
+
+const archiveCycleRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/cycles/{id}/archive",
+  tags: ["cycles"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Cycle archived",
+      content: { "application/json": { schema: cycleSchema } },
+    },
+  },
+});
+
+const unarchiveCycleRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/cycles/{id}/unarchive",
+  tags: ["cycles"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Cycle unarchived",
       content: { "application/json": { schema: cycleSchema } },
     },
   },
@@ -960,6 +996,34 @@ export function registerWorkspaceEntityRoutes(app: OpenAPIHono<AppContext>) {
     const db = createD1(c.env.D1);
     await deleteCycle(db, organizationId, id);
     return c.body(null, 204);
+  });
+
+  app.openapi(archiveCycleRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const item = await archiveCycle(db, organizationId, id);
+    if (!item) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Cycle not found",
+      });
+    }
+    return c.json(item);
+  });
+
+  app.openapi(unarchiveCycleRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const item = await unarchiveCycle(db, organizationId, id);
+    if (!item) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Cycle not found",
+      });
+    }
+    return c.json(item);
   });
 
   app.openapi(cycleCapacityRoute, async (c) => {

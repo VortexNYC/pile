@@ -184,6 +184,7 @@ export async function updateCycle(
     number: number | null;
     status: "upcoming" | "active" | "completed";
     autoRollover: boolean;
+    archivedAt: string | null;
     startDate: string | null;
     endDate: string | null;
   }>
@@ -197,6 +198,22 @@ export async function updateCycle(
     .from(cycles)
     .where(and(eq(cycles.organizationId, organizationId), eq(cycles.id, id)))
     .get();
+}
+
+export async function archiveCycle(
+  db: D1Client,
+  organizationId: string,
+  id: string
+) {
+  return updateCycle(db, organizationId, id, { archivedAt: now() });
+}
+
+export async function unarchiveCycle(
+  db: D1Client,
+  organizationId: string,
+  id: string
+) {
+  return updateCycle(db, organizationId, id, { archivedAt: null });
 }
 
 export async function deleteCycle(
