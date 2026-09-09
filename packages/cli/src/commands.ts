@@ -5818,6 +5818,31 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "import create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/import",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "source",
+        flag: "source",
+      },
+      {
+        name: "credentials",
+        flag: "credentials",
+      },
+      {
+        name: "options",
+        flag: "options",
+      },
+    ],
+  },
   "migrate linear": {
     method: "POST",
     path: "/workspaces/{organizationId}/migrate/linear",

@@ -2446,4 +2446,254 @@ describe("API integration", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it("imports Jira issues into Vortex", async () => {
+    const organizationId = await seedWorkspace();
+    const token = await adminToken(organizationId);
+
+    const jiraHost = "https://jira-test.example.com";
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input, init) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+      if (!url.startsWith(jiraHost)) return originalFetch(input, init);
+      const path = new URL(url).pathname;
+      const method = init?.method ?? "GET";
+
+      if (method === "GET" && path === "/rest/api/3/myself") {
+        return Response.json({
+          accountId: "jira-me",
+          emailAddress: "me@example.com",
+          displayName: "Me",
+        });
+      }
+
+      if (method === "POST" && path === "/rest/api/3/search/jql") {
+        return Response.json({
+          issues: [
+            {
+              id: "10000",
+              key: "TEST-1",
+              fields: {
+                summary: "Jira issue title",
+                description: {
+                  type: "doc",
+                  version: 1,
+                  content: [
+                    {
+                      type: "paragraph",
+                      content: [{ type: "text", text: "Body" }],
+                    },
+                  ],
+                },
+                status: {
+                  id: "1",
+                  name: "In Progress",
+                  statusCategory: { key: "indeterminate", name: "In Progress" },
+                },
+                priority: { name: "High" },
+                assignee: {
+                  accountId: "jira-user-1",
+                  emailAddress: "assignee@example.com",
+                  displayName: "Assignee",
+                },
+                reporter: { accountId: "jira-me" },
+                labels: ["backend"],
+                issuetype: { name: "Story" },
+                created: "2026-01-01T00:00:00.000+0000",
+                updated: "2026-01-02T00:00:00.000+0000",
+                comment: {
+                  comments: [
+                    {
+                      id: "comment-1",
+                      body: {
+                        type: "doc",
+                        version: 1,
+                        content: [
+                          {
+                            type: "paragraph",
+                            content: [{ type: "text", text: "Comment body" }],
+                          },
+                        ],
+                      },
+                      author: {
+                        accountId: "jira-user-1",
+                        emailAddress: "assignee@example.com",
+                        displayName: "Assignee",
+                      },
+                      created: "2026-01-01T00:00:00.000+0000",
+                      updated: "2026-01-01T00:00:00.000+0000",
+                    },
+                  ],
+                },
+                attachment: [
+                  {
+                    id: "att-1",
+                    filename: "note.txt",
+                    contentType: "text/plain",
+                    created: "2026-01-01T00:00:00.000+0000",
+                  },
+                ],
+                project: { id: "1", key: "TEST", name: "Test Project" },
+              },
+            },
+          ],
+          maxResults: 100,
+        });
+      }
+
+      return new Response("Not Found", { status: 404 });
+    };
+
+    try {
+      const importRes = await app.fetch(
+        request(`/workspaces/${organizationId}/import`, {
+          method: "POST",
+          token,
+          body: JSON.stringify({
+            source: "jira",
+            credentials: {
+              host: jiraHost,
+              email: "me@example.com",
+              token: "secret",
+            },
+            options: { projectKey: "TEST" },
+          }),
+        }),
+        env
+      );
+      expect(importRes.status).toBe(200);
+      const importBody = await importRes.json<{
+        ok: boolean;
+        counts: Record<string, number>;
+      }>();
+      expect(importBody.ok).toBe(true);
+      expect(importBody.counts.issues).toBe(1);
+      expect(importBody.counts.comments).toBe(1);
+
+      const issuesRes = await app.fetch(
+        request(`/workspaces/${organizationId}/issues`, { token }),
+        env
+      );
+      expect(issuesRes.status).toBe(200);
+      const issuesBody = await issuesRes.json<{
+        issues: Array<{ title: string; status: string }>;
+      }>();
+      expect(issuesBody.issues).toHaveLength(1);
+      expect(issuesBody.issues[0]?.title).toBe("Jira issue title");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("imports Confluence pages into Vortex documents", async () => {
+    const organizationId = await seedWorkspace();
+    const token = await adminToken(organizationId);
+
+    const confluenceHost = "https://confluence-test.example.com";
+    const adf = JSON.stringify({
+      type: "doc",
+      version: 1,
+      content: [
+        {
+          type: "paragraph",
+          content: [{ type: "text", text: "Hello Confluence" }],
+        },
+      ],
+    });
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input, init) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+      if (!url.startsWith(confluenceHost)) return originalFetch(input, init);
+      const path = new URL(url).pathname;
+      const method = init?.method ?? "GET";
+
+      if (method === "GET" && path === "/wiki/rest/api/space/TEST") {
+        return Response.json({
+          id: "space-1",
+          key: "TEST",
+          name: "Test Space",
+        });
+      }
+
+      if (method === "GET" && path === "/wiki/api/v2/pages") {
+        return Response.json({
+          results: [
+            {
+              id: "page-1",
+              status: "current",
+              title: "Confluence Page",
+              spaceId: "space-1",
+              authorId: "conf-me",
+              ownerId: "conf-me",
+              createdAt: "2026-01-01T00:00:00.000+0000",
+              version: { createdAt: "2026-01-01T00:00:00.000+0000" },
+              body: { atlas_doc_format: { value: adf } },
+            },
+          ],
+          _links: {},
+        });
+      }
+
+      if (method === "GET" && path === "/wiki/rest/api/user") {
+        return Response.json({
+          accountId: "conf-me",
+          email: "me@example.com",
+          displayName: "Me",
+        });
+      }
+
+      return new Response("Not Found", { status: 404 });
+    };
+
+    try {
+      const importRes = await app.fetch(
+        request(`/workspaces/${organizationId}/import`, {
+          method: "POST",
+          token,
+          body: JSON.stringify({
+            source: "confluence",
+            credentials: {
+              host: confluenceHost,
+              email: "me@example.com",
+              token: "secret",
+            },
+            options: { spaceKey: "TEST" },
+          }),
+        }),
+        env
+      );
+      expect(importRes.status).toBe(200);
+      const importBody = await importRes.json<{
+        ok: boolean;
+        counts: Record<string, number>;
+      }>();
+      expect(importBody.ok).toBe(true);
+      expect(importBody.counts.documents).toBe(1);
+
+      const docsRes = await app.fetch(
+        request(`/workspaces/${organizationId}/documents`, { token }),
+        env
+      );
+      expect(docsRes.status).toBe(200);
+      const docsBody = await docsRes.json<{
+        documents: Array<{ title: string; content: string }>;
+      }>();
+      expect(docsBody.documents).toHaveLength(1);
+      expect(docsBody.documents[0]?.title).toBe("Confluence Page");
+      expect(docsBody.documents[0]?.content).toContain("Hello Confluence");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

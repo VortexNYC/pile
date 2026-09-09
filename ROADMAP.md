@@ -54,6 +54,12 @@ This is the durable tracker for the open-source Linear alternative. Operational 
   - Markdown content import into Vortex documents
   - `notion_users` mapping for `createdById` / `updatedById`
   - `notion_installations` and `notion_page_mappings` D1 tables
+- Import adapters framework and first Atlassian adapters:
+  - Generic `ImportSource` contract in `src/import`
+  - `POST /workspaces/{id}/import` with `source: "jira" | "confluence"`
+  - ADF-to-markdown converter
+  - Jira Cloud issue import (projects, statuses, users, issues, comments, attachments)
+  - Confluence Cloud page import (spaces, pages, ADF-to-markdown, parent-child hierarchy)
 
 ## Next
 
