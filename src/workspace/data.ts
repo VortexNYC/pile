@@ -8,6 +8,7 @@ import {
   desc,
   eq,
   gt,
+  inArray,
   isNotNull,
   isNull,
   lte,
@@ -36,6 +37,7 @@ import {
   workspaceCustomerStatuses,
   workspaceCustomerTiers,
   workspaceIssueApprovals,
+  workspaceIssues,
   workspaceIssueRelations,
   workspaceIssueSubscribers,
   workspaceLinearUsers,
@@ -2629,4 +2631,24 @@ export function listDocumentLinks(
     .from(workspaceDocumentLinks)
     .where(and(...conditions))
     .all();
+}
+
+export function shiftIssueCycle(
+  db: WorkspaceDb,
+  fromCycleId: string,
+  toCycleId: string
+) {
+  const now = new Date().toISOString();
+  const ids = db
+    .select({ id: workspaceIssues.id })
+    .from(workspaceIssues)
+    .where(eq(workspaceIssues.cycleId, fromCycleId))
+    .all()
+    .map((row) => row.id);
+  if (ids.length === 0) return 0;
+  db.update(workspaceIssues)
+    .set({ cycleId: toCycleId, updatedAt: now })
+    .where(inArray(workspaceIssues.id, ids))
+    .run();
+  return ids.length;
 }

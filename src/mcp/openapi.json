@@ -4807,6 +4807,169 @@
         "summary": "Create cycle rollover"
       }
     },
+    "/workspaces/{organizationId}/cycles/{id}/shift-all": {
+      "post": {
+        "tags": [
+          "cycles"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "targetCycleId": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Shifted all issues to target cycle",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "moved": {
+                      "type": "number"
+                    },
+                    "fromCycleId": {
+                      "type": "string"
+                    },
+                    "targetCycleId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "moved",
+                    "fromCycleId",
+                    "targetCycleId"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create cycle shift all"
+      }
+    },
+    "/workspaces/{organizationId}/cycles/{id}/start-today": {
+      "post": {
+        "tags": [
+          "cycles"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cycle started today",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "projectId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "number": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "upcoming",
+                        "active",
+                        "completed"
+                      ]
+                    },
+                    "autoRollover": {
+                      "type": "boolean"
+                    },
+                    "startDate": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "endDate": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "projectId",
+                    "name",
+                    "number",
+                    "status",
+                    "autoRollover",
+                    "startDate",
+                    "endDate",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create cycle start today"
+      }
+    },
     "/workspaces/{organizationId}/labels": {
       "get": {
         "tags": [

@@ -1144,6 +1144,43 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "cycles shift all create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/cycles/{id}/shift-all",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "targetCycleId",
+        flag: "target-cycle-id",
+      },
+    ],
+  },
+  "cycles start today create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/cycles/{id}/start-today",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "labels list": {
     method: "GET",
     path: "/workspaces/{organizationId}/labels",

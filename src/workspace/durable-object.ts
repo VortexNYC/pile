@@ -2044,6 +2044,15 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     };
   }
 
+
+  async shiftIssueCycle(
+    fromCycleId: string,
+    toCycleId: string
+  ): Promise<{ moved: number }> {
+    await this.ready;
+    const moved = data.shiftIssueCycle(this.db, fromCycleId, toCycleId);
+    return { moved };
+  }
   async cycleCapacity(
     cycleId: string,
     teamIds?: string[]

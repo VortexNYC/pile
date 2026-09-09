@@ -376,6 +376,53 @@ const rolloverCyclesRoute = createRoute({
   },
 });
 
+const shiftCycleRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/cycles/{id}/shift-all",
+  tags: ["cycles"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({ targetCycleId: z.string().optional() }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Shifted all issues to target cycle",
+      content: {
+        "application/json": {
+          schema: z.object({
+            moved: z.number(),
+            fromCycleId: z.string(),
+            targetCycleId: z.string(),
+          }),
+        },
+      },
+    },
+  },
+});
+
+const startTodayCycleRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/cycles/{id}/start-today",
+  tags: ["cycles"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Cycle started today",
+      content: { "application/json": { schema: cycleSchema } },
+    },
+  },
+});
+
 const deleteCycleRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/cycles/{id}",
@@ -878,6 +925,97 @@ export function registerWorkspaceEntityRoutes(app: OpenAPIHono<AppContext>) {
     await stub.setOrganizationId(organizationId);
     const result = await stub.rolloverCycles();
     return c.json(result);
+  });
+
+  app.openapi(shiftCycleRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const { targetCycleId } = c.req.valid("json");
+    const db = createD1(c.env.D1);
+
+    const fromCycle = await getCycle(db, organizationId, id);
+    if (!fromCycle) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Cycle not found",
+      });
+    }
+
+    let targetId = targetCycleId;
+    if (!targetId) {
+      const allCycles = await listCycles(db, organizationId);
+      const fromNumber = fromCycle.number ?? 0;
+      const candidates = allCycles
+        .filter(
+          (other) =>
+            other.id !== fromCycle.id &&
+            c.status !== "completed" &&
+            (fromCycle.projectId === null
+              ? other.projectId === null
+              : other.projectId === fromCycle.projectId) &&
+            (other.number ?? 0) > fromNumber
+        )
+        .toSorted((a, b) => (a.number ?? 0) - (b.number ?? 0));
+      const next = candidates[0];
+      if (!next) {
+        throw new VortexError({
+          code: "BAD_REQUEST",
+          status: 400,
+          message: "No next cycle to shift into",
+        });
+      }
+      targetId = next.id;
+    }
+
+    const toCycle = await getCycle(db, organizationId, targetId);
+    if (!toCycle) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Target cycle not found",
+      });
+    }
+
+    const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(
+      c.env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const { moved } = await stub.shiftIssueCycle(id, toCycle.id);
+    return c.json({ moved, fromCycleId: id, targetCycleId: toCycle.id });
+  });
+
+  app.openapi(startTodayCycleRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+
+    const cycle = await getCycle(db, organizationId, id);
+    if (!cycle) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Cycle not found",
+      });
+    }
+
+    const now = new Date();
+    const nowIso = now.toISOString();
+    let endDate = cycle.endDate;
+
+    if (cycle.startDate && cycle.endDate) {
+      const start = new Date(cycle.startDate).getTime();
+      const end = new Date(cycle.endDate).getTime();
+      const duration = end - start;
+      if (duration > 0) {
+        endDate = new Date(now.getTime() + duration).toISOString();
+      }
+    }
+
+    const updated = await updateCycle(db, organizationId, id, {
+      startDate: nowIso,
+      endDate: endDate ?? null,
+      status: "active",
+    });
+    return c.json(updated);
   });
 
   app.openapi(listLabelsRoute, async (c) => {

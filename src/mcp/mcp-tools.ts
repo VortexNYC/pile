@@ -3796,6 +3796,56 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdCyclesIdShiftall",
+    "description": "Create cycle shift all (POST /workspaces/{organizationId}/cycles/{id}/shift-all)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/cycles/{id}/shift-all",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "targetCycleId": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdCyclesIdStarttoday",
+    "description": "Create cycle start today (POST /workspaces/{organizationId}/cycles/{id}/start-today)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/cycles/{id}/start-today",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdCyclesRollover",
     "description": "Create cycle rollover (POST /workspaces/{organizationId}/cycles/rollover)",
     "method": "POST",
