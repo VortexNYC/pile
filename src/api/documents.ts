@@ -1,8 +1,15 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
+import { eq } from "drizzle-orm";
 
+import { createD1 } from "../global/db.js";
+import { teamMember } from "../global/schema.js";
 import { VortexError } from "../platform/errors.js";
-import type { AppContext } from "../platform/middleware.js";
+import type { WorkspaceIdentity } from "../platform/identity.js";
+import type {
+  AppContext,
+  WorkerEnv,
+} from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 import { getWorkspaceStub } from "./stub.js";
 
@@ -108,20 +115,35 @@ function notFound(): never {
 }
 
 // Per-doc grants: when a doc has any permission rows, only listed actors
-// (+ workspace admins) get in. Default-open otherwise.
+// (+ workspace admins, + members of granted Better Auth teams) get in.
+// Default-open otherwise.
 async function assertDocAccess(
+  c: { env: WorkerEnv; get: (key: "workspaceIdentity") => WorkspaceIdentity },
   stub: {
     documentAccessLevel(
       documentId: string,
-      actorId: string
+      actorId: string,
+      teamIds: string[]
     ): Promise<"view" | "edit" | null>;
   },
   documentId: string,
-  identity: { id: string; permissions: string[] },
   required: "view" | "edit"
 ) {
+  const identity = c.get("workspaceIdentity");
   if (identity.permissions.includes("admin")) return;
-  const level = await stub.documentAccessLevel(documentId, identity.id);
+  // Resolve Better Auth team memberships for user identities; API-key
+  // actors (agents) hold grants directly on their key identity.
+  const teamIds =
+    identity.type === "user"
+      ? (
+          await createD1(c.env.D1)
+            .select({ teamId: teamMember.teamId })
+            .from(teamMember)
+            .where(eq(teamMember.userId, identity.id))
+            .all()
+        ).map((row) => row.teamId)
+      : [];
+  const level = await stub.documentAccessLevel(documentId, identity.id, teamIds);
   if (level === null || (required === "edit" && level === "view")) {
     if (level === null) return notFound();
     throw new VortexError({
@@ -593,8 +615,9 @@ const searchRoute = createRoute({
 
 
 const permissionSchema = z.object({
+  // User id, API-key id, or Better Auth team id (actorType="team").
   actorId: z.string(),
-  actorType: z.string().optional(),
+  actorType: z.enum(["user", "agent", "team"]).optional(),
   level: z.enum(["view", "edit"]),
 });
 
@@ -730,10 +753,9 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(getRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
-    const identity = c.get("workspaceIdentity");
     const doc = await stub.getDocument(id);
     if (!doc) return notFound();
-    await assertDocAccess(stub, id, identity, "view");
+    await assertDocAccess(c, stub, id, "view");
     return c.json(toResponse(doc));
   });
 
@@ -742,7 +764,7 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
     const input = c.req.valid("json");
     const identity = c.get("workspaceIdentity");
     const stub = getWorkspaceStub(c.env, organizationId);
-    await assertDocAccess(stub, id, identity, "edit");
+    await assertDocAccess(c, stub, id, "edit");
     const doc = await stub.updateDocument(id, input, identity.id);
     if (!doc) return notFound();
     return c.json(toResponse(doc));
@@ -752,7 +774,7 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId, id } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
     const identity = c.get("workspaceIdentity");
-    await assertDocAccess(stub, id, identity, "edit");
+    await assertDocAccess(c, stub, id, "edit");
     const deleted = await stub.deleteDocument(id, identity.id);
     if (!deleted) return notFound();
     return c.body(null, 204);
@@ -938,9 +960,8 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(setPermissionRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
     const input = c.req.valid("json");
-    const identity = c.get("workspaceIdentity");
     const stub = getWorkspaceStub(c.env, organizationId);
-    await assertDocAccess(stub, id, identity, "edit");
+    await assertDocAccess(c, stub, id, "edit");
     const doc = await stub.getDocument(id);
     if (!doc) return notFound();
     const grant = await stub.setDocumentPermission(
@@ -954,9 +975,8 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(revokePermissionRoute, async (c) => {
     const { organizationId, id, actorId } = c.req.valid("param");
-    const identity = c.get("workspaceIdentity");
     const stub = getWorkspaceStub(c.env, organizationId);
-    await assertDocAccess(stub, id, identity, "edit");
+    await assertDocAccess(c, stub, id, "edit");
     await stub.revokeDocumentPermission(id, actorId);
     return c.body(null, 204);
   });

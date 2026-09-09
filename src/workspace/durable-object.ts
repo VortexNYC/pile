@@ -1450,8 +1450,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.listDocumentPermissions(this.db, documentId);
   }
 
-  documentAccessLevel(documentId: string, actorId: string) {
-    return data.documentAccessLevel(this.db, documentId, actorId);
+  documentAccessLevel(
+    documentId: string,
+    actorId: string,
+    teamIds: string[] = []
+  ) {
+    return data.documentAccessLevel(this.db, documentId, actorId, teamIds);
   }
 
   listDocumentLinks(

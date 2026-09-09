@@ -5367,7 +5367,12 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string"
             },
             "actorType": {
-              "type": "string"
+              "type": "string",
+              "enum": [
+                "user",
+                "agent",
+                "team"
+              ]
             },
             "level": {
               "type": "string",

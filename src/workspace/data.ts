@@ -2543,16 +2543,26 @@ export function listDocumentPermissions(
 }
 
 // Returns the effective level for an actor, or null when the doc is
-// restricted and the actor is unlisted.
+// restricted and the actor is unlisted. Team grants (Better Auth
+// organization teams) cover every member of the team.
 export function documentAccessLevel(
   db: WorkspaceDb,
   documentId: string,
-  actorId: string
+  actorId: string,
+  teamIds: string[] = []
 ): "view" | "edit" | null {
   const grants = listDocumentPermissions(db, documentId);
   if (grants.length === 0) return "edit";
-  const grant = grants.find((g) => g.actorId === actorId);
-  return grant ? grant.level : null;
+  let level: "view" | "edit" | null = null;
+  for (const grant of grants) {
+    const covered =
+      grant.actorId === actorId ||
+      (grant.actorType === "team" && teamIds.includes(grant.actorId));
+    if (covered && (level === null || grant.level === "edit")) {
+      level = grant.level;
+    }
+  }
+  return level;
 }
 
 export function replaceDocumentLinks(

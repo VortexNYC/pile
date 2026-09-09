@@ -8973,7 +8973,12 @@
                     "type": "string"
                   },
                   "actorType": {
-                    "type": "string"
+                    "type": "string",
+                    "enum": [
+                      "user",
+                      "agent",
+                      "team"
+                    ]
                   },
                   "level": {
                     "type": "string",

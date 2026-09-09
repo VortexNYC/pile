@@ -4345,7 +4345,8 @@ export interface paths {
                 content: {
                     "application/json": {
                         actorId: string;
-                        actorType?: string;
+                        /** @enum {string} */
+                        actorType?: "user" | "agent" | "team";
                         /** @enum {string} */
                         level: "view" | "edit";
                     };
