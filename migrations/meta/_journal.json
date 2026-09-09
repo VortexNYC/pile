@@ -351,6 +351,13 @@
       "when": 1788969051730,
       "tag": "0049_cool_hill",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "6",
+      "when": 1788971375637,
+      "tag": "0050_tiny_lake",
+      "breakpoints": true
     }
   ]
 }

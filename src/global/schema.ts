@@ -488,6 +488,26 @@ export const attachments = sqliteTable(
   ]
 );
 
+export const emojis = sqliteTable(
+  "emojis" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name" as string).notNull(),
+    shortcut: text("shortcut" as string).notNull(),
+    url: text("url" as string).notNull(),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("emojis_organizationId_idx" as string).on(table.organizationId),
+    index("emojis_shortcut_idx" as string).on(table.organizationId, table.shortcut),
+  ]
+);
+
 export const issueHistory = sqliteTable(
   "issue_history" as string,
   {

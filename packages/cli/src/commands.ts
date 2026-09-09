@@ -2224,6 +2224,35 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "view preferences list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/view-preferences",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "view preferences update": {
+    method: "PUT",
+    path: "/workspaces/{organizationId}/view-preferences",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "defaultViewId",
+        flag: "default-view-id",
+      },
+    ],
+  },
   "issues comments": {
     method: "POST",
     path: "/workspaces/{organizationId}/issues/{issueId}/comments",
@@ -2938,6 +2967,104 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "entryId",
         flag: "entry-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "emojis list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/emojis",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "emojis create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/emojis",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "shortcut",
+        flag: "shortcut",
+      },
+      {
+        name: "url",
+        flag: "url",
+      },
+    ],
+  },
+  "emojis get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/emojis/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "emojis update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/emojis/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "shortcut",
+        flag: "shortcut",
+      },
+      {
+        name: "url",
+        flag: "url",
+      },
+    ],
+  },
+  "emojis delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/emojis/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
       },
     ],
     query: [],
@@ -3664,6 +3791,116 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "organizationId",
         flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "issues external links list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/issues/{issueId}/external-links",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "issues external links create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/issues/{issueId}/external-links",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "url",
+        flag: "url",
+      },
+      {
+        name: "label",
+        flag: "label",
+      },
+    ],
+  },
+  "issues external links get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/issues/{issueId}/external-links/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "issues external links update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/issues/{issueId}/external-links/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "url",
+        flag: "url",
+      },
+      {
+        name: "label",
+        flag: "label",
+      },
+    ],
+  },
+  "issues external links delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/issues/{issueId}/external-links/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "issueId",
+        flag: "issue",
       },
       {
         name: "id",

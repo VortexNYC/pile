@@ -37,6 +37,7 @@ import {
   workspaceCustomerStatuses,
   workspaceCustomerTiers,
   workspaceIssueApprovals,
+  issueExternalLinks,
   workspaceIssues,
   workspaceIssueRelations,
   workspaceIssueSubscribers,
@@ -1964,6 +1965,102 @@ export function deleteCustomer(
       .returning()
       .all().length > 0
   );
+}
+
+// ---- issue external links ----
+
+export function listIssueExternalLinks(
+  db: WorkspaceDb,
+  organizationId: string,
+  issueId: string
+) {
+  return db
+    .select()
+    .from(issueExternalLinks)
+    .where(
+      and(
+        eq(issueExternalLinks.organizationId, organizationId),
+        eq(issueExternalLinks.issueId, issueId)
+      )
+    )
+    .all();
+}
+
+export function getIssueExternalLink(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  return db
+    .select()
+    .from(issueExternalLinks)
+    .where(
+      and(
+        eq(issueExternalLinks.organizationId, organizationId),
+        eq(issueExternalLinks.id, id)
+      )
+    )
+    .get();
+}
+
+export async function createIssueExternalLink(
+  db: WorkspaceDb,
+  organizationId: string,
+  issueId: string,
+  input: { url: string; label?: string | null }
+) {
+  const id = crypto.randomUUID();
+  const ts = new Date().toISOString();
+  await db.insert(issueExternalLinks).values({
+    id,
+    organizationId,
+    issueId,
+    url: input.url,
+    label: input.label ?? null,
+    createdAt: ts,
+  });
+  return getIssueExternalLink(db, organizationId, id);
+}
+
+export async function updateIssueExternalLink(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string,
+  input: { url?: string; label?: string | null }
+) {
+  const existing = await getIssueExternalLink(db, organizationId, id);
+  if (!existing) return undefined;
+  await db
+    .update(issueExternalLinks)
+    .set({
+      url: input.url ?? existing.url,
+      label: input.label === undefined ? existing.label : input.label,
+    })
+    .where(
+      and(
+        eq(issueExternalLinks.organizationId, organizationId),
+        eq(issueExternalLinks.id, id)
+      )
+    );
+  return getIssueExternalLink(db, organizationId, id);
+}
+
+export async function deleteIssueExternalLink(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  const existing = await getIssueExternalLink(db, organizationId, id);
+  if (!existing) return false;
+  await db
+    .delete(issueExternalLinks)
+    .where(
+      and(
+        eq(issueExternalLinks.organizationId, organizationId),
+        eq(issueExternalLinks.id, id)
+      )
+    );
+  return true;
 }
 
 // ---- customer tiers / statuses ----

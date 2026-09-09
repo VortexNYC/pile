@@ -1274,6 +1274,31 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return doc;
   }
 
+  // ---- issue external links ----
+
+  listIssueExternalLinks(issueId: string) {
+    return data.listIssueExternalLinks(this.db, this.organizationId, issueId);
+  }
+
+  getIssueExternalLink(id: string) {
+    return data.getIssueExternalLink(this.db, this.organizationId, id);
+  }
+
+  createIssueExternalLink(input: { issueId: string; url: string; label?: string | null }) {
+    return data.createIssueExternalLink(this.db, this.organizationId, input.issueId, {
+      url: input.url,
+      label: input.label,
+    });
+  }
+
+  updateIssueExternalLink(id: string, input: { url?: string; label?: string | null }) {
+    return data.updateIssueExternalLink(this.db, this.organizationId, id, input);
+  }
+
+  deleteIssueExternalLink(id: string) {
+    return data.deleteIssueExternalLink(this.db, this.organizationId, id);
+  }
+
   // ---- customers ----
   createCustomer(input: Omit<data.CustomerInput, "organizationId">) {
     const customer = data.createCustomer(this.db, {

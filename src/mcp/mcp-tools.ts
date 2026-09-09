@@ -271,6 +271,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdEmojisId",
+    "description": "Delete emoji (DELETE /workspaces/{organizationId}/emojis/{id})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/emojis/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdGithubInstallationsId",
     "description": "Delete github installation (DELETE /workspaces/{organizationId}/github/installations/{id})",
     "method": "DELETE",
@@ -363,6 +384,31 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "description": "Delete issue comment (DELETE /workspaces/{organizationId}/issues/{issueId}/comments/{id})",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/issues/{issueId}/comments/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "issueId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "issueId",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "deleteWorkspacesOrganizationIdIssuesIssueIdExternallinksId",
+    "description": "Delete issue external link (DELETE /workspaces/{organizationId}/issues/{issueId}/external-links/{id})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/issues/{issueId}/external-links/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1496,6 +1542,44 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdEmojis",
+    "description": "List emojis (GET /workspaces/{organizationId}/emojis)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/emojis",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdEmojisId",
+    "description": "Get emoji (GET /workspaces/{organizationId}/emojis/{id})",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/emojis/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdExport",
     "description": "List export (GET /workspaces/{organizationId}/export)",
     "method": "GET",
@@ -1972,6 +2056,52 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
+        "issueId",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdIssuesIssueIdExternallinks",
+    "description": "List issue external links (GET /workspaces/{organizationId}/issues/{issueId}/external-links)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/issues/{issueId}/external-links",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "issueId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "issueId",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdIssuesIssueIdExternallinksId",
+    "description": "Get issue external link (GET /workspaces/{organizationId}/issues/{issueId}/external-links/{id})",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/issues/{issueId}/external-links/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "issueId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
         "issueId",
         "organizationId"
       ]
@@ -2968,6 +3098,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdViewpreferences",
+    "description": "List view preferences (GET /workspaces/{organizationId}/view-preferences)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/view-preferences",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdWebhooksubscriptions",
     "description": "List webhook subscriptions (GET /workspaces/{organizationId}/webhook-subscriptions)",
     "method": "GET",
@@ -3430,6 +3577,44 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "patchWorkspacesOrganizationIdEmojisId",
+    "description": "Update emoji (PATCH /workspaces/{organizationId}/emojis/{id})",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/emojis/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "shortcut": {
+              "type": "string",
+              "minLength": 1
+            },
+            "url": {
+              "type": "string",
+              "format": "uri"
+            }
+          }
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "patchWorkspacesOrganizationIdInitiativesId",
     "description": "Update initiative (PATCH /workspaces/{organizationId}/initiatives/{id})",
     "method": "PATCH",
@@ -3613,6 +3798,43 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "required": [
             "body"
           ]
+        }
+      },
+      "required": [
+        "id",
+        "issueId",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "patchWorkspacesOrganizationIdIssuesIssueIdExternallinksId",
+    "description": "Update issue external link (PATCH /workspaces/{organizationId}/issues/{issueId}/external-links/{id})",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/issues/{issueId}/external-links/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "issueId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "label": {
+              "type": "string"
+            }
+          }
         }
       },
       "required": [
@@ -5144,6 +5366,45 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdEmojis",
+    "description": "Create emoji (POST /workspaces/{organizationId}/emojis)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/emojis",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "shortcut": {
+              "type": "string",
+              "minLength": 1
+            },
+            "url": {
+              "type": "string",
+              "format": "uri"
+            }
+          },
+          "required": [
+            "name",
+            "shortcut",
+            "url"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdGithubInstall",
     "description": "Install GitHub app (POST /workspaces/{organizationId}/github/install)",
     "method": "POST",
@@ -5698,6 +5959,42 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
+        "issueId",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdIssuesIssueIdExternallinks",
+    "description": "Create issue external link (POST /workspaces/{organizationId}/issues/{issueId}/external-links)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/issues/{issueId}/external-links",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "issueId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "label": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "url"
+          ]
+        }
+      },
+      "required": [
         "issueId",
         "organizationId"
       ]
@@ -7100,6 +7397,32 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "organizationId",
         "projectId"
+      ]
+    }
+  },
+  {
+    "name": "putWorkspacesOrganizationIdViewpreferences",
+    "description": "Update view preferences (PUT /workspaces/{organizationId}/view-preferences)",
+    "method": "PUT",
+    "path": "/workspaces/{organizationId}/view-preferences",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "defaultViewId": {
+              "type": "string",
+              "nullable": true
+            }
+          }
+        }
+      },
+      "required": [
+        "organizationId"
       ]
     }
   }
