@@ -1742,6 +1742,198 @@ describe("API integration", () => {
     expect(commentsAfterDelete.comments).toHaveLength(0);
   });
 
+  it("syncs GitLab merge requests and MR notes into Vortex", async () => {
+    const organizationId = await seedWorkspace();
+    const token = await adminToken(organizationId);
+    const db = createD1(env.D1);
+
+    const projectPath = "vortex/gitlab-mr";
+    await createGitlabInstallation(
+      db,
+      organizationId,
+      "456",
+      projectPath,
+      "gltoken",
+      "webhook-secret"
+    );
+
+    const issueWithBranchRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          title: "Backend issue",
+          repo: projectPath,
+          branch: "feature/backend",
+        }),
+      }),
+      env
+    );
+    expect(issueWithBranchRes.status).toBe(201);
+    const issueWithBranch = await issueWithBranchRes.json<{
+      id: string;
+      identifier: string;
+    }>();
+
+    const issueByIdentifierRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          title: "Linked issue",
+        }),
+      }),
+      env
+    );
+    expect(issueByIdentifierRes.status).toBe(201);
+    const linkedIssue = await issueByIdentifierRes.json<{
+      id: string;
+      identifier: string;
+    }>();
+
+    const gitlabRequest = (body: unknown) =>
+      request("/gitlab", {
+        method: "POST",
+        body: JSON.stringify(body),
+        headers: {
+          "X-Gitlab-Token": "webhook-secret",
+        },
+      });
+
+    const openMrPayload = {
+      object_kind: "merge_request" as const,
+      event_type: "merge_request",
+      project: { id: 456, path_with_namespace: projectPath },
+      object_attributes: {
+        id: 100,
+        iid: 7,
+        title: `Fixes ${linkedIssue.identifier}`,
+        description: "MR description",
+        state: "opened",
+        action: "open",
+        draft: false,
+        work_in_progress: false,
+        source_branch: "feature/backend",
+        target_branch: "main",
+        url: "https://gitlab.com/vortex/gitlab-mr/-/merge_requests/7",
+        source: { id: 456, path_with_namespace: projectPath },
+        target: { id: 456, path_with_namespace: projectPath },
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:00:00Z",
+      },
+      author: { username: "shlomo", name: "Shlomo" },
+    };
+
+    const openMrRes = await app.fetch(gitlabRequest(openMrPayload), env);
+    expect(openMrRes.status).toBe(200);
+
+    const issueWithBranchAfterMrRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${issueWithBranch.id}`, {
+        token,
+      }),
+      env
+    );
+    expect(issueWithBranchAfterMrRes.status).toBe(200);
+    const issueWithBranchAfterMr = await issueWithBranchAfterMrRes.json<{
+      prUrl: string | null;
+      prState: string | null;
+      status: string;
+    }>();
+    expect(issueWithBranchAfterMr.prUrl).toBe(
+      "https://gitlab.com/vortex/gitlab-mr/-/merge_requests/7"
+    );
+    expect(issueWithBranchAfterMr.prState).toBe("open");
+    expect(issueWithBranchAfterMr.status).toBe("in_progress");
+
+    const linkedIssueAfterMrRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${linkedIssue.id}`, {
+        token,
+      }),
+      env
+    );
+    expect(linkedIssueAfterMrRes.status).toBe(200);
+    const linkedIssueAfterMr = await linkedIssueAfterMrRes.json<{
+      prUrl: string | null;
+      prState: string | null;
+      repo: string | null;
+      branch: string | null;
+      status: string;
+    }>();
+    expect(linkedIssueAfterMr.prUrl).toBe(
+      "https://gitlab.com/vortex/gitlab-mr/-/merge_requests/7"
+    );
+    expect(linkedIssueAfterMr.prState).toBe("open");
+    expect(linkedIssueAfterMr.repo).toBe(projectPath);
+    expect(linkedIssueAfterMr.branch).toBe("feature/backend");
+    expect(linkedIssueAfterMr.status).toBe("in_progress");
+
+    const mrNotePayload = {
+      object_kind: "note" as const,
+      event_type: "note",
+      project: { id: 456, path_with_namespace: projectPath },
+      object_attributes: {
+        id: 20,
+        note: "MR review note",
+        noteable_type: "MergeRequest",
+        noteable_id: 7,
+        action: "created",
+        created_at: "2026-01-01T00:10:00Z",
+        updated_at: "2026-01-01T00:10:00Z",
+      },
+      merge_request: {
+        iid: 7,
+        source_branch: "feature/backend",
+        source: { id: 456, path_with_namespace: projectPath },
+        target: { id: 456, path_with_namespace: projectPath },
+      },
+      author: { username: "shlomo", name: "Shlomo" },
+    };
+
+    const mrNoteRes = await app.fetch(gitlabRequest(mrNotePayload), env);
+    expect(mrNoteRes.status).toBe(200);
+
+    const commentsRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/issues/${issueWithBranch.id}/comments`,
+        { token }
+      ),
+      env
+    );
+    expect(commentsRes.status).toBe(200);
+    const commentsBody = await commentsRes.json<{
+      comments: Array<{ body: string }>;
+    }>();
+    expect(commentsBody.comments).toHaveLength(1);
+    expect(commentsBody.comments[0]?.body).toBe("MR review note");
+
+    const mergeMrPayload = {
+      ...openMrPayload,
+      object_attributes: {
+        ...openMrPayload.object_attributes,
+        state: "merged",
+        action: "merge",
+        updated_at: "2026-01-01T00:20:00Z",
+      },
+    };
+
+    const mergeMrRes = await app.fetch(gitlabRequest(mergeMrPayload), env);
+    expect(mergeMrRes.status).toBe(200);
+
+    const issueAfterMergeRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${issueWithBranch.id}`, {
+        token,
+      }),
+      env
+    );
+    expect(issueAfterMergeRes.status).toBe(200);
+    const issueAfterMerge = await issueAfterMergeRes.json<{
+      prState: string | null;
+      status: string;
+    }>();
+    expect(issueAfterMerge.prState).toBe("merged");
+    expect(issueAfterMerge.status).toBe("done");
+  });
+
   it("manages Slack installation state and verifies events", async () => {
     const organizationId = await seedWorkspace();
     const token = await adminToken(organizationId);
