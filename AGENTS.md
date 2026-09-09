@@ -33,6 +33,12 @@ pnpm run check
 - Keep `compatibility_date` pinned to a date the installed `workerd` binary supports. It is currently aligned to `2026-07-30` for `workerd 1.20260730.1`; do not use a later date.
 - The `wrangler.toml` file is git-ignored; canonical config lives in `wrangler.toml.example`. Copy and customize it for local deploys.
 
+## Git workflow
+
+- Use the `gh` CLI for PRs and stacks.
+- For stacked PRs in this repo, use the `github/gh-stack` extension (`gh stack init`, `gh stack add`, `gh stack submit`).
+- Do not use `gt` / Graphite for this repo.
+
 ## Where things live
 
 - `src/api/index.ts` — main Hono/OpenAPIHono app, serves `/openapi.json`.
