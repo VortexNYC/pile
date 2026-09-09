@@ -1,9 +1,11 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 
+import { findOrCreateCycleByName } from "../global/cycles.js";
 import { createD1, type D1Client } from "../global/db.js";
 import { findGitlabInstallationByProjectPath } from "../global/gitlab-installations.js";
 import { findUserByGitlabUsername } from "../global/gitlab-users.js";
+import { findLabelsByWorkspaceAndNames } from "../global/labels.js";
 import {
   createRepoIssue,
   deleteRepoIssue,
@@ -42,10 +44,17 @@ const gitlabIssueAttributesSchema = z.object({
   labels: z
     .array(
       z.object({
-        title: z.string(),
+        title: z.string().optional(),
+        name: z.string().optional(),
       })
     )
     .default([]),
+  milestone: z
+    .object({
+      title: z.string(),
+    })
+    .nullable()
+    .default(null),
 });
 
 const gitlabIssuePayloadSchema = z.object({
@@ -63,6 +72,12 @@ const gitlabNoteAttributesSchema = z.object({
   created_at: z.string(),
   updated_at: z.string(),
   action: z.string().default("created"),
+  position: z
+    .object({
+      new_path: z.string().optional(),
+      old_path: z.string().optional(),
+    })
+    .optional(),
 });
 
 const gitlabNoteAuthorSchema = z.object({
@@ -322,13 +337,32 @@ async function processGitlabIssue(
   const assigneeId = assigneeUsername
     ? ((await findUserByGitlabUsername(db, organizationId, assigneeUsername))
         ?.userId ?? undefined)
-    : undefined;
+    : null;
+
+  const labelNames = attrs.labels
+    .map((label) => label.title ?? label.name)
+    .filter((name): name is string => Boolean(name));
+  const matchedLabels = await findLabelsByWorkspaceAndNames(
+    db,
+    organizationId,
+    labelNames
+  );
+  const labelIds =
+    matchedLabels.length > 0
+      ? matchedLabels.map((label) => label.id).join(",")
+      : null;
+
+  const cycleId = attrs.milestone
+    ? await findOrCreateCycleByName(db, organizationId, attrs.milestone.title)
+    : null;
 
   const status = gitlabStatusFromState(attrs.state, attrs.action);
   const commonPatch = {
     title: attrs.title,
     description: attrs.description ?? undefined,
     assigneeId,
+    labelIds,
+    cycleId,
     repo: projectPath,
     ...(status !== undefined ? { status } : {}),
   };
@@ -343,6 +377,8 @@ async function processGitlabIssue(
           description: attrs.description ?? undefined,
           status: status ?? "backlog",
           assigneeId,
+          labelIds,
+          cycleId,
           repo: projectPath,
         },
         "gitlab"
@@ -578,6 +614,9 @@ async function processGitlabMergeRequestNote(
   const externalAuthor =
     payload.author.username || payload.author.name || "gitlab";
 
+  const filePath = attrs.position?.new_path ?? attrs.position?.old_path;
+  const body = filePath ? `[${filePath}] ${attrs.note}` : attrs.note;
+
   const existingComment = await stub.findCommentByExternalId(
     externalSource,
     externalId
@@ -587,7 +626,7 @@ async function processGitlabMergeRequestNote(
     if (!existingComment) {
       await stub.createComment({
         issueId: issue.id,
-        body: attrs.note,
+        body,
         externalId,
         externalSource,
         externalAuthor,
@@ -598,13 +637,13 @@ async function processGitlabMergeRequestNote(
   } else if (attrs.action === "updated") {
     if (existingComment) {
       await stub.updateComment(existingComment.id, {
-        body: attrs.note,
+        body,
         updatedAt: attrs.updated_at,
       });
     } else {
       await stub.createComment({
         issueId: issue.id,
-        body: attrs.note,
+        body,
         externalId,
         externalSource,
         externalAuthor,
