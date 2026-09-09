@@ -157,5 +157,7 @@ Behavior:
 ## Notes
 
 - Existing `/migrate/linear` and `/notion/import` have been folded into `/import`; the old routes are removed.
-- Import jobs are persisted in D1 with `pending | running | completed | failed | paused` status and a `GET` endpoint for status polling.
-- Cursor-based pagination/resume and approval gates are future enhancements on top of the `import_jobs` table.
+- Import jobs are persisted in D1 with `pending | pending_approval | running | completed | failed | paused` status and a `GET` endpoint for status polling.
+- `POST /import/{jobId}/resume` accepts fresh credentials and an optional `limit` and continues from the stored `cursor`.
+- `POST /import` with `options.approvalRequired: true` creates a `pending_approval` job and an `import_approvals` row; `/approve` and `/reject` endpoints gate execution.
+- `ImportSource.run` now returns `{ counts, nextCursor? }` so the runner can accumulate counts and pause/resume per adapter. GitHub Issues is the first adapter with full cursor support; the rest return `nextCursor: null` for now.

@@ -51,6 +51,8 @@ This is the durable tracker for the open-source Linear alternative. Operational 
   - MR diff notes
 - GitHub Issues import adapter via `/import` (`source: "github-issues"`).
 - Import job status tracking with `import_jobs` D1 table and `GET /workspaces/{id}/import/{jobId}`.
+- Cursor-based import pagination/resume for GitHub Issues with `POST /workspaces/{id}/import/{jobId}/resume`.
+- Import approval gates with `import_approvals` table, `POST /{jobId}/approve`, and `POST /{jobId}/reject`.
 - Notion / documents integration:
   - `POST /workspaces/{id}/import` with `source: "notion"` (root page or workspace-wide search)
   - Markdown content import into Vortex documents
@@ -68,7 +70,6 @@ This is the durable tracker for the open-source Linear alternative. Operational 
 ## Next
 
 - Linear workspace migration and dogfooding.
-- Agent-native import features: cursor-based pagination/resume and approval gates.
 - Zendesk / Intercom integrations.
 
 ## Later
