@@ -87,7 +87,10 @@ export default defineConfig({
       },
       {
         files: [
-          "src/migrate/linear.ts",
+          "src/import/confluence.ts",
+          "src/import/jira.ts",
+          "src/import/linear.ts",
+          "src/api/notion.ts",
           "scripts/**",
           "**/*.test.ts",
           "packages/cli/src/index.ts",

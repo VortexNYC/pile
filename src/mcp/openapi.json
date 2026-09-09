@@ -23789,7 +23789,8 @@
                     "type": "string",
                     "enum": [
                       "jira",
-                      "confluence"
+                      "confluence",
+                      "linear"
                     ]
                   },
                   "credentials": {
@@ -23838,91 +23839,6 @@
           }
         },
         "summary": "Create import"
-      }
-    },
-    "/workspaces/{organizationId}/migrate/linear": {
-      "post": {
-        "tags": [
-          "migrate"
-        ],
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "name": "organizationId",
-            "in": "path"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "linearToken": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "teamId": {
-                    "type": "string",
-                    "minLength": 1
-                  }
-                },
-                "required": [
-                  "linearToken",
-                  "teamId"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Migration complete",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "ok": {
-                      "type": "boolean"
-                    },
-                    "counts": {
-                      "type": "object",
-                      "properties": {
-                        "issues": {
-                          "type": "number"
-                        },
-                        "labels": {
-                          "type": "number"
-                        },
-                        "projects": {
-                          "type": "number"
-                        },
-                        "cycles": {
-                          "type": "number"
-                        }
-                      },
-                      "required": [
-                        "issues",
-                        "labels",
-                        "projects",
-                        "cycles"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "ok",
-                    "counts"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "summary": "Migrate from Linear"
       }
     },
     "/workspaces/{organizationId}/notion/users": {

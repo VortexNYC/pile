@@ -11,13 +11,18 @@ import {
   jiraImportSource,
   jiraOptionsSchema,
 } from "../import/jira.js";
+import {
+  linearCredentialsSchema,
+  linearImportSource,
+  linearOptionsSchema,
+} from "../import/linear.js";
 import { createImportContext, runImport } from "../import/runner.js";
 import type { ImportCounts } from "../import/types.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 
 const importBodySchema = z.object({
-  source: z.enum(["jira", "confluence"]),
+  source: z.enum(["jira", "confluence", "linear"]),
   credentials: z.unknown(),
   options: z.unknown().optional(),
 });
@@ -78,6 +83,12 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
           credentials,
           options
         );
+        break;
+      }
+      case "linear": {
+        const credentials = linearCredentialsSchema.parse(body.credentials);
+        const options = linearOptionsSchema.parse(body.options ?? {});
+        counts = await runImport(linearImportSource, ctx, credentials, options);
         break;
       }
       default: {

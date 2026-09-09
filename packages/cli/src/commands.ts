@@ -5843,27 +5843,6 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
-  "migrate linear": {
-    method: "POST",
-    path: "/workspaces/{organizationId}/migrate/linear",
-    params: [
-      {
-        name: "organizationId",
-        flag: "workspace",
-      },
-    ],
-    query: [],
-    body: [
-      {
-        name: "linearToken",
-        flag: "linear-token",
-      },
-      {
-        name: "teamId",
-        flag: "team",
-      },
-    ],
-  },
   "notion users": {
     method: "POST",
     path: "/workspaces/{organizationId}/notion/users",

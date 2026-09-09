@@ -6316,7 +6316,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string",
               "enum": [
                 "jira",
-                "confluence"
+                "confluence",
+                "linear"
               ]
             },
             "credentials": {
@@ -7082,40 +7083,6 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           },
           "required": [
             "userId"
-          ]
-        }
-      },
-      "required": [
-        "organizationId"
-      ]
-    }
-  },
-  {
-    "name": "postWorkspacesOrganizationIdMigrateLinear",
-    "description": "Migrate from Linear (POST /workspaces/{organizationId}/migrate/linear)",
-    "method": "POST",
-    "path": "/workspaces/{organizationId}/migrate/linear",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "organizationId": {
-          "type": "string"
-        },
-        "body": {
-          "type": "object",
-          "properties": {
-            "linearToken": {
-              "type": "string",
-              "minLength": 1
-            },
-            "teamId": {
-              "type": "string",
-              "minLength": 1
-            }
-          },
-          "required": [
-            "linearToken",
-            "teamId"
           ]
         }
       },

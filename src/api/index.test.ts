@@ -2696,4 +2696,163 @@ describe("API integration", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it("imports Linear issues into Vortex", async () => {
+    const organizationId = await seedWorkspace();
+    const token = await adminToken(organizationId);
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input, init) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+      if (!url.startsWith("https://api.linear.app/graphql")) {
+        return originalFetch(input, init);
+      }
+
+      const body = typeof init?.body === "string" ? JSON.parse(init.body) : {};
+      const query: string = body.query ?? "";
+
+      if (query.includes("GetStates")) {
+        return Response.json({
+          data: {
+            team: {
+              states: {
+                nodes: [
+                  { id: "state-1", name: "In Progress", type: "started" },
+                ],
+              },
+            },
+          },
+        });
+      }
+
+      if (query.includes("GetLabels")) {
+        return Response.json({
+          data: {
+            issueLabels: {
+              nodes: [{ id: "label-1", name: "Bug", color: "#ff0000" }],
+            },
+          },
+        });
+      }
+
+      if (query.includes("GetProjects")) {
+        return Response.json({
+          data: { team: { projects: { nodes: [] } } },
+        });
+      }
+
+      if (query.includes("GetCycles")) {
+        return Response.json({
+          data: { team: { cycles: { nodes: [] } } },
+        });
+      }
+
+      if (query.includes("GetUsers")) {
+        return Response.json({
+          data: {
+            team: {
+              members: {
+                nodes: [
+                  {
+                    id: "linear-user-1",
+                    name: "Alice",
+                    email: "alice@example.com",
+                  },
+                ],
+              },
+            },
+          },
+        });
+      }
+
+      if (query.includes("GetTemplates")) {
+        return Response.json({
+          data: { team: { templates: { nodes: [] } } },
+        });
+      }
+
+      if (query.includes("GetIssues")) {
+        return Response.json({
+          data: {
+            team: {
+              issues: {
+                nodes: [
+                  {
+                    id: "linear-issue-1",
+                    title: "Linear issue title",
+                    description: "Linear body",
+                    state: {
+                      id: "state-1",
+                      name: "In Progress",
+                      type: "started",
+                    },
+                    priority: 2,
+                    estimate: null,
+                    assignee: { id: "linear-user-1" },
+                    project: null,
+                    cycle: null,
+                    labels: { nodes: [{ id: "label-1" }] },
+                    comments: { nodes: [] },
+                    attachments: { nodes: [] },
+                    history: { nodes: [] },
+                    subscribers: { nodes: [] },
+                    parent: null,
+                    children: { nodes: [] },
+                    relations: { nodes: [] },
+                    inverseRelations: { nodes: [] },
+                    createdAt: "2026-01-01T00:00:00.000+0000",
+                    updatedAt: "2026-01-02T00:00:00.000+0000",
+                  },
+                ],
+                pageInfo: { hasNextPage: false, endCursor: null },
+              },
+            },
+          },
+        });
+      }
+
+      return new Response("Not Found", { status: 404 });
+    };
+
+    try {
+      const importRes = await app.fetch(
+        request(`/workspaces/${organizationId}/import`, {
+          method: "POST",
+          token,
+          body: JSON.stringify({
+            source: "linear",
+            credentials: { token: "linear-token" },
+            options: { linearTeamId: "linear-team-1" },
+          }),
+        }),
+        env
+      );
+      expect(importRes.status).toBe(200);
+      const importBody = await importRes.json<{
+        ok: boolean;
+        counts: Record<string, number>;
+      }>();
+      expect(importBody.ok).toBe(true);
+      expect(importBody.counts.issues).toBe(1);
+
+      const issuesRes = await app.fetch(
+        request(`/workspaces/${organizationId}/issues`, { token }),
+        env
+      );
+      expect(issuesRes.status).toBe(200);
+      const issuesBody = await issuesRes.json<{
+        issues: Array<{ title: string; status: string }>;
+      }>();
+      expect(issuesBody.issues).toHaveLength(1);
+      expect(issuesBody.issues[0]?.title).toBe("Linear issue title");
+      expect(issuesBody.issues[0]?.status).toBe("in_progress");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

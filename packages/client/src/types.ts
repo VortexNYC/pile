@@ -12891,7 +12891,7 @@ export interface paths {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        source: "jira" | "confluence";
+                        source: "jira" | "confluence" | "linear";
                         credentials?: unknown;
                         options?: unknown;
                     };
@@ -12909,59 +12909,6 @@ export interface paths {
                             source: string;
                             counts: {
                                 [key: string]: number;
-                            };
-                        };
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/workspaces/{organizationId}/migrate/linear": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Migrate from Linear */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    organizationId: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: {
-                content: {
-                    "application/json": {
-                        linearToken: string;
-                        teamId: string;
-                    };
-                };
-            };
-            responses: {
-                /** @description Migration complete */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            ok: boolean;
-                            counts: {
-                                issues: number;
-                                labels: number;
-                                projects: number;
-                                cycles: number;
                             };
                         };
                     };
