@@ -75,19 +75,53 @@ const gitlabNoteIssueSchema = z.object({
   title: z.string(),
 });
 
+const gitlabNoteMergeRequestSchema = z.object({
+  iid: z.number().int(),
+  source_branch: z.string(),
+  source: gitlabProjectSchema.optional(),
+  target: gitlabProjectSchema.optional(),
+});
+
 const gitlabNotePayloadSchema = z.object({
   object_kind: z.literal("note"),
   event_type: z.string().default("note"),
   project: gitlabProjectSchema,
   object_attributes: gitlabNoteAttributesSchema,
   issue: gitlabNoteIssueSchema.optional(),
-  merge_request: z.unknown().optional(),
+  merge_request: gitlabNoteMergeRequestSchema.optional(),
   author: gitlabNoteAuthorSchema,
+});
+
+const gitlabMergeRequestAttributesSchema = z.object({
+  id: z.union([z.string(), z.number()]),
+  iid: z.number().int(),
+  title: z.string(),
+  description: z.string().nullable().default(null),
+  state: z.string(),
+  action: z.string(),
+  draft: z.boolean().default(false),
+  work_in_progress: z.boolean().default(false),
+  source_branch: z.string(),
+  target_branch: z.string(),
+  url: z.string(),
+  source: gitlabProjectSchema.optional(),
+  target: gitlabProjectSchema.optional(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+const gitlabMergeRequestPayloadSchema = z.object({
+  object_kind: z.literal("merge_request"),
+  event_type: z.string().default("merge_request"),
+  project: gitlabProjectSchema,
+  object_attributes: gitlabMergeRequestAttributesSchema,
+  author: gitlabNoteAuthorSchema.optional(),
 });
 
 const gitlabWebhookPayloadSchema = z.union([
   gitlabIssuePayloadSchema,
   gitlabNotePayloadSchema,
+  gitlabMergeRequestPayloadSchema,
 ]);
 
 export const gitlabWebhookRoute = createRoute({
@@ -114,6 +148,25 @@ function gitlabStatusFromState(
   if (action === "reopen") return "todo";
   if (action === "open") return "backlog";
   return undefined;
+}
+
+function parseIssueIdentifiers(text: string) {
+  const regex = /\b([A-Za-z][A-Za-z0-9_-]*-\d+)\b/g;
+  const matches: string[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(text)) !== null) {
+    matches.push(match[1]);
+  }
+  return [...new Set(matches)];
+}
+
+function gitlabPrStateFromAttributes(
+  attrs: z.infer<typeof gitlabMergeRequestAttributesSchema>
+): string {
+  if (attrs.draft || attrs.work_in_progress) return "draft";
+  if (attrs.state === "merged") return "merged";
+  if (attrs.state === "closed") return "closed";
+  return "open";
 }
 
 function gitlabDeliveryId(
@@ -199,8 +252,8 @@ export async function processGitlabWebhook(c: Context<AppContext>) {
     );
   }
 
-  if (data.object_kind === "note" && data.issue) {
-    return processGitlabNote(
+  if (data.object_kind === "merge_request") {
+    return processGitlabMergeRequest(
       c,
       db,
       organizationId,
@@ -208,6 +261,32 @@ export async function processGitlabWebhook(c: Context<AppContext>) {
       projectId,
       data
     );
+  }
+
+  if (data.object_kind === "note") {
+    if (
+      data.object_attributes.noteable_type === "MergeRequest" &&
+      data.merge_request
+    ) {
+      return processGitlabMergeRequestNote(
+        c,
+        db,
+        organizationId,
+        projectPath,
+        projectId,
+        data
+      );
+    }
+    if (data.issue) {
+      return processGitlabIssueNote(
+        c,
+        db,
+        organizationId,
+        projectPath,
+        projectId,
+        data
+      );
+    }
   }
 
   return c.json({ ok: true }, 200);
@@ -302,7 +381,7 @@ async function processGitlabIssue(
   return c.json({ ok: true }, 200);
 }
 
-async function processGitlabNote(
+async function processGitlabIssueNote(
   c: Context<AppContext>,
   db: D1Client,
   organizationId: string,
@@ -391,5 +470,158 @@ async function processGitlabNote(
   }
 
   await recordWebhookDelivery(db, deliveryId, "gitlab", "note", organizationId);
+  return c.json({ ok: true }, 200);
+}
+
+async function processGitlabMergeRequest(
+  c: Context<AppContext>,
+  db: D1Client,
+  organizationId: string,
+  projectPath: string,
+  projectId: string | number,
+  payload: z.infer<typeof gitlabMergeRequestPayloadSchema>
+) {
+  const attrs = payload.object_attributes;
+  const deliveryId = gitlabDeliveryId(
+    "merge_request",
+    projectId,
+    attrs.id,
+    attrs.updated_at
+  );
+  const existing = await findWebhookDelivery(db, deliveryId);
+  if (existing) {
+    return c.json({ ok: true }, 200);
+  }
+
+  const repo = attrs.source?.path_with_namespace ?? projectPath;
+  const branch = attrs.source_branch;
+  const prUrl = attrs.url;
+  const prState = gitlabPrStateFromAttributes(attrs);
+
+  const doId = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId);
+  const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(doId);
+  await stub.setOrganizationId(organizationId);
+
+  await stub.updatePrState(repo, branch, prUrl, prState, "gitlab");
+
+  const text = [attrs.title, attrs.description ?? "", branch].join(" ");
+  const identifiers = parseIssueIdentifiers(text);
+  await Promise.all(
+    identifiers.map((identifier) =>
+      stub.updatePrByIdentifier(
+        identifier,
+        prUrl,
+        prState,
+        repo,
+        branch,
+        "gitlab"
+      )
+    )
+  );
+
+  await recordWebhookDelivery(
+    db,
+    deliveryId,
+    "gitlab",
+    "merge_request",
+    organizationId
+  );
+  return c.json({ ok: true }, 200);
+}
+
+async function processGitlabMergeRequestNote(
+  c: Context<AppContext>,
+  db: D1Client,
+  organizationId: string,
+  projectPath: string,
+  projectId: string | number,
+  payload: z.infer<typeof gitlabNotePayloadSchema>
+) {
+  const attrs = payload.object_attributes;
+  const deliveryId = gitlabDeliveryId(
+    "mr_note",
+    projectId,
+    attrs.id,
+    attrs.updated_at
+  );
+  const existing = await findWebhookDelivery(db, deliveryId);
+  if (existing) {
+    return c.json({ ok: true }, 200);
+  }
+
+  const mr = payload.merge_request;
+  if (!mr) {
+    return c.json({ ok: true }, 200);
+  }
+
+  const repo = mr.source?.path_with_namespace ?? projectPath;
+  const branch = mr.source_branch;
+
+  const doId = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId);
+  const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(doId);
+  await stub.setOrganizationId(organizationId);
+
+  const issue = await stub.getIssueByBranch(repo, branch);
+  if (!issue) {
+    await recordWebhookDelivery(
+      db,
+      deliveryId,
+      "gitlab",
+      "mr_note",
+      organizationId
+    );
+    return c.json({ ok: true }, 200);
+  }
+
+  const externalId = String(attrs.id);
+  const externalSource = "gitlab";
+  const externalAuthor =
+    payload.author.username || payload.author.name || "gitlab";
+
+  const existingComment = await stub.findCommentByExternalId(
+    externalSource,
+    externalId
+  );
+
+  if (attrs.action === "created") {
+    if (!existingComment) {
+      await stub.createComment({
+        issueId: issue.id,
+        body: attrs.note,
+        externalId,
+        externalSource,
+        externalAuthor,
+        createdAt: attrs.created_at,
+        updatedAt: attrs.updated_at,
+      });
+    }
+  } else if (attrs.action === "updated") {
+    if (existingComment) {
+      await stub.updateComment(existingComment.id, {
+        body: attrs.note,
+        updatedAt: attrs.updated_at,
+      });
+    } else {
+      await stub.createComment({
+        issueId: issue.id,
+        body: attrs.note,
+        externalId,
+        externalSource,
+        externalAuthor,
+        createdAt: attrs.created_at,
+        updatedAt: attrs.updated_at,
+      });
+    }
+  } else if (attrs.action === "deleted" && existingComment) {
+    await stub.deleteComment(existingComment.id);
+  }
+
+  await recordWebhookDelivery(
+    db,
+    deliveryId,
+    "gitlab",
+    "mr_note",
+    organizationId
+  );
   return c.json({ ok: true }, 200);
 }
