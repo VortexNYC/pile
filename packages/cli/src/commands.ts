@@ -1634,6 +1634,14 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "content",
       },
       {
+        name: "contentFormat",
+        flag: "content-format",
+      },
+      {
+        name: "slug",
+        flag: "slug",
+      },
+      {
         name: "projectId",
         flag: "project",
       },
@@ -1701,6 +1709,14 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "content",
         flag: "content",
+      },
+      {
+        name: "contentFormat",
+        flag: "content-format",
+      },
+      {
+        name: "slug",
+        flag: "slug",
       },
       {
         name: "projectId",
@@ -2027,6 +2043,42 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "q",
       },
     ],
+    body: [],
+  },
+  "docs llms.txt list": {
+    method: "GET",
+    path: "/docs/{organizationId}/{spaceId}/llms.txt",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "spaceId",
+        flag: "space-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "docs get": {
+    method: "GET",
+    path: "/docs/{organizationId}/{spaceId}/{slug}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "spaceId",
+        flag: "space-id",
+      },
+      {
+        name: "slug",
+        flag: "slug",
+      },
+    ],
+    query: [],
     body: [],
   },
   "audit log list": {

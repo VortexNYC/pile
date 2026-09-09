@@ -351,8 +351,16 @@ export const workspaceDocuments = sqliteTable(
     organizationId: text("organization_id" as string).notNull(),
     title: text("title" as string).notNull(),
     icon: text("icon" as string),
-    // BlockNote JSON (stringified array of blocks).
+    // "blocks" = BlockNote JSON; "markdown" = raw markdown (agent-native).
+    contentFormat: text("content_format" as string, {
+      enum: ["blocks", "markdown"],
+    })
+      .notNull()
+      .default("blocks"),
+    // BlockNote JSON or markdown, per contentFormat.
     content: text("content" as string).notNull().default("[]"),
+    // Optional stable slug for public docs-site URLs.
+    slug: text("slug" as string),
     projectId: text("project_id" as string),
     issueId: text("issue_id" as string),
     initiativeId: text("initiative_id" as string),

@@ -1415,7 +1415,9 @@ export interface DocumentInput {
   organizationId: string;
   title: string;
   icon?: string | null;
-  content?: unknown[]; // BlockNote blocks
+  content?: unknown[] | string; // BlockNote blocks or markdown
+  contentFormat?: "blocks" | "markdown";
+  slug?: string | null;
   projectId?: string | null;
   issueId?: string | null;
   initiativeId?: string | null;
@@ -1428,7 +1430,13 @@ export interface DocumentInput {
 export function createDocument(db: WorkspaceDb, input: DocumentInput) {
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
-  const content = JSON.stringify(input.content ?? []);
+  const content =
+    typeof input.content === "string"
+      ? input.content
+      : JSON.stringify(input.content ?? []);
+  const contentFormat =
+    input.contentFormat ??
+    (typeof input.content === "string" ? "markdown" : "blocks");
   const doc = db
     .insert(workspaceDocuments)
     .values({
@@ -1436,7 +1444,9 @@ export function createDocument(db: WorkspaceDb, input: DocumentInput) {
       organizationId: input.organizationId,
       title: input.title,
       icon: input.icon ?? null,
+      contentFormat,
       content,
+      slug: input.slug ?? null,
       projectId: input.projectId ?? null,
       issueId: input.issueId ?? null,
       initiativeId: input.initiativeId ?? null,
@@ -1469,6 +1479,7 @@ export interface ListDocumentsArgs {
   parentDocumentId?: string | null;
   spaceId?: string;
   isTemplate?: boolean;
+  slug?: string;
   includeTrashed?: boolean;
 }
 
@@ -1503,6 +1514,9 @@ export function listDocuments(
   if (args.isTemplate !== undefined) {
     conditions.push(eq(workspaceDocuments.isTemplate, args.isTemplate));
   }
+  if (args.slug !== undefined) {
+    conditions.push(eq(workspaceDocuments.slug, args.slug));
+  }
   return db
     .select()
     .from(workspaceDocuments)
@@ -1530,7 +1544,9 @@ export function getDocument(
 export interface DocumentUpdate {
   title?: string;
   icon?: string | null;
-  content?: unknown[];
+  content?: unknown[] | string;
+  contentFormat?: "blocks" | "markdown";
+  slug?: string | null;
   projectId?: string | null;
   issueId?: string | null;
   initiativeId?: string | null;
@@ -1561,9 +1577,19 @@ export function updateDocument(
     patch.parentDocumentId = update.parentDocumentId;
   if (update.spaceId !== undefined) patch.spaceId = update.spaceId;
   if (update.isTemplate !== undefined) patch.isTemplate = update.isTemplate;
+  if (update.slug !== undefined) patch.slug = update.slug;
+  if (update.contentFormat !== undefined)
+    patch.contentFormat = update.contentFormat;
   if (update.trashedAt !== undefined) patch.trashedAt = update.trashedAt;
   if (update.content !== undefined) {
-    const content = JSON.stringify(update.content);
+    const content =
+      typeof update.content === "string"
+        ? update.content
+        : JSON.stringify(update.content);
+    if (update.contentFormat === undefined) {
+      patch.contentFormat =
+        typeof update.content === "string" ? "markdown" : "blocks";
+    }
     patch.content = content;
     db.insert(workspaceDocumentHistory)
       .values({

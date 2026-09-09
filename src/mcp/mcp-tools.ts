@@ -660,6 +660,52 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getDocsOrganizationIdSpaceIdLlmstxt",
+    "description": "List doc {organizationId} llms.txt (GET /docs/{organizationId}/{spaceId}/llms.txt)",
+    "method": "GET",
+    "path": "/docs/{organizationId}/{spaceId}/llms.txt",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "spaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "spaceId"
+      ]
+    }
+  },
+  {
+    "name": "getDocsOrganizationIdSpaceIdSlug",
+    "description": "GET /docs/{organizationId}/{spaceId}/{slug} (GET /docs/{organizationId}/{spaceId}/{slug})",
+    "method": "GET",
+    "path": "/docs/{organizationId}/{spaceId}/{slug}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "spaceId": {
+          "type": "string"
+        },
+        "slug": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "slug",
+        "spaceId"
+      ]
+    }
+  },
+  {
     "name": "getShareddocumentsOrganizationIdToken",
     "description": "GET /shared-documents/{organizationId}/{token} (GET /shared-documents/{organizationId}/{token})",
     "method": "GET",
@@ -2500,13 +2546,31 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "nullable": true
             },
             "content": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "additionalProperties": {
-                  "nullable": true
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "nullable": true
+                    }
+                  }
+                },
+                {
+                  "type": "string"
                 }
-              }
+              ]
+            },
+            "contentFormat": {
+              "type": "string",
+              "enum": [
+                "blocks",
+                "markdown"
+              ]
+            },
+            "slug": {
+              "type": "string",
+              "nullable": true
             },
             "projectId": {
               "type": "string",
@@ -3682,13 +3746,30 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string"
             },
             "content": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "additionalProperties": {
-                  "nullable": true
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "nullable": true
+                    }
+                  }
+                },
+                {
+                  "type": "string"
                 }
-              }
+              ]
+            },
+            "contentFormat": {
+              "type": "string",
+              "enum": [
+                "blocks",
+                "markdown"
+              ]
+            },
+            "slug": {
+              "type": "string"
             },
             "projectId": {
               "type": "string"

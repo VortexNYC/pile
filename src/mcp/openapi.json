@@ -6732,13 +6732,31 @@
                             "nullable": true
                           },
                           "content": {
-                            "type": "array",
-                            "items": {
-                              "type": "object",
-                              "additionalProperties": {
-                                "nullable": true
+                            "anyOf": [
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "nullable": true
+                                  }
+                                }
+                              },
+                              {
+                                "type": "string"
                               }
-                            }
+                            ]
+                          },
+                          "contentFormat": {
+                            "type": "string",
+                            "enum": [
+                              "blocks",
+                              "markdown"
+                            ]
+                          },
+                          "slug": {
+                            "type": "string",
+                            "nullable": true
                           },
                           "projectId": {
                             "type": "string",
@@ -6787,6 +6805,8 @@
                           "title",
                           "icon",
                           "content",
+                          "contentFormat",
+                          "slug",
                           "projectId",
                           "issueId",
                           "initiativeId",
@@ -6840,13 +6860,30 @@
                     "type": "string"
                   },
                   "content": {
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "nullable": true
+                    "anyOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "string"
                       }
-                    }
+                    ]
+                  },
+                  "contentFormat": {
+                    "type": "string",
+                    "enum": [
+                      "blocks",
+                      "markdown"
+                    ]
+                  },
+                  "slug": {
+                    "type": "string"
                   },
                   "projectId": {
                     "type": "string"
@@ -6896,13 +6933,31 @@
                       "nullable": true
                     },
                     "content": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "additionalProperties": {
-                          "nullable": true
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "nullable": true
+                            }
+                          }
+                        },
+                        {
+                          "type": "string"
                         }
-                      }
+                      ]
+                    },
+                    "contentFormat": {
+                      "type": "string",
+                      "enum": [
+                        "blocks",
+                        "markdown"
+                      ]
+                    },
+                    "slug": {
+                      "type": "string",
+                      "nullable": true
                     },
                     "projectId": {
                       "type": "string",
@@ -6951,6 +7006,8 @@
                     "title",
                     "icon",
                     "content",
+                    "contentFormat",
+                    "slug",
                     "projectId",
                     "issueId",
                     "initiativeId",
@@ -7016,13 +7073,31 @@
                       "nullable": true
                     },
                     "content": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "additionalProperties": {
-                          "nullable": true
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "nullable": true
+                            }
+                          }
+                        },
+                        {
+                          "type": "string"
                         }
-                      }
+                      ]
+                    },
+                    "contentFormat": {
+                      "type": "string",
+                      "enum": [
+                        "blocks",
+                        "markdown"
+                      ]
+                    },
+                    "slug": {
+                      "type": "string",
+                      "nullable": true
                     },
                     "projectId": {
                       "type": "string",
@@ -7071,6 +7146,8 @@
                     "title",
                     "icon",
                     "content",
+                    "contentFormat",
+                    "slug",
                     "projectId",
                     "issueId",
                     "initiativeId",
@@ -7130,13 +7207,31 @@
                     "nullable": true
                   },
                   "content": {
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "nullable": true
+                    "anyOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "string"
                       }
-                    }
+                    ]
+                  },
+                  "contentFormat": {
+                    "type": "string",
+                    "enum": [
+                      "blocks",
+                      "markdown"
+                    ]
+                  },
+                  "slug": {
+                    "type": "string",
+                    "nullable": true
                   },
                   "projectId": {
                     "type": "string",
@@ -7188,13 +7283,31 @@
                       "nullable": true
                     },
                     "content": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "additionalProperties": {
-                          "nullable": true
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "nullable": true
+                            }
+                          }
+                        },
+                        {
+                          "type": "string"
                         }
-                      }
+                      ]
+                    },
+                    "contentFormat": {
+                      "type": "string",
+                      "enum": [
+                        "blocks",
+                        "markdown"
+                      ]
+                    },
+                    "slug": {
+                      "type": "string",
+                      "nullable": true
                     },
                     "projectId": {
                       "type": "string",
@@ -7243,6 +7356,8 @@
                     "title",
                     "icon",
                     "content",
+                    "contentFormat",
+                    "slug",
                     "projectId",
                     "issueId",
                     "initiativeId",
@@ -7343,13 +7458,31 @@
                       "nullable": true
                     },
                     "content": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "additionalProperties": {
-                          "nullable": true
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "nullable": true
+                            }
+                          }
+                        },
+                        {
+                          "type": "string"
                         }
-                      }
+                      ]
+                    },
+                    "contentFormat": {
+                      "type": "string",
+                      "enum": [
+                        "blocks",
+                        "markdown"
+                      ]
+                    },
+                    "slug": {
+                      "type": "string",
+                      "nullable": true
                     },
                     "projectId": {
                       "type": "string",
@@ -7398,6 +7531,8 @@
                     "title",
                     "icon",
                     "content",
+                    "contentFormat",
+                    "slug",
                     "projectId",
                     "issueId",
                     "initiativeId",
@@ -7464,13 +7599,20 @@
                             "type": "string"
                           },
                           "content": {
-                            "type": "array",
-                            "items": {
-                              "type": "object",
-                              "additionalProperties": {
-                                "nullable": true
+                            "anyOf": [
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "nullable": true
+                                  }
+                                }
+                              },
+                              {
+                                "type": "string"
                               }
-                            }
+                            ]
                           },
                           "actorId": {
                             "type": "string"
@@ -8372,13 +8514,31 @@
                           "nullable": true
                         },
                         "content": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "additionalProperties": {
-                              "nullable": true
+                          "anyOf": [
+                            {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "nullable": true
+                                }
+                              }
+                            },
+                            {
+                              "type": "string"
                             }
-                          }
+                          ]
+                        },
+                        "contentFormat": {
+                          "type": "string",
+                          "enum": [
+                            "blocks",
+                            "markdown"
+                          ]
+                        },
+                        "slug": {
+                          "type": "string",
+                          "nullable": true
                         },
                         "projectId": {
                           "type": "string",
@@ -8427,6 +8587,8 @@
                         "title",
                         "icon",
                         "content",
+                        "contentFormat",
+                        "slug",
                         "projectId",
                         "issueId",
                         "initiativeId",
@@ -8459,13 +8621,31 @@
                             "nullable": true
                           },
                           "content": {
-                            "type": "array",
-                            "items": {
-                              "type": "object",
-                              "additionalProperties": {
-                                "nullable": true
+                            "anyOf": [
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "nullable": true
+                                  }
+                                }
+                              },
+                              {
+                                "type": "string"
                               }
-                            }
+                            ]
+                          },
+                          "contentFormat": {
+                            "type": "string",
+                            "enum": [
+                              "blocks",
+                              "markdown"
+                            ]
+                          },
+                          "slug": {
+                            "type": "string",
+                            "nullable": true
                           },
                           "projectId": {
                             "type": "string",
@@ -8514,6 +8694,8 @@
                           "title",
                           "icon",
                           "content",
+                          "contentFormat",
+                          "slug",
                           "projectId",
                           "issueId",
                           "initiativeId",
@@ -8657,13 +8839,31 @@
                             "nullable": true
                           },
                           "content": {
-                            "type": "array",
-                            "items": {
-                              "type": "object",
-                              "additionalProperties": {
-                                "nullable": true
+                            "anyOf": [
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "nullable": true
+                                  }
+                                }
+                              },
+                              {
+                                "type": "string"
                               }
-                            }
+                            ]
+                          },
+                          "contentFormat": {
+                            "type": "string",
+                            "enum": [
+                              "blocks",
+                              "markdown"
+                            ]
+                          },
+                          "slug": {
+                            "type": "string",
+                            "nullable": true
                           },
                           "projectId": {
                             "type": "string",
@@ -8712,6 +8912,8 @@
                           "title",
                           "icon",
                           "content",
+                          "contentFormat",
+                          "slug",
                           "projectId",
                           "issueId",
                           "initiativeId",
@@ -8736,6 +8938,96 @@
           }
         },
         "summary": "List document search"
+      }
+    },
+    "/docs/{organizationId}/{spaceId}/llms.txt": {
+      "get": {
+        "tags": [
+          "docs-site"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "spaceId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "llms.txt index of published documents in the space",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Space not found or not public"
+          }
+        },
+        "summary": "List doc {organizationId} llms.txt"
+      }
+    },
+    "/docs/{organizationId}/{spaceId}/{slug}": {
+      "get": {
+        "tags": [
+          "docs-site"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "spaceId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "slug",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Document content as markdown",
+            "content": {
+              "text/markdown": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Document not found or not published"
+          }
+        },
+        "summary": "GET /docs/{organizationId}/{spaceId}/{slug}"
       }
     },
     "/workspaces/{organizationId}/audit-log": {

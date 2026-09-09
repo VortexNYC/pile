@@ -3212,7 +3212,10 @@ export interface paths {
                                 icon: string | null;
                                 content: {
                                     [key: string]: unknown;
-                                }[];
+                                }[] | string;
+                                /** @enum {string} */
+                                contentFormat: "blocks" | "markdown";
+                                slug: string | null;
                                 projectId: string | null;
                                 issueId: string | null;
                                 initiativeId: string | null;
@@ -3248,7 +3251,10 @@ export interface paths {
                         icon?: string;
                         content?: {
                             [key: string]: unknown;
-                        }[];
+                        }[] | string;
+                        /** @enum {string} */
+                        contentFormat?: "blocks" | "markdown";
+                        slug?: string;
                         projectId?: string;
                         issueId?: string;
                         initiativeId?: string;
@@ -3272,7 +3278,10 @@ export interface paths {
                             icon: string | null;
                             content: {
                                 [key: string]: unknown;
-                            }[];
+                            }[] | string;
+                            /** @enum {string} */
+                            contentFormat: "blocks" | "markdown";
+                            slug: string | null;
                             projectId: string | null;
                             issueId: string | null;
                             initiativeId: string | null;
@@ -3328,7 +3337,10 @@ export interface paths {
                             icon: string | null;
                             content: {
                                 [key: string]: unknown;
-                            }[];
+                            }[] | string;
+                            /** @enum {string} */
+                            contentFormat: "blocks" | "markdown";
+                            slug: string | null;
                             projectId: string | null;
                             issueId: string | null;
                             initiativeId: string | null;
@@ -3403,7 +3415,10 @@ export interface paths {
                         icon?: string | null;
                         content?: {
                             [key: string]: unknown;
-                        }[];
+                        }[] | string;
+                        /** @enum {string} */
+                        contentFormat?: "blocks" | "markdown";
+                        slug?: string | null;
                         projectId?: string | null;
                         issueId?: string | null;
                         initiativeId?: string | null;
@@ -3427,7 +3442,10 @@ export interface paths {
                             icon: string | null;
                             content: {
                                 [key: string]: unknown;
-                            }[];
+                            }[] | string;
+                            /** @enum {string} */
+                            contentFormat: "blocks" | "markdown";
+                            slug: string | null;
                             projectId: string | null;
                             issueId: string | null;
                             initiativeId: string | null;
@@ -3488,7 +3506,10 @@ export interface paths {
                             icon: string | null;
                             content: {
                                 [key: string]: unknown;
-                            }[];
+                            }[] | string;
+                            /** @enum {string} */
+                            contentFormat: "blocks" | "markdown";
+                            slug: string | null;
                             projectId: string | null;
                             issueId: string | null;
                             initiativeId: string | null;
@@ -3550,7 +3571,7 @@ export interface paths {
                                 documentId: string;
                                 content: {
                                     [key: string]: unknown;
-                                }[];
+                                }[] | string;
                                 actorId: string;
                                 createdAt: string;
                             }[];
@@ -4113,7 +4134,10 @@ export interface paths {
                                 icon: string | null;
                                 content: {
                                     [key: string]: unknown;
-                                }[];
+                                }[] | string;
+                                /** @enum {string} */
+                                contentFormat: "blocks" | "markdown";
+                                slug: string | null;
                                 projectId: string | null;
                                 issueId: string | null;
                                 initiativeId: string | null;
@@ -4133,7 +4157,10 @@ export interface paths {
                                 icon: string | null;
                                 content: {
                                     [key: string]: unknown;
-                                }[];
+                                }[] | string;
+                                /** @enum {string} */
+                                contentFormat: "blocks" | "markdown";
+                                slug: string | null;
                                 projectId: string | null;
                                 issueId: string | null;
                                 initiativeId: string | null;
@@ -4266,7 +4293,10 @@ export interface paths {
                                 icon: string | null;
                                 content: {
                                     [key: string]: unknown;
-                                }[];
+                                }[] | string;
+                                /** @enum {string} */
+                                contentFormat: "blocks" | "markdown";
+                                slug: string | null;
                                 projectId: string | null;
                                 issueId: string | null;
                                 initiativeId: string | null;
@@ -4281,6 +4311,99 @@ export interface paths {
                             }[];
                         };
                     };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/docs/{organizationId}/{spaceId}/llms.txt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List doc {organizationId} llms.txt */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    spaceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description llms.txt index of published documents in the space */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": string;
+                    };
+                };
+                /** @description Space not found or not public */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/docs/{organizationId}/{spaceId}/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GET /docs/{organizationId}/{spaceId}/{slug} */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    spaceId: string;
+                    slug: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Document content as markdown */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/markdown": string;
+                    };
+                };
+                /** @description Document not found or not published */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
                 };
             };
         };

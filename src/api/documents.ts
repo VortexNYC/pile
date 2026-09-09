@@ -10,13 +10,17 @@ import { getWorkspaceStub } from "./stub.js";
 // loosely — the array-of-objects shape is the contract; block internals are
 // owned by the editor schema (BlockNote/TipTap).
 const blockSchema = z.array(z.record(z.string(), z.unknown()));
+// Agents write markdown; editors write blocks.
+const contentInputSchema = z.union([blockSchema, z.string()]);
 
 const documentSchema = z.object({
   id: z.string(),
   organizationId: z.string(),
   title: z.string(),
   icon: z.string().nullable(),
-  content: blockSchema,
+  content: contentInputSchema,
+  contentFormat: z.enum(["blocks", "markdown"]),
+  slug: z.string().nullable(),
   projectId: z.string().nullable(),
   issueId: z.string().nullable(),
   initiativeId: z.string().nullable(),
@@ -33,7 +37,9 @@ const documentSchema = z.object({
 const createDocumentSchema = z.object({
   title: z.string().min(1),
   icon: z.string().optional(),
-  content: blockSchema.optional(),
+  content: contentInputSchema.optional(),
+  contentFormat: z.enum(["blocks", "markdown"]).optional(),
+  slug: z.string().optional(),
   projectId: z.string().optional(),
   issueId: z.string().optional(),
   initiativeId: z.string().optional(),
@@ -45,7 +51,9 @@ const createDocumentSchema = z.object({
 const updateDocumentSchema = z.object({
   title: z.string().min(1).optional(),
   icon: z.string().nullable().optional(),
-  content: blockSchema.optional(),
+  content: contentInputSchema.optional(),
+  contentFormat: z.enum(["blocks", "markdown"]).optional(),
+  slug: z.string().nullable().optional(),
   projectId: z.string().nullable().optional(),
   issueId: z.string().nullable().optional(),
   initiativeId: z.string().nullable().optional(),
@@ -57,7 +65,7 @@ const updateDocumentSchema = z.object({
 const historyEntrySchema = z.object({
   id: z.string(),
   documentId: z.string(),
-  content: blockSchema,
+  content: contentInputSchema,
   actorId: z.string(),
   createdAt: z.string(),
 });
@@ -74,6 +82,8 @@ function toResponse(row: {
   parentDocumentId: string | null;
   spaceId: string | null;
   isTemplate: boolean;
+  contentFormat: "blocks" | "markdown";
+  slug: string | null;
   createdById: string;
   updatedById: string | null;
   createdAt: string;
@@ -82,7 +92,10 @@ function toResponse(row: {
 }) {
   return {
     ...row,
-    content: JSON.parse(row.content) as Record<string, unknown>[],
+    content:
+      row.contentFormat === "markdown"
+        ? row.content
+        : (JSON.parse(row.content) as Record<string, unknown>[]),
   };
 }
 
@@ -627,7 +640,13 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
       history: history.map((h) => ({
         id: h.id,
         documentId: h.documentId,
-        content: JSON.parse(h.content) as Record<string, unknown>[],
+        content: (() => {
+          try {
+            return JSON.parse(h.content) as Record<string, unknown>[];
+          } catch {
+            return h.content;
+          }
+        })(),
         actorId: h.actorId,
         createdAt: h.createdAt,
       })),

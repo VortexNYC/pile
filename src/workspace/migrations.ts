@@ -552,6 +552,12 @@ CREATE INDEX IF NOT EXISTS comments_document_idx ON comments (organization_id, d
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS comments_external_idx ON comments (organization_id, external_source, external_id)`;
 
+const v18 = `ALTER TABLE documents ADD COLUMN content_format TEXT NOT NULL DEFAULT 'blocks'
+--> statement-breakpoint
+ALTER TABLE documents ADD COLUMN slug TEXT
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS documents_space_slug_idx ON documents (space_id, slug)`;
+
 export const workspaceMigrations = {
   journal: {
     entries: [
@@ -572,6 +578,7 @@ export const workspaceMigrations = {
       { idx: 14, when: 14, tag: "v15", breakpoints: true },
       { idx: 15, when: 15, tag: "v16", breakpoints: true },
       { idx: 16, when: 16, tag: "v17", breakpoints: true },
+      { idx: 17, when: 17, tag: "v18", breakpoints: true },
     ],
   },
   migrations: {
@@ -592,5 +599,6 @@ export const workspaceMigrations = {
     m0014: v15,
     m0015: v16,
     m0016: v17,
+    m0017: v18,
   },
 } satisfies Parameters<typeof migrate>[1];
