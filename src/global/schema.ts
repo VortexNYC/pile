@@ -1018,6 +1018,7 @@ export const teamMember = sqliteTable(
     userId: text("user_id" as string)
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
+    role: text("role" as string).notNull().default("member"),
     membershipKey: text("membership_key" as string).unique(),
     createdAt: integer("created_at" as string, { mode: "timestamp_ms" })
       .notNull()

@@ -10087,6 +10087,92 @@ export interface paths {
         };
         options?: never;
         head?: never;
+        /** Update team member */
+        patch: {
+            parameters: {
+                query?: {
+                    memberType?: "user" | "agent";
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                    memberId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        role: "member" | "guest" | "admin";
+                    };
+                };
+            };
+            responses: {
+                /** @description Member role updated */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/users/{userId}/teams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List user teams */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    userId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description User teams */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            teams: {
+                                id: string;
+                                organizationId: string;
+                                key: string;
+                                name: string;
+                                ownerId: string;
+                                isDefault: boolean;
+                                isPublic: boolean;
+                                parentAutoClose: boolean;
+                                triageAssigneeId: string | null;
+                                defaultTemplateId: string | null;
+                                subIssueAutoClose: boolean;
+                                createdAt: string;
+                                updatedAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
         patch?: never;
         trace?: never;
     };

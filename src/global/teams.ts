@@ -266,7 +266,7 @@ function userTypeFromMetadata(
   }
 }
 
-async function resolveUserId(
+export async function resolveUserId(
   db: D1Client,
   memberId: string,
   memberType: "user" | "agent"
@@ -290,7 +290,8 @@ export async function addTeamMember(
   organizationId: string,
   teamId: string,
   memberId: string,
-  memberType: "user" | "agent" = "user"
+  memberType: "user" | "agent" = "user",
+  role = "member"
 ): Promise<void> {
   const userId = await resolveUserId(db, memberId, memberType);
 
@@ -329,6 +330,7 @@ export async function addTeamMember(
       id: crypto.randomUUID(),
       teamId,
       userId,
+      role,
       createdAt: new Date(),
     });
   }
@@ -353,6 +355,7 @@ export async function listTeamMembers(
   const rows = await db
     .select({
       userId: teamMember.userId,
+      role: teamMember.role,
       userMetadata: userTable.metadata,
     })
     .from(teamMember)
@@ -362,7 +365,7 @@ export async function listTeamMembers(
   return rows.map((r) => ({
     memberId: r.userId,
     memberType: userTypeFromMetadata(r.userMetadata),
-    role: "member",
+    role: r.role,
   }));
 }
 
@@ -421,4 +424,35 @@ export async function getVisibleTeamIds(
     }
   }
   return visible;
+}
+
+export async function updateTeamMemberRole(
+  db: D1Client,
+  teamId: string,
+  userId: string,
+  role: string
+) {
+  await db
+    .update(teamMember)
+    .set({ role })
+    .where(and(eq(teamMember.teamId, teamId), eq(teamMember.userId, userId)));
+}
+
+export async function listUserTeams(
+  db: D1Client,
+  organizationId: string,
+  userId: string
+): Promise<TeamRecord[]> {
+  const rows = await db
+    .select({
+      team: team,
+    })
+    .from(team)
+    .where(eq(team.organizationId, organizationId))
+    .innerJoin(
+      teamMember,
+      and(eq(team.id, teamMember.teamId), eq(teamMember.userId, userId))
+    )
+    .all();
+  return rows.map((r) => teamRecordFromRow(r.team));
 }

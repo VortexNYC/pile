@@ -4552,6 +4552,36 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "teams members update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/teams/{id}/members/{memberId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+      {
+        name: "memberId",
+        flag: "member",
+      },
+    ],
+    query: [
+      {
+        name: "memberType",
+        flag: "member-type",
+      },
+    ],
+    body: [
+      {
+        name: "role",
+        flag: "role",
+      },
+    ],
+  },
   "teams members delete": {
     method: "DELETE",
     path: "/workspaces/{organizationId}/teams/{id}/members/{memberId}",
@@ -4575,6 +4605,22 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "member-type",
       },
     ],
+    body: [],
+  },
+  "users teams list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/users/{userId}/teams",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "userId",
+        flag: "user",
+      },
+    ],
+    query: [],
     body: [],
   },
   "templates list": {

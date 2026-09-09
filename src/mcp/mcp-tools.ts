@@ -2807,6 +2807,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdUsersUserIdTeams",
+    "description": "List user teams (GET /workspaces/{organizationId}/users/{userId}/teams)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/users/{userId}/teams",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "userId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdWebhooksubscriptions",
     "description": "List webhook subscriptions (GET /workspaces/{organizationId}/webhook-subscriptions)",
     "method": "GET",
@@ -3939,6 +3960,54 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "patchWorkspacesOrganizationIdTeamsIdMembersMemberId",
+    "description": "Update team member (PATCH /workspaces/{organizationId}/teams/{id}/members/{memberId})",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/teams/{id}/members/{memberId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "memberId": {
+          "type": "string"
+        },
+        "memberType": {
+          "type": "string",
+          "enum": [
+            "user",
+            "agent"
+          ]
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "role": {
+              "type": "string",
+              "enum": [
+                "member",
+                "guest",
+                "admin"
+              ]
+            }
+          },
+          "required": [
+            "role"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "memberId",
         "organizationId"
       ]
     }

@@ -10,8 +10,11 @@ import {
   getVisibleTeamIds,
   listTeamMembers,
   listTeams,
+  listUserTeams,
   removeTeamMember,
+  resolveUserId,
   updateTeam,
+  updateTeamMemberRole,
   type TeamRecord,
 } from "../global/teams.js";
 import { VortexError } from "../platform/errors.js";
@@ -243,6 +246,51 @@ const removeTeamMemberRoute = createRoute({
   },
 });
 
+const updateTeamMemberRoute = createRoute({
+  method: "patch",
+  path: "/workspaces/{organizationId}/teams/{id}/members/{memberId}",
+  tags: ["teams"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({
+      organizationId: z.string(),
+      id: z.string(),
+      memberId: z.string(),
+    }),
+    query: z.object({
+      memberType: z.enum(["user", "agent"]).optional(),
+    }),
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({ role: z.enum(["member", "guest", "admin"]) }),
+        },
+      },
+    },
+  },
+  responses: {
+    204: { description: "Member role updated" },
+  },
+});
+
+const listUserTeamsRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/users/{userId}/teams",
+  tags: ["teams"],
+  middleware: [rls("read")],
+  request: {
+    params: z.object({ organizationId: z.string(), userId: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "User teams",
+      content: {
+        "application/json": { schema: z.object({ teams: z.array(teamSchema) }) },
+      },
+    },
+  },
+});
+
 function canManageTeam(
   record: TeamRecord,
   identity: {
@@ -415,7 +463,7 @@ export function registerTeamRoutes(app: OpenAPIHono<AppContext>) {
         message: "Cannot manage this team",
       });
     }
-    await addTeamMember(db, organizationId, id, body.memberId, body.memberType);
+    await addTeamMember(db, organizationId, id, body.memberId, body.memberType, body.role);
     return c.body(null, 204);
   });
 
@@ -441,5 +489,38 @@ export function registerTeamRoutes(app: OpenAPIHono<AppContext>) {
     }
     await removeTeamMember(db, id, memberId, memberType ?? "user");
     return c.body(null, 204);
+  });
+
+  app.openapi(updateTeamMemberRoute, async (c) => {
+    const { organizationId, id, memberId } = c.req.valid("param");
+    const { memberType } = c.req.valid("query");
+    const body = c.req.valid("json");
+    const identity = c.get("workspaceIdentity");
+    const db = createD1(c.env.D1);
+    const record = await getTeamById(db, id, organizationId);
+    if (!record) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Team not found",
+      });
+    }
+    if (!canManageTeam(record, identity)) {
+      throw new VortexError({
+        code: "FORBIDDEN",
+        status: 403,
+        message: "Cannot manage this team",
+      });
+    }
+    const userId = await resolveUserId(db, memberId, memberType ?? "user");
+    await updateTeamMemberRole(db, id, userId, body.role);
+    return c.body(null, 204);
+  });
+
+  app.openapi(listUserTeamsRoute, async (c) => {
+    const { organizationId, userId } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const teams = await listUserTeams(db, organizationId, userId);
+    return c.json({ teams: teams.map(serializeTeam) });
   });
 }
