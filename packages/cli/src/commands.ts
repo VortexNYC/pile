@@ -3853,6 +3853,92 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "push tokens list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/push-tokens",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "push tokens create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/push-tokens",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "provider",
+        flag: "provider",
+      },
+      {
+        name: "token",
+        flag: "token",
+      },
+    ],
+  },
+  "push tokens delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/push-tokens/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "push send create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/push/send",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "tokenId",
+        flag: "token",
+      },
+      {
+        name: "userId",
+        flag: "user",
+      },
+      {
+        name: "title",
+        flag: "title",
+      },
+      {
+        name: "body",
+        flag: "body",
+      },
+      {
+        name: "data",
+        flag: "data",
+      },
+    ],
+  },
   "issues reactions": {
     method: "POST",
     path: "/workspaces/{organizationId}/issues/{id}/reactions",

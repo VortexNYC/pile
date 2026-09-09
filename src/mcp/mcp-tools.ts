@@ -497,6 +497,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdPushtokensId",
+    "description": "Delete push token (DELETE /workspaces/{organizationId}/push-tokens/{id})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/push-tokens/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdReactionsReactionId",
     "description": "Delete reaction (DELETE /workspaces/{organizationId}/reactions/{reactionId})",
     "method": "DELETE",
@@ -2228,6 +2249,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         "id",
         "organizationId",
         "projectId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdPushtokens",
+    "description": "List push tokens (GET /workspaces/{organizationId}/push-tokens)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/push-tokens",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
       ]
     }
   },
@@ -5510,6 +5548,94 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "organizationId",
         "projectId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdPushSend",
+    "description": "Create push send (POST /workspaces/{organizationId}/push/send)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/push/send",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "tokenId": {
+              "type": "string"
+            },
+            "userId": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1
+            },
+            "body": {
+              "type": "string",
+              "minLength": 1
+            },
+            "data": {
+              "type": "object",
+              "additionalProperties": {
+                "nullable": true
+              },
+              "default": {}
+            }
+          },
+          "required": [
+            "title",
+            "body"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdPushtokens",
+    "description": "Create push token (POST /workspaces/{organizationId}/push-tokens)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/push-tokens",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "provider": {
+              "type": "string",
+              "enum": [
+                "fcm",
+                "apns",
+                "expo"
+              ],
+              "default": "fcm"
+            },
+            "token": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "token"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
       ]
     }
   },

@@ -575,6 +575,67 @@ export const outboundWebhookDeliveries = sqliteTable(
   ]
 );
 
+export const pushTokens = sqliteTable(
+  "push_tokens" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    userId: text("user_id" as string)
+      .notNull()
+      .references(() => user.id),
+    name: text("name" as string),
+    provider: text("provider" as string, {
+      enum: ["fcm", "apns", "expo"] as const,
+    })
+      .notNull()
+      .default("fcm"),
+    token: text("token" as string).notNull(),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("push_tokens_organization_idx" as string).on(table.organizationId),
+    index("push_tokens_user_idx" as string).on(table.userId),
+  ]
+);
+
+export const pushDeliveries = sqliteTable(
+  "push_deliveries" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    tokenId: text("token_id" as string)
+      .notNull()
+      .references(() => pushTokens.id),
+    userId: text("user_id" as string)
+      .notNull()
+      .references(() => user.id),
+    payload: text("payload" as string).notNull(),
+    status: text("status" as string)
+      .notNull()
+      .default("pending"),
+    error: text("error" as string),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("push_deliveries_organization_idx" as string).on(
+      table.organizationId
+    ),
+    index("push_deliveries_token_idx" as string).on(table.tokenId),
+    index("push_deliveries_user_idx" as string).on(table.userId),
+  ]
+);
+
 export const notifications = sqliteTable(
   "notifications" as string,
   {

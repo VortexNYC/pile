@@ -33,6 +33,7 @@ import { registerProjectDetailRoutes } from "./projects.js";
 import { registerMigrateRoutes } from "./migrate.js";
 import { registerNotificationRoutes } from "./notifications.js";
 import { registerOAuthClientRoutes } from "./oauth-clients.js";
+import { registerPushRoutes } from "./push.js";
 import { registerReactionRoutes } from "./reactions.js";
 import { registerSavedViewRoutes } from "./saved-views.js";
 import {
@@ -94,6 +95,7 @@ registerStateRoutes(app);
 registerWebhookRoutes(app);
 registerLinearUserRoutes(app);
 registerNotificationRoutes(app);
+registerPushRoutes(app);
 registerReactionRoutes(app);
 registerSavedViewRoutes(app);
 registerTeamRoutes(app);
