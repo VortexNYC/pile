@@ -2,14 +2,21 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import {
+  getNotionDatabase,
   getNotionPage,
   getNotionPageMarkdown,
   getNotionWorkspaceInfo,
   NotionApiError,
+  queryNotionDatabase,
   searchNotionPages,
+  type NotionPage,
   type NotionSearchPage,
 } from "../global/notion-client.js";
 import { upsertNotionInstallation } from "../global/notion-installations.js";
+import {
+  findNotionIssueMapping,
+  upsertNotionIssueMapping,
+} from "../global/notion-issue-mappings.js";
 import {
   findNotionPageMapping,
   upsertNotionPageMapping,
@@ -17,6 +24,7 @@ import {
 import { findNotionUserByNotionId } from "../global/notion-users.js";
 import { notionPageMappings } from "../global/schema.js";
 import { VortexError } from "../platform/errors.js";
+import type { IssueInput } from "../types/workspace.js";
 import type {
   ImportContext,
   ImportCounts,
@@ -33,6 +41,8 @@ export type NotionCredentials = z.infer<typeof notionCredentialsSchema>;
 export const notionOptionsSchema = z.object({
   rootPageId: z.string().optional(),
   spaceId: z.string().optional(),
+  databaseId: z.string().optional(),
+  teamId: z.string().optional(),
 });
 
 export type NotionOptions = z.infer<typeof notionOptionsSchema>;
@@ -138,7 +148,7 @@ export const notionImportSource: ImportSource<
   async run(ctx, credentials, options): Promise<ImportCounts> {
     const parsedOptions = notionOptionsSchema.parse(options ?? {});
     const { token } = credentials;
-    const { rootPageId, spaceId } = parsedOptions;
+    const { rootPageId, spaceId, databaseId, teamId } = parsedOptions;
 
     let workspaceInfo;
     try {
@@ -160,6 +170,10 @@ export const notionImportSource: ImportSource<
       workspaceInfo.workspaceId,
       token
     );
+
+    if (databaseId) {
+      return importNotionDatabase(ctx, token, databaseId, teamId);
+    }
 
     const pages: NotionSearchPage[] = [];
 
@@ -242,3 +256,77 @@ export const notionImportSource: ImportSource<
     };
   },
 };
+
+async function importNotionDatabase(
+  ctx: ImportContext,
+  token: string,
+  databaseId: string,
+  teamId: string | undefined
+): Promise<ImportCounts> {
+  const database = await getNotionDatabase(token, databaseId);
+
+  const rows: NotionPage[] = [];
+  let cursor: string | null = null;
+  do {
+    const result = await queryNotionDatabase(
+      token,
+      databaseId,
+      database.titlePropertyName,
+      cursor ?? undefined
+    );
+    rows.push(...result.rows);
+    cursor = result.nextCursor;
+  } while (cursor);
+
+  let created = 0;
+  let updated = 0;
+  let errors = 0;
+
+  for (const row of rows) {
+    try {
+      const markdown = await getNotionPageMarkdown(token, row.id);
+      const actorId = await resolveNotionUserId(
+        ctx,
+        row.lastEditedById ?? row.createdById,
+        ctx.importerId
+      );
+      const mapping = await findNotionIssueMapping(
+        ctx.db,
+        ctx.organizationId,
+        row.id
+      );
+
+      if (mapping) {
+        await ctx.stub.updateIssue(
+          mapping.issueId,
+          { title: row.title, description: markdown },
+          actorId
+        );
+        updated++;
+      } else {
+        const issueInput: IssueInput = {
+          title: row.title,
+          description: markdown,
+          teamId,
+        };
+        const issue = await ctx.stub.createIssue(issueInput, actorId);
+        await upsertNotionIssueMapping(
+          ctx.db,
+          ctx.organizationId,
+          row.id,
+          issue.id
+        );
+        created++;
+      }
+    } catch {
+      errors++;
+    }
+  }
+
+  return {
+    issues: created + updated,
+    created,
+    updated,
+    errors,
+  };
+}

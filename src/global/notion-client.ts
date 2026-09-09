@@ -252,6 +252,35 @@ const notionSearchResponseSchema = z.object({
   next_cursor: z.string().nullable().optional(),
 });
 
+const notionDatabaseSchema = z.object({
+  object: z.literal("database"),
+  id: z.string(),
+  properties: z.record(z.string(), z.unknown()),
+});
+
+const notionDatabaseRowSchema = z.object({
+  object: z.literal("page"),
+  id: z.string(),
+  url: z.string().optional(),
+  icon: z.unknown().optional(),
+  properties: z.record(z.string(), z.unknown()).optional(),
+  parent: z.unknown().optional(),
+  created_by: z.unknown().optional(),
+  last_edited_by: z.unknown().optional(),
+});
+
+const notionDatabaseQueryResponseSchema = z.object({
+  object: z.literal("list"),
+  results: z.array(notionDatabaseRowSchema),
+  has_more: z.boolean().optional(),
+  next_cursor: z.string().nullable().optional(),
+});
+
+const titlePropertySchema = z.object({
+  type: z.literal("title"),
+  title: z.array(z.unknown()),
+});
+
 export type NotionSearchPage = {
   id: string;
   url: string;
@@ -294,6 +323,104 @@ export async function searchNotionPages(
     };
   });
   return { pages, nextCursor: data.next_cursor ?? null };
+}
+
+function extractDatabaseRowTitle(
+  properties: unknown,
+  titlePropertyName: string | null
+): string {
+  const record = propertiesRecordSchema.safeParse(properties).success
+    ? propertiesRecordSchema.parse(properties)
+    : {};
+  const name = titlePropertyName ?? "Name";
+  const titleProperty = record[name];
+  const parsed = titlePropertySchema.safeParse(titleProperty);
+  if (!parsed.success) return "Untitled";
+  const texts = parsed.data.title
+    .map((item) => {
+      const text = plainTextSchema.safeParse(item);
+      return text.success ? text.data.plain_text : "";
+    })
+    .filter(Boolean);
+  return texts.length > 0 ? texts.join("") : "Untitled";
+}
+
+function findTitlePropertyName(properties: unknown): string | null {
+  const record = propertiesRecordSchema.safeParse(properties).success
+    ? propertiesRecordSchema.parse(properties)
+    : {};
+  for (const [name, value] of Object.entries(record)) {
+    if (titlePropertySchema.safeParse(value).success) {
+      return name;
+    }
+  }
+  return null;
+}
+
+export type NotionDatabase = {
+  id: string;
+  titlePropertyName: string | null;
+};
+
+export async function getNotionDatabase(
+  token: string,
+  databaseId: string
+): Promise<NotionDatabase> {
+  const raw = await notionRequest(
+    token,
+    "GET",
+    `/databases/${encodeURIComponent(databaseId)}`,
+    undefined,
+    (value) => {
+      const parsed = notionDatabaseSchema.safeParse(value);
+      if (!parsed.success) {
+        throw new NotionApiError("Invalid Notion database response", 500);
+      }
+      return parsed.data;
+    }
+  );
+  return {
+    id: raw.id,
+    titlePropertyName: findTitlePropertyName(raw.properties),
+  };
+}
+
+export async function queryNotionDatabase(
+  token: string,
+  databaseId: string,
+  titlePropertyName: string | null,
+  cursor?: string | null
+): Promise<{ rows: NotionPage[]; nextCursor: string | null }> {
+  const data = await notionRequest(
+    token,
+    "POST",
+    `/databases/${encodeURIComponent(databaseId)}/query`,
+    {
+      page_size: 100,
+      ...(cursor ? { start_cursor: cursor } : {}),
+    },
+    (value) => {
+      const parsed = notionDatabaseQueryResponseSchema.safeParse(value);
+      if (!parsed.success) {
+        throw new NotionApiError("Invalid Notion database query response", 500);
+      }
+      return parsed.data;
+    }
+  );
+  const rows = data.results.map((result) => {
+    const parent = extractParent(result.parent);
+    return {
+      id: result.id,
+      url: result.url ?? `https://www.notion.so/${result.id.replace(/-/g, "")}`,
+      icon: extractIcon(result.icon),
+      title: extractDatabaseRowTitle(result.properties, titlePropertyName),
+      parentType: parent.type,
+      parentPageId: parent.pageId,
+      createdById: extractUserId(result.created_by),
+      lastEditedById: extractUserId(result.last_edited_by),
+    };
+  });
+  return { rows, nextCursor: data.next_cursor ?? null };
 }
 
 export { NotionApiError };

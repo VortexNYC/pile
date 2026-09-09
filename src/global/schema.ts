@@ -1321,6 +1321,34 @@ export const notionPageMappings = sqliteTable(
   ]
 );
 
+export const notionIssueMappings = sqliteTable(
+  "notion_issue_mappings" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    notionPageId: text("notion_page_id" as string).notNull(),
+    issueId: text("issue_id" as string).notNull(),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("notion_issue_mappings_workspace_page_idx" as string).on(
+      table.organizationId,
+      table.notionPageId
+    ),
+    index("notion_issue_mappings_issue_idx" as string).on(
+      table.organizationId,
+      table.issueId
+    ),
+  ]
+);
+
 export const savedViews = sqliteTable(
   "saved_views" as string,
   {

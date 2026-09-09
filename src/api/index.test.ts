@@ -2559,6 +2559,138 @@ describe("API integration", () => {
     }
   });
 
+  it("imports a Notion database into Vortex issues", async () => {
+    const organizationId = await seedWorkspace();
+    const token = await adminToken(organizationId);
+
+    const teamRes = await app.fetch(
+      request(`/workspaces/${organizationId}/teams`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ key: "ENG", name: "Engineering" }),
+      }),
+      env
+    );
+    expect(teamRes.status).toBe(201);
+    const team = await teamRes.json<{ id: string }>();
+
+    const notionRequests: { method: string; path: string }[] = [];
+    const originalFetch = globalThis.fetch;
+
+    globalThis.fetch = async (
+      input: RequestInfo | URL,
+      init?: RequestInit
+    ): Promise<Response> => {
+      const path = notionPath(input);
+      if (!path) return originalFetch(input, init);
+
+      const method = init?.method ?? "GET";
+      notionRequests.push({ method, path });
+
+      if (method === "GET" && path === "/users/me") {
+        return Response.json({
+          object: "user",
+          id: "bot-1",
+          type: "bot",
+          bot: {
+            owner: { type: "workspace", workspace: true },
+            workspace_name: "Test Notion",
+            workspace_id: "ws-1",
+          },
+        });
+      }
+
+      if (method === "GET" && path === "/databases/db-1") {
+        return Response.json({
+          object: "database",
+          id: "db-1",
+          properties: {
+            Name: { type: "title" },
+            Status: { type: "select" },
+          },
+        });
+      }
+
+      if (method === "POST" && path === "/databases/db-1/query") {
+        return Response.json({
+          object: "list",
+          results: [
+            {
+              object: "page",
+              id: "issue-row-1",
+              url: "https://www.notion.so/issue-row-1",
+              properties: {
+                Name: {
+                  type: "title",
+                  title: [{ plain_text: "Database Issue One" }],
+                },
+              },
+              parent: { type: "database_id", database_id: "db-1" },
+              created_by: { id: "notion-user-1" },
+              last_edited_by: { id: "notion-user-1" },
+            },
+          ],
+          has_more: false,
+          next_cursor: null,
+        });
+      }
+
+      if (method === "GET" && path === "/pages/issue-row-1/markdown") {
+        return Response.json({
+          object: "page_markdown",
+          id: "issue-row-1",
+          markdown: "# Database Issue One\n\nDetails from Notion.",
+        });
+      }
+
+      return new Response("Not Found", { status: 404 });
+    };
+
+    try {
+      const importRes = await app.fetch(
+        request(`/workspaces/${organizationId}/import`, {
+          method: "POST",
+          token,
+          body: JSON.stringify({
+            source: "notion",
+            credentials: { token: "ntn-test" },
+            options: { databaseId: "db-1", teamId: team.id },
+          }),
+        }),
+        env
+      );
+      expect(importRes.status).toBe(200);
+      const importBody = await importRes.json<{
+        ok: boolean;
+        source: string;
+        counts: { created: number; updated: number; errors: number };
+      }>();
+      expect(importBody.ok).toBe(true);
+      expect(importBody.source).toBe("notion");
+      expect(importBody.counts.created).toBe(1);
+      expect(importBody.counts.updated).toBe(0);
+      expect(importBody.counts.errors).toBe(0);
+
+      const issuesRes = await app.fetch(
+        request(`/workspaces/${organizationId}/issues`, { token }),
+        env
+      );
+      expect(issuesRes.status).toBe(200);
+      const issuesBody = await issuesRes.json<{ issues: unknown[] }>();
+      expect(issuesBody.issues).toHaveLength(1);
+
+      const issue = issuesBody.issues[0] as {
+        id: string;
+        title: string;
+        description: string;
+      };
+      expect(issue.title).toBe("Database Issue One");
+      expect(issue.description).toContain("Details from Notion");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("imports Jira issues into Vortex", async () => {
     const organizationId = await seedWorkspace();
     const token = await adminToken(organizationId);
