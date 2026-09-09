@@ -510,6 +510,11 @@ export const workspaceDocumentHistory = sqliteTable(
     organizationId: text("organization_id" as string).notNull(),
     documentId: text("document_id" as string).notNull(),
     content: text("content" as string).notNull(),
+    contentFormat: text("content_format" as string, {
+      enum: ["blocks", "markdown"],
+    })
+      .notNull()
+      .default("blocks"),
     actorId: text("actor_id" as string).notNull(),
     createdAt: text("created_at" as string).notNull(),
   },

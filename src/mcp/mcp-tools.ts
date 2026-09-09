@@ -3922,6 +3922,31 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdDocumentsIdHistoryEntryIdRestore",
+    "description": "Create document history restore (POST /workspaces/{organizationId}/documents/{id}/history/{entryId}/restore)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/documents/{id}/history/{entryId}/restore",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "entryId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "entryId",
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdDocumentsIdRestore",
     "description": "Create document restore (POST /workspaces/{organizationId}/documents/{id}/restore)",
     "method": "POST",

@@ -2142,6 +2142,26 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "documents history restore create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/documents/{id}/history/{entryId}/restore",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+      {
+        name: "entryId",
+        flag: "entry-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "docs llms.txt list": {
     method: "GET",
     path: "/docs/{organizationId}/{spaceId}/llms.txt",

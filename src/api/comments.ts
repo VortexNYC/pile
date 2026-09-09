@@ -2,6 +2,7 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
 import { createD1 } from "../global/db.js";
+import { resolveMentions } from "./mentions.js";
 import { getInstallationToken } from "../global/github-auth.js";
 import { findGithubInstallation } from "../global/github-installations.js";
 import { findRepoIssueByIssueId } from "../global/repo-issues.js";
@@ -196,10 +197,12 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
         message: "Cannot comment on this issue",
       });
     }
+    const mentions = await resolveMentions(db, organizationId, body);
     const created = await issueStub.createComment({
       issueId,
       authorId: identity.id,
       body,
+      mentions,
     });
     if (!created) {
       throw new VortexError({

@@ -680,7 +680,9 @@ export type NotificationType =
   | "issue_updated"
   | "issue_deleted"
   | "comment_created"
-  | "document_updated";
+  | "document_updated"
+  | "document_commented"
+  | "mention";
 
 export type RecipientType = "user" | "agent";
 
@@ -1467,6 +1469,7 @@ export function createDocument(db: WorkspaceDb, input: DocumentInput) {
       organizationId: input.organizationId,
       documentId: id,
       content,
+      contentFormat,
       actorId: input.createdById,
       createdAt: now,
     })
@@ -1588,10 +1591,10 @@ export function updateDocument(
       typeof update.content === "string"
         ? update.content
         : JSON.stringify(update.content);
-    if (update.contentFormat === undefined) {
-      patch.contentFormat =
-        typeof update.content === "string" ? "markdown" : "blocks";
-    }
+    const resolvedFormat: "blocks" | "markdown" =
+      update.contentFormat ??
+      (typeof update.content === "string" ? "markdown" : "blocks");
+    patch.contentFormat = resolvedFormat;
     patch.content = content;
     db.insert(workspaceDocumentHistory)
       .values({
@@ -1599,6 +1602,7 @@ export function updateDocument(
         organizationId,
         documentId: id,
         content,
+        contentFormat: resolvedFormat,
         actorId,
         createdAt: new Date().toISOString(),
       })
@@ -1642,6 +1646,25 @@ export function deleteDocument(
       .returning()
       .all().length > 0
   );
+}
+
+export function getDocumentHistoryEntry(
+  db: WorkspaceDb,
+  organizationId: string,
+  documentId: string,
+  entryId: string
+) {
+  return db
+    .select()
+    .from(workspaceDocumentHistory)
+    .where(
+      and(
+        eq(workspaceDocumentHistory.id, entryId),
+        eq(workspaceDocumentHistory.documentId, documentId),
+        eq(workspaceDocumentHistory.organizationId, organizationId)
+      )
+    )
+    .get();
 }
 
 export function listDocumentHistory(

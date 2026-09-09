@@ -9307,6 +9307,157 @@
         "summary": "List issue documents"
       }
     },
+    "/workspaces/{organizationId}/documents/{id}/history/{entryId}/restore": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "entryId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Document restored to the given history entry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "icon": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "content": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "nullable": true
+                            }
+                          }
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "contentFormat": {
+                      "type": "string",
+                      "enum": [
+                        "blocks",
+                        "markdown"
+                      ]
+                    },
+                    "slug": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "projectId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "issueId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "initiativeId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "parentDocumentId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "spaceId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "isTemplate": {
+                      "type": "boolean"
+                    },
+                    "createdById": {
+                      "type": "string"
+                    },
+                    "updatedById": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    },
+                    "trashedAt": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "title",
+                    "icon",
+                    "content",
+                    "contentFormat",
+                    "slug",
+                    "projectId",
+                    "issueId",
+                    "initiativeId",
+                    "parentDocumentId",
+                    "spaceId",
+                    "isTemplate",
+                    "createdById",
+                    "updatedById",
+                    "createdAt",
+                    "updatedAt",
+                    "trashedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Document or history entry not found"
+          }
+        },
+        "summary": "Create document history restore"
+      }
+    },
     "/docs/{organizationId}/{spaceId}/llms.txt": {
       "get": {
         "tags": [

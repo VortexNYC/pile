@@ -583,6 +583,8 @@ CREATE INDEX IF NOT EXISTS document_links_document_idx ON document_links (organi
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS document_links_target_idx ON document_links (organization_id, target_type, target_id)`;
 
+const v20 = `ALTER TABLE document_content_history ADD COLUMN content_format TEXT NOT NULL DEFAULT 'blocks'`;
+
 export const workspaceMigrations = {
   journal: {
     entries: [
@@ -605,6 +607,7 @@ export const workspaceMigrations = {
       { idx: 16, when: 16, tag: "v17", breakpoints: true },
       { idx: 17, when: 17, tag: "v18", breakpoints: true },
       { idx: 18, when: 18, tag: "v19", breakpoints: true },
+      { idx: 19, when: 19, tag: "v20", breakpoints: true },
     ],
   },
   migrations: {
@@ -627,5 +630,6 @@ export const workspaceMigrations = {
     m0016: v17,
     m0017: v18,
     m0018: v19,
+    m0019: v20,
   },
 } satisfies Parameters<typeof migrate>[1];

@@ -574,6 +574,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   async createComment(values: {
     issueId?: string | null;
     documentId?: string | null;
+    mentions?: string[];
     authorId?: string | null;
     body: string;
     externalId?: string;
@@ -598,6 +599,48 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       createdAt: values.createdAt ?? ts,
       updatedAt: values.updatedAt ?? ts,
     });
+    const subjectId = values.documentId ?? values.issueId;
+    if (subjectId) {
+      const notified = new Set<string>();
+      if (values.documentId) {
+        await Promise.all(
+          data.listDocumentWatchers(this.db, subjectId).map(
+            async (watcherId) => {
+              if (watcherId === values.authorId || notified.has(watcherId))
+                return;
+              notified.add(watcherId);
+              await data.createNotification(this.db, {
+                organizationId: this.organizationId,
+                recipientId: watcherId,
+                recipientType: "user",
+                issueId: subjectId,
+                type: "document_commented",
+                metadata: { documentId: subjectId, commentId: id },
+              });
+            }
+          )
+        );
+      }
+      await Promise.all(
+        (values.mentions ?? []).map(async (mentionId) => {
+          if (mentionId === values.authorId || notified.has(mentionId))
+            return;
+          notified.add(mentionId);
+          await data.createNotification(this.db, {
+            organizationId: this.organizationId,
+            recipientId: mentionId,
+            recipientType: "user",
+            issueId: subjectId,
+            type: "mention",
+            metadata: {
+              documentId: values.documentId ?? null,
+              issueId: values.issueId ?? null,
+              commentId: id,
+            },
+          });
+        })
+      );
+    }
     return this.getComment(id);
   }
 
@@ -1159,6 +1202,34 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   listDocumentHistory(documentId: string) {
     return data.listDocumentHistory(this.db, this.organizationId, documentId);
+  }
+
+  async restoreDocumentVersion(
+    documentId: string,
+    entryId: string,
+    actorId: string
+  ) {
+    const entry = data.getDocumentHistoryEntry(
+      this.db,
+      this.organizationId,
+      documentId,
+      entryId
+    );
+    if (!entry) return undefined;
+    const doc = await this.updateDocument(
+      documentId,
+      {
+        content: entry.content,
+        contentFormat: entry.contentFormat,
+      },
+      actorId
+    );
+    if (doc) {
+      this.audit("document.restored", "document", documentId, actorId, {
+        historyEntryId: { from: null, to: entryId },
+      });
+    }
+    return doc;
   }
 
   // ---- customers ----

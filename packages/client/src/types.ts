@@ -4562,6 +4562,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/documents/{id}/history/{entryId}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create document history restore */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                    entryId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Document restored to the given history entry */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            title: string;
+                            icon: string | null;
+                            content: {
+                                [key: string]: unknown;
+                            }[] | string;
+                            /** @enum {string} */
+                            contentFormat: "blocks" | "markdown";
+                            slug: string | null;
+                            projectId: string | null;
+                            issueId: string | null;
+                            initiativeId: string | null;
+                            parentDocumentId: string | null;
+                            spaceId: string | null;
+                            isTemplate: boolean;
+                            createdById: string;
+                            updatedById: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                            trashedAt: string | null;
+                        };
+                    };
+                };
+                /** @description Document or history entry not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/docs/{organizationId}/{spaceId}/llms.txt": {
         parameters: {
             query?: never;

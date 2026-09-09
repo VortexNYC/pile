@@ -12,6 +12,7 @@ import type {
   WorkerEnv,
 } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
+import { resolveMentions } from "./mentions.js";
 import { getWorkspaceStub } from "./stub.js";
 
 // `content` is a BlockNote document: a JSON array of blocks. Validated
@@ -750,6 +751,28 @@ const issueDocumentsRoute = createRoute({
   },
 });
 
+
+const restoreVersionRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/documents/{id}/history/{entryId}/restore",
+  tags: ["documents"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({
+      organizationId: z.string(),
+      id: z.string(),
+      entryId: z.string(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Document restored to the given history entry",
+      content: { "application/json": { schema: documentSchema } },
+    },
+    404: { description: "Document or history entry not found" },
+  },
+});
+
 export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
@@ -890,10 +913,16 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
     const stub = getWorkspaceStub(c.env, organizationId);
     const doc = await stub.getDocument(id);
     if (!doc) return notFound();
+    const mentions = await resolveMentions(
+      createD1(c.env.D1),
+      organizationId,
+      body
+    );
     const comment = await stub.createComment({
       documentId: id,
       authorId: identity.id,
       body,
+      mentions,
     });
     return c.json(comment, 201);
   });
@@ -1052,5 +1081,15 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
       }
     );
     return c.json({ documents: docs.map(toResponse) });
+  });
+
+  app.openapi(restoreVersionRoute, async (c) => {
+    const { organizationId, id, entryId } = c.req.valid("param");
+    const identity = c.get("workspaceIdentity");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    await assertDocAccess(c, stub, id, "edit");
+    const doc = await stub.restoreDocumentVersion(id, entryId, identity.id);
+    if (!doc) return notFound();
+    return c.json(toResponse(doc));
   });
 }
