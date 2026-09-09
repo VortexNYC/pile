@@ -1238,6 +1238,89 @@ export const gitlabUsers = sqliteTable(
   ]
 );
 
+export const notionInstallations = sqliteTable(
+  "notion_installations" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    workspaceId: text("workspace_id" as string),
+    token: text("token" as string).notNull(),
+    verificationToken: text("verification_token" as string),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("notion_installations_workspace_idx" as string).on(
+      table.organizationId,
+      table.workspaceId
+    ),
+    index("notion_installations_organization_idx" as string).on(
+      table.organizationId
+    ),
+  ]
+);
+
+export const notionUsers = sqliteTable(
+  "notion_users" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    userId: text("user_id" as string)
+      .notNull()
+      .references(() => user.id),
+    notionUserId: text("notion_user_id" as string).notNull(),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("notion_users_workspace_user_idx" as string).on(
+      table.organizationId,
+      table.userId
+    ),
+    uniqueIndex("notion_users_workspace_notion_idx" as string).on(
+      table.organizationId,
+      table.notionUserId
+    ),
+  ]
+);
+
+export const notionPageMappings = sqliteTable(
+  "notion_page_mappings" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    notionPageId: text("notion_page_id" as string).notNull(),
+    documentId: text("document_id" as string).notNull(),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("notion_page_mappings_workspace_page_idx" as string).on(
+      table.organizationId,
+      table.notionPageId
+    ),
+    index("notion_page_mappings_document_idx" as string).on(
+      table.organizationId,
+      table.documentId
+    ),
+  ]
+);
+
 export const savedViews = sqliteTable(
   "saved_views" as string,
   {
