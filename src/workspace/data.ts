@@ -48,6 +48,8 @@ import {
   workspaceReleasePipelines,
   workspaceReleases,
   workspaceSavedViews,
+  gitAutomationStates,
+  gitAutomationTargetBranches,
   timeSchedules,
   workspaceUserPreferences,
   workspaceViewFavorites,
@@ -2154,6 +2156,188 @@ export async function deleteTimeSchedule(
       and(
         eq(timeSchedules.organizationId, organizationId),
         eq(timeSchedules.id, id)
+      )
+    );
+  return true;
+}
+
+// ---- git automation ----
+
+export interface GitAutomationStateInput {
+  stateId: string;
+  prState: string;
+}
+
+export function listGitAutomationStates(db: WorkspaceDb, organizationId: string) {
+  return db
+    .select()
+    .from(gitAutomationStates)
+    .where(eq(gitAutomationStates.organizationId, organizationId))
+    .all();
+}
+
+export function getGitAutomationState(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  return db
+    .select()
+    .from(gitAutomationStates)
+    .where(
+      and(
+        eq(gitAutomationStates.organizationId, organizationId),
+        eq(gitAutomationStates.id, id)
+      )
+    )
+    .get();
+}
+
+export async function createGitAutomationState(
+  db: WorkspaceDb,
+  organizationId: string,
+  input: GitAutomationStateInput
+) {
+  const id = crypto.randomUUID();
+  const ts = new Date().toISOString();
+  await db.insert(gitAutomationStates).values({
+    id,
+    organizationId,
+    stateId: input.stateId,
+    prState: input.prState,
+    createdAt: ts,
+  });
+  return getGitAutomationState(db, organizationId, id);
+}
+
+export async function updateGitAutomationState(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string,
+  input: Partial<GitAutomationStateInput>
+) {
+  const existing = await getGitAutomationState(db, organizationId, id);
+  if (!existing) return undefined;
+  await db
+    .update(gitAutomationStates)
+    .set({
+      stateId: input.stateId ?? existing.stateId,
+      prState: input.prState ?? existing.prState,
+    })
+    .where(
+      and(
+        eq(gitAutomationStates.organizationId, organizationId),
+        eq(gitAutomationStates.id, id)
+      )
+    );
+  return getGitAutomationState(db, organizationId, id);
+}
+
+export async function deleteGitAutomationState(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  const existing = await getGitAutomationState(db, organizationId, id);
+  if (!existing) return false;
+  await db
+    .delete(gitAutomationStates)
+    .where(
+      and(
+        eq(gitAutomationStates.organizationId, organizationId),
+        eq(gitAutomationStates.id, id)
+      )
+    );
+  return true;
+}
+
+export interface GitAutomationTargetBranchInput {
+  name: string;
+  pattern?: string | null;
+}
+
+export function listGitAutomationTargetBranches(
+  db: WorkspaceDb,
+  organizationId: string
+) {
+  return db
+    .select()
+    .from(gitAutomationTargetBranches)
+    .where(eq(gitAutomationTargetBranches.organizationId, organizationId))
+    .all();
+}
+
+export function getGitAutomationTargetBranch(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  return db
+    .select()
+    .from(gitAutomationTargetBranches)
+    .where(
+      and(
+        eq(gitAutomationTargetBranches.organizationId, organizationId),
+        eq(gitAutomationTargetBranches.id, id)
+      )
+    )
+    .get();
+}
+
+export async function createGitAutomationTargetBranch(
+  db: WorkspaceDb,
+  organizationId: string,
+  input: GitAutomationTargetBranchInput
+) {
+  const id = crypto.randomUUID();
+  const ts = new Date().toISOString();
+  await db.insert(gitAutomationTargetBranches).values({
+    id,
+    organizationId,
+    name: input.name,
+    pattern: input.pattern ?? null,
+    createdAt: ts,
+  });
+  return getGitAutomationTargetBranch(db, organizationId, id);
+}
+
+export async function updateGitAutomationTargetBranch(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string,
+  input: Partial<GitAutomationTargetBranchInput>
+) {
+  const existing = await getGitAutomationTargetBranch(db, organizationId, id);
+  if (!existing) return undefined;
+  await db
+    .update(gitAutomationTargetBranches)
+    .set({
+      name: input.name ?? existing.name,
+      pattern:
+        input.pattern === undefined ? existing.pattern : input.pattern,
+    })
+    .where(
+      and(
+        eq(gitAutomationTargetBranches.organizationId, organizationId),
+        eq(gitAutomationTargetBranches.id, id)
+      )
+    );
+  return getGitAutomationTargetBranch(db, organizationId, id);
+}
+
+export async function deleteGitAutomationTargetBranch(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  const existing = await getGitAutomationTargetBranch(db, organizationId, id);
+  if (!existing) return false;
+  await db
+    .delete(gitAutomationTargetBranches)
+    .where(
+      and(
+        eq(gitAutomationTargetBranches.organizationId, organizationId),
+        eq(gitAutomationTargetBranches.id, id)
       )
     );
   return true;

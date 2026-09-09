@@ -607,6 +607,28 @@ const v22 = `CREATE TABLE IF NOT EXISTS time_schedules (
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS time_schedules_organization_idx ON time_schedules (organization_id)`;
 
+const v23 = `CREATE TABLE IF NOT EXISTS git_automation_states (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  state_id TEXT NOT NULL,
+  pr_state TEXT NOT NULL,
+  created_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS git_automation_states_organization_idx ON git_automation_states (organization_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS git_automation_states_state_idx ON git_automation_states (organization_id, state_id)
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS git_automation_target_branches (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  pattern TEXT,
+  created_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS git_automation_target_branches_organization_idx ON git_automation_target_branches (organization_id)`;
+
 export const workspaceMigrations = {
   journal: {
     entries: [
@@ -632,6 +654,7 @@ export const workspaceMigrations = {
       { idx: 19, when: 19, tag: "v20", breakpoints: true },
       { idx: 20, when: 20, tag: "v21", breakpoints: true },
       { idx: 21, when: 21, tag: "v22", breakpoints: true },
+      { idx: 22, when: 22, tag: "v23", breakpoints: true },
     ],
   },
   migrations: {
@@ -657,5 +680,6 @@ export const workspaceMigrations = {
     m0019: v20,
     m0020: v21,
     m0021: v22,
+    m0022: v23,
   },
 } satisfies Parameters<typeof migrate>[1];

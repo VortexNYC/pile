@@ -2343,6 +2343,186 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "git automation states list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/git-automation-states",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "git automation states create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/git-automation-states",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "stateId",
+        flag: "state",
+      },
+      {
+        name: "prState",
+        flag: "pr-state",
+      },
+    ],
+  },
+  "git automation states get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/git-automation-states/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "git automation states update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/git-automation-states/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "stateId",
+        flag: "state",
+      },
+      {
+        name: "prState",
+        flag: "pr-state",
+      },
+    ],
+  },
+  "git automation states delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/git-automation-states/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "git automation target branches list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/git-automation-target-branches",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "git automation target branches create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/git-automation-target-branches",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "pattern",
+        flag: "pattern",
+      },
+    ],
+  },
+  "git automation target branches get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/git-automation-target-branches/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "git automation target branches update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/git-automation-target-branches/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "pattern",
+        flag: "pattern",
+      },
+    ],
+  },
+  "git automation target branches delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/git-automation-target-branches/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "issues comments": {
     method: "POST",
     path: "/workspaces/{organizationId}/issues/{issueId}/comments",

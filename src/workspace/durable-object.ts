@@ -1311,6 +1311,54 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return ok;
   }
 
+  // ---- git automation ----
+
+  listGitAutomationStates() {
+    return data.listGitAutomationStates(this.db, this.organizationId);
+  }
+
+  getGitAutomationState(id: string) {
+    return data.getGitAutomationState(this.db, this.organizationId, id);
+  }
+
+  createGitAutomationState(input: data.GitAutomationStateInput) {
+    return data.createGitAutomationState(this.db, this.organizationId, input);
+  }
+
+  updateGitAutomationState(
+    id: string,
+    input: Partial<data.GitAutomationStateInput>
+  ) {
+    return data.updateGitAutomationState(this.db, this.organizationId, id, input);
+  }
+
+  deleteGitAutomationState(id: string) {
+    return data.deleteGitAutomationState(this.db, this.organizationId, id);
+  }
+
+  listGitAutomationTargetBranches() {
+    return data.listGitAutomationTargetBranches(this.db, this.organizationId);
+  }
+
+  getGitAutomationTargetBranch(id: string) {
+    return data.getGitAutomationTargetBranch(this.db, this.organizationId, id);
+  }
+
+  createGitAutomationTargetBranch(input: data.GitAutomationTargetBranchInput) {
+    return data.createGitAutomationTargetBranch(this.db, this.organizationId, input);
+  }
+
+  updateGitAutomationTargetBranch(
+    id: string,
+    input: Partial<data.GitAutomationTargetBranchInput>
+  ) {
+    return data.updateGitAutomationTargetBranch(this.db, this.organizationId, id, input);
+  }
+
+  deleteGitAutomationTargetBranch(id: string) {
+    return data.deleteGitAutomationTargetBranch(this.db, this.organizationId, id);
+  }
+
   // ---- issue external links ----
 
   listIssueExternalLinks(issueId: string) {

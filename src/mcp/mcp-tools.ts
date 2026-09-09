@@ -292,6 +292,48 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdGitautomationstatesId",
+    "description": "Delete git automation state (DELETE /workspaces/{organizationId}/git-automation-states/{id})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/git-automation-states/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "deleteWorkspacesOrganizationIdGitautomationtargetbranchesId",
+    "description": "Delete git automation target branche (DELETE /workspaces/{organizationId}/git-automation-target-branches/{id})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/git-automation-target-branches/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdGithubInstallationsId",
     "description": "Delete github installation (DELETE /workspaces/{organizationId}/github/installations/{id})",
     "method": "DELETE",
@@ -1613,6 +1655,82 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdGitautomationstates",
+    "description": "List git automation states (GET /workspaces/{organizationId}/git-automation-states)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/git-automation-states",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdGitautomationstatesId",
+    "description": "Get git automation state (GET /workspaces/{organizationId}/git-automation-states/{id})",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/git-automation-states/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdGitautomationtargetbranches",
+    "description": "List git automation target branches (GET /workspaces/{organizationId}/git-automation-target-branches)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/git-automation-target-branches",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdGitautomationtargetbranchesId",
+    "description": "Get git automation target branche (GET /workspaces/{organizationId}/git-automation-target-branches/{id})",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/git-automation-target-branches/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
         "organizationId"
       ]
     }
@@ -3674,6 +3792,71 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "patchWorkspacesOrganizationIdGitautomationstatesId",
+    "description": "Update git automation state (PATCH /workspaces/{organizationId}/git-automation-states/{id})",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/git-automation-states/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "stateId": {
+              "type": "string"
+            },
+            "prState": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "patchWorkspacesOrganizationIdGitautomationtargetbranchesId",
+    "description": "Update git automation target branche (PATCH /workspaces/{organizationId}/git-automation-target-branches/{id})",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/git-automation-target-branches/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "pattern": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "patchWorkspacesOrganizationIdInitiativesId",
     "description": "Update initiative (PATCH /workspaces/{organizationId}/initiatives/{id})",
     "method": "PATCH",
@@ -5488,6 +5671,70 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "name",
             "shortcut",
             "url"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdGitautomationstates",
+    "description": "Create git automation state (POST /workspaces/{organizationId}/git-automation-states)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/git-automation-states",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "stateId": {
+              "type": "string"
+            },
+            "prState": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "stateId",
+            "prState"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdGitautomationtargetbranches",
+    "description": "Create git automation target branche (POST /workspaces/{organizationId}/git-automation-target-branches)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/git-automation-target-branches",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "pattern": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
           ]
         }
       },

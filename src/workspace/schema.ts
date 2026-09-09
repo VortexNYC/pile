@@ -892,3 +892,39 @@ export const timeSchedules = sqliteTable(
     index("time_schedules_organization_idx" as string).on(table.organizationId),
   ]
 );
+
+export const gitAutomationStates = sqliteTable(
+  "git_automation_states" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    stateId: text("state_id" as string).notNull(),
+    prState: text("pr_state" as string).notNull(),
+    createdAt: text("created_at" as string).notNull(),
+  },
+  (table) => [
+    index("git_automation_states_organization_idx" as string).on(
+      table.organizationId
+    ),
+    index("git_automation_states_state_idx" as string).on(
+      table.organizationId,
+      table.stateId
+    ),
+  ]
+);
+
+export const gitAutomationTargetBranches = sqliteTable(
+  "git_automation_target_branches" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    name: text("name" as string).notNull(),
+    pattern: text("pattern" as string),
+    createdAt: text("created_at" as string).notNull(),
+  },
+  (table) => [
+    index("git_automation_target_branches_organization_idx" as string).on(
+      table.organizationId
+    ),
+  ]
+);
