@@ -12921,6 +12921,139 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/notion/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List notion users */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Notion user mappings */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            users: {
+                                id: string;
+                                organizationId: string;
+                                userId: string;
+                                notionUserId: string;
+                                createdAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create notion user */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        userId: string;
+                        notionUserId: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Notion user mapping created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            userId: string;
+                            notionUserId: string;
+                            createdAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/notion/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create notion import */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        token: string;
+                        rootPageId?: string;
+                        spaceId?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Import summary */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            created: number;
+                            updated: number;
+                            errors: number;
+                            workspaceId: string;
+                            workspaceName: string | null;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/export": {
         parameters: {
             query?: never;

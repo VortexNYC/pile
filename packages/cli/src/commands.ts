@@ -5839,6 +5839,52 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "notion users": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/notion/users",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "userId",
+        flag: "user",
+      },
+      {
+        name: "notionUserId",
+        flag: "notion-user-id",
+      },
+    ],
+  },
+  "notion import create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/notion/import",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "token",
+        flag: "token",
+      },
+      {
+        name: "rootPageId",
+        flag: "root-page-id",
+      },
+      {
+        name: "spaceId",
+        flag: "space-id",
+      },
+    ],
+  },
   export: {
     method: "GET",
     path: "/workspaces/{organizationId}/export",

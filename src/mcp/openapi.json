@@ -23849,6 +23849,223 @@
         "summary": "Migrate from Linear"
       }
     },
+    "/workspaces/{organizationId}/notion/users": {
+      "post": {
+        "tags": [
+          "notion"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "userId": {
+                    "type": "string"
+                  },
+                  "notionUserId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "userId",
+                  "notionUserId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Notion user mapping created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "userId": {
+                      "type": "string"
+                    },
+                    "notionUserId": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "userId",
+                    "notionUserId",
+                    "createdAt"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create notion user"
+      },
+      "get": {
+        "tags": [
+          "notion"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Notion user mappings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "users": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "userId": {
+                            "type": "string"
+                          },
+                          "notionUserId": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "userId",
+                          "notionUserId",
+                          "createdAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "users"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List notion users"
+      }
+    },
+    "/workspaces/{organizationId}/notion/import": {
+      "post": {
+        "tags": [
+          "notion"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "rootPageId": {
+                    "type": "string"
+                  },
+                  "spaceId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "token"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Import summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "created": {
+                      "type": "integer"
+                    },
+                    "updated": {
+                      "type": "integer"
+                    },
+                    "errors": {
+                      "type": "integer"
+                    },
+                    "workspaceId": {
+                      "type": "string"
+                    },
+                    "workspaceName": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "created",
+                    "updated",
+                    "errors",
+                    "workspaceId",
+                    "workspaceName"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create notion import"
+      }
+    },
     "/workspaces/{organizationId}/export": {
       "get": {
         "tags": [

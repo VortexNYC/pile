@@ -49,10 +49,15 @@ This is the durable tracker for the open-source Linear alternative. Operational 
   - Merge request sync with `fixes KEY-123` / `closes KEY-123` linking
   - Label, milestone, and assignee sync
   - MR diff notes
+- Notion / documents integration — Phase 1:
+  - `POST /workspaces/{id}/notion/import` (root page or workspace-wide search)
+  - Markdown content import into Vortex documents
+  - `notion_users` mapping for `createdById` / `updatedById`
+  - `notion_installations` and `notion_page_mappings` D1 tables
 
 ## Next
 
-- Notion / documents integration and migration (before Intercom/Zendesk).
+- Notion / documents integration — Phase 2: ongoing webhook sync and Notion database migration.
 - Linear workspace migration and dogfooding.
 - Zendesk / Intercom integrations.
 
