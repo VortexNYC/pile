@@ -3113,7 +3113,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return this.db
       .select()
       .from(workspaceIssues)
-      .where(eq(workspaceIssues.identifier, identifier))
+      .where(
+        and(
+          eq(workspaceIssues.organizationId, this.organizationId),
+          eq(workspaceIssues.identifier, identifier)
+        )
+      )
       .get();
   }
 
