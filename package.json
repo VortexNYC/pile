@@ -1,7 +1,7 @@
 {
   "name": "issuetracker",
   "version": "0.1.0",
-  "description": "Vortex Issue Tracker — an open-source, agent-native issue tracker on Cloudflare Workers.",
+  "description": "Vortex Issue Tracker \u2014 an open-source, agent-native issue tracker on Cloudflare Workers.",
   "keywords": [
     "agent",
     "cloudflare",
@@ -33,7 +33,15 @@
     "format": "vp fmt",
     "format:check": "vp fmt --check",
     "check": "pnpm run contract:check && vp check && pnpm test",
-    "selfhost": "bash scripts/selfhost.sh"
+    "selfhost": "bash scripts/selfhost.sh",
+    "scan:secrets": "secretlint . --no-gitignore --secretlintignore .secretlintignore",
+    "entire:review": "entire review",
+    "entire:investigate": "entire investigate",
+    "entire:why": "entire why",
+    "entire:blame": "entire blame",
+    "entire:experts": "entire experts",
+    "entire:tokens": "entire tokens",
+    "entire:tokens:profile": "entire tokens profile"
   },
   "dependencies": {
     "@better-auth/api-key": "1.7.2",
@@ -62,11 +70,21 @@
     "vite": "^6.0.0",
     "vite-plus": "^0.3.0",
     "vitest": "^4.1.11",
-    "wrangler": "~4.129.0"
+    "wrangler": "~4.129.0",
+    "@secretlint/secretlint-rule-preset-recommend": "^13.0.5",
+    "secretlint": "^13.0.5",
+    "simple-git-hooks": "^2.14.0"
   },
   "pnpm": {
     "overrides": {
       "@better-auth/utils": "0.5.0"
     }
+  },
+  "engines": {
+    "node": ">=20.12.0"
+  },
+  "packageManager": "pnpm@9.15.4",
+  "simple-git-hooks": {
+    "pre-commit": "pnpm run scan:secrets"
   }
 }
