@@ -7,6 +7,11 @@ import {
   confluenceOptionsSchema,
 } from "../import/confluence.js";
 import {
+  githubIssuesCredentialsSchema,
+  githubIssuesImportSource,
+  githubIssuesOptionsSchema,
+} from "../import/github-issues.js";
+import {
   jiraCredentialsSchema,
   jiraImportSource,
   jiraOptionsSchema,
@@ -16,11 +21,6 @@ import {
   linearImportSource,
   linearOptionsSchema,
 } from "../import/linear.js";
-import {
-  githubIssuesCredentialsSchema,
-  githubIssuesImportSource,
-  githubIssuesOptionsSchema,
-} from "../import/github-issues.js";
 import {
   notionCredentialsSchema,
   notionImportSource,
@@ -32,13 +32,7 @@ import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 
 const importBodySchema = z.object({
-  source: z.enum([
-    "jira",
-    "confluence",
-    "linear",
-    "notion",
-    "github-issues",
-  ]),
+  source: z.enum(["jira", "confluence", "linear", "notion", "github-issues"]),
   credentials: z.unknown(),
   options: z.unknown().optional(),
 });

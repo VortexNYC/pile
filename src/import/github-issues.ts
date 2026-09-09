@@ -4,12 +4,9 @@ import { findOrCreateCycleByName } from "../global/cycles.js";
 import type { D1Client } from "../global/db.js";
 import { findUserByGithubLogin } from "../global/github-users.js";
 import { findLabelsByWorkspaceAndNames } from "../global/labels.js";
-import {
-  createRepoIssue,
-  findRepoIssue,
-} from "../global/repo-issues.js";
-import type { IssueInput } from "../types/workspace.js";
+import { createRepoIssue, findRepoIssue } from "../global/repo-issues.js";
 import { VortexError } from "../platform/errors.js";
+import type { IssueInput } from "../types/workspace.js";
 import type {
   ImportContext,
   ImportCounts,
@@ -69,10 +66,7 @@ const githubIssueSchema = z.object({
 
 type GithubIssue = z.infer<typeof githubIssueSchema>;
 
-async function githubRequest<T>(
-  token: string,
-  path: string
-): Promise<T> {
+async function githubRequest<T>(token: string, path: string): Promise<T> {
   const response = await fetch(`${GITHUB_API_BASE}${path}`, {
     headers: {
       Accept: "application/vnd.github+json",
@@ -90,11 +84,7 @@ async function githubRequest<T>(
   return response.json() as Promise<T>;
 }
 
-async function getGithubRepository(
-  token: string,
-  owner: string,
-  repo: string
-) {
+async function getGithubRepository(token: string, owner: string, repo: string) {
   const raw = await githubRequest<unknown>(token, `/repos/${owner}/${repo}`);
   const parsed = z
     .object({
@@ -151,11 +141,7 @@ async function resolveGithubUser(
   fallbackId: string
 ): Promise<string> {
   if (!login) return fallbackId;
-  const mapping = await findUserByGithubLogin(
-    db,
-    organizationId,
-    login
-  );
+  const mapping = await findUserByGithubLogin(db, organizationId, login);
   return mapping?.userId ?? fallbackId;
 }
 
@@ -198,19 +184,15 @@ async function syncGithubIssue(
     ctx.organizationId,
     labelNames
   );
-  const labelIds = matched.length > 0 ? matched.map((l) => l.id).join(",") : undefined;
+  const labelIds =
+    matched.length > 0 ? matched.map((l) => l.id).join(",") : undefined;
 
   const status = githubStateToVortexStatus(
     issue.state,
     issue.state_reason ?? null
   );
 
-  const mapping = await findRepoIssue(
-    ctx.db,
-    repo,
-    issue.number,
-    "github"
-  );
+  const mapping = await findRepoIssue(ctx.db, repo, issue.number, "github");
 
   if (mapping) {
     await ctx.stub.updateIssue(
@@ -270,8 +252,9 @@ export const githubIssuesImportSource: ImportSource<
 
   async run(ctx, credentials, options): Promise<ImportCounts> {
     const { token } = credentials;
-    const { owner, repo, teamId, state } =
-      githubIssuesOptionsSchema.parse(options ?? {});
+    const { owner, repo, teamId, state } = githubIssuesOptionsSchema.parse(
+      options ?? {}
+    );
     const fullRepo = `${owner}/${repo}`;
 
     await getGithubRepository(token, owner, repo);
@@ -293,12 +276,7 @@ export const githubIssuesImportSource: ImportSource<
 
       for (const issue of issues) {
         try {
-          const result = await syncGithubIssue(
-            ctx,
-            issue,
-            fullRepo,
-            teamId
-          );
+          const result = await syncGithubIssue(ctx, issue, fullRepo, teamId);
           if (result === "created") created++;
           else updated++;
         } catch {
