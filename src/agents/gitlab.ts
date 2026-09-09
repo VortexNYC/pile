@@ -109,10 +109,11 @@ export const gitlabWebhookRoute = createRoute({
 function gitlabStatusFromState(
   state: string,
   action: string
-): IssueInput["status"] {
+): IssueInput["status"] | undefined {
   if (state === "closed" || action === "close") return "canceled";
   if (action === "reopen") return "todo";
-  return "backlog";
+  if (action === "open") return "backlog";
+  return undefined;
 }
 
 function gitlabDeliveryId(
@@ -245,26 +246,23 @@ async function processGitlabIssue(
     : undefined;
 
   const status = gitlabStatusFromState(attrs.state, attrs.action);
+  const commonPatch = {
+    title: attrs.title,
+    description: attrs.description ?? undefined,
+    assigneeId,
+    repo: projectPath,
+    ...(status !== undefined ? { status } : {}),
+  };
 
   if (attrs.action === "open" || attrs.action === "reopen") {
     if (mapping) {
-      await stub.updateIssue(
-        mapping.issueId,
-        {
-          title: attrs.title,
-          description: attrs.description ?? undefined,
-          status,
-          assigneeId,
-          repo: projectPath,
-        },
-        "gitlab"
-      );
+      await stub.updateIssue(mapping.issueId, commonPatch, "gitlab");
     } else {
       const created = await stub.createIssue(
         {
           title: attrs.title,
           description: attrs.description ?? undefined,
-          status,
+          status: status ?? "backlog",
           assigneeId,
           repo: projectPath,
         },
@@ -281,17 +279,7 @@ async function processGitlabIssue(
     }
   } else if (attrs.action === "update") {
     if (mapping) {
-      await stub.updateIssue(
-        mapping.issueId,
-        {
-          title: attrs.title,
-          description: attrs.description ?? undefined,
-          status,
-          assigneeId,
-          repo: projectPath,
-        },
-        "gitlab"
-      );
+      await stub.updateIssue(mapping.issueId, commonPatch, "gitlab");
     }
   } else if (attrs.action === "close") {
     if (mapping) {
