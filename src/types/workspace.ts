@@ -169,4 +169,19 @@ export type RealtimeEvent =
       type: "document.deleted";
       organizationId: string;
       documentId: Id;
+    }
+  | {
+      type: "draft.created";
+      organizationId: string;
+      issue: Issue;
+    }
+  | {
+      type: "draft.updated";
+      organizationId: string;
+      issue: Issue;
+    }
+  | {
+      type: "draft.deleted";
+      organizationId: string;
+      issueId: Id;
     };

@@ -2020,6 +2020,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       organizationId: this.organizationId,
       issue,
     });
+    if (issue.isDraft) {
+      await this.emit({
+        type: "draft.created",
+        organizationId: this.organizationId,
+        issue,
+      });
+    }
     await this.notifyIssueEvent(issue, "issue_created", actorId);
     await this.recordIssueHistory(
       issue.id,
@@ -2680,6 +2687,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       organizationId: this.organizationId,
       issue,
     });
+    if (issue.isDraft || old.isDraft) {
+      await this.emit({
+        type: "draft.updated",
+        organizationId: this.organizationId,
+        issue,
+      });
+    }
     await this.notifyIssueEvent(issue, "issue_updated", actorId);
 
     if (issue.status !== old.status) {
@@ -2838,6 +2852,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const index = await this.ensureSearchIndex();
     await removeIssueDocuments(index, id);
 
+    if (old?.isDraft) {
+      await this.emit({
+        type: "draft.deleted",
+        organizationId: this.organizationId,
+        issueId: id,
+      });
+    }
     await this.emit({
       type: "issue.deleted",
       organizationId: this.organizationId,
