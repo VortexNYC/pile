@@ -1325,24 +1325,65 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.getGitAutomationState(this.db, this.organizationId, id);
   }
 
-  createGitAutomationState(input: data.GitAutomationStateInput) {
-    return data.createGitAutomationState(this.db, this.organizationId, input);
+  async createGitAutomationState(
+    input: data.GitAutomationStateInput,
+    actorId?: string
+  ) {
+    const state = await data.createGitAutomationState(
+      this.db,
+      this.organizationId,
+      input
+    );
+    if (state)
+      this.audit(
+        "git_automation_state.created",
+        "git_automation_state",
+        state.id,
+        actorId
+      );
+    return state;
   }
 
-  updateGitAutomationState(
+  async updateGitAutomationState(
     id: string,
-    input: Partial<data.GitAutomationStateInput>
+    input: Partial<data.GitAutomationStateInput>,
+    actorId?: string
   ) {
-    return data.updateGitAutomationState(
+    const state = await data.updateGitAutomationState(
       this.db,
       this.organizationId,
       id,
       input
     );
+    if (state)
+      this.audit(
+        "git_automation_state.updated",
+        "git_automation_state",
+        state.id,
+        actorId
+      );
+    return state;
   }
 
-  deleteGitAutomationState(id: string) {
-    return data.deleteGitAutomationState(this.db, this.organizationId, id);
+  async deleteGitAutomationState(id: string, actorId?: string) {
+    const existing = await data.getGitAutomationState(
+      this.db,
+      this.organizationId,
+      id
+    );
+    const ok = await data.deleteGitAutomationState(
+      this.db,
+      this.organizationId,
+      id
+    );
+    if (ok && existing)
+      this.audit(
+        "git_automation_state.deleted",
+        "git_automation_state",
+        existing.id,
+        actorId
+      );
+    return ok;
   }
 
   listGitAutomationTargetBranches() {
@@ -1353,32 +1394,65 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.getGitAutomationTargetBranch(this.db, this.organizationId, id);
   }
 
-  createGitAutomationTargetBranch(input: data.GitAutomationTargetBranchInput) {
-    return data.createGitAutomationTargetBranch(
+  async createGitAutomationTargetBranch(
+    input: data.GitAutomationTargetBranchInput,
+    actorId?: string
+  ) {
+    const branch = await data.createGitAutomationTargetBranch(
       this.db,
       this.organizationId,
       input
     );
+    if (branch)
+      this.audit(
+        "git_automation_target_branch.created",
+        "git_automation_target_branch",
+        branch.id,
+        actorId
+      );
+    return branch;
   }
 
-  updateGitAutomationTargetBranch(
+  async updateGitAutomationTargetBranch(
     id: string,
-    input: Partial<data.GitAutomationTargetBranchInput>
+    input: Partial<data.GitAutomationTargetBranchInput>,
+    actorId?: string
   ) {
-    return data.updateGitAutomationTargetBranch(
+    const branch = await data.updateGitAutomationTargetBranch(
       this.db,
       this.organizationId,
       id,
       input
     );
+    if (branch)
+      this.audit(
+        "git_automation_target_branch.updated",
+        "git_automation_target_branch",
+        branch.id,
+        actorId
+      );
+    return branch;
   }
 
-  deleteGitAutomationTargetBranch(id: string) {
-    return data.deleteGitAutomationTargetBranch(
+  async deleteGitAutomationTargetBranch(id: string, actorId?: string) {
+    const existing = await data.getGitAutomationTargetBranch(
       this.db,
       this.organizationId,
       id
     );
+    const ok = await data.deleteGitAutomationTargetBranch(
+      this.db,
+      this.organizationId,
+      id
+    );
+    if (ok && existing)
+      this.audit(
+        "git_automation_target_branch.deleted",
+        "git_automation_target_branch",
+        existing.id,
+        actorId
+      );
+    return ok;
   }
 
   // ---- issue external links ----

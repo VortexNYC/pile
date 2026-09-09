@@ -34,7 +34,7 @@ const targetBranchBodySchema = z.object({
   pattern: z.string().optional(),
 });
 
-function notFound(message: string) {
+function notFound(message: string): never {
   throw new VortexError({ code: "NOT_FOUND", status: 404, message });
 }
 
@@ -216,9 +216,11 @@ export function registerGitAutomationRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(createStateRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
     const input = c.req.valid("json");
+    const identity = c.var.workspaceIdentity;
     const stub = getWorkspaceStub(c.env, organizationId);
-    const state = await stub.createGitAutomationState(input);
-    return c.json(state!, 201);
+    const state = await stub.createGitAutomationState(input, identity.id);
+    if (!state) notFound("State not found");
+    return c.json(state, 201);
   });
 
   app.openapi(getStateRoute, async (c) => {
@@ -226,22 +228,25 @@ export function registerGitAutomationRoutes(app: OpenAPIHono<AppContext>) {
     const stub = getWorkspaceStub(c.env, organizationId);
     const state = await stub.getGitAutomationState(id);
     if (!state) notFound("State not found");
-    return c.json(state!);
+    return c.json(state);
   });
 
   app.openapi(updateStateRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
     const input = c.req.valid("json");
+    const identity = c.var.workspaceIdentity;
     const stub = getWorkspaceStub(c.env, organizationId);
-    const state = await stub.updateGitAutomationState(id, input);
+    const state = await stub.updateGitAutomationState(id, input, identity.id);
     if (!state) notFound("State not found");
-    return c.json(state!);
+    return c.json(state);
   });
 
   app.openapi(deleteStateRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
+    const identity = c.var.workspaceIdentity;
     const stub = getWorkspaceStub(c.env, organizationId);
-    if (!(await stub.deleteGitAutomationState(id))) notFound("State not found");
+    if (!(await stub.deleteGitAutomationState(id, identity.id)))
+      notFound("State not found");
     return c.body(null, 204);
   });
 
@@ -254,12 +259,17 @@ export function registerGitAutomationRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(createBranchRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
     const input = c.req.valid("json");
+    const identity = c.var.workspaceIdentity;
     const stub = getWorkspaceStub(c.env, organizationId);
-    const branch = await stub.createGitAutomationTargetBranch({
-      name: input.name,
-      pattern: input.pattern ?? null,
-    });
-    return c.json(branch!, 201);
+    const branch = await stub.createGitAutomationTargetBranch(
+      {
+        name: input.name,
+        pattern: input.pattern ?? null,
+      },
+      identity.id
+    );
+    if (!branch) notFound("Target branch not found");
+    return c.json(branch, 201);
   });
 
   app.openapi(getBranchRoute, async (c) => {
@@ -267,22 +277,28 @@ export function registerGitAutomationRoutes(app: OpenAPIHono<AppContext>) {
     const stub = getWorkspaceStub(c.env, organizationId);
     const branch = await stub.getGitAutomationTargetBranch(id);
     if (!branch) notFound("Target branch not found");
-    return c.json(branch!);
+    return c.json(branch);
   });
 
   app.openapi(updateBranchRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
     const input = c.req.valid("json");
+    const identity = c.var.workspaceIdentity;
     const stub = getWorkspaceStub(c.env, organizationId);
-    const branch = await stub.updateGitAutomationTargetBranch(id, input);
+    const branch = await stub.updateGitAutomationTargetBranch(
+      id,
+      input,
+      identity.id
+    );
     if (!branch) notFound("Target branch not found");
-    return c.json(branch!);
+    return c.json(branch);
   });
 
   app.openapi(deleteBranchRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
+    const identity = c.var.workspaceIdentity;
     const stub = getWorkspaceStub(c.env, organizationId);
-    if (!(await stub.deleteGitAutomationTargetBranch(id)))
+    if (!(await stub.deleteGitAutomationTargetBranch(id, identity.id)))
       notFound("Target branch not found");
     return c.body(null, 204);
   });

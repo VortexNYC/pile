@@ -66,7 +66,7 @@ const resendInviteRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/invitations/{id}/resend",
   tags: ["workspace-users"],
-  middleware: [rls("write")],
+  middleware: [rls("admin")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
