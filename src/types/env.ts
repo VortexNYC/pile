@@ -28,6 +28,9 @@ export interface AppEnv {
   SLACK_SIGNING_SECRET?: string;
   SLACK_ENCRYPTION_KEY?: string;
   SLACK_REDIRECT_URI?: string;
+  // GitLab integration.
+  GITLAB_WEBHOOK_SECRET?: string;
+  GITLAB_API_URL?: string;
   // Cloudflare Email Service send binding.
   EMAIL?: SendEmail;
   EMAIL_FROM?: string;

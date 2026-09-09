@@ -37,6 +37,9 @@ export const repoIssues = sqliteTable(
     organizationId: text("organization_id" as string)
       .notNull()
       .references(() => organization.id),
+    source: text("source" as string, { enum: ["github", "gitlab"] })
+      .notNull()
+      .default("github"),
     repo: text("repo" as string).notNull(),
     issueNumber: integer("issue_number" as string).notNull(),
     issueId: text("issue_id" as string).notNull(),
@@ -45,7 +48,8 @@ export const repoIssues = sqliteTable(
       .default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
-    index("repo_issues_repo_number_idx" as string).on(
+    index("repo_issues_source_repo_number_idx" as string).on(
+      table.source,
       table.repo,
       table.issueNumber
     ),
@@ -69,6 +73,35 @@ export const githubInstallations = sqliteTable(
   (table) => [
     index("github_installations_repo_idx" as string).on(table.repo),
     index("github_installations_organization_idx" as string).on(
+      table.organizationId
+    ),
+  ]
+);
+
+export const gitlabInstallations = sqliteTable(
+  "gitlab_installations" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    projectId: text("project_id" as string).notNull(),
+    projectPath: text("project_path" as string).notNull(),
+    token: text("token" as string).notNull(),
+    webhookSecret: text("webhook_secret" as string),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("gitlab_installations_project_path_idx" as string).on(
+      table.organizationId,
+      table.projectPath
+    ),
+    index("gitlab_installations_organization_idx" as string).on(
       table.organizationId
     ),
   ]
@@ -1172,6 +1205,33 @@ export const githubUsers = sqliteTable(
       table.githubLogin
     ),
     uniqueIndex("github_users_workspace_user_idx" as string).on(
+      table.organizationId,
+      table.userId
+    ),
+  ]
+);
+
+export const gitlabUsers = sqliteTable(
+  "gitlab_users" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    userId: text("user_id" as string)
+      .notNull()
+      .references(() => user.id),
+    gitlabUsername: text("gitlab_username" as string).notNull(),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("gitlab_users_workspace_username_idx" as string).on(
+      table.organizationId,
+      table.gitlabUsername
+    ),
+    uniqueIndex("gitlab_users_workspace_user_idx" as string).on(
       table.organizationId,
       table.userId
     ),

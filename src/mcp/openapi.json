@@ -11152,6 +11152,314 @@
         "summary": "Create image from url"
       }
     },
+    "/workspaces/{organizationId}/gitlab/users": {
+      "post": {
+        "tags": [
+          "gitlab"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "userId": {
+                    "type": "string"
+                  },
+                  "gitlabUsername": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "userId",
+                  "gitlabUsername"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "GitLab user mapping created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "userId": {
+                      "type": "string"
+                    },
+                    "gitlabUsername": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "userId",
+                    "gitlabUsername",
+                    "createdAt"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create gitlab user"
+      },
+      "get": {
+        "tags": [
+          "gitlab"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "GitLab user mappings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "users": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "userId": {
+                            "type": "string"
+                          },
+                          "gitlabUsername": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "userId",
+                          "gitlabUsername",
+                          "createdAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "users"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List gitlab users"
+      }
+    },
+    "/workspaces/{organizationId}/gitlab/install": {
+      "post": {
+        "tags": [
+          "gitlab"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "projectId": {
+                    "type": "string"
+                  },
+                  "projectPath": {
+                    "type": "string"
+                  },
+                  "token": {
+                    "type": "string"
+                  },
+                  "webhookSecret": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "projectId",
+                  "projectPath",
+                  "token"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "GitLab project installed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "projectId": {
+                      "type": "string"
+                    },
+                    "projectPath": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "projectId",
+                    "projectPath",
+                    "createdAt"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create gitlab install"
+      }
+    },
+    "/workspaces/{organizationId}/gitlab/installations": {
+      "get": {
+        "tags": [
+          "gitlab"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "GitLab installations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "installations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "projectId": {
+                            "type": "string"
+                          },
+                          "projectPath": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "projectId",
+                          "projectPath",
+                          "createdAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "installations"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List gitlab installations"
+      }
+    },
+    "/workspaces/{organizationId}/gitlab/installations/{id}": {
+      "delete": {
+        "tags": [
+          "gitlab"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Installation removed"
+          }
+        },
+        "summary": "Delete gitlab installation"
+      }
+    },
     "/workspaces/{organizationId}/issues/{issueId}/comments": {
       "get": {
         "tags": [
@@ -23972,6 +24280,34 @@
           }
         },
         "summary": "Receive GitHub webhook"
+      }
+    },
+    "/gitlab": {
+      "post": {
+        "tags": [
+          "gitlab"
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook processed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create gitlab"
       }
     },
     "/workspaces/{organizationId}/ws": {

@@ -4,6 +4,8 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { createD1 } from "../global/db.js";
 import { getInstallationToken } from "../global/github-auth.js";
 import { findGithubInstallation } from "../global/github-installations.js";
+import { gitlabFetch } from "../global/gitlab-auth.js";
+import { findGitlabInstallation } from "../global/gitlab-installations.js";
 import { findRepoIssueByIssueId } from "../global/repo-issues.js";
 import { canAccessTeam } from "../global/teams.js";
 import { VortexError } from "../platform/errors.js";
@@ -265,36 +267,74 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
 
     const mapping = await findRepoIssueByIssueId(db, issueId);
     if (mapping) {
-      const installation = await findGithubInstallation(db, mapping.repo);
-      if (installation) {
-        const token = await getInstallationToken(
-          c.env,
-          installation.installationId
+      if (mapping.source === "github") {
+        const installation = await findGithubInstallation(db, mapping.repo);
+        if (installation) {
+          const token = await getInstallationToken(
+            c.env,
+            installation.installationId
+          );
+          if (token) {
+            const response = await fetch(
+              `https://api.github.com/repos/${mapping.repo}/issues/${mapping.issueNumber}/comments`,
+              {
+                method: "POST",
+                headers: {
+                  Accept: "application/vnd.github+json",
+                  Authorization: `Bearer ${token}`,
+                  "X-GitHub-Api-Version": "2022-11-28",
+                  "Content-Type": "application/json",
+                  "User-Agent": "vortex",
+                },
+                body: JSON.stringify({ body }),
+              }
+            );
+            if (response.ok) {
+              const raw: unknown = await response.json();
+              const parsed = z.object({ id: z.number().int() }).safeParse(raw);
+              if (parsed.success) {
+                const externalId = parsed.data.id.toString();
+                const updated = await issueStub.updateComment(item.id, {
+                  body,
+                  externalId,
+                  externalSource: "github",
+                });
+                if (updated) {
+                  item = updated;
+                }
+              }
+            }
+          }
+        }
+      }
+
+      if (mapping.source === "gitlab") {
+        const installation = await findGitlabInstallation(
+          db,
+          issue.organizationId,
+          mapping.repo
         );
-        if (token) {
-          const response = await fetch(
-            `https://api.github.com/repos/${mapping.repo}/issues/${mapping.issueNumber}/comments`,
+        if (installation) {
+          const response = await gitlabFetch(
+            c.env,
+            installation.token,
+            `/projects/${encodeURIComponent(mapping.repo)}/issues/${mapping.issueNumber}/notes`,
             {
               method: "POST",
-              headers: {
-                Accept: "application/vnd.github+json",
-                Authorization: `Bearer ${token}`,
-                "X-GitHub-Api-Version": "2022-11-28",
-                "Content-Type": "application/json",
-                "User-Agent": "vortex",
-              },
               body: JSON.stringify({ body }),
             }
           );
           if (response.ok) {
             const raw: unknown = await response.json();
-            const parsed = z.object({ id: z.number().int() }).safeParse(raw);
+            const parsed = z
+              .object({ id: z.union([z.string(), z.number()]) })
+              .safeParse(raw);
             if (parsed.success) {
-              const externalId = parsed.data.id.toString();
+              const externalId = String(parsed.data.id);
               const updated = await issueStub.updateComment(item.id, {
                 body,
                 externalId,
-                externalSource: "github",
+                externalSource: "gitlab",
               });
               if (updated) {
                 item = updated;

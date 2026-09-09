@@ -376,6 +376,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdGitlabInstallationsId",
+    "description": "Delete gitlab installation (DELETE /workspaces/{organizationId}/gitlab/installations/{id})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/gitlab/installations/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdInitiativesId",
     "description": "Delete initiative (DELETE /workspaces/{organizationId}/initiatives/{id})",
     "method": "DELETE",
@@ -1869,6 +1890,40 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "description": "List github users (GET /workspaces/{organizationId}/github/users)",
     "method": "GET",
     "path": "/workspaces/{organizationId}/github/users",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdGitlabInstallations",
+    "description": "List gitlab installations (GET /workspaces/{organizationId}/gitlab/installations)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/gitlab/installations",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdGitlabUsers",
+    "description": "List gitlab users (GET /workspaces/{organizationId}/gitlab/users)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/gitlab/users",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -4966,6 +5021,16 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postGitlab",
+    "description": "Create gitlab (POST /gitlab)",
+    "method": "POST",
+    "path": "/gitlab",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
     "name": "postWorkspaces",
     "description": "Create workspace (POST /workspaces)",
     "method": "POST",
@@ -6105,6 +6170,77 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "required": [
             "userId",
             "githubLogin"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdGitlabInstall",
+    "description": "Create gitlab install (POST /workspaces/{organizationId}/gitlab/install)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/gitlab/install",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "projectId": {
+              "type": "string"
+            },
+            "projectPath": {
+              "type": "string"
+            },
+            "token": {
+              "type": "string"
+            },
+            "webhookSecret": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "projectId",
+            "projectPath",
+            "token"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdGitlabUsers",
+    "description": "Create gitlab user (POST /workspaces/{organizationId}/gitlab/users)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/gitlab/users",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "userId": {
+              "type": "string"
+            },
+            "gitlabUsername": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "userId",
+            "gitlabUsername"
           ]
         }
       },

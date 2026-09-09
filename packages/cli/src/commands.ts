@@ -2783,6 +2783,84 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "gitlab users": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/gitlab/users",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "userId",
+        flag: "user",
+      },
+      {
+        name: "gitlabUsername",
+        flag: "gitlab-username",
+      },
+    ],
+  },
+  "gitlab install create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/gitlab/install",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "projectId",
+        flag: "project",
+      },
+      {
+        name: "projectPath",
+        flag: "project-path",
+      },
+      {
+        name: "token",
+        flag: "token",
+      },
+      {
+        name: "webhookSecret",
+        flag: "webhook-secret",
+      },
+    ],
+  },
+  "gitlab installations": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/gitlab/installations",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "gitlab installations delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/gitlab/installations/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "issues comments": {
     method: "POST",
     path: "/workspaces/{organizationId}/issues/{issueId}/comments",
@@ -5837,5 +5915,12 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "channel-id",
       },
     ],
+  },
+  "gitlab create": {
+    method: "POST",
+    path: "/gitlab",
+    params: [],
+    query: [],
+    body: [],
   },
 };
