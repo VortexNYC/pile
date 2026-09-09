@@ -5,6 +5,7 @@ import { organization } from "better-auth/plugins";
 
 import { createD1 } from "../global/db.js";
 import * as schema from "../global/schema.js";
+import { organizationOptions } from "./access.js";
 import type { AppEnv } from "./env.js";
 
 export function createAuth(env: AppEnv) {
@@ -30,7 +31,7 @@ export function createAuth(env: AppEnv) {
         },
       }),
       organization({
-        teams: { enabled: true },
+        ...organizationOptions,
         schema: {
           organization: {
             additionalFields: {

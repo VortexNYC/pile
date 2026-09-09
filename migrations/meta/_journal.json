@@ -288,6 +288,13 @@
       "when": 1788875144244,
       "tag": "0040_happy_starbolt",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "6",
+      "when": 1788914145599,
+      "tag": "0041_misty_franklin_storm",
+      "breakpoints": true
     }
   ]
 }

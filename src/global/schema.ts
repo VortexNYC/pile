@@ -783,6 +783,32 @@ export const team = sqliteTable(
   ]
 );
 
+// Better Auth dynamic access control — org-level custom roles.
+export const organizationRole = sqliteTable(
+  "organization_role" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    role: text("role" as string).notNull(),
+    permission: text("permission" as string).notNull(), // JSON Record<string, string[]>
+    createdAt: integer("created_at" as string, { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`),
+    updatedAt: integer("updated_at" as string, { mode: "timestamp_ms" }),
+  },
+  (table) => [
+    index("organizationRole_organizationId_idx" as string).on(
+      table.organizationId
+    ),
+    index("organizationRole_role_idx" as string).on(
+      table.organizationId,
+      table.role
+    ),
+  ]
+);
+
 export const teamMember = sqliteTable(
   "team_member" as string,
   {

@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 
 import { createD1 } from "../global/db.js";
 import { teamMember } from "../global/schema.js";
+import { createAuth } from "../platform/auth.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
 import type {
@@ -118,7 +119,14 @@ function notFound(): never {
 // (+ workspace admins, + members of granted Better Auth teams) get in.
 // Default-open otherwise.
 async function assertDocAccess(
-  c: { env: WorkerEnv; get: (key: "workspaceIdentity") => WorkspaceIdentity },
+  c: {
+    env: WorkerEnv;
+    get: (key: "workspaceIdentity") => WorkspaceIdentity;
+    req: {
+      param: (key: string) => string;
+      raw: { headers: Headers };
+    };
+  },
   stub: {
     documentAccessLevel(
       documentId: string,
@@ -129,8 +137,29 @@ async function assertDocAccess(
   documentId: string,
   required: "view" | "edit"
 ) {
+  const organizationId = c.req.param("organizationId");
   const identity = c.get("workspaceIdentity");
   if (identity.permissions.includes("admin")) return;
+  // Type-level ceiling: the member's Better Auth role (incl. dynamic
+  // organizationRole rows) must allow the action on `document`. Agents
+  // authenticate by org-scoped API key, not session — instance grants only.
+  if (identity.type === "user" && identity.role) {
+    const auth = createAuth(c.env);
+    const result = await auth.api.hasPermission({
+      body: {
+        organizationId,
+        permissions: { document: [required] },
+      },
+      headers: c.req.raw.headers,
+    });
+    if (!result.success) {
+      throw new VortexError({
+        code: "FORBIDDEN",
+        status: 403,
+        message: `Role does not allow ${required} on documents`,
+      });
+    }
+  }
   // Resolve Better Auth team memberships for user identities; API-key
   // actors (agents) hold grants directly on their key identity.
   const teamIds =

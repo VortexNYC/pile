@@ -6,6 +6,8 @@ export const workspaceIdentitySchema = z.object({
   id: z.string(),
   organizationId: z.string(),
   type: z.union([z.literal("agent"), z.literal("user")]),
+  // Better Auth organization role (user identities only).
+  role: z.string().optional(),
   permissions: z.array(z.string()),
 });
 
@@ -61,6 +63,7 @@ export function toUserWorkspaceIdentity(
     id: userId,
     organizationId,
     type: "user",
+    role: parsedRole,
     permissions: [...rolePermissionsMap[parsedRole]],
   });
 }
