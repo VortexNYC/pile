@@ -49,11 +49,13 @@ This is the durable tracker for the open-source Linear alternative. Operational 
   - Merge request sync with `fixes KEY-123` / `closes KEY-123` linking
   - Label, milestone, and assignee sync
   - MR diff notes
-- Notion / documents integration — Phase 1:
-  - `POST /workspaces/{id}/notion/import` (root page or workspace-wide search)
+- Notion / documents integration:
+  - `POST /workspaces/{id}/import` with `source: "notion"` (root page or workspace-wide search)
   - Markdown content import into Vortex documents
   - `notion_users` mapping for `createdById` / `updatedById`
   - `notion_installations` and `notion_page_mappings` D1 tables
+  - Ongoing Notion webhook sync for page create/update/delete events
+  - Notion database migration into Vortex issues
 - Import adapters framework and first Atlassian adapters:
   - Generic `ImportSource` contract in `src/import`
   - `POST /workspaces/{id}/import` with `source: "jira" | "confluence"`
@@ -63,7 +65,8 @@ This is the durable tracker for the open-source Linear alternative. Operational 
 
 ## Next
 
-- Notion / documents integration — Phase 2: ongoing webhook sync and Notion database migration.
+- GitHub Issues import adapter.
+- Agent-native import features: job status, pagination/resume, approvals.
 - Linear workspace migration and dogfooding.
 - Zendesk / Intercom integrations.
 

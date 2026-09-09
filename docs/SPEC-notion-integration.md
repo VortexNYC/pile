@@ -2,16 +2,17 @@
 
 ## Status
 
-Phase 1 (page import and user mapping) is implemented in PR #49. Ongoing webhook sync and database migration are future phases.
+- Phase 1 (page import and user mapping): implemented.
+- Phase 2 (ongoing webhook sync and database migration into issues): implemented.
 
 ## Objective
 
-Let Vortex replace Notion as the source of truth for documents by importing Notion pages into the existing Vortex `documents` model. The first slice is a one-time page import; ongoing webhook sync and database migration can follow.
+Let Vortex replace Notion as the source of truth for documents and issue backlogs by importing Notion pages into the existing Vortex `documents` model and Notion databases into Vortex `issues`. Ongoing webhook sync keeps documents in sync after the initial import.
 
 ## In scope — Phase 1: page import (done)
 
-- `POST /workspaces/{organizationId}/notion/import`
-  - Body: `{ token: string; rootPageId?: string; spaceId?: string }`
+- `POST /workspaces/{organizationId}/import`
+  - Body: `{ source: "notion", credentials: { token: string }, options?: { rootPageId?: string; spaceId?: string } }`
   - `token` is a Notion internal integration token (`ntn_...`).
   - If `rootPageId` is provided, import that single page.
   - If omitted, use `POST /v1/search` to discover and import all pages reachable by the integration.
@@ -38,22 +39,36 @@ Let Vortex replace Notion as the source of truth for documents by importing Noti
 - OpenAPI / MCP / client / CLI parity regenerated.
 - Integration tests using mocked Notion API responses.
 
-## Out of scope (future phases)
+## In scope — Phase 2a: database migration into issues (done)
 
-- Real-time webhook sync from Notion to Vortex.
+- `POST /workspaces/{organizationId}/import`
+  - Body: `{ source: "notion", credentials: { token: string }, options: { databaseId: string; teamId?: string } }`
+  - `databaseId` is a Notion database ID.
+  - Fetches database metadata with `GET /v1/databases/{database_id}` to discover the title property.
+  - Paginates through rows with `POST /v1/databases/{database_id}/query`.
+  - For each row, fetches `GET /v1/pages/{page_id}/markdown` for the description.
+  - Creates or updates Vortex `issues` through the native Workspace DO `createIssue` / `updateIssue` paths.
+  - Records `notion_issue_mappings` (organizationId, notionPageId, issueId) for idempotent re-imports.
+  - `teamId` is passed through to `createIssue`; the workspace default team is used otherwise.
+- D1 tables:
+  - `notion_issue_mappings` — `organizationId`, `notionPageId`, `issueId`, `createdAt`, `updatedAt`.
+
+## Out of scope
+
 - Writing Vortex document edits back to Notion.
-- Syncing Notion databases into Vortex issues.
 - Importing comments, permissions, file attachments, or embedded databases.
-- Converting Notion blocks to BlockNote JSON (markdown is sufficient for Phase 1).
+- Converting Notion blocks to BlockNote JSON (markdown is sufficient for page content).
 
 ## Data flow
 
 ```
-POST /notion/import
+POST /workspaces/{organizationId}/import { source: "notion" }
+  ├─ validate token with GET /v1/users/me
+  ├─ upsert notion_installations
   ├─ fetch Notion page(s)
   ├─ for each page:
-  │   ├─ GET /v1/pages/{id}        → title, icon, parent, authors
-  │   ├─ GET /v1/pages/{id}/markdown → content
+  │   ├─ GET /v1/pages/{id}            → title, icon, parent, authors
+  │   ├─ GET /v1/pages/{id}/markdown   → content
   │   ├─ resolve parentDocumentId from notion_page_mappings
   │   ├─ resolve createdById/updatedById from notion_users (fallback to importer)
   │   ├─ create or update Vortex document via WorkspaceDO
@@ -61,15 +76,15 @@ POST /notion/import
   └─ return summary
 ```
 
-## Webhooks — Phase 2 (spec only)
+## Webhooks — Phase 2 (implemented)
 
-Notion sends signed `POST` events to `/notion`:
+Notion sends signed `POST` events to `/notion/{organizationId}/{workspaceId}`:
 
-- Handshake request has no `X-Notion-Signature`; body is `{ verification_token }`.
-- Event requests include `X-Notion-Signature: sha256=<hmac>` signed with the workspace's stored `verification_token`.
+- Handshake request has no `X-Notion-Signature`; body is `{ verification_token }`. The token is stored on the matching `notion_installations` row.
+- Event requests include `X-Notion-Signature: sha256=<hmac>` signed with the workspace's stored `verification_token`. The handler uses a constant-time comparison.
 - Supported events: `page.created`, `page.content_updated`, `page.properties_updated`, `page.deleted`, `page.moved`.
-- Event payload contains `entity.id` (page id) and `workspace_id`; fetch full page + markdown on update events.
-- Update or create the mapped Vortex document; soft-delete on `page.deleted`.
+- Event payload contains `entity.id` (page id) and `workspace_id`; handler fetches full page + markdown on create/update/move events and reuses the shared `syncNotionPage` logic.
+- Update or create the mapped Vortex document; soft-delete on `page.deleted` by setting `trashedAt`.
 
 ## Security
 
@@ -84,12 +99,17 @@ Notion sends signed `POST` events to `/notion`:
 - `pnpm run knip`
 - `pnpm run scan:secrets`
 
-## Files expected to change (Phase 1)
+## Files expected to change
 
-- `src/api/notion.ts` — new routes and handlers.
-- `src/global/notion-installations.ts`, `src/global/notion-users.ts`, `src/global/notion-page-mappings.ts` — new D1 helpers.
-- `src/global/schema.ts` — new D1 tables.
-- `src/types/env.ts` — optional `NOTION_API_URL` / `NOTION_API_VERSION` defaults.
-- `src/api/index.ts` — register Notion routes.
-- `src/api/index.test.ts` — import tests.
+- `src/import/notion.ts` — shared import adapter for pages and database migration.
+- `src/api/import.ts` — registers `source: "notion"` on the shared `/import` route.
+- `src/api/notion.ts` — Notion user mapping routes.
+- `src/api/notion-webhook.ts` — Notion webhook handler.
+- `src/platform/security.ts` — `/notion/*` as a public webhook path.
+- `src/global/notion-client.ts` — typed Notion API helpers including database query.
+- `src/global/notion-installations.ts`, `src/global/notion-users.ts`, `src/global/notion-page-mappings.ts`, `src/global/notion-issue-mappings.ts` — D1 helpers.
+- `src/global/schema.ts` — `notion_installations`, `notion_users`, `notion_page_mappings`, `notion_issue_mappings` tables.
+- `src/api/index.ts` — register Notion routes and webhook route.
+- `src/api/index.test.ts` — import, webhook, and database tests.
 - Generated OpenAPI / MCP / client / CLI artifacts.
+- `migrations/` — D1 schema migrations for Notion tables.
