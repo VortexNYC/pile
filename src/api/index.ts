@@ -32,6 +32,7 @@ import { registerLinearUserRoutes } from "./linear-users.js";
 import { registerProjectDetailRoutes } from "./projects.js";
 import { registerMigrateRoutes } from "./migrate.js";
 import { registerNotificationRoutes } from "./notifications.js";
+import { registerOAuthClientRoutes } from "./oauth-clients.js";
 import { registerReactionRoutes } from "./reactions.js";
 import { registerSavedViewRoutes } from "./saved-views.js";
 import {
@@ -70,6 +71,7 @@ app.use("*", ...securityMiddleware);
 app.use("/workspaces/:organizationId/*", workspaceAuthMiddleware);
 registerWorkspaceRoutes(app);
 registerTokenRoutes(app);
+registerOAuthClientRoutes(app);
 registerIssueRoutes(app);
 registerAgentSessionRoutes(app);
 registerAgentProviderRoutes(app);

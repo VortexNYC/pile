@@ -118,6 +118,112 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "oauth clients list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/oauth-clients",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "oauth clients create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/oauth-clients",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "redirectUris",
+        flag: "redirect-uris",
+      },
+      {
+        name: "scopes",
+        flag: "scopes",
+      },
+      {
+        name: "permissions",
+        flag: "permissions",
+      },
+    ],
+  },
+  "oauth clients get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/oauth-clients/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "oauth clients update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/oauth-clients/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "redirectUris",
+        flag: "redirect-uris",
+      },
+      {
+        name: "scopes",
+        flag: "scopes",
+      },
+      {
+        name: "permissions",
+        flag: "permissions",
+      },
+    ],
+  },
+  "oauth clients delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/oauth-clients/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "issues list": {
     method: "GET",
     path: "/workspaces/{organizationId}/issues",

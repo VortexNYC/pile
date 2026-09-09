@@ -384,6 +384,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdOauthclientsId",
+    "description": "Delete oauth client (DELETE /workspaces/{organizationId}/oauth-clients/{id})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/oauth-clients/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdProjectsId",
     "description": "Delete project (DELETE /workspaces/{organizationId}/projects/{id})",
     "method": "DELETE",
@@ -2022,6 +2043,44 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdOauthclients",
+    "description": "List oauth clients (GET /workspaces/{organizationId}/oauth-clients)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/oauth-clients",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdOauthclientsId",
+    "description": "Get oauth client (GET /workspaces/{organizationId}/oauth-clients/{id})",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/oauth-clients/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdProjects",
     "description": "List projects (GET /workspaces/{organizationId}/projects)",
     "method": "GET",
@@ -3236,6 +3295,52 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         },
         "id": {
           "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "patchWorkspacesOrganizationIdOauthclientsId",
+    "description": "Update oauth client (PATCH /workspaces/{organizationId}/oauth-clients/{id})",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/oauth-clients/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "redirectUris": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "uri"
+              }
+            },
+            "scopes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "permissions": {
+              "type": "string"
+            }
+          }
         }
       },
       "required": [
@@ -5164,6 +5269,54 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "properties": {
         "organizationId": {
           "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdOauthclients",
+    "description": "Create oauth client (POST /workspaces/{organizationId}/oauth-clients)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/oauth-clients",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "redirectUris": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "uri"
+              },
+              "default": []
+            },
+            "scopes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": []
+            },
+            "permissions": {
+              "type": "string",
+              "default": "read"
+            }
+          },
+          "required": [
+            "name"
+          ]
         }
       },
       "required": [

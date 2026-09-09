@@ -50,7 +50,7 @@ describe("MCP integration", () => {
     const listBody = (await listRes.json()) as {
       result?: { tools?: unknown[] };
     };
-    expect(listBody.result?.tools?.length).toBe(205);
+    expect(listBody.result?.tools?.length).toBe(210);
 
     const callRes = await app.fetch(
       mcpRequest({
