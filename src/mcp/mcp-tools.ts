@@ -6299,6 +6299,44 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdImport",
+    "description": "Create import (POST /workspaces/{organizationId}/import)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/import",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string",
+              "enum": [
+                "jira",
+                "confluence"
+              ]
+            },
+            "credentials": {
+              "nullable": true
+            },
+            "options": {
+              "nullable": true
+            }
+          },
+          "required": [
+            "source"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdInitiatives",
     "description": "Create initiative (POST /workspaces/{organizationId}/initiatives)",
     "method": "POST",

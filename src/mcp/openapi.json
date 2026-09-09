@@ -23764,6 +23764,82 @@
         "summary": "Get template"
       }
     },
+    "/workspaces/{organizationId}/import": {
+      "post": {
+        "tags": [
+          "import"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "jira",
+                      "confluence"
+                    ]
+                  },
+                  "credentials": {
+                    "nullable": true
+                  },
+                  "options": {
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "source"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Import complete",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "counts": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "number"
+                      }
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "source",
+                    "counts"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create import"
+      }
+    },
     "/workspaces/{organizationId}/migrate/linear": {
       "post": {
         "tags": [
