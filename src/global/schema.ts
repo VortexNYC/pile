@@ -676,6 +676,64 @@ export const pushDeliveries = sqliteTable(
   ]
 );
 
+export const emailInboxes = sqliteTable(
+  "email_inboxes" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    address: text("address" as string).notNull(),
+    teamId: text("team_id" as string),
+    projectId: text("project_id" as string).references(() => projects.id),
+    enabled: integer("enabled" as string, { mode: "boolean" })
+      .notNull()
+      .default(true),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("email_inboxes_organization_idx" as string).on(table.organizationId),
+    index("email_inboxes_address_idx" as string).on(table.address),
+  ]
+);
+
+export const usageRecords = sqliteTable(
+  "usage_records" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    period: text("period" as string).notNull(),
+    resource: text("resource" as string).notNull(),
+    action: text("action" as string).notNull(),
+    count: integer("count" as string, { mode: "number" })
+      .notNull()
+      .default(0),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("usage_records_organization_idx" as string).on(table.organizationId),
+    index("usage_records_period_idx" as string).on(table.period),
+    uniqueIndex("usage_records_period_resource_action_unique" as string).on(
+      table.organizationId,
+      table.period,
+      table.resource,
+      table.action
+    ),
+  ]
+);
+
 export const notifications = sqliteTable(
   "notifications" as string,
   {

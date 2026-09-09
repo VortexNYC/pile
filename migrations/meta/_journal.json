@@ -330,6 +330,13 @@
       "when": 1788967061793,
       "tag": "0046_still_mirage",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "6",
+      "when": 1788968038876,
+      "tag": "0047_clear_brook",
+      "breakpoints": true
     }
   ]
 }

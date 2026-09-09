@@ -2121,6 +2121,109 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "email inboxes list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/email-inboxes",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "email inboxes create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/email-inboxes",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "address",
+        flag: "address",
+      },
+      {
+        name: "teamId",
+        flag: "team",
+      },
+      {
+        name: "projectId",
+        flag: "project",
+      },
+      {
+        name: "enabled",
+        flag: "enabled",
+      },
+    ],
+  },
+  "email inboxes delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/email-inboxes/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "usage list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/usage",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "period",
+        flag: "period",
+      },
+    ],
+    body: [],
+  },
+  "usage create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/usage",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "period",
+        flag: "period",
+      },
+      {
+        name: "resource",
+        flag: "resource",
+      },
+      {
+        name: "action",
+        flag: "action",
+      },
+      {
+        name: "count",
+        flag: "count",
+      },
+    ],
+  },
   "issues comments": {
     method: "POST",
     path: "/workspaces/{organizationId}/issues/{issueId}/comments",

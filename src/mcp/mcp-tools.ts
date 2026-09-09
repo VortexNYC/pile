@@ -250,6 +250,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdEmailinboxesId",
+    "description": "Delete email inboxe (DELETE /workspaces/{organizationId}/email-inboxes/{id})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/email-inboxes/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdGithubInstallationsId",
     "description": "Delete github installation (DELETE /workspaces/{organizationId}/github/installations/{id})",
     "method": "DELETE",
@@ -1360,6 +1381,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "organizationId",
         "q"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdEmailinboxes",
+    "description": "List email inboxes (GET /workspaces/{organizationId}/email-inboxes)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/email-inboxes",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
       ]
     }
   },
@@ -2728,6 +2766,26 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "type": "string"
         },
         "view": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdUsage",
+    "description": "List usage (GET /workspaces/{organizationId}/usage)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/usage",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "period": {
           "type": "string"
         }
       },
@@ -4702,6 +4760,45 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdEmailinboxes",
+    "description": "Create email inboxe (POST /workspaces/{organizationId}/email-inboxes)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/email-inboxes",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "address": {
+              "type": "string",
+              "format": "email"
+            },
+            "teamId": {
+              "type": "string"
+            },
+            "projectId": {
+              "type": "string"
+            },
+            "enabled": {
+              "type": "boolean",
+              "default": true
+            }
+          },
+          "required": [
+            "address"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdGithubInstall",
     "description": "Install GitHub app (POST /workspaces/{organizationId}/github/install)",
     "method": "POST",
@@ -6246,6 +6343,50 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           },
           "required": [
             "name"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdUsage",
+    "description": "Create usage (POST /workspaces/{organizationId}/usage)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/usage",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "period": {
+              "type": "string",
+              "minLength": 1
+            },
+            "resource": {
+              "type": "string",
+              "minLength": 1
+            },
+            "action": {
+              "type": "string",
+              "minLength": 1
+            },
+            "count": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 1
+            }
+          },
+          "required": [
+            "period",
+            "resource",
+            "action"
           ]
         }
       },
