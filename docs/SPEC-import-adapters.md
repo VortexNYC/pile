@@ -8,14 +8,14 @@ This spec covers the shared framework plus all adapters folded into it: Jira, Co
 
 ## Capability map
 
-| Module                | Responsibility                                                                    | Depends on                                                         |
-| --------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `import-core`         | Shared `ImportSource` contract, runner, `POST /workspaces/{id}/import` route, and `import_jobs` persistence | —                                                                  |
-| `import-jira`         | Jira Cloud issue import: projects, statuses, users, issues, comments, attachments | `import-core`                                                      |
-| `import-confluence`   | Confluence Cloud page import: spaces, pages, ADF-to-markdown conversion           | `import-core`, `import-jira` (Atlassian credentials are identical) |
-| `import-notion`       | Notion page and database import into documents and issues                         | `import-core`                                                      |
-| `import-linear`       | Linear issue migration                                                            | `import-core`                                                      |
-| `import-github-issues`| GitHub repository issue import into Vortex issues                                 | `import-core`                                                      |
+| Module                 | Responsibility                                                                                              | Depends on                                                         |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `import-core`          | Shared `ImportSource` contract, runner, `POST /workspaces/{id}/import` route, and `import_jobs` persistence | —                                                                  |
+| `import-jira`          | Jira Cloud issue import: projects, statuses, users, issues, comments, attachments                           | `import-core`                                                      |
+| `import-confluence`    | Confluence Cloud page import: spaces, pages, ADF-to-markdown conversion                                     | `import-core`, `import-jira` (Atlassian credentials are identical) |
+| `import-notion`        | Notion page and database import into documents and issues                                                   | `import-core`                                                      |
+| `import-linear`        | Linear issue migration                                                                                      | `import-core`                                                      |
+| `import-github-issues` | GitHub repository issue import into Vortex issues                                                           | `import-core`                                                      |
 
 Build order: `import-core` → adapters (Jira, Confluence, Linear, Notion, GitHub Issues).
 
