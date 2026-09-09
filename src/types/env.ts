@@ -28,4 +28,7 @@ export interface AppEnv {
   SLACK_SIGNING_SECRET?: string;
   SLACK_ENCRYPTION_KEY?: string;
   SLACK_REDIRECT_URI?: string;
+  // Cloudflare Email Service send binding.
+  EMAIL?: SendEmail;
+  EMAIL_FROM?: string;
 }

@@ -1,3 +1,4 @@
+import { EmailMessage } from "cloudflare:email";
 import { DurableObject } from "cloudflare:workers";
 import {
   and,
@@ -609,8 +610,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
               if (watcherId === values.authorId || notified.has(watcherId))
                 return;
               notified.add(watcherId);
-              await data.createNotification(this.db, {
-                organizationId: this.organizationId,
+              await this.deliverNotification({
                 recipientId: watcherId,
                 recipientType: "user",
                 issueId: subjectId,
@@ -626,8 +626,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           if (mentionId === values.authorId || notified.has(mentionId))
             return;
           notified.add(mentionId);
-          await data.createNotification(this.db, {
-            organizationId: this.organizationId,
+          await this.deliverNotification({
             recipientId: mentionId,
             recipientType: "user",
             issueId: subjectId,
@@ -772,6 +771,58 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return [...recipients];
   }
 
+  // Single notification path: preference-gated in-app row + email fanout.
+  private async deliverNotification(
+    input: Omit<data.NotificationInput, "organizationId">
+  ): Promise<void> {
+    const prefs = data.getNotificationPreferences(
+      this.db,
+      this.organizationId,
+      input.recipientId
+    );
+    const muted = prefs?.mutedTypes?.split(",") ?? [];
+    if (muted.includes(input.type)) return;
+    if (!prefs || prefs.inApp) {
+      await data.createNotification(this.db, {
+        ...input,
+        organizationId: this.organizationId,
+      });
+    }
+    if (prefs?.email && this.env.EMAIL && this.env.EMAIL_FROM) {
+      try {
+        const d1 = createD1(this.env.D1);
+        const recipient = await d1
+          .select({ email: globalUser.email })
+          .from(globalUser)
+          .where(eq(globalUser.id, input.recipientId))
+          .get();
+        if (!recipient?.email) return;
+        const subject = `Vortex: ${input.type.replace(/_/g, " ")}`;
+        const text = `You have a new ${input.type.replace(
+          /_/g,
+          " "
+        )} notification in workspace ${this.organizationId}.\n`;
+        const raw = [
+          `From: ${this.env.EMAIL_FROM}`,
+          `To: ${recipient.email}`,
+          `Subject: ${subject}`,
+          "MIME-Version: 1.0",
+          'Content-Type: text/plain; charset="utf-8"',
+          "",
+          text,
+        ].join("\r\n");
+        const message = new EmailMessage(
+          this.env.EMAIL_FROM,
+          recipient.email,
+          raw
+        );
+        await this.env.EMAIL.send(message);
+      } catch {
+        // Email delivery is best-effort; never block the notification.
+      }
+    }
+  }
+
   private async notifyIssueEvent(
     issue: { id: string; assigneeId: string | null },
     type: data.NotificationType,
@@ -780,16 +831,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const recipients = await this.resolveIssueRecipients(issue, actorId);
     await Promise.all(
       recipients.map(async (recipientId) => {
-        const prefs = data.getNotificationPreferences(
-          this.db,
-          this.organizationId,
-          recipientId
-        );
-        if (prefs && !prefs.inApp) return;
-        const muted = prefs?.mutedTypes?.split(",") ?? [];
-        if (muted.includes(type)) return;
-        await data.createNotification(this.db, {
-          organizationId: this.organizationId,
+        await this.deliverNotification({
           recipientId,
           recipientType: "user",
           issueId: issue.id,
@@ -822,10 +864,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   // ---- notifications ----
   createNotification(input: Omit<data.NotificationInput, "organizationId">) {
-    return data.createNotification(this.db, {
-      ...input,
-      organizationId: this.organizationId,
-    });
+    return this.deliverNotification(input);
   }
 
   listNotificationsForRecipient(
@@ -1160,8 +1199,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       await Promise.all(
         data.listDocumentWatchers(this.db, id).map(async (watcherId) => {
           if (watcherId === actorId) return;
-          await data.createNotification(this.db, {
-            organizationId: this.organizationId,
+          await this.deliverNotification({
             recipientId: watcherId,
             recipientType: "user",
             issueId: doc.issueId ?? doc.id,
