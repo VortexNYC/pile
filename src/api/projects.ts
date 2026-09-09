@@ -90,7 +90,7 @@ export function registerProjectDetailRoutes(app: OpenAPIHono<AppContext>) {
     method: "get",
     path: "/workspaces/{organizationId}/projects/{projectId}/updates",
     tags: ["projects"],
-    middleware: [rls("read")],
+    middleware: [rls("project:member")],
     request: {
       params: z.object({ organizationId: z.string(), projectId: z.string() }),
     },
@@ -108,7 +108,7 @@ export function registerProjectDetailRoutes(app: OpenAPIHono<AppContext>) {
     method: "post",
     path: "/workspaces/{organizationId}/projects/{projectId}/updates",
     tags: ["projects"],
-    middleware: [rls("write")],
+    middleware: [rls("project:lead")],
     request: {
       params: z.object({ organizationId: z.string(), projectId: z.string() }),
       body: { content: { "application/json": { schema: projectUpdateBodySchema } } },
@@ -125,7 +125,7 @@ export function registerProjectDetailRoutes(app: OpenAPIHono<AppContext>) {
     method: "get",
     path: "/workspaces/{organizationId}/projects/{projectId}/updates/{id}",
     tags: ["projects"],
-    middleware: [rls("read")],
+    middleware: [rls("project:member")],
     request: {
       params: z.object({
         organizationId: z.string(),
@@ -145,7 +145,7 @@ export function registerProjectDetailRoutes(app: OpenAPIHono<AppContext>) {
     method: "patch",
     path: "/workspaces/{organizationId}/projects/{projectId}/updates/{id}",
     tags: ["projects"],
-    middleware: [rls("write")],
+    middleware: [rls("project:lead")],
     request: {
       params: z.object({
         organizationId: z.string(),
@@ -166,7 +166,7 @@ export function registerProjectDetailRoutes(app: OpenAPIHono<AppContext>) {
     method: "delete",
     path: "/workspaces/{organizationId}/projects/{projectId}/updates/{id}",
     tags: ["projects"],
-    middleware: [rls("write")],
+    middleware: [rls("project:lead")],
     request: {
       params: z.object({
         organizationId: z.string(),
@@ -181,7 +181,7 @@ export function registerProjectDetailRoutes(app: OpenAPIHono<AppContext>) {
     method: "get",
     path: "/workspaces/{organizationId}/projects/{projectId}/milestones",
     tags: ["projects"],
-    middleware: [rls("read")],
+    middleware: [rls("project:member")],
     request: {
       params: z.object({ organizationId: z.string(), projectId: z.string() }),
     },
@@ -199,7 +199,7 @@ export function registerProjectDetailRoutes(app: OpenAPIHono<AppContext>) {
     method: "post",
     path: "/workspaces/{organizationId}/projects/{projectId}/milestones",
     tags: ["projects"],
-    middleware: [rls("write")],
+    middleware: [rls("project:lead")],
     request: {
       params: z.object({ organizationId: z.string(), projectId: z.string() }),
       body: { content: { "application/json": { schema: projectMilestoneBodySchema } } },
@@ -216,7 +216,7 @@ export function registerProjectDetailRoutes(app: OpenAPIHono<AppContext>) {
     method: "get",
     path: "/workspaces/{organizationId}/projects/{projectId}/milestones/{id}",
     tags: ["projects"],
-    middleware: [rls("read")],
+    middleware: [rls("project:member")],
     request: {
       params: z.object({
         organizationId: z.string(),
@@ -236,7 +236,7 @@ export function registerProjectDetailRoutes(app: OpenAPIHono<AppContext>) {
     method: "patch",
     path: "/workspaces/{organizationId}/projects/{projectId}/milestones/{id}",
     tags: ["projects"],
-    middleware: [rls("write")],
+    middleware: [rls("project:lead")],
     request: {
       params: z.object({
         organizationId: z.string(),
@@ -257,7 +257,7 @@ export function registerProjectDetailRoutes(app: OpenAPIHono<AppContext>) {
     method: "delete",
     path: "/workspaces/{organizationId}/projects/{projectId}/milestones/{id}",
     tags: ["projects"],
-    middleware: [rls("write")],
+    middleware: [rls("project:lead")],
     request: {
       params: z.object({
         organizationId: z.string(),
@@ -272,7 +272,7 @@ export function registerProjectDetailRoutes(app: OpenAPIHono<AppContext>) {
     method: "get",
     path: "/workspaces/{organizationId}/projects/{projectId}/reminder",
     tags: ["projects"],
-    middleware: [rls("read")],
+    middleware: [rls("project:member")],
     request: {
       params: z.object({ organizationId: z.string(), projectId: z.string() }),
     },
@@ -288,7 +288,7 @@ export function registerProjectDetailRoutes(app: OpenAPIHono<AppContext>) {
     method: "put",
     path: "/workspaces/{organizationId}/projects/{projectId}/reminder",
     tags: ["projects"],
-    middleware: [rls("write")],
+    middleware: [rls("project:lead")],
     request: {
       params: z.object({ organizationId: z.string(), projectId: z.string() }),
       body: { content: { "application/json": { schema: projectUpdateReminderBodySchema } } },
@@ -305,7 +305,7 @@ export function registerProjectDetailRoutes(app: OpenAPIHono<AppContext>) {
     method: "delete",
     path: "/workspaces/{organizationId}/projects/{projectId}/reminder",
     tags: ["projects"],
-    middleware: [rls("write")],
+    middleware: [rls("project:lead")],
     request: {
       params: z.object({ organizationId: z.string(), projectId: z.string() }),
     },

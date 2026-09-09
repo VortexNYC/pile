@@ -201,7 +201,7 @@ const getProjectRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/projects/{id}",
   tags: ["projects"],
-  middleware: [rls("read")],
+  middleware: [rls("project:member")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -219,7 +219,7 @@ const updateProjectRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/projects/{id}",
   tags: ["projects"],
-  middleware: [rls("write")],
+  middleware: [rls("project:lead")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
     body: {
@@ -242,7 +242,7 @@ const archiveProjectRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/projects/{id}/archive",
   tags: ["projects"],
-  middleware: [rls("write")],
+  middleware: [rls("project:lead")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -258,7 +258,7 @@ const unarchiveProjectRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/projects/{id}/unarchive",
   tags: ["projects"],
-  middleware: [rls("write")],
+  middleware: [rls("project:lead")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -274,7 +274,7 @@ const deleteProjectRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/projects/{id}",
   tags: ["projects"],
-  middleware: [rls("write")],
+  middleware: [rls("project:lead")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },

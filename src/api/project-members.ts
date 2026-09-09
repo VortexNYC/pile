@@ -35,7 +35,7 @@ const listProjectMembersRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/projects/{projectId}/members",
   tags: ["project-members"],
-  middleware: [rls("read")],
+  middleware: [rls("project:member")],
   request: {
     params: z.object({ organizationId: z.string(), projectId: z.string() }),
   },
@@ -56,7 +56,7 @@ const createProjectMemberRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/projects/{projectId}/members",
   tags: ["project-members"],
-  middleware: [rls("write")],
+  middleware: [rls("project:lead")],
   request: {
     params: z.object({ organizationId: z.string(), projectId: z.string() }),
     body: {
@@ -78,7 +78,7 @@ const updateProjectMemberRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/projects/{projectId}/members/{id}",
   tags: ["project-members"],
-  middleware: [rls("write")],
+  middleware: [rls("project:lead")],
   request: {
     params: z.object({
       organizationId: z.string(),
@@ -102,7 +102,7 @@ const deleteProjectMemberRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/projects/{projectId}/members/{id}",
   tags: ["project-members"],
-  middleware: [rls("write")],
+  middleware: [rls("project:lead")],
   request: {
     params: z.object({
       organizationId: z.string(),
