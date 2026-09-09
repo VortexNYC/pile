@@ -9683,6 +9683,57 @@ export interface paths {
         };
         trace?: never;
     };
+    "/workspaces/{organizationId}/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create search */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        query: string;
+                        /** @default [] */
+                        teamIds?: string[];
+                        /** @default 50 */
+                        limit?: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Search results */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            issueIds: string[];
+                            documentIds: string[];
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/teams": {
         parameters: {
             query?: never;

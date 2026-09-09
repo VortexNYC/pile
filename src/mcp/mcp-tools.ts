@@ -6081,6 +6081,48 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdSearch",
+    "description": "Create search (POST /workspaces/{organizationId}/search)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/search",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "minLength": 1
+            },
+            "teamIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": []
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 50
+            }
+          },
+          "required": [
+            "query"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdSlackChannel",
     "description": "Create slack channel (POST /workspaces/{organizationId}/slack/channel)",
     "method": "POST",

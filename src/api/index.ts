@@ -40,6 +40,7 @@ import { registerPushRoutes } from "./push.js";
 import { registerReactionRoutes } from "./reactions.js";
 import { registerRealtimeRoutes } from "./realtime.js";
 import { registerSavedViewRoutes } from "./saved-views.js";
+import { registerSearchRoutes } from "./search.js";
 import {
   handleSlackEvents,
   handleSlackOAuth,
@@ -106,6 +107,7 @@ registerPushRoutes(app);
 registerReactionRoutes(app);
 registerRealtimeRoutes(app);
 registerSavedViewRoutes(app);
+registerSearchRoutes(app);
 registerTeamRoutes(app);
 registerTemplateRoutes(app);
 registerMigrateRoutes(app);

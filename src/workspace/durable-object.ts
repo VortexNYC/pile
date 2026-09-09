@@ -1485,6 +1485,19 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return searchDocuments(index, query, limit);
   }
 
+  async searchAll(
+    query: string,
+    teamIds: string[],
+    limit = 50
+  ): Promise<{ issueIds: string[]; documentIds: string[] }> {
+    const index = await this.ensureSearchIndex();
+    const [issueIds, documentIds] = await Promise.all([
+      searchIssues(index, query, teamIds, limit),
+      searchDocuments(index, query, limit),
+    ]);
+    return { issueIds, documentIds };
+  }
+
   // Extract [[doc slug/id]] and ISSUE-KEY references from content.
   private async syncDocumentLinks(
     documentId: string,

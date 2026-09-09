@@ -4368,6 +4368,31 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "search create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/search",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "query",
+        flag: "query",
+      },
+      {
+        name: "teamIds",
+        flag: "team-ids",
+      },
+      {
+        name: "limit",
+        flag: "limit",
+      },
+    ],
+  },
   "teams list": {
     method: "GET",
     path: "/workspaces/{organizationId}/teams",
