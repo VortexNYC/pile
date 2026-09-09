@@ -2,11 +2,18 @@ import { getWorkspaceStub } from "../api/stub.js";
 import { createD1 } from "../global/db.js";
 import {
   createImportJob,
+  findImportJob,
   updateImportJobStatus,
   type ImportJobRecord,
 } from "../global/import-jobs.js";
 import type { WorkerEnv } from "../platform/middleware.js";
-import type { ImportContext, ImportCounts, ImportSource } from "./types.js";
+import type {
+  ImportBatchResult,
+  ImportContext,
+  ImportCounts,
+  ImportRunState,
+  ImportSource,
+} from "./types.js";
 
 export async function createImportContext(
   env: WorkerEnv,
@@ -25,52 +32,113 @@ export async function createImportContext(
 }
 
 export interface ImportRunResult {
-  counts: ImportCounts;
+  batch: ImportBatchResult;
   job: ImportJobRecord;
+}
+
+function mergeCounts(
+  existing: ImportCounts | null,
+  batch: ImportCounts
+): ImportCounts {
+  const merged: ImportCounts = existing ? { ...existing } : {};
+  for (const [key, value] of Object.entries(batch)) {
+    merged[key] = (merged[key] ?? 0) + value;
+  }
+  return merged;
+}
+
+function serializeCounts(counts: ImportCounts): string {
+  return JSON.stringify(counts);
+}
+
+function parseCounts(json: string | null): ImportCounts | null {
+  if (!json) return null;
+  try {
+    return JSON.parse(json) as ImportCounts;
+  } catch {
+    return null;
+  }
+}
+
+export async function executeImportBatch<TCredentials, TOptions>(
+  source: ImportSource<TCredentials, TOptions>,
+  ctx: ImportContext,
+  job: ImportJobRecord,
+  credentials: TCredentials,
+  options: TOptions,
+  state?: ImportRunState
+): Promise<ImportRunResult> {
+  const validation = await source.validate(credentials);
+  if (!validation.ok) {
+    const result = { counts: { errors: 1 } };
+    await updateImportJobStatus(ctx.db, job.id, "failed", {
+      error: validation.error,
+      counts: serializeCounts(result.counts),
+      completedAt: new Date().toISOString(),
+    });
+    return { batch: result, job };
+  }
+
+  await updateImportJobStatus(ctx.db, job.id, "running");
+  try {
+    const batch = await source.run(ctx, credentials, options, {
+      cursor: state?.cursor ?? job.cursor ?? undefined,
+      limit: state?.limit,
+    });
+
+    const existing = parseCounts(job.counts);
+    const merged = mergeCounts(existing, batch.counts);
+
+    if (batch.nextCursor !== undefined && batch.nextCursor !== null) {
+      const updated = await updateImportJobStatus(ctx.db, job.id, "paused", {
+        cursor: batch.nextCursor,
+        counts: serializeCounts(merged),
+      });
+      return { batch, job: updated as ImportJobRecord };
+    }
+
+    const updated = await updateImportJobStatus(ctx.db, job.id, "completed", {
+      counts: serializeCounts(merged),
+      completedAt: new Date().toISOString(),
+      cursor: null,
+    });
+    return { batch, job: updated as ImportJobRecord };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const existing = parseCounts(job.counts);
+    const merged = mergeCounts(existing, { errors: 1 });
+    const updated = await updateImportJobStatus(ctx.db, job.id, "failed", {
+      error: message,
+      counts: serializeCounts(merged),
+      completedAt: new Date().toISOString(),
+    });
+    return { batch: { counts: merged }, job: updated as ImportJobRecord };
+  }
 }
 
 export async function runImport<TCredentials, TOptions>(
   source: ImportSource<TCredentials, TOptions>,
   ctx: ImportContext,
   credentials: TCredentials,
-  options: TOptions
+  options: TOptions,
+  state?: ImportRunState
 ): Promise<ImportRunResult> {
-  const validation = await source.validate(credentials);
   const job = await createImportJob(
     ctx.db,
     ctx.organizationId,
     source.name,
     options
   );
-  if (!validation.ok) {
-    await updateImportJobStatus(ctx.db, job.id, "failed", {
-      error: validation.error,
-      completedAt: new Date().toISOString(),
-    });
-    return {
-      counts: { errors: 1 },
-      job,
-    };
-  }
+  return executeImportBatch(source, ctx, job, credentials, options, state);
+}
 
-  await updateImportJobStatus(ctx.db, job.id, "running");
-  try {
-    const counts = await source.run(ctx, credentials, options);
-    const result = { errors: 0, ...counts };
-    await updateImportJobStatus(ctx.db, job.id, "completed", {
-      counts: JSON.stringify(result),
-      completedAt: new Date().toISOString(),
-    });
-    return { counts: result, job };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    await updateImportJobStatus(ctx.db, job.id, "failed", {
-      error: message,
-      completedAt: new Date().toISOString(),
-    });
-    return {
-      counts: { errors: 1 },
-      job,
-    };
-  }
+export async function resumeImport<TCredentials, TOptions>(
+  source: ImportSource<TCredentials, TOptions>,
+  ctx: ImportContext,
+  job: ImportJobRecord,
+  credentials: TCredentials,
+  options: TOptions,
+  state?: ImportRunState
+): Promise<ImportRunResult> {
+  return executeImportBatch(source, ctx, job, credentials, options, state);
 }

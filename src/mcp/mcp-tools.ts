@@ -6382,6 +6382,81 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdImportJobIdApprove",
+    "description": "Create import approve (POST /workspaces/{organizationId}/import/{jobId}/approve)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/import/{jobId}/approve",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "jobId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "jobId",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdImportJobIdReject",
+    "description": "Create import reject (POST /workspaces/{organizationId}/import/{jobId}/reject)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/import/{jobId}/reject",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "jobId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "jobId",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdImportJobIdResume",
+    "description": "Create import resume (POST /workspaces/{organizationId}/import/{jobId}/resume)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/import/{jobId}/resume",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "jobId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "credentials": {
+              "nullable": true
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "jobId",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdInitiatives",
     "description": "Create initiative (POST /workspaces/{organizationId}/initiatives)",
     "method": "POST",

@@ -10,11 +10,21 @@ export interface ImportContext {
   stub: DurableObjectStub<WorkspaceDO>;
 }
 
+export interface ImportRunState {
+  cursor?: string;
+  limit?: number;
+}
+
 export type ImportValidationResult =
   | { ok: true }
   | { ok: false; error: string };
 
 export type ImportCounts = Record<string, number>;
+
+export interface ImportBatchResult {
+  counts: ImportCounts;
+  nextCursor?: string | null;
+}
 
 export interface ImportSource<TCredentials, TOptions = unknown> {
   name: string;
@@ -24,6 +34,7 @@ export interface ImportSource<TCredentials, TOptions = unknown> {
   run(
     ctx: ImportContext,
     credentials: TCredentials,
-    options: TOptions
-  ): Promise<ImportCounts>;
+    options: TOptions,
+    state?: ImportRunState
+  ): Promise<ImportBatchResult>;
 }

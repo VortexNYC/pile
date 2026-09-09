@@ -23811,7 +23811,7 @@
         },
         "responses": {
           "200": {
-            "description": "Import complete",
+            "description": "Import started or awaiting approval",
             "content": {
               "application/json": {
                 "schema": {
@@ -23826,18 +23826,24 @@
                     "jobId": {
                       "type": "string"
                     },
+                    "status": {
+                      "type": "string"
+                    },
                     "counts": {
                       "type": "object",
                       "additionalProperties": {
                         "type": "number"
                       }
+                    },
+                    "nextCursor": {
+                      "type": "string"
                     }
                   },
                   "required": [
                     "ok",
                     "source",
                     "jobId",
-                    "counts"
+                    "status"
                   ]
                 }
               }
@@ -23895,6 +23901,20 @@
                     },
                     "error": {
                       "type": "string"
+                    },
+                    "approval": {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string"
+                        },
+                        "approvedBy": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "status"
+                      ]
                     }
                   },
                   "required": [
@@ -23911,6 +23931,203 @@
           }
         },
         "summary": "Get import"
+      }
+    },
+    "/workspaces/{organizationId}/import/{jobId}/resume": {
+      "post": {
+        "tags": [
+          "import"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "jobId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "credentials": {
+                    "nullable": true
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Import batch resumed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "jobId": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "counts": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "number"
+                      }
+                    },
+                    "nextCursor": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "source",
+                    "jobId",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Import job not found"
+          },
+          "409": {
+            "description": "Import job is not resumable"
+          }
+        },
+        "summary": "Create import resume"
+      }
+    },
+    "/workspaces/{organizationId}/import/{jobId}/approve": {
+      "post": {
+        "tags": [
+          "import"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "jobId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Import approved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "jobId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "jobId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Import job not found"
+          }
+        },
+        "summary": "Create import approve"
+      }
+    },
+    "/workspaces/{organizationId}/import/{jobId}/reject": {
+      "post": {
+        "tags": [
+          "import"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "jobId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Import rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "jobId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "jobId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Import job not found"
+          }
+        },
+        "summary": "Create import reject"
       }
     },
     "/workspaces/{organizationId}/notion/users": {

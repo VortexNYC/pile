@@ -8,8 +8,9 @@ import { createRepoIssue, findRepoIssue } from "../global/repo-issues.js";
 import { VortexError } from "../platform/errors.js";
 import type { IssueInput } from "../types/workspace.js";
 import type {
+  ImportBatchResult,
   ImportContext,
-  ImportCounts,
+  ImportRunState,
   ImportSource,
   ImportValidationResult,
 } from "./types.js";
@@ -29,6 +30,8 @@ export const githubIssuesOptionsSchema = z.object({
   repo: z.string().min(1),
   teamId: z.string().optional(),
   state: z.enum(["open", "closed", "all"]).optional().default("open"),
+  limit: z.number().int().min(1).max(100).optional(),
+  cursor: z.string().optional(),
 });
 
 export type GithubIssuesOptions = z.infer<typeof githubIssuesOptionsSchema>;
@@ -106,13 +109,13 @@ async function listGithubIssues(
   token: string,
   owner: string,
   repo: string,
-  state: string,
-  page: number
+  issueState: string,
+  page: number,
+  perPage: number
 ): Promise<{ issues: GithubIssue[]; hasMore: boolean }> {
-  const perPage = 100;
   const raw = await githubRequest<unknown[]>(
     token,
-    `/repos/${owner}/${repo}/issues?state=${state}&per_page=${perPage}&page=${page}`
+    `/repos/${owner}/${repo}/issues?state=${issueState}&per_page=${perPage}&page=${page}`
   );
   const parsed = z.array(githubIssueSchema).safeParse(raw);
   if (!parsed.success) {
@@ -250,11 +253,16 @@ export const githubIssuesImportSource: ImportSource<
     return { ok: true };
   },
 
-  async run(ctx, credentials, options): Promise<ImportCounts> {
+  async run(ctx, credentials, options, runState): Promise<ImportBatchResult> {
     const { token } = credentials;
-    const { owner, repo, teamId, state } = githubIssuesOptionsSchema.parse(
-      options ?? {}
-    );
+    const parsedOptions = githubIssuesOptionsSchema.parse(options ?? {});
+    const { owner, repo, teamId, state: issueState } = parsedOptions;
+    const limit = runState?.limit ?? parsedOptions.limit;
+    const startPage = runState?.cursor
+      ? parseInt(runState.cursor, 10)
+      : parsedOptions.cursor
+        ? parseInt(parsedOptions.cursor, 10)
+        : 1;
     const fullRepo = `${owner}/${repo}`;
 
     await getGithubRepository(token, owner, repo);
@@ -262,15 +270,19 @@ export const githubIssuesImportSource: ImportSource<
     let created = 0;
     let updated = 0;
     let errors = 0;
-    let page = 1;
+    let processed = 0;
+    let page = startPage;
+    const perPage = Math.min(limit ?? 100, 100);
+    let nextCursor: string | null = null;
 
     while (true) {
       const { issues, hasMore } = await listGithubIssues(
         token,
         owner,
         repo,
-        state,
-        page
+        issueState,
+        page,
+        perPage
       );
       if (issues.length === 0) break;
 
@@ -284,15 +296,26 @@ export const githubIssuesImportSource: ImportSource<
         }
       }
 
-      if (!hasMore) break;
+      processed += issues.length;
+
+      const hasNextPage = hasMore && (limit === undefined || processed < limit);
+      if (!hasNextPage) {
+        if (hasMore && limit !== undefined && processed >= limit) {
+          nextCursor = String(page + 1);
+        }
+        break;
+      }
       page++;
     }
 
     return {
-      issues: created + updated,
-      created,
-      updated,
-      errors,
+      counts: {
+        issues: created + updated,
+        created,
+        updated,
+        errors,
+      },
+      nextCursor,
     };
   },
 };

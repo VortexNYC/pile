@@ -5,6 +5,7 @@ import { importJobs } from "./schema.js";
 
 export type ImportJobStatus =
   | "pending"
+  | "pending_approval"
   | "running"
   | "completed"
   | "failed"

@@ -17,8 +17,8 @@ import type {
   IssueStatus,
 } from "../types/workspace.js";
 import type {
+  ImportBatchResult,
   ImportContext,
-  ImportCounts,
   ImportSource,
   ImportValidationResult,
 } from "./types.js";
@@ -742,7 +742,7 @@ export const linearImportSource: ImportSource<
     return { ok: true };
   },
 
-  async run(ctx, credentials, options): Promise<ImportCounts> {
+  async run(ctx, credentials, options): Promise<ImportBatchResult> {
     const parsedOptions = linearOptionsSchema.parse(options ?? {});
     const linearTeamId = parsedOptions.linearTeamId;
     const client = new LinearClient(credentials.token);
@@ -1033,20 +1033,23 @@ export const linearImportSource: ImportSource<
     }
 
     return {
-      issues: issueCount,
-      labels: labels.length,
-      states: states.length,
-      projects: projects.length,
-      cycles: cycles.length,
-      users: linearUsers.length,
-      comments: commentCount,
-      relations: relationCount,
-      attachments: attachmentCount,
-      history: historyCount,
-      subscribers: subscriberCount,
-      memberships: membershipCount,
-      templates: templates.length,
-      parentLinks: parentLinkCount,
+      counts: {
+        issues: issueCount,
+        labels: labels.length,
+        states: states.length,
+        projects: projects.length,
+        cycles: cycles.length,
+        users: linearUsers.length,
+        comments: commentCount,
+        relations: relationCount,
+        attachments: attachmentCount,
+        history: historyCount,
+        subscribers: subscriberCount,
+        memberships: membershipCount,
+        templates: templates.length,
+        parentLinks: parentLinkCount,
+      },
+      nextCursor: null,
     };
   },
 };

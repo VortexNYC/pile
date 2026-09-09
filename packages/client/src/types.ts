@@ -12898,7 +12898,7 @@ export interface paths {
                 };
             };
             responses: {
-                /** @description Import complete */
+                /** @description Import started or awaiting approval */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -12908,9 +12908,11 @@ export interface paths {
                             ok: boolean;
                             source: string;
                             jobId: string;
-                            counts: {
+                            status: string;
+                            counts?: {
                                 [key: string]: number;
                             };
+                            nextCursor?: string;
                         };
                     };
                 };
@@ -12956,6 +12958,10 @@ export interface paths {
                                 [key: string]: number;
                             };
                             error?: string;
+                            approval?: {
+                                status: string;
+                                approvedBy?: string;
+                            };
                         };
                     };
                 };
@@ -12970,6 +12976,173 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/import/{jobId}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create import resume */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    jobId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        credentials?: unknown;
+                        limit?: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Import batch resumed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                            source: string;
+                            jobId: string;
+                            status: string;
+                            counts?: {
+                                [key: string]: number;
+                            };
+                            nextCursor?: string;
+                        };
+                    };
+                };
+                /** @description Import job not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Import job is not resumable */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/import/{jobId}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create import approve */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    jobId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Import approved */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                            jobId: string;
+                        };
+                    };
+                };
+                /** @description Import job not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/import/{jobId}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create import reject */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    jobId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Import rejected */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                            jobId: string;
+                        };
+                    };
+                };
+                /** @description Import job not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;

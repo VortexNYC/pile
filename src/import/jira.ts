@@ -15,6 +15,7 @@ import type {
   IssueStatus,
 } from "../types/workspace.js";
 import type {
+  ImportBatchResult,
   ImportContext,
   ImportCounts,
   ImportSource,
@@ -416,13 +417,13 @@ export const jiraImportSource: ImportSource<JiraCredentials, JiraOptions> = {
     return { ok: true };
   },
 
-  async run(ctx, credentials, options): Promise<ImportCounts> {
+  async run(ctx, credentials, options): Promise<ImportBatchResult> {
     const parsedOptions = jiraOptionsSchema.parse(options ?? {});
     const projectKey = parsedOptions.projectKey;
     const customJql = parsedOptions.jql;
 
     if (!projectKey && !customJql) {
-      return { errors: 1 };
+      return { counts: { errors: 1 }, nextCursor: null };
     }
 
     const jql = customJql ?? `project = ${projectKey}`;
@@ -620,11 +621,14 @@ export const jiraImportSource: ImportSource<JiraCredentials, JiraOptions> = {
     }
 
     return {
-      issues: issueCount,
-      comments: commentCount,
-      attachments: attachmentCount,
-      parentLinks: parentLinkedCount,
-      pages: pageCount,
+      counts: {
+        issues: issueCount,
+        comments: commentCount,
+        attachments: attachmentCount,
+        parentLinks: parentLinkedCount,
+        pages: pageCount,
+      },
+      nextCursor: null,
     };
   },
 };

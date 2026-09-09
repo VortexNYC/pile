@@ -3189,4 +3189,280 @@ describe("API integration", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it("paginates and resumes a GitHub issues import", async () => {
+    const organizationId = await seedWorkspace();
+    const token = await adminToken(organizationId);
+
+    const teamRes = await app.fetch(
+      request(`/workspaces/${organizationId}/teams`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ key: "ENG", name: "Engineering" }),
+      }),
+      env
+    );
+    expect(teamRes.status).toBe(201);
+    const team = await teamRes.json<{ id: string }>();
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input, init) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+      if (!url.startsWith("https://api.github.com")) {
+        return originalFetch(input, init);
+      }
+
+      const parsedUrl = new URL(url);
+      const path = parsedUrl.pathname;
+      if (path === "/repos/testowner/testrepo") {
+        return Response.json({ id: 1, full_name: "testowner/testrepo" });
+      }
+
+      if (path === "/repos/testowner/testrepo/issues") {
+        const page = parsedUrl.searchParams.get("page") ?? "1";
+        if (page === "1") {
+          return Response.json([
+            {
+              number: 1,
+              title: "GitHub issue one",
+              body: "Body one",
+              state: "open",
+              state_reason: null,
+              user: { login: "gh-user-1" },
+              assignee: null,
+              milestone: null,
+              labels: [],
+            },
+          ]);
+        }
+        if (page === "2") {
+          return Response.json([
+            {
+              number: 2,
+              title: "GitHub issue two",
+              body: "Body two",
+              state: "open",
+              state_reason: null,
+              user: { login: "gh-user-2" },
+              assignee: null,
+              milestone: null,
+              labels: [],
+            },
+          ]);
+        }
+        return Response.json([]);
+      }
+
+      return new Response("Not Found", { status: 404 });
+    };
+
+    try {
+      const importRes = await app.fetch(
+        request(`/workspaces/${organizationId}/import`, {
+          method: "POST",
+          token,
+          body: JSON.stringify({
+            source: "github-issues",
+            credentials: { token: "gh-token" },
+            options: {
+              owner: "testowner",
+              repo: "testrepo",
+              teamId: team.id,
+              limit: 1,
+            },
+          }),
+        }),
+        env
+      );
+      expect(importRes.status).toBe(200);
+      const importBody = await importRes.json<{
+        ok: boolean;
+        status: string;
+        jobId: string;
+        counts: Record<string, number>;
+        nextCursor?: string;
+      }>();
+      expect(importBody.ok).toBe(true);
+      expect(importBody.status).toBe("paused");
+      expect(importBody.nextCursor).toBe("2");
+      expect(importBody.counts.issues).toBe(1);
+
+      const resumeRes = await app.fetch(
+        request(
+          `/workspaces/${organizationId}/import/${importBody.jobId}/resume`,
+          {
+            method: "POST",
+            token,
+            body: JSON.stringify({ credentials: { token: "gh-token" } }),
+          }
+        ),
+        env
+      );
+      expect(resumeRes.status).toBe(200);
+      const resumeBody = await resumeRes.json<{
+        ok: boolean;
+        status: string;
+        nextCursor?: string;
+        counts: Record<string, number>;
+      }>();
+      expect(resumeBody.ok).toBe(true);
+      expect(resumeBody.status).toBe("completed");
+      expect(resumeBody.nextCursor).toBeUndefined();
+      expect(resumeBody.counts.issues).toBe(2);
+
+      const issuesRes = await app.fetch(
+        request(`/workspaces/${organizationId}/issues`, { token }),
+        env
+      );
+      expect(issuesRes.status).toBe(200);
+      const issuesBody = await issuesRes.json<{
+        issues: Array<{ title: string }>;
+      }>();
+      expect(issuesBody.issues).toHaveLength(2);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("requires approval before running a GitHub issues import", async () => {
+    const organizationId = await seedWorkspace();
+    const token = await adminToken(organizationId);
+
+    const teamRes = await app.fetch(
+      request(`/workspaces/${organizationId}/teams`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ key: "ENG", name: "Engineering" }),
+      }),
+      env
+    );
+    expect(teamRes.status).toBe(201);
+    const team = await teamRes.json<{ id: string }>();
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input, init) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+      if (!url.startsWith("https://api.github.com")) {
+        return originalFetch(input, init);
+      }
+
+      const parsedUrl = new URL(url);
+      const path = parsedUrl.pathname;
+      if (path === "/repos/testowner/testrepo") {
+        return Response.json({ id: 1, full_name: "testowner/testrepo" });
+      }
+
+      if (path === "/repos/testowner/testrepo/issues") {
+        const page = parsedUrl.searchParams.get("page") ?? "1";
+        if (page === "1") {
+          return Response.json([
+            {
+              number: 1,
+              title: "GitHub issue one",
+              body: "Body one",
+              state: "open",
+              state_reason: null,
+              user: { login: "gh-user-1" },
+              assignee: null,
+              milestone: null,
+              labels: [],
+            },
+          ]);
+        }
+        return Response.json([]);
+      }
+
+      return new Response("Not Found", { status: 404 });
+    };
+
+    try {
+      const importRes = await app.fetch(
+        request(`/workspaces/${organizationId}/import`, {
+          method: "POST",
+          token,
+          body: JSON.stringify({
+            source: "github-issues",
+            credentials: { token: "gh-token" },
+            options: {
+              owner: "testowner",
+              repo: "testrepo",
+              teamId: team.id,
+              limit: 1,
+              approvalRequired: true,
+            },
+          }),
+        }),
+        env
+      );
+      expect(importRes.status).toBe(200);
+      const importBody = await importRes.json<{
+        ok: boolean;
+        status: string;
+        jobId: string;
+      }>();
+      expect(importBody.ok).toBe(true);
+      expect(importBody.status).toBe("pending_approval");
+
+      const statusRes = await app.fetch(
+        request(`/workspaces/${organizationId}/import/${importBody.jobId}`, {
+          token,
+        }),
+        env
+      );
+      expect(statusRes.status).toBe(200);
+      const statusBody = await statusRes.json<{
+        status: string;
+        approval: { status: string };
+      }>();
+      expect(statusBody.status).toBe("pending_approval");
+      expect(statusBody.approval.status).toBe("pending");
+
+      const approveRes = await app.fetch(
+        request(
+          `/workspaces/${organizationId}/import/${importBody.jobId}/approve`,
+          {
+            method: "POST",
+            token,
+          }
+        ),
+        env
+      );
+      expect(approveRes.status).toBe(200);
+      const approveBody = await approveRes.json<{ ok: boolean }>();
+      expect(approveBody.ok).toBe(true);
+
+      const resumeRes = await app.fetch(
+        request(
+          `/workspaces/${organizationId}/import/${importBody.jobId}/resume`,
+          {
+            method: "POST",
+            token,
+            body: JSON.stringify({ credentials: { token: "gh-token" } }),
+          }
+        ),
+        env
+      );
+      expect(resumeRes.status).toBe(200);
+      const resumeBody = await resumeRes.json<{
+        ok: boolean;
+        status: string;
+        counts: Record<string, number>;
+      }>();
+      expect(resumeBody.ok).toBe(true);
+      expect(resumeBody.status).toBe("completed");
+      expect(resumeBody.counts.issues).toBe(1);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

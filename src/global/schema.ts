@@ -66,7 +66,14 @@ export const importJobs = sqliteTable(
       .references(() => organization.id),
     source: text("source" as string).notNull(),
     status: text("status" as string, {
-      enum: ["pending", "running", "completed", "failed", "paused"],
+      enum: [
+        "pending",
+        "pending_approval",
+        "running",
+        "completed",
+        "failed",
+        "paused",
+      ],
     })
       .notNull()
       .default("pending"),
@@ -86,6 +93,38 @@ export const importJobs = sqliteTable(
     index("import_jobs_organization_idx" as string).on(
       table.organizationId,
       table.createdAt
+    ),
+  ]
+);
+
+export const importApprovals = sqliteTable(
+  "import_approvals" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    jobId: text("job_id" as string)
+      .notNull()
+      .references(() => importJobs.id),
+    status: text("status" as string, {
+      enum: ["pending", "approved", "rejected"],
+    })
+      .notNull()
+      .default("pending"),
+    requestedBy: text("requested_by" as string).notNull(),
+    approvedBy: text("approved_by" as string),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("import_approvals_job_idx" as string).on(table.jobId),
+    index("import_approvals_organization_idx" as string).on(
+      table.organizationId
     ),
   ]
 );

@@ -3,8 +3,8 @@ import { z } from "zod";
 import { adfToMarkdown } from "../global/adf-to-markdown.js";
 import { VortexError } from "../platform/errors.js";
 import type {
+  ImportBatchResult,
   ImportContext,
-  ImportCounts,
   ImportSource,
   ImportValidationResult,
 } from "./types.js";
@@ -285,10 +285,10 @@ export const confluenceImportSource: ImportSource<
     return { ok: true };
   },
 
-  async run(ctx, credentials, options): Promise<ImportCounts> {
+  async run(ctx, credentials, options): Promise<ImportBatchResult> {
     const parsedOptions = confluenceOptionsSchema.parse(options ?? {});
     if (!parsedOptions.spaceKey && !parsedOptions.rootPageId) {
-      return { errors: 1 };
+      return { counts: { errors: 1 }, nextCursor: null };
     }
 
     const api = makeClient(credentials);
@@ -356,9 +356,12 @@ export const confluenceImportSource: ImportSource<
     }
 
     return {
-      documents: createdCount,
-      parentLinks: parentLinkedCount,
-      errors: errorCount,
+      counts: {
+        documents: createdCount,
+        parentLinks: parentLinkedCount,
+        errors: errorCount,
+      },
+      nextCursor: null,
     };
   },
 };

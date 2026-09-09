@@ -5859,6 +5859,63 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "import resume create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/import/{jobId}/resume",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "jobId",
+        flag: "job-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "credentials",
+        flag: "credentials",
+      },
+      {
+        name: "limit",
+        flag: "limit",
+      },
+    ],
+  },
+  "import approve create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/import/{jobId}/approve",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "jobId",
+        flag: "job-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "import reject create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/import/{jobId}/reject",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "jobId",
+        flag: "job-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "notion users": {
     method: "POST",
     path: "/workspaces/{organizationId}/notion/users",

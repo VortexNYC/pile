@@ -26,6 +26,7 @@ import { notionPageMappings } from "../global/schema.js";
 import { VortexError } from "../platform/errors.js";
 import type { IssueInput } from "../types/workspace.js";
 import type {
+  ImportBatchResult,
   ImportContext,
   ImportCounts,
   ImportSource,
@@ -145,7 +146,7 @@ export const notionImportSource: ImportSource<
     return { ok: true };
   },
 
-  async run(ctx, credentials, options): Promise<ImportCounts> {
+  async run(ctx, credentials, options): Promise<ImportBatchResult> {
     const parsedOptions = notionOptionsSchema.parse(options ?? {});
     const { token } = credentials;
     const { rootPageId, spaceId, databaseId, teamId } = parsedOptions;
@@ -249,10 +250,13 @@ export const notionImportSource: ImportSource<
     }
 
     return {
-      documents: created + updated,
-      created,
-      updated,
-      errors,
+      counts: {
+        documents: created + updated,
+        created,
+        updated,
+        errors,
+      },
+      nextCursor: null,
     };
   },
 };
@@ -262,7 +266,7 @@ async function importNotionDatabase(
   token: string,
   databaseId: string,
   teamId: string | undefined
-): Promise<ImportCounts> {
+): Promise<ImportBatchResult> {
   const database = await getNotionDatabase(token, databaseId);
 
   const rows: NotionPage[] = [];
@@ -324,9 +328,12 @@ async function importNotionDatabase(
   }
 
   return {
-    issues: created + updated,
-    created,
-    updated,
-    errors,
+    counts: {
+      issues: created + updated,
+      created,
+      updated,
+      errors,
+    },
+    nextCursor: null,
   };
 }
