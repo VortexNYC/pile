@@ -120,6 +120,7 @@ export const projects = sqliteTable(
     })
       .notNull()
       .default("on_track"),
+    leadId: text("lead_id" as string).references(() => user.id),
     archivedAt: text("archived_at" as string),
     startDate: text("start_date" as string),
     endDate: text("end_date" as string),
@@ -132,6 +133,45 @@ export const projects = sqliteTable(
   },
   (table) => [
     index("projects_organization_idx" as string).on(table.organizationId),
+    index("projects_lead_idx" as string).on(table.leadId),
+  ]
+);
+
+export const projectMembers = sqliteTable(
+  "project_members" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    projectId: text("project_id" as string)
+      .notNull()
+      .references(() => projects.id),
+    userId: text("user_id" as string)
+      .notNull()
+      .references(() => user.id),
+    role: text("role" as string, {
+      enum: ["lead", "member"] as const,
+    })
+      .notNull()
+      .default("member"),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("project_members_project_idx" as string).on(table.projectId),
+    index("project_members_user_idx" as string).on(table.userId),
+    index("project_members_organization_idx" as string).on(
+      table.organizationId
+    ),
+    uniqueIndex("project_members_project_user_unique" as string).on(
+      table.projectId,
+      table.userId
+    ),
   ]
 );
 

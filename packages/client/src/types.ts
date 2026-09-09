@@ -2005,6 +2005,7 @@ export interface paths {
                                 status: string;
                                 /** @enum {string} */
                                 health: "on_track" | "at_risk" | "off_track" | "paused";
+                                leadId: string | null;
                                 archivedAt: string | null;
                                 startDate: string | null;
                                 endDate: string | null;
@@ -2035,6 +2036,7 @@ export interface paths {
                         status?: string;
                         /** @enum {string} */
                         health?: "on_track" | "at_risk" | "off_track" | "paused";
+                        leadId?: string;
                         archivedAt?: string;
                         startDate?: string;
                         endDate?: string;
@@ -2056,6 +2058,7 @@ export interface paths {
                             status: string;
                             /** @enum {string} */
                             health: "on_track" | "at_risk" | "off_track" | "paused";
+                            leadId: string | null;
                             archivedAt: string | null;
                             startDate: string | null;
                             endDate: string | null;
@@ -2106,6 +2109,7 @@ export interface paths {
                             status: string;
                             /** @enum {string} */
                             health: "on_track" | "at_risk" | "off_track" | "paused";
+                            leadId: string | null;
                             archivedAt: string | null;
                             startDate: string | null;
                             endDate: string | null;
@@ -2161,6 +2165,7 @@ export interface paths {
                         status?: string;
                         /** @enum {string} */
                         health?: "on_track" | "at_risk" | "off_track" | "paused";
+                        leadId?: string;
                         archivedAt?: string;
                         startDate?: string;
                         endDate?: string;
@@ -2182,6 +2187,7 @@ export interface paths {
                             status: string;
                             /** @enum {string} */
                             health: "on_track" | "at_risk" | "off_track" | "paused";
+                            leadId: string | null;
                             archivedAt: string | null;
                             startDate: string | null;
                             endDate: string | null;
@@ -2230,6 +2236,7 @@ export interface paths {
                             status: string;
                             /** @enum {string} */
                             health: "on_track" | "at_risk" | "off_track" | "paused";
+                            leadId: string | null;
                             archivedAt: string | null;
                             startDate: string | null;
                             endDate: string | null;
@@ -2282,6 +2289,7 @@ export interface paths {
                             status: string;
                             /** @enum {string} */
                             health: "on_track" | "at_risk" | "off_track" | "paused";
+                            leadId: string | null;
                             archivedAt: string | null;
                             startDate: string | null;
                             endDate: string | null;
@@ -4136,6 +4144,198 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/projects/{projectId}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List project members */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    projectId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Project members list */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            members: {
+                                id: string;
+                                organizationId: string;
+                                projectId: string;
+                                userId: string;
+                                /** @enum {string} */
+                                role: "lead" | "member";
+                                createdAt: string;
+                                updatedAt: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Project not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        /** Create project member */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    projectId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        userId: string;
+                        /**
+                         * @default member
+                         * @enum {string}
+                         */
+                        role?: "lead" | "member";
+                    };
+                };
+            };
+            responses: {
+                /** @description Project member added */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            projectId: string;
+                            userId: string;
+                            /** @enum {string} */
+                            role: "lead" | "member";
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Project not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/projects/{projectId}/members/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete project member */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    projectId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Project member removed */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /** Update project member */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    projectId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        role: "lead" | "member";
+                    };
+                };
+            };
+            responses: {
+                /** @description Project member updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            projectId: string;
+                            userId: string;
+                            /** @enum {string} */
+                            role: "lead" | "member";
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Project member not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         trace?: never;
     };
     "/workspaces/{organizationId}/issues/{issueId}/comments": {

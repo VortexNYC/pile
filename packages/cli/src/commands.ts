@@ -1034,6 +1034,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "health",
       },
       {
+        name: "leadId",
+        flag: "lead-id",
+      },
+      {
         name: "archivedAt",
         flag: "archived-at",
       },
@@ -1093,6 +1097,10 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "health",
         flag: "health",
+      },
+      {
+        name: "leadId",
+        flag: "lead-id",
       },
       {
         name: "archivedAt",
@@ -2038,6 +2046,76 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "organizationId",
         flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "projects members": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/projects/{projectId}/members",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "projectId",
+        flag: "project",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "userId",
+        flag: "user",
+      },
+      {
+        name: "role",
+        flag: "role",
+      },
+    ],
+  },
+  "projects members update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/projects/{projectId}/members/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "projectId",
+        flag: "project",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "role",
+        flag: "role",
+      },
+    ],
+  },
+  "projects members delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/projects/{projectId}/members/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "projectId",
+        flag: "project",
+      },
+      {
+        name: "id",
+        flag: "id",
       },
     ],
     query: [],

@@ -77,6 +77,7 @@ export async function updateProject(
     description: string | null;
     status: string;
     health: "on_track" | "at_risk" | "off_track" | "paused";
+    leadId: string | null;
     archivedAt: string | null;
     startDate: string | null;
     endDate: string | null;

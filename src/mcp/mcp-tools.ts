@@ -426,6 +426,31 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdProjectsProjectIdMembersId",
+    "description": "Delete project member (DELETE /workspaces/{organizationId}/projects/{projectId}/members/{id})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/projects/{projectId}/members/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId",
+        "projectId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdProjectsProjectIdMilestonesId",
     "description": "Delete project milestone (DELETE /workspaces/{organizationId}/projects/{projectId}/milestones/{id})",
     "method": "DELETE",
@@ -2140,6 +2165,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdProjectsProjectIdMembers",
+    "description": "List project members (GET /workspaces/{organizationId}/projects/{projectId}/members)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/projects/{projectId}/members",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "projectId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdProjectsProjectIdMilestones",
     "description": "List project milestones (GET /workspaces/{organizationId}/projects/{projectId}/milestones)",
     "method": "GET",
@@ -3423,6 +3469,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "paused"
               ]
             },
+            "leadId": {
+              "type": "string"
+            },
             "archivedAt": {
               "type": "string"
             },
@@ -3438,6 +3487,46 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "id",
         "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "patchWorkspacesOrganizationIdProjectsProjectIdMembersId",
+    "description": "Update project member (PATCH /workspaces/{organizationId}/projects/{projectId}/members/{id})",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/projects/{projectId}/members/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "role": {
+              "type": "string",
+              "enum": [
+                "lead",
+                "member"
+              ]
+            }
+          },
+          "required": [
+            "role"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "organizationId",
+        "projectId"
       ]
     }
   },
@@ -5395,6 +5484,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "paused"
               ]
             },
+            "leadId": {
+              "type": "string"
+            },
             "archivedAt": {
               "type": "string"
             },
@@ -5454,6 +5546,46 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "id",
         "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdProjectsProjectIdMembers",
+    "description": "Create project member (POST /workspaces/{organizationId}/projects/{projectId}/members)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/projects/{projectId}/members",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "userId": {
+              "type": "string"
+            },
+            "role": {
+              "type": "string",
+              "enum": [
+                "lead",
+                "member"
+              ],
+              "default": "member"
+            }
+          },
+          "required": [
+            "userId"
+          ]
+        }
+      },
+      "required": [
+        "organizationId",
+        "projectId"
       ]
     }
   },

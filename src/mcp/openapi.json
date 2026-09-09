@@ -4311,6 +4311,10 @@
                               "paused"
                             ]
                           },
+                          "leadId": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "archivedAt": {
                             "type": "string",
                             "nullable": true
@@ -4337,6 +4341,7 @@
                           "description",
                           "status",
                           "health",
+                          "leadId",
                           "archivedAt",
                           "startDate",
                           "endDate",
@@ -4395,6 +4400,9 @@
                       "paused"
                     ]
                   },
+                  "leadId": {
+                    "type": "string"
+                  },
                   "archivedAt": {
                     "type": "string"
                   },
@@ -4445,6 +4453,10 @@
                         "paused"
                       ]
                     },
+                    "leadId": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "archivedAt": {
                       "type": "string",
                       "nullable": true
@@ -4471,6 +4483,7 @@
                     "description",
                     "status",
                     "health",
+                    "leadId",
                     "archivedAt",
                     "startDate",
                     "endDate",
@@ -4541,6 +4554,10 @@
                         "paused"
                       ]
                     },
+                    "leadId": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "archivedAt": {
                       "type": "string",
                       "nullable": true
@@ -4567,6 +4584,7 @@
                     "description",
                     "status",
                     "health",
+                    "leadId",
                     "archivedAt",
                     "startDate",
                     "endDate",
@@ -4627,6 +4645,9 @@
                       "paused"
                     ]
                   },
+                  "leadId": {
+                    "type": "string"
+                  },
                   "archivedAt": {
                     "type": "string"
                   },
@@ -4674,6 +4695,10 @@
                         "paused"
                       ]
                     },
+                    "leadId": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "archivedAt": {
                       "type": "string",
                       "nullable": true
@@ -4700,6 +4725,7 @@
                     "description",
                     "status",
                     "health",
+                    "leadId",
                     "archivedAt",
                     "startDate",
                     "endDate",
@@ -4799,6 +4825,10 @@
                         "paused"
                       ]
                     },
+                    "leadId": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "archivedAt": {
                       "type": "string",
                       "nullable": true
@@ -4825,6 +4855,7 @@
                     "description",
                     "status",
                     "health",
+                    "leadId",
                     "archivedAt",
                     "startDate",
                     "endDate",
@@ -4895,6 +4926,10 @@
                         "paused"
                       ]
                     },
+                    "leadId": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "archivedAt": {
                       "type": "string",
                       "nullable": true
@@ -4921,6 +4956,7 @@
                     "description",
                     "status",
                     "health",
+                    "leadId",
                     "archivedAt",
                     "startDate",
                     "endDate",
@@ -8421,6 +8457,337 @@
           }
         },
         "summary": "Create project update reminder fire due"
+      }
+    },
+    "/workspaces/{organizationId}/projects/{projectId}/members": {
+      "get": {
+        "tags": [
+          "project-members"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "projectId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Project members list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "members": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "projectId": {
+                            "type": "string"
+                          },
+                          "userId": {
+                            "type": "string"
+                          },
+                          "role": {
+                            "type": "string",
+                            "enum": [
+                              "lead",
+                              "member"
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "projectId",
+                          "userId",
+                          "role",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "members"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Project not found"
+          }
+        },
+        "summary": "List project members"
+      },
+      "post": {
+        "tags": [
+          "project-members"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "projectId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "userId": {
+                    "type": "string"
+                  },
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "lead",
+                      "member"
+                    ],
+                    "default": "member"
+                  }
+                },
+                "required": [
+                  "userId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Project member added",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "projectId": {
+                      "type": "string"
+                    },
+                    "userId": {
+                      "type": "string"
+                    },
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "lead",
+                        "member"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "projectId",
+                    "userId",
+                    "role",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Project not found"
+          }
+        },
+        "summary": "Create project member"
+      }
+    },
+    "/workspaces/{organizationId}/projects/{projectId}/members/{id}": {
+      "patch": {
+        "tags": [
+          "project-members"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "projectId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "lead",
+                      "member"
+                    ]
+                  }
+                },
+                "required": [
+                  "role"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Project member updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "projectId": {
+                      "type": "string"
+                    },
+                    "userId": {
+                      "type": "string"
+                    },
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "lead",
+                        "member"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "projectId",
+                    "userId",
+                    "role",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Project member not found"
+          }
+        },
+        "summary": "Update project member"
+      },
+      "delete": {
+        "tags": [
+          "project-members"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "projectId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Project member removed"
+          }
+        },
+        "summary": "Delete project member"
       }
     },
     "/workspaces/{organizationId}/issues/{issueId}/comments": {
