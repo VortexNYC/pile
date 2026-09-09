@@ -365,6 +365,22 @@ export const COMMANDS: Record<string, CommandDef> = {
     ],
     body: [],
   },
+  "issues branch name list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/issues/{id}/branch-name",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "issue analytics list": {
     method: "GET",
     path: "/workspaces/{organizationId}/issue-analytics",

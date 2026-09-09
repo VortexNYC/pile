@@ -24,3 +24,13 @@ export async function createRepoBranch(
     .values({ id, organizationId, repo, branch, issueId });
   return { id, organizationId, repo, branch, issueId };
 }
+
+export function suggestBranchName(identifier: string, title: string): string {
+  const base = identifier.toLowerCase();
+  const slug = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 40);
+  return slug ? `${base}-${slug}` : base;
+}

@@ -1160,6 +1160,55 @@
         "summary": "List triage"
       }
     },
+    "/workspaces/{organizationId}/issues/{id}/branch-name": {
+      "get": {
+        "tags": [
+          "issues"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Suggested branch name",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "branchName": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "branchName"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Issue not found"
+          }
+        },
+        "summary": "List issue branch name"
+      }
+    },
     "/workspaces/{organizationId}/issue-analytics": {
       "get": {
         "tags": [

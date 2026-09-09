@@ -6,7 +6,10 @@ import { dispatchAgent } from "../agents/index.js";
 import { resolveAgentEnv } from "../agents/outpost.js";
 import { createD1 } from "../global/db.js";
 import { deleteIssueReferences } from "../global/issue-data.js";
-import { createRepoBranch } from "../global/repo-branches.js";
+import {
+  createRepoBranch,
+  suggestBranchName,
+} from "../global/repo-branches.js";
 import { repoBranches } from "../global/schema.js";
 import {
   canAccessTeam,
@@ -296,6 +299,27 @@ const listTriageIssuesRoute = createRoute({
         },
       },
     },
+  },
+});
+
+const getIssueBranchNameRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/issues/{id}/branch-name",
+  tags: ["issues"],
+  middleware: [rls("read")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Suggested branch name",
+      content: {
+        "application/json": {
+          schema: z.object({ branchName: z.string() }),
+        },
+      },
+    },
+    404: { description: "Issue not found" },
   },
 });
 
@@ -636,6 +660,27 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       teamIds: visibleTeamIds,
     });
     return c.json({ issues });
+  });
+
+  app.openapi(getIssueBranchNameRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const identity = c.get("workspaceIdentity");
+    const db = createD1(c.env.D1);
+    const stub = await getStub(c.env, organizationId);
+    const issue = await stub.getIssue(id);
+    if (!issue) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Issue not found",
+      });
+    }
+    await assertIssueAccess(db, issue, identity);
+    const branchName = suggestBranchName(
+      issue.identifier ?? issue.id,
+      issue.title
+    );
+    return c.json({ branchName });
   });
 
   app.openapi(issueAnalyticsRoute, async (c) => {

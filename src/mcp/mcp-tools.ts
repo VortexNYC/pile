@@ -1561,6 +1561,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdIssuesIdBranchname",
+    "description": "List issue branch name (GET /workspaces/{organizationId}/issues/{id}/branch-name)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/issues/{id}/branch-name",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdIssuesIdChildren",
     "description": "List issue children (GET /workspaces/{organizationId}/issues/{id}/children)",
     "method": "GET",
