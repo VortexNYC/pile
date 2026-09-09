@@ -27,20 +27,3 @@ export function timingSafeEqualHex(a: string, b: string): boolean {
   }
   return diff === 0;
 }
-
-export async function hashToken(
-  token: string,
-  secret?: string
-): Promise<string> {
-  if (secret !== undefined && secret.length > 0) {
-    return hmacSha256Hex(secret, token);
-  }
-
-  const buffer = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(token)
-  );
-  return [...new Uint8Array(buffer)]
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}

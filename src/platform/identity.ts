@@ -49,8 +49,6 @@ const rolePermissionsMap = {
   member: ["read", "write"],
 } as const;
 
-export type WorkspaceRole = keyof typeof rolePermissionsMap;
-
 const workspaceRoleSchema = z.enum(["owner", "admin", "member"]);
 
 export function toUserWorkspaceIdentity(

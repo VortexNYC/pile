@@ -49,25 +49,6 @@ export async function addProjectMember(
     .get();
 }
 
-export async function getProjectMember(
-  db: D1Client,
-  organizationId: string,
-  projectId: string,
-  userId: string
-) {
-  return db
-    .select()
-    .from(projectMembers)
-    .where(
-      and(
-        eq(projectMembers.organizationId, organizationId),
-        eq(projectMembers.projectId, projectId),
-        eq(projectMembers.userId, userId)
-      )
-    )
-    .get();
-}
-
 export async function updateProjectMemberRole(
   db: D1Client,
   organizationId: string,
