@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import type { D1Client } from "./db.js";
 import { importApprovals } from "./schema.js";

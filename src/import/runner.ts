@@ -2,7 +2,6 @@ import { getWorkspaceStub } from "../api/stub.js";
 import { createD1 } from "../global/db.js";
 import {
   createImportJob,
-  findImportJob,
   updateImportJobStatus,
   type ImportJobRecord,
 } from "../global/import-jobs.js";

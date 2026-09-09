@@ -17,7 +17,6 @@ import type {
 import type {
   ImportBatchResult,
   ImportContext,
-  ImportCounts,
   ImportSource,
   ImportValidationResult,
 } from "./types.js";

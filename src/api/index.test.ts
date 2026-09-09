@@ -3298,7 +3298,10 @@ describe("API integration", () => {
           {
             method: "POST",
             token,
-            body: JSON.stringify({ credentials: { token: "gh-token" } }),
+            body: JSON.stringify({
+              credentials: { token: "gh-token" },
+              limit: 100,
+            }),
           }
         ),
         env
@@ -3447,7 +3450,10 @@ describe("API integration", () => {
           {
             method: "POST",
             token,
-            body: JSON.stringify({ credentials: { token: "gh-token" } }),
+            body: JSON.stringify({
+              credentials: { token: "gh-token" },
+              limit: 100,
+            }),
           }
         ),
         env
