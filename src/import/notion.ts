@@ -9,7 +9,6 @@ import {
   NotionApiError,
   queryNotionDatabase,
   searchNotionPages,
-  type NotionPage,
   type NotionSearchPage,
 } from "../global/notion-client.js";
 import { upsertNotionInstallation } from "../global/notion-installations.js";
@@ -28,6 +27,7 @@ import type { IssueInput } from "../types/workspace.js";
 import type {
   ImportBatchResult,
   ImportContext,
+  ImportRunState,
   ImportSource,
   ImportValidationResult,
 } from "./types.js";
@@ -43,6 +43,8 @@ export const notionOptionsSchema = z.object({
   spaceId: z.string().optional(),
   databaseId: z.string().optional(),
   teamId: z.string().optional(),
+  limit: z.number().int().min(1).max(100).optional(),
+  cursor: z.string().optional(),
 });
 
 export type NotionOptions = z.infer<typeof notionOptionsSchema>;
@@ -145,7 +147,12 @@ export const notionImportSource: ImportSource<
     return { ok: true };
   },
 
-  async run(ctx, credentials, options): Promise<ImportBatchResult> {
+  async run(
+    ctx,
+    credentials,
+    options,
+    runState?: ImportRunState
+  ): Promise<ImportBatchResult> {
     const parsedOptions = notionOptionsSchema.parse(options ?? {});
     const { token } = credentials;
     const { rootPageId, spaceId, databaseId, teamId } = parsedOptions;
@@ -172,79 +179,134 @@ export const notionImportSource: ImportSource<
     );
 
     if (databaseId) {
-      return importNotionDatabase(ctx, token, databaseId, teamId);
+      return importNotionDatabase(ctx, token, databaseId, teamId, runState);
     }
 
-    const pages: NotionSearchPage[] = [];
+    const limit = runState?.limit ?? parsedOptions.limit;
+    let startCursor = runState?.cursor ?? parsedOptions.cursor ?? null;
+    let nextCursor: string | null = null;
 
-    if (rootPageId) {
-      const page = await getNotionPage(token, rootPageId);
-      pages.push({
-        id: page.id,
-        url: page.url,
-        icon: page.icon,
-        title: page.title,
-        parentType: page.parentType,
-        parentPageId: page.parentPageId,
-      });
-    } else {
-      let cursor: string | null = null;
-      do {
-        const result = await searchNotionPages(token, cursor ?? undefined);
-        pages.push(...result.pages);
-        cursor = result.nextCursor;
-      } while (cursor);
-    }
-
-    const parentByPageId = new Map<string, string | null>();
-
+    const processedPages: Array<{ id: string; parentPageId: string | null }> =
+      [];
     let created = 0;
     let updated = 0;
     let errors = 0;
+    let processed = 0;
+    let searchComplete = false;
 
-    for (const page of pages) {
+    if (rootPageId) {
+      const page = await getNotionPage(token, rootPageId);
       try {
+        const parentDocumentId = page.parentPageId
+          ? ((
+              await findNotionPageMapping(
+                ctx.db,
+                ctx.organizationId,
+                page.parentPageId
+              )
+            )?.documentId ?? null)
+          : null;
         const result = await syncNotionPage(
           ctx,
           token,
-          page,
+          {
+            id: page.id,
+            url: page.url,
+            icon: page.icon,
+            title: page.title,
+            parentType: page.parentType,
+            parentPageId: page.parentPageId,
+          },
           spaceId ?? null,
-          null
+          parentDocumentId
         );
         if (result === "created") created++;
         else updated++;
-        parentByPageId.set(page.id, page.parentPageId);
+        processedPages.push({
+          id: page.id,
+          parentPageId: page.parentPageId,
+        });
       } catch {
         errors++;
       }
+      searchComplete = true;
+    } else {
+      let keepGoing = true;
+      do {
+        const remaining = limit ? limit - processed : undefined;
+        const pageSize = remaining ? Math.min(100, remaining) : 100;
+        const result = await searchNotionPages(
+          token,
+          startCursor ?? undefined,
+          pageSize
+        );
+        for (const page of result.pages) {
+          try {
+            const parentDocumentId = page.parentPageId
+              ? ((
+                  await findNotionPageMapping(
+                    ctx.db,
+                    ctx.organizationId,
+                    page.parentPageId
+                  )
+                )?.documentId ?? null)
+              : null;
+            const syncResult = await syncNotionPage(
+              ctx,
+              token,
+              page,
+              spaceId ?? null,
+              parentDocumentId
+            );
+            if (syncResult === "created") created++;
+            else updated++;
+            processedPages.push({
+              id: page.id,
+              parentPageId: page.parentPageId,
+            });
+          } catch {
+            errors++;
+          }
+        }
+        processed += result.pages.length;
+        nextCursor = result.nextCursor;
+        startCursor = nextCursor;
+        keepGoing =
+          startCursor !== null && (limit === undefined || processed < limit);
+      } while (keepGoing);
+
+      searchComplete = !startCursor;
     }
 
-    const mappings = await ctx.db
-      .select({
-        notionPageId: notionPageMappings.notionPageId,
-        documentId: notionPageMappings.documentId,
-      })
-      .from(notionPageMappings)
-      .where(eq(notionPageMappings.organizationId, ctx.organizationId))
-      .all();
-    const documentIdByNotionPageId = new Map(
-      mappings.map((m) => [m.notionPageId, m.documentId])
-    );
+    if (searchComplete) {
+      const mappings = await ctx.db
+        .select({
+          notionPageId: notionPageMappings.notionPageId,
+          documentId: notionPageMappings.documentId,
+        })
+        .from(notionPageMappings)
+        .where(eq(notionPageMappings.organizationId, ctx.organizationId))
+        .all();
+      const documentIdByNotionPageId = new Map(
+        mappings.map((m) => [m.notionPageId, m.documentId])
+      );
 
-    for (const page of pages) {
-      const documentId = documentIdByNotionPageId.get(page.id);
-      const parentPageId = parentByPageId.get(page.id);
-      if (!documentId || !parentPageId) continue;
-      const parentDocumentId = documentIdByNotionPageId.get(parentPageId);
-      if (!parentDocumentId) continue;
-      try {
-        await ctx.stub.updateDocument(
-          documentId,
-          { parentDocumentId },
-          ctx.importerId
+      for (const page of processedPages) {
+        const documentId = documentIdByNotionPageId.get(page.id);
+        if (!documentId || !page.parentPageId) continue;
+        const parentDocumentId = documentIdByNotionPageId.get(
+          page.parentPageId
         );
-      } catch {
-        errors++;
+        if (!parentDocumentId) continue;
+        try {
+          await ctx.stub.updateDocument(
+            documentId,
+            { parentDocumentId },
+            ctx.importerId
+          );
+        } catch {
+          errors++;
+        }
       }
     }
 
@@ -255,7 +317,7 @@ export const notionImportSource: ImportSource<
         updated,
         errors,
       },
-      nextCursor: null,
+      nextCursor,
     };
   },
 };
@@ -264,67 +326,79 @@ async function importNotionDatabase(
   ctx: ImportContext,
   token: string,
   databaseId: string,
-  teamId: string | undefined
+  teamId: string | undefined,
+  runState?: ImportRunState
 ): Promise<ImportBatchResult> {
   const database = await getNotionDatabase(token, databaseId);
 
-  const rows: NotionPage[] = [];
-  let cursor: string | null = null;
-  do {
-    const result = await queryNotionDatabase(
-      token,
-      databaseId,
-      database.titlePropertyName,
-      cursor ?? undefined
-    );
-    rows.push(...result.rows);
-    cursor = result.nextCursor;
-  } while (cursor);
+  const limit = runState?.limit;
+  let startCursor = runState?.cursor ?? null;
+  let nextCursor: string | null = null;
 
   let created = 0;
   let updated = 0;
   let errors = 0;
+  let processed = 0;
 
-  for (const row of rows) {
-    try {
-      const markdown = await getNotionPageMarkdown(token, row.id);
-      const actorId = await resolveNotionUserId(
-        ctx,
-        row.lastEditedById ?? row.createdById,
-        ctx.importerId
-      );
-      const mapping = await findNotionIssueMapping(
-        ctx.db,
-        ctx.organizationId,
-        row.id
-      );
+  let keepGoing = true;
+  do {
+    const remaining = limit ? limit - processed : undefined;
+    const pageSize = remaining ? Math.min(100, remaining) : 100;
+    const result = await queryNotionDatabase(
+      token,
+      databaseId,
+      database.titlePropertyName,
+      startCursor ?? undefined,
+      pageSize
+    );
 
-      if (mapping) {
-        await ctx.stub.updateIssue(
-          mapping.issueId,
-          { title: row.title, description: markdown },
-          actorId
+    for (const row of result.rows) {
+      try {
+        const markdown = await getNotionPageMarkdown(token, row.id);
+        const actorId = await resolveNotionUserId(
+          ctx,
+          row.lastEditedById ?? row.createdById,
+          ctx.importerId
         );
-        updated++;
-      } else {
-        const issueInput: IssueInput = {
-          title: row.title,
-          description: markdown,
-          teamId,
-        };
-        const issue = await ctx.stub.createIssue(issueInput, actorId);
-        await upsertNotionIssueMapping(
+        const mapping = await findNotionIssueMapping(
           ctx.db,
           ctx.organizationId,
-          row.id,
-          issue.id
+          row.id
         );
-        created++;
+
+        if (mapping) {
+          await ctx.stub.updateIssue(
+            mapping.issueId,
+            { title: row.title, description: markdown },
+            actorId
+          );
+          updated++;
+        } else {
+          const issueInput: IssueInput = {
+            title: row.title,
+            description: markdown,
+            teamId,
+          };
+          const issue = await ctx.stub.createIssue(issueInput, actorId);
+          await upsertNotionIssueMapping(
+            ctx.db,
+            ctx.organizationId,
+            row.id,
+            issue.id
+          );
+          created++;
+        }
+      } catch {
+        errors++;
       }
-    } catch {
-      errors++;
     }
-  }
+
+    processed += result.rows.length;
+    nextCursor = result.nextCursor;
+    startCursor = nextCursor;
+    keepGoing =
+      startCursor !== null && (limit === undefined || processed < limit);
+  } while (keepGoing);
 
   return {
     counts: {
@@ -333,6 +407,6 @@ async function importNotionDatabase(
       updated,
       errors,
     },
-    nextCursor: null,
+    nextCursor,
   };
 }

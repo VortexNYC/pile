@@ -292,7 +292,8 @@ export type NotionSearchPage = {
 
 export async function searchNotionPages(
   token: string,
-  cursor?: string | null
+  cursor?: string | null,
+  pageSize = 100
 ): Promise<{ pages: NotionSearchPage[]; nextCursor: string | null }> {
   const data = await notionRequest(
     token,
@@ -300,7 +301,7 @@ export async function searchNotionPages(
     "/search",
     {
       filter: { value: "page", property: "object" },
-      page_size: 100,
+      page_size: Math.min(pageSize, 100),
       ...(cursor ? { start_cursor: cursor } : {}),
     },
     (value) => {
@@ -389,14 +390,15 @@ export async function queryNotionDatabase(
   token: string,
   databaseId: string,
   titlePropertyName: string | null,
-  cursor?: string | null
+  cursor?: string | null,
+  pageSize = 100
 ): Promise<{ rows: NotionPage[]; nextCursor: string | null }> {
   const data = await notionRequest(
     token,
     "POST",
     `/databases/${encodeURIComponent(databaseId)}/query`,
     {
-      page_size: 100,
+      page_size: Math.min(pageSize, 100),
       ...(cursor ? { start_cursor: cursor } : {}),
     },
     (value) => {

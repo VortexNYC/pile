@@ -19,6 +19,7 @@ import type {
 import type {
   ImportBatchResult,
   ImportContext,
+  ImportRunState,
   ImportSource,
   ImportValidationResult,
 } from "./types.js";
@@ -33,6 +34,8 @@ export type LinearCredentials = z.infer<typeof linearCredentialsSchema>;
 export const linearOptionsSchema = z.object({
   linearTeamId: z.string().min(1),
   teamId: z.string().optional(),
+  limit: z.number().int().min(1).optional(),
+  cursor: z.string().optional(),
 });
 
 export type LinearOptions = z.infer<typeof linearOptionsSchema>;
@@ -382,11 +385,11 @@ class LinearClient {
     );
   }
 
-  async getIssuesPage(teamId: string, cursor?: string) {
+  async getIssuesPage(teamId: string, cursor?: string, first = 50) {
     return this.request(
-      `query GetIssues($teamId: String!, $after: String) {
+      `query GetIssues($teamId: String!, $after: String, $first: Int!) {
         team(id: $teamId) {
-          issues(first: 50, after: $after) {
+          issues(first: $first, after: $after) {
             nodes {
               id
               title
@@ -522,7 +525,7 @@ class LinearClient {
           }
         }
       }`,
-      { teamId, after: cursor ?? null },
+      { teamId, after: cursor ?? null, first },
       z.object({
         team: z
           .object({
@@ -742,7 +745,12 @@ export const linearImportSource: ImportSource<
     return { ok: true };
   },
 
-  async run(ctx, credentials, options): Promise<ImportBatchResult> {
+  async run(
+    ctx,
+    credentials,
+    options,
+    runState?: ImportRunState
+  ): Promise<ImportBatchResult> {
     const parsedOptions = linearOptionsSchema.parse(options ?? {});
     const linearTeamId = parsedOptions.linearTeamId;
     const client = new LinearClient(credentials.token);
@@ -884,6 +892,8 @@ export const linearImportSource: ImportSource<
       cycleMap.set(cycle.id, created.id);
     }
 
+    const limit = runState?.limit ?? parsedOptions.limit;
+
     let issueCount = 0;
     let commentCount = 0;
     let parentLinkCount = 0;
@@ -891,8 +901,9 @@ export const linearImportSource: ImportSource<
     let attachmentCount = 0;
     let historyCount = 0;
     let subscriberCount = 0;
-    let cursor: string | undefined;
+    let cursor = runState?.cursor ?? parsedOptions.cursor ?? undefined;
     let hasNextPage = true;
+    let nextCursor: string | null = null;
     const issueIds = new Set<string>();
     const parentLinks = new Map<string, string>();
     const relationLinks = new Map<
@@ -901,7 +912,9 @@ export const linearImportSource: ImportSource<
     >();
 
     while (hasNextPage) {
-      const page = await client.getIssuesPage(linearTeamId, cursor);
+      const remaining = limit ? limit - issueCount : undefined;
+      const first = remaining ? Math.min(50, remaining) : 50;
+      const page = await client.getIssuesPage(linearTeamId, cursor, first);
       const issues = page.team?.issues.nodes ?? [];
       const pageInfo = page.team?.issues.pageInfo ?? { hasNextPage: false };
 
@@ -1006,29 +1019,33 @@ export const linearImportSource: ImportSource<
         }
       }
 
-      hasNextPage = pageInfo.hasNextPage;
+      nextCursor = pageInfo.endCursor ?? null;
+      hasNextPage =
+        pageInfo.hasNextPage && (limit === undefined || issueCount < limit);
       cursor = pageInfo.endCursor ?? undefined;
     }
 
-    for (const rel of relationLinks.values()) {
-      if (!issueIds.has(rel.fromIssueId) || !issueIds.has(rel.toIssueId)) {
-        continue;
+    if (!nextCursor) {
+      for (const rel of relationLinks.values()) {
+        if (!issueIds.has(rel.fromIssueId) || !issueIds.has(rel.toIssueId)) {
+          continue;
+        }
+        try {
+          await ctx.stub.createIssueRelation(rel);
+          relationCount++;
+        } catch {
+          // Skip invalid or malformed relation edges.
+        }
       }
-      try {
-        await ctx.stub.createIssueRelation(rel);
-        relationCount++;
-      } catch {
-        // Skip invalid or malformed relation edges.
-      }
-    }
 
-    for (const [childId, parentId] of parentLinks) {
-      if (!issueIds.has(childId) || !issueIds.has(parentId)) continue;
-      try {
-        await ctx.stub.updateIssue(childId, { parentId }, ctx.importerId);
-        parentLinkCount++;
-      } catch {
-        // Parent may create a cycle or be in a different team; skip.
+      for (const [childId, parentId] of parentLinks) {
+        if (!issueIds.has(childId) || !issueIds.has(parentId)) continue;
+        try {
+          await ctx.stub.updateIssue(childId, { parentId }, ctx.importerId);
+          parentLinkCount++;
+        } catch {
+          // Parent may create a cycle or be in a different team; skip.
+        }
       }
     }
 
@@ -1049,7 +1066,7 @@ export const linearImportSource: ImportSource<
         templates: templates.length,
         parentLinks: parentLinkCount,
       },
-      nextCursor: null,
+      nextCursor,
     };
   },
 };

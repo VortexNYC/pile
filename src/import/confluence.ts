@@ -5,6 +5,7 @@ import { VortexError } from "../platform/errors.js";
 import type {
   ImportBatchResult,
   ImportContext,
+  ImportRunState,
   ImportSource,
   ImportValidationResult,
 } from "./types.js";
@@ -22,6 +23,8 @@ export type ConfluenceCredentials = z.infer<typeof confluenceCredentialsSchema>;
 export const confluenceOptionsSchema = z.object({
   spaceKey: z.string().optional(),
   rootPageId: z.string().optional(),
+  limit: z.number().int().min(1).optional(),
+  cursor: z.string().optional(),
 });
 
 export type ConfluenceOptions = z.infer<typeof confluenceOptionsSchema>;
@@ -189,15 +192,26 @@ async function importPage(
 
 async function listSpacePages(
   api: ConfluenceApi,
-  spaceId: string
-): Promise<z.infer<typeof confluencePageSchema>[]> {
+  spaceId: string,
+  startCursor?: string,
+  limit?: number
+): Promise<{
+  pages: z.infer<typeof confluencePageSchema>[];
+  nextCursor: string | null;
+}> {
   const pages: z.infer<typeof confluencePageSchema>[] = [];
-  let cursor: string | undefined;
+  let cursor = startCursor;
+  let nextCursor: string | null = null;
+  let processed = 0;
+  let keepGoing = true;
+
   do {
+    const remaining = limit ? limit - processed : undefined;
+    const pageLimit = remaining ? String(Math.min(100, remaining)) : "100";
     const result = await api.get("/wiki/api/v2/pages", {
       "space-id": spaceId,
       "body-format": "atlas_doc_format",
-      limit: "100",
+      limit: pageLimit,
       ...(cursor ? { cursor } : {}),
     });
     const parsed = z
@@ -211,13 +225,18 @@ async function listSpacePages(
       const page = confluencePageSchema.safeParse(raw);
       if (page.success) pages.push(page.data);
     }
+    processed += parsed.data.results.length;
     const { _links: links } = parsed.data;
     const nextUrl = links?.next;
     cursor = nextUrl
       ? (new URL(nextUrl, api.host).searchParams.get("cursor") ?? undefined)
       : undefined;
-  } while (cursor);
-  return pages;
+    nextCursor = cursor ?? null;
+    keepGoing =
+      cursor !== undefined && (limit === undefined || processed < limit);
+  } while (keepGoing);
+
+  return { pages, nextCursor };
 }
 
 async function fetchPage(
@@ -285,7 +304,12 @@ export const confluenceImportSource: ImportSource<
     return { ok: true };
   },
 
-  async run(ctx, credentials, options): Promise<ImportBatchResult> {
+  async run(
+    ctx,
+    credentials,
+    options,
+    runState?: ImportRunState
+  ): Promise<ImportBatchResult> {
     const parsedOptions = confluenceOptionsSchema.parse(options ?? {});
     if (!parsedOptions.spaceKey && !parsedOptions.rootPageId) {
       return { counts: { errors: 1 }, nextCursor: null };
@@ -299,6 +323,8 @@ export const confluenceImportSource: ImportSource<
       await collectRootSubtree(api, parsedOptions.rootPageId, pages);
     }
 
+    let nextCursor: string | null = null;
+
     if (parsedOptions.spaceKey) {
       const spaceResult = await api.get(
         `/wiki/rest/api/space/${parsedOptions.spaceKey}`
@@ -311,8 +337,15 @@ export const confluenceImportSource: ImportSource<
           message: `Confluence space ${parsedOptions.spaceKey} not found`,
         });
       }
-      const spacePages = await listSpacePages(api, space.data.id);
+      const { pages: spacePages, nextCursor: spaceNextCursor } =
+        await listSpacePages(
+          api,
+          space.data.id,
+          runState?.cursor ?? parsedOptions.cursor ?? undefined,
+          runState?.limit ?? parsedOptions.limit
+        );
       pages.push(...spacePages);
+      nextCursor = spaceNextCursor;
     }
 
     const imported = new Map<
@@ -337,21 +370,23 @@ export const confluenceImportSource: ImportSource<
       }
     }
 
-    // Second pass: set parentDocumentId.
+    // Second pass: set parentDocumentId only when the full space is imported.
     let parentLinkedCount = 0;
-    for (const [, result] of imported) {
-      if (!result.parentId) continue;
-      const parentDocumentId = imported.get(result.parentId)?.documentId;
-      if (!parentDocumentId) continue;
-      try {
-        await ctx.stub.updateDocument(
-          result.documentId,
-          { parentDocumentId },
-          ctx.importerId
-        );
-        parentLinkedCount++;
-      } catch {
-        // Ignore parent update failures.
+    if (!nextCursor) {
+      for (const [, result] of imported) {
+        if (!result.parentId) continue;
+        const parentDocumentId = imported.get(result.parentId)?.documentId;
+        if (!parentDocumentId) continue;
+        try {
+          await ctx.stub.updateDocument(
+            result.documentId,
+            { parentDocumentId },
+            ctx.importerId
+          );
+          parentLinkedCount++;
+        } catch {
+          // Ignore parent update failures.
+        }
       }
     }
 
@@ -361,7 +396,7 @@ export const confluenceImportSource: ImportSource<
         parentLinks: parentLinkedCount,
         errors: errorCount,
       },
-      nextCursor: null,
+      nextCursor,
     };
   },
 };

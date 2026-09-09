@@ -17,6 +17,7 @@ import type {
 import type {
   ImportBatchResult,
   ImportContext,
+  ImportRunState,
   ImportSource,
   ImportValidationResult,
 } from "./types.js";
@@ -34,6 +35,8 @@ export type JiraCredentials = z.infer<typeof jiraCredentialsSchema>;
 export const jiraOptionsSchema = z.object({
   projectKey: z.string().optional(),
   jql: z.string().optional(),
+  limit: z.number().int().min(1).optional(),
+  cursor: z.string().optional(),
 });
 
 export type JiraOptions = z.infer<typeof jiraOptionsSchema>;
@@ -416,7 +419,12 @@ export const jiraImportSource: ImportSource<JiraCredentials, JiraOptions> = {
     return { ok: true };
   },
 
-  async run(ctx, credentials, options): Promise<ImportBatchResult> {
+  async run(
+    ctx,
+    credentials,
+    options,
+    runState?: ImportRunState
+  ): Promise<ImportBatchResult> {
     const parsedOptions = jiraOptionsSchema.parse(options ?? {});
     const projectKey = parsedOptions.projectKey;
     const customJql = parsedOptions.jql;
@@ -445,11 +453,15 @@ export const jiraImportSource: ImportSource<JiraCredentials, JiraOptions> = {
     const issueIdByJiraId = new Map<string, string>();
     const parentLinks = new Map<string, string>();
 
+    const limit = runState?.limit ?? parsedOptions.limit;
+
     let issueCount = 0;
     let commentCount = 0;
     let attachmentCount = 0;
     let pageCount = 0;
-    let nextPageToken: string | undefined;
+    let nextPageToken: string | undefined =
+      runState?.cursor ?? parsedOptions.cursor ?? undefined;
+    let nextCursor: string | null = null;
 
     const fields = [
       "summary",
@@ -469,11 +481,14 @@ export const jiraImportSource: ImportSource<JiraCredentials, JiraOptions> = {
       "project",
     ];
 
+    let keepGoing = true;
     do {
       pageCount++;
+      const remaining = limit ? limit - issueCount : undefined;
+      const maxResults = remaining ? Math.min(100, remaining) : 100;
       const result = await api.post("/rest/api/3/search/jql", {
         jql,
-        maxResults: 100,
+        maxResults,
         fields,
         nextPageToken,
       });
@@ -486,6 +501,7 @@ export const jiraImportSource: ImportSource<JiraCredentials, JiraOptions> = {
         });
       }
       nextPageToken = parsed.data.nextPageToken;
+      nextCursor = nextPageToken ?? null;
 
       for (const rawIssue of parsed.data.issues) {
         const issueResult = jiraIssueSchema.safeParse(rawIssue);
@@ -600,22 +616,27 @@ export const jiraImportSource: ImportSource<JiraCredentials, JiraOptions> = {
           }
         }
       }
-    } while (nextPageToken);
+      keepGoing =
+        nextPageToken !== undefined &&
+        (limit === undefined || issueCount < limit);
+    } while (keepGoing);
 
-    // Second pass: resolve parent links.
+    // Second pass: resolve parent links only when the full import completes.
     let parentLinkedCount = 0;
-    for (const [issueId, parentJiraId] of parentLinks) {
-      const parentIssueId = issueIdByJiraId.get(parentJiraId);
-      if (!parentIssueId) continue;
-      try {
-        await ctx.stub.updateIssue(
-          issueId,
-          { parentId: parentIssueId },
-          ctx.importerId
-        );
-        parentLinkedCount++;
-      } catch {
-        // Ignore parent update failures.
+    if (!nextCursor) {
+      for (const [issueId, parentJiraId] of parentLinks) {
+        const parentIssueId = issueIdByJiraId.get(parentJiraId);
+        if (!parentIssueId) continue;
+        try {
+          await ctx.stub.updateIssue(
+            issueId,
+            { parentId: parentIssueId },
+            ctx.importerId
+          );
+          parentLinkedCount++;
+        } catch {
+          // Ignore parent update failures.
+        }
       }
     }
 
@@ -627,7 +648,7 @@ export const jiraImportSource: ImportSource<JiraCredentials, JiraOptions> = {
         parentLinks: parentLinkedCount,
         pages: pageCount,
       },
-      nextCursor: null,
+      nextCursor,
     };
   },
 };
