@@ -44,10 +44,17 @@ This is the durable tracker for the open-source Linear alternative. Operational 
 - Cycles: status/number/auto-rollover, scheduled cron rollover, capacity endpoint.
 - Issue analytics: `groupBy` aggregates and per-cycle burndown series.
 - One-command Cloudflare self-host (`pnpm run selfhost`) + Deploy-to-Cloudflare button for forks.
+- GitLab integration:
+  - Issue and note/comment webhook sync
+  - Merge request sync with `fixes KEY-123` / `closes KEY-123` linking
+  - Label, milestone, and assignee sync
+  - MR diff notes
 
 ## Next
 
-- Zendesk / GitLab / Intercom integrations.
+- Notion / documents integration and migration (before Intercom/Zendesk).
+- Linear workspace migration and dogfooding.
+- Zendesk / Intercom integrations.
 
 ## Later
 
@@ -56,5 +63,4 @@ This is the durable tracker for the open-source Linear alternative. Operational 
 - Billing and metering.
 - Full CLI parity.
 - Slack: thread/reply sync, unfurls, interactive components.
-- GitLab / Zendesk / Intercom integrations.
 - Frontend (after backend is solid).
