@@ -7291,6 +7291,409 @@
         "summary": "Delete initiative"
       }
     },
+    "/workspaces/{organizationId}/external-links": {
+      "get": {
+        "tags": [
+          "external-links"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "issue",
+                "project",
+                "customer",
+                "document"
+              ]
+            },
+            "required": false,
+            "name": "entityType",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "entityId",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "External links",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "links": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "entityType": {
+                            "type": "string"
+                          },
+                          "entityId": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "entityType",
+                          "entityId",
+                          "url",
+                          "label",
+                          "createdAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "links"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List external links"
+      },
+      "post": {
+        "tags": [
+          "external-links"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "entityType": {
+                    "type": "string",
+                    "enum": [
+                      "issue",
+                      "project",
+                      "customer",
+                      "document"
+                    ]
+                  },
+                  "entityId": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "label": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "entityType",
+                  "entityId",
+                  "url"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "External link created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "entityType": {
+                      "type": "string"
+                    },
+                    "entityId": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "entityType",
+                    "entityId",
+                    "url",
+                    "label",
+                    "createdAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Entity not found"
+          }
+        },
+        "summary": "Create external link"
+      }
+    },
+    "/workspaces/{organizationId}/external-links/{id}": {
+      "get": {
+        "tags": [
+          "external-links"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "External link",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "entityType": {
+                      "type": "string"
+                    },
+                    "entityId": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "entityType",
+                    "entityId",
+                    "url",
+                    "label",
+                    "createdAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "External link not found"
+          }
+        },
+        "summary": "Get external link"
+      },
+      "patch": {
+        "tags": [
+          "external-links"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "entityType": {
+                    "type": "string",
+                    "enum": [
+                      "issue",
+                      "project",
+                      "customer",
+                      "document"
+                    ]
+                  },
+                  "entityId": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "label": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "External link updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "entityType": {
+                      "type": "string"
+                    },
+                    "entityId": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "entityType",
+                    "entityId",
+                    "url",
+                    "label",
+                    "createdAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "External link not found"
+          }
+        },
+        "summary": "Update external link"
+      },
+      "delete": {
+        "tags": [
+          "external-links"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "External link deleted"
+          },
+          "404": {
+            "description": "External link not found"
+          }
+        },
+        "summary": "Delete external link"
+      }
+    },
     "/workspaces/{organizationId}/projects/{projectId}/updates": {
       "get": {
         "tags": [
@@ -16514,6 +16917,72 @@
         "summary": "Delete customer need"
       }
     },
+    "/workspaces/{organizationId}/csv-exports": {
+      "post": {
+        "tags": [
+          "csv-exports"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "entityType": {
+                    "type": "string",
+                    "enum": [
+                      "issues",
+                      "projects"
+                    ]
+                  },
+                  "teamId": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "priority": {
+                    "type": "string"
+                  },
+                  "assigneeId": {
+                    "type": "string"
+                  },
+                  "projectId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "entityType"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "CSV export",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create csv export"
+      }
+    },
     "/workspaces/{organizationId}/releases": {
       "get": {
         "tags": [
@@ -17349,7 +17818,10 @@
                           "organizationId": {
                             "type": "string"
                           },
-                          "issueId": {
+                          "entityType": {
+                            "type": "string"
+                          },
+                          "entityId": {
                             "type": "string"
                           },
                           "url": {
@@ -17366,7 +17838,8 @@
                         "required": [
                           "id",
                           "organizationId",
-                          "issueId",
+                          "entityType",
+                          "entityId",
                           "url",
                           "label",
                           "createdAt"
@@ -17441,7 +17914,10 @@
                     "organizationId": {
                       "type": "string"
                     },
-                    "issueId": {
+                    "entityType": {
+                      "type": "string"
+                    },
+                    "entityId": {
                       "type": "string"
                     },
                     "url": {
@@ -17458,7 +17934,8 @@
                   "required": [
                     "id",
                     "organizationId",
-                    "issueId",
+                    "entityType",
+                    "entityId",
                     "url",
                     "label",
                     "createdAt"
@@ -17516,7 +17993,10 @@
                     "organizationId": {
                       "type": "string"
                     },
-                    "issueId": {
+                    "entityType": {
+                      "type": "string"
+                    },
+                    "entityId": {
                       "type": "string"
                     },
                     "url": {
@@ -17533,7 +18013,8 @@
                   "required": [
                     "id",
                     "organizationId",
-                    "issueId",
+                    "entityType",
+                    "entityId",
                     "url",
                     "label",
                     "createdAt"
@@ -17610,7 +18091,10 @@
                     "organizationId": {
                       "type": "string"
                     },
-                    "issueId": {
+                    "entityType": {
+                      "type": "string"
+                    },
+                    "entityId": {
                       "type": "string"
                     },
                     "url": {
@@ -17627,7 +18111,8 @@
                   "required": [
                     "id",
                     "organizationId",
-                    "issueId",
+                    "entityType",
+                    "entityId",
                     "url",
                     "label",
                     "createdAt"

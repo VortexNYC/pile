@@ -1361,27 +1361,35 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   // ---- issue external links ----
 
-  listIssueExternalLinks(issueId: string) {
-    return data.listIssueExternalLinks(this.db, this.organizationId, issueId);
+  listExternalLinks(args: { entityType?: string; entityId?: string } = {}) {
+    return data.listExternalLinks(this.db, this.organizationId, args);
   }
 
-  getIssueExternalLink(id: string) {
-    return data.getIssueExternalLink(this.db, this.organizationId, id);
+  getExternalLink(id: string) {
+    return data.getExternalLink(this.db, this.organizationId, id);
   }
 
-  createIssueExternalLink(input: { issueId: string; url: string; label?: string | null }) {
-    return data.createIssueExternalLink(this.db, this.organizationId, input.issueId, {
-      url: input.url,
-      label: input.label,
-    });
+  async createExternalLink(input: data.ExternalLinkInput, actorId?: string) {
+    const link = await data.createExternalLink(this.db, this.organizationId, input);
+    if (link) this.audit("external_link.created", input.entityType, input.entityId, actorId);
+    return link;
   }
 
-  updateIssueExternalLink(id: string, input: { url?: string; label?: string | null }) {
-    return data.updateIssueExternalLink(this.db, this.organizationId, id, input);
+  async updateExternalLink(
+    id: string,
+    input: { url?: string; label?: string | null },
+    actorId?: string
+  ) {
+    const link = await data.updateExternalLink(this.db, this.organizationId, id, input);
+    if (link) this.audit("external_link.updated", link.entityType, link.entityId, actorId);
+    return link;
   }
 
-  deleteIssueExternalLink(id: string) {
-    return data.deleteIssueExternalLink(this.db, this.organizationId, id);
+  async deleteExternalLink(id: string, actorId?: string) {
+    const existing = await data.getExternalLink(this.db, this.organizationId, id);
+    const ok = await data.deleteExternalLink(this.db, this.organizationId, id);
+    if (ok && existing) this.audit("external_link.deleted", existing.entityType, existing.entityId, actorId);
+    return ok;
   }
 
   // ---- customers ----

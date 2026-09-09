@@ -32,6 +32,10 @@ import {
   workspaceUserPreferences,
   workspaceViewFavorites,
   workspaceWebhookSubscriptions,
+  externalLinks,
+  timeSchedules,
+  gitAutomationStates,
+  gitAutomationTargetBranches,
 } from "./schema.js";
 
 export const workspaceSchema = {
@@ -68,4 +72,8 @@ export const workspaceSchema = {
   workspaceCustomerNeeds,
   workspaceReleasePipelines,
   workspaceReleases,
+  externalLinks,
+  timeSchedules,
+  gitAutomationStates,
+  gitAutomationTargetBranches,
 };

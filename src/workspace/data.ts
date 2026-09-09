@@ -37,7 +37,6 @@ import {
   workspaceCustomerStatuses,
   workspaceCustomerTiers,
   workspaceIssueApprovals,
-  issueExternalLinks,
   workspaceIssues,
   workspaceIssueRelations,
   workspaceIssueSubscribers,
@@ -51,6 +50,7 @@ import {
   gitAutomationStates,
   gitAutomationTargetBranches,
   timeSchedules,
+  externalLinks,
   workspaceUserPreferences,
   workspaceViewFavorites,
   workspaceWebhookSubscriptions,
@@ -1970,98 +1970,96 @@ export function deleteCustomer(
   );
 }
 
-// ---- issue external links ----
+// ---- external links ----
 
-export function listIssueExternalLinks(
+export interface ExternalLinkInput {
+  entityType: string;
+  entityId: string;
+  url: string;
+  label?: string | null;
+}
+
+export function listExternalLinks(
   db: WorkspaceDb,
   organizationId: string,
-  issueId: string
+  args: { entityType?: string; entityId?: string } = {}
 ) {
+  const conditions = [eq(externalLinks.organizationId, organizationId)];
+  if (args.entityType !== undefined)
+    conditions.push(eq(externalLinks.entityType, args.entityType));
+  if (args.entityId !== undefined)
+    conditions.push(eq(externalLinks.entityId, args.entityId));
   return db
     .select()
-    .from(issueExternalLinks)
-    .where(
-      and(
-        eq(issueExternalLinks.organizationId, organizationId),
-        eq(issueExternalLinks.issueId, issueId)
-      )
-    )
+    .from(externalLinks)
+    .where(and(...conditions))
     .all();
 }
 
-export function getIssueExternalLink(
+export function getExternalLink(
   db: WorkspaceDb,
   organizationId: string,
   id: string
 ) {
   return db
     .select()
-    .from(issueExternalLinks)
+    .from(externalLinks)
     .where(
-      and(
-        eq(issueExternalLinks.organizationId, organizationId),
-        eq(issueExternalLinks.id, id)
-      )
+      and(eq(externalLinks.organizationId, organizationId), eq(externalLinks.id, id))
     )
     .get();
 }
 
-export async function createIssueExternalLink(
+export async function createExternalLink(
   db: WorkspaceDb,
   organizationId: string,
-  issueId: string,
-  input: { url: string; label?: string | null }
+  input: ExternalLinkInput
 ) {
   const id = crypto.randomUUID();
   const ts = new Date().toISOString();
-  await db.insert(issueExternalLinks).values({
+  await db.insert(externalLinks).values({
     id,
     organizationId,
-    issueId,
+    entityType: input.entityType,
+    entityId: input.entityId,
     url: input.url,
     label: input.label ?? null,
     createdAt: ts,
   });
-  return getIssueExternalLink(db, organizationId, id);
+  return getExternalLink(db, organizationId, id);
 }
 
-export async function updateIssueExternalLink(
+export async function updateExternalLink(
   db: WorkspaceDb,
   organizationId: string,
   id: string,
   input: { url?: string; label?: string | null }
 ) {
-  const existing = await getIssueExternalLink(db, organizationId, id);
+  const existing = await getExternalLink(db, organizationId, id);
   if (!existing) return undefined;
   await db
-    .update(issueExternalLinks)
+    .update(externalLinks)
     .set({
       url: input.url ?? existing.url,
       label: input.label === undefined ? existing.label : input.label,
     })
     .where(
-      and(
-        eq(issueExternalLinks.organizationId, organizationId),
-        eq(issueExternalLinks.id, id)
-      )
+      and(eq(externalLinks.organizationId, organizationId), eq(externalLinks.id, id))
     );
-  return getIssueExternalLink(db, organizationId, id);
+  return getExternalLink(db, organizationId, id);
 }
 
-export async function deleteIssueExternalLink(
+export async function deleteExternalLink(
   db: WorkspaceDb,
   organizationId: string,
   id: string
 ) {
-  const existing = await getIssueExternalLink(db, organizationId, id);
+  const existing = await getExternalLink(db, organizationId, id);
   if (!existing) return false;
   await db
-    .delete(issueExternalLinks)
+    .delete(externalLinks)
     .where(
-      and(
-        eq(issueExternalLinks.organizationId, organizationId),
-        eq(issueExternalLinks.id, id)
-      )
+      and(eq(externalLinks.organizationId, organizationId), eq(externalLinks.id, id))
     );
   return true;
 }

@@ -860,20 +860,23 @@ export const workspaceAgentProviderConfigs = sqliteTable(
   ]
 );
 
-export const issueExternalLinks = sqliteTable(
-  "issue_external_links" as string,
+export const externalLinks = sqliteTable(
+  "external_links" as string,
   {
     id: text("id" as string).primaryKey(),
     organizationId: text("organization_id" as string).notNull(),
-    issueId: text("issue_id" as string).notNull(),
+    entityType: text("entity_type" as string).notNull(),
+    entityId: text("entity_id" as string).notNull(),
     url: text("url" as string).notNull(),
     label: text("label" as string),
     createdAt: text("created_at" as string).notNull(),
   },
   (table) => [
-    index("issue_external_links_issue_idx" as string).on(
+    index("external_links_organization_idx" as string).on(table.organizationId),
+    index("external_links_entity_idx" as string).on(
       table.organizationId,
-      table.issueId
+      table.entityType,
+      table.entityId
     ),
   ]
 );

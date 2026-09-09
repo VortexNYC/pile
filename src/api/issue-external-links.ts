@@ -11,7 +11,8 @@ import { getWorkspaceStub } from "./stub.js";
 const linkSchema = z.object({
   id: z.string(),
   organizationId: z.string(),
-  issueId: z.string(),
+  entityType: z.string(),
+  entityId: z.string(),
   url: z.string(),
   label: z.string().nullable(),
   createdAt: z.string(),
@@ -151,7 +152,10 @@ export function registerIssueExternalLinkRoutes(app: OpenAPIHono<AppContext>) {
     const identity = c.var.workspaceIdentity;
     const db = createD1(c.env.D1);
     const stub = await checkIssueAccess(c.env, db, organizationId, issueId, identity);
-    const links = await stub.listIssueExternalLinks(issueId);
+    const links = await stub.listExternalLinks({
+      entityType: "issue",
+      entityId: issueId,
+    });
     return c.json({ links });
   });
 
@@ -161,11 +165,15 @@ export function registerIssueExternalLinkRoutes(app: OpenAPIHono<AppContext>) {
     const identity = c.var.workspaceIdentity;
     const db = createD1(c.env.D1);
     const stub = await checkIssueAccess(c.env, db, organizationId, issueId, identity);
-    const link = await stub.createIssueExternalLink({
-      issueId,
-      url: input.url,
-      label: input.label ?? null,
-    });
+    const link = await stub.createExternalLink(
+      {
+        entityType: "issue",
+        entityId: issueId,
+        url: input.url,
+        label: input.label ?? null,
+      },
+      identity.id
+    );
     return c.json(link!, 201);
   });
 
@@ -174,8 +182,8 @@ export function registerIssueExternalLinkRoutes(app: OpenAPIHono<AppContext>) {
     const identity = c.var.workspaceIdentity;
     const db = createD1(c.env.D1);
     const stub = await checkIssueAccess(c.env, db, organizationId, issueId, identity);
-    const link = await stub.getIssueExternalLink(id);
-    if (!link || link.issueId !== issueId) {
+    const link = await stub.getExternalLink(id);
+    if (!link || link.entityType !== "issue" || link.entityId !== issueId) {
       throw new VortexError({
         code: "NOT_FOUND",
         status: 404,
@@ -191,15 +199,15 @@ export function registerIssueExternalLinkRoutes(app: OpenAPIHono<AppContext>) {
     const identity = c.var.workspaceIdentity;
     const db = createD1(c.env.D1);
     const stub = await checkIssueAccess(c.env, db, organizationId, issueId, identity);
-    const existing = await stub.getIssueExternalLink(id);
-    if (!existing || existing.issueId !== issueId) {
+    const existing = await stub.getExternalLink(id);
+    if (!existing || existing.entityType !== "issue" || existing.entityId !== issueId) {
       throw new VortexError({
         code: "NOT_FOUND",
         status: 404,
         message: "External link not found",
       });
     }
-    const link = await stub.updateIssueExternalLink(id, input);
+    const link = await stub.updateExternalLink(id, input, identity.id);
     return c.json(link!);
   });
 
@@ -208,15 +216,15 @@ export function registerIssueExternalLinkRoutes(app: OpenAPIHono<AppContext>) {
     const identity = c.var.workspaceIdentity;
     const db = createD1(c.env.D1);
     const stub = await checkIssueAccess(c.env, db, organizationId, issueId, identity);
-    const existing = await stub.getIssueExternalLink(id);
-    if (!existing || existing.issueId !== issueId) {
+    const existing = await stub.getExternalLink(id);
+    if (!existing || existing.entityType !== "issue" || existing.entityId !== issueId) {
       throw new VortexError({
         code: "NOT_FOUND",
         status: 404,
         message: "External link not found",
       });
     }
-    await stub.deleteIssueExternalLink(id);
+    await stub.deleteExternalLink(id, identity.id);
     return c.body(null, 204);
   });
 }

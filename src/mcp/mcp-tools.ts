@@ -292,6 +292,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdExternallinksId",
+    "description": "Delete external link (DELETE /workspaces/{organizationId}/external-links/{id})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/external-links/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdGitautomationstatesId",
     "description": "Delete git automation state (DELETE /workspaces/{organizationId}/git-automation-states/{id})",
     "method": "DELETE",
@@ -1675,6 +1696,56 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdExternallinks",
+    "description": "List external links (GET /workspaces/{organizationId}/external-links)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/external-links",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "entityType": {
+          "type": "string",
+          "enum": [
+            "issue",
+            "project",
+            "customer",
+            "document"
+          ]
+        },
+        "entityId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdExternallinksId",
+    "description": "Get external link (GET /workspaces/{organizationId}/external-links/{id})",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/external-links/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
         "organizationId"
       ]
     }
@@ -3833,6 +3904,51 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "patchWorkspacesOrganizationIdExternallinksId",
+    "description": "Update external link (PATCH /workspaces/{organizationId}/external-links/{id})",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/external-links/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "entityType": {
+              "type": "string",
+              "enum": [
+                "issue",
+                "project",
+                "customer",
+                "document"
+              ]
+            },
+            "entityId": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "label": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "patchWorkspacesOrganizationIdGitautomationstatesId",
     "description": "Update git automation state (PATCH /workspaces/{organizationId}/git-automation-states/{id})",
     "method": "PATCH",
@@ -5075,6 +5191,53 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdCsvexports",
+    "description": "Create csv export (POST /workspaces/{organizationId}/csv-exports)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/csv-exports",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "entityType": {
+              "type": "string",
+              "enum": [
+                "issues",
+                "projects"
+              ]
+            },
+            "teamId": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "priority": {
+              "type": "string"
+            },
+            "assigneeId": {
+              "type": "string"
+            },
+            "projectId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "entityType"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdCustomerneeds",
     "description": "Create customer need (POST /workspaces/{organizationId}/customer-needs)",
     "method": "POST",
@@ -5711,6 +5874,52 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "required": [
             "name",
             "shortcut",
+            "url"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdExternallinks",
+    "description": "Create external link (POST /workspaces/{organizationId}/external-links)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/external-links",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "entityType": {
+              "type": "string",
+              "enum": [
+                "issue",
+                "project",
+                "customer",
+                "document"
+              ]
+            },
+            "entityId": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "label": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "entityType",
+            "entityId",
             "url"
           ]
         }

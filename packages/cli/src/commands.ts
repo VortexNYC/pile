@@ -1738,6 +1738,121 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "external links list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/external-links",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "entityType",
+        flag: "entity-type",
+      },
+      {
+        name: "entityId",
+        flag: "entity-id",
+      },
+    ],
+    body: [],
+  },
+  "external links create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/external-links",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "entityType",
+        flag: "entity-type",
+      },
+      {
+        name: "entityId",
+        flag: "entity-id",
+      },
+      {
+        name: "url",
+        flag: "url",
+      },
+      {
+        name: "label",
+        flag: "label",
+      },
+    ],
+  },
+  "external links get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/external-links/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "external links update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/external-links/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "entityType",
+        flag: "entity-type",
+      },
+      {
+        name: "entityId",
+        flag: "entity-id",
+      },
+      {
+        name: "url",
+        flag: "url",
+      },
+      {
+        name: "label",
+        flag: "label",
+      },
+    ],
+  },
+  "external links delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/external-links/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "projects updates list": {
     method: "GET",
     path: "/workspaces/{organizationId}/projects/{projectId}/updates",
@@ -4010,6 +4125,43 @@ export const COMMANDS: Record<string, CommandDef> = {
     ],
     query: [],
     body: [],
+  },
+  "csv exports create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/csv-exports",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "entityType",
+        flag: "entity-type",
+      },
+      {
+        name: "teamId",
+        flag: "team",
+      },
+      {
+        name: "status",
+        flag: "status",
+      },
+      {
+        name: "priority",
+        flag: "priority",
+      },
+      {
+        name: "assigneeId",
+        flag: "assignee",
+      },
+      {
+        name: "projectId",
+        flag: "project",
+      },
+    ],
   },
   "releases list": {
     method: "GET",

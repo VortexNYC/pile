@@ -3559,6 +3559,236 @@ export interface paths {
         };
         trace?: never;
     };
+    "/workspaces/{organizationId}/external-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List external links */
+        get: {
+            parameters: {
+                query?: {
+                    entityType?: "issue" | "project" | "customer" | "document";
+                    entityId?: string;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description External links */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            links: {
+                                id: string;
+                                organizationId: string;
+                                entityType: string;
+                                entityId: string;
+                                url: string;
+                                label: string | null;
+                                createdAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create external link */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        entityType: "issue" | "project" | "customer" | "document";
+                        entityId: string;
+                        /** Format: uri */
+                        url: string;
+                        label?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description External link created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            entityType: string;
+                            entityId: string;
+                            url: string;
+                            label: string | null;
+                            createdAt: string;
+                        };
+                    };
+                };
+                /** @description Entity not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/external-links/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get external link */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description External link */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            entityType: string;
+                            entityId: string;
+                            url: string;
+                            label: string | null;
+                            createdAt: string;
+                        };
+                    };
+                };
+                /** @description External link not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        /** Delete external link */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description External link deleted */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description External link not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /** Update external link */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        entityType?: "issue" | "project" | "customer" | "document";
+                        entityId?: string;
+                        /** Format: uri */
+                        url?: string;
+                        label?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description External link updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            entityType: string;
+                            entityId: string;
+                            url: string;
+                            label: string | null;
+                            createdAt: string;
+                        };
+                    };
+                };
+                /** @description External link not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        trace?: never;
+    };
     "/workspaces/{organizationId}/projects/{projectId}/updates": {
         parameters: {
             query?: never;
@@ -8725,6 +8955,56 @@ export interface paths {
         };
         trace?: never;
     };
+    "/workspaces/{organizationId}/csv-exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create csv export */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        entityType: "issues" | "projects";
+                        teamId?: string;
+                        status?: string;
+                        priority?: string;
+                        assigneeId?: string;
+                        projectId?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description CSV export */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/csv": string;
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/releases": {
         parameters: {
             query?: never;
@@ -9127,7 +9407,8 @@ export interface paths {
                             links: {
                                 id: string;
                                 organizationId: string;
-                                issueId: string;
+                                entityType: string;
+                                entityId: string;
                                 url: string;
                                 label: string | null;
                                 createdAt: string;
@@ -9168,7 +9449,8 @@ export interface paths {
                         "application/json": {
                             id: string;
                             organizationId: string;
-                            issueId: string;
+                            entityType: string;
+                            entityId: string;
                             url: string;
                             label: string | null;
                             createdAt: string;
@@ -9213,7 +9495,8 @@ export interface paths {
                         "application/json": {
                             id: string;
                             organizationId: string;
-                            issueId: string;
+                            entityType: string;
+                            entityId: string;
                             url: string;
                             label: string | null;
                             createdAt: string;
@@ -9294,7 +9577,8 @@ export interface paths {
                         "application/json": {
                             id: string;
                             organizationId: string;
-                            issueId: string;
+                            entityType: string;
+                            entityId: string;
                             url: string;
                             label: string | null;
                             createdAt: string;
