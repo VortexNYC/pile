@@ -1,16 +1,21 @@
 # Notion Integration
 
+## Status
+
+Phase 1 (page import and user mapping) is implemented in PR #49. Ongoing webhook sync and database migration are future phases.
+
 ## Objective
 
 Let Vortex replace Notion as the source of truth for documents by importing Notion pages into the existing Vortex `documents` model. The first slice is a one-time page import; ongoing webhook sync and database migration can follow.
 
-## In scope — Phase 1: page import
+## In scope — Phase 1: page import (done)
 
 - `POST /workspaces/{organizationId}/notion/import`
   - Body: `{ token: string; rootPageId?: string; spaceId?: string }`
   - `token` is a Notion internal integration token (`ntn_...`).
-  - If `rootPageId` is provided, recursively import that page and its child pages.
-  - If omitted, use `POST /v1/search` to discover all top-level pages reachable by the integration.
+  - If `rootPageId` is provided, import that single page.
+  - If omitted, use `POST /v1/search` to discover and import all pages reachable by the integration.
+  - Parent pages are imported before children where possible; `parentDocumentId` is set on a second pass using `notion_page_mappings`.
   - Creates or updates Vortex documents with `contentFormat: "markdown"`.
   - Preserves parent/child page hierarchy as `parentDocumentId`.
   - Records a `notion_page_mappings` row per page so re-imports update instead of duplicate.
