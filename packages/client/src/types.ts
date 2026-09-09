@@ -7017,131 +7017,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{organizationId}/release-pipelines": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List release pipelines */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    organizationId: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Release pipelines */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            pipelines: {
-                                id: string;
-                                organizationId: string;
-                                name: string;
-                                stages: string[];
-                                createdAt: string;
-                            }[];
-                        };
-                    };
-                };
-            };
-        };
-        put?: never;
-        /** Create release pipeline */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    organizationId: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: {
-                content: {
-                    "application/json": {
-                        name: string;
-                        stages?: string[];
-                    };
-                };
-            };
-            responses: {
-                /** @description Pipeline created */
-                201: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            id: string;
-                            organizationId: string;
-                            name: string;
-                            stages: string[];
-                            createdAt: string;
-                        };
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/workspaces/{organizationId}/release-pipelines/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Delete release pipeline */
-        delete: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    organizationId: string;
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Pipeline deleted */
-                204: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                /** @description Pipeline not found */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/workspaces/{organizationId}/releases": {
         parameters: {
             query?: never;
@@ -7154,6 +7029,8 @@ export interface paths {
             parameters: {
                 query?: {
                     projectId?: string;
+                    teamId?: string;
+                    status?: "upcoming" | "in_progress" | "released" | "archived";
                 };
                 header?: never;
                 path: {
@@ -7163,7 +7040,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Releases */
+                /** @description Releases list */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -7173,14 +7050,15 @@ export interface paths {
                             releases: {
                                 id: string;
                                 organizationId: string;
+                                projectId: string | null;
+                                teamId: string | null;
                                 name: string;
                                 version: string | null;
-                                projectId: string | null;
-                                pipelineId: string | null;
-                                stage: string | null;
-                                status: string;
-                                targetDate: string | null;
-                                createdById: string | null;
+                                /** @enum {string} */
+                                status: "upcoming" | "in_progress" | "released" | "archived";
+                                notes: string | null;
+                                plannedAt: string | null;
+                                releasedAt: string | null;
                                 createdAt: string;
                                 updatedAt: string;
                             }[];
@@ -7203,13 +7081,18 @@ export interface paths {
             requestBody?: {
                 content: {
                     "application/json": {
+                        projectId?: string;
+                        teamId?: string;
                         name: string;
                         version?: string;
-                        projectId?: string;
-                        pipelineId?: string;
-                        stage?: string;
-                        status?: string;
-                        targetDate?: string;
+                        /**
+                         * @default upcoming
+                         * @enum {string}
+                         */
+                        status?: "upcoming" | "in_progress" | "released" | "archived";
+                        notes?: string;
+                        plannedAt?: string;
+                        releasedAt?: string;
                     };
                 };
             };
@@ -7223,14 +7106,15 @@ export interface paths {
                         "application/json": {
                             id: string;
                             organizationId: string;
+                            projectId: string | null;
+                            teamId: string | null;
                             name: string;
                             version: string | null;
-                            projectId: string | null;
-                            pipelineId: string | null;
-                            stage: string | null;
-                            status: string;
-                            targetDate: string | null;
-                            createdById: string | null;
+                            /** @enum {string} */
+                            status: "upcoming" | "in_progress" | "released" | "archived";
+                            notes: string | null;
+                            plannedAt: string | null;
+                            releasedAt: string | null;
                             createdAt: string;
                             updatedAt: string;
                         };
@@ -7251,7 +7135,44 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Get release */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Release */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            projectId: string | null;
+                            teamId: string | null;
+                            name: string;
+                            version: string | null;
+                            /** @enum {string} */
+                            status: "upcoming" | "in_progress" | "released" | "archived";
+                            notes: string | null;
+                            plannedAt: string | null;
+                            releasedAt: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
         put?: never;
         post?: never;
         /** Delete release */
@@ -7269,13 +7190,6 @@ export interface paths {
             responses: {
                 /** @description Release deleted */
                 204: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                /** @description Release not found */
-                404: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -7299,13 +7213,18 @@ export interface paths {
             requestBody?: {
                 content: {
                     "application/json": {
+                        projectId?: string;
+                        teamId?: string;
                         name?: string;
                         version?: string;
-                        projectId?: string;
-                        pipelineId?: string;
-                        stage?: string;
-                        status?: string;
-                        targetDate?: string;
+                        /**
+                         * @default upcoming
+                         * @enum {string}
+                         */
+                        status?: "upcoming" | "in_progress" | "released" | "archived";
+                        notes?: string;
+                        plannedAt?: string;
+                        releasedAt?: string;
                     };
                 };
             };
@@ -7319,25 +7238,19 @@ export interface paths {
                         "application/json": {
                             id: string;
                             organizationId: string;
+                            projectId: string | null;
+                            teamId: string | null;
                             name: string;
                             version: string | null;
-                            projectId: string | null;
-                            pipelineId: string | null;
-                            stage: string | null;
-                            status: string;
-                            targetDate: string | null;
-                            createdById: string | null;
+                            /** @enum {string} */
+                            status: "upcoming" | "in_progress" | "released" | "archived";
+                            notes: string | null;
+                            plannedAt: string | null;
+                            releasedAt: string | null;
                             createdAt: string;
                             updatedAt: string;
                         };
                     };
-                };
-                /** @description Release not found */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
                 };
             };
         };

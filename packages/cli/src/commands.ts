@@ -3274,55 +3274,6 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
-  "release pipelines list": {
-    method: "GET",
-    path: "/workspaces/{organizationId}/release-pipelines",
-    params: [
-      {
-        name: "organizationId",
-        flag: "workspace",
-      },
-    ],
-    query: [],
-    body: [],
-  },
-  "release pipelines create": {
-    method: "POST",
-    path: "/workspaces/{organizationId}/release-pipelines",
-    params: [
-      {
-        name: "organizationId",
-        flag: "workspace",
-      },
-    ],
-    query: [],
-    body: [
-      {
-        name: "name",
-        flag: "name",
-      },
-      {
-        name: "stages",
-        flag: "stages",
-      },
-    ],
-  },
-  "release pipelines delete": {
-    method: "DELETE",
-    path: "/workspaces/{organizationId}/release-pipelines/{id}",
-    params: [
-      {
-        name: "organizationId",
-        flag: "workspace",
-      },
-      {
-        name: "id",
-        flag: "id",
-      },
-    ],
-    query: [],
-    body: [],
-  },
   "releases list": {
     method: "GET",
     path: "/workspaces/{organizationId}/releases",
@@ -3336,6 +3287,14 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "projectId",
         flag: "project",
+      },
+      {
+        name: "teamId",
+        flag: "team",
+      },
+      {
+        name: "status",
+        flag: "status",
       },
     ],
     body: [],
@@ -3352,6 +3311,14 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [
       {
+        name: "projectId",
+        flag: "project",
+      },
+      {
+        name: "teamId",
+        flag: "team",
+      },
+      {
         name: "name",
         flag: "name",
       },
@@ -3360,26 +3327,38 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "version",
       },
       {
-        name: "projectId",
-        flag: "project",
-      },
-      {
-        name: "pipelineId",
-        flag: "pipeline-id",
-      },
-      {
-        name: "stage",
-        flag: "stage",
-      },
-      {
         name: "status",
         flag: "status",
       },
       {
-        name: "targetDate",
-        flag: "target-date",
+        name: "notes",
+        flag: "notes",
+      },
+      {
+        name: "plannedAt",
+        flag: "planned-at",
+      },
+      {
+        name: "releasedAt",
+        flag: "released-at",
       },
     ],
+  },
+  "releases get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/releases/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
   },
   "releases update": {
     method: "PATCH",
@@ -3397,6 +3376,14 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [
       {
+        name: "projectId",
+        flag: "project",
+      },
+      {
+        name: "teamId",
+        flag: "team",
+      },
+      {
         name: "name",
         flag: "name",
       },
@@ -3405,24 +3392,20 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "version",
       },
       {
-        name: "projectId",
-        flag: "project",
-      },
-      {
-        name: "pipelineId",
-        flag: "pipeline-id",
-      },
-      {
-        name: "stage",
-        flag: "stage",
-      },
-      {
         name: "status",
         flag: "status",
       },
       {
-        name: "targetDate",
-        flag: "target-date",
+        name: "notes",
+        flag: "notes",
+      },
+      {
+        name: "plannedAt",
+        flag: "planned-at",
+      },
+      {
+        name: "releasedAt",
+        flag: "released-at",
       },
     ],
   },

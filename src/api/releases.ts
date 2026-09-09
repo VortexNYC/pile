@@ -1,118 +1,41 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
+import { and, eq } from "drizzle-orm";
 
+import { createD1 } from "../global/db.js";
+import { releases } from "../global/schema.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
-import { getWorkspaceStub } from "./stub.js";
 
-const pipelineSchema = z.object({
-  id: z.string(),
-  organizationId: z.string(),
-  name: z.string(),
-  stages: z.array(z.string()),
-  createdAt: z.string(),
-});
+const now = () => new Date().toISOString();
 
 const releaseSchema = z.object({
   id: z.string(),
   organizationId: z.string(),
+  projectId: z.string().nullable(),
+  teamId: z.string().nullable(),
   name: z.string(),
   version: z.string().nullable(),
-  projectId: z.string().nullable(),
-  pipelineId: z.string().nullable(),
-  stage: z.string().nullable(),
-  status: z.string(),
-  targetDate: z.string().nullable(),
-  createdById: z.string().nullable(),
+  status: z.enum(["upcoming", "in_progress", "released", "archived"]),
+  notes: z.string().nullable(),
+  plannedAt: z.string().nullable(),
+  releasedAt: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
 
-const pipelineBodySchema = z.object({
-  name: z.string().min(1),
-  stages: z.array(z.string()).optional(),
-});
-
-const createReleaseSchema = z.object({
+const releaseBodySchema = z.object({
+  projectId: z.string().optional(),
+  teamId: z.string().optional(),
   name: z.string().min(1),
   version: z.string().optional(),
-  projectId: z.string().optional(),
-  pipelineId: z.string().optional(),
-  stage: z.string().optional(),
-  status: z.string().optional(),
-  targetDate: z.string().optional(),
-});
-
-const updateReleaseSchema = createReleaseSchema.partial();
-
-const orgParam = z.object({ organizationId: z.string() });
-const orgIdParam = z.object({
-  organizationId: z.string(),
-  id: z.string(),
-});
-
-function notFound(message: string): never {
-  throw new VortexError({ code: "NOT_FOUND", status: 404, message });
-}
-
-function toPipeline(row: {
-  id: string;
-  organizationId: string;
-  name: string;
-  stages: string;
-  createdAt: string;
-}) {
-  return { ...row, stages: JSON.parse(row.stages) as string[] };
-}
-
-const listPipelinesRoute = createRoute({
-  method: "get",
-  path: "/workspaces/{organizationId}/release-pipelines",
-  tags: ["releases"],
-  middleware: [rls("read")],
-  request: { params: orgParam },
-  responses: {
-    200: {
-      description: "Release pipelines",
-      content: {
-        "application/json": {
-          schema: z.object({ pipelines: z.array(pipelineSchema) }),
-        },
-      },
-    },
-  },
-});
-
-const createPipelineRoute = createRoute({
-  method: "post",
-  path: "/workspaces/{organizationId}/release-pipelines",
-  tags: ["releases"],
-  middleware: [rls("write")],
-  request: {
-    params: orgParam,
-    body: {
-      content: { "application/json": { schema: pipelineBodySchema } },
-    },
-  },
-  responses: {
-    201: {
-      description: "Pipeline created",
-      content: { "application/json": { schema: pipelineSchema } },
-    },
-  },
-});
-
-const deletePipelineRoute = createRoute({
-  method: "delete",
-  path: "/workspaces/{organizationId}/release-pipelines/{id}",
-  tags: ["releases"],
-  middleware: [rls("write")],
-  request: { params: orgIdParam },
-  responses: {
-    204: { description: "Pipeline deleted" },
-    404: { description: "Pipeline not found" },
-  },
+  status: z
+    .enum(["upcoming", "in_progress", "released", "archived"])
+    .default("upcoming"),
+  notes: z.string().optional(),
+  plannedAt: z.string().optional(),
+  releasedAt: z.string().optional(),
 });
 
 const listReleasesRoute = createRoute({
@@ -121,16 +44,18 @@ const listReleasesRoute = createRoute({
   tags: ["releases"],
   middleware: [rls("read")],
   request: {
-    params: orgParam,
-    query: z.object({ projectId: z.string().optional() }),
+    params: z.object({ organizationId: z.string() }),
+    query: z.object({
+      projectId: z.string().optional(),
+      teamId: z.string().optional(),
+      status: z.enum(["upcoming", "in_progress", "released", "archived"]).optional(),
+    }),
   },
   responses: {
     200: {
-      description: "Releases",
+      description: "Releases list",
       content: {
-        "application/json": {
-          schema: z.object({ releases: z.array(releaseSchema) }),
-        },
+        "application/json": { schema: z.object({ releases: z.array(releaseSchema) }) },
       },
     },
   },
@@ -142,14 +67,28 @@ const createReleaseRoute = createRoute({
   tags: ["releases"],
   middleware: [rls("write")],
   request: {
-    params: orgParam,
-    body: {
-      content: { "application/json": { schema: createReleaseSchema } },
-    },
+    params: z.object({ organizationId: z.string() }),
+    body: { content: { "application/json": { schema: releaseBodySchema } } },
   },
   responses: {
     201: {
       description: "Release created",
+      content: { "application/json": { schema: releaseSchema } },
+    },
+  },
+});
+
+const getReleaseRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/releases/{id}",
+  tags: ["releases"],
+  middleware: [rls("read")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Release",
       content: { "application/json": { schema: releaseSchema } },
     },
   },
@@ -161,17 +100,14 @@ const updateReleaseRoute = createRoute({
   tags: ["releases"],
   middleware: [rls("write")],
   request: {
-    params: orgIdParam,
-    body: {
-      content: { "application/json": { schema: updateReleaseSchema } },
-    },
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+    body: { content: { "application/json": { schema: releaseBodySchema.partial() } } },
   },
   responses: {
     200: {
       description: "Release updated",
       content: { "application/json": { schema: releaseSchema } },
     },
-    404: { description: "Release not found" },
   },
 });
 
@@ -180,71 +116,130 @@ const deleteReleaseRoute = createRoute({
   path: "/workspaces/{organizationId}/releases/{id}",
   tags: ["releases"],
   middleware: [rls("write")],
-  request: { params: orgIdParam },
-  responses: {
-    204: { description: "Release deleted" },
-    404: { description: "Release not found" },
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
   },
+  responses: { 204: { description: "Release deleted" } },
 });
 
+function toReleaseResponse(row: typeof releases.$inferSelect) {
+  return {
+    id: row.id,
+    organizationId: row.organizationId,
+    projectId: row.projectId,
+    teamId: row.teamId,
+    name: row.name,
+    version: row.version,
+    status: row.status,
+    notes: row.notes,
+    plannedAt: row.plannedAt,
+    releasedAt: row.releasedAt,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
 export function registerReleaseRoutes(app: OpenAPIHono<AppContext>) {
-  app.openapi(listPipelinesRoute, async (c) => {
-    const { organizationId } = c.req.valid("param");
-    const stub = getWorkspaceStub(c.env, organizationId);
-    const rows = await stub.listReleasePipelines();
-    return c.json({ pipelines: rows.map(toPipeline) });
-  });
-
-  app.openapi(createPipelineRoute, async (c) => {
-    const { organizationId } = c.req.valid("param");
-    const input = c.req.valid("json");
-    const stub = getWorkspaceStub(c.env, organizationId);
-    return c.json(toPipeline(await stub.createReleasePipeline(input)), 201);
-  });
-
-  app.openapi(deletePipelineRoute, async (c) => {
-    const { organizationId, id } = c.req.valid("param");
-    const stub = getWorkspaceStub(c.env, organizationId);
-    if (!(await stub.deleteReleasePipeline(id)))
-      return notFound("Pipeline not found");
-    return c.body(null, 204);
-  });
-
   app.openapi(listReleasesRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
-    const { projectId } = c.req.valid("query");
-    const stub = getWorkspaceStub(c.env, organizationId);
-    return c.json({ releases: await stub.listReleases({ projectId }) });
+    const query = c.req.valid("query");
+    const db = createD1(c.env.D1);
+    const conditions = [eq(releases.organizationId, organizationId)];
+    if (query.projectId) conditions.push(eq(releases.projectId, query.projectId));
+    if (query.teamId) conditions.push(eq(releases.teamId, query.teamId));
+    if (query.status) conditions.push(eq(releases.status, query.status));
+    const rows = await db
+      .select()
+      .from(releases)
+      .where(and(...conditions))
+      .all();
+    return c.json({ releases: rows.map(toReleaseResponse) });
   });
 
   app.openapi(createReleaseRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
     const input = c.req.valid("json");
-    const identity = c.var.workspaceIdentity;
-    const stub = getWorkspaceStub(c.env, organizationId);
-    const release = await stub.createRelease({
-      ...input,
-      createdById: identity.id,
+    const db = createD1(c.env.D1);
+    const id = crypto.randomUUID();
+    const ts = now();
+    await db.insert(releases).values({
+      id,
+      organizationId,
+      projectId: input.projectId ?? null,
+      teamId: input.teamId ?? null,
+      name: input.name,
+      version: input.version ?? null,
+      status: input.status,
+      notes: input.notes ?? null,
+      plannedAt: input.plannedAt ?? null,
+      releasedAt: input.releasedAt ?? null,
+      createdAt: ts,
+      updatedAt: ts,
     });
-    return c.json(release, 201);
+    const row = await db
+      .select()
+      .from(releases)
+      .where(eq(releases.id, id))
+      .get();
+    return c.json(toReleaseResponse(row!), 201);
+  });
+
+  app.openapi(getReleaseRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const row = await db
+      .select()
+      .from(releases)
+      .where(and(eq(releases.id, id), eq(releases.organizationId, organizationId)))
+      .get();
+    if (!row) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Release not found",
+      });
+    }
+    return c.json(toReleaseResponse(row));
   });
 
   app.openapi(updateReleaseRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
     const input = c.req.valid("json");
-    const identity = c.var.workspaceIdentity;
-    const stub = getWorkspaceStub(c.env, organizationId);
-    const release = await stub.updateRelease(id, input, identity.id);
-    if (!release) return notFound("Release not found");
-    return c.json(release);
+    const db = createD1(c.env.D1);
+    await db
+      .update(releases)
+      .set({
+        ...input,
+        projectId: input.projectId ?? undefined,
+        teamId: input.teamId ?? undefined,
+        version: input.version ?? undefined,
+        notes: input.notes ?? undefined,
+        plannedAt: input.plannedAt ?? undefined,
+        releasedAt: input.releasedAt ?? undefined,
+        updatedAt: now(),
+      })
+      .where(and(eq(releases.id, id), eq(releases.organizationId, organizationId)));
+    const row = await db
+      .select()
+      .from(releases)
+      .where(and(eq(releases.id, id), eq(releases.organizationId, organizationId)))
+      .get();
+    if (!row) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Release not found",
+      });
+    }
+    return c.json(toReleaseResponse(row));
   });
 
   app.openapi(deleteReleaseRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
-    const identity = c.var.workspaceIdentity;
-    const stub = getWorkspaceStub(c.env, organizationId);
-    if (!(await stub.deleteRelease(id, identity.id)))
-      return notFound("Release not found");
+    const db = createD1(c.env.D1);
+    await db
+      .delete(releases)
+      .where(and(eq(releases.id, id), eq(releases.organizationId, organizationId)));
     return c.body(null, 204);
   });
 }

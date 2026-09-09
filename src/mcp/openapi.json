@@ -13778,187 +13778,6 @@
         "summary": "Delete customer need"
       }
     },
-    "/workspaces/{organizationId}/release-pipelines": {
-      "get": {
-        "tags": [
-          "releases"
-        ],
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "name": "organizationId",
-            "in": "path"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Release pipelines",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "pipelines": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "id": {
-                            "type": "string"
-                          },
-                          "organizationId": {
-                            "type": "string"
-                          },
-                          "name": {
-                            "type": "string"
-                          },
-                          "stages": {
-                            "type": "array",
-                            "items": {
-                              "type": "string"
-                            }
-                          },
-                          "createdAt": {
-                            "type": "string"
-                          }
-                        },
-                        "required": [
-                          "id",
-                          "organizationId",
-                          "name",
-                          "stages",
-                          "createdAt"
-                        ]
-                      }
-                    }
-                  },
-                  "required": [
-                    "pipelines"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "summary": "List release pipelines"
-      },
-      "post": {
-        "tags": [
-          "releases"
-        ],
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "name": "organizationId",
-            "in": "path"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "stages": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  }
-                },
-                "required": [
-                  "name"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Pipeline created",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "id": {
-                      "type": "string"
-                    },
-                    "organizationId": {
-                      "type": "string"
-                    },
-                    "name": {
-                      "type": "string"
-                    },
-                    "stages": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    },
-                    "createdAt": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "organizationId",
-                    "name",
-                    "stages",
-                    "createdAt"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "summary": "Create release pipeline"
-      }
-    },
-    "/workspaces/{organizationId}/release-pipelines/{id}": {
-      "delete": {
-        "tags": [
-          "releases"
-        ],
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "name": "organizationId",
-            "in": "path"
-          },
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "name": "id",
-            "in": "path"
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Pipeline deleted"
-          },
-          "404": {
-            "description": "Pipeline not found"
-          }
-        },
-        "summary": "Delete release pipeline"
-      }
-    },
     "/workspaces/{organizationId}/releases": {
       "get": {
         "tags": [
@@ -13980,11 +13799,33 @@
             "required": false,
             "name": "projectId",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "teamId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "upcoming",
+                "in_progress",
+                "released",
+                "archived"
+              ]
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
           }
         ],
         "responses": {
           "200": {
-            "description": "Releases",
+            "description": "Releases list",
             "content": {
               "application/json": {
                 "schema": {
@@ -14001,6 +13842,14 @@
                           "organizationId": {
                             "type": "string"
                           },
+                          "projectId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "teamId": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "name": {
                             "type": "string"
                           },
@@ -14008,26 +13857,24 @@
                             "type": "string",
                             "nullable": true
                           },
-                          "projectId": {
-                            "type": "string",
-                            "nullable": true
-                          },
-                          "pipelineId": {
-                            "type": "string",
-                            "nullable": true
-                          },
-                          "stage": {
-                            "type": "string",
-                            "nullable": true
-                          },
                           "status": {
-                            "type": "string"
+                            "type": "string",
+                            "enum": [
+                              "upcoming",
+                              "in_progress",
+                              "released",
+                              "archived"
+                            ]
                           },
-                          "targetDate": {
+                          "notes": {
                             "type": "string",
                             "nullable": true
                           },
-                          "createdById": {
+                          "plannedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "releasedAt": {
                             "type": "string",
                             "nullable": true
                           },
@@ -14041,14 +13888,14 @@
                         "required": [
                           "id",
                           "organizationId",
+                          "projectId",
+                          "teamId",
                           "name",
                           "version",
-                          "projectId",
-                          "pipelineId",
-                          "stage",
                           "status",
-                          "targetDate",
-                          "createdById",
+                          "notes",
+                          "plannedAt",
+                          "releasedAt",
                           "createdAt",
                           "updatedAt"
                         ]
@@ -14085,6 +13932,12 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "projectId": {
+                    "type": "string"
+                  },
+                  "teamId": {
+                    "type": "string"
+                  },
                   "name": {
                     "type": "string",
                     "minLength": 1
@@ -14092,19 +13945,23 @@
                   "version": {
                     "type": "string"
                   },
-                  "projectId": {
-                    "type": "string"
-                  },
-                  "pipelineId": {
-                    "type": "string"
-                  },
-                  "stage": {
-                    "type": "string"
-                  },
                   "status": {
+                    "type": "string",
+                    "enum": [
+                      "upcoming",
+                      "in_progress",
+                      "released",
+                      "archived"
+                    ],
+                    "default": "upcoming"
+                  },
+                  "notes": {
                     "type": "string"
                   },
-                  "targetDate": {
+                  "plannedAt": {
+                    "type": "string"
+                  },
+                  "releasedAt": {
                     "type": "string"
                   }
                 },
@@ -14129,6 +13986,14 @@
                     "organizationId": {
                       "type": "string"
                     },
+                    "projectId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "teamId": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "name": {
                       "type": "string"
                     },
@@ -14136,26 +14001,24 @@
                       "type": "string",
                       "nullable": true
                     },
-                    "projectId": {
-                      "type": "string",
-                      "nullable": true
-                    },
-                    "pipelineId": {
-                      "type": "string",
-                      "nullable": true
-                    },
-                    "stage": {
-                      "type": "string",
-                      "nullable": true
-                    },
                     "status": {
-                      "type": "string"
+                      "type": "string",
+                      "enum": [
+                        "upcoming",
+                        "in_progress",
+                        "released",
+                        "archived"
+                      ]
                     },
-                    "targetDate": {
+                    "notes": {
                       "type": "string",
                       "nullable": true
                     },
-                    "createdById": {
+                    "plannedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "releasedAt": {
                       "type": "string",
                       "nullable": true
                     },
@@ -14169,14 +14032,14 @@
                   "required": [
                     "id",
                     "organizationId",
+                    "projectId",
+                    "teamId",
                     "name",
                     "version",
-                    "projectId",
-                    "pipelineId",
-                    "stage",
                     "status",
-                    "targetDate",
-                    "createdById",
+                    "notes",
+                    "plannedAt",
+                    "releasedAt",
                     "createdAt",
                     "updatedAt"
                   ]
@@ -14189,6 +14052,106 @@
       }
     },
     "/workspaces/{organizationId}/releases/{id}": {
+      "get": {
+        "tags": [
+          "releases"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Release",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "projectId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "teamId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "upcoming",
+                        "in_progress",
+                        "released",
+                        "archived"
+                      ]
+                    },
+                    "notes": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "plannedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "releasedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "projectId",
+                    "teamId",
+                    "name",
+                    "version",
+                    "status",
+                    "notes",
+                    "plannedAt",
+                    "releasedAt",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get release"
+      },
       "patch": {
         "tags": [
           "releases"
@@ -14217,6 +14180,12 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "projectId": {
+                    "type": "string"
+                  },
+                  "teamId": {
+                    "type": "string"
+                  },
                   "name": {
                     "type": "string",
                     "minLength": 1
@@ -14224,19 +14193,23 @@
                   "version": {
                     "type": "string"
                   },
-                  "projectId": {
-                    "type": "string"
-                  },
-                  "pipelineId": {
-                    "type": "string"
-                  },
-                  "stage": {
-                    "type": "string"
-                  },
                   "status": {
+                    "type": "string",
+                    "enum": [
+                      "upcoming",
+                      "in_progress",
+                      "released",
+                      "archived"
+                    ],
+                    "default": "upcoming"
+                  },
+                  "notes": {
                     "type": "string"
                   },
-                  "targetDate": {
+                  "plannedAt": {
+                    "type": "string"
+                  },
+                  "releasedAt": {
                     "type": "string"
                   }
                 }
@@ -14258,6 +14231,14 @@
                     "organizationId": {
                       "type": "string"
                     },
+                    "projectId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "teamId": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "name": {
                       "type": "string"
                     },
@@ -14265,26 +14246,24 @@
                       "type": "string",
                       "nullable": true
                     },
-                    "projectId": {
-                      "type": "string",
-                      "nullable": true
-                    },
-                    "pipelineId": {
-                      "type": "string",
-                      "nullable": true
-                    },
-                    "stage": {
-                      "type": "string",
-                      "nullable": true
-                    },
                     "status": {
-                      "type": "string"
+                      "type": "string",
+                      "enum": [
+                        "upcoming",
+                        "in_progress",
+                        "released",
+                        "archived"
+                      ]
                     },
-                    "targetDate": {
+                    "notes": {
                       "type": "string",
                       "nullable": true
                     },
-                    "createdById": {
+                    "plannedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "releasedAt": {
                       "type": "string",
                       "nullable": true
                     },
@@ -14298,23 +14277,20 @@
                   "required": [
                     "id",
                     "organizationId",
+                    "projectId",
+                    "teamId",
                     "name",
                     "version",
-                    "projectId",
-                    "pipelineId",
-                    "stage",
                     "status",
-                    "targetDate",
-                    "createdById",
+                    "notes",
+                    "plannedAt",
+                    "releasedAt",
                     "createdAt",
                     "updatedAt"
                   ]
                 }
               }
             }
-          },
-          "404": {
-            "description": "Release not found"
           }
         },
         "summary": "Update release"
@@ -14344,9 +14320,6 @@
         "responses": {
           "204": {
             "description": "Release deleted"
-          },
-          "404": {
-            "description": "Release not found"
           }
         },
         "summary": "Delete release"

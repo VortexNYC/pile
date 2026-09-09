@@ -280,6 +280,39 @@ export const initiatives = sqliteTable(
   ]
 );
 
+export const releases = sqliteTable(
+  "releases" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    projectId: text("project_id" as string).references(() => projects.id),
+    teamId: text("team_id" as string).references(() => team.id),
+    name: text("name" as string).notNull(),
+    version: text("version" as string),
+    status: text("status" as string, {
+      enum: ["upcoming", "in_progress", "released", "archived"] as const,
+    })
+      .notNull()
+      .default("upcoming"),
+    notes: text("notes" as string),
+    plannedAt: text("planned_at" as string),
+    releasedAt: text("released_at" as string),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("releases_organization_idx" as string).on(table.organizationId),
+    index("releases_project_idx" as string).on(table.projectId),
+    index("releases_team_idx" as string).on(table.teamId),
+  ]
+);
+
 export const states = sqliteTable(
   "states" as string,
   {

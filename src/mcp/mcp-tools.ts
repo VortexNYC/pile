@@ -606,27 +606,6 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
-    "name": "deleteWorkspacesOrganizationIdReleasepipelinesId",
-    "description": "Delete release pipeline (DELETE /workspaces/{organizationId}/release-pipelines/{id})",
-    "method": "DELETE",
-    "path": "/workspaces/{organizationId}/release-pipelines/{id}",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "organizationId": {
-          "type": "string"
-        },
-        "id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "id",
-        "organizationId"
-      ]
-    }
-  },
-  {
     "name": "deleteWorkspacesOrganizationIdReleasesId",
     "description": "Delete release (DELETE /workspaces/{organizationId}/releases/{id})",
     "method": "DELETE",
@@ -2371,23 +2350,6 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
-    "name": "getWorkspacesOrganizationIdReleasepipelines",
-    "description": "List release pipelines (GET /workspaces/{organizationId}/release-pipelines)",
-    "method": "GET",
-    "path": "/workspaces/{organizationId}/release-pipelines",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "organizationId": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "organizationId"
-      ]
-    }
-  },
-  {
     "name": "getWorkspacesOrganizationIdReleases",
     "description": "List releases (GET /workspaces/{organizationId}/releases)",
     "method": "GET",
@@ -2400,9 +2362,42 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         },
         "projectId": {
           "type": "string"
+        },
+        "teamId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "upcoming",
+            "in_progress",
+            "released",
+            "archived"
+          ]
         }
       },
       "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdReleasesId",
+    "description": "Get release (GET /workspaces/{organizationId}/releases/{id})",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/releases/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
         "organizationId"
       ]
     }
@@ -3701,6 +3696,12 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         "body": {
           "type": "object",
           "properties": {
+            "projectId": {
+              "type": "string"
+            },
+            "teamId": {
+              "type": "string"
+            },
             "name": {
               "type": "string",
               "minLength": 1
@@ -3708,19 +3709,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "version": {
               "type": "string"
             },
-            "projectId": {
-              "type": "string"
-            },
-            "pipelineId": {
-              "type": "string"
-            },
-            "stage": {
-              "type": "string"
-            },
             "status": {
+              "type": "string",
+              "enum": [
+                "upcoming",
+                "in_progress",
+                "released",
+                "archived"
+              ],
+              "default": "upcoming"
+            },
+            "notes": {
               "type": "string"
             },
-            "targetDate": {
+            "plannedAt": {
+              "type": "string"
+            },
+            "releasedAt": {
               "type": "string"
             }
           }
@@ -5886,41 +5891,6 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
-    "name": "postWorkspacesOrganizationIdReleasepipelines",
-    "description": "Create release pipeline (POST /workspaces/{organizationId}/release-pipelines)",
-    "method": "POST",
-    "path": "/workspaces/{organizationId}/release-pipelines",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "organizationId": {
-          "type": "string"
-        },
-        "body": {
-          "type": "object",
-          "properties": {
-            "name": {
-              "type": "string",
-              "minLength": 1
-            },
-            "stages": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            }
-          },
-          "required": [
-            "name"
-          ]
-        }
-      },
-      "required": [
-        "organizationId"
-      ]
-    }
-  },
-  {
     "name": "postWorkspacesOrganizationIdReleases",
     "description": "Create release (POST /workspaces/{organizationId}/releases)",
     "method": "POST",
@@ -5934,6 +5904,12 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         "body": {
           "type": "object",
           "properties": {
+            "projectId": {
+              "type": "string"
+            },
+            "teamId": {
+              "type": "string"
+            },
             "name": {
               "type": "string",
               "minLength": 1
@@ -5941,19 +5917,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "version": {
               "type": "string"
             },
-            "projectId": {
-              "type": "string"
-            },
-            "pipelineId": {
-              "type": "string"
-            },
-            "stage": {
-              "type": "string"
-            },
             "status": {
+              "type": "string",
+              "enum": [
+                "upcoming",
+                "in_progress",
+                "released",
+                "archived"
+              ],
+              "default": "upcoming"
+            },
+            "notes": {
               "type": "string"
             },
-            "targetDate": {
+            "plannedAt": {
+              "type": "string"
+            },
+            "releasedAt": {
               "type": "string"
             }
           },
