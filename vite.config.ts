@@ -90,6 +90,7 @@ export default defineConfig({
           "src/import/confluence.ts",
           "src/import/jira.ts",
           "src/import/linear.ts",
+          "src/import/notion.ts",
           "src/api/notion.ts",
           "scripts/**",
           "**/*.test.ts",

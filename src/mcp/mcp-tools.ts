@@ -6317,7 +6317,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "enum": [
                 "jira",
                 "confluence",
-                "linear"
+                "linear",
+                "notion"
               ]
             },
             "credentials": {
@@ -7101,41 +7102,6 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "properties": {
         "organizationId": {
           "type": "string"
-        }
-      },
-      "required": [
-        "organizationId"
-      ]
-    }
-  },
-  {
-    "name": "postWorkspacesOrganizationIdNotionImport",
-    "description": "Create notion import (POST /workspaces/{organizationId}/notion/import)",
-    "method": "POST",
-    "path": "/workspaces/{organizationId}/notion/import",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "organizationId": {
-          "type": "string"
-        },
-        "body": {
-          "type": "object",
-          "properties": {
-            "token": {
-              "type": "string",
-              "minLength": 1
-            },
-            "rootPageId": {
-              "type": "string"
-            },
-            "spaceId": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "token"
-          ]
         }
       },
       "required": [

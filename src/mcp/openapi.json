@@ -23790,7 +23790,8 @@
                     "enum": [
                       "jira",
                       "confluence",
-                      "linear"
+                      "linear",
+                      "notion"
                     ]
                   },
                   "credentials": {
@@ -23977,85 +23978,6 @@
           }
         },
         "summary": "List notion users"
-      }
-    },
-    "/workspaces/{organizationId}/notion/import": {
-      "post": {
-        "tags": [
-          "notion"
-        ],
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "name": "organizationId",
-            "in": "path"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "token": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "rootPageId": {
-                    "type": "string"
-                  },
-                  "spaceId": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "token"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Import summary",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "created": {
-                      "type": "integer"
-                    },
-                    "updated": {
-                      "type": "integer"
-                    },
-                    "errors": {
-                      "type": "integer"
-                    },
-                    "workspaceId": {
-                      "type": "string"
-                    },
-                    "workspaceName": {
-                      "type": "string",
-                      "nullable": true
-                    }
-                  },
-                  "required": [
-                    "created",
-                    "updated",
-                    "errors",
-                    "workspaceId",
-                    "workspaceName"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "summary": "Create notion import"
       }
     },
     "/workspaces/{organizationId}/export": {

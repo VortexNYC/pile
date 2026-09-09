@@ -12891,7 +12891,7 @@ export interface paths {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        source: "jira" | "confluence" | "linear";
+                        source: "jira" | "confluence" | "linear" | "notion";
                         credentials?: unknown;
                         options?: unknown;
                     };
@@ -12991,58 +12991,6 @@ export interface paths {
                             userId: string;
                             notionUserId: string;
                             createdAt: string;
-                        };
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/workspaces/{organizationId}/notion/import": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Create notion import */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    organizationId: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: {
-                content: {
-                    "application/json": {
-                        token: string;
-                        rootPageId?: string;
-                        spaceId?: string;
-                    };
-                };
-            };
-            responses: {
-                /** @description Import summary */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            created: number;
-                            updated: number;
-                            errors: number;
-                            workspaceId: string;
-                            workspaceName: string | null;
                         };
                     };
                 };

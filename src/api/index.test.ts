@@ -2370,25 +2370,28 @@ describe("API integration", () => {
       expect(usersBody.users[0]?.notionUserId).toBe("notion-user-1");
 
       const rootRes = await app.fetch(
-        request(`/workspaces/${organizationId}/notion/import`, {
+        request(`/workspaces/${organizationId}/import`, {
           method: "POST",
           token,
-          body: JSON.stringify({ token: "ntn-test", rootPageId: "page-1" }),
+          body: JSON.stringify({
+            source: "notion",
+            credentials: { token: "ntn-test" },
+            options: { rootPageId: "page-1" },
+          }),
         }),
         env
       );
       expect(rootRes.status).toBe(200);
       const rootBody = await rootRes.json<{
-        created: number;
-        updated: number;
-        errors: number;
-        workspaceId: string;
-        workspaceName: string | null;
+        ok: boolean;
+        source: string;
+        counts: { created: number; updated: number; errors: number };
       }>();
-      expect(rootBody.created).toBe(1);
-      expect(rootBody.updated).toBe(0);
-      expect(rootBody.errors).toBe(0);
-      expect(rootBody.workspaceId).toBe("ws-1");
+      expect(rootBody.ok).toBe(true);
+      expect(rootBody.source).toBe("notion");
+      expect(rootBody.counts.created).toBe(1);
+      expect(rootBody.counts.updated).toBe(0);
+      expect(rootBody.counts.errors).toBe(0);
 
       const docsRes = await app.fetch(
         request(`/workspaces/${organizationId}/documents`, { token }),
@@ -2399,22 +2402,27 @@ describe("API integration", () => {
       expect(docsBody.documents).toHaveLength(1);
 
       const searchRes = await app.fetch(
-        request(`/workspaces/${organizationId}/notion/import`, {
+        request(`/workspaces/${organizationId}/import`, {
           method: "POST",
           token,
-          body: JSON.stringify({ token: "ntn-test" }),
+          body: JSON.stringify({
+            source: "notion",
+            credentials: { token: "ntn-test" },
+          }),
         }),
         env
       );
       expect(searchRes.status).toBe(200);
       const searchBody = await searchRes.json<{
-        created: number;
-        updated: number;
-        errors: number;
+        ok: boolean;
+        source: string;
+        counts: { created: number; updated: number; errors: number };
       }>();
-      expect(searchBody.created).toBe(1);
-      expect(searchBody.updated).toBe(0);
-      expect(searchBody.errors).toBe(0);
+      expect(searchBody.ok).toBe(true);
+      expect(searchBody.source).toBe("notion");
+      expect(searchBody.counts.created).toBe(1);
+      expect(searchBody.counts.updated).toBe(0);
+      expect(searchBody.counts.errors).toBe(0);
 
       const allDocsRes = await app.fetch(
         request(`/workspaces/${organizationId}/documents`, { token }),
