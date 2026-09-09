@@ -407,6 +407,65 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/triage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List triage */
+        get: {
+            parameters: {
+                query?: {
+                    limit?: number | null;
+                    cursor?: string;
+                    teamId?: string;
+                    status?: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
+                    priority?: "low" | "medium" | "high" | "urgent";
+                    parentId?: string;
+                    hasParent?: "true" | "false";
+                    isParent?: "true" | "false";
+                    isDraft?: "true" | "false";
+                    includeSnoozed?: "true" | "false";
+                    assigneeId?: string;
+                    projectId?: string;
+                    cycleId?: string;
+                    labelId?: string;
+                    search?: string;
+                    identifier?: string;
+                    view?: string;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Triage inbox: issues awaiting triage */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            issues: components["schemas"]["Issue"][];
+                            nextCursor?: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/issue-analytics": {
         parameters: {
             query?: never;
@@ -488,65 +547,6 @@ export interface paths {
                                 scope: number;
                                 remaining: number;
                             }[];
-                        };
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/workspaces/{organizationId}/triage": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List triage */
-        get: {
-            parameters: {
-                query?: {
-                    limit?: number | null;
-                    cursor?: string;
-                    teamId?: string;
-                    status?: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
-                    priority?: "low" | "medium" | "high" | "urgent";
-                    parentId?: string;
-                    hasParent?: "true" | "false";
-                    isParent?: "true" | "false";
-                    isDraft?: "true" | "false";
-                    includeSnoozed?: "true" | "false";
-                    assigneeId?: string;
-                    projectId?: string;
-                    cycleId?: string;
-                    labelId?: string;
-                    search?: string;
-                    identifier?: string;
-                    view?: string;
-                };
-                header?: never;
-                path: {
-                    organizationId: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Triage inbox: issues awaiting triage */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            issues: components["schemas"]["Issue"][];
-                            nextCursor?: string;
                         };
                     };
                 };

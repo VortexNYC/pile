@@ -277,6 +277,28 @@ const listIssuesRoute = createRoute({
   },
 });
 
+const listTriageIssuesRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/triage",
+  tags: ["issues"],
+  middleware: [rls("read")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Triage issues",
+      content: {
+        "application/json": {
+          schema: z.object({
+            issues: z.array(issueApiSchema),
+          }),
+        },
+      },
+    },
+  },
+});
+
 const issueAnalyticsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/issue-analytics",
@@ -597,6 +619,23 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
           })
         : undefined;
     return c.json({ issues, nextCursor });
+  });
+
+  app.openapi(listTriageIssuesRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const identity = c.get("workspaceIdentity");
+    const db = createD1(c.env.D1);
+    const stub = await getStub(c.env, organizationId);
+    const visibleTeamIds = await loadVisibleTeamIds(
+      db,
+      organizationId,
+      identity
+    );
+    const issues = await stub.listIssues({
+      status: "triage",
+      teamIds: visibleTeamIds,
+    });
+    return c.json({ issues });
   });
 
   app.openapi(issueAnalyticsRoute, async (c) => {

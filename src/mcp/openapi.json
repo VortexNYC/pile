@@ -947,154 +947,6 @@
         "summary": "Create issue"
       }
     },
-    "/workspaces/{organizationId}/issue-analytics": {
-      "get": {
-        "tags": [
-          "issues"
-        ],
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "name": "organizationId",
-            "in": "path"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "enum": [
-                "status",
-                "priority",
-                "assigneeId",
-                "teamId",
-                "projectId",
-                "cycleId"
-              ],
-              "default": "status"
-            },
-            "required": false,
-            "name": "groupBy",
-            "in": "query"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Issue counts and estimate totals grouped by a field",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "groups": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "group": {
-                            "type": "string",
-                            "nullable": true
-                          },
-                          "count": {
-                            "type": "number"
-                          },
-                          "estimateTotal": {
-                            "type": "number"
-                          }
-                        },
-                        "required": [
-                          "group",
-                          "count",
-                          "estimateTotal"
-                        ]
-                      }
-                    }
-                  },
-                  "required": [
-                    "groups"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "summary": "List issue analytics"
-      }
-    },
-    "/workspaces/{organizationId}/issue-analytics/burndown": {
-      "get": {
-        "tags": [
-          "issues"
-        ],
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "name": "organizationId",
-            "in": "path"
-          },
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "name": "cycleId",
-            "in": "query"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Daily scope/remaining burndown series for a cycle",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "total": {
-                      "type": "number"
-                    },
-                    "totalEstimate": {
-                      "type": "number"
-                    },
-                    "series": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "date": {
-                            "type": "string"
-                          },
-                          "scope": {
-                            "type": "number"
-                          },
-                          "remaining": {
-                            "type": "number"
-                          }
-                        },
-                        "required": [
-                          "date",
-                          "scope",
-                          "remaining"
-                        ]
-                      }
-                    }
-                  },
-                  "required": [
-                    "total",
-                    "totalEstimate",
-                    "series"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "summary": "List issue analytic burndown"
-      }
-    },
     "/workspaces/{organizationId}/triage": {
       "get": {
         "tags": [
@@ -1306,6 +1158,154 @@
           }
         },
         "summary": "List triage"
+      }
+    },
+    "/workspaces/{organizationId}/issue-analytics": {
+      "get": {
+        "tags": [
+          "issues"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "status",
+                "priority",
+                "assigneeId",
+                "teamId",
+                "projectId",
+                "cycleId"
+              ],
+              "default": "status"
+            },
+            "required": false,
+            "name": "groupBy",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Issue counts and estimate totals grouped by a field",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "groups": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "group": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "count": {
+                            "type": "number"
+                          },
+                          "estimateTotal": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "group",
+                          "count",
+                          "estimateTotal"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "groups"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List issue analytics"
+      }
+    },
+    "/workspaces/{organizationId}/issue-analytics/burndown": {
+      "get": {
+        "tags": [
+          "issues"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "cycleId",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Daily scope/remaining burndown series for a cycle",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "total": {
+                      "type": "number"
+                    },
+                    "totalEstimate": {
+                      "type": "number"
+                    },
+                    "series": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "date": {
+                            "type": "string"
+                          },
+                          "scope": {
+                            "type": "number"
+                          },
+                          "remaining": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "date",
+                          "scope",
+                          "remaining"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "total",
+                    "totalEstimate",
+                    "series"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List issue analytic burndown"
       }
     },
     "/workspaces/{organizationId}/issues/{id}": {

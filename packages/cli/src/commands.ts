@@ -284,40 +284,6 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
-  "issue analytics list": {
-    method: "GET",
-    path: "/workspaces/{organizationId}/issue-analytics",
-    params: [
-      {
-        name: "organizationId",
-        flag: "workspace",
-      },
-    ],
-    query: [
-      {
-        name: "groupBy",
-        flag: "group-by",
-      },
-    ],
-    body: [],
-  },
-  "issue analytics burndown list": {
-    method: "GET",
-    path: "/workspaces/{organizationId}/issue-analytics/burndown",
-    params: [
-      {
-        name: "organizationId",
-        flag: "workspace",
-      },
-    ],
-    query: [
-      {
-        name: "cycleId",
-        flag: "cycle",
-      },
-    ],
-    body: [],
-  },
   "triage list": {
     method: "GET",
     path: "/workspaces/{organizationId}/triage",
@@ -395,6 +361,40 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "view",
         flag: "view",
+      },
+    ],
+    body: [],
+  },
+  "issue analytics list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/issue-analytics",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "groupBy",
+        flag: "group-by",
+      },
+    ],
+    body: [],
+  },
+  "issue analytics burndown list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/issue-analytics/burndown",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "cycleId",
+        flag: "cycle",
       },
     ],
     body: [],
