@@ -6896,7 +6896,44 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Get customer tier */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Tier */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            name: string;
+                            color: string | null;
+                            position: number;
+                            createdAt: string;
+                        };
+                    };
+                };
+                /** @description Tier not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         put?: never;
         post?: never;
         /** Delete customer tier */
@@ -6930,7 +6967,52 @@ export interface paths {
         };
         options?: never;
         head?: never;
-        patch?: never;
+        /** Update customer tier */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        name?: string;
+                        color?: string;
+                        position?: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Tier updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            name: string;
+                            color: string | null;
+                            position: number;
+                            createdAt: string;
+                        };
+                    };
+                };
+                /** @description Tier not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         trace?: never;
     };
     "/workspaces/{organizationId}/customer-statuses": {
@@ -7024,7 +7106,44 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Get customer statuse */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Status */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            name: string;
+                            color: string | null;
+                            position: number;
+                            createdAt: string;
+                        };
+                    };
+                };
+                /** @description Status not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         put?: never;
         post?: never;
         /** Delete customer statuse */
@@ -7058,7 +7177,52 @@ export interface paths {
         };
         options?: never;
         head?: never;
-        patch?: never;
+        /** Update customer statuse */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        name?: string;
+                        color?: string;
+                        position?: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Status updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            name: string;
+                            color: string | null;
+                            position: number;
+                            createdAt: string;
+                        };
+                    };
+                };
+                /** @description Status not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         trace?: never;
     };
     "/workspaces/{organizationId}/customer-needs": {
@@ -7162,7 +7326,46 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Get customer need */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Need */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            customerId: string;
+                            issueId: string | null;
+                            projectId: string | null;
+                            priority: string | null;
+                            note: string | null;
+                            createdAt: string;
+                        };
+                    };
+                };
+                /** @description Need not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         put?: never;
         post?: never;
         /** Delete customer need */
@@ -7196,7 +7399,56 @@ export interface paths {
         };
         options?: never;
         head?: never;
-        patch?: never;
+        /** Update customer need */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        customerId?: string;
+                        issueId?: string;
+                        projectId?: string;
+                        priority?: string;
+                        note?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Need updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            customerId: string;
+                            issueId: string | null;
+                            projectId: string | null;
+                            priority: string | null;
+                            note: string | null;
+                            createdAt: string;
+                        };
+                    };
+                };
+                /** @description Need not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         trace?: never;
     };
     "/workspaces/{organizationId}/releases": {

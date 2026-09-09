@@ -3195,6 +3195,51 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "customer tiers get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/customer-tiers/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "customer tiers update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/customer-tiers/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "color",
+        flag: "color",
+      },
+      {
+        name: "position",
+        flag: "position",
+      },
+    ],
+  },
   "customer tiers delete": {
     method: "DELETE",
     path: "/workspaces/{organizationId}/customer-tiers/{id}",
@@ -3230,6 +3275,51 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "organizationId",
         flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "color",
+        flag: "color",
+      },
+      {
+        name: "position",
+        flag: "position",
+      },
+    ],
+  },
+  "customer statuses get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/customer-statuses/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "customer statuses update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/customer-statuses/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
       },
     ],
     query: [],
@@ -3296,6 +3386,59 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "organizationId",
         flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "customerId",
+        flag: "customer-id",
+      },
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+      {
+        name: "projectId",
+        flag: "project",
+      },
+      {
+        name: "priority",
+        flag: "priority",
+      },
+      {
+        name: "note",
+        flag: "note",
+      },
+    ],
+  },
+  "customer needs get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/customer-needs/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "customer needs update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/customer-needs/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
       },
     ],
     query: [],

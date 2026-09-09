@@ -1103,6 +1103,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdCustomerneedsId",
+    "description": "Get customer need (GET /workspaces/{organizationId}/customer-needs/{id})",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/customer-needs/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdCustomers",
     "description": "List customers (GET /workspaces/{organizationId}/customers)",
     "method": "GET",
@@ -1158,6 +1179,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdCustomerstatusesId",
+    "description": "Get customer statuse (GET /workspaces/{organizationId}/customer-statuses/{id})",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/customer-statuses/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdCustomertiers",
     "description": "List customer tiers (GET /workspaces/{organizationId}/customer-tiers)",
     "method": "GET",
@@ -1170,6 +1212,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdCustomertiersId",
+    "description": "Get customer tier (GET /workspaces/{organizationId}/customer-tiers/{id})",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/customer-tiers/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
         "organizationId"
       ]
     }
@@ -3024,6 +3087,48 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "patchWorkspacesOrganizationIdCustomerneedsId",
+    "description": "Update customer need (PATCH /workspaces/{organizationId}/customer-needs/{id})",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/customer-needs/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "customerId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "issueId": {
+              "type": "string"
+            },
+            "projectId": {
+              "type": "string"
+            },
+            "priority": {
+              "type": "string"
+            },
+            "note": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "patchWorkspacesOrganizationIdCustomersId",
     "description": "Update customer (PATCH /workspaces/{organizationId}/customers/{id})",
     "method": "PATCH",
@@ -3061,6 +3166,78 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "ownerId": {
               "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "patchWorkspacesOrganizationIdCustomerstatusesId",
+    "description": "Update customer statuse (PATCH /workspaces/{organizationId}/customer-statuses/{id})",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/customer-statuses/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "color": {
+              "type": "string"
+            },
+            "position": {
+              "type": "number"
+            }
+          }
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "patchWorkspacesOrganizationIdCustomertiersId",
+    "description": "Update customer tier (PATCH /workspaces/{organizationId}/customer-tiers/{id})",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/customer-tiers/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "color": {
+              "type": "string"
+            },
+            "position": {
+              "type": "number"
             }
           }
         }

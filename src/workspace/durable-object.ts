@@ -1325,6 +1325,17 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.listCustomerTiers(this.db, this.organizationId);
   }
 
+  getCustomerTier(id: string) {
+    return data.getCustomerTier(this.db, this.organizationId, id);
+  }
+
+  updateCustomerTier(
+    id: string,
+    input: { name?: string; color?: string | null; position?: number }
+  ) {
+    return data.updateCustomerTier(this.db, this.organizationId, id, input);
+  }
+
   deleteCustomerTier(id: string) {
     return data.deleteCustomerTier(this.db, this.organizationId, id);
   }
@@ -1339,6 +1350,17 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   listCustomerStatuses() {
     return data.listCustomerStatuses(this.db, this.organizationId);
+  }
+
+  getCustomerStatus(id: string) {
+    return data.getCustomerStatus(this.db, this.organizationId, id);
+  }
+
+  updateCustomerStatus(
+    id: string,
+    input: { name?: string; color?: string | null; position?: number }
+  ) {
+    return data.updateCustomerStatus(this.db, this.organizationId, id, input);
   }
 
   deleteCustomerStatus(id: string) {
@@ -1359,6 +1381,25 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     args: { customerId?: string; issueId?: string; projectId?: string } = {}
   ) {
     return data.listCustomerNeeds(this.db, this.organizationId, args);
+  }
+
+  getCustomerNeed(id: string) {
+    return data.getCustomerNeed(this.db, this.organizationId, id);
+  }
+
+  updateCustomerNeed(
+    id: string,
+    input: data.CustomerNeedUpdateInput,
+    actorId?: string
+  ) {
+    const need = data.updateCustomerNeed(
+      this.db,
+      this.organizationId,
+      id,
+      input
+    );
+    if (need) this.audit("customer_need.updated", "customer", need.customerId, actorId);
+    return need;
   }
 
   deleteCustomerNeed(id: string) {

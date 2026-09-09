@@ -197,6 +197,41 @@ const createTierRoute = createRoute({
   },
 });
 
+const getTierRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/customer-tiers/{id}",
+  tags: ["customers"],
+  middleware: [rls("read")],
+  request: { params: orgIdParam },
+  responses: {
+    200: {
+      description: "Tier",
+      content: { "application/json": { schema: tierSchema } },
+    },
+    404: { description: "Tier not found" },
+  },
+});
+
+const updateTierRoute = createRoute({
+  method: "patch",
+  path: "/workspaces/{organizationId}/customer-tiers/{id}",
+  tags: ["customers"],
+  middleware: [rls("write")],
+  request: {
+    params: orgIdParam,
+    body: {
+      content: { "application/json": { schema: tierBodySchema.partial() } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Tier updated",
+      content: { "application/json": { schema: tierSchema } },
+    },
+    404: { description: "Tier not found" },
+  },
+});
+
 const deleteTierRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/customer-tiers/{id}",
@@ -243,6 +278,41 @@ const createStatusRoute = createRoute({
       description: "Status created",
       content: { "application/json": { schema: tierSchema } },
     },
+  },
+});
+
+const getStatusRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/customer-statuses/{id}",
+  tags: ["customers"],
+  middleware: [rls("read")],
+  request: { params: orgIdParam },
+  responses: {
+    200: {
+      description: "Status",
+      content: { "application/json": { schema: tierSchema } },
+    },
+    404: { description: "Status not found" },
+  },
+});
+
+const updateStatusRoute = createRoute({
+  method: "patch",
+  path: "/workspaces/{organizationId}/customer-statuses/{id}",
+  tags: ["customers"],
+  middleware: [rls("write")],
+  request: {
+    params: orgIdParam,
+    body: {
+      content: { "application/json": { schema: tierBodySchema.partial() } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Status updated",
+      content: { "application/json": { schema: tierSchema } },
+    },
+    404: { description: "Status not found" },
   },
 });
 
@@ -299,6 +369,41 @@ const createNeedRoute = createRoute({
       description: "Need created",
       content: { "application/json": { schema: needSchema } },
     },
+  },
+});
+
+const getNeedRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/customer-needs/{id}",
+  tags: ["customers"],
+  middleware: [rls("read")],
+  request: { params: orgIdParam },
+  responses: {
+    200: {
+      description: "Need",
+      content: { "application/json": { schema: needSchema } },
+    },
+    404: { description: "Need not found" },
+  },
+});
+
+const updateNeedRoute = createRoute({
+  method: "patch",
+  path: "/workspaces/{organizationId}/customer-needs/{id}",
+  tags: ["customers"],
+  middleware: [rls("write")],
+  request: {
+    params: orgIdParam,
+    body: {
+      content: { "application/json": { schema: needBodySchema.partial() } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Need updated",
+      content: { "application/json": { schema: needSchema } },
+    },
+    404: { description: "Need not found" },
   },
 });
 
@@ -369,6 +474,23 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     return c.json(await stub.createCustomerTier(input), 201);
   });
 
+  app.openapi(getTierRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const tier = await stub.getCustomerTier(id);
+    if (!tier) return notFound("Tier not found");
+    return c.json(tier);
+  });
+
+  app.openapi(updateTierRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const tier = await stub.updateCustomerTier(id, input);
+    if (!tier) return notFound("Tier not found");
+    return c.json(tier);
+  });
+
   app.openapi(deleteTierRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
@@ -388,6 +510,23 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     const input = c.req.valid("json");
     const stub = getWorkspaceStub(c.env, organizationId);
     return c.json(await stub.createCustomerStatus(input), 201);
+  });
+
+  app.openapi(getStatusRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const status = await stub.getCustomerStatus(id);
+    if (!status) return notFound("Status not found");
+    return c.json(status);
+  });
+
+  app.openapi(updateStatusRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const status = await stub.updateCustomerStatus(id, input);
+    if (!status) return notFound("Status not found");
+    return c.json(status);
   });
 
   app.openapi(deleteStatusRoute, async (c) => {
@@ -411,6 +550,24 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     const identity = c.var.workspaceIdentity;
     const stub = getWorkspaceStub(c.env, organizationId);
     return c.json(await stub.createCustomerNeed(input, identity.id), 201);
+  });
+
+  app.openapi(getNeedRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const need = await stub.getCustomerNeed(id);
+    if (!need) return notFound("Need not found");
+    return c.json(need);
+  });
+
+  app.openapi(updateNeedRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const identity = c.var.workspaceIdentity;
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const need = await stub.updateCustomerNeed(id, input, identity.id);
+    if (!need) return notFound("Need not found");
+    return c.json(need);
   });
 
   app.openapi(deleteNeedRoute, async (c) => {

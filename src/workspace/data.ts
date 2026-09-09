@@ -1995,6 +1995,46 @@ export function listCustomerTiers(db: WorkspaceDb, organizationId: string) {
     .all();
 }
 
+export function getCustomerTier(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  return db
+    .select()
+    .from(workspaceCustomerTiers)
+    .where(
+      and(
+        eq(workspaceCustomerTiers.id, id),
+        eq(workspaceCustomerTiers.organizationId, organizationId)
+      )
+    )
+    .get();
+}
+
+export function updateCustomerTier(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string,
+  input: { name?: string; color?: string | null; position?: number }
+) {
+  return db
+    .update(workspaceCustomerTiers)
+    .set({
+      name: input.name,
+      color: input.color,
+      position: input.position,
+    })
+    .where(
+      and(
+        eq(workspaceCustomerTiers.id, id),
+        eq(workspaceCustomerTiers.organizationId, organizationId)
+      )
+    )
+    .returning()
+    .get();
+}
+
 export function deleteCustomerTier(
   db: WorkspaceDb,
   organizationId: string,
@@ -2041,6 +2081,46 @@ export function listCustomerStatuses(db: WorkspaceDb, organizationId: string) {
     .all();
 }
 
+export function getCustomerStatus(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  return db
+    .select()
+    .from(workspaceCustomerStatuses)
+    .where(
+      and(
+        eq(workspaceCustomerStatuses.id, id),
+        eq(workspaceCustomerStatuses.organizationId, organizationId)
+      )
+    )
+    .get();
+}
+
+export function updateCustomerStatus(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string,
+  input: { name?: string; color?: string | null; position?: number }
+) {
+  return db
+    .update(workspaceCustomerStatuses)
+    .set({
+      name: input.name,
+      color: input.color,
+      position: input.position,
+    })
+    .where(
+      and(
+        eq(workspaceCustomerStatuses.id, id),
+        eq(workspaceCustomerStatuses.organizationId, organizationId)
+      )
+    )
+    .returning()
+    .get();
+}
+
 export function deleteCustomerStatus(
   db: WorkspaceDb,
   organizationId: string,
@@ -2064,6 +2144,14 @@ export function deleteCustomerStatus(
 
 export interface CustomerNeedInput {
   customerId: string;
+  issueId?: string | null;
+  projectId?: string | null;
+  priority?: string | null;
+  note?: string | null;
+}
+
+export interface CustomerNeedUpdateInput {
+  customerId?: string;
   issueId?: string | null;
   projectId?: string | null;
   priority?: string | null;
@@ -2108,6 +2196,48 @@ export function listCustomerNeeds(
     .from(workspaceCustomerNeeds)
     .where(and(...conditions))
     .all();
+}
+
+export function getCustomerNeed(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  return db
+    .select()
+    .from(workspaceCustomerNeeds)
+    .where(
+      and(
+        eq(workspaceCustomerNeeds.id, id),
+        eq(workspaceCustomerNeeds.organizationId, organizationId)
+      )
+    )
+    .get();
+}
+
+export function updateCustomerNeed(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string,
+  input: CustomerNeedUpdateInput
+) {
+  return db
+    .update(workspaceCustomerNeeds)
+    .set({
+      customerId: input.customerId,
+      issueId: input.issueId,
+      projectId: input.projectId,
+      priority: input.priority,
+      note: input.note,
+    })
+    .where(
+      and(
+        eq(workspaceCustomerNeeds.id, id),
+        eq(workspaceCustomerNeeds.organizationId, organizationId)
+      )
+    )
+    .returning()
+    .get();
 }
 
 export function deleteCustomerNeed(
