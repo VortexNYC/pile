@@ -1,11 +1,14 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
+import type { D1Client } from "../global/db.js";
 import { createD1 } from "../global/db.js";
 import { canAccessTeam } from "../global/teams.js";
 import { getProject } from "../global/workspace-entities.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
+import { canAccess } from "../platform/permissions.js";
+import { canAccessProject } from "../platform/rls.js";
 import { rls } from "../platform/rls.js";
 import { getWorkspaceStub } from "./stub.js";
 
@@ -27,6 +30,88 @@ const bodySchema = z.object({
   url: z.string().url(),
   label: z.string().optional(),
 });
+
+type WorkspaceIdentity = {
+  id: string;
+  type: "user" | "agent";
+  permissions: string[];
+};
+
+function notFound(message = "External link not found"): never {
+  throw new VortexError({ code: "NOT_FOUND", status: 404, message });
+}
+
+async function canAccessEntity(
+  env: AppContext["Bindings"],
+  db: D1Client,
+  organizationId: string,
+  entityType: string,
+  entityId: string,
+  identity: WorkspaceIdentity,
+  mode: "read" | "write"
+): Promise<boolean> {
+  const stub = getWorkspaceStub(env, organizationId);
+  switch (entityType) {
+    case "issue": {
+      const issue = await stub.getIssue(entityId);
+      if (!issue) return false;
+      return canAccessTeam(db, issue.teamId, identity);
+    }
+    case "project": {
+      const project = await getProject(db, organizationId, entityId);
+      if (!project) return false;
+      return canAccessProject(db, organizationId, project.id, identity, mode);
+    }
+    case "customer": {
+      const customer = await stub.getCustomer(entityId);
+      if (!customer) return false;
+      if (canAccess(identity.permissions, "admin")) return true;
+      if (mode === "read") return true;
+      return customer.ownerId === identity.id;
+    }
+    case "document": {
+      const doc = await stub.getDocument(entityId);
+      if (!doc) return false;
+      if (canAccess(identity.permissions, "admin")) return true;
+      if (doc.createdById === identity.id) return true;
+      const permissions = await stub.listDocumentPermissions(entityId);
+      if (permissions.length === 0) return true;
+      const requiredLevel = mode === "write" ? "edit" : "view";
+      return permissions.some(
+        (p) =>
+          p.actorId === identity.id &&
+          p.actorType === identity.type &&
+          (requiredLevel === "view" || p.level === "edit")
+      );
+    }
+    default:
+      return false;
+  }
+}
+
+async function assertEntityAccess(
+  env: AppContext["Bindings"],
+  db: D1Client,
+  organizationId: string,
+  entityType: string,
+  entityId: string,
+  identity: WorkspaceIdentity,
+  mode: "read" | "write",
+  message = "Entity not found"
+) {
+  const allowed = await canAccessEntity(
+    env,
+    db,
+    organizationId,
+    entityType,
+    entityId,
+    identity,
+    mode
+  );
+  if (!allowed) {
+    throw new VortexError({ code: "NOT_FOUND", status: 404, message });
+  }
+}
 
 const listRoute = createRoute({
   method: "get",
@@ -115,82 +200,53 @@ const deleteRoute = createRoute({
   },
 });
 
-async function checkEntityAccess(
-  env: AppContext["Bindings"],
-  db: ReturnType<typeof createD1>,
-  organizationId: string,
-  entityType: string,
-  entityId: string,
-  identity: { id: string; permissions: string[] }
-) {
-  const stub = getWorkspaceStub(env, organizationId);
-  switch (entityType) {
-    case "issue": {
-      const issue = await stub.getIssue(entityId);
-      if (!issue)
-        throw new VortexError({
-          code: "NOT_FOUND",
-          status: 404,
-          message: "Issue not found",
-        });
-      const allowed = await canAccessTeam(db, issue.teamId, identity);
-      if (!allowed)
-        throw new VortexError({
-          code: "NOT_FOUND",
-          status: 404,
-          message: "Entity not found",
-        });
-      return;
-    }
-    case "project": {
-      const project = await getProject(db, organizationId, entityId);
-      if (!project)
-        throw new VortexError({
-          code: "NOT_FOUND",
-          status: 404,
-          message: "Project not found",
-        });
-      return;
-    }
-    case "customer": {
-      const customer = await stub.getCustomer(entityId);
-      if (!customer)
-        throw new VortexError({
-          code: "NOT_FOUND",
-          status: 404,
-          message: "Customer not found",
-        });
-      return;
-    }
-    case "document": {
-      const doc = await stub.getDocument(entityId);
-      if (!doc)
-        throw new VortexError({
-          code: "NOT_FOUND",
-          status: 404,
-          message: "Document not found",
-        });
-      return;
-    }
-    default:
-      throw new VortexError({
-        code: "BAD_REQUEST",
-        status: 400,
-        message: "Unsupported entity type",
-      });
-  }
-}
-
 export function registerExternalLinkRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
     const { entityType, entityId } = c.req.valid("query");
+    const identity = c.var.workspaceIdentity;
     const stub = getWorkspaceStub(c.env, organizationId);
+
+    if (entityType && entityId) {
+      const db = createD1(c.env.D1);
+      await assertEntityAccess(
+        c.env,
+        db,
+        organizationId,
+        entityType,
+        entityId,
+        identity,
+        "read"
+      );
+      const links = await stub.listExternalLinks({ entityType, entityId });
+      return c.json({ links });
+    }
+
     const links = await stub.listExternalLinks({
       entityType: entityType ?? undefined,
       entityId: entityId ?? undefined,
     });
-    return c.json({ links });
+
+    if (links.length === 0) {
+      return c.json({ links });
+    }
+
+    const db = createD1(c.env.D1);
+    const access = await Promise.all(
+      links.map(async (link) => ({
+        link,
+        ok: await canAccessEntity(
+          c.env,
+          db,
+          organizationId,
+          link.entityType,
+          link.entityId,
+          identity,
+          "read"
+        ),
+      }))
+    );
+    return c.json({ links: access.filter((a) => a.ok).map((a) => a.link) });
   });
 
   app.openapi(createRouteDef, async (c) => {
@@ -198,13 +254,14 @@ export function registerExternalLinkRoutes(app: OpenAPIHono<AppContext>) {
     const input = c.req.valid("json");
     const identity = c.var.workspaceIdentity;
     const db = createD1(c.env.D1);
-    await checkEntityAccess(
+    await assertEntityAccess(
       c.env,
       db,
       organizationId,
       input.entityType,
       input.entityId,
-      identity
+      identity,
+      "write"
     );
     const stub = getWorkspaceStub(c.env, organizationId);
     const link = await stub.createExternalLink(
@@ -221,14 +278,21 @@ export function registerExternalLinkRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(getRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
+    const identity = c.var.workspaceIdentity;
     const stub = getWorkspaceStub(c.env, organizationId);
     const link = await stub.getExternalLink(id);
-    if (!link)
-      throw new VortexError({
-        code: "NOT_FOUND",
-        status: 404,
-        message: "External link not found",
-      });
+    if (!link) notFound();
+    const db = createD1(c.env.D1);
+    await assertEntityAccess(
+      c.env,
+      db,
+      organizationId,
+      link.entityType,
+      link.entityId,
+      identity,
+      "read",
+      "External link not found"
+    );
     return c.json(link);
   });
 
@@ -238,21 +302,29 @@ export function registerExternalLinkRoutes(app: OpenAPIHono<AppContext>) {
     const identity = c.var.workspaceIdentity;
     const stub = getWorkspaceStub(c.env, organizationId);
     const existing = await stub.getExternalLink(id);
-    if (!existing)
-      throw new VortexError({
-        code: "NOT_FOUND",
-        status: 404,
-        message: "External link not found",
-      });
-    if (input.entityType || input.entityId) {
-      const db = createD1(c.env.D1);
-      await checkEntityAccess(
+    if (!existing) notFound();
+    const db = createD1(c.env.D1);
+    await assertEntityAccess(
+      c.env,
+      db,
+      organizationId,
+      existing.entityType,
+      existing.entityId,
+      identity,
+      "write",
+      "External link not found"
+    );
+    const nextType = input.entityType ?? existing.entityType;
+    const nextId = input.entityId ?? existing.entityId;
+    if (nextType !== existing.entityType || nextId !== existing.entityId) {
+      await assertEntityAccess(
         c.env,
         db,
         organizationId,
-        input.entityType ?? existing.entityType,
-        input.entityId ?? existing.entityId,
-        identity
+        nextType,
+        nextId,
+        identity,
+        "write"
       );
     }
     const link = await stub.updateExternalLink(
@@ -271,12 +343,18 @@ export function registerExternalLinkRoutes(app: OpenAPIHono<AppContext>) {
     const identity = c.var.workspaceIdentity;
     const stub = getWorkspaceStub(c.env, organizationId);
     const existing = await stub.getExternalLink(id);
-    if (!existing)
-      throw new VortexError({
-        code: "NOT_FOUND",
-        status: 404,
-        message: "External link not found",
-      });
+    if (!existing) notFound();
+    const db = createD1(c.env.D1);
+    await assertEntityAccess(
+      c.env,
+      db,
+      organizationId,
+      existing.entityType,
+      existing.entityId,
+      identity,
+      "write",
+      "External link not found"
+    );
     await stub.deleteExternalLink(id, identity.id);
     return c.body(null, 204);
   });

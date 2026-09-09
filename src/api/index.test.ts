@@ -1555,4 +1555,108 @@ describe("API integration", () => {
     );
     expect(badRes.status).toBe(401);
   });
+
+  it("enforces entity authorization on generic external links", async () => {
+    const organizationId = await seedWorkspace();
+    const admin = await adminToken(organizationId);
+
+    const projectRes = await app.fetch(
+      request(`/workspaces/${organizationId}/projects`, {
+        method: "POST",
+        token: admin,
+        body: JSON.stringify({ name: "Secret project" }),
+      }),
+      env
+    );
+    expect(projectRes.status).toBe(201);
+    const project = await projectRes.json<{ id: string }>();
+
+    const linkRes = await app.fetch(
+      request(`/workspaces/${organizationId}/external-links`, {
+        method: "POST",
+        token: admin,
+        body: JSON.stringify({
+          entityType: "project",
+          entityId: project.id,
+          url: "https://example.com",
+        }),
+      }),
+      env
+    );
+    expect(linkRes.status).toBe(201);
+    const link = await linkRes.json<{ id: string }>();
+
+    const memberToken = await (async () => {
+      const auth = createAuth(env);
+      const result = await auth.api.createApiKey({
+        body: {
+          userId: "user-1",
+          name: "test-member",
+          metadata: {
+            organizationId,
+            permissions: "read,write",
+          },
+        },
+      });
+      const parsed = z
+        .object({ id: z.string(), key: z.string() })
+        .parse(result);
+      const db = createD1(env.D1);
+      await db
+        .update(apikeyTable)
+        .set({ rateLimitEnabled: false })
+        .where(eq(apikeyTable.id, parsed.id));
+      return parsed.key;
+    })();
+
+    const createRes = await app.fetch(
+      request(`/workspaces/${organizationId}/external-links`, {
+        method: "POST",
+        token: memberToken,
+        body: JSON.stringify({
+          entityType: "project",
+          entityId: project.id,
+          url: "https://member.com",
+        }),
+      }),
+      env
+    );
+    expect(createRes.status).toBe(404);
+
+    const listRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/external-links?entityType=project&entityId=${project.id}`,
+        { token: memberToken }
+      ),
+      env
+    );
+    expect(listRes.status).toBe(404);
+
+    const getRes = await app.fetch(
+      request(`/workspaces/${organizationId}/external-links/${link.id}`, {
+        token: memberToken,
+      }),
+      env
+    );
+    expect(getRes.status).toBe(404);
+
+    const updateRes = await app.fetch(
+      request(`/workspaces/${organizationId}/external-links/${link.id}`, {
+        method: "PATCH",
+        token: memberToken,
+        body: JSON.stringify({ url: "https://hijacked.com" }),
+      }),
+      env
+    );
+    expect(updateRes.status).toBe(404);
+
+    const deleteRes = await app.fetch(
+      request(`/workspaces/${organizationId}/external-links/${link.id}`, {
+        method: "DELETE",
+        token: memberToken,
+      }),
+      env
+    );
+    expect(deleteRes.status).toBe(404);
+  });
 });

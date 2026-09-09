@@ -1,14 +1,14 @@
 import { and, eq } from "drizzle-orm";
 import { createMiddleware } from "hono/factory";
 
-import { createD1 } from "../global/db.js";
+import { createD1, type D1Client } from "../global/db.js";
 import { projectMembers, projects } from "../global/schema.js";
 import { VortexError } from "./errors.js";
 import type { AppContext } from "./middleware.js";
 import { canAccess } from "./permissions.js";
 
-async function getProjectRole(
-  db: ReturnType<typeof createD1>,
+export async function getProjectRole(
+  db: D1Client,
   organizationId: string,
   projectId: string,
   userId: string
@@ -41,6 +41,20 @@ async function getProjectRole(
     return "lead";
   }
   return null;
+}
+
+export async function canAccessProject(
+  db: D1Client,
+  organizationId: string,
+  projectId: string,
+  identity: { id: string; permissions: string[] },
+  mode: "read" | "write" = "read"
+): Promise<boolean> {
+  if (canAccess(identity.permissions, "admin")) return true;
+  const role = await getProjectRole(db, organizationId, projectId, identity.id);
+  if (role === "lead") return true;
+  if (mode === "read" && role === "member") return true;
+  return false;
 }
 
 function expandProjectRoles(allowed: string[]): Set<string> {

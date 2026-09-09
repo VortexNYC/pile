@@ -629,13 +629,48 @@ CREATE TABLE IF NOT EXISTS git_automation_target_branches (
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS git_automation_target_branches_organization_idx ON git_automation_target_branches (organization_id)`;
 
-const v24 = `ALTER TABLE issue_external_links RENAME TO external_links
+const v24 = `CREATE TABLE IF NOT EXISTS external_links_new (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  url TEXT NOT NULL,
+  label TEXT,
+  created_at TEXT NOT NULL
+)
 --> statement-breakpoint
-ALTER TABLE external_links ADD COLUMN entity_type TEXT
+INSERT OR IGNORE INTO external_links_new (id, organization_id, entity_type, entity_id, url, label, created_at)
+SELECT id, organization_id, 'issue', issue_id, url, label, created_at FROM issue_external_links
 --> statement-breakpoint
-ALTER TABLE external_links ADD COLUMN entity_id TEXT
+DROP TABLE IF EXISTS external_links
 --> statement-breakpoint
-UPDATE external_links SET entity_type = 'issue', entity_id = issue_id
+DROP TABLE IF EXISTS issue_external_links
+--> statement-breakpoint
+ALTER TABLE external_links_new RENAME TO external_links
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS external_links_organization_idx ON external_links (organization_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS external_links_entity_idx ON external_links (organization_id, entity_type, entity_id)`;
+
+// Recreate the external_links table if it still carries the legacy issue_id
+// NOT NULL column from older v24 migrations, copying any data that has already
+// been migrated to entity_type/entity_id.
+const v25 = `CREATE TABLE IF NOT EXISTS external_links_new (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  url TEXT NOT NULL,
+  label TEXT,
+  created_at TEXT NOT NULL
+)
+--> statement-breakpoint
+INSERT OR IGNORE INTO external_links_new (id, organization_id, entity_type, entity_id, url, label, created_at)
+SELECT id, organization_id, entity_type, entity_id, url, label, created_at FROM external_links
+--> statement-breakpoint
+DROP TABLE IF EXISTS external_links
+--> statement-breakpoint
+ALTER TABLE external_links_new RENAME TO external_links
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS external_links_organization_idx ON external_links (organization_id)
 --> statement-breakpoint
@@ -668,6 +703,7 @@ export const workspaceMigrations = {
       { idx: 21, when: 21, tag: "v22", breakpoints: true },
       { idx: 22, when: 22, tag: "v23", breakpoints: true },
       { idx: 23, when: 23, tag: "v24", breakpoints: true },
+      { idx: 24, when: 24, tag: "v25", breakpoints: true },
     ],
   },
   migrations: {
@@ -695,5 +731,6 @@ export const workspaceMigrations = {
     m0021: v22,
     m0022: v23,
     m0023: v24,
+    m0024: v25,
   },
 } satisfies Parameters<typeof migrate>[1];
