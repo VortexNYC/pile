@@ -290,98 +290,192 @@ export async function getTicketById(
     return null;
   }
 
-  const [customerRows, companies, identities, labelsList, assignees, events] =
-    await Promise.all([
-      db
-        .select({
-          id: supportCustomers.id,
-          email: supportCustomers.email,
-          fullName: supportCustomers.fullName,
-          phone: supportCustomers.phone,
-        })
-        .from(supportCustomers)
-        .where(eq(supportCustomers.id, ticket.customerId))
-        .limit(1),
-      db
-        .select({
-          id: supportCustomerCompanies.id,
-          name: supportCompanies.name,
-          isPrimary: supportCustomerCompanies.isPrimary,
-        })
-        .from(supportCustomerCompanies)
-        .innerJoin(
-          supportCompanies,
-          eq(supportCustomerCompanies.companyId, supportCompanies.id)
-        )
-        .where(eq(supportCustomerCompanies.customerId, ticket.customerId)),
-      db
-        .select()
-        .from(supportCustomerIdentities)
-        .where(eq(supportCustomerIdentities.customerId, ticket.customerId)),
-      db
-        .select({
-          id: supportTicketLabels.id,
-          labelId: supportTicketLabels.labelId,
-          name: labels.name,
-          color: labels.color,
-        })
-        .from(supportTicketLabels)
-        .innerJoin(labels, eq(supportTicketLabels.labelId, labels.id))
-        .where(eq(supportTicketLabels.ticketId, ticketId)),
-      db
-        .select({
-          id: supportTicketAssignments.id,
-          userId: supportTicketAssignments.userId,
-          teamId: supportTicketAssignments.teamId,
-          userName: user.name,
-          teamName: team.name,
-          isPrimary: supportTicketAssignments.isPrimary,
-        })
-        .from(supportTicketAssignments)
-        .leftJoin(user, eq(supportTicketAssignments.userId, user.id))
-        .leftJoin(team, eq(supportTicketAssignments.teamId, team.id))
-        .where(eq(supportTicketAssignments.ticketId, ticketId)),
-      listTicketEvents(db, organizationId, ticketId, { limit: 20 }),
-    ]);
+  const [hydrated] = await hydrateTicketRelations(db, organizationId, [ticket]);
+  return hydrated ?? null;
+}
 
-  const customer = customerRows[0];
-  if (!customer) {
-    throw new VortexError({
-      code: "INTERNAL_ERROR",
-      status: 500,
-      message: "Customer for ticket not found",
-    });
+function groupBy<T>(
+  items: readonly T[],
+  keyFn: (item: T) => string
+): Map<string, T[]> {
+  const map = new Map<string, T[]>();
+  for (const item of items) {
+    const key = keyFn(item);
+    const list = map.get(key) ?? [];
+    list.push(item);
+    map.set(key, list);
   }
+  return map;
+}
 
-  return {
-    ...ticket,
-    customer,
-    companies: companies.map((c) => ({
-      id: c.id,
-      name: c.name,
-      isPrimary: c.isPrimary,
-    })),
-    identities,
-    labels: labelsList,
-    assignees: assignees.map((a) => {
-      const assigneeId = a.userId ?? a.teamId;
-      if (!assigneeId) {
-        throw new VortexError({
-          code: "INTERNAL_ERROR",
-          status: 500,
-          message: "Invalid support ticket assignment",
-        });
-      }
-      return {
-        id: a.id,
-        type: a.userId ? "user" : "team",
-        assigneeId,
-        name: a.userName ?? a.teamName ?? null,
-        isPrimary: a.isPrimary,
-      };
-    }),
+async function loadTicketEventsForTickets(
+  db: D1Client,
+  ticketIds: string[],
+  limitPerTicket: number
+): Promise<Map<string, SupportTicketEventWithDetails[]>> {
+  if (ticketIds.length === 0) return new Map();
+
+  const events = await db
+    .select()
+    .from(supportTicketEvents)
+    .where(inArray(supportTicketEvents.ticketId, ticketIds))
+    .orderBy(asc(supportTicketEvents.createdAt));
+
+  if (events.length === 0) return new Map();
+
+  const eventIds = events.map((e) => e.id);
+  const [messages, notes] = await Promise.all([
+    db
+      .select()
+      .from(supportTicketMessages)
+      .where(inArray(supportTicketMessages.eventId, eventIds)),
+    db
+      .select()
+      .from(supportTicketNotes)
+      .where(inArray(supportTicketNotes.eventId, eventIds)),
+  ]);
+
+  const messageMap = new Map(messages.map((m) => [m.eventId, m]));
+  const noteMap = new Map(notes.map((n) => [n.eventId, n]));
+  const detailed: SupportTicketEventWithDetails[] = events.map((event) =>
+    Object.assign({}, event, {
+      message: messageMap.get(event.id),
+      note: noteMap.get(event.id),
+    })
+  );
+
+  const grouped = groupBy(detailed, (e) => e.ticketId);
+  const result = new Map<string, SupportTicketEventWithDetails[]>();
+  for (const [ticketId, list] of grouped) {
+    result.set(ticketId, list.slice(-limitPerTicket));
+  }
+  return result;
+}
+
+export async function hydrateTicketRelations(
+  db: D1Client,
+  organizationId: string,
+  tickets: SupportTicket[],
+  options?: { eventsLimit?: number }
+): Promise<SupportTicketWithRelations[]> {
+  if (tickets.length === 0) return [];
+
+  const customerIds = [...new Set(tickets.map((t) => t.customerId))];
+  const ticketIds = tickets.map((t) => t.id);
+
+  const [
+    customerRows,
+    companyRows,
+    identityRows,
+    labelRows,
+    assigneeRows,
     events,
-  };
+  ] = await Promise.all([
+    db
+      .select({
+        id: supportCustomers.id,
+        email: supportCustomers.email,
+        fullName: supportCustomers.fullName,
+        phone: supportCustomers.phone,
+      })
+      .from(supportCustomers)
+      .where(inArray(supportCustomers.id, customerIds)),
+    db
+      .select({
+        id: supportCustomerCompanies.id,
+        name: supportCompanies.name,
+        isPrimary: supportCustomerCompanies.isPrimary,
+        customerId: supportCustomerCompanies.customerId,
+      })
+      .from(supportCustomerCompanies)
+      .innerJoin(
+        supportCompanies,
+        eq(supportCustomerCompanies.companyId, supportCompanies.id)
+      )
+      .where(inArray(supportCustomerCompanies.customerId, customerIds)),
+    db
+      .select()
+      .from(supportCustomerIdentities)
+      .where(inArray(supportCustomerIdentities.customerId, customerIds)),
+    db
+      .select({
+        id: supportTicketLabels.id,
+        labelId: supportTicketLabels.labelId,
+        name: labels.name,
+        color: labels.color,
+        ticketId: supportTicketLabels.ticketId,
+      })
+      .from(supportTicketLabels)
+      .innerJoin(labels, eq(supportTicketLabels.labelId, labels.id))
+      .where(inArray(supportTicketLabels.ticketId, ticketIds)),
+    db
+      .select({
+        id: supportTicketAssignments.id,
+        userId: supportTicketAssignments.userId,
+        teamId: supportTicketAssignments.teamId,
+        userName: user.name,
+        teamName: team.name,
+        isPrimary: supportTicketAssignments.isPrimary,
+        ticketId: supportTicketAssignments.ticketId,
+      })
+      .from(supportTicketAssignments)
+      .leftJoin(user, eq(supportTicketAssignments.userId, user.id))
+      .leftJoin(team, eq(supportTicketAssignments.teamId, team.id))
+      .where(inArray(supportTicketAssignments.ticketId, ticketIds)),
+    loadTicketEventsForTickets(db, ticketIds, options?.eventsLimit ?? 20),
+  ]);
+
+  const customerMap = new Map(customerRows.map((c) => [c.id, c]));
+  const companyMap = groupBy(companyRows, (c) => c.customerId);
+  const identityMap = groupBy(identityRows, (i) => i.customerId);
+  const labelMap = groupBy(labelRows, (l) => l.ticketId);
+  const assigneeMap = groupBy(assigneeRows, (a) => a.ticketId);
+
+  return tickets.map((ticket) => {
+    const customer = customerMap.get(ticket.customerId);
+    if (!customer) {
+      throw new VortexError({
+        code: "INTERNAL_ERROR",
+        status: 500,
+        message: "Customer for ticket not found",
+      });
+    }
+
+    return {
+      ...ticket,
+      customer,
+      companies: (companyMap.get(ticket.customerId) ?? []).map((c) => ({
+        id: c.id,
+        name: c.name,
+        isPrimary: c.isPrimary,
+      })),
+      identities: identityMap.get(ticket.customerId) ?? [],
+      labels: (labelMap.get(ticket.id) ?? []).map((l) => ({
+        id: l.id,
+        labelId: l.labelId,
+        name: l.name,
+        color: l.color,
+      })),
+      assignees: (assigneeMap.get(ticket.id) ?? []).map((a) => {
+        const assigneeId = a.userId ?? a.teamId;
+        if (!assigneeId) {
+          throw new VortexError({
+            code: "INTERNAL_ERROR",
+            status: 500,
+            message: "Invalid support ticket assignment",
+          });
+        }
+        return {
+          id: a.id,
+          type: a.userId ? "user" : "team",
+          assigneeId,
+          name: a.userName ?? a.teamName ?? null,
+          isPrimary: a.isPrimary,
+        };
+      }),
+      events: events.get(ticket.id) ?? [],
+    };
+  });
 }
 
 export type ListTicketsOptions = {

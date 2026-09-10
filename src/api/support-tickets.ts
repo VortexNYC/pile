@@ -9,6 +9,7 @@ import {
   addTicketNote,
   createTicket,
   getTicketById,
+  hydrateTicketRelations,
   listTicketEvents,
   listTickets,
   setTicketAssignees,
@@ -634,16 +635,13 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
       q: query.q,
     });
 
-    const withRelations = await Promise.all(
-      tickets.map((ticket) => getTicketById(db, organizationId, ticket.id))
+    const withRelations = await hydrateTicketRelations(
+      db,
+      organizationId,
+      tickets
     );
 
-    return c.json({
-      tickets: withRelations.filter(
-        (t): t is NonNullable<typeof t> => t !== null
-      ),
-      nextCursor,
-    });
+    return c.json({ tickets: withRelations, nextCursor });
   });
 
   app.openapi(getTicketRoute, async (c) => {
