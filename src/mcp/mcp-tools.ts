@@ -8559,6 +8559,266 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdSupportTicketsImportIntercom",
+    "description": "Create support ticket import intercom (POST /workspaces/{organizationId}/support/tickets/import/intercom)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/tickets/import/intercom",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "customerId": {
+              "type": "string"
+            },
+            "conversation": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "state": {
+                  "type": "string",
+                  "enum": [
+                    "open",
+                    "closed",
+                    "snoozed"
+                  ]
+                },
+                "priority": {
+                  "type": "string",
+                  "enum": [
+                    "none",
+                    "low",
+                    "medium",
+                    "high",
+                    "urgent"
+                  ],
+                  "default": "none"
+                },
+                "source": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "subject": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "body": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "default": {}
+                },
+                "created_at": {
+                  "type": "integer"
+                },
+                "updated_at": {
+                  "type": "integer"
+                },
+                "replies": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "body": {
+                        "type": "string"
+                      },
+                      "direction": {
+                        "type": "string",
+                        "enum": [
+                          "inbound",
+                          "outbound"
+                        ]
+                      },
+                      "channel": {
+                        "type": "string",
+                        "enum": [
+                          "email",
+                          "slack",
+                          "msteams",
+                          "discord",
+                          "chat",
+                          "api"
+                        ]
+                      },
+                      "customerId": {
+                        "type": "string"
+                      },
+                      "userId": {
+                        "type": "string"
+                      },
+                      "createdAt": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "body",
+                      "direction"
+                    ]
+                  },
+                  "default": []
+                }
+              },
+              "required": [
+                "id",
+                "state"
+              ]
+            }
+          },
+          "required": [
+            "customerId",
+            "conversation"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSupportTicketsImportPlain",
+    "description": "Create support ticket import plain (POST /workspaces/{organizationId}/support/tickets/import/plain)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/tickets/import/plain",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "customerId": {
+              "type": "string"
+            },
+            "thread": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "todo",
+                    "done",
+                    "snoozed"
+                  ]
+                },
+                "priority": {
+                  "type": "string",
+                  "enum": [
+                    "none",
+                    "low",
+                    "medium",
+                    "high",
+                    "urgent"
+                  ],
+                  "default": "none"
+                },
+                "source": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "subject": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "body": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "default": {}
+                },
+                "createdAt": {
+                  "type": "string"
+                },
+                "updatedAt": {
+                  "type": "string"
+                },
+                "replies": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "body": {
+                        "type": "string"
+                      },
+                      "direction": {
+                        "type": "string",
+                        "enum": [
+                          "inbound",
+                          "outbound"
+                        ]
+                      },
+                      "channel": {
+                        "type": "string",
+                        "enum": [
+                          "email",
+                          "slack",
+                          "msteams",
+                          "discord",
+                          "chat",
+                          "api"
+                        ]
+                      },
+                      "customerId": {
+                        "type": "string"
+                      },
+                      "userId": {
+                        "type": "string"
+                      },
+                      "createdAt": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "body",
+                      "direction"
+                    ]
+                  },
+                  "default": []
+                }
+              },
+              "required": [
+                "id",
+                "status"
+              ]
+            }
+          },
+          "required": [
+            "customerId",
+            "thread"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdSupportTicketsTicketIdDone",
     "description": "Create support ticket done (POST /workspaces/{organizationId}/support/tickets/{ticketId}/done)",
     "method": "POST",

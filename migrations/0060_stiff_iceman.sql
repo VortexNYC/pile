@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `support_tickets_org_external_idx` ON `support_tickets` (`organization_id`,`external_id`,`external_source`);

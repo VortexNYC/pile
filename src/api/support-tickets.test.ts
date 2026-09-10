@@ -280,4 +280,88 @@ describe("support-tickets API", () => {
     });
     expect(res.status).toBe(400);
   });
+
+  it("imports an Intercom conversation as a support ticket", async () => {
+    const customerId = await createCustomer({
+      email: "intercom@example.com",
+      fullName: "Intercom Customer",
+    });
+
+    const res = await fetch(
+      `/workspaces/${organizationId}/support/tickets/import/intercom`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          customerId,
+          conversation: {
+            id: "conv-123",
+            state: "open",
+            priority: "high",
+            source: {
+              type: "email",
+              subject: "Cannot log in",
+              body: "<p>I forgot my password</p>",
+            },
+            created_at: 1700000000,
+            updated_at: 1700000100,
+            replies: [
+              {
+                body: "We can reset it for you",
+                direction: "outbound",
+                createdAt: "2023-11-14T11:15:00.000Z",
+              },
+              {
+                body: "That worked, thanks",
+                direction: "inbound",
+                createdAt: "2023-11-14T11:20:00.000Z",
+              },
+            ],
+          },
+        }),
+      }
+    );
+    expect(res.status).toBe(201);
+    const imported = (await res.json()) as {
+      ticket: { status: string; priority: string; events: unknown[] };
+    };
+    expect(imported.ticket.status).toBe("todo");
+    expect(imported.ticket.priority).toBe("high");
+    expect(imported.ticket.events.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("imports a Plain thread as a support ticket", async () => {
+    const customerId = await createCustomer({
+      email: "plain@example.com",
+      fullName: "Plain Customer",
+    });
+
+    const res = await fetch(
+      `/workspaces/${organizationId}/support/tickets/import/plain`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          customerId,
+          thread: {
+            id: "thread-456",
+            status: "done",
+            priority: "low",
+            source: {
+              type: "chat",
+              body: "Feature request: dark mode",
+            },
+            createdAt: "2023-11-14T12:00:00.000Z",
+            updatedAt: "2023-11-14T12:05:00.000Z",
+            replies: [],
+          },
+        }),
+      }
+    );
+    expect(res.status).toBe(201);
+    const imported = (await res.json()) as {
+      ticket: { status: string; priority: string; externalSource: string };
+    };
+    expect(imported.ticket.status).toBe("done");
+    expect(imported.ticket.priority).toBe("low");
+    expect(imported.ticket.externalSource).toBe("plain");
+  });
 });

@@ -6,6 +6,8 @@ import {
   addTicketMessage,
   addTicketNote,
   createTicket,
+  createTicketFromIntercom,
+  createTicketFromPlain,
   getTicketById,
   listTicketEvents,
   listTickets,
@@ -192,6 +194,65 @@ const listEventsQuerySchema = z.object({
 
 const snoozeBodySchema = z.object({
   until: z.string(),
+});
+
+const externalSupportReplySchema = z.object({
+  body: z.string(),
+  direction: z.enum(["inbound", "outbound"]),
+  channel: supportTicketMessageChannelEnum.optional(),
+  customerId: z.string().optional(),
+  userId: z.string().optional(),
+  createdAt: z.string().optional(),
+});
+
+const intercomSupportSourceSchema = z.object({
+  type: z.string().optional(),
+  subject: z.string().nullable().optional(),
+  body: z.string().nullable().optional(),
+});
+
+const intercomSupportConversationSchema = z.object({
+  id: z.string(),
+  title: z.string().nullable().optional(),
+  state: z.enum(["open", "closed", "snoozed"]),
+  priority: z
+    .enum(["none", "low", "medium", "high", "urgent"])
+    .optional()
+    .default("none"),
+  source: intercomSupportSourceSchema.default({}),
+  created_at: z.number().int().optional(),
+  updated_at: z.number().int().optional(),
+  replies: z.array(externalSupportReplySchema).default([]),
+});
+
+const plainSupportSourceSchema = z.object({
+  type: z.string().optional(),
+  subject: z.string().nullable().optional(),
+  body: z.string().nullable().optional(),
+});
+
+const plainSupportThreadSchema = z.object({
+  id: z.string(),
+  title: z.string().nullable().optional(),
+  status: z.enum(["todo", "done", "snoozed"]),
+  priority: z
+    .enum(["none", "low", "medium", "high", "urgent"])
+    .optional()
+    .default("none"),
+  source: plainSupportSourceSchema.default({}),
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
+  replies: z.array(externalSupportReplySchema).default([]),
+});
+
+const importIntercomBodySchema = z.object({
+  customerId: z.string(),
+  conversation: intercomSupportConversationSchema,
+});
+
+const importPlainBodySchema = z.object({
+  customerId: z.string(),
+  thread: plainSupportThreadSchema,
 });
 
 const orgParam = z.object({ organizationId: z.string() });
@@ -441,6 +502,56 @@ const snoozeRoute = createRoute({
   },
 });
 
+const importIntercomRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/support/tickets/import/intercom",
+  tags: ["support-tickets"],
+  middleware: [rls("write")],
+  request: {
+    params: orgParam,
+    body: {
+      content: {
+        "application/json": { schema: importIntercomBodySchema },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "Intercom conversation imported as support ticket",
+      content: {
+        "application/json": {
+          schema: z.object({ ticket: supportTicketSchema }),
+        },
+      },
+    },
+  },
+});
+
+const importPlainRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/support/tickets/import/plain",
+  tags: ["support-tickets"],
+  middleware: [rls("write")],
+  request: {
+    params: orgParam,
+    body: {
+      content: {
+        "application/json": { schema: importPlainBodySchema },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "Plain thread imported as support ticket",
+      content: {
+        "application/json": {
+          schema: z.object({ ticket: supportTicketSchema }),
+        },
+      },
+    },
+  },
+});
+
 export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(createTicketRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
@@ -589,5 +700,31 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
     const full =
       (await getTicketById(db, organizationId, ticketId)) ?? ticketNotFound();
     return c.json({ ticket: full });
+  });
+
+  app.openapi(importIntercomRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const { customerId, conversation } = c.req.valid("json");
+    const db = createD1(c.env.D1);
+    const ticket = await createTicketFromIntercom(
+      db,
+      organizationId,
+      customerId,
+      conversation
+    );
+    return c.json({ ticket }, 201);
+  });
+
+  app.openapi(importPlainRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const { customerId, thread } = c.req.valid("json");
+    const db = createD1(c.env.D1);
+    const ticket = await createTicketFromPlain(
+      db,
+      organizationId,
+      customerId,
+      thread
+    );
+    return c.json({ ticket }, 201);
   });
 }

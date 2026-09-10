@@ -85,6 +85,8 @@ export type SupportTicketInput = {
   externalId?: string | null;
   externalSource?: SupportTicketSource;
   issueId?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type SupportTicket = {
@@ -195,6 +197,8 @@ export async function createTicket(
   const priority: SupportTicketPriority = input.priority ?? "medium";
   const externalSource: SupportTicketSource = input.externalSource ?? "manual";
   const now = new Date().toISOString();
+  const createdAt = input.createdAt ?? now;
+  const updatedAt = input.updatedAt ?? now;
 
   await db.insert(supportTickets).values({
     id,
@@ -210,8 +214,8 @@ export async function createTicket(
     issueId: input.issueId ?? null,
     lastCustomerMessageAt: null,
     lastAgentMessageAt: null,
-    createdAt: now,
-    updatedAt: now,
+    createdAt,
+    updatedAt,
   });
 
   return {
@@ -228,8 +232,8 @@ export async function createTicket(
     issueId: input.issueId ?? null,
     lastCustomerMessageAt: null,
     lastAgentMessageAt: null,
-    createdAt: now,
-    updatedAt: now,
+    createdAt,
+    updatedAt,
   };
 }
 
@@ -495,11 +499,13 @@ export async function addTicketMessage(
     channel: SupportTicketMessageChannel;
     customerId?: string | null;
     userId?: string | null;
+    createdAt?: string;
   }
 ): Promise<SupportTicketEventWithDetails> {
   await ensureTicket(db, organizationId, ticketId);
 
   const now = new Date().toISOString();
+  const messageCreatedAt = input.createdAt ?? now;
   const eventId = crypto.randomUUID();
   const messageId = crypto.randomUUID();
   const actorType: SupportTicketActorType = input.customerId
@@ -515,7 +521,7 @@ export async function addTicketMessage(
     type: "message",
     actorType,
     actorId,
-    createdAt: now,
+    createdAt: messageCreatedAt,
   });
 
   await db.insert(supportTicketMessages).values({
@@ -533,9 +539,9 @@ export async function addTicketMessage(
     .update(supportTickets)
     .set({
       ...(input.direction === "inbound"
-        ? { lastCustomerMessageAt: now }
-        : { lastAgentMessageAt: now }),
-      updatedAt: now,
+        ? { lastCustomerMessageAt: messageCreatedAt }
+        : { lastAgentMessageAt: messageCreatedAt }),
+      updatedAt: messageCreatedAt,
     })
     .where(
       and(
@@ -550,7 +556,7 @@ export async function addTicketMessage(
     type: "message",
     actorType,
     actorId,
-    createdAt: now,
+    createdAt: messageCreatedAt,
     message: {
       id: messageId,
       eventId,
@@ -701,4 +707,357 @@ export async function listTicketEvents(
     message: messageMap.get(event.id),
     note: noteMap.get(event.id),
   }));
+}
+
+export async function findSupportTicketByExternalId(
+  db: D1Client,
+  organizationId: string,
+  externalId: string,
+  externalSource: SupportTicketSource
+): Promise<SupportTicket | null> {
+  const [ticket] = await db
+    .select()
+    .from(supportTickets)
+    .where(
+      and(
+        eq(supportTickets.organizationId, organizationId),
+        eq(supportTickets.externalId, externalId),
+        eq(supportTickets.externalSource, externalSource)
+      )
+    )
+    .limit(1);
+  return ticket ?? null;
+}
+
+export type ExternalSupportReply = {
+  body: string;
+  direction: SupportTicketMessageDirection;
+  channel?: SupportTicketMessageChannel;
+  customerId?: string | null;
+  userId?: string | null;
+  createdAt?: string;
+};
+
+export type IntercomSupportConversation = {
+  id: string;
+  title?: string | null;
+  state: "open" | "closed" | "snoozed";
+  priority?: "none" | "low" | "medium" | "high" | "urgent";
+  source: {
+    type?: string;
+    subject?: string | null;
+    body?: string | null;
+  };
+  created_at?: number;
+  updated_at?: number;
+  replies: ExternalSupportReply[];
+};
+
+export type PlainSupportThread = {
+  id: string;
+  title?: string | null;
+  status: "todo" | "done" | "snoozed";
+  priority?: "none" | "low" | "medium" | "high" | "urgent";
+  source: {
+    type?: string;
+    subject?: string | null;
+    body?: string | null;
+  };
+  createdAt?: string;
+  updatedAt?: string;
+  replies: ExternalSupportReply[];
+};
+
+function stripHtml(html: string | null | undefined): string {
+  if (!html) return "";
+  return html
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function asMessageChannel(
+  sourceType: string | null | undefined
+): SupportTicketMessageChannel {
+  if (
+    sourceType === "email" ||
+    sourceType === "slack" ||
+    sourceType === "msteams" ||
+    sourceType === "discord" ||
+    sourceType === "chat" ||
+    sourceType === "api"
+  ) {
+    return sourceType;
+  }
+  return "chat";
+}
+
+function asTicketChannel(
+  sourceType: string | null | undefined
+): SupportTicketChannel {
+  if (
+    sourceType === "email" ||
+    sourceType === "slack" ||
+    sourceType === "msteams" ||
+    sourceType === "discord" ||
+    sourceType === "chat" ||
+    sourceType === "capture" ||
+    sourceType === "api" ||
+    sourceType === "intercom" ||
+    sourceType === "zendesk" ||
+    sourceType === "plain"
+  ) {
+    return sourceType;
+  }
+  return "chat";
+}
+
+function intercomStateToTicketStatus(
+  state: IntercomSupportConversation["state"]
+): SupportTicketStatus {
+  const map: Record<string, SupportTicketStatus> = {
+    open: "todo",
+    closed: "done",
+    snoozed: "snoozed",
+  };
+  return map[state] ?? "todo";
+}
+
+function plainStateToTicketStatus(
+  status: PlainSupportThread["status"]
+): SupportTicketStatus {
+  const map: Record<string, SupportTicketStatus> = {
+    todo: "todo",
+    done: "done",
+    snoozed: "snoozed",
+  };
+  return map[status] ?? "todo";
+}
+
+function externalPriorityToTicketPriority(
+  priority: "none" | "low" | "medium" | "high" | "urgent" | undefined
+): SupportTicketPriority {
+  if (!priority || priority === "none") return "medium";
+  return priority;
+}
+
+export async function createTicketFromIntercom(
+  db: D1Client,
+  organizationId: string,
+  customerId: string,
+  conversation: IntercomSupportConversation,
+  overrides: {
+    title?: string;
+    status?: SupportTicketStatus;
+    priority?: SupportTicketPriority;
+  } = {}
+): Promise<SupportTicketWithRelations> {
+  const existing = await findSupportTicketByExternalId(
+    db,
+    organizationId,
+    conversation.id,
+    "intercom"
+  );
+  if (existing) {
+    const full = await getTicketById(db, organizationId, existing.id);
+    return (
+      full ?? {
+        ...existing,
+        customer: {
+          id: existing.customerId,
+          email: "",
+          fullName: null,
+          phone: null,
+        },
+        companies: [],
+        identities: [],
+        labels: [],
+        assignees: [],
+        events: [],
+      }
+    );
+  }
+
+  const body = stripHtml(conversation.source?.body);
+  const subject = conversation.source?.subject ?? null;
+  const title =
+    overrides.title ??
+    conversation.title ??
+    subject ??
+    (body.slice(0, 120) || `Intercom conversation ${conversation.id}`);
+
+  const createdAt = conversation.created_at
+    ? new Date(conversation.created_at * 1000).toISOString()
+    : new Date().toISOString();
+  const updatedAt = conversation.updated_at
+    ? new Date(conversation.updated_at * 1000).toISOString()
+    : createdAt;
+
+  const sourceChannel = asTicketChannel(conversation.source?.type);
+  const messageChannel = asMessageChannel(conversation.source?.type);
+
+  const ticket = await createTicket(db, {
+    organizationId,
+    customerId,
+    title,
+    sourceChannel,
+    status: overrides.status ?? intercomStateToTicketStatus(conversation.state),
+    priority:
+      overrides.priority ??
+      externalPriorityToTicketPriority(conversation.priority),
+    externalId: conversation.id,
+    externalSource: "intercom",
+    createdAt,
+    updatedAt,
+  });
+
+  const firstMessage = body || subject || "(no content)";
+  await addTicketMessage(db, organizationId, ticket.id, {
+    direction: "inbound",
+    textContent: firstMessage,
+    channel: messageChannel,
+    customerId,
+    createdAt,
+  });
+
+  const sortedReplies = conversation.replies.toSorted(
+    (a, b) =>
+      (a.createdAt ? Date.parse(a.createdAt) : 0) -
+      (b.createdAt ? Date.parse(b.createdAt) : 0)
+  );
+
+  for (const reply of sortedReplies) {
+    const replyCustomerId =
+      reply.direction === "inbound" ? customerId : undefined;
+    await addTicketMessage(db, organizationId, ticket.id, {
+      direction: reply.direction,
+      textContent: stripHtml(reply.body) || "(no content)",
+      markdownContent: reply.body,
+      channel: reply.channel ?? messageChannel,
+      customerId: replyCustomerId ?? reply.customerId,
+      userId: reply.userId,
+      createdAt: reply.createdAt,
+    });
+  }
+
+  const full = await getTicketById(db, organizationId, ticket.id);
+  return (
+    full ?? {
+      ...ticket,
+      customer: { id: customerId, email: "", fullName: null, phone: null },
+      companies: [],
+      identities: [],
+      labels: [],
+      assignees: [],
+      events: [],
+    }
+  );
+}
+
+export async function createTicketFromPlain(
+  db: D1Client,
+  organizationId: string,
+  customerId: string,
+  thread: PlainSupportThread,
+  overrides: {
+    title?: string;
+    status?: SupportTicketStatus;
+    priority?: SupportTicketPriority;
+  } = {}
+): Promise<SupportTicketWithRelations> {
+  const existing = await findSupportTicketByExternalId(
+    db,
+    organizationId,
+    thread.id,
+    "plain"
+  );
+  if (existing) {
+    const full = await getTicketById(db, organizationId, existing.id);
+    return (
+      full ?? {
+        ...existing,
+        customer: {
+          id: existing.customerId,
+          email: "",
+          fullName: null,
+          phone: null,
+        },
+        companies: [],
+        identities: [],
+        labels: [],
+        assignees: [],
+        events: [],
+      }
+    );
+  }
+
+  const body = stripHtml(thread.source?.body);
+  const subject = thread.source?.subject ?? null;
+  const title =
+    overrides.title ??
+    thread.title ??
+    subject ??
+    (body.slice(0, 120) || `Plain thread ${thread.id}`);
+
+  const createdAt = thread.createdAt ?? new Date().toISOString();
+  const updatedAt = thread.updatedAt ?? createdAt;
+
+  const sourceChannel = asTicketChannel(thread.source?.type);
+  const messageChannel = asMessageChannel(thread.source?.type);
+
+  const ticket = await createTicket(db, {
+    organizationId,
+    customerId,
+    title,
+    sourceChannel,
+    status: overrides.status ?? plainStateToTicketStatus(thread.status),
+    priority:
+      overrides.priority ?? externalPriorityToTicketPriority(thread.priority),
+    externalId: thread.id,
+    externalSource: "plain",
+    createdAt,
+    updatedAt,
+  });
+
+  const firstMessage = body || subject || "(no content)";
+  await addTicketMessage(db, organizationId, ticket.id, {
+    direction: "inbound",
+    textContent: firstMessage,
+    channel: messageChannel,
+    customerId,
+    createdAt,
+  });
+
+  const sortedReplies = thread.replies.toSorted(
+    (a, b) =>
+      (a.createdAt ? Date.parse(a.createdAt) : 0) -
+      (b.createdAt ? Date.parse(b.createdAt) : 0)
+  );
+
+  for (const reply of sortedReplies) {
+    const replyCustomerId =
+      reply.direction === "inbound" ? customerId : undefined;
+    await addTicketMessage(db, organizationId, ticket.id, {
+      direction: reply.direction,
+      textContent: stripHtml(reply.body) || "(no content)",
+      markdownContent: reply.body,
+      channel: reply.channel ?? messageChannel,
+      customerId: replyCustomerId ?? reply.customerId,
+      userId: reply.userId,
+      createdAt: reply.createdAt,
+    });
+  }
+
+  const full = await getTicketById(db, organizationId, ticket.id);
+  return (
+    full ?? {
+      ...ticket,
+      customer: { id: customerId, email: "", fullName: null, phone: null },
+      companies: [],
+      identities: [],
+      labels: [],
+      assignees: [],
+      events: [],
+    }
+  );
 }

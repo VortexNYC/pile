@@ -1988,6 +1988,11 @@ export const supportTickets = sqliteTable(
       table.organizationId,
       table.priority
     ),
+    uniqueIndex("support_tickets_org_external_idx" as string).on(
+      table.organizationId,
+      table.externalId,
+      table.externalSource
+    ),
   ]
 );
 
