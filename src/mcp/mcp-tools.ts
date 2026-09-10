@@ -6687,6 +6687,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "github-issues",
                 "intercom",
                 "intercom-support",
+                "plain-support",
                 "zendesk-support"
               ]
             },

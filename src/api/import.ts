@@ -48,6 +48,11 @@ import {
   notionImportSource,
   notionOptionsSchema,
 } from "../import/notion.js";
+import {
+  plainSupportCredentialsSchema,
+  plainSupportImportSource,
+  plainSupportOptionsSchema,
+} from "../import/plain-support.js";
 import { resumeImport, runImport } from "../import/runner.js";
 import type { ImportCounts, ImportRunState } from "../import/types.js";
 import {
@@ -67,6 +72,7 @@ const importBodySchema = z.object({
     "github-issues",
     "intercom",
     "intercom-support",
+    "plain-support",
     "zendesk-support",
   ]),
   credentials: z.unknown(),
@@ -428,6 +434,23 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
         output = importRunOutput(body.source, job, batch);
         break;
       }
+      case "plain-support": {
+        const credentials = plainSupportCredentialsSchema.parse(
+          body.credentials
+        );
+        const options = plainSupportOptionsSchema.parse(body.options ?? {});
+        const { batch, job } = await runImport(
+          plainSupportImportSource,
+          c.env,
+          organizationId,
+          importerId,
+          credentials,
+          options,
+          state
+        );
+        output = importRunOutput(body.source, job, batch);
+        break;
+      }
       case "zendesk-support": {
         const credentials = zendeskSupportCredentialsSchema.parse(
           body.credentials
@@ -614,6 +637,24 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
         const parsedOptions = intercomSupportOptionsSchema.parse(options ?? {});
         const { batch, job: updatedJob } = await resumeImport(
           intercomSupportImportSource,
+          c.env,
+          organizationId,
+          importerId,
+          job,
+          credentials,
+          parsedOptions,
+          state
+        );
+        output = importRunOutput(job.source, updatedJob, batch);
+        break;
+      }
+      case "plain-support": {
+        const credentials = plainSupportCredentialsSchema.parse(
+          resumeBody.credentials
+        );
+        const parsedOptions = plainSupportOptionsSchema.parse(options ?? {});
+        const { batch, job: updatedJob } = await resumeImport(
+          plainSupportImportSource,
           c.env,
           organizationId,
           importerId,
