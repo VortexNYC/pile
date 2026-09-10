@@ -10284,7 +10284,7 @@ export interface paths {
                         customerId?: string;
                         userId?: string;
                         /** @enum {string} */
-                        actorType?: "customer" | "user" | "machine" | "system";
+                        actorType?: "customer" | "user" | "agent" | "automation";
                         actorId?: string | null;
                         subType?: string | null;
                         metadata?: {
@@ -10365,7 +10365,7 @@ export interface paths {
                         body: string;
                         userId?: string;
                         /** @enum {string} */
-                        actorType?: "customer" | "user" | "machine" | "system";
+                        actorType?: "customer" | "user" | "agent" | "automation";
                         actorId?: string | null;
                         subType?: string | null;
                         metadata?: {

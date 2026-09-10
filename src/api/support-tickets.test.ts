@@ -364,7 +364,7 @@ describe("support-tickets API", () => {
           {
             type: "status_change",
             subType: "close",
-            actorType: "system",
+            actorType: "automation",
             actorId: null,
             createdAt: "2023-11-14T11:21:00.000Z",
             metadata: { previousStatus: "open", newStatus: "closed" },
@@ -462,7 +462,7 @@ describe("support-tickets API", () => {
           {
             body: "Thanks for the suggestion",
             direction: "outbound",
-            actorType: "machine",
+            actorType: "agent",
             actorId: "bot-1",
             subType: "ChatEntry",
             createdAt: "2023-11-14T12:02:00.000Z",
@@ -481,7 +481,7 @@ describe("support-tickets API", () => {
           {
             type: "priority_change",
             subType: "ThreadPriorityChangedEntry",
-            actorType: "system",
+            actorType: "automation",
             actorId: null,
             createdAt: "2023-11-14T12:04:00.000Z",
             metadata: { previousPriority: "medium", newPriority: "low" },
@@ -489,7 +489,7 @@ describe("support-tickets API", () => {
           {
             type: "sla_change",
             subType: "ServiceLevelAgreementStatusTransitionedEntry",
-            actorType: "system",
+            actorType: "automation",
             actorId: null,
             createdAt: "2023-11-14T12:04:30.000Z",
             metadata: {
@@ -500,7 +500,7 @@ describe("support-tickets API", () => {
           {
             type: "survey_requested",
             subType: "CustomerSurveyRequestedEntry",
-            actorType: "system",
+            actorType: "automation",
             actorId: null,
             createdAt: "2023-11-14T12:04:45.000Z",
             metadata: { customerSurveyId: "survey-1" },
@@ -516,7 +516,7 @@ describe("support-tickets API", () => {
           {
             type: "custom_entry",
             subType: "CustomEntry",
-            actorType: "system",
+            actorType: "automation",
             actorId: null,
             createdAt: "2023-11-14T12:05:30.000Z",
             metadata: { title: "Order status", type: "tracking" },
@@ -540,11 +540,11 @@ describe("support-tickets API", () => {
     expect(noteEvent?.actorId).toBe("agent-1");
     expect(noteEvent?.subType).toBe("NoteEntry");
 
-    const machineEvent = events.find(
-      (e) => e.type === "message" && e.actorType === "machine"
+    const agentEvent = events.find(
+      (e) => e.type === "message" && e.actorType === "agent"
     );
-    expect(machineEvent?.actorId).toBe("bot-1");
-    expect(machineEvent?.subType).toBe("ChatEntry");
+    expect(agentEvent?.actorId).toBe("bot-1");
+    expect(agentEvent?.subType).toBe("ChatEntry");
 
     const priorityEvent = events.find((e) => e.type === "priority_change");
     expect(priorityEvent).toBeDefined();
@@ -624,7 +624,7 @@ describe("support-tickets API", () => {
           {
             type: "assignment_change",
             subType: "Change:group_id",
-            actorType: "system",
+            actorType: "automation",
             actorId: null,
             createdAt: "2023-11-14T13:04:00.000Z",
             metadata: { assigneeId: "group-billing" },

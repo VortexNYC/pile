@@ -20600,8 +20600,8 @@
                     "enum": [
                       "customer",
                       "user",
-                      "machine",
-                      "system"
+                      "agent",
+                      "automation"
                     ]
                   },
                   "actorId": {
@@ -20803,8 +20803,8 @@
                     "enum": [
                       "customer",
                       "user",
-                      "machine",
-                      "system"
+                      "agent",
+                      "automation"
                     ]
                   },
                   "actorId": {

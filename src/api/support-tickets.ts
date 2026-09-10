@@ -52,8 +52,8 @@ const supportTicketMessageChannelEnum = z.enum([
 const supportTicketActorTypeEnum = z.enum([
   "customer",
   "user",
-  "machine",
-  "system",
+  "agent",
+  "automation",
 ]);
 
 const supportCustomerSummarySchema = z.object({

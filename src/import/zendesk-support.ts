@@ -408,7 +408,7 @@ function commentActor(
   const author = userById(users, comment.author_id);
   const role = author?.role?.toLowerCase() ?? "";
   if (role === "system") {
-    return { actorType: "system", actorId: String(comment.author_id) };
+    return { actorType: "automation", actorId: String(comment.author_id) };
   }
   if (role === "agent" || role === "admin") {
     return { actorType: "user", actorId: String(comment.author_id) };
@@ -499,7 +499,7 @@ function auditActor(
   const author = userById(users, audit.author_id);
   const role = author?.role?.toLowerCase() ?? "";
   if (role === "system") {
-    return { actorType: "system", actorId: String(audit.author_id) };
+    return { actorType: "automation", actorId: String(audit.author_id) };
   }
   if (role === "agent" || role === "admin") {
     return { actorType: "user", actorId: String(audit.author_id) };
@@ -841,7 +841,7 @@ export const zendeskSupportImportSource: ImportSource<
 
             const ticketEvent: ExternalSupportEvent = {
               type: "field_change",
-              actorType: "system",
+              actorType: "automation",
               actorId: null,
               createdAt: ticket.created_at,
               metadata: { ticket },

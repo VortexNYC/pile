@@ -274,10 +274,10 @@ function partActor(part: IntercomConversationPart): {
     authorType === "fin" ||
     authorType === "copilot"
   ) {
-    return { actorType: "machine", actorId: part.author?.id ?? null };
+    return { actorType: "agent", actorId: part.author?.id ?? null };
   }
   if (authorType === "system") {
-    return { actorType: "system", actorId: part.author?.id ?? null };
+    return { actorType: "automation", actorId: part.author?.id ?? null };
   }
   return { actorType: "user", actorId: part.author?.id ?? null };
 }

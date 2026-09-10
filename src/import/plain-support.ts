@@ -571,12 +571,12 @@ function timelineActor(entry: PlainTimelineEntry): {
   }
   const machineUserId = actor.machineUserId ?? actor.machineUser?.id ?? null;
   if (machineUserId) {
-    return { actorType: "machine", actorId: machineUserId };
+    return { actorType: "agent", actorId: machineUserId };
   }
   if (actor.systemId) {
-    return { actorType: "system", actorId: actor.systemId };
+    return { actorType: "automation", actorId: actor.systemId };
   }
-  return { actorType: "system", actorId: null };
+  return { actorType: "automation", actorId: null };
 }
 
 function timelineDirection(entry: PlainTimelineEntry): "inbound" | "outbound" {

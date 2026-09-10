@@ -2069,7 +2069,7 @@ export const supportTicketEvents = sqliteTable(
     }).notNull(),
     subType: text("sub_type" as string),
     actorType: text("actor_type" as string, {
-      enum: ["customer", "user", "machine", "system"] as const,
+      enum: ["customer", "user", "agent", "automation"] as const,
     }).notNull(),
     actorId: text("actor_id" as string),
     metadata: text("metadata" as string),

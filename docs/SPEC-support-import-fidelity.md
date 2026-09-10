@@ -7,7 +7,7 @@ Make the Intercom, Plain, and Zendesk support import adapters capture the full p
 ## Success Criteria
 
 1. Provider-specific notes (Intercom `note` parts, Plain `NoteEntry`, Zendesk `public=false` comments) are imported as `support_ticket_events` with `type = "note"`.
-2. Every imported message/note/event records the original provider actor `actorType` (`customer` | `user` | `machine` | `system`) and `actorId`.
+2. Every imported message/note/event records the original provider actor `actorType` (`customer` | `user` | `agent` | `automation`) and `actorId`.
 3. Provider attachments are stored in a new `support_ticket_attachments` table linked to the event.
 4. Non-message timeline items are imported as `support_ticket_events` with `type` mapped to a proper native event type and `subType` preserving the exact provider entry/event name.
 5. The three adapter tests exercise notes, actor fields, attachments, metadata, `subType`, and the full event type taxonomy.
@@ -72,7 +72,7 @@ Make the Intercom, Plain, and Zendesk support import adapters capture the full p
   - `source_add`/`ticket_shared`/`automation_flywheel`/`log_event`/`default` → `thread_event`
   - everything else → `field_change`
 - `subType` = `part_type`.
-- `author.type` is normalized to `customer`/`user`/`machine`/`system`.
+- `author.type` is normalized to `customer`/`user`/`agent`/`automation`.
 - `attachments` on `comment`/`note`/`whatsapp`/`linked_message` parts are captured.
 
 ### Plain
@@ -102,7 +102,7 @@ Make the Intercom, Plain, and Zendesk support import adapters capture the full p
 
 - `comments` are fetched with `include=users`.
 - `public=false` comments → `note` (`subType = InternalComment`); `public=true` comments → `message` (`subType = Comment`).
-- `author_id` is resolved to a `role` from the included users; `requester_id`/`end-user` → `customer`, `agent`/`admin` → `user`, `system` → `system`.
+- `author_id` is resolved to a `role` from the included users; `requester_id`/`end-user` → `customer`, `agent`/`admin` → `user`, `system` → `automation`.
 - `via.channel` is normalized to a native message channel.
 - `attachments` on comments are captured.
 - `audits` are fetched and each audit `event` is mapped:

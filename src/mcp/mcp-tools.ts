@@ -8634,8 +8634,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "enum": [
                 "customer",
                 "user",
-                "machine",
-                "system"
+                "agent",
+                "automation"
               ]
             },
             "actorId": {
@@ -8694,8 +8694,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "enum": [
                 "customer",
                 "user",
-                "machine",
-                "system"
+                "agent",
+                "automation"
               ]
             },
             "actorId": {

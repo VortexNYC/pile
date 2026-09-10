@@ -88,7 +88,11 @@ export type SupportTicketEventType =
   | "voicemail"
   | "custom_entry"
   | "field_change";
-export type SupportTicketActorType = "customer" | "user" | "machine" | "system";
+export type SupportTicketActorType =
+  | "customer"
+  | "user"
+  | "agent"
+  | "automation";
 
 export type SupportTicketInput = {
   id?: string;
@@ -568,7 +572,7 @@ export async function addTicketMessage(
   const messageId = crypto.randomUUID();
   const actorType: SupportTicketActorType =
     input.actorType ??
-    (input.customerId ? "customer" : input.userId ? "user" : "system");
+    (input.customerId ? "customer" : input.userId ? "user" : "automation");
   const actorId = input.actorId ?? input.customerId ?? input.userId ?? null;
   const metadata = input.metadata ? JSON.stringify(input.metadata) : null;
 
@@ -717,7 +721,7 @@ export async function addTicketEvent(
   const now = new Date().toISOString();
   const eventCreatedAt = input.createdAt ?? now;
   const eventId = crypto.randomUUID();
-  const actorType: SupportTicketActorType = input.actorType ?? "system";
+  const actorType: SupportTicketActorType = input.actorType ?? "automation";
   const actorId = input.actorId ?? null;
   const metadata = input.metadata ? JSON.stringify(input.metadata) : null;
 
