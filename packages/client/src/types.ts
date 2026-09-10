@@ -597,7 +597,7 @@ export interface paths {
                         assigneeId?: string | null;
                         projectId?: string;
                         cycleId?: string;
-                        labelIds?: string;
+                        labelIds?: string[];
                         repo?: string;
                         branch?: string;
                     };
@@ -911,7 +911,7 @@ export interface paths {
                         assigneeId?: string | null;
                         projectId?: string;
                         cycleId?: string;
-                        labelIds?: string;
+                        labelIds?: string[];
                         repo?: string;
                         branch?: string;
                     };
@@ -1014,7 +1014,7 @@ export interface paths {
                             assigneeId?: string | null;
                             projectId?: string;
                             cycleId?: string;
-                            labelIds?: string;
+                            labelIds?: string[];
                             repo?: string;
                             branch?: string;
                         };

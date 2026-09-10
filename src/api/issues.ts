@@ -219,7 +219,10 @@ const createIssueSchema = z.object({
   assigneeId: z.string().nullable().optional(),
   projectId: z.string().optional(),
   cycleId: z.string().optional(),
-  labelIds: z.string().optional(),
+  labelIds: z
+    .array(z.string())
+    .optional()
+    .transform((ids) => (ids && ids.length > 0 ? ids.join(",") : null)),
   repo: z.string().optional(),
   branch: z.string().optional(),
 }) satisfies z.ZodType<IssueInput>;

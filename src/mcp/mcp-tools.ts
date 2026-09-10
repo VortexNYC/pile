@@ -4536,7 +4536,10 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string"
             },
             "labelIds": {
-              "type": "string"
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             },
             "repo": {
               "type": "string"
@@ -7247,7 +7250,10 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string"
             },
             "labelIds": {
-              "type": "string"
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             },
             "repo": {
               "type": "string"
@@ -7369,7 +7375,10 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                   "type": "string"
                 },
                 "labelIds": {
-                  "type": "string"
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
                 },
                 "repo": {
                   "type": "string"

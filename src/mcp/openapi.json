@@ -1327,7 +1327,10 @@
                     "type": "string"
                   },
                   "labelIds": {
-                    "type": "string"
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
                   },
                   "repo": {
                     "type": "string"
@@ -1910,7 +1913,10 @@
                     "type": "string"
                   },
                   "labelIds": {
-                    "type": "string"
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
                   },
                   "repo": {
                     "type": "string"
@@ -2126,7 +2132,10 @@
                         "type": "string"
                       },
                       "labelIds": {
-                        "type": "string"
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
                       },
                       "repo": {
                         "type": "string"
