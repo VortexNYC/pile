@@ -6686,7 +6686,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "notion",
                 "github-issues",
                 "intercom",
-                "intercom-support"
+                "intercom-support",
+                "zendesk-support"
               ]
             },
             "credentials": {
