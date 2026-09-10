@@ -64,8 +64,12 @@ export const organizationOptions = {
         const workspaceKey = meta.key ?? "general";
         const ownerId =
           ctx.context.session?.user.id ??
-          z.object({ userId: z.string() }).safeParse(ctx.body).data?.userId ??
-          "";
+          z.object({ userId: z.string() }).safeParse(ctx.body).data?.userId;
+        if (!ownerId) {
+          throw new Error(
+            "customCreateDefaultTeam could not resolve the creating user"
+          );
+        }
         const now = new Date();
         const metadata = teamMetadataString({
           key: workspaceKey,
