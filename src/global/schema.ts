@@ -1783,3 +1783,127 @@ export const projectUpdateReminders = sqliteTable(
     ),
   ]
 );
+
+export const supportCustomers = sqliteTable(
+  "support_customers" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    userId: text("user_id" as string).references(() => user.id, {
+      onDelete: "set null",
+    }),
+    externalId: text("external_id" as string),
+    externalSource: text("external_source" as string)
+      .notNull()
+      .default("manual"),
+    email: text("email" as string).notNull(),
+    fullName: text("full_name" as string),
+    phone: text("phone" as string),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("support_customers_org_email_idx" as string).on(
+      table.organizationId,
+      table.email
+    ),
+    index("support_customers_org_external_idx" as string).on(
+      table.organizationId,
+      table.externalId,
+      table.externalSource
+    ),
+  ]
+);
+
+export const supportCompanies = sqliteTable(
+  "support_companies" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    externalId: text("external_id" as string),
+    externalSource: text("external_source" as string)
+      .notNull()
+      .default("manual"),
+    name: text("name" as string).notNull(),
+    domain: text("domain" as string),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("support_companies_org_name_idx" as string).on(
+      table.organizationId,
+      table.name
+    ),
+    index("support_companies_org_domain_idx" as string).on(
+      table.organizationId,
+      table.domain
+    ),
+  ]
+);
+
+export const supportCustomerIdentities = sqliteTable(
+  "support_customer_identities" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    customerId: text("customer_id" as string)
+      .notNull()
+      .references(() => supportCustomers.id, { onDelete: "cascade" }),
+    type: text("type" as string, {
+      enum: ["email", "phone", "slack", "chat"] as const,
+    }).notNull(),
+    value: text("value" as string).notNull(),
+    isPrimary: integer("is_primary" as string, { mode: "boolean" })
+      .notNull()
+      .default(false),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("support_customer_identities_unique_idx" as string).on(
+      table.customerId,
+      table.type,
+      table.value
+    ),
+  ]
+);
+
+export const supportCustomerCompanies = sqliteTable(
+  "support_customer_companies" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    customerId: text("customer_id" as string)
+      .notNull()
+      .references(() => supportCustomers.id, { onDelete: "cascade" }),
+    companyId: text("company_id" as string)
+      .notNull()
+      .references(() => supportCompanies.id, { onDelete: "cascade" }),
+    isPrimary: integer("is_primary" as string, { mode: "boolean" })
+      .notNull()
+      .default(false),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("support_customer_companies_unique_idx" as string).on(
+      table.customerId,
+      table.companyId
+    ),
+    index("support_customer_companies_company_idx" as string).on(
+      table.companyId
+    ),
+  ]
+);
