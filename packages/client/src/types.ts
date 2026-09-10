@@ -12891,7 +12891,7 @@ export interface paths {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        source: "jira" | "confluence" | "linear" | "notion" | "github-issues";
+                        source: "jira" | "confluence" | "linear" | "notion" | "github-issues" | "intercom";
                         credentials?: unknown;
                         options?: unknown;
                     };

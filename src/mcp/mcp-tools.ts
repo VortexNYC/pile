@@ -6361,7 +6361,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "confluence",
                 "linear",
                 "notion",
-                "github-issues"
+                "github-issues",
+                "intercom"
               ]
             },
             "credentials": {

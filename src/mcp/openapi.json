@@ -23797,7 +23797,8 @@
                       "confluence",
                       "linear",
                       "notion",
-                      "github-issues"
+                      "github-issues",
+                      "intercom"
                     ]
                   },
                   "credentials": {

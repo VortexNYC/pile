@@ -24,6 +24,11 @@ import {
   githubIssuesOptionsSchema,
 } from "../import/github-issues.js";
 import {
+  intercomCredentialsSchema,
+  intercomImportSource,
+  intercomOptionsSchema,
+} from "../import/intercom.js";
+import {
   jiraCredentialsSchema,
   jiraImportSource,
   jiraOptionsSchema,
@@ -44,7 +49,14 @@ import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 
 const importBodySchema = z.object({
-  source: z.enum(["jira", "confluence", "linear", "notion", "github-issues"]),
+  source: z.enum([
+    "jira",
+    "confluence",
+    "linear",
+    "notion",
+    "github-issues",
+    "intercom",
+  ]),
   credentials: z.unknown(),
   options: z.unknown().optional(),
 });
@@ -372,6 +384,21 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
         output = importRunOutput(body.source, job, batch);
         break;
       }
+      case "intercom": {
+        const credentials = intercomCredentialsSchema.parse(body.credentials);
+        const options = intercomOptionsSchema.parse(body.options ?? {});
+        const { batch, job } = await runImport(
+          intercomImportSource,
+          c.env,
+          organizationId,
+          importerId,
+          credentials,
+          options,
+          state
+        );
+        output = importRunOutput(body.source, job, batch);
+        break;
+      }
       default: {
         const exhaustive: never = body.source;
         throw new Error(`Unsupported import source: ${String(exhaustive)}`);
@@ -505,6 +532,24 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
         const parsedOptions = githubIssuesOptionsSchema.parse(options ?? {});
         const { batch, job: updatedJob } = await resumeImport(
           githubIssuesImportSource,
+          c.env,
+          organizationId,
+          importerId,
+          job,
+          credentials,
+          parsedOptions,
+          state
+        );
+        output = importRunOutput(job.source, updatedJob, batch);
+        break;
+      }
+      case "intercom": {
+        const credentials = intercomCredentialsSchema.parse(
+          resumeBody.credentials
+        );
+        const parsedOptions = intercomOptionsSchema.parse(options ?? {});
+        const { batch, job: updatedJob } = await resumeImport(
+          intercomImportSource,
           c.env,
           organizationId,
           importerId,
