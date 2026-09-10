@@ -231,7 +231,7 @@ export interface paths {
                 content: {
                     "application/json": {
                         name: string;
-                        permissions?: string;
+                        permissions?: string | string[];
                         /** @enum {string} */
                         actorType?: "user" | "agent";
                         provider?: string;

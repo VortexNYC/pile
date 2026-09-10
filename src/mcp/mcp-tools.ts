@@ -9553,7 +9553,17 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "minLength": 1
             },
             "permissions": {
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
             },
             "actorType": {
               "type": "string",
