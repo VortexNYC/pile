@@ -2434,3 +2434,35 @@ export const supportTicketSlaEvents = sqliteTable(
     ),
   ]
 );
+
+export const supportSavedViews = sqliteTable(
+  "support_saved_views" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    userId: text("user_id" as string).references(() => user.id, {
+      onDelete: "cascade",
+    }),
+    name: text("name" as string).notNull(),
+    filter: text("filter" as string)
+      .notNull()
+      .default("{}"),
+    sort: text("sort" as string)
+      .notNull()
+      .default('{"by":"updated_at","direction":"desc"}'),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("support_saved_views_org_user_idx" as string).on(
+      table.organizationId,
+      table.userId
+    ),
+  ]
+);

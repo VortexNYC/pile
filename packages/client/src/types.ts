@@ -11947,6 +11947,382 @@ export interface paths {
         };
         trace?: never;
     };
+    "/workspaces/{organizationId}/support/inbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List support inbox */
+        get: {
+            parameters: {
+                query?: {
+                    status?: "todo" | "done" | "snoozed";
+                    priority?: "low" | "medium" | "high" | "urgent";
+                    assignedTo?: string;
+                    customerId?: string;
+                    channel?: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                    q?: string;
+                    limit?: number;
+                    cursor?: string;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Inbox tickets */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            tickets: {
+                                id: string;
+                                number: number;
+                                title: string;
+                                /** @enum {string} */
+                                status: "todo" | "done" | "snoozed";
+                                /** @enum {string} */
+                                priority: "low" | "medium" | "high" | "urgent";
+                                customer: {
+                                    id: string;
+                                    email: string;
+                                    fullName?: string | null;
+                                };
+                                primaryAssignee?: string;
+                                labels: string[];
+                                /** Format: date-time */
+                                lastCustomerMessageAt?: string;
+                                /** Format: date-time */
+                                lastAgentMessageAt?: string;
+                                sla?: {
+                                    /** Format: date-time */
+                                    firstResponseTargetAt?: string;
+                                    firstResponseBreached: boolean;
+                                    /** Format: date-time */
+                                    resolutionTargetAt?: string;
+                                    resolutionBreached: boolean;
+                                } | null;
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                            }[];
+                            nextCursor?: string | null;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/support/inbox/counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List support inbox counts */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Inbox counts */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            counts: {
+                                todo: number;
+                                done: number;
+                                snoozed: number;
+                                mine: number;
+                                unassigned: number;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/support/inbox/views": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List support inbox views */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Saved views */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            views: {
+                                id: string;
+                                organizationId: string;
+                                userId: string | null;
+                                name: string;
+                                filter: {
+                                    [key: string]: unknown;
+                                };
+                                sort: {
+                                    [key: string]: unknown;
+                                };
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create support inbox view */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        name: string;
+                        filter: {
+                            [key: string]: unknown;
+                        };
+                        sort?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description View created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            view: {
+                                id: string;
+                                organizationId: string;
+                                userId: string | null;
+                                name: string;
+                                filter: {
+                                    [key: string]: unknown;
+                                };
+                                sort: {
+                                    [key: string]: unknown;
+                                };
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/support/inbox/views/{viewId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get support inbox view */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    viewId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description View */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            view: {
+                                id: string;
+                                organizationId: string;
+                                userId: string | null;
+                                name: string;
+                                filter: {
+                                    [key: string]: unknown;
+                                };
+                                sort: {
+                                    [key: string]: unknown;
+                                };
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/support/inbox/views/{viewId}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List support inbox view run */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    viewId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Run view */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            tickets: {
+                                id: string;
+                                number: number;
+                                title: string;
+                                /** @enum {string} */
+                                status: "todo" | "done" | "snoozed";
+                                /** @enum {string} */
+                                priority: "low" | "medium" | "high" | "urgent";
+                                customer: {
+                                    id: string;
+                                    email: string;
+                                    fullName?: string | null;
+                                };
+                                primaryAssignee?: string;
+                                labels: string[];
+                                /** Format: date-time */
+                                lastCustomerMessageAt?: string;
+                                /** Format: date-time */
+                                lastAgentMessageAt?: string;
+                                sla?: {
+                                    /** Format: date-time */
+                                    firstResponseTargetAt?: string;
+                                    firstResponseBreached: boolean;
+                                    /** Format: date-time */
+                                    resolutionTargetAt?: string;
+                                    resolutionBreached: boolean;
+                                } | null;
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                            }[];
+                            nextCursor?: string | null;
+                        };
+                    };
+                };
+                /** @description View not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/support/users/{userId}/status": {
         parameters: {
             query?: never;

@@ -5031,6 +5031,132 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "support inbox list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/inbox",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "status",
+        flag: "status",
+      },
+      {
+        name: "priority",
+        flag: "priority",
+      },
+      {
+        name: "assignedTo",
+        flag: "assigned-to",
+      },
+      {
+        name: "customerId",
+        flag: "customer-id",
+      },
+      {
+        name: "channel",
+        flag: "channel",
+      },
+      {
+        name: "q",
+        flag: "q",
+      },
+      {
+        name: "limit",
+        flag: "limit",
+      },
+      {
+        name: "cursor",
+        flag: "cursor",
+      },
+    ],
+    body: [],
+  },
+  "support inbox counts list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/inbox/counts",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support inbox views list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/inbox/views",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support inbox views create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/inbox/views",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "filter",
+        flag: "filter",
+      },
+      {
+        name: "sort",
+        flag: "sort",
+      },
+    ],
+  },
+  "support inbox views get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/inbox/views/{viewId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "viewId",
+        flag: "view-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support inbox views run list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/inbox/views/{viewId}/run",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "viewId",
+        flag: "view-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "support users status create": {
     method: "POST",
     path: "/workspaces/{organizationId}/support/users/{userId}/status",

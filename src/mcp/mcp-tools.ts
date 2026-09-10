@@ -3449,6 +3449,149 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdSupportInbox",
+    "description": "List support inbox (GET /workspaces/{organizationId}/support/inbox)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/inbox",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "todo",
+            "done",
+            "snoozed"
+          ]
+        },
+        "priority": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "urgent"
+          ]
+        },
+        "assignedTo": {
+          "type": "string"
+        },
+        "customerId": {
+          "type": "string"
+        },
+        "channel": {
+          "type": "string",
+          "enum": [
+            "email",
+            "slack",
+            "msteams",
+            "discord",
+            "chat",
+            "capture",
+            "api",
+            "intercom",
+            "zendesk",
+            "plain"
+          ]
+        },
+        "q": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 25
+        },
+        "cursor": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportInboxCounts",
+    "description": "List support inbox counts (GET /workspaces/{organizationId}/support/inbox/counts)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/inbox/counts",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportInboxViews",
+    "description": "List support inbox views (GET /workspaces/{organizationId}/support/inbox/views)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/inbox/views",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportInboxViewsViewId",
+    "description": "Get support inbox view (GET /workspaces/{organizationId}/support/inbox/views/{viewId})",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/inbox/views/{viewId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "viewId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "viewId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportInboxViewsViewIdRun",
+    "description": "List support inbox view run (GET /workspaces/{organizationId}/support/inbox/views/{viewId}/run)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/inbox/views/{viewId}/run",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "viewId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "viewId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdSupportSlas",
     "description": "List support slas (GET /workspaces/{organizationId}/support/slas)",
     "method": "GET",
@@ -9281,6 +9424,48 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "name",
             "conditions",
             "action"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSupportInboxViews",
+    "description": "Create support inbox view (POST /workspaces/{organizationId}/support/inbox/views)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/inbox/views",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "filter": {
+              "type": "object",
+              "additionalProperties": {
+                "nullable": true
+              }
+            },
+            "sort": {
+              "type": "object",
+              "additionalProperties": {
+                "nullable": true
+              }
+            }
+          },
+          "required": [
+            "name",
+            "filter"
           ]
         }
       },
