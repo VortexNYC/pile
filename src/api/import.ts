@@ -267,7 +267,7 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
     const body = c.req.valid("json");
     const db = createD1(c.env.D1);
     const baseOptions = parseBaseOptions(body.options);
-    const importerId = c.var.userId ?? "unknown";
+    const importerId = c.var.userId ?? c.var.workspaceIdentity.id ?? "unknown";
 
     if (baseOptions.approvalRequired) {
       const job = await createApprovalJob(
@@ -408,7 +408,7 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId, jobId } = c.req.valid("param");
     const resumeBody = c.req.valid("json");
     const db = createD1(c.env.D1);
-    const importerId = c.var.userId ?? "unknown";
+    const importerId = c.var.userId ?? c.var.workspaceIdentity.id ?? "unknown";
     const job = await findImportJob(db, organizationId, jobId);
     if (!job) {
       return c.json({ error: "Import job not found" }, 404);

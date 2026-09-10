@@ -8,7 +8,7 @@ import {
   recordImportParentLink,
   resolveImportParentLinks,
 } from "../global/import-parent-links.js";
-import { createTeam, getDefaultTeam } from "../global/teams.js";
+import { createTeam, getDefaultTeam, getTeamById } from "../global/teams.js";
 import { createTemplate } from "../global/templates.js";
 import { createUser, findUserByEmail } from "../global/users.js";
 import {
@@ -585,6 +585,22 @@ class LinearClient {
       })
     );
   }
+
+  async getTeam(id: string) {
+    return this.request(
+      `query GetTeam($id: String!) {
+        team(id: $id) {
+          id
+          name
+          key
+        }
+      }`,
+      { id },
+      z.object({
+        team: linearTeamSchema.nullable(),
+      })
+    );
+  }
 }
 
 function mapStatus(
@@ -985,7 +1001,6 @@ export const linearImportSource: ImportSource<
           .join(",");
 
         const input: IssueInput = {
-          id: issue.id,
           teamId,
           title: issue.title,
           description: issue.description ?? undefined,
@@ -1159,6 +1174,7 @@ interface LinearWorkspaceState {
   teamCursor?: string | null;
   teamIds?: string[];
   teamIndex?: number;
+  vortexTeamId?: string;
   issueCursor?: string | null;
 }
 
@@ -1233,12 +1249,30 @@ async function importLinearWorkspace(
     };
   }
 
-  const vortexTeam = await createTeam(ctx.db, {
-    organizationId: ctx.organizationId,
-    name: `Linear team ${teamIndex + 1}`,
-    key: `LINEAR-${teamIndex + 1}`,
-    ownerId: ctx.importerId,
-  });
+  const linearTeam = await client.getTeam(linearTeamId);
+  if (!linearTeam.team) {
+    return {
+      counts: { errors: 1 },
+      nextCursor: null,
+    };
+  }
+
+  const teamName = linearTeam.team.name ?? `Linear team ${teamIndex + 1}`;
+  const teamKey = linearTeam.team.key ?? `LINEAR-${teamIndex + 1}`;
+  const vortexTeam = state.vortexTeamId
+    ? await getTeamById(ctx.db, state.vortexTeamId, ctx.organizationId)
+    : await createTeam(ctx.db, {
+        organizationId: ctx.organizationId,
+        name: teamName,
+        key: teamKey,
+        ownerId: ctx.importerId,
+      });
+  if (!vortexTeam) {
+    return {
+      counts: { errors: 1 },
+      nextCursor: null,
+    };
+  }
 
   const teamResult = await linearImportSource.run(
     ctx,
@@ -1262,12 +1296,14 @@ async function importLinearWorkspace(
         phase: "issues",
         teamIds,
         teamIndex,
+        vortexTeamId: vortexTeam.id,
         issueCursor: teamResult.nextCursor,
       }
     : {
         phase: "issues",
         teamIds,
         teamIndex: teamIndex + 1,
+        vortexTeamId: undefined,
         issueCursor: undefined,
       };
 
