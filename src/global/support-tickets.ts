@@ -31,7 +31,10 @@ import {
   team,
   user,
 } from "./schema.js";
-import { getCustomerById } from "./support-contacts.js";
+import {
+  getCustomerById,
+  type SupportCustomerIdentity,
+} from "./support-contacts.js";
 import { createTeam } from "./teams.js";
 
 export type SupportTicketStatus = "todo" | "done" | "snoozed";
@@ -142,7 +145,7 @@ export type SupportTicketWithRelations = SupportTicket & {
     phone: string | null;
   };
   companies: { id: string; name: string; isPrimary: boolean }[];
-  identities: { id: string; type: string; value: string; isPrimary: boolean }[];
+  identities: SupportCustomerIdentity[];
   labels: { id: string; labelId: string; name: string; color: string | null }[];
   assignees: {
     id: string;
@@ -343,7 +346,11 @@ export async function getTicketById(
 
   const customer = customerRows[0];
   if (!customer) {
-    throw new VortexError("Customer for ticket not found", 500);
+    throw new VortexError({
+      code: "INTERNAL_ERROR",
+      status: 500,
+      message: "Customer for ticket not found",
+    });
   }
 
   return {
@@ -633,6 +640,49 @@ export async function setTicketAssignees(
   });
 
   await db.insert(supportTicketAssignments).values(rows);
+}
+
+export async function setTicketLabels(
+  db: D1Client,
+  organizationId: string,
+  ticketId: string,
+  labelIds: string[]
+): Promise<void> {
+  await ensureTicket(db, organizationId, ticketId);
+
+  await db
+    .delete(supportTicketLabels)
+    .where(eq(supportTicketLabels.ticketId, ticketId));
+
+  if (labelIds.length === 0) return;
+
+  const validLabels = await db
+    .select({ id: labels.id })
+    .from(labels)
+    .where(
+      and(
+        eq(labels.organizationId, organizationId),
+        inArray(labels.id, labelIds)
+      )
+    );
+
+  const validIds = validLabels.map((label) => label.id);
+  const invalid = labelIds.filter((id) => !validIds.includes(id));
+  if (invalid.length > 0) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: `Invalid labels: ${invalid.join(", ")}`,
+    });
+  }
+
+  await db.insert(supportTicketLabels).values(
+    validIds.map((labelId) => ({
+      id: crypto.randomUUID(),
+      ticketId,
+      labelId,
+    }))
+  );
 }
 
 export async function addTicketMessage(
@@ -1320,7 +1370,11 @@ export async function createTicketFromIntercom(
 
   const full = await getTicketById(db, organizationId, ticket.id);
   if (!full) {
-    throw new VortexError("Imported ticket not found", 500);
+    throw new VortexError({
+      code: "INTERNAL_ERROR",
+      status: 500,
+      message: "Imported ticket not found",
+    });
   }
   return full;
 }
@@ -1345,7 +1399,11 @@ export async function createTicketFromPlain(
   if (existing) {
     const full = await getTicketById(db, organizationId, existing.id);
     if (!full) {
-      throw new VortexError("Imported ticket not found", 500);
+      throw new VortexError({
+        code: "INTERNAL_ERROR",
+        status: 500,
+        message: "Imported ticket not found",
+      });
     }
     return full;
   }
@@ -1390,7 +1448,11 @@ export async function createTicketFromPlain(
 
   const full = await getTicketById(db, organizationId, ticket.id);
   if (!full) {
-    throw new VortexError("Imported ticket not found", 500);
+    throw new VortexError({
+      code: "INTERNAL_ERROR",
+      status: 500,
+      message: "Imported ticket not found",
+    });
   }
   return full;
 }
@@ -1513,7 +1575,11 @@ export async function createTicketFromZendesk(
 
   const full = await getTicketById(db, organizationId, created.id);
   if (!full) {
-    throw new VortexError("Imported ticket not found", 500);
+    throw new VortexError({
+      code: "INTERNAL_ERROR",
+      status: 500,
+      message: "Imported ticket not found",
+    });
   }
   return full;
 }

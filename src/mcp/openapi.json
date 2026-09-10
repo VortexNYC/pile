@@ -17700,8 +17700,17 @@
                             "email",
                             "phone",
                             "slack",
-                            "chat"
+                            "msteams",
+                            "discord",
+                            "whatsapp",
+                            "chat",
+                            "api",
+                            "social",
+                            "custom"
                           ]
+                        },
+                        "subType": {
+                          "type": "string"
                         },
                         "value": {
                           "type": "string"
@@ -17821,8 +17830,18 @@
                                   "email",
                                   "phone",
                                   "slack",
-                                  "chat"
+                                  "msteams",
+                                  "discord",
+                                  "whatsapp",
+                                  "chat",
+                                  "api",
+                                  "social",
+                                  "custom"
                                 ]
+                              },
+                              "subType": {
+                                "type": "string",
+                                "nullable": true
                               },
                               "value": {
                                 "type": "string"
@@ -17838,6 +17857,7 @@
                               "id",
                               "customerId",
                               "type",
+                              "subType",
                               "value",
                               "isPrimary",
                               "createdAt"
@@ -18018,8 +18038,18 @@
                                     "email",
                                     "phone",
                                     "slack",
-                                    "chat"
+                                    "msteams",
+                                    "discord",
+                                    "whatsapp",
+                                    "chat",
+                                    "api",
+                                    "social",
+                                    "custom"
                                   ]
+                                },
+                                "subType": {
+                                  "type": "string",
+                                  "nullable": true
                                 },
                                 "value": {
                                   "type": "string"
@@ -18035,6 +18065,7 @@
                                 "id",
                                 "customerId",
                                 "type",
+                                "subType",
                                 "value",
                                 "isPrimary",
                                 "createdAt"
@@ -18194,8 +18225,18 @@
                                   "email",
                                   "phone",
                                   "slack",
-                                  "chat"
+                                  "msteams",
+                                  "discord",
+                                  "whatsapp",
+                                  "chat",
+                                  "api",
+                                  "social",
+                                  "custom"
                                 ]
+                              },
+                              "subType": {
+                                "type": "string",
+                                "nullable": true
                               },
                               "value": {
                                 "type": "string"
@@ -18211,6 +18252,7 @@
                               "id",
                               "customerId",
                               "type",
+                              "subType",
                               "value",
                               "isPrimary",
                               "createdAt"
@@ -18392,8 +18434,18 @@
                                   "email",
                                   "phone",
                                   "slack",
-                                  "chat"
+                                  "msteams",
+                                  "discord",
+                                  "whatsapp",
+                                  "chat",
+                                  "api",
+                                  "social",
+                                  "custom"
                                 ]
+                              },
+                              "subType": {
+                                "type": "string",
+                                "nullable": true
                               },
                               "value": {
                                 "type": "string"
@@ -18409,6 +18461,7 @@
                               "id",
                               "customerId",
                               "type",
+                              "subType",
                               "value",
                               "isPrimary",
                               "createdAt"
@@ -18594,8 +18647,18 @@
                                   "email",
                                   "phone",
                                   "slack",
-                                  "chat"
+                                  "msteams",
+                                  "discord",
+                                  "whatsapp",
+                                  "chat",
+                                  "api",
+                                  "social",
+                                  "custom"
                                 ]
+                              },
+                              "subType": {
+                                "type": "string",
+                                "nullable": true
                               },
                               "value": {
                                 "type": "string"
@@ -18611,6 +18674,7 @@
                               "id",
                               "customerId",
                               "type",
+                              "subType",
                               "value",
                               "isPrimary",
                               "createdAt"
@@ -18685,8 +18749,17 @@
                             "email",
                             "phone",
                             "slack",
-                            "chat"
+                            "msteams",
+                            "discord",
+                            "whatsapp",
+                            "chat",
+                            "api",
+                            "social",
+                            "custom"
                           ]
+                        },
+                        "subType": {
+                          "type": "string"
                         },
                         "value": {
                           "type": "string"
@@ -18806,8 +18879,18 @@
                                   "email",
                                   "phone",
                                   "slack",
-                                  "chat"
+                                  "msteams",
+                                  "discord",
+                                  "whatsapp",
+                                  "chat",
+                                  "api",
+                                  "social",
+                                  "custom"
                                 ]
+                              },
+                              "subType": {
+                                "type": "string",
+                                "nullable": true
                               },
                               "value": {
                                 "type": "string"
@@ -18823,6 +18906,7 @@
                               "id",
                               "customerId",
                               "type",
+                              "subType",
                               "value",
                               "isPrimary",
                               "createdAt"
@@ -19254,7 +19338,11 @@
                           "msteams",
                           "discord",
                           "chat",
-                          "api"
+                          "capture",
+                          "api",
+                          "intercom",
+                          "zendesk",
+                          "plain"
                         ],
                         "default": "chat"
                       }
@@ -19571,7 +19659,11 @@
                                       "msteams",
                                       "discord",
                                       "chat",
-                                      "api"
+                                      "capture",
+                                      "api",
+                                      "intercom",
+                                      "zendesk",
+                                      "plain"
                                     ]
                                   },
                                   "customerId": {
@@ -20046,7 +20138,11 @@
                                         "msteams",
                                         "discord",
                                         "chat",
-                                        "api"
+                                        "capture",
+                                        "api",
+                                        "intercom",
+                                        "zendesk",
+                                        "plain"
                                       ]
                                     },
                                     "customerId": {
@@ -20465,7 +20561,11 @@
                                       "msteams",
                                       "discord",
                                       "chat",
-                                      "api"
+                                      "capture",
+                                      "api",
+                                      "intercom",
+                                      "zendesk",
+                                      "plain"
                                     ]
                                   },
                                   "customerId": {
@@ -20912,7 +21012,11 @@
                                       "msteams",
                                       "discord",
                                       "chat",
-                                      "api"
+                                      "capture",
+                                      "api",
+                                      "intercom",
+                                      "zendesk",
+                                      "plain"
                                     ]
                                   },
                                   "customerId": {
@@ -21054,7 +21158,11 @@
                       "msteams",
                       "discord",
                       "chat",
-                      "api"
+                      "capture",
+                      "api",
+                      "intercom",
+                      "zendesk",
+                      "plain"
                     ]
                   },
                   "customerId": {
@@ -21165,7 +21273,11 @@
                                 "msteams",
                                 "discord",
                                 "chat",
-                                "api"
+                                "capture",
+                                "api",
+                                "intercom",
+                                "zendesk",
+                                "plain"
                               ]
                             },
                             "customerId": {
@@ -21366,7 +21478,11 @@
                                 "msteams",
                                 "discord",
                                 "chat",
-                                "api"
+                                "capture",
+                                "api",
+                                "intercom",
+                                "zendesk",
+                                "plain"
                               ]
                             },
                             "customerId": {
@@ -21545,7 +21661,11 @@
                                   "msteams",
                                   "discord",
                                   "chat",
-                                  "api"
+                                  "capture",
+                                  "api",
+                                  "intercom",
+                                  "zendesk",
+                                  "plain"
                                 ]
                               },
                               "customerId": {
@@ -21938,7 +22058,11 @@
                                       "msteams",
                                       "discord",
                                       "chat",
-                                      "api"
+                                      "capture",
+                                      "api",
+                                      "intercom",
+                                      "zendesk",
+                                      "plain"
                                     ]
                                   },
                                   "customerId": {
@@ -22351,7 +22475,11 @@
                                       "msteams",
                                       "discord",
                                       "chat",
-                                      "api"
+                                      "capture",
+                                      "api",
+                                      "intercom",
+                                      "zendesk",
+                                      "plain"
                                     ]
                                   },
                                   "customerId": {
@@ -22781,7 +22909,11 @@
                                       "msteams",
                                       "discord",
                                       "chat",
-                                      "api"
+                                      "capture",
+                                      "api",
+                                      "intercom",
+                                      "zendesk",
+                                      "plain"
                                     ]
                                   },
                                   "customerId": {
@@ -22871,6 +23003,917 @@
           }
         },
         "summary": "Create support ticket snooze"
+      }
+    },
+    "/workspaces/{organizationId}/support/tickets/{ticketId}/assignees": {
+      "put": {
+        "tags": [
+          "support-tickets"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "ticketId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "assignees": {
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "userId": {
+                              "type": "string"
+                            },
+                            "teamId": {
+                              "type": "string"
+                            },
+                            "isPrimary": {
+                              "type": "boolean",
+                              "default": false
+                            }
+                          },
+                          "required": [
+                            "userId"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "userId": {
+                              "type": "string"
+                            },
+                            "teamId": {
+                              "type": "string"
+                            },
+                            "isPrimary": {
+                              "type": "boolean",
+                              "default": false
+                            }
+                          },
+                          "required": [
+                            "teamId"
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "assignees"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Ticket assignees updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ticket": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "customerId": {
+                          "type": "string"
+                        },
+                        "number": {
+                          "type": "integer"
+                        },
+                        "externalId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "externalSource": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "todo",
+                            "done",
+                            "snoozed"
+                          ]
+                        },
+                        "priority": {
+                          "type": "string",
+                          "enum": [
+                            "low",
+                            "medium",
+                            "high",
+                            "urgent"
+                          ]
+                        },
+                        "sourceChannel": {
+                          "type": "string",
+                          "enum": [
+                            "email",
+                            "slack",
+                            "msteams",
+                            "discord",
+                            "chat",
+                            "capture",
+                            "api",
+                            "intercom",
+                            "zendesk",
+                            "plain"
+                          ]
+                        },
+                        "issueId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "lastCustomerMessageAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "lastAgentMessageAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        },
+                        "customer": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "email": {
+                              "type": "string"
+                            },
+                            "fullName": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "phone": {
+                              "type": "string",
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "email",
+                            "fullName",
+                            "phone"
+                          ]
+                        },
+                        "companies": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "isPrimary": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "isPrimary"
+                            ]
+                          }
+                        },
+                        "identities": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "email",
+                                  "phone",
+                                  "slack",
+                                  "msteams",
+                                  "discord",
+                                  "whatsapp",
+                                  "chat",
+                                  "api",
+                                  "social",
+                                  "custom"
+                                ]
+                              },
+                              "value": {
+                                "type": "string"
+                              },
+                              "subType": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "isPrimary": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "value",
+                              "subType",
+                              "isPrimary"
+                            ]
+                          }
+                        },
+                        "labels": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "labelId": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "color": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "labelId",
+                              "name",
+                              "color"
+                            ]
+                          }
+                        },
+                        "assignees": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "user",
+                                  "team"
+                                ]
+                              },
+                              "assigneeId": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "isPrimary": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "assigneeId",
+                              "name",
+                              "isPrimary"
+                            ]
+                          }
+                        },
+                        "events": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "ticketId": {
+                                "type": "string"
+                              },
+                              "type": {
+                                "type": "string"
+                              },
+                              "subType": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "actorType": {
+                                "type": "string"
+                              },
+                              "actorId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "metadata": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "eventId": {
+                                    "type": "string"
+                                  },
+                                  "direction": {
+                                    "type": "string",
+                                    "enum": [
+                                      "inbound",
+                                      "outbound"
+                                    ]
+                                  },
+                                  "textContent": {
+                                    "type": "string"
+                                  },
+                                  "markdownContent": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "channel": {
+                                    "type": "string",
+                                    "enum": [
+                                      "email",
+                                      "slack",
+                                      "msteams",
+                                      "discord",
+                                      "chat",
+                                      "capture",
+                                      "api",
+                                      "intercom",
+                                      "zendesk",
+                                      "plain"
+                                    ]
+                                  },
+                                  "customerId": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "userId": {
+                                    "type": "string",
+                                    "nullable": true
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "eventId",
+                                  "direction",
+                                  "textContent",
+                                  "markdownContent",
+                                  "channel",
+                                  "customerId",
+                                  "userId"
+                                ]
+                              },
+                              "note": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "eventId": {
+                                    "type": "string"
+                                  },
+                                  "body": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "eventId",
+                                  "body"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "ticketId",
+                              "type",
+                              "subType",
+                              "actorType",
+                              "actorId",
+                              "metadata",
+                              "createdAt"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "customerId",
+                        "number",
+                        "externalId",
+                        "externalSource",
+                        "title",
+                        "status",
+                        "priority",
+                        "sourceChannel",
+                        "issueId",
+                        "lastCustomerMessageAt",
+                        "lastAgentMessageAt",
+                        "createdAt",
+                        "updatedAt",
+                        "customer",
+                        "companies",
+                        "identities",
+                        "labels",
+                        "assignees",
+                        "events"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "ticket"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Update support ticket assignees"
+      }
+    },
+    "/workspaces/{organizationId}/support/tickets/{ticketId}/labels": {
+      "put": {
+        "tags": [
+          "support-tickets"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "ticketId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "labels": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "labels"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Ticket labels updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ticket": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "customerId": {
+                          "type": "string"
+                        },
+                        "number": {
+                          "type": "integer"
+                        },
+                        "externalId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "externalSource": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "todo",
+                            "done",
+                            "snoozed"
+                          ]
+                        },
+                        "priority": {
+                          "type": "string",
+                          "enum": [
+                            "low",
+                            "medium",
+                            "high",
+                            "urgent"
+                          ]
+                        },
+                        "sourceChannel": {
+                          "type": "string",
+                          "enum": [
+                            "email",
+                            "slack",
+                            "msteams",
+                            "discord",
+                            "chat",
+                            "capture",
+                            "api",
+                            "intercom",
+                            "zendesk",
+                            "plain"
+                          ]
+                        },
+                        "issueId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "lastCustomerMessageAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "lastAgentMessageAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        },
+                        "customer": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "email": {
+                              "type": "string"
+                            },
+                            "fullName": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "phone": {
+                              "type": "string",
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "email",
+                            "fullName",
+                            "phone"
+                          ]
+                        },
+                        "companies": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "isPrimary": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "isPrimary"
+                            ]
+                          }
+                        },
+                        "identities": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "email",
+                                  "phone",
+                                  "slack",
+                                  "msteams",
+                                  "discord",
+                                  "whatsapp",
+                                  "chat",
+                                  "api",
+                                  "social",
+                                  "custom"
+                                ]
+                              },
+                              "value": {
+                                "type": "string"
+                              },
+                              "subType": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "isPrimary": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "value",
+                              "subType",
+                              "isPrimary"
+                            ]
+                          }
+                        },
+                        "labels": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "labelId": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "color": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "labelId",
+                              "name",
+                              "color"
+                            ]
+                          }
+                        },
+                        "assignees": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "user",
+                                  "team"
+                                ]
+                              },
+                              "assigneeId": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "isPrimary": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "assigneeId",
+                              "name",
+                              "isPrimary"
+                            ]
+                          }
+                        },
+                        "events": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "ticketId": {
+                                "type": "string"
+                              },
+                              "type": {
+                                "type": "string"
+                              },
+                              "subType": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "actorType": {
+                                "type": "string"
+                              },
+                              "actorId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "metadata": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "eventId": {
+                                    "type": "string"
+                                  },
+                                  "direction": {
+                                    "type": "string",
+                                    "enum": [
+                                      "inbound",
+                                      "outbound"
+                                    ]
+                                  },
+                                  "textContent": {
+                                    "type": "string"
+                                  },
+                                  "markdownContent": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "channel": {
+                                    "type": "string",
+                                    "enum": [
+                                      "email",
+                                      "slack",
+                                      "msteams",
+                                      "discord",
+                                      "chat",
+                                      "capture",
+                                      "api",
+                                      "intercom",
+                                      "zendesk",
+                                      "plain"
+                                    ]
+                                  },
+                                  "customerId": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "userId": {
+                                    "type": "string",
+                                    "nullable": true
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "eventId",
+                                  "direction",
+                                  "textContent",
+                                  "markdownContent",
+                                  "channel",
+                                  "customerId",
+                                  "userId"
+                                ]
+                              },
+                              "note": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "eventId": {
+                                    "type": "string"
+                                  },
+                                  "body": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "eventId",
+                                  "body"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "ticketId",
+                              "type",
+                              "subType",
+                              "actorType",
+                              "actorId",
+                              "metadata",
+                              "createdAt"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "customerId",
+                        "number",
+                        "externalId",
+                        "externalSource",
+                        "title",
+                        "status",
+                        "priority",
+                        "sourceChannel",
+                        "issueId",
+                        "lastCustomerMessageAt",
+                        "lastAgentMessageAt",
+                        "createdAt",
+                        "updatedAt",
+                        "customer",
+                        "companies",
+                        "identities",
+                        "labels",
+                        "assignees",
+                        "events"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "ticket"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Update support ticket labels"
       }
     },
     "/workspaces/{organizationId}/csv-exports": {

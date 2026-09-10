@@ -18,7 +18,18 @@ import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 
-const identityTypeEnum = z.enum(["email", "phone", "slack", "chat"]);
+const identityTypeEnum = z.enum([
+  "email",
+  "phone",
+  "slack",
+  "msteams",
+  "discord",
+  "whatsapp",
+  "chat",
+  "api",
+  "social",
+  "custom",
+]);
 
 const supportCustomerCompanySchema = z.object({
   id: z.string(),
@@ -33,6 +44,7 @@ const supportCustomerIdentitySchema = z.object({
   id: z.string(),
   customerId: z.string(),
   type: identityTypeEnum,
+  subType: z.string().nullable(),
   value: z.string(),
   isPrimary: z.boolean(),
   createdAt: z.string(),
@@ -83,6 +95,7 @@ const createCustomerBodySchema = z.object({
     .array(
       z.object({
         type: identityTypeEnum,
+        subType: z.string().optional(),
         value: z.string(),
         isPrimary: z.boolean().default(false),
       })
@@ -112,6 +125,7 @@ const setCustomerIdentitiesBodySchema = z.object({
   identities: z.array(
     z.object({
       type: identityTypeEnum,
+      subType: z.string().optional(),
       value: z.string(),
       isPrimary: z.boolean().default(false),
     })
@@ -437,7 +451,10 @@ export function registerSupportContactRoutes(app: OpenAPIHono<AppContext>) {
     );
 
     return c.json({
-      customers: withRelations.filter(Boolean),
+      customers: withRelations.filter(
+        (customer): customer is NonNullable<typeof customer> =>
+          customer !== null
+      ),
       nextCursor,
     });
   });
@@ -456,10 +473,13 @@ export function registerSupportContactRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId, customerId } = c.req.valid("param");
     const body = c.req.valid("json");
     const db = createD1(c.env.D1);
-    const customer = await updateCustomer(db, organizationId, customerId, body);
-    if (!customer) {
+    const updated = await updateCustomer(db, organizationId, customerId, body);
+    if (!updated) {
       customerNotFound();
     }
+    const customer =
+      (await getCustomerById(db, organizationId, customerId)) ??
+      customerNotFound();
     return c.json({ customer });
   });
 

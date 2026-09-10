@@ -4851,6 +4851,48 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "support tickets assignees update": {
+    method: "PUT",
+    path: "/workspaces/{organizationId}/support/tickets/{ticketId}/assignees",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "ticketId",
+        flag: "ticket-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "assignees",
+        flag: "assignees",
+      },
+    ],
+  },
+  "support tickets labels update": {
+    method: "PUT",
+    path: "/workspaces/{organizationId}/support/tickets/{ticketId}/labels",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "ticketId",
+        flag: "ticket-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "labels",
+        flag: "labels",
+      },
+    ],
+  },
   "csv exports create": {
     method: "POST",
     path: "/workspaces/{organizationId}/csv-exports",

@@ -9,6 +9,8 @@ import {
   getTicketById,
   listTicketEvents,
   listTickets,
+  setTicketAssignees,
+  setTicketLabels,
   updateTicket,
 } from "../global/support-tickets.js";
 import { VortexError } from "../platform/errors.js";
@@ -47,7 +49,11 @@ const supportTicketMessageChannelEnum = z.enum([
   "msteams",
   "discord",
   "chat",
+  "capture",
   "api",
+  "intercom",
+  "zendesk",
+  "plain",
 ]);
 const supportTicketActorTypeEnum = z.enum([
   "customer",
@@ -192,7 +198,7 @@ const addMessageBodySchema = z.object({
   actorType: supportTicketActorTypeEnum.optional(),
   actorId: z.string().optional().nullable(),
   subType: z.string().optional().nullable(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 const addNoteBodySchema = z.object({
@@ -201,7 +207,7 @@ const addNoteBodySchema = z.object({
   actorType: supportTicketActorTypeEnum.optional(),
   actorId: z.string().optional().nullable(),
   subType: z.string().optional().nullable(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 const listTicketsQuerySchema = z.object({
@@ -221,6 +227,27 @@ const listEventsQuerySchema = z.object({
 
 const snoozeBodySchema = z.object({
   until: z.string(),
+});
+
+const supportTicketAssigneeSchema = z.union([
+  z.object({
+    userId: z.string(),
+    teamId: z.string().optional(),
+    isPrimary: z.boolean().default(false),
+  }),
+  z.object({
+    userId: z.string().optional(),
+    teamId: z.string(),
+    isPrimary: z.boolean().default(false),
+  }),
+]);
+
+const setAssigneesBodySchema = z.object({
+  assignees: z.array(supportTicketAssigneeSchema),
+});
+
+const setLabelsBodySchema = z.object({
+  labels: z.array(z.string()),
 });
 
 const orgParam = z.object({ organizationId: z.string() });
@@ -470,6 +497,56 @@ const snoozeRoute = createRoute({
   },
 });
 
+const setAssigneesRoute = createRoute({
+  method: "put",
+  path: "/workspaces/{organizationId}/support/tickets/{ticketId}/assignees",
+  tags: ["support-tickets"],
+  middleware: [rls("write")],
+  request: {
+    params: ticketIdParam,
+    body: {
+      content: {
+        "application/json": { schema: setAssigneesBodySchema },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Ticket assignees updated",
+      content: {
+        "application/json": {
+          schema: z.object({ ticket: supportTicketSchema }),
+        },
+      },
+    },
+  },
+});
+
+const setLabelsRoute = createRoute({
+  method: "put",
+  path: "/workspaces/{organizationId}/support/tickets/{ticketId}/labels",
+  tags: ["support-tickets"],
+  middleware: [rls("write")],
+  request: {
+    params: ticketIdParam,
+    body: {
+      content: {
+        "application/json": { schema: setLabelsBodySchema },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Ticket labels updated",
+      content: {
+        "application/json": {
+          schema: z.object({ ticket: supportTicketSchema }),
+        },
+      },
+    },
+  },
+});
+
 export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(createTicketRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
@@ -521,7 +598,12 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
       tickets.map((ticket) => getTicketById(db, organizationId, ticket.id))
     );
 
-    return c.json({ tickets: withRelations.filter(Boolean), nextCursor });
+    return c.json({
+      tickets: withRelations.filter(
+        (t): t is NonNullable<typeof t> => t !== null
+      ),
+      nextCursor,
+    });
   });
 
   app.openapi(getTicketRoute, async (c) => {
@@ -615,6 +697,26 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
       status: "snoozed",
       actorType: "user",
     });
+    const full =
+      (await getTicketById(db, organizationId, ticketId)) ?? ticketNotFound();
+    return c.json({ ticket: full });
+  });
+
+  app.openapi(setAssigneesRoute, async (c) => {
+    const { organizationId, ticketId } = c.req.valid("param");
+    const { assignees } = c.req.valid("json");
+    const db = createD1(c.env.D1);
+    await setTicketAssignees(db, organizationId, ticketId, assignees);
+    const full =
+      (await getTicketById(db, organizationId, ticketId)) ?? ticketNotFound();
+    return c.json({ ticket: full });
+  });
+
+  app.openapi(setLabelsRoute, async (c) => {
+    const { organizationId, ticketId } = c.req.valid("param");
+    const { labels: labelIds } = c.req.valid("json");
+    const db = createD1(c.env.D1);
+    await setTicketLabels(db, organizationId, ticketId, labelIds);
     const full =
       (await getTicketById(db, organizationId, ticketId)) ?? ticketNotFound();
     return c.json({ ticket: full });

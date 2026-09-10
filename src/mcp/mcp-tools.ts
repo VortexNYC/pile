@@ -8553,8 +8553,17 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                       "email",
                       "phone",
                       "slack",
-                      "chat"
+                      "msteams",
+                      "discord",
+                      "whatsapp",
+                      "chat",
+                      "api",
+                      "social",
+                      "custom"
                     ]
+                  },
+                  "subType": {
+                    "type": "string"
                   },
                   "value": {
                     "type": "string"
@@ -8675,7 +8684,11 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                     "msteams",
                     "discord",
                     "chat",
-                    "api"
+                    "capture",
+                    "api",
+                    "intercom",
+                    "zendesk",
+                    "plain"
                   ],
                   "default": "chat"
                 }
@@ -8756,7 +8769,11 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "msteams",
                 "discord",
                 "chat",
-                "api"
+                "capture",
+                "api",
+                "intercom",
+                "zendesk",
+                "plain"
               ]
             },
             "customerId": {
@@ -9498,8 +9515,17 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                       "email",
                       "phone",
                       "slack",
-                      "chat"
+                      "msteams",
+                      "discord",
+                      "whatsapp",
+                      "chat",
+                      "api",
+                      "social",
+                      "custom"
                     ]
+                  },
+                  "subType": {
+                    "type": "string"
                   },
                   "value": {
                     "type": "string"
@@ -9524,6 +9550,113 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "customerId",
         "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "putWorkspacesOrganizationIdSupportTicketsTicketIdAssignees",
+    "description": "Update support ticket assignees (PUT /workspaces/{organizationId}/support/tickets/{ticketId}/assignees)",
+    "method": "PUT",
+    "path": "/workspaces/{organizationId}/support/tickets/{ticketId}/assignees",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "ticketId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "assignees": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "userId": {
+                        "type": "string"
+                      },
+                      "teamId": {
+                        "type": "string"
+                      },
+                      "isPrimary": {
+                        "type": "boolean",
+                        "default": false
+                      }
+                    },
+                    "required": [
+                      "userId"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "userId": {
+                        "type": "string"
+                      },
+                      "teamId": {
+                        "type": "string"
+                      },
+                      "isPrimary": {
+                        "type": "boolean",
+                        "default": false
+                      }
+                    },
+                    "required": [
+                      "teamId"
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "required": [
+            "assignees"
+          ]
+        }
+      },
+      "required": [
+        "organizationId",
+        "ticketId"
+      ]
+    }
+  },
+  {
+    "name": "putWorkspacesOrganizationIdSupportTicketsTicketIdLabels",
+    "description": "Update support ticket labels (PUT /workspaces/{organizationId}/support/tickets/{ticketId}/labels)",
+    "method": "PUT",
+    "path": "/workspaces/{organizationId}/support/tickets/{ticketId}/labels",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "ticketId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "labels": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "labels"
+          ]
+        }
+      },
+      "required": [
+        "organizationId",
+        "ticketId"
       ]
     }
   },

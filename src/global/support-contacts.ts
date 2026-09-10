@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, like, or } from "drizzle-orm";
+import { and, asc, eq, gt, like, or, type SQL } from "drizzle-orm";
 
 import type { D1Client } from "./db.js";
 import {
@@ -245,7 +245,9 @@ export async function listCustomers(
   organizationId: string,
   options: ListCustomersOptions
 ): Promise<{ customers: SupportCustomer[]; nextCursor: string | null }> {
-  const conditions = [eq(supportCustomers.organizationId, organizationId)];
+  const conditions: (SQL<unknown> | undefined)[] = [
+    eq(supportCustomers.organizationId, organizationId),
+  ];
 
   if (options.companyId) {
     const customerIds = await db
@@ -531,7 +533,9 @@ export async function listCompanies(
   organizationId: string,
   options: ListCompaniesOptions
 ): Promise<{ companies: SupportCompany[]; nextCursor: string | null }> {
-  const conditions = [eq(supportCompanies.organizationId, organizationId)];
+  const conditions: (SQL<unknown> | undefined)[] = [
+    eq(supportCompanies.organizationId, organizationId),
+  ];
 
   if (options.q) {
     const query = `%${options.q}%`;
