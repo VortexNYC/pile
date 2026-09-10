@@ -1,4 +1,4 @@
-import type { EmailMessage } from "@cloudflare/workers-types";
+import type { ForwardableEmailMessage } from "@cloudflare/workers-types";
 import { and, eq } from "drizzle-orm";
 import PostalMime from "postal-mime";
 
@@ -7,6 +7,20 @@ import { supportChannels } from "../global/schema.js";
 import { processIncomingMessage } from "../global/support-channels.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 
+function isAddressLike(
+  value: unknown
+): value is { address: unknown; name?: unknown } {
+  return typeof value === "object" && value !== null && "address" in value;
+}
+
+function extractReferenceMessageId(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const match = value.match(/<([^>]+)>/);
+  return match ? match[1] : value.trim() || null;
+}
+
 function addressObject(value: unknown): {
   address: string;
   name: string | null;
@@ -14,16 +28,10 @@ function addressObject(value: unknown): {
   if (typeof value === "string") {
     return { address: value.trim().toLowerCase(), name: null };
   }
-  if (
-    value &&
-    typeof value === "object" &&
-    "address" in value &&
-    typeof (value as { address: unknown }).address === "string"
-  ) {
-    const item = value as { address: string; name?: unknown };
+  if (isAddressLike(value) && typeof value.address === "string") {
     return {
-      address: item.address.trim().toLowerCase(),
-      name: typeof item.name === "string" ? item.name : null,
+      address: value.address.trim().toLowerCase(),
+      name: typeof value.name === "string" ? value.name : null,
     };
   }
   return { address: "", name: null };
@@ -74,7 +82,7 @@ async function findChannelByEmailAddress(
 }
 
 export async function handleIncomingEmail(
-  message: EmailMessage,
+  message: ForwardableEmailMessage,
   env: WorkerEnv
 ): Promise<void> {
   const to = firstAddress(message.to);
@@ -93,7 +101,12 @@ export async function handleIncomingEmail(
   const raw = await readRawEmail(message.raw);
   const parsed = await PostalMime.parse(raw);
 
-  const from = addressObject(parsed.from ?? message.from);
+  const fromHeader = addressObject(parsed.from);
+  const fromEnvelope = firstAddress(message.from);
+  const from = {
+    address: fromEnvelope.address || fromHeader.address,
+    name: fromHeader.name ?? fromEnvelope.name,
+  };
   if (!from.address) {
     message.setReject("Missing sender");
     return;
@@ -102,6 +115,13 @@ export async function handleIncomingEmail(
   const text = typeof parsed.text === "string" ? parsed.text : "";
   const html = typeof parsed.html === "string" ? parsed.html : null;
   const subject = typeof parsed.subject === "string" ? parsed.subject : "";
+  const messageId =
+    typeof parsed.messageId === "string" ? parsed.messageId : null;
+  const inReplyTo =
+    typeof parsed.inReplyTo === "string" ? parsed.inReplyTo : null;
+  const messageIdValue = extractReferenceMessageId(messageId);
+  const inReplyToValue = extractReferenceMessageId(inReplyTo);
+  const externalTicketId = inReplyToValue ?? messageIdValue;
 
   await processIncomingMessage(db, channel.organizationId, {
     channel: "email",
@@ -110,7 +130,7 @@ export async function handleIncomingEmail(
     subject,
     text,
     html,
-    externalMessageId:
-      typeof parsed.messageId === "string" ? parsed.messageId : null,
+    externalTicketId,
+    externalMessageId: messageIdValue,
   });
 }

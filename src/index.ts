@@ -1,4 +1,4 @@
-import type { EmailMessage } from "@cloudflare/workers-types";
+import type { ForwardableEmailMessage } from "@cloudflare/workers-types";
 import { ne } from "drizzle-orm";
 
 import { drainOutpostQueue, sweepOutpostWorkers } from "./agents/outpost.js";
@@ -55,7 +55,7 @@ async function scheduled(
 }
 
 async function email(
-  message: EmailMessage,
+  message: ForwardableEmailMessage,
   env: WorkerEnv,
   _ctx: ExecutionContext
 ) {
