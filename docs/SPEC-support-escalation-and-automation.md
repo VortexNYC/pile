@@ -1,27 +1,28 @@
-# Spec: Support auto-escalation and rules
+# Spec: Support auto-escalation
 
 ## Objective
 
-Let a workspace automatically turn a support ticket into an engineering issue when configurable conditions match, while keeping the support ticket as the primary customer conversation. Provide the same manual link API already exists today.
+Let agents (and the teams running them) automatically promote a support ticket to a linked engineering issue when simple conditions match. Keep the support ticket as the customer record and the issue as the linked work item.
 
-## What we learned from the players
+This is intentionally the **first consumer** of a trigger/condition/action pattern, not a generic platform workflow engine. When a second domain needs the same shape, we will lift it into a generic `automations` table. A generic engine with one consumer is a second system.
 
-- **Manual link is the baseline.** Plain, Linear/Intercom, and Zendesk all let an agent press `i` (or use a sidebar widget) to create or link an engineering issue from a support thread. The support thread stays; the issue is a linked sibling.
-- **Rules are admin-configured, not agent-asked.** Zendesk *Triggers* and *Automations*, Plain *Workflows*, and Linear *Triage Rules* run because an admin configured them. They are not per-action approvals.
-- **AI actions are the approval layer.** Plain Sidekick "escalate" and Linear Agent issue creation are in the *needs approval* tier. Plain exposes this explicitly in its permissions table. Rules-based automation does not wait for a human click.
-- **Triggers are events, not schedules first.** Plain: thread created, message added, labels/priority/status changed. Zendesk: ticket created/updated. Linear: issue created, state changed, updated, comment created. Scheduled/cron is a separate workflow type.
-- **Conditions are grouped.** Zendesk uses `all`/`any`. Plain uses `All of`/`Any of`/`Not`. Linear filters on issue properties.
-- **Actions run in order; stop on conflict or per-action idempotency.** Plain and Zendesk execute rules top-down. Creating an issue is naturally idempotent: once `issueId` is set, a second `create_issue` should be a no-op.
-- **Issues land in triage/backlog, never an active cycle.** Linear/Plain/Zendesk create issues in triage or a configured backlog state. Close-the-loop status sync comes later.
-- **Context travels.** The linked engineering issue should contain title, support ticket description, customer email/name, channel, and a link back to the support ticket.
+## End users are agents
 
-## Proposed Vortex design
+- Rules are created, read, updated and deleted through the API/CLI/MCP, not a UI wizard.
+- A rule is a small JSON object an agent can generate from instructions.
+- No nested AND/OR DSL. All conditions in a rule are ANDed; OR is expressed by creating multiple rules.
+- No human-in-the-loop approval. Approval is for AI agent actions; rules are deterministic admin config.
+- Execution is synchronous after the triggering event so agents can observe the result immediately.
 
-### Principle: start domain-specific, generalize later
+## What the players do (and what we keep)
 
-Build `support_escalation_rules` as the first consumer. Once we have a second domain (e.g. issue status automations, billing dunning), we can extract a generic `automations` engine. A generic rule engine now would be premature abstraction.
+- **Manual link is the baseline.** Plain `i`, Linear/Intercom/Zendesk sidebar widgets all link a support thread to an existing or new issue. We already expose this via `PATCH /support/tickets/:id` (`issueId`).
+- **Rules are admin config.** Zendesk Triggers, Linear Triage Rules, Plain Workflows run automatically once configured. We use the same model.
+- **Issues land in triage/backlog.** Linear/Plain/Zendesk create issues in a non-active state. We default to `triage`.
+- **Context travels.** The linked issue must include customer email, channel, and a link back to the support ticket.
+- **No OR DSL.** Players have `all`/`any` grouping, but that is UI sugar. For an agent-first API, OR is cheaper and clearer as multiple rules.
 
-### Data model
+## Data model
 
 ```ts
 export const supportEscalationRules = sqliteTable(
@@ -37,12 +38,7 @@ export const supportEscalationRules = sqliteTable(
       .default(true),
     sortOrder: integer("sort_order" as string).notNull().default(0),
     conditions: text("conditions" as string).notNull(), // JSON
-    action: text("action" as string, {
-      enum: ["create_issue"],
-    } as const)
-      .notNull()
-      .default("create_issue"),
-    actionConfig: text("action_config" as string).notNull(), // JSON
+    action: text("action" as string).notNull(), // JSON
     createdAt: text("created_at" as string)
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
@@ -60,104 +56,82 @@ export const supportEscalationRules = sqliteTable(
 );
 ```
 
-`conditions` schema (Zod):
+`conditions` schema — all top-level keys are optional; when present they are ANDed:
 
 ```ts
 export const escalationConditionsSchema = z.object({
-  all: z.array(z.union([
-    z.object({
-      type: z.literal("keywords"),
-      keywords: z.array(z.string().min(1)),
-      scope: z.enum(["subject", "text", "any"]).default("any"),
-    }),
-    z.object({
-      type: z.literal("channel"),
-      channels: z.array(supportTicketChannelEnum),
-    }),
-    z.object({
-      type: z.literal("priority"),
-      priorities: z.array(supportTicketPriorityEnum),
-    }),
-    z.object({
-      type: z.literal("status"),
-      statuses: z.array(supportTicketStatusEnum),
-    }),
-    z.object({
-      type: z.literal("source"),
-      sources: z.array(supportTicketSourceEnum),
-    }),
-    z.object({
-      type: z.literal("customer_domain"),
-      domains: z.array(z.string()),
-    }),
-  ])).optional(),
+  keywords: z.array(z.string().min(1)).optional(),
+  channels: z.array(supportTicketChannelEnum).optional(),
+  priorities: z.array(supportTicketPriorityEnum).optional(),
+  statuses: z.array(supportTicketStatusEnum).optional(),
+  sources: z.array(supportTicketSourceEnum).optional(),
+  customerDomains: z.array(z.string()).optional(),
 });
 ```
 
-`actionConfig` schema:
+`action` schema for the first slice:
 
 ```ts
-export const createIssueActionConfigSchema = z.object({
+export const escalationActionSchema = z.object({
+  type: z.literal("create_issue"),
   teamId: z.string().optional(), // default team if omitted
-  titleTemplate: z.string().optional(), // supports {{ticket.title}}
-  descriptionTemplate: z.string().optional(),
   priority: z.enum(ISSUE_PRIORITIES).optional(),
   status: z.enum(ISSUE_STATUSES).optional().default("triage"),
   labels: z.array(z.string()).optional(),
 });
 ```
 
-### Triggers
+## Triggers
 
-Evaluate rules at these points in `src/global/support-channels.ts` and the provider handlers:
+First slice: `support_ticket.created` only.
 
-1. `support_ticket.created` — after a new ticket is created.
-2. `support_message.received` — after a new inbound message is added to an existing ticket.
-3. `support_ticket.status_changed` — after `updateTicket` changes status.
-4. `support_ticket.priority_changed` — after `updateTicket` changes priority.
+`support_message.received`, `support_ticket.status_changed`, and `support_ticket.priority_changed` are intentionally out of scope until a customer/agent actually asks for them. They are trivial to add later by calling the same evaluator at the right moment.
 
-For the first slice, implement **1 and 2**. 3 and 4 are follow-ups.
+## Execution
 
-### Execution model
+- After a support ticket is created, load active rules for the workspace ordered by `sortOrder`, then `createdAt`.
+- Build context: `{ ticket, subject, text, customer, channel, source }`.
+- For each rule:
+  - If `ticket.issueId` is already set, stop (idempotent).
+  - If every present condition matches, execute `create_issue`.
+  - Call `WorkspaceDO.createIssue(...)` with the configured team, priority, status, labels.
+  - Title: support ticket title.
+  - Description: support ticket text + customer email + channel + source + link back to support ticket.
+  - Update `support_tickets.issueId`.
+  - Insert `support_ticket_events` row: `type: "link_added"`, `actorType: "automation"`, `actorId: rule.id`, `metadata: { issueId, ruleId }`.
+  - Stop; one issue per support ticket.
 
-- Load active rules for the workspace ordered by `sortOrder`.
-- Build a context object: `{ ticket, message?, customer, channel, source, subject, text, fromEmail }`.
-- Evaluate each rule's `conditions` top-down.
-- When a rule matches:
-  - If `action` is `create_issue` and `ticket.issueId` is already set, skip (idempotent).
-  - Call `WorkspaceDO.createIssue(...)` with the configured team/priority/status.
-  - Update `support_tickets.issueId` with the new issue id.
-  - Insert a `support_ticket_events` row of type `link_added`, `actorType: "automation"`, `actorId: rule.id`, `metadata: { issueId, ruleId }`.
-  - Stop evaluating further `create_issue` rules for this ticket. Other action types (when added later) may continue.
+## Manual linking
 
-### Manual linking
+Already supported: `PATCH /support/tickets/:id` accepts `{ issueId: string | null }`. The first slice must also fix `updateTicket` to emit `link_added`/`link_changed`/`link_removed` events when `issueId` changes, with `actorType: "user"` and the acting user id.
 
-Already supported: `PATCH /support/tickets/:id` accepts `{ issueId: string | null }` and `updateTicket` writes it. The first slice must also fix `updateTicket` to emit `link_added`/`link_changed`/`link_removed` events when `issueId` changes, using `actorType: "user"` and the acting user id.
+## API
 
-### API additions
+- `GET    /support/escalation-rules`
+- `POST   /support/escalation-rules`
+- `GET    /support/escalation-rules/:ruleId`
+- `PATCH  /support/escalation-rules/:ruleId`
+- `DELETE /support/escalation-rules/:ruleId` (hard-delete; audit is in `support_ticket_events`)
 
-- `GET    /support/escalation-rules` — list active rules.
-- `POST   /support/escalation-rules` — create a rule.
-- `GET    /support/escalation-rules/:ruleId` — get a rule.
-- `PATCH  /support/escalation-rules/:ruleId` — update name, sortOrder, isActive, conditions, actionConfig.
-- `DELETE /support/escalation-rules/:ruleId` — soft-delete (or hard-delete; decide in implementation).
+## CLI/MCP example
 
-### Open questions for decision
-
-1. **Soft-delete vs hard-delete for rules?** Zendesk/Plain keep history; Linear can delete triage rules. Suggest hard-delete because rules are cheap and audit lives in `support_ticket_events`.
-2. **Should the first slice include `support_message.received` or only `support_ticket.created`?** Plain and Jetson re-evaluate on new messages, which matters for long threads. Suggest including `support_message.received` from the start; the incremental cost is small.
-3. **Should `createIssue` run synchronously in the webhook handler or async via `waitUntil`?** Synchronous is simpler and keeps tests deterministic. If support volume grows, move async later.
-4. **Should we expose `support_ticket.status_changed`/`priority_changed` triggers in the first slice?** These are useful but not required for the core escalation flow. Defer to keep the first slice small.
+```bash
+issuetracker support escalation-rules create \
+  --org org_vortex_main \
+  --name "bug-from-intercom" \
+  --conditions '{"keywords":["bug","broken"],"channels":["intercom"]}' \
+  --action '{"type":"create_issue","priority":"high","status":"triage"}'
+```
 
 ## Boundaries
 
-- **Always:** parse rule `conditions` and `actionConfig` with Zod before storing; validate templates at write time; narrow `env[...]` without `any`; record automation events.
-- **Ask first:** generalizing to a cross-domain `automations` table; adding scheduled/cron triggers; adding approval-gated AI escalation.
-- **Never:** store issue bodies in D1 (Durable Object owns issue state); commit secrets; auto-merge.
+- **Always:** Zod-validate `conditions` and `action` at write time; evaluate synchronously after ticket creation; record a `link_added` event.
+- **Ask first:** adding `support_message.received`/status/priority triggers; adding non-`create_issue` actions; generalizing to a cross-domain `automations` table.
+- **Never:** store issue state in D1; commit secrets; auto-merge.
 
 ## Success criteria
 
 - `PATCH /support/tickets/:id` with `issueId` links/unlinks and emits the right event.
-- A rule with keywords `"bug"` and channel `intercom` creates an issue when an Intercom webhook creates a ticket.
-- A rule with keywords `"urgent"` triggers on a second inbound email message and creates an issue for an existing ticket.
+- `POST /support/escalation-rules` creates a typed rule.
+- An Intercom webhook for a ticket containing "bug" creates a linked issue when a rule matches.
 - `pnpm run typecheck && pnpm run check && pnpm test` green.
