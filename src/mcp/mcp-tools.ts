@@ -8701,7 +8701,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "config": {
               "type": "object",
               "additionalProperties": {
-                "nullable": true
+                "type": "string"
               }
             },
             "isActive": {

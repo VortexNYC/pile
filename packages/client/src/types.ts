@@ -4788,19 +4788,136 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
-                            channels: {
+                            channels: ({
+                                /** @enum {string} */
+                                type: "email";
                                 id: string;
                                 organizationId: string;
-                                /** @enum {string} */
-                                type: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
                                 name: string;
                                 isActive: boolean;
                                 config: {
-                                    [key: string]: unknown;
+                                    emailAddress?: string;
+                                    color?: string;
                                 };
                                 createdAt: string;
                                 updatedAt: string;
-                            }[];
+                            } | {
+                                /** @enum {string} */
+                                type: "slack";
+                                id: string;
+                                organizationId: string;
+                                name: string;
+                                isActive: boolean;
+                                config: {
+                                    channelId?: string;
+                                    webhookUrl?: string;
+                                    color?: string;
+                                };
+                                createdAt: string;
+                                updatedAt: string;
+                            } | {
+                                /** @enum {string} */
+                                type: "msteams";
+                                id: string;
+                                organizationId: string;
+                                name: string;
+                                isActive: boolean;
+                                config: {
+                                    channelId?: string;
+                                    webhookUrl?: string;
+                                    color?: string;
+                                };
+                                createdAt: string;
+                                updatedAt: string;
+                            } | {
+                                /** @enum {string} */
+                                type: "discord";
+                                id: string;
+                                organizationId: string;
+                                name: string;
+                                isActive: boolean;
+                                config: {
+                                    channelId?: string;
+                                    webhookUrl?: string;
+                                    color?: string;
+                                };
+                                createdAt: string;
+                                updatedAt: string;
+                            } | {
+                                /** @enum {string} */
+                                type: "chat";
+                                id: string;
+                                organizationId: string;
+                                name: string;
+                                isActive: boolean;
+                                config: {
+                                    widgetId?: string;
+                                    color?: string;
+                                };
+                                createdAt: string;
+                                updatedAt: string;
+                            } | {
+                                /** @enum {string} */
+                                type: "capture";
+                                id: string;
+                                organizationId: string;
+                                name: string;
+                                isActive: boolean;
+                                config: {
+                                    formId?: string;
+                                    color?: string;
+                                };
+                                createdAt: string;
+                                updatedAt: string;
+                            } | {
+                                /** @enum {string} */
+                                type: "api";
+                                id: string;
+                                organizationId: string;
+                                name: string;
+                                isActive: boolean;
+                                config: {
+                                    endpoint?: string;
+                                };
+                                createdAt: string;
+                                updatedAt: string;
+                            } | {
+                                /** @enum {string} */
+                                type: "intercom";
+                                id: string;
+                                organizationId: string;
+                                name: string;
+                                isActive: boolean;
+                                config: {
+                                    appId?: string;
+                                };
+                                createdAt: string;
+                                updatedAt: string;
+                            } | {
+                                /** @enum {string} */
+                                type: "zendesk";
+                                id: string;
+                                organizationId: string;
+                                name: string;
+                                isActive: boolean;
+                                config: {
+                                    subdomain?: string;
+                                };
+                                createdAt: string;
+                                updatedAt: string;
+                            } | {
+                                /** @enum {string} */
+                                type: "plain";
+                                id: string;
+                                organizationId: string;
+                                name: string;
+                                isActive: boolean;
+                                config: {
+                                    workspaceId?: string;
+                                };
+                                createdAt: string;
+                                updatedAt: string;
+                            })[];
                         };
                     };
                 };
@@ -4824,7 +4941,7 @@ export interface paths {
                         type: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
                         name: string;
                         config?: {
-                            [key: string]: unknown;
+                            [key: string]: string;
                         };
                         /** @default true */
                         isActive?: boolean;
@@ -4839,14 +4956,131 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
+                            /** @enum {string} */
+                            type: "email";
                             id: string;
                             organizationId: string;
-                            /** @enum {string} */
-                            type: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
                             name: string;
                             isActive: boolean;
                             config: {
-                                [key: string]: unknown;
+                                emailAddress?: string;
+                                color?: string;
+                            };
+                            createdAt: string;
+                            updatedAt: string;
+                        } | {
+                            /** @enum {string} */
+                            type: "slack";
+                            id: string;
+                            organizationId: string;
+                            name: string;
+                            isActive: boolean;
+                            config: {
+                                channelId?: string;
+                                webhookUrl?: string;
+                                color?: string;
+                            };
+                            createdAt: string;
+                            updatedAt: string;
+                        } | {
+                            /** @enum {string} */
+                            type: "msteams";
+                            id: string;
+                            organizationId: string;
+                            name: string;
+                            isActive: boolean;
+                            config: {
+                                channelId?: string;
+                                webhookUrl?: string;
+                                color?: string;
+                            };
+                            createdAt: string;
+                            updatedAt: string;
+                        } | {
+                            /** @enum {string} */
+                            type: "discord";
+                            id: string;
+                            organizationId: string;
+                            name: string;
+                            isActive: boolean;
+                            config: {
+                                channelId?: string;
+                                webhookUrl?: string;
+                                color?: string;
+                            };
+                            createdAt: string;
+                            updatedAt: string;
+                        } | {
+                            /** @enum {string} */
+                            type: "chat";
+                            id: string;
+                            organizationId: string;
+                            name: string;
+                            isActive: boolean;
+                            config: {
+                                widgetId?: string;
+                                color?: string;
+                            };
+                            createdAt: string;
+                            updatedAt: string;
+                        } | {
+                            /** @enum {string} */
+                            type: "capture";
+                            id: string;
+                            organizationId: string;
+                            name: string;
+                            isActive: boolean;
+                            config: {
+                                formId?: string;
+                                color?: string;
+                            };
+                            createdAt: string;
+                            updatedAt: string;
+                        } | {
+                            /** @enum {string} */
+                            type: "api";
+                            id: string;
+                            organizationId: string;
+                            name: string;
+                            isActive: boolean;
+                            config: {
+                                endpoint?: string;
+                            };
+                            createdAt: string;
+                            updatedAt: string;
+                        } | {
+                            /** @enum {string} */
+                            type: "intercom";
+                            id: string;
+                            organizationId: string;
+                            name: string;
+                            isActive: boolean;
+                            config: {
+                                appId?: string;
+                            };
+                            createdAt: string;
+                            updatedAt: string;
+                        } | {
+                            /** @enum {string} */
+                            type: "zendesk";
+                            id: string;
+                            organizationId: string;
+                            name: string;
+                            isActive: boolean;
+                            config: {
+                                subdomain?: string;
+                            };
+                            createdAt: string;
+                            updatedAt: string;
+                        } | {
+                            /** @enum {string} */
+                            type: "plain";
+                            id: string;
+                            organizationId: string;
+                            name: string;
+                            isActive: boolean;
+                            config: {
+                                workspaceId?: string;
                             };
                             createdAt: string;
                             updatedAt: string;

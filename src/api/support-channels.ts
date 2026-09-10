@@ -19,32 +19,141 @@ import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 
-const supportChannelSchema = z.object({
-  id: z.string(),
-  organizationId: z.string(),
-  type: z.enum([
-    "email",
-    "slack",
-    "msteams",
-    "discord",
-    "chat",
-    "capture",
-    "api",
-    "intercom",
-    "zendesk",
-    "plain",
-  ]),
-  name: z.string(),
-  isActive: z.boolean(),
-  config: z.record(z.string(), z.unknown()),
-  createdAt: z.string(),
-  updatedAt: z.string(),
+const supportChannelTypeEnum = z.enum([
+  "email",
+  "slack",
+  "msteams",
+  "discord",
+  "chat",
+  "capture",
+  "api",
+  "intercom",
+  "zendesk",
+  "plain",
+]);
+
+const baseMessagingConfig = z.object({
+  channelId: z.string().optional(),
+  webhookUrl: z.string().optional(),
+  color: z.string().optional(),
 });
 
+const supportChannelSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("email"),
+    id: z.string(),
+    organizationId: z.string(),
+    name: z.string(),
+    isActive: z.boolean(),
+    config: z.object({
+      emailAddress: z.string().optional(),
+      color: z.string().optional(),
+    }),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  }),
+  z.object({
+    type: z.literal("slack"),
+    id: z.string(),
+    organizationId: z.string(),
+    name: z.string(),
+    isActive: z.boolean(),
+    config: baseMessagingConfig,
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  }),
+  z.object({
+    type: z.literal("msteams"),
+    id: z.string(),
+    organizationId: z.string(),
+    name: z.string(),
+    isActive: z.boolean(),
+    config: baseMessagingConfig,
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  }),
+  z.object({
+    type: z.literal("discord"),
+    id: z.string(),
+    organizationId: z.string(),
+    name: z.string(),
+    isActive: z.boolean(),
+    config: baseMessagingConfig,
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  }),
+  z.object({
+    type: z.literal("chat"),
+    id: z.string(),
+    organizationId: z.string(),
+    name: z.string(),
+    isActive: z.boolean(),
+    config: z.object({
+      widgetId: z.string().optional(),
+      color: z.string().optional(),
+    }),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  }),
+  z.object({
+    type: z.literal("capture"),
+    id: z.string(),
+    organizationId: z.string(),
+    name: z.string(),
+    isActive: z.boolean(),
+    config: z.object({
+      formId: z.string().optional(),
+      color: z.string().optional(),
+    }),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  }),
+  z.object({
+    type: z.literal("api"),
+    id: z.string(),
+    organizationId: z.string(),
+    name: z.string(),
+    isActive: z.boolean(),
+    config: z.object({ endpoint: z.string().optional() }),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  }),
+  z.object({
+    type: z.literal("intercom"),
+    id: z.string(),
+    organizationId: z.string(),
+    name: z.string(),
+    isActive: z.boolean(),
+    config: z.object({ appId: z.string().optional() }),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  }),
+  z.object({
+    type: z.literal("zendesk"),
+    id: z.string(),
+    organizationId: z.string(),
+    name: z.string(),
+    isActive: z.boolean(),
+    config: z.object({ subdomain: z.string().optional() }),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  }),
+  z.object({
+    type: z.literal("plain"),
+    id: z.string(),
+    organizationId: z.string(),
+    name: z.string(),
+    isActive: z.boolean(),
+    config: z.object({ workspaceId: z.string().optional() }),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  }),
+]);
+
 const createSupportChannelSchema = z.object({
-  type: supportChannelSchema.shape.type,
+  type: supportChannelTypeEnum,
   name: z.string().min(1).max(200),
-  config: z.record(z.string(), z.unknown()).optional(),
+  config: z.record(z.string(), z.string()).optional(),
   isActive: z.boolean().default(true),
 });
 
@@ -80,16 +189,12 @@ export function registerSupportChannelRoutes(app: OpenAPIHono<AppContext>) {
         .where(eq(supportChannels.organizationId, organizationId))
         .all();
       return c.json({
-        channels: rows.map((row) => ({
-          id: row.id,
-          organizationId: row.organizationId,
-          type: row.type,
-          name: row.name,
-          isActive: row.isActive,
-          config: JSON.parse(row.config),
-          createdAt: row.createdAt,
-          updatedAt: row.updatedAt,
-        })),
+        channels: rows.map((row) =>
+          supportChannelSchema.parse({
+            ...row,
+            config: JSON.parse(row.config),
+          })
+        ),
       });
     }
   );
@@ -152,19 +257,17 @@ export function registerSupportChannelRoutes(app: OpenAPIHono<AppContext>) {
         createdAt: ts,
         updatedAt: ts,
       });
-      return c.json(
-        {
-          id,
-          organizationId,
-          type: input.type,
-          name: input.name,
-          isActive: input.isActive,
-          config: input.config ?? {},
-          createdAt: ts,
-          updatedAt: ts,
-        },
-        201
-      );
+      const response = supportChannelSchema.parse({
+        type: input.type,
+        id,
+        organizationId,
+        name: input.name,
+        isActive: input.isActive,
+        config: input.config ?? {},
+        createdAt: ts,
+        updatedAt: ts,
+      });
+      return c.json(response, 201);
     }
   );
 
