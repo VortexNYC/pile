@@ -4,6 +4,10 @@ import { recordImportMapping } from "../global/import-mappings.js";
 import {
   createCustomer,
   findCustomerByExternalId,
+  findOrCreateCompany,
+  setCustomerCompanies,
+  setCustomerIdentities,
+  type CustomerIdentityInput,
 } from "../global/support-contacts.js";
 import type {
   ExternalSupportAttachment,
@@ -12,7 +16,11 @@ import type {
   SupportTicketActorType,
   SupportTicketEventType,
 } from "../global/support-tickets.js";
-import { createTicketFromIntercom } from "../global/support-tickets.js";
+import {
+  createTicketFromIntercom,
+  findUserByEmail,
+  setTicketAssignees,
+} from "../global/support-tickets.js";
 import { VortexError } from "../platform/errors.js";
 import {
   intercomCredentialsSchema,
@@ -42,8 +50,71 @@ function contactEmail(contact: { id: string; email?: string }): string {
   return `${contact.id}@intercom.imported`;
 }
 
+const intercomSocialProfileSchema = z
+  .object({
+    type: z.string(),
+    username: z.string().optional().nullable(),
+    url: z.string().optional().nullable(),
+  })
+  .passthrough();
+
+const intercomCompanySchema = z
+  .object({
+    type: z.string().optional(),
+    id: z.string(),
+    company_id: z.string().optional().nullable(),
+    name: z.string().optional().nullable(),
+    website: z.string().optional().nullable(),
+  })
+  .passthrough();
+
+const intercomContactDetailSchema = z
+  .object({
+    type: z.literal("contact"),
+    id: z.string(),
+    email: z.string().optional().nullable(),
+    name: z.string().optional().nullable(),
+    phone: z.string().optional().nullable(),
+    external_id: z.string().optional().nullable(),
+    custom_attributes: z.record(z.unknown()).optional(),
+    companies: z.array(intercomCompanySchema).optional().default([]),
+    social_profiles: z
+      .array(intercomSocialProfileSchema)
+      .optional()
+      .default([]),
+  })
+  .passthrough();
+
+async function getIntercomContactDetail(
+  token: string,
+  contactId: string
+): Promise<z.infer<typeof intercomContactDetailSchema> | null> {
+  const raw = await intercomRequest(token, `/contacts/${contactId}`);
+  const parsed = intercomContactDetailSchema.safeParse(raw);
+  if (!parsed.success) return null;
+  return parsed.data;
+}
+
+function intercomSocialProfileToInput(
+  profile: z.infer<typeof intercomSocialProfileSchema>
+): CustomerIdentityInput | null {
+  const type = profile.type.toLowerCase();
+  const value = profile.username ?? profile.url ?? "";
+  if (!value) return null;
+  if (
+    type === "twitter" ||
+    type === "facebook" ||
+    type === "linkedin" ||
+    type === "instagram"
+  ) {
+    return { type: "social", subType: type, value, isPrimary: false };
+  }
+  return { type: "custom", subType: profile.type, value, isPrimary: false };
+}
+
 async function getOrCreateIntercomSupportCustomer(
   ctx: ImportContext,
+  token: string,
   contact: { id: string; email?: string; name?: string }
 ): Promise<string> {
   const existing = await findCustomerByExternalId(
@@ -52,18 +123,79 @@ async function getOrCreateIntercomSupportCustomer(
     contact.id,
     "intercom"
   );
-  if (existing) {
-    return existing.id;
+  const customerId = existing
+    ? existing.id
+    : (
+        await createCustomer(ctx.db, {
+          organizationId: ctx.organizationId,
+          email: contactEmail(contact),
+          fullName: contact.name ?? null,
+          externalId: contact.id,
+          externalSource: "intercom",
+        })
+      ).id;
+
+  const detail = await getIntercomContactDetail(token, contact.id);
+  if (!detail) return customerId;
+
+  const companyInputs = (detail.companies ?? []).map((company) => ({
+    name: company.name ?? "Unknown company",
+    domain: company.website ?? null,
+    externalId: company.company_id ?? company.id,
+    externalSource: "intercom" as const,
+  }));
+
+  const companies = await Promise.all(
+    companyInputs.map(async (input) => {
+      const company = await findOrCreateCompany(
+        ctx.db,
+        ctx.organizationId,
+        input
+      );
+      return { companyId: company.id, isPrimary: false };
+    })
+  );
+
+  if (companies.length > 0) {
+    await setCustomerCompanies(
+      ctx.db,
+      ctx.organizationId,
+      customerId,
+      companies
+    );
   }
 
-  const customer = await createCustomer(ctx.db, {
-    organizationId: ctx.organizationId,
-    email: contactEmail(contact),
-    fullName: contact.name ?? null,
-    externalId: contact.id,
-    externalSource: "intercom",
-  });
-  return customer.id;
+  const identities: CustomerIdentityInput[] = [];
+  if (detail.email) {
+    identities.push({
+      type: "email",
+      subType: "email",
+      value: detail.email,
+      isPrimary: true,
+    });
+  }
+  if (detail.phone) {
+    identities.push({
+      type: "phone",
+      subType: "phone",
+      value: detail.phone,
+      isPrimary: false,
+    });
+  }
+  for (const profile of detail.social_profiles ?? []) {
+    const input = intercomSocialProfileToInput(profile);
+    if (input) identities.push(input);
+  }
+  if (identities.length > 0) {
+    await setCustomerIdentities(
+      ctx.db,
+      ctx.organizationId,
+      customerId,
+      identities
+    );
+  }
+
+  return customerId;
 }
 
 const intercomAttachmentSchema = z
@@ -296,6 +428,23 @@ async function getIntercomConversationParts(
   return { replies, events };
 }
 
+async function syncIntercomTicketAssignees(
+  ctx: ImportContext,
+  ticketId: string,
+  assignee: { type?: string; email?: string | null } | null | undefined
+): Promise<void> {
+  if (!assignee || assignee.type !== "admin" || !assignee.email) {
+    return;
+  }
+  const user = await findUserByEmail(ctx.db, assignee.email);
+  if (!user) {
+    return;
+  }
+  await setTicketAssignees(ctx.db, ctx.organizationId, ticketId, [
+    { userId: user.id, isPrimary: true },
+  ]);
+}
+
 export const intercomSupportImportSource: ImportSource<
   IntercomSupportCredentials,
   IntercomSupportOptions
@@ -350,6 +499,7 @@ export const intercomSupportImportSource: ImportSource<
             const [customerId, timeline] = await Promise.all([
               getOrCreateIntercomSupportCustomer(
                 ctx,
+                token,
                 primary as { id: string; email?: string; name?: string }
               ),
               getIntercomConversationParts(token, conversation.id),
@@ -373,15 +523,22 @@ export const intercomSupportImportSource: ImportSource<
               {}
             );
 
-            await recordImportMapping(
-              ctx.db,
-              ctx.organizationId,
-              ctx.jobId,
-              "intercom-support",
-              "ticket",
-              conversation.id,
-              result.id
-            );
+            await Promise.all([
+              syncIntercomTicketAssignees(
+                ctx,
+                result.id,
+                conversation.assignee
+              ),
+              recordImportMapping(
+                ctx.db,
+                ctx.organizationId,
+                ctx.jobId,
+                "intercom-support",
+                "ticket",
+                conversation.id,
+                result.id
+              ),
+            ]);
 
             const isExisting =
               result.externalId === conversation.id &&

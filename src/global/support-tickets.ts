@@ -506,6 +506,42 @@ export async function updateTicket(
   return updated ?? null;
 }
 
+export async function findUserByEmail(
+  db: D1Client,
+  email: string
+): Promise<{ id: string } | null> {
+  const [found] = await db
+    .select({ id: user.id })
+    .from(user)
+    .where(eq(user.email, email))
+    .limit(1);
+  return found ?? null;
+}
+
+export async function setTicketAssignees(
+  db: D1Client,
+  organizationId: string,
+  ticketId: string,
+  assignees: { userId: string; isPrimary: boolean }[]
+): Promise<void> {
+  await ensureTicket(db, organizationId, ticketId);
+
+  await db
+    .delete(supportTicketAssignments)
+    .where(eq(supportTicketAssignments.ticketId, ticketId));
+
+  if (assignees.length > 0) {
+    await db.insert(supportTicketAssignments).values(
+      assignees.map((assignee) => ({
+        id: crypto.randomUUID(),
+        ticketId,
+        userId: assignee.userId,
+        isPrimary: assignee.isPrimary,
+      }))
+    );
+  }
+}
+
 export async function addTicketMessage(
   db: D1Client,
   organizationId: string,

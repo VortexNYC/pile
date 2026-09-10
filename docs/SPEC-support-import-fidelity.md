@@ -26,6 +26,37 @@ Make the Intercom, Plain, and Zendesk support import adapters capture the full p
 
 - `addTicketMessage`, `addTicketNote`, `addTicketEvent`, `addSupportTicketAttachment` accept explicit `actorType`, `actorId`, `subType`, `metadata`, and `createdAt`.
 - `ingestSupportTimeline` creates the first inbound message, then replies and events in provider order, attaching attachments to the correct event.
+- `findUserByEmail` resolves a provider agent to a Vortex `user` by email.
+- `setTicketAssignees` replaces a ticket's current assignees; only matched Vortex users are linked, preserving `isPrimary` for the primary owner.
+
+### Contact graph
+
+- `support_customers`, `support_companies`, `support_customer_companies`, and `support_customer_identities` are populated during import.
+- `support_customer_identities.type` is a native channel (`email`, `phone`, `slack`, `msteams`, `discord`, `whatsapp`, `chat`, `api`, `social`, `custom`).
+- `support_customer_identities.sub_type` stores the exact provider identity type (`EmailCustomerIdentity`, `twitter`, `facebook`, etc.).
+- `findOrCreateCompany` deduplicates companies by `externalId` + `externalSource` so repeated runs don't duplicate `support_companies`.
+
+### Intercom contacts
+
+- The primary contact from `conversation.contacts` is looked up with `/contacts/{id}` to fetch `companies`, `phone`, `external_id`, `custom_attributes`, and `social_profiles`.
+- `companies` become `support_companies` (domain from `website`, external id from `company_id` > `id`).
+- `email` and `phone` become `email`/`phone` identities; `social_profiles` become `social` or `custom` identities with the provider `sub_type` preserved.
+- `conversation.assignee` with `type = "admin"` and a matching Vortex user email populates `support_ticket_assignments`.
+
+### Plain customers
+
+- The thread's `customer` now includes `externalId`, `identities`, `company`, and `tenantMemberships(first: 20)`.
+- `customer.company` becomes the primary `support_company`.
+- `customer.tenantMemberships.edges[].node.tenant` become additional `support_company` rows (`externalId` from `externalId` > `id`).
+- `customer.identities` (`EmailCustomerIdentity`, `SlackCustomerIdentity`, `DiscordCustomerIdentity`) become `support_customer_identities` with the original `__typename` as `sub_type`.
+- `thread.assignedTo` (when `User` with email) and `thread.additionalAssignees` resolve to Vortex users and populate `support_ticket_assignments`.
+
+### Zendesk users and organizations
+
+- `listZendeskTickets` includes `users`; `users` now include `phone` and `organization_id`.
+- `listAllZendeskOrganizations` fetches all organizations and maps `requester.organization_id` to a `support_company`.
+- `requester.email` and `requester.phone` become `email`/`phone` identities.
+- `ticket.assignee_id` resolves to a Vortex user by email and populates `support_ticket_assignments`.
 
 ### Intercom
 

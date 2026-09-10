@@ -4,6 +4,10 @@ import { recordImportMapping } from "../global/import-mappings.js";
 import {
   createCustomer,
   findCustomerByExternalId,
+  findOrCreateCompany,
+  setCustomerCompanies,
+  setCustomerIdentities,
+  type CustomerIdentityInput,
 } from "../global/support-contacts.js";
 import type {
   ExternalSupportAttachment,
@@ -13,7 +17,11 @@ import type {
   SupportTicketEventType,
   SupportTicketMessageChannel,
 } from "../global/support-tickets.js";
-import { createTicketFromPlain } from "../global/support-tickets.js";
+import {
+  createTicketFromPlain,
+  findUserByEmail,
+  setTicketAssignees,
+} from "../global/support-tickets.js";
 import { VortexError } from "../platform/errors.js";
 import type {
   ImportBatchResult,
@@ -82,16 +90,71 @@ const plainTimestampSchema = z.object({
   iso8601: z.string(),
 });
 
-const plainCustomerSchema = z.object({
-  id: z.string(),
-  fullName: z.string().optional().nullable(),
-  email: z
-    .object({
-      email: z.string(),
-    })
-    .optional()
-    .nullable(),
-});
+const plainIdentitySchema = z
+  .object({
+    typename: z.string().optional(),
+    email: z.string().optional().nullable(),
+    discordUserId: z.string().optional().nullable(),
+    slackUserId: z.string().optional().nullable(),
+  })
+  .passthrough();
+
+const plainCompanySchema = z
+  .object({
+    id: z.string(),
+    name: z.string().optional().nullable(),
+    domainName: z.string().optional().nullable(),
+  })
+  .passthrough();
+
+const plainTenantSchema = z
+  .object({
+    id: z.string(),
+    name: z.string().optional().nullable(),
+    externalId: z.string().optional().nullable(),
+  })
+  .passthrough();
+
+const plainCustomerSchema = z
+  .object({
+    id: z.string(),
+    externalId: z.string().optional().nullable(),
+    fullName: z.string().optional().nullable(),
+    email: z
+      .object({
+        email: z.string(),
+      })
+      .optional()
+      .nullable(),
+    identities: z.array(plainIdentitySchema).optional().default([]),
+    company: plainCompanySchema.optional().nullable(),
+    tenantMemberships: z
+      .object({
+        edges: z
+          .array(
+            z.object({
+              node: z.object({
+                tenant: plainTenantSchema,
+              }),
+            })
+          )
+          .optional()
+          .default([]),
+      })
+      .optional()
+      .nullable(),
+  })
+  .passthrough();
+
+const plainAssigneeSchema = z
+  .object({
+    typename: z.string().optional(),
+    id: z.string().optional(),
+    email: z.string().optional().nullable(),
+    systemId: z.string().optional(),
+    machineUserId: z.string().optional(),
+  })
+  .passthrough();
 
 const plainThreadSchema = z.object({
   id: z.string(),
@@ -102,6 +165,8 @@ const plainThreadSchema = z.object({
   createdAt: plainTimestampSchema.optional().nullable(),
   updatedAt: plainTimestampSchema.optional().nullable(),
   customer: plainCustomerSchema.optional().nullable(),
+  assignedTo: plainAssigneeSchema.optional().nullable(),
+  additionalAssignees: z.array(plainAssigneeSchema).optional().default([]),
 });
 
 const plainPageInfoSchema = z.object({
@@ -143,37 +208,172 @@ function plainPriorityToVortex(
   return "none";
 }
 
-function customerEmail(customer: { email?: { email: string } | null }): string {
+type PlainCustomer = z.infer<typeof plainCustomerSchema>;
+type PlainAssignee = z.infer<typeof plainAssigneeSchema>;
+
+function customerEmail(customer: PlainCustomer): string {
   if (customer.email?.email) return customer.email.email;
   return `${customer.id}@plain.imported`;
 }
 
+function plainIdentityToInput(
+  identity: z.infer<typeof plainIdentitySchema>
+): CustomerIdentityInput | null {
+  const typename = identity.typename ?? "";
+  if (typename === "EmailCustomerIdentity" && identity.email) {
+    return {
+      type: "email",
+      subType: typename,
+      value: identity.email,
+      isPrimary: false,
+    };
+  }
+  if (typename === "SlackCustomerIdentity" && identity.slackUserId) {
+    return {
+      type: "slack",
+      subType: typename,
+      value: identity.slackUserId,
+      isPrimary: false,
+    };
+  }
+  if (typename === "DiscordCustomerIdentity" && identity.discordUserId) {
+    return {
+      type: "discord",
+      subType: typename,
+      value: identity.discordUserId,
+      isPrimary: false,
+    };
+  }
+  if (typename) {
+    return {
+      type: "custom",
+      subType: typename,
+      value:
+        identity.email ??
+        identity.slackUserId ??
+        identity.discordUserId ??
+        JSON.stringify(identity),
+      isPrimary: false,
+    };
+  }
+  return null;
+}
+
 async function getOrCreatePlainSupportCustomer(
   ctx: ImportContext,
-  customer: {
-    id: string;
-    fullName?: string | null;
-    email?: { email: string } | null;
-  }
+  customer: PlainCustomer
 ): Promise<string> {
+  const externalId = customer.externalId ?? customer.id;
   const existing = await findCustomerByExternalId(
     ctx.db,
     ctx.organizationId,
-    customer.id,
+    externalId,
     "plain"
   );
-  if (existing) {
-    return existing.id;
+  const customerId = existing
+    ? existing.id
+    : (
+        await createCustomer(ctx.db, {
+          organizationId: ctx.organizationId,
+          email: customerEmail(customer),
+          fullName: customer.fullName ?? null,
+          externalId,
+          externalSource: "plain",
+        })
+      ).id;
+
+  const companies: { companyId: string; isPrimary: boolean }[] = [];
+  if (customer.company) {
+    const company = await findOrCreateCompany(ctx.db, ctx.organizationId, {
+      name: customer.company.name ?? "Unknown company",
+      domain: customer.company.domainName ?? null,
+      externalId: customer.company.id,
+      externalSource: "plain",
+    });
+    companies.push({ companyId: company.id, isPrimary: true });
   }
 
-  const created = await createCustomer(ctx.db, {
-    organizationId: ctx.organizationId,
-    email: customerEmail(customer),
-    fullName: customer.fullName ?? null,
-    externalId: customer.id,
-    externalSource: "plain",
-  });
-  return created.id;
+  const tenantInputs = (customer.tenantMemberships?.edges ?? [])
+    .map((edge) => edge.node.tenant)
+    .filter((tenant) => tenant.id)
+    .map((tenant) => ({
+      name: tenant.name ?? "Unknown tenant",
+      domain: tenant.externalId ?? null,
+      externalId: tenant.externalId ?? tenant.id,
+      externalSource: "plain" as const,
+    }));
+
+  const tenantCompanies = await Promise.all(
+    tenantInputs.map(async (input) => {
+      const company = await findOrCreateCompany(
+        ctx.db,
+        ctx.organizationId,
+        input
+      );
+      return { companyId: company.id, isPrimary: false };
+    })
+  );
+  companies.push(...tenantCompanies);
+
+  if (companies.length > 0) {
+    await setCustomerCompanies(
+      ctx.db,
+      ctx.organizationId,
+      customerId,
+      companies
+    );
+  }
+
+  const identities = (customer.identities ?? [])
+    .map(plainIdentityToInput)
+    .filter((identity): identity is CustomerIdentityInput => identity !== null);
+  if (identities.length > 0) {
+    const primaryIdentity =
+      identities.find((i) => i.type === "email") ?? identities[0];
+    if (primaryIdentity) primaryIdentity.isPrimary = true;
+    await setCustomerIdentities(
+      ctx.db,
+      ctx.organizationId,
+      customerId,
+      identities
+    );
+  }
+
+  return customerId;
+}
+
+async function syncPlainTicketAssignees(
+  ctx: ImportContext,
+  ticketId: string,
+  assignedTo: PlainAssignee | null | undefined,
+  additionalAssignees: PlainAssignee[]
+): Promise<void> {
+  const assignees: { userId: string; isPrimary: boolean }[] = [];
+  const seen = new Set<string>();
+
+  const resolveUser = async (assignee: PlainAssignee): Promise<void> => {
+    if (assignee.typename !== "User" || !assignee.email) return;
+    const user = await findUserByEmail(ctx.db, assignee.email);
+    if (!user || seen.has(user.id)) return;
+    seen.add(user.id);
+    assignees.push({ userId: user.id, isPrimary: false });
+  };
+
+  if (assignedTo) {
+    if (assignedTo.typename === "User" && assignedTo.email) {
+      const user = await findUserByEmail(ctx.db, assignedTo.email);
+      if (user) {
+        assignees.push({ userId: user.id, isPrimary: true });
+        seen.add(user.id);
+      }
+    }
+  }
+
+  await Promise.all(additionalAssignees.map(resolveUser));
+
+  if (assignees.length > 0) {
+    await setTicketAssignees(ctx.db, ctx.organizationId, ticketId, assignees);
+  }
 }
 
 async function listPlainThreads(
@@ -195,10 +395,16 @@ async function listPlainThreads(
           priority
           createdAt { iso8601 }
           updatedAt { iso8601 }
+          assignedTo { typename: __typename ... on User { id email } ... on MachineUser { id } ... on System { systemId } }
+          additionalAssignees { typename: __typename ... on User { id email } ... on MachineUser { id } ... on System { systemId } }
           customer {
             id
+            externalId
             fullName
             email { email }
+            identities { typename: __typename ... on EmailCustomerIdentity { email } ... on SlackCustomerIdentity { slackUserId } ... on DiscordCustomerIdentity { discordUserId } }
+            company { id name domainName }
+            tenantMemberships(first: 20) { edges { node { tenant { id name externalId } } } }
           }
         }
         pageInfo {
@@ -810,15 +1016,23 @@ export const plainSupportImportSource: ImportSource<
               {}
             );
 
-            await recordImportMapping(
-              ctx.db,
-              ctx.organizationId,
-              ctx.jobId,
-              "plain-support",
-              "ticket",
-              thread.id,
-              result.id
-            );
+            await Promise.all([
+              syncPlainTicketAssignees(
+                ctx,
+                result.id,
+                thread.assignedTo,
+                thread.additionalAssignees ?? []
+              ),
+              recordImportMapping(
+                ctx.db,
+                ctx.organizationId,
+                ctx.jobId,
+                "plain-support",
+                "ticket",
+                thread.id,
+                result.id
+              ),
+            ]);
 
             const isExisting =
               result.externalId === thread.id &&

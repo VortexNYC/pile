@@ -4,6 +4,10 @@ import { recordImportMapping } from "../global/import-mappings.js";
 import {
   createCustomer,
   findCustomerByExternalId,
+  findOrCreateCompany,
+  setCustomerCompanies,
+  setCustomerIdentities,
+  type CustomerIdentityInput,
 } from "../global/support-contacts.js";
 import type {
   ExternalSupportAttachment,
@@ -12,7 +16,11 @@ import type {
   SupportTicketActorType,
   SupportTicketMessageChannel,
 } from "../global/support-tickets.js";
-import { createTicketFromZendesk } from "../global/support-tickets.js";
+import {
+  createTicketFromZendesk,
+  findUserByEmail,
+  setTicketAssignees,
+} from "../global/support-tickets.js";
 import { VortexError } from "../platform/errors.js";
 import type {
   ImportBatchResult,
@@ -84,8 +92,30 @@ const zendeskUserSchema = z
     email: z.string().optional(),
     name: z.string().optional(),
     role: z.string().optional(),
+    phone: z.string().optional().nullable(),
+    organization_id: z.number().int().optional().nullable(),
   })
   .passthrough();
+
+const zendeskOrganizationSchema = z
+  .object({
+    id: z.number().int(),
+    name: z.string().optional().nullable(),
+    domain_names: z.array(z.string()).optional().default([]),
+    external_id: z.string().optional().nullable(),
+  })
+  .passthrough();
+
+const zendeskOrganizationListSchema = z.object({
+  organizations: z.array(zendeskOrganizationSchema),
+  meta: z
+    .object({
+      has_more: z.boolean(),
+      after_cursor: z.string().optional(),
+    })
+    .optional()
+    .default({ has_more: false }),
+});
 
 const zendeskTicketSchema = z
   .object({
@@ -98,6 +128,8 @@ const zendeskTicketSchema = z
       .optional()
       .default("normal"),
     requester_id: z.number().int(),
+    assignee_id: z.number().int().optional().nullable(),
+    group_id: z.number().int().optional().nullable(),
     created_at: z.string(),
     updated_at: z.string(),
   })
@@ -225,10 +257,49 @@ async function listZendeskTickets(
   return { tickets, users, nextCursor };
 }
 
-function userById(
-  users: ZendeskUser[],
-  id: number
-): { id: number; email?: string; name?: string } | null {
+type ZendeskOrganization = z.infer<typeof zendeskOrganizationSchema>;
+
+async function listAllZendeskOrganizations(
+  credentials: ZendeskCredentials
+): Promise<Map<number, ZendeskOrganization>> {
+  const organizations = new Map<number, ZendeskOrganization>();
+
+  const fetchPage = async (cursor?: string): Promise<void> => {
+    const params = new URLSearchParams();
+    params.set("page[size]", "100");
+    if (cursor) {
+      params.set("page[after]", cursor);
+    }
+
+    const raw = await zendeskRequest(
+      credentials,
+      `/api/v2/organizations.json?${params.toString()}`
+    );
+    const parsed = zendeskOrganizationListSchema.safeParse(raw);
+    if (!parsed.success) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 500,
+        message: "Invalid Zendesk organizations response",
+        hint: parsed.error.message,
+      });
+    }
+
+    for (const org of parsed.data.organizations) {
+      organizations.set(org.id, org);
+    }
+
+    const meta = parsed.data.meta;
+    if (meta?.has_more && meta.after_cursor) {
+      await fetchPage(meta.after_cursor);
+    }
+  };
+
+  await fetchPage();
+  return organizations;
+}
+
+function userById(users: ZendeskUser[], id: number): ZendeskUser | null {
   return users.find((user) => user.id === id) ?? null;
 }
 
@@ -239,7 +310,8 @@ function requesterEmail(requester: { id: number; email?: string }): string {
 
 async function getOrCreateZendeskSupportCustomer(
   ctx: ImportContext,
-  requester: { id: number; email?: string; name?: string }
+  requester: ZendeskUser,
+  organizations: Map<number, ZendeskOrganization>
 ): Promise<string> {
   const existing = await findCustomerByExternalId(
     ctx.db,
@@ -247,18 +319,82 @@ async function getOrCreateZendeskSupportCustomer(
     String(requester.id),
     "zendesk"
   );
-  if (existing) {
-    return existing.id;
+  const customerId = existing
+    ? existing.id
+    : (
+        await createCustomer(ctx.db, {
+          organizationId: ctx.organizationId,
+          email: requesterEmail(requester),
+          fullName: requester.name ?? null,
+          externalId: String(requester.id),
+          externalSource: "zendesk",
+        })
+      ).id;
+
+  const companies: { companyId: string; isPrimary: boolean }[] = [];
+  const org = requester.organization_id
+    ? organizations.get(requester.organization_id)
+    : null;
+  if (org) {
+    const domain = org.domain_names?.[0] ?? null;
+    const company = await findOrCreateCompany(ctx.db, ctx.organizationId, {
+      name: org.name ?? "Unknown organization",
+      domain,
+      externalId: org.external_id ?? String(org.id),
+      externalSource: "zendesk",
+    });
+    companies.push({ companyId: company.id, isPrimary: true });
+    await setCustomerCompanies(
+      ctx.db,
+      ctx.organizationId,
+      customerId,
+      companies
+    );
   }
 
-  const customer = await createCustomer(ctx.db, {
-    organizationId: ctx.organizationId,
-    email: requesterEmail(requester),
-    fullName: requester.name ?? null,
-    externalId: String(requester.id),
-    externalSource: "zendesk",
-  });
-  return customer.id;
+  const identities: CustomerIdentityInput[] = [];
+  if (requester.email) {
+    identities.push({
+      type: "email",
+      subType: "email",
+      value: requester.email,
+      isPrimary: true,
+    });
+  }
+  if (requester.phone) {
+    identities.push({
+      type: "phone",
+      subType: "phone",
+      value: requester.phone,
+      isPrimary: false,
+    });
+  }
+  if (identities.length > 0) {
+    await setCustomerIdentities(
+      ctx.db,
+      ctx.organizationId,
+      customerId,
+      identities
+    );
+  }
+
+  return customerId;
+}
+
+async function syncZendeskTicketAssignees(
+  ctx: ImportContext,
+  ticketId: string,
+  ticket: ZendeskTicket,
+  users: ZendeskUser[]
+): Promise<void> {
+  if (!ticket.assignee_id) return;
+  const assignee = userById(users, ticket.assignee_id);
+  if (!assignee?.email) return;
+  const user = await findUserByEmail(ctx.db, assignee.email);
+  if (!user) return;
+  await setTicketAssignees(ctx.db, ctx.organizationId, ticketId, [
+    { userId: user.id, isPrimary: true },
+  ]);
 }
 
 function commentActor(
@@ -659,6 +795,8 @@ export const zendeskSupportImportSource: ImportSource<
     let processed = 0;
     let nextCursor: string | null = null;
 
+    const organizations = await listAllZendeskOrganizations(credentials);
+
     const processPage = async (cursor?: string): Promise<void> => {
       const {
         tickets,
@@ -685,14 +823,20 @@ export const zendeskSupportImportSource: ImportSource<
             }
 
             const [customerId, comments] = await Promise.all([
-              getOrCreateZendeskSupportCustomer(ctx, requester),
+              getOrCreateZendeskSupportCustomer(ctx, requester, organizations),
               getZendeskTicketComments(credentials, ticket),
             ]);
+
+            const allUsers = Array.from(
+              new Map(
+                [...users, ...comments.users].map((u) => [u.id, u])
+              ).values()
+            );
 
             const auditEvents = await getZendeskTicketAudits(
               credentials,
               ticket,
-              comments.users
+              allUsers
             );
 
             const ticketEvent: ExternalSupportEvent = {
@@ -721,6 +865,8 @@ export const zendeskSupportImportSource: ImportSource<
               },
               {}
             );
+
+            await syncZendeskTicketAssignees(ctx, result.id, ticket, allUsers);
 
             await recordImportMapping(
               ctx.db,

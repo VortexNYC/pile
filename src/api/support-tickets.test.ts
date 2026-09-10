@@ -11,11 +11,20 @@ import {
   supportTicketNotes,
   user as userTable,
 } from "../global/schema.js";
-import { createCustomer as createSupportCustomer } from "../global/support-contacts.js";
+import {
+  createCustomer as createSupportCustomer,
+  createCompany,
+  getCustomerById,
+  setCustomerCompanies,
+  setCustomerIdentities,
+} from "../global/support-contacts.js";
 import {
   createTicketFromIntercom,
   createTicketFromPlain,
   createTicketFromZendesk,
+  findUserByEmail,
+  getTicketById,
+  setTicketAssignees,
 } from "../global/support-tickets.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
@@ -683,5 +692,104 @@ describe("support-tickets API", () => {
     expect(surveyEvent).toBeDefined();
     expect(surveyEvent?.subType).toBe("SatisfactionRating");
     expect(surveyEvent?.actorType).toBe("customer");
+  });
+
+  it("preserves customer companies and identities", async () => {
+    const db = createD1(env.D1);
+    const customer = await createSupportCustomer(db, {
+      organizationId,
+      email: "contact@acme.example",
+      fullName: "Contact Person",
+      externalId: null,
+      externalSource: null,
+    });
+
+    const company = await createCompany(db, {
+      organizationId,
+      name: "Acme",
+      domain: "acme.example",
+      externalId: "acme-123",
+      externalSource: "test",
+    });
+
+    await setCustomerCompanies(db, organizationId, customer.id, [
+      { companyId: company.id, isPrimary: true },
+    ]);
+
+    await setCustomerIdentities(db, organizationId, customer.id, [
+      {
+        type: "email",
+        subType: "work",
+        value: "contact@acme.example",
+        isPrimary: true,
+      },
+      {
+        type: "slack",
+        subType: "SlackCustomerIdentity",
+        value: "U123456",
+        isPrimary: false,
+      },
+      {
+        type: "social",
+        subType: "twitter",
+        value: "@acme_support",
+        isPrimary: false,
+      },
+    ]);
+
+    const fetched = await getCustomerById(db, organizationId, customer.id);
+    expect(fetched).not.toBeNull();
+    expect(fetched?.companies.length).toBe(1);
+    expect(fetched?.companies[0]?.companyId).toBe(company.id);
+    expect(fetched?.companies[0]?.isPrimary).toBe(true);
+
+    const emailIdentity = fetched?.identities.find((i) => i.type === "email");
+    expect(emailIdentity?.value).toBe("contact@acme.example");
+    expect(emailIdentity?.subType).toBe("work");
+
+    const socialIdentity = fetched?.identities.find((i) => i.type === "social");
+    expect(socialIdentity?.subType).toBe("twitter");
+  });
+
+  it("populates ticket assignments from provider agent emails", async () => {
+    const db = createD1(env.D1);
+    const user = await findUserByEmail(db, "user-1@example.com");
+    expect(user).not.toBeNull();
+
+    const customer = await createSupportCustomer(db, {
+      organizationId,
+      email: "assigned@example.com",
+      fullName: "Assigned Customer",
+      externalId: null,
+      externalSource: null,
+    });
+
+    const ticket = await createTicketFromPlain(
+      db,
+      organizationId,
+      customer.id,
+      {
+        id: "thread-assigned",
+        status: "todo",
+        priority: "medium",
+        source: {
+          type: "chat",
+          body: "I need help",
+        },
+        createdAt: "2023-11-14T14:00:00.000Z",
+        updatedAt: "2023-11-14T14:00:00.000Z",
+        replies: [],
+        events: [],
+      }
+    );
+
+    await setTicketAssignees(db, organizationId, ticket.id, [
+      { userId: user!.id, isPrimary: true },
+    ]);
+
+    const fetched = await getTicketById(db, organizationId, ticket.id);
+    expect(fetched?.assignees.length).toBe(1);
+    expect(fetched?.assignees[0]?.userId).toBe(user!.id);
+    expect(fetched?.assignees[0]?.isPrimary).toBe(true);
   });
 });

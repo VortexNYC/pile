@@ -1872,8 +1872,20 @@ export const supportCustomerIdentities = sqliteTable(
       .notNull()
       .references(() => supportCustomers.id, { onDelete: "cascade" }),
     type: text("type" as string, {
-      enum: ["email", "phone", "slack", "chat"] as const,
+      enum: [
+        "email",
+        "phone",
+        "slack",
+        "msteams",
+        "discord",
+        "whatsapp",
+        "chat",
+        "api",
+        "social",
+        "custom",
+      ] as const,
     }).notNull(),
+    subType: text("sub_type" as string),
     value: text("value" as string).notNull(),
     isPrimary: integer("is_primary" as string, { mode: "boolean" })
       .notNull()

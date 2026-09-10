@@ -1,0 +1,1 @@
+ALTER TABLE `support_customer_identities` ADD `sub_type` text;

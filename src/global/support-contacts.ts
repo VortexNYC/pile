@@ -46,10 +46,23 @@ export type SupportCustomerCompany = {
   createdAt: string;
 };
 
+export type SupportCustomerIdentityType =
+  | "email"
+  | "phone"
+  | "slack"
+  | "msteams"
+  | "discord"
+  | "whatsapp"
+  | "chat"
+  | "api"
+  | "social"
+  | "custom";
+
 export type SupportCustomerIdentity = {
   id: string;
   customerId: string;
-  type: "email" | "phone" | "slack" | "chat";
+  type: SupportCustomerIdentityType;
+  subType: string | null;
   value: string;
   isPrimary: boolean;
   createdAt: string;
@@ -353,11 +366,18 @@ export async function setCustomerCompanies(
   }
 }
 
+export type CustomerIdentityInput = {
+  type: SupportCustomerIdentityType;
+  subType?: string | null;
+  value: string;
+  isPrimary: boolean;
+};
+
 export async function setCustomerIdentities(
   db: D1Client,
   organizationId: string,
   customerId: string,
-  identities: { type: string; value: string; isPrimary: boolean }[]
+  identities: CustomerIdentityInput[]
 ): Promise<void> {
   const customer = await getCustomerById(db, organizationId, customerId);
   if (!customer) {
@@ -375,6 +395,7 @@ export async function setCustomerIdentities(
         id: crypto.randomUUID(),
         customerId,
         type: i.type,
+        subType: i.subType ?? null,
         value: i.value,
         isPrimary: i.isPrimary,
         createdAt: now,
@@ -431,6 +452,43 @@ export async function getCompanyById(
     .limit(1);
 
   return company ?? null;
+}
+
+export async function findCompanyByExternalId(
+  db: D1Client,
+  organizationId: string,
+  externalId: string,
+  externalSource: string
+): Promise<SupportCompany | null> {
+  const [company] = await db
+    .select()
+    .from(supportCompanies)
+    .where(
+      and(
+        eq(supportCompanies.organizationId, organizationId),
+        eq(supportCompanies.externalId, externalId),
+        eq(supportCompanies.externalSource, externalSource)
+      )
+    )
+    .limit(1);
+  return company ?? null;
+}
+
+export async function findOrCreateCompany(
+  db: D1Client,
+  organizationId: string,
+  input: SupportCompanyInput
+): Promise<SupportCompany> {
+  if (input.externalId && input.externalSource) {
+    const existing = await findCompanyByExternalId(
+      db,
+      organizationId,
+      input.externalId,
+      input.externalSource
+    );
+    if (existing) return existing;
+  }
+  return createCompany(db, input);
 }
 
 export type ListCompaniesOptions = {

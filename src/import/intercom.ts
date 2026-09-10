@@ -42,6 +42,15 @@ const intercomContactSchema = z.object({
   name: z.string().optional(),
 });
 
+const intercomAssigneeSchema = z
+  .object({
+    type: z.string().optional(),
+    id: z.string().optional(),
+    name: z.string().optional(),
+    email: z.string().optional().nullable(),
+  })
+  .passthrough();
+
 const intercomConversationSchema = z.object({
   type: z.literal("conversation"),
   id: z.string(),
@@ -54,6 +63,7 @@ const intercomConversationSchema = z.object({
     .optional()
     .default("none"),
   source: intercomConversationSourceSchema.nullable().default(null),
+  assignee: intercomAssigneeSchema.optional().nullable(),
   contacts: z
     .object({
       type: z.string(),
