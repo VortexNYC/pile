@@ -5,6 +5,7 @@ import { createD1 } from "../global/db.js";
 import {
   createSupportSavedView,
   getInboxTicketCounts,
+  getNextInboxTicket,
   getSupportSavedView,
   listInboxTickets,
   listSupportSavedViews,
@@ -70,6 +71,8 @@ const listInboxOptionsSchema = z.object({
   assignedTo: z.string().optional(),
   customerId: z.string().optional(),
   channel: channelEnum.optional(),
+  label: z.string().optional(),
+  slaBreach: z.coerce.boolean().optional(),
   q: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(25),
   cursor: z.string().optional(),
@@ -122,6 +125,28 @@ const getInboxCountsRoute = createRoute({
         },
       },
     },
+  },
+});
+
+const getNextInboxRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/support/inbox/next",
+  tags: ["support-inbox"],
+  middleware: [rls("read")],
+  request: { params: orgParam },
+  responses: {
+    200: {
+      description: "Next ticket",
+      content: {
+        "application/json": {
+          schema: z.object({
+            ticketId: z.string(),
+            userId: z.string(),
+          }),
+        },
+      },
+    },
+    404: { description: "No unassigned ticket or available agent" },
   },
 });
 
@@ -247,6 +272,20 @@ export function registerSupportInboxRoutes(app: OpenAPIHono<AppContext>) {
       c.var.workspaceIdentity.id
     );
     return c.json({ counts });
+  });
+
+  app.openapi(getNextInboxRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const next = await getNextInboxTicket(db, organizationId);
+    if (!next) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "No unassigned ticket or available agent",
+      });
+    }
+    return c.json(next);
   });
 
   app.openapi(createSavedViewRoute, async (c) => {

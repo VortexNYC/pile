@@ -1,4 +1,4 @@
-import { and, count, eq, inArray, max, ne } from "drizzle-orm";
+import { and, asc, count, eq, inArray, max, ne, notInArray } from "drizzle-orm";
 
 import type { D1Client } from "./db.js";
 import {
@@ -12,6 +12,7 @@ import {
   supportTickets,
 } from "./schema.js";
 import type { SupportCustomer } from "./support-contacts.js";
+import { listSupportAgents } from "./support-team.js";
 import {
   listTickets,
   type SupportTicketChannel,
@@ -48,6 +49,8 @@ export type ListInboxOptions = {
   assignedTo?: string;
   customerId?: string;
   channel?: SupportTicketChannel;
+  label?: string;
+  slaBreach?: boolean;
   q?: string;
 };
 
@@ -392,4 +395,56 @@ export async function listSupportSavedViews(
     )
     .orderBy(supportSavedViews.createdAt);
   return rows as unknown as (typeof supportSavedViews.$inferSelect)[];
+}
+
+export async function getNextInboxTicket(
+  db: D1Client,
+  organizationId: string
+): Promise<{ ticketId: string; userId: string } | null> {
+  const assigned = await db
+    .select({ ticketId: supportTicketAssignments.ticketId })
+    .from(supportTicketAssignments)
+    .innerJoin(
+      supportTickets,
+      eq(supportTicketAssignments.ticketId, supportTickets.id)
+    )
+    .where(
+      and(
+        eq(supportTickets.organizationId, organizationId),
+        eq(supportTickets.status, "todo"),
+        eq(supportTicketAssignments.isPrimary, true)
+      )
+    );
+  const assignedIds = assigned.map((a) => a.ticketId);
+
+  const conditions = [
+    eq(supportTickets.organizationId, organizationId),
+    eq(supportTickets.status, "todo"),
+  ];
+  if (assignedIds.length > 0) {
+    conditions.push(notInArray(supportTickets.id, assignedIds));
+  }
+
+  const tickets = await db
+    .select()
+    .from(supportTickets)
+    .where(and(...conditions))
+    .orderBy(asc(supportTickets.createdAt))
+    .limit(1);
+  const ticket = tickets[0];
+  if (!ticket) return null;
+
+  const agents = (await listSupportAgents(db, organizationId)).filter(
+    (a) => a.status === "active"
+  );
+  if (agents.length === 0) return null;
+
+  agents.sort((a, b) => {
+    if (a.openTickets !== b.openTickets) return a.openTickets - b.openTickets;
+    return a.userId.localeCompare(b.userId);
+  });
+
+  const agent = agents[0];
+  if (!agent) return null;
+  return { ticketId: ticket.id, userId: agent.userId };
 }

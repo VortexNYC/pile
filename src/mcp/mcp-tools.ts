@@ -3497,6 +3497,13 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "plain"
           ]
         },
+        "label": {
+          "type": "string"
+        },
+        "slaBreach": {
+          "type": "boolean",
+          "nullable": true
+        },
         "q": {
           "type": "string"
         },
@@ -3520,6 +3527,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "description": "List support inbox counts (GET /workspaces/{organizationId}/support/inbox/counts)",
     "method": "GET",
     "path": "/workspaces/{organizationId}/support/inbox/counts",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportInboxNext",
+    "description": "List support inbox next (GET /workspaces/{organizationId}/support/inbox/next)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/inbox/next",
     "inputSchema": {
       "type": "object",
       "properties": {

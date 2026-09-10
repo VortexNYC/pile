@@ -26085,6 +26085,23 @@
               "type": "string"
             },
             "required": false,
+            "name": "label",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "boolean",
+              "nullable": true
+            },
+            "required": false,
+            "name": "slaBreach",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
             "name": "q",
             "in": "query"
           },
@@ -26305,6 +26322,51 @@
           }
         },
         "summary": "List support inbox counts"
+      }
+    },
+    "/workspaces/{organizationId}/support/inbox/next": {
+      "get": {
+        "tags": [
+          "support-inbox"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Next ticket",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ticketId": {
+                      "type": "string"
+                    },
+                    "userId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ticketId",
+                    "userId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No unassigned ticket or available agent"
+          }
+        },
+        "summary": "List support inbox next"
       }
     },
     "/workspaces/{organizationId}/support/inbox/views": {

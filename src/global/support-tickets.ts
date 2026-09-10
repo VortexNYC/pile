@@ -29,6 +29,7 @@ import {
   supportTicketLabels,
   supportTicketMessages,
   supportTicketNotes,
+  supportTicketSlaEvents,
   supportTickets,
   team,
   user,
@@ -513,6 +514,8 @@ export type ListTicketsOptions = {
   sourceChannel?: SupportTicketChannel;
   externalSource?: SupportTicketSource;
   assignedTo?: string;
+  label?: string;
+  slaBreach?: boolean;
   q?: string;
 };
 
@@ -562,12 +565,73 @@ export async function listTickets(
       )
     );
   }
+  if (options.label) {
+    const labelTicketIds = await db
+      .select({ ticketId: supportTicketLabels.ticketId })
+      .from(supportTicketLabels)
+      .where(eq(supportTicketLabels.labelId, options.label));
+    if (labelTicketIds.length === 0) {
+      return { tickets: [], nextCursor: null };
+    }
+    conditions.push(
+      inArray(
+        supportTickets.id,
+        labelTicketIds.map((t) => t.ticketId)
+      )
+    );
+  }
+  if (options.slaBreach) {
+    const breachTicketIds = await db
+      .select({ ticketId: supportTicketSlaEvents.ticketId })
+      .from(supportTicketSlaEvents)
+      .innerJoin(
+        supportTickets,
+        eq(supportTicketSlaEvents.ticketId, supportTickets.id)
+      )
+      .where(
+        and(
+          eq(supportTickets.organizationId, organizationId),
+          eq(supportTicketSlaEvents.breached, true)
+        )
+      );
+    if (breachTicketIds.length === 0) {
+      return { tickets: [], nextCursor: null };
+    }
+    conditions.push(
+      inArray(
+        supportTickets.id,
+        breachTicketIds.map((t) => t.ticketId)
+      )
+    );
+  }
   if (options.q) {
     const query = `%${options.q}%`;
+    const customerIds = await db
+      .select({ id: supportCustomers.id })
+      .from(supportCustomers)
+      .where(
+        and(
+          eq(supportCustomers.organizationId, organizationId),
+          or(
+            like(supportCustomers.email, query),
+            like(supportCustomers.fullName, query)
+          )
+        )
+      );
+    const customerSearch =
+      customerIds.length > 0
+        ? [
+            inArray(
+              supportTickets.customerId,
+              customerIds.map((c) => c.id)
+            ),
+          ]
+        : [];
     conditions.push(
       or(
         like(supportTickets.title, query),
-        like(supportTickets.externalId, query)
+        like(supportTickets.externalId, query),
+        ...customerSearch
       )
     );
   }

@@ -5062,6 +5062,14 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "channel",
       },
       {
+        name: "label",
+        flag: "label",
+      },
+      {
+        name: "slaBreach",
+        flag: "sla-breach",
+      },
+      {
         name: "q",
         flag: "q",
       },
@@ -5079,6 +5087,18 @@ export const COMMANDS: Record<string, CommandDef> = {
   "support inbox counts list": {
     method: "GET",
     path: "/workspaces/{organizationId}/support/inbox/counts",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support inbox next list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/inbox/next",
     params: [
       {
         name: "organizationId",
