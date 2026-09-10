@@ -38,11 +38,7 @@ import {
   notionImportSource,
   notionOptionsSchema,
 } from "../import/notion.js";
-import {
-  createImportContext,
-  resumeImport,
-  runImport,
-} from "../import/runner.js";
+import { resumeImport, runImport } from "../import/runner.js";
 import type { ImportCounts, ImportRunState } from "../import/types.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
@@ -269,20 +265,17 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(importRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
     const body = c.req.valid("json");
-    const ctx = await createImportContext(
-      c.env,
-      organizationId,
-      c.var.userId ?? "unknown"
-    );
+    const db = createD1(c.env.D1);
     const baseOptions = parseBaseOptions(body.options);
+    const importerId = c.var.userId ?? "unknown";
 
     if (baseOptions.approvalRequired) {
       const job = await createApprovalJob(
-        ctx.db,
+        db,
         organizationId,
         body.source,
         body.options,
-        c.var.userId ?? "unknown"
+        importerId
       );
       return c.json(
         {
@@ -307,7 +300,9 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
         const options = jiraOptionsSchema.parse(body.options ?? {});
         const { batch, job } = await runImport(
           jiraImportSource,
-          ctx,
+          c.env,
+          organizationId,
+          importerId,
           credentials,
           options,
           state
@@ -320,7 +315,9 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
         const options = confluenceOptionsSchema.parse(body.options ?? {});
         const { batch, job } = await runImport(
           confluenceImportSource,
-          ctx,
+          c.env,
+          organizationId,
+          importerId,
           credentials,
           options,
           state
@@ -333,7 +330,9 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
         const options = linearOptionsSchema.parse(body.options ?? {});
         const { batch, job } = await runImport(
           linearImportSource,
-          ctx,
+          c.env,
+          organizationId,
+          importerId,
           credentials,
           options,
           state
@@ -346,7 +345,9 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
         const options = notionOptionsSchema.parse(body.options ?? {});
         const { batch, job } = await runImport(
           notionImportSource,
-          ctx,
+          c.env,
+          organizationId,
+          importerId,
           credentials,
           options,
           state
@@ -361,7 +362,9 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
         const options = githubIssuesOptionsSchema.parse(body.options ?? {});
         const { batch, job } = await runImport(
           githubIssuesImportSource,
-          ctx,
+          c.env,
+          organizationId,
+          importerId,
           credentials,
           options,
           state
@@ -405,11 +408,7 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId, jobId } = c.req.valid("param");
     const resumeBody = c.req.valid("json");
     const db = createD1(c.env.D1);
-    const ctx = await createImportContext(
-      c.env,
-      organizationId,
-      c.var.userId ?? "unknown"
-    );
+    const importerId = c.var.userId ?? "unknown";
     const job = await findImportJob(db, organizationId, jobId);
     if (!job) {
       return c.json({ error: "Import job not found" }, 404);
@@ -434,7 +433,9 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
         const parsedOptions = jiraOptionsSchema.parse(options ?? {});
         const { batch, job: updatedJob } = await resumeImport(
           jiraImportSource,
-          ctx,
+          c.env,
+          organizationId,
+          importerId,
           job,
           credentials,
           parsedOptions,
@@ -450,7 +451,9 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
         const parsedOptions = confluenceOptionsSchema.parse(options ?? {});
         const { batch, job: updatedJob } = await resumeImport(
           confluenceImportSource,
-          ctx,
+          c.env,
+          organizationId,
+          importerId,
           job,
           credentials,
           parsedOptions,
@@ -466,7 +469,9 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
         const parsedOptions = linearOptionsSchema.parse(options ?? {});
         const { batch, job: updatedJob } = await resumeImport(
           linearImportSource,
-          ctx,
+          c.env,
+          organizationId,
+          importerId,
           job,
           credentials,
           parsedOptions,
@@ -482,7 +487,9 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
         const parsedOptions = notionOptionsSchema.parse(options ?? {});
         const { batch, job: updatedJob } = await resumeImport(
           notionImportSource,
-          ctx,
+          c.env,
+          organizationId,
+          importerId,
           job,
           credentials,
           parsedOptions,
@@ -498,7 +505,9 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
         const parsedOptions = githubIssuesOptionsSchema.parse(options ?? {});
         const { batch, job: updatedJob } = await resumeImport(
           githubIssuesImportSource,
-          ctx,
+          c.env,
+          organizationId,
+          importerId,
           job,
           credentials,
           parsedOptions,

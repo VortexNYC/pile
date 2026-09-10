@@ -1,6 +1,9 @@
-import { eq } from "drizzle-orm";
 import { z } from "zod";
 
+import {
+  recordImportParentLink,
+  resolveImportParentLinks,
+} from "../global/import-parent-links.js";
 import {
   getNotionDatabase,
   getNotionPage,
@@ -21,7 +24,6 @@ import {
   upsertNotionPageMapping,
 } from "../global/notion-page-mappings.js";
 import { findNotionUserByNotionId } from "../global/notion-users.js";
-import { notionPageMappings } from "../global/schema.js";
 import { VortexError } from "../platform/errors.js";
 import type { IssueInput } from "../types/workspace.js";
 import type {
@@ -69,7 +71,7 @@ export async function syncNotionPage(
   notionPage: NotionSearchPage,
   spaceId: string | null,
   parentDocumentId: string | null
-): Promise<"created" | "updated"> {
+): Promise<{ status: "created" | "updated"; documentId: string }> {
   const [page, markdown] = await Promise.all([
     getNotionPage(token, notionPage.id),
     getNotionPageMarkdown(token, notionPage.id),
@@ -130,7 +132,7 @@ export async function syncNotionPage(
     documentId
   );
 
-  return mapping ? "updated" : "created";
+  return { status: mapping ? "updated" : "created", documentId };
 }
 
 export const notionImportSource: ImportSource<
@@ -186,8 +188,6 @@ export const notionImportSource: ImportSource<
     let startCursor = runState?.cursor ?? parsedOptions.cursor ?? null;
     let nextCursor: string | null = null;
 
-    const processedPages: Array<{ id: string; parentPageId: string | null }> =
-      [];
     let created = 0;
     let updated = 0;
     let errors = 0;
@@ -206,7 +206,7 @@ export const notionImportSource: ImportSource<
               )
             )?.documentId ?? null)
           : null;
-        const result = await syncNotionPage(
+        const { status, documentId } = await syncNotionPage(
           ctx,
           token,
           {
@@ -220,12 +220,17 @@ export const notionImportSource: ImportSource<
           spaceId ?? null,
           parentDocumentId
         );
-        if (result === "created") created++;
+        if (status === "created") created++;
         else updated++;
-        processedPages.push({
-          id: page.id,
-          parentPageId: page.parentPageId,
-        });
+        if (page.parentPageId) {
+          await recordImportParentLink(
+            ctx.db,
+            ctx.organizationId,
+            ctx.jobId,
+            documentId,
+            page.parentPageId
+          );
+        }
       } catch {
         errors++;
       }
@@ -251,19 +256,24 @@ export const notionImportSource: ImportSource<
                   )
                 )?.documentId ?? null)
               : null;
-            const syncResult = await syncNotionPage(
+            const { status, documentId } = await syncNotionPage(
               ctx,
               token,
               page,
               spaceId ?? null,
               parentDocumentId
             );
-            if (syncResult === "created") created++;
+            if (status === "created") created++;
             else updated++;
-            processedPages.push({
-              id: page.id,
-              parentPageId: page.parentPageId,
-            });
+            if (page.parentPageId) {
+              await recordImportParentLink(
+                ctx.db,
+                ctx.organizationId,
+                ctx.jobId,
+                documentId,
+                page.parentPageId
+              );
+            }
           } catch {
             errors++;
           }
@@ -279,35 +289,25 @@ export const notionImportSource: ImportSource<
     }
 
     if (searchComplete) {
-      const mappings = await ctx.db
-        .select({
-          notionPageId: notionPageMappings.notionPageId,
-          documentId: notionPageMappings.documentId,
-        })
-        .from(notionPageMappings)
-        .where(eq(notionPageMappings.organizationId, ctx.organizationId))
-        .all();
-      const documentIdByNotionPageId = new Map(
-        mappings.map((m) => [m.notionPageId, m.documentId])
-      );
-
-      for (const page of processedPages) {
-        const documentId = documentIdByNotionPageId.get(page.id);
-        if (!documentId || !page.parentPageId) continue;
-        const parentDocumentId = documentIdByNotionPageId.get(
-          page.parentPageId
-        );
-        if (!parentDocumentId) continue;
-        try {
+      await resolveImportParentLinks(
+        ctx.db,
+        ctx.jobId,
+        async (parentExternalId) => {
+          const mapping = await findNotionPageMapping(
+            ctx.db,
+            ctx.organizationId,
+            parentExternalId
+          );
+          return mapping?.documentId ?? undefined;
+        },
+        async (childId, parentDocumentId) => {
           await ctx.stub.updateDocument(
-            documentId,
+            childId,
             { parentDocumentId },
             ctx.importerId
           );
-        } catch {
-          errors++;
         }
-      }
+      );
     }
 
     return {

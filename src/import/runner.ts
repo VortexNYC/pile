@@ -17,7 +17,8 @@ import type {
 export async function createImportContext(
   env: WorkerEnv,
   organizationId: string,
-  importerId: string
+  importerId: string,
+  jobId: string
 ): Promise<ImportContext> {
   const stub = getWorkspaceStub(env, organizationId);
   await stub.setOrganizationId(organizationId);
@@ -25,6 +26,7 @@ export async function createImportContext(
     env,
     organizationId,
     importerId,
+    jobId,
     db: createD1(env.D1),
     stub,
   };
@@ -117,27 +119,39 @@ export async function executeImportBatch<TCredentials, TOptions>(
 
 export async function runImport<TCredentials, TOptions>(
   source: ImportSource<TCredentials, TOptions>,
-  ctx: ImportContext,
+  env: WorkerEnv,
+  organizationId: string,
+  importerId: string,
   credentials: TCredentials,
   options: TOptions,
   state?: ImportRunState
 ): Promise<ImportRunResult> {
-  const job = await createImportJob(
-    ctx.db,
-    ctx.organizationId,
-    source.name,
-    options
+  const db = createD1(env.D1);
+  const job = await createImportJob(db, organizationId, source.name, options);
+  const ctx = await createImportContext(
+    env,
+    organizationId,
+    importerId,
+    job.id
   );
   return executeImportBatch(source, ctx, job, credentials, options, state);
 }
 
 export async function resumeImport<TCredentials, TOptions>(
   source: ImportSource<TCredentials, TOptions>,
-  ctx: ImportContext,
+  env: WorkerEnv,
+  organizationId: string,
+  importerId: string,
   job: ImportJobRecord,
   credentials: TCredentials,
   options: TOptions,
   state?: ImportRunState
 ): Promise<ImportRunResult> {
+  const ctx = await createImportContext(
+    env,
+    organizationId,
+    importerId,
+    job.id
+  );
   return executeImportBatch(source, ctx, job, credentials, options, state);
 }

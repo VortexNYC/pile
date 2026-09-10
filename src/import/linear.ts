@@ -1,5 +1,13 @@
 import { z } from "zod";
 
+import {
+  findImportMapping,
+  recordImportMapping,
+} from "../global/import-mappings.js";
+import {
+  recordImportParentLink,
+  resolveImportParentLinks,
+} from "../global/import-parent-links.js";
 import { getDefaultTeam } from "../global/teams.js";
 import { createTemplate } from "../global/templates.js";
 import { createUser, findUserByEmail } from "../global/users.js";
@@ -905,7 +913,6 @@ export const linearImportSource: ImportSource<
     let hasNextPage = true;
     let nextCursor: string | null = null;
     const issueIds = new Set<string>();
-    const parentLinks = new Map<string, string>();
     const relationLinks = new Map<
       string,
       { fromIssueId: string; toIssueId: string; type: string }
@@ -954,6 +961,16 @@ export const linearImportSource: ImportSource<
           issueCount++;
           issueIds.add(issue.id);
 
+          await recordImportMapping(
+            ctx.db,
+            ctx.organizationId,
+            ctx.jobId,
+            "linear",
+            "issue",
+            issue.id,
+            createdIssue.id
+          );
+
           for (const rel of issue.relations.nodes) {
             if (rel.relatedIssue?.id) {
               const type = mapRelationType(rel.type);
@@ -982,7 +999,13 @@ export const linearImportSource: ImportSource<
           }
 
           if (issue.parent?.id) {
-            parentLinks.set(issue.id, issue.parent.id);
+            await recordImportParentLink(
+              ctx.db,
+              ctx.organizationId,
+              ctx.jobId,
+              createdIssue.id,
+              issue.parent.id
+            );
           }
 
           commentCount += await importComments(
@@ -1019,6 +1042,23 @@ export const linearImportSource: ImportSource<
         }
       }
 
+      parentLinkCount += await resolveImportParentLinks(
+        ctx.db,
+        ctx.jobId,
+        async (parentId) => {
+          if (issueIds.has(parentId)) return parentId;
+          const mapping = await findImportMapping(ctx.db, ctx.jobId, parentId);
+          return mapping?.vortexId;
+        },
+        async (childId, parentVortexId) => {
+          await ctx.stub.updateIssue(
+            childId,
+            { parentId: parentVortexId },
+            ctx.importerId
+          );
+        }
+      );
+
       nextCursor = pageInfo.endCursor ?? null;
       hasNextPage =
         pageInfo.hasNextPage && (limit === undefined || issueCount < limit);
@@ -1035,16 +1075,6 @@ export const linearImportSource: ImportSource<
           relationCount++;
         } catch {
           // Skip invalid or malformed relation edges.
-        }
-      }
-
-      for (const [childId, parentId] of parentLinks) {
-        if (!issueIds.has(childId) || !issueIds.has(parentId)) continue;
-        try {
-          await ctx.stub.updateIssue(childId, { parentId }, ctx.importerId);
-          parentLinkCount++;
-        } catch {
-          // Parent may create a cycle or be in a different team; skip.
         }
       }
     }

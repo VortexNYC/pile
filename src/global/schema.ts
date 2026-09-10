@@ -129,6 +129,70 @@ export const importApprovals = sqliteTable(
   ]
 );
 
+export const importMappings = sqliteTable(
+  "import_mappings" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    jobId: text("job_id" as string)
+      .notNull()
+      .references(() => importJobs.id),
+    source: text("source" as string).notNull(),
+    type: text("type" as string, {
+      enum: ["issue", "document"],
+    }).notNull(),
+    externalId: text("external_id" as string).notNull(),
+    vortexId: text("vortex_id" as string).notNull(),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("import_mappings_job_external_idx" as string).on(
+      table.jobId,
+      table.externalId
+    ),
+    index("import_mappings_organization_idx" as string).on(
+      table.organizationId
+    ),
+  ]
+);
+
+export const importParentLinks = sqliteTable(
+  "import_parent_links" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    jobId: text("job_id" as string)
+      .notNull()
+      .references(() => importJobs.id),
+    childId: text("child_id" as string).notNull(),
+    parentExternalId: text("parent_external_id" as string).notNull(),
+    resolvedAt: text("resolved_at" as string),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("import_parent_links_job_idx" as string).on(table.jobId),
+    index("import_parent_links_child_idx" as string).on(table.childId),
+    index("import_parent_links_parent_external_idx" as string).on(
+      table.jobId,
+      table.parentExternalId
+    ),
+  ]
+);
+
 export const githubInstallations = sqliteTable(
   "github_installations" as string,
   {

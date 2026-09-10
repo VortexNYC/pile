@@ -1,6 +1,14 @@
 import { z } from "zod";
 
 import { adfToMarkdown } from "../global/adf-to-markdown.js";
+import {
+  findImportMapping,
+  recordImportMapping,
+} from "../global/import-mappings.js";
+import {
+  recordImportParentLink,
+  resolveImportParentLinks,
+} from "../global/import-parent-links.js";
 import { VortexError } from "../platform/errors.js";
 import type {
   ImportBatchResult,
@@ -160,7 +168,8 @@ async function importPage(
   ctx: ImportContext,
   api: ConfluenceApi,
   userCache: Map<string, string | null>,
-  confluencePage: z.infer<typeof confluencePageSchema>
+  confluencePage: z.infer<typeof confluencePageSchema>,
+  source = "confluence"
 ): Promise<{
   confluencePageId: string;
   documentId: string;
@@ -183,9 +192,30 @@ async function importPage(
     createdById: authorId ?? ctx.importerId,
   });
 
+  const documentId = unwrap(doc, "Failed to create document").id;
+
+  await recordImportMapping(
+    ctx.db,
+    ctx.organizationId,
+    ctx.jobId,
+    source,
+    "document",
+    confluencePage.id,
+    documentId
+  );
+  if (confluencePage.parentId) {
+    await recordImportParentLink(
+      ctx.db,
+      ctx.organizationId,
+      ctx.jobId,
+      documentId,
+      confluencePage.parentId
+    );
+  }
+
   return {
     confluencePageId: confluencePage.id,
-    documentId: unwrap(doc, "Failed to create document").id,
+    documentId,
     parentId: confluencePage.parentId,
   };
 }
@@ -348,17 +378,12 @@ export const confluenceImportSource: ImportSource<
       nextCursor = spaceNextCursor;
     }
 
-    const imported = new Map<
-      string,
-      { documentId: string; parentId?: string }
-    >();
     let createdCount = 0;
     let errorCount = 0;
 
     for (const page of pages) {
       try {
-        const result = await importPage(ctx, api, userCache, page);
-        imported.set(result.confluencePageId, result);
+        await importPage(ctx, api, userCache, page);
         createdCount++;
       } catch (err) {
         errorCount++;
@@ -370,25 +395,25 @@ export const confluenceImportSource: ImportSource<
       }
     }
 
-    // Second pass: set parentDocumentId only when the full space is imported.
-    let parentLinkedCount = 0;
-    if (!nextCursor) {
-      for (const [, result] of imported) {
-        if (!result.parentId) continue;
-        const parentDocumentId = imported.get(result.parentId)?.documentId;
-        if (!parentDocumentId) continue;
-        try {
-          await ctx.stub.updateDocument(
-            result.documentId,
-            { parentDocumentId },
-            ctx.importerId
-          );
-          parentLinkedCount++;
-        } catch {
-          // Ignore parent update failures.
-        }
+    const parentLinkedCount = await resolveImportParentLinks(
+      ctx.db,
+      ctx.jobId,
+      async (parentExternalId) => {
+        const mapping = await findImportMapping(
+          ctx.db,
+          ctx.jobId,
+          parentExternalId
+        );
+        return mapping?.vortexId;
+      },
+      async (childId, parentDocumentId) => {
+        await ctx.stub.updateDocument(
+          childId,
+          { parentDocumentId },
+          ctx.importerId
+        );
       }
-    }
+    );
 
     return {
       counts: {

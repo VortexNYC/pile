@@ -2,6 +2,14 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { adfToMarkdown } from "../global/adf-to-markdown.js";
+import {
+  findImportMapping,
+  recordImportMapping,
+} from "../global/import-mappings.js";
+import {
+  recordImportParentLink,
+  resolveImportParentLinks,
+} from "../global/import-parent-links.js";
 import { labels, projects, states } from "../global/schema.js";
 import {
   createLabel,
@@ -451,7 +459,6 @@ export const jiraImportSource: ImportSource<JiraCredentials, JiraOptions> = {
     const projectCache = new Map<string, string>();
     const stateCache = new Map<string, string>();
     const issueIdByJiraId = new Map<string, string>();
-    const parentLinks = new Map<string, string>();
 
     const limit = runState?.limit ?? parsedOptions.limit;
 
@@ -586,8 +593,23 @@ export const jiraImportSource: ImportSource<JiraCredentials, JiraOptions> = {
           );
           issueCount++;
           issueIdByJiraId.set(issue.id, createdIssue.id);
+          await recordImportMapping(
+            ctx.db,
+            ctx.organizationId,
+            ctx.jobId,
+            "jira",
+            "issue",
+            issue.id,
+            createdIssue.id
+          );
           if (parent?.id) {
-            parentLinks.set(createdIssue.id, parent.id);
+            await recordImportParentLink(
+              ctx.db,
+              ctx.organizationId,
+              ctx.jobId,
+              createdIssue.id,
+              parent.id
+            );
           }
 
           if (comments && comments.comments.length > 0) {
@@ -621,24 +643,27 @@ export const jiraImportSource: ImportSource<JiraCredentials, JiraOptions> = {
         (limit === undefined || issueCount < limit);
     } while (keepGoing);
 
-    // Second pass: resolve parent links only when the full import completes.
-    let parentLinkedCount = 0;
-    if (!nextCursor) {
-      for (const [issueId, parentJiraId] of parentLinks) {
-        const parentIssueId = issueIdByJiraId.get(parentJiraId);
-        if (!parentIssueId) continue;
-        try {
-          await ctx.stub.updateIssue(
-            issueId,
-            { parentId: parentIssueId },
-            ctx.importerId
-          );
-          parentLinkedCount++;
-        } catch {
-          // Ignore parent update failures.
-        }
+    const parentLinkedCount = await resolveImportParentLinks(
+      ctx.db,
+      ctx.jobId,
+      async (parentJiraId) => {
+        const local = issueIdByJiraId.get(parentJiraId);
+        if (local) return local;
+        const mapping = await findImportMapping(
+          ctx.db,
+          ctx.jobId,
+          parentJiraId
+        );
+        return mapping?.vortexId;
+      },
+      async (issueId, parentIssueId) => {
+        await ctx.stub.updateIssue(
+          issueId,
+          { parentId: parentIssueId },
+          ctx.importerId
+        );
       }
-    }
+    );
 
     return {
       counts: {

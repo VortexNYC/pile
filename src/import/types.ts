@@ -6,6 +6,7 @@ export interface ImportContext {
   env: WorkerEnv;
   organizationId: string;
   importerId: string;
+  jobId: string;
   db: D1Client;
   stub: DurableObjectStub<WorkspaceDO>;
 }

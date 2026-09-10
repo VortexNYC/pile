@@ -393,6 +393,13 @@
       "when": 1788990116223,
       "tag": "0055_omniscient_wallop",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "6",
+      "when": 1788998416185,
+      "tag": "0056_nice_golden_guardian",
+      "breakpoints": true
     }
   ]
 }
