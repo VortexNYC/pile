@@ -8,6 +8,7 @@ import { apikey as apikeyTable, user as userTable } from "../global/schema.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
+import { createAdminHeaders } from "../platform/test-auth.js";
 
 const ORIGIN = "https://your-domain.com";
 
@@ -27,7 +28,8 @@ async function seedWorkspace() {
     })
     .onConflictDoNothing({ target: [userTable.email] });
 
-  const workspace = await createWorkspace(db, env, {
+  const headers = await createAdminHeaders(env, "user-1");
+  const workspace = await createWorkspace(db, env, headers, {
     name: "Test workspace",
     slug: `test-${crypto.randomUUID()}`,
     key: `T${crypto.randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase()}`,

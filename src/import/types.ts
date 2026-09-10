@@ -4,6 +4,7 @@ import type { WorkspaceDO } from "../workspace/durable-object.js";
 
 export interface ImportContext {
   env: WorkerEnv;
+  requestHeaders: Headers;
   organizationId: string;
   importerId: string;
   jobId: string;

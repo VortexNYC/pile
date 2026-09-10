@@ -16,6 +16,7 @@ import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
 import type { WorkerEnv } from "../platform/middleware.js";
+import { createAdminHeaders } from "../platform/test-auth.js";
 
 declare module "cloudflare:test" {
   interface ProvidedEnv extends WorkerEnv {}
@@ -38,7 +39,8 @@ async function seedWorkspace() {
       updatedAt: now,
     })
     .onConflictDoNothing({ target: [userTable.email] });
-  const workspace = await createWorkspace(db, env, {
+  const headers = await createAdminHeaders(env, "user-1");
+  const workspace = await createWorkspace(db, env, headers, {
     name: "Test workspace",
     slug: `test-${crypto.randomUUID()}`,
     key: `T${crypto.randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase()}`,

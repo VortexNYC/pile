@@ -24,10 +24,19 @@ export function createAuth(env: AppEnv) {
     plugins: [
       apiKey({
         enableMetadata: true,
+        enableSessionForAPIKeys: true,
         permissions: {
           defaultPermissions: {
             vortex: ["read"],
           },
+        },
+        customAPIKeyGetter: (ctx) => {
+          const auth = ctx.headers?.get("Authorization") ?? "";
+          const bearerPrefix = "Bearer ";
+          if (auth.startsWith(bearerPrefix)) {
+            return auth.slice(bearerPrefix.length).trim();
+          }
+          return null;
         },
       }),
       organization({

@@ -6,6 +6,7 @@ import { createD1 } from "../global/db.js";
 import { member, organization, user as userTable } from "../global/schema.js";
 import { createDefaultTeam } from "../global/teams.js";
 import type { WorkerEnv } from "../platform/middleware.js";
+import { createAdminHeaders } from "../platform/test-auth.js";
 import type { WorkspaceDO } from "./durable-object.js";
 
 declare module "cloudflare:test" {
@@ -50,7 +51,8 @@ async function ensureWorkspace() {
     role: "owner",
     createdAt: now,
   });
-  await createDefaultTeam(db, WORKSPACE_ID, "WEB", "user-1");
+  const headers = await createAdminHeaders(env, "user-1");
+  await createDefaultTeam(db, env, headers, WORKSPACE_ID, "WEB", "user-1");
 }
 
 function getStub() {

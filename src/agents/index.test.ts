@@ -5,6 +5,7 @@ import { createD1 } from "../global/db.js";
 import { user as userTable } from "../global/schema.js";
 import { createWorkspace } from "../global/workspaces.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
+import { createAdminHeaders } from "../platform/test-auth.js";
 import { MockAgentProvider } from "./harness.js";
 import {
   dispatchAgent,
@@ -34,7 +35,8 @@ beforeAll(async () => {
       updatedAt: now,
     })
     .onConflictDoNothing({ target: [userTable.email] });
-  const workspace = await createWorkspace(db, env, {
+  const headers = await createAdminHeaders(env, "user-1");
+  const workspace = await createWorkspace(db, env, headers, {
     name: "Test workspace",
     slug: "test-ws",
     ownerId: actor.id,

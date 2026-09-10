@@ -1380,7 +1380,7 @@ async function importLinearWorkspace(
   const teamKey = `${linearTeam.team.key ?? "LINEAR"}-${teamIndex + 1}`;
   const vortexTeam = state.vortexTeamId
     ? await getTeamById(ctx.db, state.vortexTeamId, ctx.organizationId)
-    : await createTeam(ctx.db, {
+    : await createTeam(ctx.db, ctx.env, ctx.requestHeaders, {
         organizationId: ctx.organizationId,
         name: teamName,
         key: teamKey,

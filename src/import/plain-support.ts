@@ -387,6 +387,8 @@ async function syncPlainTicketAssignees(
       ? { id: options.teamId }
       : await findOrCreateTeam(
           ctx.db,
+          ctx.env,
+          ctx.requestHeaders,
           ctx.organizationId,
           options.teamName!,
           ctx.importerId

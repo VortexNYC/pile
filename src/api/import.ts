@@ -331,6 +331,7 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
         const { batch, job } = await runImport(
           jiraImportSource,
           c.env,
+          c.req.raw.headers,
           organizationId,
           importerId,
           credentials,
@@ -346,6 +347,7 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
         const { batch, job } = await runImport(
           confluenceImportSource,
           c.env,
+          c.req.raw.headers,
           organizationId,
           importerId,
           credentials,
@@ -361,6 +363,7 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
         const { batch, job } = await runImport(
           linearImportSource,
           c.env,
+          c.req.raw.headers,
           organizationId,
           importerId,
           credentials,
@@ -376,6 +379,7 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
         const { batch, job } = await runImport(
           notionImportSource,
           c.env,
+          c.req.raw.headers,
           organizationId,
           importerId,
           credentials,
@@ -393,6 +397,7 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
         const { batch, job } = await runImport(
           githubIssuesImportSource,
           c.env,
+          c.req.raw.headers,
           organizationId,
           importerId,
           credentials,
@@ -408,6 +413,7 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
         const { batch, job } = await runImport(
           intercomImportSource,
           c.env,
+          c.req.raw.headers,
           organizationId,
           importerId,
           credentials,
@@ -425,6 +431,7 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
         const { batch, job } = await runImport(
           intercomSupportImportSource,
           c.env,
+          c.req.raw.headers,
           organizationId,
           importerId,
           credentials,
@@ -442,6 +449,7 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
         const { batch, job } = await runImport(
           plainSupportImportSource,
           c.env,
+          c.req.raw.headers,
           organizationId,
           importerId,
           credentials,
@@ -459,6 +467,7 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
         const { batch, job } = await runImport(
           zendeskSupportImportSource,
           c.env,
+          c.req.raw.headers,
           organizationId,
           importerId,
           credentials,
@@ -530,6 +539,7 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
         const { batch, job: updatedJob } = await resumeImport(
           jiraImportSource,
           c.env,
+          c.req.raw.headers,
           organizationId,
           importerId,
           job,
@@ -548,6 +558,7 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
         const { batch, job: updatedJob } = await resumeImport(
           confluenceImportSource,
           c.env,
+          c.req.raw.headers,
           organizationId,
           importerId,
           job,
@@ -566,6 +577,7 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
         const { batch, job: updatedJob } = await resumeImport(
           linearImportSource,
           c.env,
+          c.req.raw.headers,
           organizationId,
           importerId,
           job,
@@ -584,6 +596,7 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
         const { batch, job: updatedJob } = await resumeImport(
           notionImportSource,
           c.env,
+          c.req.raw.headers,
           organizationId,
           importerId,
           job,
@@ -602,6 +615,7 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
         const { batch, job: updatedJob } = await resumeImport(
           githubIssuesImportSource,
           c.env,
+          c.req.raw.headers,
           organizationId,
           importerId,
           job,
@@ -620,6 +634,7 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
         const { batch, job: updatedJob } = await resumeImport(
           intercomImportSource,
           c.env,
+          c.req.raw.headers,
           organizationId,
           importerId,
           job,
@@ -638,6 +653,7 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
         const { batch, job: updatedJob } = await resumeImport(
           intercomSupportImportSource,
           c.env,
+          c.req.raw.headers,
           organizationId,
           importerId,
           job,
@@ -656,6 +672,7 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
         const { batch, job: updatedJob } = await resumeImport(
           plainSupportImportSource,
           c.env,
+          c.req.raw.headers,
           organizationId,
           importerId,
           job,
@@ -674,6 +691,7 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
         const { batch, job: updatedJob } = await resumeImport(
           zendeskSupportImportSource,
           c.env,
+          c.req.raw.headers,
           organizationId,
           importerId,
           job,

@@ -6,6 +6,7 @@ import { createD1 } from "../global/db.js";
 import { member, organization, user as userTable } from "../global/schema.js";
 import { createDefaultTeam, updateTeam } from "../global/teams.js";
 import type { WorkerEnv } from "../platform/middleware.js";
+import { createAdminHeaders } from "../platform/test-auth.js";
 import type { WorkspaceDO } from "./durable-object.js";
 
 declare module "cloudflare:test" {
@@ -13,6 +14,7 @@ declare module "cloudflare:test" {
 }
 
 const WORKSPACE_ID = "test-workspace";
+let testHeaders: Headers;
 
 async function ensureWorkspace() {
   const db = createD1(env.D1);
@@ -50,7 +52,8 @@ async function ensureWorkspace() {
     role: "owner",
     createdAt: now,
   });
-  await createDefaultTeam(db, WORKSPACE_ID, "TEST", "user-1");
+  testHeaders = await createAdminHeaders(env, "user-1");
+  await createDefaultTeam(db, env, testHeaders, WORKSPACE_ID, "TEST", "user-1");
 }
 
 function getStub() {
@@ -265,8 +268,17 @@ describe("WorkspaceDO", () => {
   it("auto-closes sub-issues when parent is done and setting is enabled", async () => {
     const stub = getStub();
     const db = createD1(env.D1);
-    const team = await createDefaultTeam(db, WORKSPACE_ID, "AUTO", "user-1");
-    await updateTeam(db, team.id, WORKSPACE_ID, { subIssueAutoClose: true });
+    const team = await createDefaultTeam(
+      db,
+      env,
+      testHeaders,
+      WORKSPACE_ID,
+      "AUTO",
+      "user-1"
+    );
+    await updateTeam(db, env, testHeaders, team.id, WORKSPACE_ID, {
+      subIssueAutoClose: true,
+    });
 
     const parent = await withWorkspace(stub, (instance) =>
       instance.createIssue({ title: "Auto parent", teamId: team.id })
@@ -293,8 +305,17 @@ describe("WorkspaceDO", () => {
   it("auto-closes parent when all sub-issues are done and setting is enabled", async () => {
     const stub = getStub();
     const db = createD1(env.D1);
-    const team = await createDefaultTeam(db, WORKSPACE_ID, "AUTO2", "user-1");
-    await updateTeam(db, team.id, WORKSPACE_ID, { parentAutoClose: true });
+    const team = await createDefaultTeam(
+      db,
+      env,
+      testHeaders,
+      WORKSPACE_ID,
+      "AUTO2",
+      "user-1"
+    );
+    await updateTeam(db, env, testHeaders, team.id, WORKSPACE_ID, {
+      parentAutoClose: true,
+    });
 
     const parent = await withWorkspace(stub, (instance) =>
       instance.createIssue({ title: "Auto parent 2", teamId: team.id })
@@ -389,8 +410,15 @@ describe("WorkspaceDO", () => {
   it("auto-assigns triage issues to the team triage owner", async () => {
     const stub = getStub();
     const db = createD1(env.D1);
-    const team = await createDefaultTeam(db, WORKSPACE_ID, "TRI", "user-1");
-    await updateTeam(db, team.id, WORKSPACE_ID, {
+    const team = await createDefaultTeam(
+      db,
+      env,
+      testHeaders,
+      WORKSPACE_ID,
+      "TRI",
+      "user-1"
+    );
+    await updateTeam(db, env, testHeaders, team.id, WORKSPACE_ID, {
       triageAssigneeId: "user-1",
     });
     const issue = await withWorkspace(stub, (instance) =>

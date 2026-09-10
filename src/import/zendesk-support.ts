@@ -467,6 +467,8 @@ async function syncZendeskTicketAssignees(
     if (group?.name) {
       const team = await findOrCreateTeam(
         ctx.db,
+        ctx.env,
+        ctx.requestHeaders,
         ctx.organizationId,
         group.name,
         ctx.importerId

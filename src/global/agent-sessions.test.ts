@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import type { WorkerEnv } from "../platform/middleware.js";
+import { createAdminHeaders } from "../platform/test-auth.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
 import { createD1 } from "./db.js";
 import { member, organization, user as userTable } from "./schema.js";
@@ -71,7 +72,8 @@ describe("agent sessions", () => {
       .where(eq(organization.id, WORKSPACE_ID))
       .get();
     if (existing) {
-      await createDefaultTeam(db, WORKSPACE_ID, "AST", "user-1");
+      const headers = await createAdminHeaders(env, "user-1");
+      await createDefaultTeam(db, env, headers, WORKSPACE_ID, "AST", "user-1");
     }
   });
 

@@ -9,6 +9,7 @@ import { user as userTable } from "../global/schema.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
+import { createAdminHeaders } from "../platform/test-auth.js";
 
 const ORIGIN = "https://your-domain.com";
 
@@ -51,7 +52,8 @@ describe("agent sessions API", () => {
         updatedAt: now,
       })
       .onConflictDoNothing({ target: [userTable.email] });
-    const workspace = await createWorkspace(db, env, {
+    const headers = await createAdminHeaders(env, "user-1");
+    const workspace = await createWorkspace(db, env, headers, {
       name: "Agent API tests",
       slug: `agent-api-${crypto.randomUUID()}`,
       ownerId: "user-1",

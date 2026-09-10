@@ -31,7 +31,7 @@ export const memberRole = ac.newRole({
 });
 
 export const organizationOptions = {
-  teams: { enabled: true },
+  teams: { enabled: true, defaultTeam: { enabled: false } },
   ac,
   roles: {
     owner: ownerRole,

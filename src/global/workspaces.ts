@@ -90,6 +90,7 @@ export async function getWorkspaceById(
 export async function createWorkspace(
   db: D1Client,
   env: AppEnv,
+  headers: Headers,
   values: {
     name: string;
     slug: string;
@@ -105,6 +106,7 @@ export async function createWorkspace(
       userId: values.ownerId,
       metadata: { key: values.key ?? null },
     },
+    headers,
   });
   const orgId = z.object({ id: z.string() }).parse(orgResult).id;
   const workspaceKey = values.key ?? "general";
@@ -112,6 +114,8 @@ export async function createWorkspace(
 
   const defaultTeam = await createDefaultTeam(
     db,
+    env,
+    headers,
     orgId,
     workspaceKey,
     values.ownerId

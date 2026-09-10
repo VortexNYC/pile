@@ -457,6 +457,8 @@ async function syncIntercomTicketAssignees(
   if (assignee?.type === "team" && assignee.name) {
     const team = await findOrCreateTeam(
       ctx.db,
+      ctx.env,
+      ctx.requestHeaders,
       ctx.organizationId,
       assignee.name,
       ctx.importerId
@@ -472,6 +474,8 @@ async function syncIntercomTicketAssignees(
       ? { id: options.teamId }
       : await findOrCreateTeam(
           ctx.db,
+          ctx.env,
+          ctx.requestHeaders,
           ctx.organizationId,
           options.teamName!,
           ctx.importerId

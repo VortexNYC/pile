@@ -12,6 +12,7 @@ import {
 } from "drizzle-orm";
 import { z } from "zod";
 
+import type { AppEnv } from "../platform/env.js";
 import { VortexError } from "../platform/errors.js";
 import type { D1Client } from "./db.js";
 import {
@@ -564,6 +565,8 @@ export async function findTeamByName(
 
 export async function findOrCreateTeam(
   db: D1Client,
+  env: AppEnv,
+  headers: Headers,
   organizationId: string,
   name: string,
   ownerId: string
@@ -578,7 +581,7 @@ export async function findOrCreateTeam(
       .replace(/^-|-$/g, "")
       .slice(0, 30) || "team";
 
-  return createTeam(db, { organizationId, name, key, ownerId });
+  return createTeam(db, env, headers, { organizationId, name, key, ownerId });
 }
 
 export type SupportTicketAssigneeInput =

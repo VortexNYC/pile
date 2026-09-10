@@ -1,14 +1,10 @@
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
+import { createAuth } from "../platform/auth.js";
+import type { AppEnv } from "../platform/env.js";
 import type { D1Client } from "./db.js";
-import {
-  apikey,
-  member,
-  team,
-  teamMember,
-  user as userTable,
-} from "./schema.js";
+import { apikey, team, teamMember, user as userTable } from "./schema.js";
 
 const teamMetadataSchema = z.object({
   key: z.string(),
@@ -149,9 +145,10 @@ interface CreateTeamInput {
 
 export async function createTeam(
   db: D1Client,
+  env: AppEnv,
+  headers: Headers,
   values: CreateTeamInput
 ): Promise<TeamRecord> {
-  const id = crypto.randomUUID();
   const metadata = teamMetadataString({
     key: values.key,
     ownerId: values.ownerId,
@@ -162,15 +159,16 @@ export async function createTeam(
     triageAssigneeId: values.triageAssigneeId,
     defaultTemplateId: values.defaultTemplateId,
   });
-  await db.insert(team).values({
-    id,
-    name: values.name,
-    organizationId: values.organizationId,
-    memberCount: 0,
-    metadata,
-    createdAt: new Date(),
-    updatedAt: new Date(),
+  const auth = createAuth(env);
+  const result = await auth.api.createTeam({
+    body: {
+      name: values.name,
+      organizationId: values.organizationId,
+      metadata,
+    },
+    headers,
   });
+  const id = z.object({ id: z.string() }).parse(result).id;
   const row = await getTeamById(db, id, values.organizationId);
   if (!row) {
     throw new Error("Failed to create team");
@@ -180,11 +178,13 @@ export async function createTeam(
 
 export async function createDefaultTeam(
   db: D1Client,
+  env: AppEnv,
+  headers: Headers,
   organizationId: string,
   workspaceKey: string,
   ownerId: string
 ): Promise<TeamRecord> {
-  const record = await createTeam(db, {
+  const record = await createTeam(db, env, headers, {
     organizationId,
     key: workspaceKey,
     name: "General",
@@ -192,7 +192,15 @@ export async function createDefaultTeam(
     isDefault: true,
     isPublic: false,
   });
-  await addTeamMember(db, organizationId, record.id, ownerId, "user");
+  await addTeamMember(
+    db,
+    env,
+    headers,
+    organizationId,
+    record.id,
+    ownerId,
+    "user"
+  );
   return record;
 }
 
@@ -208,6 +216,8 @@ interface UpdateTeamInput {
 
 export async function updateTeam(
   db: D1Client,
+  env: AppEnv,
+  headers: Headers,
   id: string,
   organizationId: string,
   input: UpdateTeamInput
@@ -232,26 +242,34 @@ export async function updateTeam(
         : input.defaultTemplateId,
   });
 
-  await db
-    .update(team)
-    .set({
-      name: input.name ?? existing.name,
-      metadata,
-      updatedAt: new Date(),
-    })
-    .where(and(eq(team.id, id), eq(team.organizationId, organizationId)));
+  const auth = createAuth(env);
+  await auth.api.updateTeam({
+    body: {
+      teamId: id,
+      data: {
+        name: input.name ?? existing.name,
+        organizationId,
+        metadata,
+      },
+    },
+    headers,
+  });
 
   return getTeamById(db, id, organizationId);
 }
 
 export async function deleteTeam(
   db: D1Client,
+  env: AppEnv,
+  headers: Headers,
   id: string,
   organizationId: string
 ): Promise<void> {
-  await db
-    .delete(team)
-    .where(and(eq(team.id, id), eq(team.organizationId, organizationId)));
+  const auth = createAuth(env);
+  await auth.api.removeTeam({
+    body: { teamId: id, organizationId },
+    headers,
+  });
 }
 
 function userTypeFromMetadata(
@@ -287,6 +305,8 @@ export async function resolveUserId(
 
 export async function addTeamMember(
   db: D1Client,
+  env: AppEnv,
+  headers: Headers,
   organizationId: string,
   teamId: string,
   memberId: string,
@@ -294,58 +314,31 @@ export async function addTeamMember(
   role = "member"
 ): Promise<void> {
   const userId = await resolveUserId(db, memberId, memberType);
-
-  const existingMember = await db
-    .select()
-    .from(member)
-    .where(
-      and(eq(member.organizationId, organizationId), eq(member.userId, userId))
-    )
-    .get();
-  if (!existingMember) {
-    const user = await db
-      .select()
-      .from(userTable)
-      .where(eq(userTable.id, userId))
-      .get();
-    if (!user) {
-      throw new Error("User not found");
-    }
-    await db.insert(member).values({
-      id: crypto.randomUUID(),
-      organizationId: organizationId,
-      userId,
-      role: "member",
-      createdAt: new Date(),
-    });
-  }
-
-  const existingTeamMember = await db
-    .select()
-    .from(teamMember)
-    .where(and(eq(teamMember.teamId, teamId), eq(teamMember.userId, userId)))
-    .get();
-  if (!existingTeamMember) {
-    await db.insert(teamMember).values({
-      id: crypto.randomUUID(),
-      teamId,
-      userId,
-      role,
-      createdAt: new Date(),
-    });
+  const auth = createAuth(env);
+  await auth.api.addTeamMember({
+    body: { teamId, userId, organizationId },
+    headers,
+  });
+  if (role !== "member") {
+    await updateTeamMemberRole(db, teamId, userId, role);
   }
 }
 
 export async function removeTeamMember(
   db: D1Client,
+  env: AppEnv,
+  headers: Headers,
+  organizationId: string,
   teamId: string,
   memberId: string,
   memberType: "user" | "agent" = "user"
 ): Promise<void> {
   const userId = await resolveUserId(db, memberId, memberType);
-  await db
-    .delete(teamMember)
-    .where(and(eq(teamMember.teamId, teamId), eq(teamMember.userId, userId)));
+  const auth = createAuth(env);
+  await auth.api.removeTeamMember({
+    body: { teamId, userId, organizationId },
+    headers,
+  });
 }
 
 export async function listTeamMembers(
@@ -426,6 +419,9 @@ export async function getVisibleTeamIds(
   return visible;
 }
 
+// Better Auth's organization plugin does not expose a team-member role update
+// endpoint, so this is the only remaining direct write to `teamMember` and is
+// only called after `addTeamMember` when the requested role is not "member".
 export async function updateTeamMemberRole(
   db: D1Client,
   teamId: string,

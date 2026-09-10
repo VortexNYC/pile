@@ -105,7 +105,7 @@ const createTeamRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/teams",
   tags: ["teams"],
-  middleware: [rls("write")],
+  middleware: [rls("admin")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: {
@@ -147,7 +147,7 @@ const updateTeamRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/teams/{id}",
   tags: ["teams"],
-  middleware: [rls("write")],
+  middleware: [rls("admin")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
     body: {
@@ -171,7 +171,7 @@ const deleteTeamRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/teams/{id}",
   tags: ["teams"],
-  middleware: [rls("write")],
+  middleware: [rls("admin")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -212,7 +212,7 @@ const addTeamMemberRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/teams/{id}/members",
   tags: ["teams"],
-  middleware: [rls("write")],
+  middleware: [rls("admin")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
     body: {
@@ -230,7 +230,7 @@ const removeTeamMemberRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/teams/{id}/members/{memberId}",
   tags: ["teams"],
-  middleware: [rls("write")],
+  middleware: [rls("admin")],
   request: {
     params: z.object({
       organizationId: z.string(),
@@ -250,7 +250,7 @@ const updateTeamMemberRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/teams/{id}/members/{memberId}",
   tags: ["teams"],
-  middleware: [rls("write")],
+  middleware: [rls("admin")],
   request: {
     params: z.object({
       organizationId: z.string(),
@@ -323,7 +323,7 @@ export function registerTeamRoutes(app: OpenAPIHono<AppContext>) {
     const body = c.req.valid("json");
     const identity = c.get("workspaceIdentity");
     const db = createD1(c.env.D1);
-    const record = await createTeam(db, {
+    const record = await createTeam(db, c.env, c.req.raw.headers, {
       organizationId,
       key: body.key,
       name: body.name,
@@ -382,7 +382,14 @@ export function registerTeamRoutes(app: OpenAPIHono<AppContext>) {
         message: "Cannot update this team",
       });
     }
-    const record = await updateTeam(db, id, organizationId, body);
+    const record = await updateTeam(
+      db,
+      c.env,
+      c.req.raw.headers,
+      id,
+      organizationId,
+      body
+    );
     if (!record) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -415,7 +422,7 @@ export function registerTeamRoutes(app: OpenAPIHono<AppContext>) {
         message: "Cannot delete this team",
       });
     }
-    await deleteTeam(db, id, organizationId);
+    await deleteTeam(db, c.env, c.req.raw.headers, id, organizationId);
     return c.body(null, 204);
   });
 
@@ -467,6 +474,8 @@ export function registerTeamRoutes(app: OpenAPIHono<AppContext>) {
     }
     await addTeamMember(
       db,
+      c.env,
+      c.req.raw.headers,
       organizationId,
       id,
       body.memberId,
@@ -496,7 +505,15 @@ export function registerTeamRoutes(app: OpenAPIHono<AppContext>) {
         message: "Cannot manage this team",
       });
     }
-    await removeTeamMember(db, id, memberId, memberType ?? "user");
+    await removeTeamMember(
+      db,
+      c.env,
+      c.req.raw.headers,
+      organizationId,
+      id,
+      memberId,
+      memberType ?? "user"
+    );
     return c.body(null, 204);
   });
 

@@ -16,6 +16,7 @@ import type {
 
 export async function createImportContext(
   env: WorkerEnv,
+  requestHeaders: Headers,
   organizationId: string,
   importerId: string,
   jobId: string
@@ -24,6 +25,7 @@ export async function createImportContext(
   await stub.setOrganizationId(organizationId);
   return {
     env,
+    requestHeaders,
     organizationId,
     importerId,
     jobId,
@@ -120,6 +122,7 @@ export async function executeImportBatch<TCredentials, TOptions>(
 export async function runImport<TCredentials, TOptions>(
   source: ImportSource<TCredentials, TOptions>,
   env: WorkerEnv,
+  requestHeaders: Headers,
   organizationId: string,
   importerId: string,
   credentials: TCredentials,
@@ -130,6 +133,7 @@ export async function runImport<TCredentials, TOptions>(
   const job = await createImportJob(db, organizationId, source.name, options);
   const ctx = await createImportContext(
     env,
+    requestHeaders,
     organizationId,
     importerId,
     job.id
@@ -140,6 +144,7 @@ export async function runImport<TCredentials, TOptions>(
 export async function resumeImport<TCredentials, TOptions>(
   source: ImportSource<TCredentials, TOptions>,
   env: WorkerEnv,
+  requestHeaders: Headers,
   organizationId: string,
   importerId: string,
   job: ImportJobRecord,
@@ -149,6 +154,7 @@ export async function resumeImport<TCredentials, TOptions>(
 ): Promise<ImportRunResult> {
   const ctx = await createImportContext(
     env,
+    requestHeaders,
     organizationId,
     importerId,
     job.id
