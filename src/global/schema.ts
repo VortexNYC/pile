@@ -80,6 +80,72 @@ export const intercomConversations = sqliteTable(
   ]
 );
 
+export const zendeskTickets = sqliteTable(
+  "zendesk_tickets" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    externalId: text("external_id" as string).notNull(),
+    ticketId: text("ticket_id" as string).notNull(),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("zendesk_tickets_external_idx" as string).on(
+      table.organizationId,
+      table.externalId
+    ),
+    index("zendesk_tickets_ticket_idx" as string).on(table.ticketId),
+  ]
+);
+
+export const plainThreads = sqliteTable(
+  "plain_threads" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    externalId: text("external_id" as string).notNull(),
+    ticketId: text("ticket_id" as string).notNull(),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("plain_threads_external_idx" as string).on(
+      table.organizationId,
+      table.externalId
+    ),
+    index("plain_threads_ticket_idx" as string).on(table.ticketId),
+  ]
+);
+
+export const plainCustomers = sqliteTable(
+  "plain_customers" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    externalId: text("external_id" as string).notNull(),
+    customerId: text("customer_id" as string).notNull(),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("plain_customers_external_idx" as string).on(
+      table.organizationId,
+      table.externalId
+    ),
+    index("plain_customers_customer_idx" as string).on(table.customerId),
+  ]
+);
+
 export const importJobs = sqliteTable(
   "import_jobs" as string,
   {
