@@ -400,6 +400,13 @@
       "when": 1788998416185,
       "tag": "0056_nice_golden_guardian",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "6",
+      "when": 1789006835061,
+      "tag": "0057_regular_siren",
+      "breakpoints": true
     }
   ]
 }

@@ -16,6 +16,7 @@ SLACK_REDIRECT_URI = "https://issuetracker.example.workers.dev/slack/oauth"
 # DEVIN_OUTPOST = "vortex-daytona"
 # DEVIN_MODEL = "swe-1-7-medium"
 EMAIL_FROM = "notifications@vortex.nyc"
+INTERCOM_CLIENT_SECRET = "test"
 
 [[d1_databases]]
 binding = "D1"

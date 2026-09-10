@@ -5069,6 +5069,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postIntercomOrganizationId",
+    "description": "Receive Intercom webhook notifications (POST /intercom/{organizationId})",
+    "method": "POST",
+    "path": "/intercom/{organizationId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "nullable": true
+        }
+      },
+      "required": [
+        "body",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postNotionOrganizationIdWorkspaceId",
     "description": "POST /notion/{organizationId}/{workspaceId} (POST /notion/{organizationId}/{workspaceId})",
     "method": "POST",

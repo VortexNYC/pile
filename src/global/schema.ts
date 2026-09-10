@@ -57,6 +57,28 @@ export const repoIssues = sqliteTable(
   ]
 );
 
+export const intercomConversations = sqliteTable(
+  "intercom_conversations" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    conversationId: text("conversation_id" as string).notNull(),
+    issueId: text("issue_id" as string).notNull(),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("intercom_conversations_external_idx" as string).on(
+      table.organizationId,
+      table.conversationId
+    ),
+    index("intercom_conversations_issue_idx" as string).on(table.issueId),
+  ]
+);
+
 export const importJobs = sqliteTable(
   "import_jobs" as string,
   {

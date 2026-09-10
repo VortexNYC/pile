@@ -31,6 +31,8 @@ export interface AppEnv {
   // GitLab integration.
   GITLAB_WEBHOOK_SECRET?: string;
   GITLAB_API_URL?: string;
+  // Intercom integration.
+  INTERCOM_CLIENT_SECRET?: string;
   // Cloudflare Email Service send binding.
   EMAIL?: SendEmail;
   EMAIL_FROM?: string;

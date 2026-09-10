@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+import {
+  createIntercomConversation,
+  findIntercomConversation,
+} from "../global/intercom-conversations.js";
 import { VortexError } from "../platform/errors.js";
 import type { IssueInput } from "../types/workspace.js";
 import type {
@@ -162,7 +166,7 @@ async function syncIntercomConversation(
   conversation: IntercomConversation,
   teamId: string | undefined,
   filterState: string
-): Promise<"created" | "skipped" | "error"> {
+): Promise<"created" | "updated" | "skipped" | "error"> {
   if (filterState !== "all" && conversation.state !== filterState) {
     return "skipped";
   }
@@ -171,7 +175,27 @@ async function syncIntercomConversation(
   const updatedAt = new Date(conversation.updated_at * 1000).toISOString();
 
   try {
-    await ctx.stub.createIssue(
+    const existing = await findIntercomConversation(
+      ctx.db,
+      ctx.organizationId,
+      conversation.id
+    );
+    if (existing) {
+      await ctx.stub.updateIssue(
+        existing.issueId,
+        {
+          title: conversationTitle(conversation),
+          description: conversationBody(conversation) || undefined,
+          status: intercomStateToVortexStatus(conversation.state),
+          priority: intercomPriorityToVortexPriority(conversation.priority),
+          updatedAt,
+        },
+        ctx.importerId
+      );
+      return "updated";
+    }
+
+    const issue = await ctx.stub.createIssue(
       {
         title: conversationTitle(conversation),
         description: conversationBody(conversation) || undefined,
@@ -182,6 +206,12 @@ async function syncIntercomConversation(
         updatedAt,
       },
       ctx.importerId
+    );
+    await createIntercomConversation(
+      ctx.db,
+      ctx.organizationId,
+      conversation.id,
+      issue.id
     );
     return "created";
   } catch {
@@ -213,6 +243,7 @@ export const intercomImportSource: ImportSource<
       runState?.cursor ?? parsedOptions.cursor ?? undefined;
 
     let created = 0;
+    let updated = 0;
     let skipped = 0;
     let errors = 0;
     let processed = 0;
@@ -231,6 +262,7 @@ export const intercomImportSource: ImportSource<
           filterState
         );
         if (result === "created") created++;
+        if (result === "updated") updated++;
         if (result === "skipped") skipped++;
         if (result === "error") errors++;
       }
@@ -253,7 +285,9 @@ export const intercomImportSource: ImportSource<
 
     return {
       counts: {
-        issues: created,
+        issues: created + updated,
+        created,
+        updated,
         skipped,
         errors,
       },
