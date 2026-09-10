@@ -3,6 +3,10 @@ import type { Context } from "hono";
 
 import { hmacSha256Hex, timingSafeEqualHex } from "../global/crypto.js";
 import { createD1, type D1Client } from "../global/db.js";
+import {
+  getActiveSupportChannelByType,
+  parseSupportChannelConfig,
+} from "../global/support-channels.js";
 import { findOrCreateCustomerByEmail } from "../global/support-contacts.js";
 import {
   addTicketMessage,
@@ -143,14 +147,31 @@ export async function processPlainSupportWebhook(
     });
   }
 
-  const secret = c.env.PLAIN_WEBHOOK_SECRET;
-  if (!secret) {
+  const db = createD1(c.env.D1);
+  const channel = await getActiveSupportChannelByType(
+    db,
+    organizationId,
+    "plain"
+  );
+  if (!channel) {
+    throw new VortexError({
+      code: "UNAUTHORIZED",
+      status: 401,
+      message: "Invalid Plain signature",
+    });
+  }
+
+  const config = parseSupportChannelConfig(channel.config);
+  const secretName = config.secretName ?? "PLAIN_WEBHOOK_SECRET";
+  const secretResult = z.string().min(1).safeParse(c.env[secretName]);
+  if (!secretResult.success) {
     throw new VortexError({
       code: "CONFIG_ERROR",
       status: 500,
-      message: "Plain webhook secret is not configured",
+      message: `Worker secret ${secretName} is not configured`,
     });
   }
+  const secret = secretResult.data;
 
   const rawBody = await c.req.text();
   const signature = c.req.header("Plain-Request-Signature");
@@ -182,7 +203,6 @@ export async function processPlainSupportWebhook(
     });
   }
 
-  const db = createD1(c.env.D1);
   const { payload } = webhook.data;
 
   switch (payload.eventType) {
