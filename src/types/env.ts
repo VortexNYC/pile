@@ -43,4 +43,7 @@ export interface AppEnv {
   EMAIL_FROM?: string;
   // Cloudflare Queue for async webhook processing.
   WEBHOOK_QUEUE?: Queue;
+
+  // Additional Worker secrets / bindings referenced by name (e.g. per-channel webhook secrets).
+  [key: string]: unknown;
 }
