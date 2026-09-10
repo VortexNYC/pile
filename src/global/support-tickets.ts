@@ -308,14 +308,14 @@ export async function getTicketById(
       listTicketEvents(db, organizationId, ticketId, { limit: 20 }),
     ]);
 
+  const customer = customerRows[0];
+  if (!customer) {
+    throw new VortexError("Customer for ticket not found", 500);
+  }
+
   return {
     ...ticket,
-    customer: customerRows[0] ?? {
-      id: ticket.customerId,
-      email: "",
-      fullName: null,
-      phone: null,
-    },
+    customer,
     companies: companies.map((c) => ({
       id: c.id,
       name: c.name,
@@ -568,6 +568,124 @@ export async function addTicketMessage(
       userId: input.userId ?? null,
     },
   };
+}
+
+type AddTicketMessageInput = {
+  direction: SupportTicketMessageDirection;
+  textContent: string;
+  markdownContent?: string | null;
+  channel: SupportTicketMessageChannel;
+  customerId?: string | null;
+  userId?: string | null;
+  createdAt?: string;
+};
+
+export async function addTicketMessagesBulk(
+  db: D1Client,
+  organizationId: string,
+  ticketId: string,
+  messages: AddTicketMessageInput[]
+): Promise<void> {
+  if (messages.length === 0) {
+    return;
+  }
+
+  await ensureTicket(db, organizationId, ticketId);
+
+  const now = new Date().toISOString();
+  const eventsToCreate: {
+    id: string;
+    ticketId: string;
+    type: "message";
+    actorType: SupportTicketActorType;
+    actorId: string | null;
+    createdAt: string;
+  }[] = [];
+  const messagesToCreate: {
+    id: string;
+    eventId: string;
+    direction: SupportTicketMessageDirection;
+    textContent: string;
+    markdownContent: string | null;
+    channel: SupportTicketMessageChannel;
+    customerId: string | null;
+    userId: string | null;
+    createdAt: string;
+  }[] = [];
+
+  let lastCustomerMessageAt: string | null = null;
+  let lastAgentMessageAt: string | null = null;
+  let latestMessageAt: string | null = null;
+
+  for (const message of messages) {
+    const messageCreatedAt = message.createdAt ?? now;
+    const actorType: SupportTicketActorType = message.customerId
+      ? "customer"
+      : message.userId
+        ? "user"
+        : "system";
+    const actorId = message.customerId ?? message.userId ?? null;
+    const eventId = crypto.randomUUID();
+    const messageId = crypto.randomUUID();
+
+    eventsToCreate.push({
+      id: eventId,
+      ticketId,
+      type: "message",
+      actorType,
+      actorId,
+      createdAt: messageCreatedAt,
+    });
+
+    messagesToCreate.push({
+      id: messageId,
+      eventId,
+      direction: message.direction,
+      textContent: message.textContent,
+      markdownContent: message.markdownContent ?? null,
+      channel: message.channel,
+      customerId: message.customerId ?? null,
+      userId: message.userId ?? null,
+      createdAt: messageCreatedAt,
+    });
+
+    if (message.direction === "inbound") {
+      if (
+        lastCustomerMessageAt === null ||
+        messageCreatedAt > lastCustomerMessageAt
+      ) {
+        lastCustomerMessageAt = messageCreatedAt;
+      }
+    } else {
+      if (
+        lastAgentMessageAt === null ||
+        messageCreatedAt > lastAgentMessageAt
+      ) {
+        lastAgentMessageAt = messageCreatedAt;
+      }
+    }
+
+    if (latestMessageAt === null || messageCreatedAt > latestMessageAt) {
+      latestMessageAt = messageCreatedAt;
+    }
+  }
+
+  await db.insert(supportTicketEvents).values(eventsToCreate);
+  await db.insert(supportTicketMessages).values(messagesToCreate);
+
+  await db
+    .update(supportTickets)
+    .set({
+      ...(lastCustomerMessageAt ? { lastCustomerMessageAt } : {}),
+      ...(lastAgentMessageAt ? { lastAgentMessageAt } : {}),
+      ...(latestMessageAt ? { updatedAt: latestMessageAt } : {}),
+    })
+    .where(
+      and(
+        eq(supportTickets.id, ticketId),
+        eq(supportTickets.organizationId, organizationId)
+      )
+    );
 }
 
 export async function addTicketNote(
@@ -912,33 +1030,30 @@ export async function createTicketFromIntercom(
   });
 
   const firstMessage = body || subject || "(no content)";
-  await addTicketMessage(db, organizationId, ticket.id, {
-    direction: "inbound",
-    textContent: firstMessage,
-    channel: messageChannel,
-    customerId,
-    createdAt,
-  });
-
   const sortedReplies = conversation.replies.toSorted(
     (a, b) =>
       (a.createdAt ? Date.parse(a.createdAt) : 0) -
       (b.createdAt ? Date.parse(b.createdAt) : 0)
   );
-
-  for (const reply of sortedReplies) {
-    const replyCustomerId =
-      reply.direction === "inbound" ? customerId : undefined;
-    await addTicketMessage(db, organizationId, ticket.id, {
+  const allMessages: AddTicketMessageInput[] = [
+    {
+      direction: "inbound",
+      textContent: firstMessage,
+      channel: messageChannel,
+      customerId,
+      createdAt,
+    },
+    ...sortedReplies.map((reply) => ({
       direction: reply.direction,
       textContent: stripHtml(reply.body) || "(no content)",
       markdownContent: reply.body,
       channel: reply.channel ?? messageChannel,
-      customerId: replyCustomerId ?? reply.customerId,
+      customerId: reply.direction === "inbound" ? customerId : reply.customerId,
       userId: reply.userId,
       createdAt: reply.createdAt,
-    });
-  }
+    })),
+  ];
+  await addTicketMessagesBulk(db, organizationId, ticket.id, allMessages);
 
   const lastReply = sortedReplies.at(-1);
   const finalUpdatedAt =
@@ -956,17 +1071,10 @@ export async function createTicketFromIntercom(
     );
 
   const full = await getTicketById(db, organizationId, ticket.id);
-  return (
-    full ?? {
-      ...ticket,
-      customer: { id: customerId, email: "", fullName: null, phone: null },
-      companies: [],
-      identities: [],
-      labels: [],
-      assignees: [],
-      events: [],
-    }
-  );
+  if (!full) {
+    throw new VortexError("Imported ticket not found", 500);
+  }
+  return full;
 }
 
 export async function createTicketFromPlain(
@@ -1035,33 +1143,30 @@ export async function createTicketFromPlain(
   });
 
   const firstMessage = body || subject || "(no content)";
-  await addTicketMessage(db, organizationId, ticket.id, {
-    direction: "inbound",
-    textContent: firstMessage,
-    channel: messageChannel,
-    customerId,
-    createdAt,
-  });
-
   const sortedReplies = thread.replies.toSorted(
     (a, b) =>
       (a.createdAt ? Date.parse(a.createdAt) : 0) -
       (b.createdAt ? Date.parse(b.createdAt) : 0)
   );
-
-  for (const reply of sortedReplies) {
-    const replyCustomerId =
-      reply.direction === "inbound" ? customerId : undefined;
-    await addTicketMessage(db, organizationId, ticket.id, {
+  const allMessages: AddTicketMessageInput[] = [
+    {
+      direction: "inbound",
+      textContent: firstMessage,
+      channel: messageChannel,
+      customerId,
+      createdAt,
+    },
+    ...sortedReplies.map((reply) => ({
       direction: reply.direction,
       textContent: stripHtml(reply.body) || "(no content)",
       markdownContent: reply.body,
       channel: reply.channel ?? messageChannel,
-      customerId: replyCustomerId ?? reply.customerId,
+      customerId: reply.direction === "inbound" ? customerId : reply.customerId,
       userId: reply.userId,
       createdAt: reply.createdAt,
-    });
-  }
+    })),
+  ];
+  await addTicketMessagesBulk(db, organizationId, ticket.id, allMessages);
 
   const lastReply = sortedReplies.at(-1);
   const finalUpdatedAt =
@@ -1079,17 +1184,10 @@ export async function createTicketFromPlain(
     );
 
   const full = await getTicketById(db, organizationId, ticket.id);
-  return (
-    full ?? {
-      ...ticket,
-      customer: { id: customerId, email: "", fullName: null, phone: null },
-      companies: [],
-      identities: [],
-      labels: [],
-      assignees: [],
-      events: [],
-    }
-  );
+  if (!full) {
+    throw new VortexError("Imported ticket not found", 500);
+  }
+  return full;
 }
 
 export type ZendeskSupportTicket = {
@@ -1198,33 +1296,30 @@ export async function createTicketFromZendesk(
   });
 
   const firstMessage = body || subject || "(no content)";
-  await addTicketMessage(db, organizationId, created.id, {
-    direction: "inbound",
-    textContent: firstMessage,
-    channel: messageChannel,
-    customerId,
-    createdAt,
-  });
-
   const sortedReplies = ticket.replies.toSorted(
     (a, b) =>
       (a.createdAt ? Date.parse(a.createdAt) : 0) -
       (b.createdAt ? Date.parse(b.createdAt) : 0)
   );
-
-  for (const reply of sortedReplies) {
-    const replyCustomerId =
-      reply.direction === "inbound" ? customerId : undefined;
-    await addTicketMessage(db, organizationId, created.id, {
+  const allMessages: AddTicketMessageInput[] = [
+    {
+      direction: "inbound",
+      textContent: firstMessage,
+      channel: messageChannel,
+      customerId,
+      createdAt,
+    },
+    ...sortedReplies.map((reply) => ({
       direction: reply.direction,
       textContent: stripHtml(reply.body) || "(no content)",
       markdownContent: reply.body,
       channel: reply.channel ?? messageChannel,
-      customerId: replyCustomerId ?? reply.customerId,
+      customerId: reply.direction === "inbound" ? customerId : reply.customerId,
       userId: reply.userId,
       createdAt: reply.createdAt,
-    });
-  }
+    })),
+  ];
+  await addTicketMessagesBulk(db, organizationId, created.id, allMessages);
 
   const lastReply = sortedReplies.at(-1);
   const finalUpdatedAt =
@@ -1242,15 +1337,8 @@ export async function createTicketFromZendesk(
     );
 
   const full = await getTicketById(db, organizationId, created.id);
-  return (
-    full ?? {
-      ...created,
-      customer: { id: customerId, email: "", fullName: null, phone: null },
-      companies: [],
-      identities: [],
-      labels: [],
-      assignees: [],
-      events: [],
-    }
-  );
+  if (!full) {
+    throw new VortexError("Imported ticket not found", 500);
+  }
+  return full;
 }
