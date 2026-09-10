@@ -274,8 +274,6 @@ export const intercomSupportImportSource: ImportSource<
     const { state: filterState } = parsedOptions;
     const perPage = 100;
     const limit = runState?.limit ?? parsedOptions.limit;
-    let startingAfter: string | undefined =
-      runState?.cursor ?? parsedOptions.cursor ?? undefined;
 
     let created = 0;
     let updated = 0;
@@ -284,10 +282,13 @@ export const intercomSupportImportSource: ImportSource<
     let processed = 0;
     let nextCursor: string | null = null;
 
-    while (true) {
+    const processPage = async (cursor?: string): Promise<void> => {
       const { conversations, nextCursor: pageNext } =
-        await listIntercomConversations(token, perPage, startingAfter);
-      if (conversations.length === 0) break;
+        await listIntercomConversations(token, perPage, cursor);
+      if (conversations.length === 0) {
+        nextCursor = null;
+        return;
+      }
 
       await Promise.all(
         conversations.map(async (conversation) => {
@@ -356,20 +357,21 @@ export const intercomSupportImportSource: ImportSource<
       );
 
       processed += conversations.length;
-      nextCursor = pageNext;
-      startingAfter = pageNext ?? undefined;
 
-      const hasMore = nextCursor !== null && nextCursor !== undefined;
+      const hasMore = pageNext !== null && pageNext !== undefined;
       const hitLimit = limit !== undefined && processed >= limit;
-      if (!hasMore || hitLimit) {
-        if (hasMore && hitLimit) {
-          nextCursor = nextCursor as string | null;
-        } else if (!hasMore) {
-          nextCursor = null;
-        }
-        break;
+      if (!hasMore) {
+        nextCursor = null;
+        return;
       }
-    }
+      if (hitLimit) {
+        nextCursor = pageNext;
+        return;
+      }
+      return processPage(pageNext ?? undefined);
+    };
+
+    await processPage(runState?.cursor ?? parsedOptions.cursor ?? undefined);
 
     return {
       counts: {

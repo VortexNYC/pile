@@ -331,8 +331,6 @@ export const zendeskSupportImportSource: ImportSource<
     const { state: filterState } = parsedOptions;
     const perPage = 100;
     const limit = runState?.limit ?? parsedOptions.limit;
-    let afterCursor: string | undefined =
-      runState?.cursor ?? parsedOptions.cursor ?? undefined;
 
     let created = 0;
     let updated = 0;
@@ -341,13 +339,16 @@ export const zendeskSupportImportSource: ImportSource<
     let processed = 0;
     let nextCursor: string | null = null;
 
-    while (true) {
+    const processPage = async (cursor?: string): Promise<void> => {
       const {
         tickets,
         users,
         nextCursor: pageNext,
-      } = await listZendeskTickets(credentials, perPage, afterCursor);
-      if (tickets.length === 0) break;
+      } = await listZendeskTickets(credentials, perPage, cursor);
+      if (tickets.length === 0) {
+        nextCursor = null;
+        return;
+      }
 
       await Promise.all(
         tickets.map(async (ticket) => {
@@ -420,20 +421,21 @@ export const zendeskSupportImportSource: ImportSource<
       );
 
       processed += tickets.length;
-      nextCursor = pageNext;
-      afterCursor = pageNext ?? undefined;
 
-      const hasMore = nextCursor !== null && nextCursor !== undefined;
+      const hasMore = pageNext !== null && pageNext !== undefined;
       const hitLimit = limit !== undefined && processed >= limit;
-      if (!hasMore || hitLimit) {
-        if (hasMore && hitLimit) {
-          nextCursor = nextCursor as string | null;
-        } else if (!hasMore) {
-          nextCursor = null;
-        }
-        break;
+      if (!hasMore) {
+        nextCursor = null;
+        return;
       }
-    }
+      if (hitLimit) {
+        nextCursor = pageNext;
+        return;
+      }
+      return processPage(pageNext ?? undefined);
+    };
+
+    await processPage(runState?.cursor ?? parsedOptions.cursor ?? undefined);
 
     return {
       counts: {

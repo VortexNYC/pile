@@ -4,7 +4,13 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { createD1 } from "../global/db.js";
-import { apikey as apikeyTable, user as userTable } from "../global/schema.js";
+import {
+  apikey as apikeyTable,
+  supportTicketAttachments,
+  supportTicketEvents,
+  supportTicketNotes,
+  user as userTable,
+} from "../global/schema.js";
 import { createCustomer as createSupportCustomer } from "../global/support-contacts.js";
 import {
   createTicketFromIntercom,
@@ -316,7 +322,26 @@ describe("support-tickets API", () => {
           {
             body: "We can reset it for you",
             direction: "outbound",
+            actorType: "user",
+            actorId: "admin-1",
             createdAt: "2023-11-14T11:15:00.000Z",
+            attachments: [
+              {
+                externalId: "att-1",
+                url: "https://example.com/faq.pdf",
+                fileName: "faq.pdf",
+                contentType: "application/pdf",
+                size: 12345,
+              },
+            ],
+          },
+          {
+            body: "<p>Internal: escalate this</p>",
+            direction: "outbound",
+            kind: "note",
+            actorType: "user",
+            actorId: "admin-2",
+            createdAt: "2023-11-14T11:16:00.000Z",
           },
           {
             body: "That worked, thanks",
@@ -324,12 +349,61 @@ describe("support-tickets API", () => {
             createdAt: "2023-11-14T11:20:00.000Z",
           },
         ],
+        events: [
+          {
+            type: "status_change",
+            actorType: "system",
+            actorId: null,
+            createdAt: "2023-11-14T11:21:00.000Z",
+            metadata: { previousStatus: "open", newStatus: "closed" },
+          },
+        ],
       }
     );
 
     expect(ticket.status).toBe("todo");
     expect(ticket.priority).toBe("high");
-    expect(ticket.events.length).toBeGreaterThanOrEqual(3);
+    expect(ticket.events.length).toBeGreaterThanOrEqual(5);
+
+    const events = await db
+      .select()
+      .from(supportTicketEvents)
+      .where(eq(supportTicketEvents.ticketId, ticket.id));
+
+    const noteEvent = events.find((e) => e.type === "note");
+    expect(noteEvent).toBeDefined();
+    expect(noteEvent?.actorType).toBe("user");
+    expect(noteEvent?.actorId).toBe("admin-2");
+    if (!noteEvent) {
+      throw new Error("note event missing");
+    }
+
+    const notes = await db
+      .select()
+      .from(supportTicketNotes)
+      .where(eq(supportTicketNotes.eventId, noteEvent.id));
+    expect(notes[0]?.body).toBe("Internal: escalate this");
+
+    const messageEvent = events.find(
+      (e) => e.type === "message" && e.actorType === "user"
+    );
+    expect(messageEvent?.actorId).toBe("admin-1");
+    if (!messageEvent) {
+      throw new Error("message event missing");
+    }
+
+    const attachments = await db
+      .select()
+      .from(supportTicketAttachments)
+      .where(eq(supportTicketAttachments.eventId, messageEvent.id));
+    expect(attachments.length).toBe(1);
+    expect(attachments[0]?.externalId).toBe("att-1");
+    expect(attachments[0]?.url).toBe("https://example.com/faq.pdf");
+    expect(attachments[0]?.fileName).toBe("faq.pdf");
+
+    const statusEvent = events.find((e) => e.type === "status_change");
+    expect(statusEvent).toBeDefined();
+    expect(statusEvent?.metadata).toContain("previousStatus");
   });
 
   it("imports a Plain thread as a support ticket", async () => {
@@ -356,13 +430,57 @@ describe("support-tickets API", () => {
         },
         createdAt: "2023-11-14T12:00:00.000Z",
         updatedAt: "2023-11-14T12:05:00.000Z",
-        replies: [],
+        replies: [
+          {
+            body: "Thanks for the suggestion",
+            direction: "outbound",
+            actorType: "machine",
+            actorId: "bot-1",
+            createdAt: "2023-11-14T12:02:00.000Z",
+          },
+          {
+            body: "Internal note: triage",
+            direction: "outbound",
+            kind: "note",
+            actorType: "user",
+            actorId: "agent-1",
+            createdAt: "2023-11-14T12:03:00.000Z",
+          },
+        ],
+        events: [
+          {
+            type: "priority_change",
+            actorType: "system",
+            actorId: null,
+            createdAt: "2023-11-14T12:04:00.000Z",
+            metadata: { previousPriority: "medium", newPriority: "low" },
+          },
+        ],
       }
     );
 
     expect(ticket.status).toBe("done");
     expect(ticket.priority).toBe("low");
     expect(ticket.externalSource).toBe("plain");
+
+    const events = await db
+      .select()
+      .from(supportTicketEvents)
+      .where(eq(supportTicketEvents.ticketId, ticket.id));
+
+    const noteEvent = events.find(
+      (e) => e.type === "note" && e.actorType === "user"
+    );
+    expect(noteEvent?.actorId).toBe("agent-1");
+
+    const machineEvent = events.find(
+      (e) => e.type === "message" && e.actorType === "machine"
+    );
+    expect(machineEvent?.actorId).toBe("bot-1");
+
+    const priorityEvent = events.find((e) => e.type === "priority_change");
+    expect(priorityEvent).toBeDefined();
+    expect(priorityEvent?.metadata).toContain("previousPriority");
   });
 
   it("imports a Zendesk ticket as a support ticket", async () => {
@@ -391,7 +509,35 @@ describe("support-tickets API", () => {
           {
             body: "Can you provide the order number?",
             direction: "outbound",
+            actorType: "user",
+            actorId: "agent-1",
             createdAt: "2023-11-14T13:02:00.000Z",
+            attachments: [
+              {
+                externalId: "att-99",
+                url: "https://example.com/receipt.pdf",
+                fileName: "receipt.pdf",
+                contentType: "application/pdf",
+                size: 54321,
+              },
+            ],
+          },
+          {
+            body: "Escalating to billing team",
+            direction: "outbound",
+            kind: "note",
+            actorType: "user",
+            actorId: "agent-2",
+            createdAt: "2023-11-14T13:03:00.000Z",
+          },
+        ],
+        events: [
+          {
+            type: "assignment_change",
+            actorType: "system",
+            actorId: null,
+            createdAt: "2023-11-14T13:04:00.000Z",
+            metadata: { assigneeId: "group-billing" },
           },
         ],
       }
@@ -400,5 +546,33 @@ describe("support-tickets API", () => {
     expect(ticket.status).toBe("todo");
     expect(ticket.priority).toBe("urgent");
     expect(ticket.externalSource).toBe("zendesk");
+
+    const events = await db
+      .select()
+      .from(supportTicketEvents)
+      .where(eq(supportTicketEvents.ticketId, ticket.id));
+
+    const noteEvent = events.find((e) => e.type === "note");
+    expect(noteEvent?.actorType).toBe("user");
+    expect(noteEvent?.actorId).toBe("agent-2");
+
+    const messageEvent = events.find(
+      (e) => e.type === "message" && e.actorId === "agent-1"
+    );
+    expect(messageEvent).toBeDefined();
+
+    const attachments = messageEvent
+      ? await db
+          .select()
+          .from(supportTicketAttachments)
+          .where(eq(supportTicketAttachments.eventId, messageEvent.id))
+      : [];
+    expect(attachments.length).toBe(1);
+    expect(attachments[0]?.externalId).toBe("att-99");
+    expect(attachments[0]?.url).toBe("https://example.com/receipt.pdf");
+
+    const assignmentEvent = events.find((e) => e.type === "assignment_change");
+    expect(assignmentEvent).toBeDefined();
+    expect(assignmentEvent?.metadata).toContain("assigneeId");
   });
 });

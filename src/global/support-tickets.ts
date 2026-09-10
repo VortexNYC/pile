@@ -1002,54 +1002,60 @@ async function ingestSupportTimeline(
   const createdAts: number[] = [
     Date.parse(input.ticketUpdatedAt),
     Date.parse(input.firstMessageCreatedAt),
+    ...sortedReplies.map((reply) =>
+      reply.createdAt ? Date.parse(reply.createdAt) : 0
+    ),
+    ...sortedEvents.map((event) =>
+      event.createdAt ? Date.parse(event.createdAt) : 0
+    ),
   ];
 
-  for (const reply of sortedReplies) {
-    if (reply.createdAt) {
-      createdAts.push(Date.parse(reply.createdAt));
-    }
-    let event: SupportTicketEventWithDetails;
-    if (reply.kind === "note") {
-      event = await addTicketNote(db, organizationId, ticketId, {
-        body: stripHtml(reply.body) || "(no content)",
-        userId: reply.userId,
-        actorType: reply.actorType,
-        actorId: reply.actorId,
-        metadata: reply.metadata,
-        createdAt: reply.createdAt,
-      });
-    } else {
-      event = await addTicketMessage(db, organizationId, ticketId, {
-        direction: reply.direction,
-        textContent: stripHtml(reply.body) || "(no content)",
-        markdownContent: reply.body,
-        channel: reply.channel ?? input.messageChannel,
-        customerId:
-          reply.direction === "inbound" ? customerId : reply.customerId,
-        userId: reply.userId,
-        actorType: reply.actorType,
-        actorId: reply.actorId,
-        metadata: reply.metadata,
-        createdAt: reply.createdAt,
-      });
-    }
-    for (const attachment of reply.attachments ?? []) {
-      await addSupportTicketAttachment(
-        db,
-        organizationId,
-        ticketId,
-        event.id,
-        attachment
+  await Promise.all(
+    sortedReplies.map(async (reply) => {
+      let event: SupportTicketEventWithDetails;
+      if (reply.kind === "note") {
+        event = await addTicketNote(db, organizationId, ticketId, {
+          body: stripHtml(reply.body) || "(no content)",
+          userId: reply.userId,
+          actorType: reply.actorType,
+          actorId: reply.actorId,
+          metadata: reply.metadata,
+          createdAt: reply.createdAt,
+        });
+      } else {
+        event = await addTicketMessage(db, organizationId, ticketId, {
+          direction: reply.direction,
+          textContent: stripHtml(reply.body) || "(no content)",
+          markdownContent: reply.body,
+          channel: reply.channel ?? input.messageChannel,
+          customerId:
+            reply.direction === "inbound" ? customerId : reply.customerId,
+          userId: reply.userId,
+          actorType: reply.actorType,
+          actorId: reply.actorId,
+          metadata: reply.metadata,
+          createdAt: reply.createdAt,
+        });
+      }
+      await Promise.all(
+        (reply.attachments ?? []).map((attachment) =>
+          addSupportTicketAttachment(
+            db,
+            organizationId,
+            ticketId,
+            event.id,
+            attachment
+          )
+        )
       );
-    }
-  }
+    })
+  );
 
-  for (const eventInput of sortedEvents) {
-    if (eventInput.createdAt) {
-      createdAts.push(Date.parse(eventInput.createdAt));
-    }
-    await addTicketEvent(db, organizationId, ticketId, eventInput);
-  }
+  await Promise.all(
+    sortedEvents.map((eventInput) =>
+      addTicketEvent(db, organizationId, ticketId, eventInput)
+    )
+  );
 
   const latest = Math.max(...createdAts);
   const finalUpdatedAt = Number.isFinite(latest)

@@ -636,8 +636,6 @@ export const plainSupportImportSource: ImportSource<
     const { state: filterState } = parsedOptions;
     const pageSize = 100;
     const limit = runState?.limit ?? parsedOptions.limit;
-    let after: string | undefined =
-      runState?.cursor ?? parsedOptions.cursor ?? undefined;
 
     let created = 0;
     let updated = 0;
@@ -646,13 +644,16 @@ export const plainSupportImportSource: ImportSource<
     let processed = 0;
     let nextCursor: string | null = null;
 
-    while (true) {
+    const processPage = async (cursor?: string): Promise<void> => {
       const { threads, nextCursor: pageNext } = await listPlainThreads(
         token,
         pageSize,
-        after
+        cursor
       );
-      if (threads.length === 0) break;
+      if (threads.length === 0) {
+        nextCursor = null;
+        return;
+      }
 
       await Promise.all(
         threads.map(async (thread) => {
@@ -726,20 +727,21 @@ export const plainSupportImportSource: ImportSource<
       );
 
       processed += threads.length;
-      nextCursor = pageNext;
-      after = pageNext ?? undefined;
 
-      const hasMore = nextCursor !== null && nextCursor !== undefined;
+      const hasMore = pageNext !== null && pageNext !== undefined;
       const hitLimit = limit !== undefined && processed >= limit;
-      if (!hasMore || hitLimit) {
-        if (hasMore && hitLimit) {
-          nextCursor = nextCursor as string | null;
-        } else if (!hasMore) {
-          nextCursor = null;
-        }
-        break;
+      if (!hasMore) {
+        nextCursor = null;
+        return;
       }
-    }
+      if (hitLimit) {
+        nextCursor = pageNext;
+        return;
+      }
+      return processPage(pageNext);
+    };
+
+    await processPage(runState?.cursor ?? parsedOptions.cursor ?? undefined);
 
     return {
       counts: {
