@@ -428,6 +428,20 @@
       "when": 1789015014858,
       "tag": "0060_stiff_iceman",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "6",
+      "when": 1789045949020,
+      "tag": "0061_exotic_roland_deschain",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "6",
+      "when": 1789046969104,
+      "tag": "0062_fast_caretaker",
+      "breakpoints": true
     }
   ]
 }

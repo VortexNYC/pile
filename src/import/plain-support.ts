@@ -5,7 +5,14 @@ import {
   createCustomer,
   findCustomerByExternalId,
 } from "../global/support-contacts.js";
-import type { ExternalSupportReply } from "../global/support-tickets.js";
+import type {
+  ExternalSupportAttachment,
+  ExternalSupportEvent,
+  ExternalSupportReply,
+  SupportTicketActorType,
+  SupportTicketEventType,
+  SupportTicketMessageChannel,
+} from "../global/support-tickets.js";
 import { createTicketFromPlain } from "../global/support-tickets.js";
 import { VortexError } from "../platform/errors.js";
 import type {
@@ -36,7 +43,8 @@ export type PlainSupportOptions = z.infer<typeof plainSupportOptionsSchema>;
 async function plainRequest(
   token: string,
   query: string,
-  variables: Record<string, unknown>
+  variables: Record<string, unknown>,
+  operationName: string
 ): Promise<unknown> {
   const response = await fetch(PLAIN_API_BASE, {
     method: "POST",
@@ -44,7 +52,7 @@ async function plainRequest(
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ query, variables, operationName: "SupportThreads" }),
+    body: JSON.stringify({ query, variables, operationName }),
   });
 
   if (!response.ok) {
@@ -201,10 +209,15 @@ async function listPlainThreads(
     }
   `;
 
-  const data = await plainRequest(token, query, {
-    first,
-    after: after ?? null,
-  });
+  const data = await plainRequest(
+    token,
+    query,
+    {
+      first,
+      after: after ?? null,
+    },
+    "SupportThreads"
+  );
   const parsed = plainThreadsResponseSchema.safeParse(data);
   if (!parsed.success) {
     throw new VortexError({
@@ -222,8 +235,27 @@ async function listPlainThreads(
   return { threads: threads.nodes, nextCursor };
 }
 
+const plainAttachmentSchema = z
+  .object({
+    id: z.string(),
+    fileName: z.string().optional().nullable(),
+    fileExtension: z.string().optional().nullable(),
+    fileMimeType: z.string().optional().nullable(),
+    fileSize: z
+      .object({
+        bytes: z.number(),
+      })
+      .optional()
+      .nullable(),
+  })
+  .passthrough();
+
 const plainActorSchema = z
   .object({
+    customerId: z.string().optional().nullable(),
+    userId: z.string().optional().nullable(),
+    machineUserId: z.string().optional().nullable(),
+    systemId: z.string().optional().nullable(),
     customer: z.object({ id: z.string() }).passthrough().optional().nullable(),
     user: z.object({ id: z.string() }).passthrough().optional().nullable(),
     machineUser: z
@@ -234,27 +266,18 @@ const plainActorSchema = z
   })
   .passthrough();
 
+const plainEntrySchema = z
+  .object({
+    typename: z.string(),
+  })
+  .passthrough();
+
 const plainTimelineEntrySchema = z.object({
   id: z.string(),
   timestamp: plainTimestampSchema,
+  llmText: z.string().optional().nullable(),
   actor: plainActorSchema.optional().nullable(),
-  entry: z
-    .object({
-      chatId: z.string().optional().nullable(),
-      text: z.string().optional().nullable(),
-      title: z.string().optional().nullable(),
-      components: z
-        .array(
-          z
-            .object({
-              text: z.string().optional().nullable(),
-            })
-            .passthrough()
-        )
-        .optional()
-        .nullable(),
-    })
-    .passthrough(),
+  entry: plainEntrySchema,
 });
 
 type PlainTimelineEntry = z.infer<typeof plainTimelineEntrySchema>;
@@ -268,31 +291,203 @@ const plainTimelineResponseSchema = z.object({
   }),
 });
 
-function timelineBody(entry: PlainTimelineEntry["entry"]): string {
-  if (entry.chatId) return entry.text ?? "";
-  if (entry.title) {
-    const parts = [
-      entry.title,
-      ...(entry.components ?? []).map((component) => component.text),
-    ];
-    return parts
-      .filter(
-        (text): text is string => typeof text === "string" && text.length > 0
-      )
-      .join("\n");
+function entryString(
+  entry: PlainTimelineEntry["entry"],
+  key: string
+): string | null {
+  const value = entry[key];
+  return typeof value === "string" ? value : null;
+}
+
+function componentTexts(components: unknown): string[] {
+  if (!Array.isArray(components)) {
+    return [];
   }
-  return "";
+  return components
+    .map((component) => {
+      if (
+        typeof component === "object" &&
+        component !== null &&
+        "text" in component &&
+        typeof component.text === "string"
+      ) {
+        return component.text;
+      }
+      return null;
+    })
+    .filter((text): text is string => text !== null);
+}
+
+function timelineBody(
+  entry: PlainTimelineEntry["entry"],
+  llmText: string | null | undefined
+): string {
+  const direct =
+    entryString(entry, "text") ??
+    entryString(entry, "markdown") ??
+    entryString(entry, "markdownContent") ??
+    entryString(entry, "resolvedText") ??
+    entryString(entry, "fullTextContent") ??
+    entryString(entry, "textContent");
+  if (direct) {
+    return direct;
+  }
+
+  const title = entryString(entry, "title");
+  const components = componentTexts(entry.components);
+  const joined = [title, ...components]
+    .filter(
+      (part): part is string => typeof part === "string" && part.length > 0
+    )
+    .join("\n");
+  if (joined) {
+    return joined;
+  }
+
+  return llmText ?? "";
+}
+
+function timelineActor(entry: PlainTimelineEntry): {
+  actorType: SupportTicketActorType;
+  actorId: string | null;
+} {
+  const actor = entry.actor;
+  if (!actor) {
+    return { actorType: "system", actorId: null };
+  }
+  const customerId = actor.customerId ?? actor.customer?.id ?? null;
+  if (customerId) {
+    return { actorType: "customer", actorId: customerId };
+  }
+  const userId = actor.userId ?? actor.user?.id ?? null;
+  if (userId) {
+    return { actorType: "user", actorId: userId };
+  }
+  const machineUserId = actor.machineUserId ?? actor.machineUser?.id ?? null;
+  if (machineUserId) {
+    return { actorType: "machine", actorId: machineUserId };
+  }
+  if (actor.systemId) {
+    return { actorType: "system", actorId: actor.systemId };
+  }
+  return { actorType: "system", actorId: null };
 }
 
 function timelineDirection(entry: PlainTimelineEntry): "inbound" | "outbound" {
-  return entry.actor?.customer != null ? "inbound" : "outbound";
+  const actor = entry.actor;
+  if (!actor) {
+    return "outbound";
+  }
+  if (actor.customerId != null || actor.customer != null) {
+    return "inbound";
+  }
+  return "outbound";
 }
+
+function timelineChannel(
+  entry: PlainTimelineEntry["entry"]
+): SupportTicketMessageChannel {
+  const typename = entry.typename;
+  if (typename === "EmailEntry") {
+    return "email";
+  }
+  if (typename === "SlackMessageEntry" || typename === "SlackReplyEntry") {
+    return "slack";
+  }
+  if (typename === "MSTeamsMessageEntry") {
+    return "msteams";
+  }
+  if (typename === "DiscordMessageEntry") {
+    return "discord";
+  }
+  return "chat";
+}
+
+function timelineAttachments(
+  entry: PlainTimelineEntry["entry"]
+): ExternalSupportAttachment[] {
+  const parsed = z.array(plainAttachmentSchema).safeParse(entry.attachments);
+  if (!parsed.success) {
+    return [];
+  }
+  return parsed.data.map((attachment) => ({
+    externalId: attachment.id,
+    fileName: attachment.fileName ?? null,
+    contentType: attachment.fileMimeType ?? null,
+    size: attachment.fileSize?.bytes ?? null,
+  }));
+}
+
+function entryEventType(
+  entry: PlainTimelineEntry["entry"]
+): SupportTicketEventType {
+  const typename = entry.typename;
+  if (typename === "ThreadStatusTransitionedEntry") {
+    return "status_change";
+  }
+  if (typename === "ThreadPriorityChangedEntry") {
+    return "priority_change";
+  }
+  if (
+    typename === "ThreadAssignmentTransitionedEntry" ||
+    typename === "ThreadAdditionalAssigneesTransitionedEntry"
+  ) {
+    return "assignment_change";
+  }
+  if (typename === "ThreadLabelsChangedEntry") {
+    return "label_added";
+  }
+  if (
+    typename === "CustomerEventEntry" ||
+    typename === "CustomerSurveyRequestedEntry" ||
+    typename === "CustomEntry"
+  ) {
+    return "customer_event";
+  }
+  return "field_change";
+}
+
+const PLAIN_TIMELINE_ENTRY_FRAGMENT = `
+  typename: __typename
+  ... on ChatEntry { chatId text attachments { id fileName fileExtension fileMimeType fileSize { bytes } } }
+  ... on NoteEntry { noteId text markdown attachments { id fileName fileExtension fileMimeType fileSize { bytes } } }
+  ... on EmailEntry { emailId subject textContent fullTextContent attachments { id fileName fileExtension fileMimeType fileSize { bytes } } }
+  ... on CustomEntry { title type components { __typename ... on ComponentText { text } } attachments { id fileName fileExtension fileMimeType fileSize { bytes } } }
+  ... on SlackMessageEntry { text attachments { id fileName fileExtension fileMimeType fileSize { bytes } } }
+  ... on SlackReplyEntry { text attachments { id fileName fileExtension fileMimeType fileSize { bytes } } }
+  ... on MSTeamsMessageEntry { text markdownContent attachments { id fileName fileExtension fileMimeType fileSize { bytes } } }
+  ... on DiscordMessageEntry { markdownContent attachments { id fileName fileExtension fileMimeType fileSize { bytes } } }
+  ... on ThreadDiscussionMessageEntry { text resolvedText attachments { id fileName fileExtension fileMimeType fileSize { bytes } } }
+  ... on HelpCenterAiConversationMessageEntry { markdown }
+  ... on MergedThreadMessageEntry { threadLinkId childThreadDetails { id title } }
+  ... on ThreadStatusTransitionedEntry { previousStatus nextStatus }
+  ... on ThreadPriorityChangedEntry { previousPriority nextPriority }
+  ... on ThreadAssignmentTransitionedEntry { previousAssignee { __typename ... on User { id } ... on MachineUser { id } ... on System { systemId } } nextAssignee { __typename ... on User { id } ... on MachineUser { id } ... on System { systemId } } }
+  ... on ThreadAdditionalAssigneesTransitionedEntry { previousAssignees { __typename ... on User { id } ... on MachineUser { id } ... on System { systemId } } nextAssignees { __typename ... on User { id } ... on MachineUser { id } ... on System { systemId } } }
+  ... on ThreadLabelsChangedEntry { previousLabels { id name } nextLabels { id name } }
+  ... on ThreadServiceLevelAgreementPolicyChangedEntry { previousServiceLevelAgreementPolicy { id name } nextServiceLevelAgreementPolicy { id name } }
+  ... on ServiceLevelAgreementStatusTransitionedEntry { previousStatus nextStatus }
+  ... on ThreadEventEntry { title components { __typename ... on ComponentText { text } } }
+  ... on CustomerEventEntry { title components { __typename ... on ComponentText { text } } }
+  ... on LinearIssueThreadLinkStateTransitionedEntry { previousLinearStateId nextLinearStateId }
+  ... on ThreadLinkCreatedEntry { threadLink { id title } }
+  ... on ThreadLinkUpdatedEntry { threadLink { id title } previousThreadLink { id title } }
+  ... on ThreadLinkDeletedEntry { threadLink { id title } }
+  ... on ThreadLinkTargetCreatedEntry { threadLink { id title } sourceThread { id title } }
+  ... on ThreadLinkTargetDeletedEntry { threadLink { id title } sourceThread { id title } }
+  ... on CustomerSurveyRequestedEntry { customerSurveyId surveyResponseId surveyResponsePublicId }
+  ... on ThreadDiscussionEntry { threadDiscussionId discussionType emailRecipients slackChannelName slackMessageLink }
+  ... on ThreadDiscussionResolvedEntry { threadDiscussionId discussionType emailRecipients slackChannelName slackMessageLink resolvedAt }
+`;
 
 async function getPlainThreadTimeline(
   token: string,
   threadId: string,
   after?: string
-): Promise<ExternalSupportReply[]> {
+): Promise<{
+  replies: ExternalSupportReply[];
+  events: ExternalSupportEvent[];
+}> {
   const query = `
     query ThreadTimeline($threadId: ID!, $first: Int, $after: String) {
       thread(threadId: $threadId) {
@@ -300,14 +495,16 @@ async function getPlainThreadTimeline(
           nodes {
             id
             timestamp { iso8601 }
+            llmText
             actor {
-              customer { id }
-              user { id }
-              machineUser { id }
+              ... on CustomerActor { customerId }
+              ... on DeletedCustomerActor { customerId }
+              ... on UserActor { userId }
+              ... on SystemActor { systemId }
+              ... on MachineUserActor { machineUserId }
             }
             entry {
-              ... on ChatEntry { chatId text }
-              ... on CustomEntry { title components { ... on ComponentText { text } } }
+              ${PLAIN_TIMELINE_ENTRY_FRAGMENT}
             }
           }
           pageInfo {
@@ -319,11 +516,16 @@ async function getPlainThreadTimeline(
     }
   `;
 
-  const data = await plainRequest(token, query, {
-    threadId,
-    first: 100,
-    after: after ?? null,
-  });
+  const data = await plainRequest(
+    token,
+    query,
+    {
+      threadId,
+      first: 100,
+      after: after ?? null,
+    },
+    "ThreadTimeline"
+  );
   const parsed = plainTimelineResponseSchema.safeParse(data);
   if (!parsed.success) {
     throw new VortexError({
@@ -336,13 +538,68 @@ async function getPlainThreadTimeline(
 
   const nodes = parsed.data.thread.timelineEntries.nodes;
   const pageInfo = parsed.data.thread.timelineEntries.pageInfo;
-  const mapped = nodes.map((node) => ({
-    body: timelineBody(node),
-    direction: timelineDirection(node),
-    customerId: null,
-    userId: null,
-    createdAt: node.timestamp.iso8601,
-  }));
+
+  const replies: ExternalSupportReply[] = [];
+  const events: ExternalSupportEvent[] = [];
+  const messageTypes = new Set([
+    "ChatEntry",
+    "EmailEntry",
+    "SlackMessageEntry",
+    "SlackReplyEntry",
+    "MSTeamsMessageEntry",
+    "DiscordMessageEntry",
+    "ThreadDiscussionMessageEntry",
+    "MergedThreadMessageEntry",
+    "HelpCenterAiConversationMessageEntry",
+    "CustomEntry",
+  ]);
+
+  for (const node of nodes) {
+    const { actorType, actorId } = timelineActor(node);
+    const createdAt = node.timestamp.iso8601;
+    const body = timelineBody(node.entry, node.llmText);
+    const attachments = timelineAttachments(node.entry);
+    const typename = node.entry.typename;
+
+    if (typename === "NoteEntry") {
+      replies.push({
+        body,
+        direction: timelineDirection(node),
+        kind: "note",
+        actorType,
+        actorId,
+        attachments,
+        createdAt,
+      });
+      continue;
+    }
+
+    if (messageTypes.has(typename)) {
+      replies.push({
+        body,
+        direction: timelineDirection(node),
+        kind: "message",
+        channel: timelineChannel(node.entry),
+        actorType,
+        actorId,
+        attachments,
+        createdAt,
+      });
+      continue;
+    }
+
+    events.push({
+      type: entryEventType(node.entry),
+      actorType,
+      actorId,
+      createdAt,
+      metadata: {
+        entryType: typename,
+        llmText: node.llmText,
+        entry: node.entry,
+      },
+    });
+  }
 
   if (pageInfo.hasNextPage && pageInfo.endCursor) {
     const next = await getPlainThreadTimeline(
@@ -350,10 +607,13 @@ async function getPlainThreadTimeline(
       threadId,
       pageInfo.endCursor
     );
-    return [...mapped, ...next];
+    return {
+      replies: [...replies, ...next.replies],
+      events: [...events, ...next.events],
+    };
   }
 
-  return mapped;
+  return { replies, events };
 }
 
 export const plainSupportImportSource: ImportSource<
@@ -414,12 +674,14 @@ export const plainSupportImportSource: ImportSource<
               getPlainThreadTimeline(token, thread.id),
             ]);
 
-            const firstEntry = timeline[0];
+            const firstReply = timeline.replies[0];
             const source = {
               type: "plain",
-              body: firstEntry?.body ?? thread.description,
+              body: firstReply?.body ?? thread.description,
             };
-            const replies = firstEntry ? timeline.slice(1) : timeline;
+            const replies = firstReply
+              ? timeline.replies.slice(1)
+              : timeline.replies;
 
             const result = await createTicketFromPlain(
               ctx.db,
@@ -434,6 +696,7 @@ export const plainSupportImportSource: ImportSource<
                 createdAt: thread.createdAt?.iso8601,
                 updatedAt: thread.updatedAt?.iso8601,
                 replies,
+                events: timeline.events,
               },
               {}
             );

@@ -9852,6 +9852,7 @@ export interface paths {
                                     type: string;
                                     actorType: string;
                                     actorId: string | null;
+                                    metadata: string | null;
                                     createdAt: string;
                                     message?: {
                                         id: string;
@@ -9988,6 +9989,7 @@ export interface paths {
                                     type: string;
                                     actorType: string;
                                     actorId: string | null;
+                                    metadata: string | null;
                                     createdAt: string;
                                     message?: {
                                         id: string;
@@ -10101,6 +10103,7 @@ export interface paths {
                                     type: string;
                                     actorType: string;
                                     actorId: string | null;
+                                    metadata: string | null;
                                     createdAt: string;
                                     message?: {
                                         id: string;
@@ -10217,6 +10220,7 @@ export interface paths {
                                     type: string;
                                     actorType: string;
                                     actorId: string | null;
+                                    metadata: string | null;
                                     createdAt: string;
                                     message?: {
                                         id: string;
@@ -10275,6 +10279,12 @@ export interface paths {
                         channel: "email" | "slack" | "msteams" | "discord" | "chat" | "api";
                         customerId?: string;
                         userId?: string;
+                        /** @enum {string} */
+                        actorType?: "customer" | "user" | "machine" | "system";
+                        actorId?: string | null;
+                        metadata?: {
+                            [key: string]: unknown;
+                        };
                     };
                 };
             };
@@ -10292,6 +10302,7 @@ export interface paths {
                                 type: string;
                                 actorType: string;
                                 actorId: string | null;
+                                metadata: string | null;
                                 createdAt: string;
                                 message?: {
                                     id: string;
@@ -10346,7 +10357,13 @@ export interface paths {
                 content: {
                     "application/json": {
                         body: string;
-                        userId: string;
+                        userId?: string;
+                        /** @enum {string} */
+                        actorType?: "customer" | "user" | "machine" | "system";
+                        actorId?: string | null;
+                        metadata?: {
+                            [key: string]: unknown;
+                        };
                     };
                 };
             };
@@ -10364,6 +10381,7 @@ export interface paths {
                                 type: string;
                                 actorType: string;
                                 actorId: string | null;
+                                metadata: string | null;
                                 createdAt: string;
                                 message?: {
                                     id: string;
@@ -10430,6 +10448,7 @@ export interface paths {
                                 type: string;
                                 actorType: string;
                                 actorId: string | null;
+                                metadata: string | null;
                                 createdAt: string;
                                 message?: {
                                     id: string;
@@ -10547,6 +10566,7 @@ export interface paths {
                                     type: string;
                                     actorType: string;
                                     actorId: string | null;
+                                    metadata: string | null;
                                     createdAt: string;
                                     message?: {
                                         id: string;
@@ -10662,6 +10682,7 @@ export interface paths {
                                     type: string;
                                     actorType: string;
                                     actorId: string | null;
+                                    metadata: string | null;
                                     createdAt: string;
                                     message?: {
                                         id: string;
@@ -10783,6 +10804,7 @@ export interface paths {
                                     type: string;
                                     actorType: string;
                                     actorId: string | null;
+                                    metadata: string | null;
                                     createdAt: string;
                                     message?: {
                                         id: string;

@@ -2044,6 +2044,7 @@ export const supportTicketEvents = sqliteTable(
       enum: ["customer", "user", "machine", "system"] as const,
     }).notNull(),
     actorId: text("actor_id" as string),
+    metadata: text("metadata" as string),
     createdAt: text("created_at" as string)
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
@@ -2053,6 +2054,35 @@ export const supportTicketEvents = sqliteTable(
       table.ticketId,
       table.createdAt
     ),
+  ]
+);
+
+export const supportTicketAttachments = sqliteTable(
+  "support_ticket_attachments" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    ticketId: text("ticket_id" as string)
+      .notNull()
+      .references(() => supportTickets.id, { onDelete: "cascade" }),
+    eventId: text("event_id" as string)
+      .notNull()
+      .references(() => supportTicketEvents.id, { onDelete: "cascade" }),
+    externalId: text("external_id" as string),
+    url: text("url" as string),
+    fileName: text("file_name" as string),
+    contentType: text("content_type" as string),
+    size: integer("size" as string),
+    r2Key: text("r2_key" as string),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("support_ticket_attachments_ticket_idx" as string).on(table.ticketId),
+    index("support_ticket_attachments_event_idx" as string).on(table.eventId),
   ]
 );
 

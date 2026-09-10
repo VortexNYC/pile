@@ -5,7 +5,13 @@ import {
   createCustomer,
   findCustomerByExternalId,
 } from "../global/support-contacts.js";
-import type { ExternalSupportReply } from "../global/support-tickets.js";
+import type {
+  ExternalSupportAttachment,
+  ExternalSupportEvent,
+  ExternalSupportReply,
+  SupportTicketActorType,
+  SupportTicketMessageChannel,
+} from "../global/support-tickets.js";
 import { createTicketFromZendesk } from "../global/support-tickets.js";
 import { VortexError } from "../platform/errors.js";
 import type {
@@ -75,6 +81,7 @@ const zendeskUserSchema = z
     id: z.number().int(),
     email: z.string().optional(),
     name: z.string().optional(),
+    role: z.string().optional(),
   })
   .passthrough();
 
@@ -106,6 +113,16 @@ const zendeskTicketListSchema = z.object({
     .default({ has_more: false }),
 });
 
+const zendeskAttachmentSchema = z
+  .object({
+    id: z.number().int(),
+    file_name: z.string().optional().nullable(),
+    content_url: z.string().optional().nullable(),
+    content_type: z.string().optional().nullable(),
+    size: z.number().optional().nullable(),
+  })
+  .passthrough();
+
 const zendeskCommentSchema = z
   .object({
     id: z.number().int(),
@@ -114,6 +131,14 @@ const zendeskCommentSchema = z
     public: z.boolean().optional(),
     author_id: z.number().int(),
     created_at: z.string(),
+    via: z
+      .object({
+        channel: z.string().optional().nullable(),
+      })
+      .passthrough()
+      .optional()
+      .nullable(),
+    attachments: z.array(zendeskAttachmentSchema).optional().default([]),
   })
   .passthrough();
 
@@ -196,6 +221,45 @@ async function getOrCreateZendeskSupportCustomer(
   return customer.id;
 }
 
+function commentActor(
+  comment: z.infer<typeof zendeskCommentSchema>,
+  ticket: ZendeskTicket,
+  users: ZendeskUser[]
+): { actorType: SupportTicketActorType; actorId: string | null } {
+  if (comment.author_id === ticket.requester_id) {
+    return { actorType: "customer", actorId: String(comment.author_id) };
+  }
+  const author = userById(users, comment.author_id);
+  const role = author?.role?.toLowerCase() ?? "";
+  if (role === "system") {
+    return { actorType: "system", actorId: String(comment.author_id) };
+  }
+  if (role === "agent" || role === "admin") {
+    return { actorType: "user", actorId: String(comment.author_id) };
+  }
+  if (role === "end-user") {
+    return { actorType: "customer", actorId: String(comment.author_id) };
+  }
+  return { actorType: "user", actorId: String(comment.author_id) };
+}
+
+function commentChannel(
+  comment: z.infer<typeof zendeskCommentSchema>
+): SupportTicketMessageChannel {
+  const channel = comment.via?.channel?.toLowerCase() ?? "";
+  if (
+    channel === "email" ||
+    channel === "chat" ||
+    channel === "api" ||
+    channel === "slack" ||
+    channel === "msteams" ||
+    channel === "discord"
+  ) {
+    return channel;
+  }
+  return "email";
+}
+
 async function getZendeskTicketComments(
   credentials: ZendeskCredentials,
   ticket: ZendeskTicket
@@ -219,14 +283,31 @@ async function getZendeskTicketComments(
   );
 
   return sorted.map((comment) => {
-    const isInbound = comment.author_id === ticket.requester_id;
+    const { actorType, actorId } = commentActor(
+      comment,
+      ticket,
+      parsed.data.users ?? []
+    );
+    const attachments: ExternalSupportAttachment[] = comment.attachments.map(
+      (attachment) => ({
+        externalId: String(attachment.id),
+        url: attachment.content_url,
+        fileName: attachment.file_name ?? null,
+        contentType: attachment.content_type ?? null,
+        size: attachment.size ?? null,
+      })
+    );
+
     return {
       body: comment.html_body ?? comment.body ?? "(no content)",
-      direction: isInbound ? "inbound" : "outbound",
-      channel: "email",
-      customerId: null,
-      userId: null,
+      direction: actorType === "customer" ? "inbound" : "outbound",
+      kind: comment.public === false ? "note" : "message",
+      channel: commentChannel(comment),
+      actorType,
+      actorId,
       createdAt: comment.created_at,
+      attachments,
+      metadata: { comment },
     };
   });
 }
@@ -287,6 +368,14 @@ export const zendeskSupportImportSource: ImportSource<
               getZendeskTicketComments(credentials, ticket),
             ]);
 
+            const ticketEvent: ExternalSupportEvent = {
+              type: "field_change",
+              actorType: "system",
+              actorId: null,
+              createdAt: ticket.created_at,
+              metadata: { ticket },
+            };
+
             const result = await createTicketFromZendesk(
               ctx.db,
               ctx.organizationId,
@@ -301,6 +390,7 @@ export const zendeskSupportImportSource: ImportSource<
                 createdAt: ticket.created_at,
                 updatedAt: ticket.updated_at,
                 replies,
+                events: [ticketEvent],
               },
               {}
             );

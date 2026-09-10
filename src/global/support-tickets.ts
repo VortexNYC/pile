@@ -21,6 +21,7 @@ import {
   supportCustomerIdentities,
   supportCustomers,
   supportTicketAssignments,
+  supportTicketAttachments,
   supportTicketEvents,
   supportTicketLabels,
   supportTicketMessages,
@@ -132,6 +133,7 @@ export type SupportTicketEvent = {
   type: SupportTicketEventType;
   actorType: SupportTicketActorType;
   actorId: string | null;
+  metadata: string | null;
   createdAt: string;
 };
 
@@ -499,6 +501,9 @@ export async function addTicketMessage(
     channel: SupportTicketMessageChannel;
     customerId?: string | null;
     userId?: string | null;
+    actorType?: SupportTicketActorType;
+    actorId?: string | null;
+    metadata?: Record<string, unknown>;
     createdAt?: string;
   }
 ): Promise<SupportTicketEventWithDetails> {
@@ -508,12 +513,11 @@ export async function addTicketMessage(
   const messageCreatedAt = input.createdAt ?? now;
   const eventId = crypto.randomUUID();
   const messageId = crypto.randomUUID();
-  const actorType: SupportTicketActorType = input.customerId
-    ? "customer"
-    : input.userId
-      ? "user"
-      : "system";
-  const actorId = input.customerId ?? input.userId ?? null;
+  const actorType: SupportTicketActorType =
+    input.actorType ??
+    (input.customerId ? "customer" : input.userId ? "user" : "system");
+  const actorId = input.actorId ?? input.customerId ?? input.userId ?? null;
+  const metadata = input.metadata ? JSON.stringify(input.metadata) : null;
 
   await db.insert(supportTicketEvents).values({
     id: eventId,
@@ -521,6 +525,7 @@ export async function addTicketMessage(
     type: "message",
     actorType,
     actorId,
+    metadata,
     createdAt: messageCreatedAt,
   });
 
@@ -556,6 +561,7 @@ export async function addTicketMessage(
     type: "message",
     actorType,
     actorId,
+    metadata,
     createdAt: messageCreatedAt,
     message: {
       id: messageId,
@@ -570,143 +576,37 @@ export async function addTicketMessage(
   };
 }
 
-type AddTicketMessageInput = {
-  direction: SupportTicketMessageDirection;
-  textContent: string;
-  markdownContent?: string | null;
-  channel: SupportTicketMessageChannel;
-  customerId?: string | null;
-  userId?: string | null;
-  createdAt?: string;
-};
-
-export async function addTicketMessagesBulk(
-  db: D1Client,
-  organizationId: string,
-  ticketId: string,
-  messages: AddTicketMessageInput[]
-): Promise<void> {
-  if (messages.length === 0) {
-    return;
-  }
-
-  await ensureTicket(db, organizationId, ticketId);
-
-  const now = new Date().toISOString();
-  const eventsToCreate: {
-    id: string;
-    ticketId: string;
-    type: "message";
-    actorType: SupportTicketActorType;
-    actorId: string | null;
-    createdAt: string;
-  }[] = [];
-  const messagesToCreate: {
-    id: string;
-    eventId: string;
-    direction: SupportTicketMessageDirection;
-    textContent: string;
-    markdownContent: string | null;
-    channel: SupportTicketMessageChannel;
-    customerId: string | null;
-    userId: string | null;
-    createdAt: string;
-  }[] = [];
-
-  let lastCustomerMessageAt: string | null = null;
-  let lastAgentMessageAt: string | null = null;
-  let latestMessageAt: string | null = null;
-
-  for (const message of messages) {
-    const messageCreatedAt = message.createdAt ?? now;
-    const actorType: SupportTicketActorType = message.customerId
-      ? "customer"
-      : message.userId
-        ? "user"
-        : "system";
-    const actorId = message.customerId ?? message.userId ?? null;
-    const eventId = crypto.randomUUID();
-    const messageId = crypto.randomUUID();
-
-    eventsToCreate.push({
-      id: eventId,
-      ticketId,
-      type: "message",
-      actorType,
-      actorId,
-      createdAt: messageCreatedAt,
-    });
-
-    messagesToCreate.push({
-      id: messageId,
-      eventId,
-      direction: message.direction,
-      textContent: message.textContent,
-      markdownContent: message.markdownContent ?? null,
-      channel: message.channel,
-      customerId: message.customerId ?? null,
-      userId: message.userId ?? null,
-      createdAt: messageCreatedAt,
-    });
-
-    if (message.direction === "inbound") {
-      if (
-        lastCustomerMessageAt === null ||
-        messageCreatedAt > lastCustomerMessageAt
-      ) {
-        lastCustomerMessageAt = messageCreatedAt;
-      }
-    } else {
-      if (
-        lastAgentMessageAt === null ||
-        messageCreatedAt > lastAgentMessageAt
-      ) {
-        lastAgentMessageAt = messageCreatedAt;
-      }
-    }
-
-    if (latestMessageAt === null || messageCreatedAt > latestMessageAt) {
-      latestMessageAt = messageCreatedAt;
-    }
-  }
-
-  await db.insert(supportTicketEvents).values(eventsToCreate);
-  await db.insert(supportTicketMessages).values(messagesToCreate);
-
-  await db
-    .update(supportTickets)
-    .set({
-      ...(lastCustomerMessageAt ? { lastCustomerMessageAt } : {}),
-      ...(lastAgentMessageAt ? { lastAgentMessageAt } : {}),
-      ...(latestMessageAt ? { updatedAt: latestMessageAt } : {}),
-    })
-    .where(
-      and(
-        eq(supportTickets.id, ticketId),
-        eq(supportTickets.organizationId, organizationId)
-      )
-    );
-}
-
 export async function addTicketNote(
   db: D1Client,
   organizationId: string,
   ticketId: string,
-  input: { body: string; userId: string }
+  input: {
+    body: string;
+    userId?: string | null;
+    actorType?: SupportTicketActorType;
+    actorId?: string | null;
+    metadata?: Record<string, unknown>;
+    createdAt?: string;
+  }
 ): Promise<SupportTicketEventWithDetails> {
   await ensureTicket(db, organizationId, ticketId);
 
   const now = new Date().toISOString();
+  const noteCreatedAt = input.createdAt ?? now;
   const eventId = crypto.randomUUID();
   const noteId = crypto.randomUUID();
+  const actorType: SupportTicketActorType = input.actorType ?? "user";
+  const actorId = input.actorId ?? input.userId ?? null;
+  const metadata = input.metadata ? JSON.stringify(input.metadata) : null;
 
   await db.insert(supportTicketEvents).values({
     id: eventId,
     ticketId,
     type: "note",
-    actorType: "user",
-    actorId: input.userId,
-    createdAt: now,
+    actorType,
+    actorId,
+    metadata,
+    createdAt: noteCreatedAt,
   });
 
   await db.insert(supportTicketNotes).values({
@@ -717,7 +617,7 @@ export async function addTicketNote(
 
   await db
     .update(supportTickets)
-    .set({ updatedAt: now })
+    .set({ updatedAt: noteCreatedAt })
     .where(
       and(
         eq(supportTickets.id, ticketId),
@@ -729,15 +629,98 @@ export async function addTicketNote(
     id: eventId,
     ticketId,
     type: "note",
-    actorType: "user",
-    actorId: input.userId,
-    createdAt: now,
+    actorType,
+    actorId,
+    metadata,
+    createdAt: noteCreatedAt,
     note: {
       id: noteId,
       eventId,
       body: input.body,
     },
   };
+}
+
+export async function addTicketEvent(
+  db: D1Client,
+  organizationId: string,
+  ticketId: string,
+  input: {
+    type: SupportTicketEventType;
+    actorType?: SupportTicketActorType;
+    actorId?: string | null;
+    metadata?: Record<string, unknown>;
+    createdAt?: string;
+  }
+): Promise<SupportTicketEventWithDetails> {
+  await ensureTicket(db, organizationId, ticketId);
+
+  const now = new Date().toISOString();
+  const eventCreatedAt = input.createdAt ?? now;
+  const eventId = crypto.randomUUID();
+  const actorType: SupportTicketActorType = input.actorType ?? "system";
+  const actorId = input.actorId ?? null;
+  const metadata = input.metadata ? JSON.stringify(input.metadata) : null;
+
+  await db.insert(supportTicketEvents).values({
+    id: eventId,
+    ticketId,
+    type: input.type,
+    actorType,
+    actorId,
+    metadata,
+    createdAt: eventCreatedAt,
+  });
+
+  await db
+    .update(supportTickets)
+    .set({ updatedAt: eventCreatedAt })
+    .where(
+      and(
+        eq(supportTickets.id, ticketId),
+        eq(supportTickets.organizationId, organizationId)
+      )
+    );
+
+  return {
+    id: eventId,
+    ticketId,
+    type: input.type,
+    actorType,
+    actorId,
+    metadata,
+    createdAt: eventCreatedAt,
+  };
+}
+
+export async function addSupportTicketAttachment(
+  db: D1Client,
+  organizationId: string,
+  ticketId: string,
+  eventId: string,
+  input: {
+    externalId?: string | null;
+    url?: string | null;
+    fileName?: string | null;
+    contentType?: string | null;
+    size?: number | null;
+  }
+): Promise<void> {
+  await ensureTicket(db, organizationId, ticketId);
+
+  await db.insert(supportTicketAttachments).values({
+    id: crypto.randomUUID(),
+    organizationId,
+    ticketId,
+    eventId,
+    externalId: input.externalId ?? null,
+    url: input.url ?? null,
+    fileName: input.fileName ?? null,
+    contentType: input.contentType ?? null,
+    size: input.size ?? null,
+    r2Key: null,
+    createdAt: new Date().toISOString(),
+  });
 }
 
 async function ensureTicket(
@@ -821,6 +804,7 @@ export async function listTicketEvents(
     type: event.type,
     actorType: event.actorType,
     actorId: event.actorId,
+    metadata: event.metadata,
     createdAt: event.createdAt,
     message: messageMap.get(event.id),
     note: noteMap.get(event.id),
@@ -847,13 +831,34 @@ export async function findSupportTicketByExternalId(
   return ticket ?? null;
 }
 
+export type ExternalSupportAttachment = {
+  externalId?: string | null;
+  url?: string | null;
+  fileName?: string | null;
+  contentType?: string | null;
+  size?: number | null;
+};
+
 export type ExternalSupportReply = {
   body: string;
   direction: SupportTicketMessageDirection;
+  kind?: "message" | "note";
   channel?: SupportTicketMessageChannel;
   customerId?: string | null;
   userId?: string | null;
+  actorType?: SupportTicketActorType;
+  actorId?: string | null;
+  attachments?: ExternalSupportAttachment[];
+  metadata?: Record<string, unknown>;
   createdAt?: string;
+};
+
+export type ExternalSupportEvent = {
+  type: SupportTicketEventType;
+  actorType?: SupportTicketActorType;
+  actorId?: string | null;
+  createdAt?: string;
+  metadata?: Record<string, unknown>;
 };
 
 export type IntercomSupportConversation = {
@@ -869,6 +874,7 @@ export type IntercomSupportConversation = {
   created_at?: number;
   updated_at?: number;
   replies: ExternalSupportReply[];
+  events?: ExternalSupportEvent[];
 };
 
 export type PlainSupportThread = {
@@ -884,6 +890,7 @@ export type PlainSupportThread = {
   createdAt?: string;
   updatedAt?: string;
   replies: ExternalSupportReply[];
+  events?: ExternalSupportEvent[];
 };
 
 function stripHtml(html: string | null | undefined): string {
@@ -959,6 +966,106 @@ function externalPriorityToTicketPriority(
   return priority;
 }
 
+async function ingestSupportTimeline(
+  db: D1Client,
+  organizationId: string,
+  ticketId: string,
+  customerId: string,
+  input: {
+    firstMessage: string;
+    firstMessageCreatedAt: string;
+    messageChannel: SupportTicketMessageChannel;
+    replies: ExternalSupportReply[];
+    events?: ExternalSupportEvent[];
+    ticketUpdatedAt: string;
+  }
+): Promise<void> {
+  await addTicketMessage(db, organizationId, ticketId, {
+    direction: "inbound",
+    textContent: input.firstMessage,
+    channel: input.messageChannel,
+    customerId,
+    createdAt: input.firstMessageCreatedAt,
+  });
+
+  const sortedReplies = input.replies.toSorted(
+    (a, b) =>
+      (a.createdAt ? Date.parse(a.createdAt) : 0) -
+      (b.createdAt ? Date.parse(b.createdAt) : 0)
+  );
+  const sortedEvents = (input.events ?? []).toSorted(
+    (a, b) =>
+      (a.createdAt ? Date.parse(a.createdAt) : 0) -
+      (b.createdAt ? Date.parse(b.createdAt) : 0)
+  );
+
+  const createdAts: number[] = [
+    Date.parse(input.ticketUpdatedAt),
+    Date.parse(input.firstMessageCreatedAt),
+  ];
+
+  for (const reply of sortedReplies) {
+    if (reply.createdAt) {
+      createdAts.push(Date.parse(reply.createdAt));
+    }
+    let event: SupportTicketEventWithDetails;
+    if (reply.kind === "note") {
+      event = await addTicketNote(db, organizationId, ticketId, {
+        body: stripHtml(reply.body) || "(no content)",
+        userId: reply.userId,
+        actorType: reply.actorType,
+        actorId: reply.actorId,
+        metadata: reply.metadata,
+        createdAt: reply.createdAt,
+      });
+    } else {
+      event = await addTicketMessage(db, organizationId, ticketId, {
+        direction: reply.direction,
+        textContent: stripHtml(reply.body) || "(no content)",
+        markdownContent: reply.body,
+        channel: reply.channel ?? input.messageChannel,
+        customerId:
+          reply.direction === "inbound" ? customerId : reply.customerId,
+        userId: reply.userId,
+        actorType: reply.actorType,
+        actorId: reply.actorId,
+        metadata: reply.metadata,
+        createdAt: reply.createdAt,
+      });
+    }
+    for (const attachment of reply.attachments ?? []) {
+      await addSupportTicketAttachment(
+        db,
+        organizationId,
+        ticketId,
+        event.id,
+        attachment
+      );
+    }
+  }
+
+  for (const eventInput of sortedEvents) {
+    if (eventInput.createdAt) {
+      createdAts.push(Date.parse(eventInput.createdAt));
+    }
+    await addTicketEvent(db, organizationId, ticketId, eventInput);
+  }
+
+  const latest = Math.max(...createdAts);
+  const finalUpdatedAt = Number.isFinite(latest)
+    ? new Date(latest).toISOString()
+    : input.ticketUpdatedAt;
+  await db
+    .update(supportTickets)
+    .set({ updatedAt: finalUpdatedAt })
+    .where(
+      and(
+        eq(supportTickets.id, ticketId),
+        eq(supportTickets.organizationId, organizationId)
+      )
+    );
+}
+
 export async function createTicketFromIntercom(
   db: D1Client,
   organizationId: string,
@@ -1030,45 +1137,14 @@ export async function createTicketFromIntercom(
   });
 
   const firstMessage = body || subject || "(no content)";
-  const sortedReplies = conversation.replies.toSorted(
-    (a, b) =>
-      (a.createdAt ? Date.parse(a.createdAt) : 0) -
-      (b.createdAt ? Date.parse(b.createdAt) : 0)
-  );
-  const allMessages: AddTicketMessageInput[] = [
-    {
-      direction: "inbound",
-      textContent: firstMessage,
-      channel: messageChannel,
-      customerId,
-      createdAt,
-    },
-    ...sortedReplies.map((reply) => ({
-      direction: reply.direction,
-      textContent: stripHtml(reply.body) || "(no content)",
-      markdownContent: reply.body,
-      channel: reply.channel ?? messageChannel,
-      customerId: reply.direction === "inbound" ? customerId : reply.customerId,
-      userId: reply.userId,
-      createdAt: reply.createdAt,
-    })),
-  ];
-  await addTicketMessagesBulk(db, organizationId, ticket.id, allMessages);
-
-  const lastReply = sortedReplies.at(-1);
-  const finalUpdatedAt =
-    lastReply?.createdAt && lastReply.createdAt > updatedAt
-      ? lastReply.createdAt
-      : updatedAt;
-  await db
-    .update(supportTickets)
-    .set({ updatedAt: finalUpdatedAt })
-    .where(
-      and(
-        eq(supportTickets.id, ticket.id),
-        eq(supportTickets.organizationId, organizationId)
-      )
-    );
+  await ingestSupportTimeline(db, organizationId, ticket.id, customerId, {
+    firstMessage,
+    firstMessageCreatedAt: createdAt,
+    messageChannel,
+    replies: conversation.replies,
+    events: conversation.events,
+    ticketUpdatedAt: updatedAt,
+  });
 
   const full = await getTicketById(db, organizationId, ticket.id);
   if (!full) {
@@ -1131,45 +1207,14 @@ export async function createTicketFromPlain(
   });
 
   const firstMessage = body || subject || "(no content)";
-  const sortedReplies = thread.replies.toSorted(
-    (a, b) =>
-      (a.createdAt ? Date.parse(a.createdAt) : 0) -
-      (b.createdAt ? Date.parse(b.createdAt) : 0)
-  );
-  const allMessages: AddTicketMessageInput[] = [
-    {
-      direction: "inbound",
-      textContent: firstMessage,
-      channel: messageChannel,
-      customerId,
-      createdAt,
-    },
-    ...sortedReplies.map((reply) => ({
-      direction: reply.direction,
-      textContent: stripHtml(reply.body) || "(no content)",
-      markdownContent: reply.body,
-      channel: reply.channel ?? messageChannel,
-      customerId: reply.direction === "inbound" ? customerId : reply.customerId,
-      userId: reply.userId,
-      createdAt: reply.createdAt,
-    })),
-  ];
-  await addTicketMessagesBulk(db, organizationId, ticket.id, allMessages);
-
-  const lastReply = sortedReplies.at(-1);
-  const finalUpdatedAt =
-    lastReply?.createdAt && lastReply.createdAt > updatedAt
-      ? lastReply.createdAt
-      : updatedAt;
-  await db
-    .update(supportTickets)
-    .set({ updatedAt: finalUpdatedAt })
-    .where(
-      and(
-        eq(supportTickets.id, ticket.id),
-        eq(supportTickets.organizationId, organizationId)
-      )
-    );
+  await ingestSupportTimeline(db, organizationId, ticket.id, customerId, {
+    firstMessage,
+    firstMessageCreatedAt: createdAt,
+    messageChannel,
+    replies: thread.replies,
+    events: thread.events,
+    ticketUpdatedAt: updatedAt,
+  });
 
   const full = await getTicketById(db, organizationId, ticket.id);
   if (!full) {
@@ -1192,6 +1237,7 @@ export type ZendeskSupportTicket = {
   createdAt?: string;
   updatedAt?: string;
   replies: ExternalSupportReply[];
+  events?: ExternalSupportEvent[];
 };
 
 function zendeskStatusToTicketStatus(
@@ -1284,45 +1330,14 @@ export async function createTicketFromZendesk(
   });
 
   const firstMessage = body || subject || "(no content)";
-  const sortedReplies = ticket.replies.toSorted(
-    (a, b) =>
-      (a.createdAt ? Date.parse(a.createdAt) : 0) -
-      (b.createdAt ? Date.parse(b.createdAt) : 0)
-  );
-  const allMessages: AddTicketMessageInput[] = [
-    {
-      direction: "inbound",
-      textContent: firstMessage,
-      channel: messageChannel,
-      customerId,
-      createdAt,
-    },
-    ...sortedReplies.map((reply) => ({
-      direction: reply.direction,
-      textContent: stripHtml(reply.body) || "(no content)",
-      markdownContent: reply.body,
-      channel: reply.channel ?? messageChannel,
-      customerId: reply.direction === "inbound" ? customerId : reply.customerId,
-      userId: reply.userId,
-      createdAt: reply.createdAt,
-    })),
-  ];
-  await addTicketMessagesBulk(db, organizationId, created.id, allMessages);
-
-  const lastReply = sortedReplies.at(-1);
-  const finalUpdatedAt =
-    lastReply?.createdAt && lastReply.createdAt > updatedAt
-      ? lastReply.createdAt
-      : updatedAt;
-  await db
-    .update(supportTickets)
-    .set({ updatedAt: finalUpdatedAt })
-    .where(
-      and(
-        eq(supportTickets.id, created.id),
-        eq(supportTickets.organizationId, organizationId)
-      )
-    );
+  await ingestSupportTimeline(db, organizationId, created.id, customerId, {
+    firstMessage,
+    firstMessageCreatedAt: createdAt,
+    messageChannel,
+    replies: ticket.replies,
+    events: ticket.events,
+    ticketUpdatedAt: updatedAt,
+  });
 
   const full = await getTicketById(db, organizationId, created.id);
   if (!full) {

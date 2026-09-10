@@ -19118,6 +19118,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "metadata": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "createdAt": {
                                 "type": "string"
                               },
@@ -19201,6 +19205,7 @@
                               "type",
                               "actorType",
                               "actorId",
+                              "metadata",
                               "createdAt"
                             ]
                           }
@@ -19564,6 +19569,10 @@
                                   "type": "string",
                                   "nullable": true
                                 },
+                                "metadata": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
                                 "createdAt": {
                                   "type": "string"
                                 },
@@ -19647,6 +19656,7 @@
                                 "type",
                                 "actorType",
                                 "actorId",
+                                "metadata",
                                 "createdAt"
                               ]
                             }
@@ -19954,6 +19964,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "metadata": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "createdAt": {
                                 "type": "string"
                               },
@@ -20037,6 +20051,7 @@
                               "type",
                               "actorType",
                               "actorId",
+                              "metadata",
                               "createdAt"
                             ]
                           }
@@ -20372,6 +20387,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "metadata": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "createdAt": {
                                 "type": "string"
                               },
@@ -20455,6 +20474,7 @@
                               "type",
                               "actorType",
                               "actorId",
+                              "metadata",
                               "createdAt"
                             ]
                           }
@@ -20554,6 +20574,25 @@
                   },
                   "userId": {
                     "type": "string"
+                  },
+                  "actorType": {
+                    "type": "string",
+                    "enum": [
+                      "customer",
+                      "user",
+                      "machine",
+                      "system"
+                    ]
+                  },
+                  "actorId": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "nullable": true
+                    }
                   }
                 },
                 "required": [
@@ -20589,6 +20628,10 @@
                           "type": "string"
                         },
                         "actorId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "metadata": {
                           "type": "string",
                           "nullable": true
                         },
@@ -20675,6 +20718,7 @@
                         "type",
                         "actorType",
                         "actorId",
+                        "metadata",
                         "createdAt"
                       ]
                     }
@@ -20724,11 +20768,29 @@
                   },
                   "userId": {
                     "type": "string"
+                  },
+                  "actorType": {
+                    "type": "string",
+                    "enum": [
+                      "customer",
+                      "user",
+                      "machine",
+                      "system"
+                    ]
+                  },
+                  "actorId": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "nullable": true
+                    }
                   }
                 },
                 "required": [
-                  "body",
-                  "userId"
+                  "body"
                 ]
               }
             }
@@ -20758,6 +20820,10 @@
                           "type": "string"
                         },
                         "actorId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "metadata": {
                           "type": "string",
                           "nullable": true
                         },
@@ -20844,6 +20910,7 @@
                         "type",
                         "actorType",
                         "actorId",
+                        "metadata",
                         "createdAt"
                       ]
                     }
@@ -20930,6 +20997,10 @@
                             "type": "string",
                             "nullable": true
                           },
+                          "metadata": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "createdAt": {
                             "type": "string"
                           },
@@ -21013,6 +21084,7 @@
                           "type",
                           "actorType",
                           "actorId",
+                          "metadata",
                           "createdAt"
                         ]
                       }
@@ -21294,6 +21366,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "metadata": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "createdAt": {
                                 "type": "string"
                               },
@@ -21377,6 +21453,7 @@
                               "type",
                               "actorType",
                               "actorId",
+                              "metadata",
                               "createdAt"
                             ]
                           }
@@ -21678,6 +21755,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "metadata": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "createdAt": {
                                 "type": "string"
                               },
@@ -21761,6 +21842,7 @@
                               "type",
                               "actorType",
                               "actorId",
+                              "metadata",
                               "createdAt"
                             ]
                           }
@@ -22079,6 +22161,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "metadata": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "createdAt": {
                                 "type": "string"
                               },
@@ -22162,6 +22248,7 @@
                               "type",
                               "actorType",
                               "actorId",
+                              "metadata",
                               "createdAt"
                             ]
                           }

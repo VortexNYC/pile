@@ -4637,6 +4637,18 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "userId",
         flag: "user",
       },
+      {
+        name: "actorType",
+        flag: "actor-type",
+      },
+      {
+        name: "actorId",
+        flag: "actor",
+      },
+      {
+        name: "metadata",
+        flag: "metadata",
+      },
     ],
   },
   "support tickets notes create": {
@@ -4661,6 +4673,18 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "userId",
         flag: "user",
+      },
+      {
+        name: "actorType",
+        flag: "actor-type",
+      },
+      {
+        name: "actorId",
+        flag: "actor",
+      },
+      {
+        name: "metadata",
+        flag: "metadata",
       },
     ],
   },

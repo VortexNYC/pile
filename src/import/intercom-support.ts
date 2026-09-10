@@ -5,7 +5,13 @@ import {
   createCustomer,
   findCustomerByExternalId,
 } from "../global/support-contacts.js";
-import type { ExternalSupportReply } from "../global/support-tickets.js";
+import type {
+  ExternalSupportAttachment,
+  ExternalSupportEvent,
+  ExternalSupportReply,
+  SupportTicketActorType,
+  SupportTicketEventType,
+} from "../global/support-tickets.js";
 import { createTicketFromIntercom } from "../global/support-tickets.js";
 import { VortexError } from "../platform/errors.js";
 import {
@@ -60,6 +66,16 @@ async function getOrCreateIntercomSupportCustomer(
   return customer.id;
 }
 
+const intercomAttachmentSchema = z
+  .object({
+    id: z.string(),
+    name: z.string().nullable().optional(),
+    url: z.string(),
+    content_type: z.string().nullable().optional(),
+    filesize: z.number().nullable().optional(),
+  })
+  .passthrough();
+
 const intercomAuthorSchema = z
   .object({
     id: z.string(),
@@ -74,6 +90,7 @@ const intercomConversationPartSchema = z
     body: z.string().nullable().default(null),
     created_at: z.number().int(),
     author: intercomAuthorSchema.optional().nullable(),
+    attachments: z.array(intercomAttachmentSchema).default([]),
   })
   .passthrough();
 
@@ -105,10 +122,83 @@ function partDirection(part: IntercomConversationPart): "inbound" | "outbound" {
   return "outbound";
 }
 
+function partActor(part: IntercomConversationPart): {
+  actorType: SupportTicketActorType;
+  actorId: string | null;
+} {
+  const authorType = part.author?.type?.toLowerCase() ?? "";
+  if (
+    authorType === "user" ||
+    authorType === "lead" ||
+    authorType === "contact"
+  ) {
+    return { actorType: "customer", actorId: part.author?.id ?? null };
+  }
+  if (authorType === "admin" || authorType === "team") {
+    return { actorType: "user", actorId: part.author?.id ?? null };
+  }
+  if (
+    authorType === "bot" ||
+    authorType === "fin" ||
+    authorType === "copilot"
+  ) {
+    return { actorType: "machine", actorId: part.author?.id ?? null };
+  }
+  if (authorType === "system") {
+    return { actorType: "system", actorId: part.author?.id ?? null };
+  }
+  return { actorType: "user", actorId: part.author?.id ?? null };
+}
+
+function partEventType(part: IntercomConversationPart): SupportTicketEventType {
+  const partType = part.part_type.toLowerCase();
+  if (
+    partType === "open" ||
+    partType === "close" ||
+    partType === "snoozed" ||
+    partType === "waiting"
+  ) {
+    return "status_change";
+  }
+  if (
+    partType === "assigned" ||
+    partType === "unassigned" ||
+    partType === "assignment"
+  ) {
+    return "assignment_change";
+  }
+  if (
+    partType === "conversation_rating" ||
+    partType === "rating" ||
+    partType === "survey" ||
+    partType === "feedback" ||
+    partType === "csat" ||
+    partType === "nps"
+  ) {
+    return "customer_event";
+  }
+  return "field_change";
+}
+
+function partAttachments(
+  part: IntercomConversationPart
+): ExternalSupportAttachment[] {
+  return part.attachments.map((attachment) => ({
+    externalId: attachment.id,
+    url: attachment.url,
+    fileName: attachment.name ?? null,
+    contentType: attachment.content_type ?? null,
+    size: attachment.filesize ?? null,
+  }));
+}
+
 async function getIntercomConversationParts(
   token: string,
   conversationId: string
-): Promise<ExternalSupportReply[]> {
+): Promise<{
+  replies: ExternalSupportReply[];
+  events: ExternalSupportEvent[];
+}> {
   const raw = await intercomRequest(
     token,
     `/conversations/${conversationId}?include=conversation_parts`
@@ -124,18 +214,44 @@ async function getIntercomConversationParts(
   }
 
   const parts = parsed.data.conversation_parts?.conversation_parts ?? [];
-  const messages = parts.filter(
-    (part) => part.part_type === "comment" || part.part_type === "note"
-  );
-  const sorted = messages.toSorted((a, b) => a.created_at - b.created_at);
+  const sorted = parts.toSorted((a, b) => a.created_at - b.created_at);
 
-  return sorted.map((part) => ({
-    body: part.body ?? "(no content)",
-    direction: partDirection(part),
-    customerId: null,
-    userId: null,
-    createdAt: new Date(part.created_at * 1000).toISOString(),
-  }));
+  const replies: ExternalSupportReply[] = [];
+  const events: ExternalSupportEvent[] = [];
+
+  for (const part of sorted) {
+    const { actorType, actorId } = partActor(part);
+    const createdAt = new Date(part.created_at * 1000).toISOString();
+    const attachments = partAttachments(part);
+
+    if (part.part_type === "comment" || part.part_type === "note") {
+      replies.push({
+        body: part.body ?? "(no content)",
+        direction: partDirection(part),
+        kind: part.part_type === "note" ? "note" : "message",
+        actorType,
+        actorId,
+        createdAt,
+        attachments,
+      });
+      continue;
+    }
+
+    events.push({
+      type: partEventType(part),
+      actorType,
+      actorId,
+      createdAt,
+      metadata: {
+        partType: part.part_type,
+        body: part.body,
+        author: part.author,
+        attachments: part.attachments,
+      },
+    });
+  }
+
+  return { replies, events };
 }
 
 export const intercomSupportImportSource: ImportSource<
@@ -188,7 +304,7 @@ export const intercomSupportImportSource: ImportSource<
               return;
             }
 
-            const [customerId, replies] = await Promise.all([
+            const [customerId, timeline] = await Promise.all([
               getOrCreateIntercomSupportCustomer(
                 ctx,
                 primary as { id: string; email?: string; name?: string }
@@ -208,7 +324,8 @@ export const intercomSupportImportSource: ImportSource<
                 source: conversation.source ?? {},
                 created_at: conversation.created_at,
                 updated_at: conversation.updated_at,
-                replies,
+                replies: timeline.replies,
+                events: timeline.events,
               },
               {}
             );

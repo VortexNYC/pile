@@ -49,6 +49,12 @@ const supportTicketMessageChannelEnum = z.enum([
   "chat",
   "api",
 ]);
+const supportTicketActorTypeEnum = z.enum([
+  "customer",
+  "user",
+  "machine",
+  "system",
+]);
 
 const supportCustomerSummarySchema = z.object({
   id: z.string(),
@@ -107,6 +113,7 @@ const supportTicketEventSchema = z.object({
   type: z.string(),
   actorType: z.string(),
   actorId: z.string().nullable(),
+  metadata: z.string().nullable(),
   createdAt: z.string(),
   message: supportTicketMessageSchema.optional(),
   note: supportTicketNoteSchema.optional(),
@@ -168,11 +175,17 @@ const addMessageBodySchema = z.object({
   channel: supportTicketMessageChannelEnum,
   customerId: z.string().optional(),
   userId: z.string().optional(),
+  actorType: supportTicketActorTypeEnum.optional(),
+  actorId: z.string().optional().nullable(),
+  metadata: z.record(z.unknown()).optional(),
 });
 
 const addNoteBodySchema = z.object({
   body: z.string(),
-  userId: z.string(),
+  userId: z.string().optional(),
+  actorType: supportTicketActorTypeEnum.optional(),
+  actorId: z.string().optional().nullable(),
+  metadata: z.record(z.unknown()).optional(),
 });
 
 const listTicketsQuerySchema = z.object({

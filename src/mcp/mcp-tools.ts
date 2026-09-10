@@ -8628,6 +8628,25 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "userId": {
               "type": "string"
+            },
+            "actorType": {
+              "type": "string",
+              "enum": [
+                "customer",
+                "user",
+                "machine",
+                "system"
+              ]
+            },
+            "actorId": {
+              "type": "string",
+              "nullable": true
+            },
+            "metadata": {
+              "type": "object",
+              "additionalProperties": {
+                "nullable": true
+              }
             }
           },
           "required": [
@@ -8665,11 +8684,29 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "userId": {
               "type": "string"
+            },
+            "actorType": {
+              "type": "string",
+              "enum": [
+                "customer",
+                "user",
+                "machine",
+                "system"
+              ]
+            },
+            "actorId": {
+              "type": "string",
+              "nullable": true
+            },
+            "metadata": {
+              "type": "object",
+              "additionalProperties": {
+                "nullable": true
+              }
             }
           },
           "required": [
-            "body",
-            "userId"
+            "body"
           ]
         }
       },
