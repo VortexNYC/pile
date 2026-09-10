@@ -1214,6 +1214,7 @@ export function registerWorkspaceEntityRoutes(app: OpenAPIHono<AppContext>) {
     const db = createD1(c.env.D1);
     const item = await createMembership(
       db,
+      c.env,
       organizationId,
       input.userId,
       input.role
