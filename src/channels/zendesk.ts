@@ -161,7 +161,9 @@ export async function processZendeskSupportWebhook(
           direction: comment ? "outbound" : "inbound",
           textContent: text,
           channel: "zendesk",
-          customerId: customer.id,
+          customerId: comment ? undefined : customer.id,
+          actorType: comment ? "automation" : undefined,
+          actorId: comment ? null : undefined,
           subType: comment ? String(comment.id ?? "") : externalId,
           createdAt,
         });
@@ -175,7 +177,12 @@ export async function processZendeskSupportWebhook(
         createdAt,
       });
     }
-    await updateTicket(db, organizationId, existing.id, { status, priority });
+    await updateTicket(db, organizationId, existing.id, {
+      status,
+      priority,
+      actorType: "automation",
+      actorId: null,
+    });
     return { ok: true };
   }
 

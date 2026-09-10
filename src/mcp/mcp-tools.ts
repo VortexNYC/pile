@@ -5414,6 +5414,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "issueId": {
               "type": "string",
               "nullable": true
+            },
+            "actorType": {
+              "type": "string",
+              "enum": [
+                "customer",
+                "user",
+                "agent",
+                "automation"
+              ]
+            },
+            "actorId": {
+              "type": "string",
+              "nullable": true
             }
           }
         }
@@ -9268,6 +9281,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "properties": {
             "until": {
               "type": "string"
+            },
+            "actorType": {
+              "type": "string",
+              "enum": [
+                "customer",
+                "user",
+                "agent",
+                "automation"
+              ]
+            },
+            "actorId": {
+              "type": "string",
+              "nullable": true
             }
           },
           "required": [

@@ -10412,6 +10412,9 @@ export interface paths {
                         /** @enum {string} */
                         priority?: "low" | "medium" | "high" | "urgent";
                         issueId?: string | null;
+                        /** @enum {string} */
+                        actorType?: "customer" | "user" | "agent" | "automation";
+                        actorId?: string | null;
                     };
                 };
             };
@@ -11013,6 +11016,9 @@ export interface paths {
                 content: {
                     "application/json": {
                         until: string;
+                        /** @enum {string} */
+                        actorType?: "customer" | "user" | "agent" | "automation";
+                        actorId?: string | null;
                     };
                 };
             };

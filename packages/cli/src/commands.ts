@@ -4673,6 +4673,14 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "issueId",
         flag: "issue",
       },
+      {
+        name: "actorType",
+        flag: "actor-type",
+      },
+      {
+        name: "actorId",
+        flag: "actor",
+      },
     ],
   },
   "support tickets messages create": {
@@ -4848,6 +4856,14 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "until",
         flag: "until",
+      },
+      {
+        name: "actorType",
+        flag: "actor-type",
+      },
+      {
+        name: "actorId",
+        flag: "actor",
       },
     ],
   },

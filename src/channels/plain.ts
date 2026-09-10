@@ -355,6 +355,8 @@ async function updatePlainTicket(
   await updateTicket(db, organizationId, existing.id, {
     status,
     priority,
+    actorType: "automation",
+    actorId: null,
   });
 }
 

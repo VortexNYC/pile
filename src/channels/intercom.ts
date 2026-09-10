@@ -272,7 +272,12 @@ export async function processIntercomSupportWebhook(
         createdAt,
       });
     }
-    await updateTicket(db, organizationId, existing.id, { status, priority });
+    await updateTicket(db, organizationId, existing.id, {
+      status,
+      priority,
+      actorType: "automation",
+      actorId: null,
+    });
     await recordWebhookDelivery(
       db,
       notification.data.id,
@@ -358,7 +363,11 @@ async function updateStatusIfExists(
     "intercom"
   );
   if (ticket) {
-    await updateTicket(db, organizationId, ticket.id, { status });
+    await updateTicket(db, organizationId, ticket.id, {
+      status,
+      actorType: "automation",
+      actorId: null,
+    });
   }
 }
 

@@ -20708,6 +20708,19 @@
                   "issueId": {
                     "type": "string",
                     "nullable": true
+                  },
+                  "actorType": {
+                    "type": "string",
+                    "enum": [
+                      "customer",
+                      "user",
+                      "agent",
+                      "automation"
+                    ]
+                  },
+                  "actorId": {
+                    "type": "string",
+                    "nullable": true
                   }
                 }
               }
@@ -22602,6 +22615,19 @@
                 "properties": {
                   "until": {
                     "type": "string"
+                  },
+                  "actorType": {
+                    "type": "string",
+                    "enum": [
+                      "customer",
+                      "user",
+                      "agent",
+                      "automation"
+                    ]
+                  },
+                  "actorId": {
+                    "type": "string",
+                    "nullable": true
                   }
                 },
                 "required": [

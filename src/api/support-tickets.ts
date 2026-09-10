@@ -16,6 +16,7 @@ import {
   updateTicket,
 } from "../global/support-tickets.js";
 import { VortexError } from "../platform/errors.js";
+import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 
@@ -188,6 +189,8 @@ const updateTicketBodySchema = z.object({
   status: supportTicketStatusEnum.optional(),
   priority: supportTicketPriorityEnum.optional(),
   issueId: z.string().nullable().optional(),
+  actorType: supportTicketActorTypeEnum.optional(),
+  actorId: z.string().nullable().optional(),
 });
 
 const addMessageBodySchema = z.object({
@@ -229,6 +232,8 @@ const listEventsQuerySchema = z.object({
 
 const snoozeBodySchema = z.object({
   until: z.string(),
+  actorType: supportTicketActorTypeEnum.optional(),
+  actorId: z.string().nullable().optional(),
 });
 
 const supportTicketAssigneeSchema = z.union([
@@ -257,6 +262,22 @@ const ticketIdParam = z.object({
   organizationId: z.string(),
   ticketId: z.string(),
 });
+
+function resolveActor(
+  identity: WorkspaceIdentity,
+  input?: {
+    actorType?: z.infer<typeof supportTicketActorTypeEnum>;
+    actorId?: string | null;
+  }
+): {
+  actorType: z.infer<typeof supportTicketActorTypeEnum>;
+  actorId: string | null;
+} {
+  const actorType =
+    input?.actorType ?? (identity.type === "agent" ? "agent" : "user");
+  const actorId = input?.actorId ?? identity.id;
+  return { actorType, actorId };
+}
 
 function ticketNotFound(): never {
   throw new VortexError({
@@ -634,11 +655,14 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(updateTicketRoute, async (c) => {
     const { organizationId, ticketId } = c.req.valid("param");
     const body = c.req.valid("json");
+    const identity = c.get("workspaceIdentity");
+    const { actorType, actorId } = resolveActor(identity, body);
     const db = createD1(c.env.D1);
+    const { actorType: _actorType, actorId: _actorId, ...updates } = body;
     const ticket = await updateTicket(db, organizationId, ticketId, {
-      ...body,
-      actorType: "user",
-      actorId: c.var.userId ?? null,
+      ...updates,
+      actorType,
+      actorId,
     });
     if (!ticket) {
       ticketNotFound();
@@ -651,16 +675,28 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(addMessageRoute, async (c) => {
     const { organizationId, ticketId } = c.req.valid("param");
     const body = c.req.valid("json");
+    const identity = c.get("workspaceIdentity");
+    const { actorType, actorId } = resolveActor(identity, body);
     const db = createD1(c.env.D1);
-    const event = await addTicketMessage(db, organizationId, ticketId, body);
+    const event = await addTicketMessage(db, organizationId, ticketId, {
+      ...body,
+      actorType,
+      actorId,
+    });
     return c.json({ event }, 201);
   });
 
   app.openapi(addNoteRoute, async (c) => {
     const { organizationId, ticketId } = c.req.valid("param");
     const body = c.req.valid("json");
+    const identity = c.get("workspaceIdentity");
+    const { actorType, actorId } = resolveActor(identity, body);
     const db = createD1(c.env.D1);
-    const event = await addTicketNote(db, organizationId, ticketId, body);
+    const event = await addTicketNote(db, organizationId, ticketId, {
+      ...body,
+      actorType,
+      actorId,
+    });
     return c.json({ event }, 201);
   });
 
@@ -683,10 +719,13 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(markDoneRoute, async (c) => {
     const { organizationId, ticketId } = c.req.valid("param");
+    const identity = c.get("workspaceIdentity");
+    const { actorType, actorId } = resolveActor(identity);
     const db = createD1(c.env.D1);
     await updateTicket(db, organizationId, ticketId, {
       status: "done",
-      actorType: "user",
+      actorType,
+      actorId,
     });
     const full =
       (await getTicketById(db, organizationId, ticketId)) ?? ticketNotFound();
@@ -695,10 +734,13 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(markTodoRoute, async (c) => {
     const { organizationId, ticketId } = c.req.valid("param");
+    const identity = c.get("workspaceIdentity");
+    const { actorType, actorId } = resolveActor(identity);
     const db = createD1(c.env.D1);
     await updateTicket(db, organizationId, ticketId, {
       status: "todo",
-      actorType: "user",
+      actorType,
+      actorId,
     });
     const full =
       (await getTicketById(db, organizationId, ticketId)) ?? ticketNotFound();
@@ -707,11 +749,14 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(snoozeRoute, async (c) => {
     const { organizationId, ticketId } = c.req.valid("param");
-    c.req.valid("json");
+    const body = c.req.valid("json");
+    const identity = c.get("workspaceIdentity");
+    const { actorType, actorId } = resolveActor(identity, body);
     const db = createD1(c.env.D1);
     await updateTicket(db, organizationId, ticketId, {
       status: "snoozed",
-      actorType: "user",
+      actorType,
+      actorId,
     });
     const full =
       (await getTicketById(db, organizationId, ticketId)) ?? ticketNotFound();
