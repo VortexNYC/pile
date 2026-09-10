@@ -3,8 +3,11 @@ import type { Context } from "hono";
 
 import { hmacSha256Hex, timingSafeEqualHex } from "../global/crypto.js";
 import { createD1, type D1Client } from "../global/db.js";
+import {
+  getActiveSupportChannelByType,
+  parseSupportChannelConfig,
+} from "../global/support-channels.js";
 import { findOrCreateCustomerByEmail } from "../global/support-contacts.js";
-import { maybeEscalate } from "../global/support-escalation.js";
 import {
   addTicketMessage,
   createTicket,
@@ -14,9 +17,8 @@ import {
   type SupportTicketPriority,
   type SupportTicketStatus,
 } from "../global/support-tickets.js";
-import { enqueueWebhook, scopedDeliveryId } from "../global/webhook-queue.js";
 import { VortexError } from "../platform/errors.js";
-import type { AppContext, WorkerEnv } from "../platform/middleware.js";
+import type { AppContext } from "../platform/middleware.js";
 
 const plainCustomerSchema = z.object({
   id: z.string(),
@@ -133,11 +135,6 @@ export const plainSupportWebhookRoute = createRoute({
   },
 });
 
-const plainQueuePayloadSchema = z.object({
-  webhook: plainWebhookSchema,
-  organizationId: z.string(),
-});
-
 export async function processPlainSupportWebhook(
   c: Context<AppContext>
 ): Promise<{ ok: boolean }> {
@@ -150,14 +147,31 @@ export async function processPlainSupportWebhook(
     });
   }
 
-  const secret = c.env.PLAIN_WEBHOOK_SECRET;
-  if (!secret) {
+  const db = createD1(c.env.D1);
+  const channel = await getActiveSupportChannelByType(
+    db,
+    organizationId,
+    "plain"
+  );
+  if (!channel) {
+    throw new VortexError({
+      code: "UNAUTHORIZED",
+      status: 401,
+      message: "Invalid Plain signature",
+    });
+  }
+
+  const config = parseSupportChannelConfig(channel.config);
+  const secretName = config.secretName ?? "PLAIN_WEBHOOK_SECRET";
+  const secretResult = z.string().min(1).safeParse(c.env[secretName]);
+  if (!secretResult.success) {
     throw new VortexError({
       code: "CONFIG_ERROR",
       status: 500,
-      message: "Plain webhook secret is not configured",
+      message: `Worker secret ${secretName} is not configured`,
     });
   }
+  const secret = secretResult.data;
 
   const rawBody = await c.req.text();
   const signature = c.req.header("Plain-Request-Signature");
@@ -189,130 +203,78 @@ export async function processPlainSupportWebhook(
     });
   }
 
-  const db = createD1(c.env.D1);
-  await enqueueWebhook(
-    db,
-    c.env,
-    {
-      deliveryId: scopedDeliveryId("plain", organizationId, webhook.data.id),
-      source: "plain",
-      event: webhook.data.payload.eventType,
-      organizationId,
-      payload: { webhook: webhook.data, organizationId },
-    },
-    new Map([["plain", processPlainSupportWebhookPayload]])
-  );
+  const { payload } = webhook.data;
 
-  return { ok: true };
-}
-
-export async function processPlainSupportWebhookPayload(
-  db: D1Client,
-  env: WorkerEnv,
-  payload: unknown
-): Promise<void> {
-  const parsed = plainQueuePayloadSchema.safeParse(payload);
-  if (!parsed.success) {
-    throw new VortexError({
-      code: "BAD_REQUEST",
-      status: 400,
-      message: "Invalid Plain queue payload",
-      hint: parsed.error.message,
-    });
-  }
-
-  const { webhook, organizationId } = parsed.data;
-  const { payload: eventPayload } = webhook;
-
-  switch (eventPayload.eventType) {
+  switch (payload.eventType) {
     case "thread.thread_created":
-      await createTicketFromPlainPayload(
-        db,
-        env,
-        organizationId,
-        eventPayload.thread,
-        {
-          text: eventPayload.thread.previewText ?? null,
-          subType: "thread_created",
-        }
-      );
+      await createTicketFromPlainPayload(db, organizationId, payload.thread, {
+        text: payload.thread.previewText ?? null,
+      });
       break;
     case "thread.thread_status_transitioned":
     case "thread.thread_priority_changed":
-      await updatePlainTicket(db, env, organizationId, eventPayload.thread);
+      await updatePlainTicket(db, organizationId, payload.thread);
       break;
     case "thread.email_received":
       await addMessageFromPlainPayload(
         db,
-        env,
         organizationId,
-        eventPayload.thread,
-        eventPayload.email.textContent ??
-          eventPayload.email.markdownContent ??
-          null,
-        eventPayload.email.from?.email ??
-          eventPayload.thread.customer?.email.email,
-        eventPayload.email.from?.name ?? null,
-        eventPayload.email.id,
-        "inbound",
-        eventPayload.eventType
+        payload.thread,
+        payload.email.textContent ?? payload.email.markdownContent ?? null,
+        payload.email.from?.email ?? payload.thread.customer?.email.email,
+        payload.email.from?.name ?? null,
+        payload.email.id,
+        "inbound"
       );
       break;
     case "thread.email_sent":
       await addMessageFromPlainPayload(
         db,
-        env,
         organizationId,
-        eventPayload.thread,
-        eventPayload.email.textContent ??
-          eventPayload.email.markdownContent ??
-          null,
-        eventPayload.email.from?.email ?? null,
-        eventPayload.email.from?.name ?? null,
-        eventPayload.email.id,
-        "outbound",
-        eventPayload.eventType
+        payload.thread,
+        payload.email.textContent ?? payload.email.markdownContent ?? null,
+        payload.email.from?.email ?? null,
+        payload.email.from?.name ?? null,
+        payload.email.id,
+        "outbound"
       );
       break;
     case "thread.chat_received":
       await addMessageFromPlainPayload(
         db,
-        env,
         organizationId,
-        eventPayload.thread,
-        eventPayload.chat.text,
-        eventPayload.thread.customer?.email.email ?? null,
-        eventPayload.thread.customer?.fullName ?? null,
-        eventPayload.chat.chatId,
-        "inbound",
-        eventPayload.eventType
+        payload.thread,
+        payload.chat.text,
+        payload.thread.customer?.email.email ?? null,
+        payload.thread.customer?.fullName ?? null,
+        payload.chat.chatId,
+        "inbound"
       );
       break;
     case "thread.chat_sent":
       await addMessageFromPlainPayload(
         db,
-        env,
         organizationId,
-        eventPayload.thread,
-        eventPayload.chat.text,
+        payload.thread,
+        payload.chat.text,
         null,
         null,
-        eventPayload.chat.chatId,
-        "outbound",
-        eventPayload.eventType
+        payload.chat.chatId,
+        "outbound"
       );
       break;
     default:
-      return;
+      return { ok: true };
   }
+
+  return { ok: true };
 }
 
 async function createTicketFromPlainPayload(
   db: D1Client,
-  env: WorkerEnv,
   organizationId: string,
   thread: z.infer<typeof plainThreadSchema>,
-  firstMessage: { text: string | null; subType?: string | null }
+  firstMessage: { text: string | null }
 ): Promise<void> {
   const customer = thread.customer;
   const email = customer?.email.email;
@@ -349,54 +311,33 @@ async function createTicketFromPlainPayload(
     "plain"
   );
 
-  const ticket = await createTicket(
-    db,
-    {
-      organizationId,
-      customerId: supportCustomer.id,
-      title,
-      sourceChannel: "plain",
-      status,
-      priority,
-      externalId: thread.id,
-      externalSource: "plain",
-      createdAt,
-      updatedAt: createdAt,
-      ifExists: "return",
-    },
-    env
-  );
-
-  await maybeEscalate(env, db, organizationId, ticket, {
-    text,
-    subject: thread.title ?? undefined,
-    customer: supportCustomer,
-    source: "plain",
-    channel: "plain",
+  const ticket = await createTicket(db, {
+    organizationId,
+    customerId: supportCustomer.id,
+    title,
+    sourceChannel: "plain",
+    status,
+    priority,
+    externalId: thread.id,
+    externalSource: "plain",
+    createdAt,
+    updatedAt: createdAt,
   });
 
   if (text) {
-    await addTicketMessage(
-      db,
-      organizationId,
-      ticket.id,
-      {
-        direction: "inbound",
-        textContent: text,
-        channel: "plain",
-        customerId: supportCustomer.id,
-        subType: firstMessage.subType ?? "thread_created",
-        externalId: thread.id,
-        createdAt,
-      },
-      env
-    );
+    await addTicketMessage(db, organizationId, ticket.id, {
+      direction: "inbound",
+      textContent: text,
+      channel: "plain",
+      customerId: supportCustomer.id,
+      subType: thread.id,
+      createdAt,
+    });
   }
 }
 
 async function updatePlainTicket(
   db: D1Client,
-  env: WorkerEnv,
   organizationId: string,
   thread: z.infer<typeof plainThreadSchema>
 ): Promise<void> {
@@ -411,31 +352,21 @@ async function updatePlainTicket(
   }
   const status = plainStatusToTicketStatus(thread.status);
   const priority = plainPriorityToTicketPriority(thread.priority);
-  await updateTicket(
-    db,
-    organizationId,
-    existing.id,
-    {
-      status,
-      priority,
-      actorType: "automation",
-      actorId: null,
-    },
-    env
-  );
+  await updateTicket(db, organizationId, existing.id, {
+    status,
+    priority,
+  });
 }
 
 async function addMessageFromPlainPayload(
   db: D1Client,
-  env: WorkerEnv,
   organizationId: string,
   thread: z.infer<typeof plainThreadSchema>,
   text: string | null,
   fromEmail: string | null | undefined,
   fromName: string | null | undefined,
   externalMessageId: string,
-  direction: "inbound" | "outbound",
-  subType: string
+  direction: "inbound" | "outbound"
 ): Promise<void> {
   let existing = await findSupportTicketByExternalId(
     db,
@@ -452,7 +383,7 @@ async function addMessageFromPlainPayload(
         message: "Missing customer email for new Plain thread",
       });
     }
-    await createTicketFromPlainPayload(db, env, organizationId, thread, {
+    await createTicketFromPlainPayload(db, organizationId, thread, {
       text,
     });
     existing = await findSupportTicketByExternalId(
@@ -470,21 +401,14 @@ async function addMessageFromPlainPayload(
   const createdAt = thread.updatedAt ?? new Date().toISOString();
 
   if (direction === "outbound" || !fromEmail) {
-    await addTicketMessage(
-      db,
-      organizationId,
-      existing.id,
-      {
-        direction,
-        textContent: body,
-        channel: "plain",
-        actorType: direction === "outbound" ? "user" : undefined,
-        subType,
-        externalId: externalMessageId,
-        createdAt,
-      },
-      env
-    );
+    await addTicketMessage(db, organizationId, existing.id, {
+      direction,
+      textContent: body,
+      channel: "plain",
+      actorType: direction === "outbound" ? "user" : undefined,
+      subType: externalMessageId,
+      createdAt,
+    });
     return;
   }
 
@@ -495,21 +419,14 @@ async function addMessageFromPlainPayload(
     fromName ?? null,
     "plain"
   );
-  await addTicketMessage(
-    db,
-    organizationId,
-    existing.id,
-    {
-      direction: "inbound",
-      textContent: body,
-      channel: "plain",
-      customerId: customer.id,
-      subType,
-      externalId: externalMessageId,
-      createdAt,
-    },
-    env
-  );
+  await addTicketMessage(db, organizationId, existing.id, {
+    direction: "inbound",
+    textContent: body,
+    channel: "plain",
+    customerId: customer.id,
+    subType: externalMessageId,
+    createdAt,
+  });
 }
 
 function plainStatusToTicketStatus(status: string): SupportTicketStatus {
@@ -531,57 +448,6 @@ function plainPriorityToTicketPriority(
     URGENT: "urgent",
   };
   return map[priority?.toUpperCase() ?? ""] ?? "medium";
-}
-
-const plainReplyResponseSchema = z.object({
-  data: z.object({
-    replyToThread: z.object({
-      thread: z.object({
-        id: z.string(),
-      }),
-    }),
-  }),
-});
-
-export async function sendPlainMessage(input: {
-  accessToken: string;
-  threadId: string;
-  textContent: string;
-  markdownContent: string | null;
-}): Promise<boolean> {
-  try {
-    const res = await fetch("https://api.plain.com/v1/graphql", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${input.accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        query: `
-          mutation ReplyToThread($input: ReplyToThreadInput!) {
-            replyToThread(input: $input) {
-              thread { id }
-            }
-          }
-        `,
-        variables: {
-          input: {
-            threadId: input.threadId,
-            textContent: input.textContent,
-            markdownContent: input.markdownContent ?? input.textContent,
-          },
-        },
-      }),
-    });
-    if (!res.ok) {
-      return false;
-    }
-    const data = (await res.json()) as unknown;
-    const parsed = plainReplyResponseSchema.safeParse(data);
-    return parsed.success;
-  } catch {
-    return false;
-  }
 }
 
 function safeJsonParse(value: string): unknown {
