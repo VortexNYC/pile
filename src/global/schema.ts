@@ -487,7 +487,7 @@ export const labels = sqliteTable(
       .references(() => organization.id),
     name: text("name" as string).notNull(),
     color: text("color" as string),
-    kind: text("kind" as string)
+    kind: text("kind" as string, { enum: ["issue", "support"] as const })
       .notNull()
       .default("issue"),
     createdAt: text("created_at" as string)
