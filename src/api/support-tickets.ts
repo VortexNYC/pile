@@ -538,17 +538,18 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(listEventsRoute, async (c) => {
-    const { ticketId } = c.req.valid("param");
+    const { organizationId, ticketId } = c.req.valid("param");
     const query = c.req.valid("query");
     const db = createD1(c.env.D1);
-    const events = await listTicketEvents(db, ticketId, {
+    const events = await listTicketEvents(db, organizationId, ticketId, {
       limit: query.limit,
       cursor: query.cursor,
     });
-    const nextCursor =
-      events.length > query.limit ? events[events.length - 1].createdAt : null;
+    const hasMore = events.length > query.limit;
+    const sliced = hasMore ? events.slice(0, query.limit) : events;
+    const nextCursor = hasMore ? sliced[sliced.length - 1].createdAt : null;
     return c.json({
-      events: events.slice(0, query.limit),
+      events: sliced,
       nextCursor,
     });
   });

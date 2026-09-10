@@ -231,4 +231,53 @@ describe("support-tickets API", () => {
     const todo = (await todoRes.json()) as { ticket: { status: string } };
     expect(todo.ticket.status).toBe("todo");
   });
+
+  it("assigns monotonic per-workspace ticket numbers", async () => {
+    const customerId = await createCustomer({
+      email: "numbering-1@example.com",
+      fullName: "Numbering One",
+    });
+
+    const firstRes = await fetch(
+      `/workspaces/${organizationId}/support/tickets`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          customerId,
+          title: "First ticket",
+          sourceChannel: "chat",
+        }),
+      }
+    );
+    expect(firstRes.status).toBe(201);
+    const first = (await firstRes.json()) as { ticket: { number: number } };
+    expect(first.ticket.number).toBeGreaterThanOrEqual(1);
+
+    const secondRes = await fetch(
+      `/workspaces/${organizationId}/support/tickets`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          customerId,
+          title: "Second ticket",
+          sourceChannel: "chat",
+        }),
+      }
+    );
+    expect(secondRes.status).toBe(201);
+    const second = (await secondRes.json()) as { ticket: { number: number } };
+    expect(second.ticket.number).toBe(first.ticket.number + 1);
+  });
+
+  it("rejects creating a ticket for a customer outside the workspace", async () => {
+    const res = await fetch(`/workspaces/${organizationId}/support/tickets`, {
+      method: "POST",
+      body: JSON.stringify({
+        customerId: crypto.randomUUID(),
+        title: "Orphan ticket",
+        sourceChannel: "chat",
+      }),
+    });
+    expect(res.status).toBe(400);
+  });
 });

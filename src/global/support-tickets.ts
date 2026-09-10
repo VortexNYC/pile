@@ -28,6 +28,7 @@ import {
   supportTickets,
   user,
 } from "./schema.js";
+import { getCustomerById } from "./support-contacts.js";
 
 export type SupportTicketStatus = "todo" | "done" | "snoozed";
 export type SupportTicketPriority = "low" | "medium" | "high" | "urgent";
@@ -162,7 +163,7 @@ export async function nextTicketNumber(
     INSERT INTO support_ticket_counters (organization_id, next_number)
     VALUES (${organizationId}, 2)
     ON CONFLICT (organization_id) DO UPDATE SET next_number = next_number + 1
-    RETURNING next_number
+    RETURNING (next_number - 1) AS next_number
   `);
 
   const rows = z
@@ -175,6 +176,19 @@ export async function createTicket(
   db: D1Client,
   input: SupportTicketInput
 ): Promise<SupportTicket> {
+  const customer = await getCustomerById(
+    db,
+    input.organizationId,
+    input.customerId
+  );
+  if (!customer) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Customer not found in workspace",
+    });
+  }
+
   const id = input.id ?? crypto.randomUUID();
   const number = await nextTicketNumber(db, input.organizationId);
   const status: SupportTicketStatus = input.status ?? "todo";
@@ -287,7 +301,7 @@ export async function getTicketById(
         .from(supportTicketAssignments)
         .innerJoin(user, eq(supportTicketAssignments.userId, user.id))
         .where(eq(supportTicketAssignments.ticketId, ticketId)),
-      listTicketEvents(db, ticketId, { limit: 20 }),
+      listTicketEvents(db, organizationId, ticketId, { limit: 20 }),
     ]);
 
   return {
@@ -629,9 +643,11 @@ async function ensureTicket(
 
 export async function listTicketEvents(
   db: D1Client,
+  organizationId: string,
   ticketId: string,
   options: { limit: number; cursor?: string }
 ): Promise<SupportTicketEventWithDetails[]> {
+  await ensureTicket(db, organizationId, ticketId);
   const conditions = [eq(supportTicketEvents.ticketId, ticketId)];
   if (options.cursor) {
     conditions.push(gt(supportTicketEvents.createdAt, options.cursor));
