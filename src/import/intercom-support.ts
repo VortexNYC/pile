@@ -4,10 +4,13 @@ import {
   createCustomer,
   findCustomerByExternalId,
 } from "../global/support-contacts.js";
+import type { ExternalSupportReply } from "../global/support-tickets.js";
 import { createTicketFromIntercom } from "../global/support-tickets.js";
+import { VortexError } from "../platform/errors.js";
 import {
   intercomCredentialsSchema,
   intercomOptionsSchema,
+  intercomRequest,
   listIntercomConversations,
 } from "./intercom.js";
 import type {
@@ -54,6 +57,84 @@ async function getOrCreateIntercomSupportCustomer(
     externalSource: "intercom",
   });
   return customer.id;
+}
+
+const intercomAuthorSchema = z
+  .object({
+    id: z.string(),
+    type: z.string(),
+  })
+  .passthrough();
+
+const intercomConversationPartSchema = z
+  .object({
+    id: z.string(),
+    part_type: z.string(),
+    body: z.string().nullable().default(null),
+    created_at: z.number().int(),
+    author: intercomAuthorSchema.optional().nullable(),
+  })
+  .passthrough();
+
+const intercomConversationDetailSchema = z
+  .object({
+    type: z.literal("conversation"),
+    id: z.string(),
+    conversation_parts: z
+      .object({
+        type: z.literal("conversation_part.list"),
+        conversation_parts: z.array(intercomConversationPartSchema).default([]),
+      })
+      .optional()
+      .nullable(),
+  })
+  .passthrough();
+
+type IntercomConversationPart = z.infer<typeof intercomConversationPartSchema>;
+
+function partDirection(part: IntercomConversationPart): "inbound" | "outbound" {
+  const authorType = part.author?.type?.toLowerCase() ?? "";
+  if (
+    authorType === "user" ||
+    authorType === "lead" ||
+    authorType === "contact"
+  ) {
+    return "inbound";
+  }
+  return "outbound";
+}
+
+async function getIntercomConversationParts(
+  token: string,
+  conversationId: string
+): Promise<ExternalSupportReply[]> {
+  const raw = await intercomRequest(
+    token,
+    `/conversations/${conversationId}?include=conversation_parts`
+  );
+  const parsed = intercomConversationDetailSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 500,
+      message: "Invalid Intercom conversation response",
+      hint: parsed.error.message,
+    });
+  }
+
+  const parts = parsed.data.conversation_parts?.conversation_parts ?? [];
+  const messages = parts.filter(
+    (part) => part.part_type === "comment" || part.part_type === "note"
+  );
+  const sorted = messages.toSorted((a, b) => a.created_at - b.created_at);
+
+  return sorted.map((part) => ({
+    body: part.body ?? "(no content)",
+    direction: partDirection(part),
+    customerId: null,
+    userId: null,
+    createdAt: new Date(part.created_at * 1000).toISOString(),
+  }));
 }
 
 export const intercomSupportImportSource: ImportSource<
@@ -106,10 +187,13 @@ export const intercomSupportImportSource: ImportSource<
               return;
             }
 
-            const customerId = await getOrCreateIntercomSupportCustomer(
-              ctx,
-              primary as { id: string; email?: string; name?: string }
-            );
+            const [customerId, replies] = await Promise.all([
+              getOrCreateIntercomSupportCustomer(
+                ctx,
+                primary as { id: string; email?: string; name?: string }
+              ),
+              getIntercomConversationParts(token, conversation.id),
+            ]);
 
             const result = await createTicketFromIntercom(
               ctx.db,
@@ -123,7 +207,7 @@ export const intercomSupportImportSource: ImportSource<
                 source: conversation.source ?? {},
                 created_at: conversation.created_at,
                 updated_at: conversation.updated_at,
-                replies: [],
+                replies,
               },
               {}
             );
