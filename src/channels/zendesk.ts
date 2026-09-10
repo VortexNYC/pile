@@ -3,6 +3,10 @@ import type { Context } from "hono";
 
 import { hmacSha256Base64, timingSafeEqualHex } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
+import {
+  getActiveSupportChannelByType,
+  parseSupportChannelConfig,
+} from "../global/support-channels.js";
 import { findOrCreateCustomerByEmail } from "../global/support-contacts.js";
 import {
   addTicketMessage,
@@ -83,14 +87,31 @@ export async function processZendeskSupportWebhook(
     });
   }
 
-  const secret = c.env.ZENDESK_WEBHOOK_SECRET;
-  if (!secret) {
+  const db = createD1(c.env.D1);
+  const channel = await getActiveSupportChannelByType(
+    db,
+    organizationId,
+    "zendesk"
+  );
+  if (!channel) {
+    throw new VortexError({
+      code: "UNAUTHORIZED",
+      status: 401,
+      message: "Invalid Zendesk signature",
+    });
+  }
+
+  const config = parseSupportChannelConfig(channel.config);
+  const secretName = config.secretName ?? "ZENDESK_WEBHOOK_SECRET";
+  const secretResult = z.string().min(1).safeParse(c.env[secretName]);
+  if (!secretResult.success) {
     throw new VortexError({
       code: "CONFIG_ERROR",
       status: 500,
-      message: "Zendesk webhook secret is not configured",
+      message: `Worker secret ${secretName} is not configured`,
     });
   }
+  const secret = secretResult.data;
 
   const rawBody = await c.req.text();
   const signature = c.req.header("X-Zendesk-Webhook-Signature");
@@ -129,7 +150,6 @@ export async function processZendeskSupportWebhook(
     return { ok: true };
   }
 
-  const db = createD1(c.env.D1);
   const externalId = String(ticketData.id);
   const status = zendeskStatusToTicketStatus(ticketData.status);
   const priority = zendeskPriorityToTicketPriority(ticketData.priority);
