@@ -49,21 +49,23 @@ migrations/                      # Drizzle-generated D1 migrations
 
 ### `support_customers`
 
-| Column            | Type                        | Notes                                    |
-| ----------------- | --------------------------- | ---------------------------------------- |
-| `id`              | text PK                     | Vortex UUID                              |
-| `organization_id` | text FK → organization      | workspace                                |
-| `external_id`     | text                        | optional Intercom/Zendesk/Plain id       |
-| `external_source` | text                        | `intercom`, `zendesk`, `plain`, `manual` |
-| `email`           | text                        | unique per workspace                     |
-| `full_name`       | text                        | nullable                                 |
-| `phone`           | text                        | nullable                                 |
-| `company_id`      | text FK → support_companies | nullable                                 |
-| `created_at`      | text                        | ISO timestamp                            |
-| `updated_at`      | text                        | ISO timestamp                            |
+| Column            | Type                   | Notes                                    |
+| ----------------- | ---------------------- | ---------------------------------------- |
+| `id`              | text PK                | Vortex UUID                              |
+| `organization_id` | text FK → organization | workspace                                |
+| `user_id`         | text FK → user         | optional; internal user submitting a bug |
+| `external_id`     | text                   | optional Intercom/Zendesk/Plain id       |
+| `external_source` | text                   | `intercom`, `zendesk`, `plain`, `manual` |
+| `email`           | text                   | unique per workspace                     |
+| `full_name`       | text                   | nullable                                 |
+| `phone`           | text                   | nullable                                 |
+| `created_at`      | text                   | ISO timestamp                            |
+| `updated_at`      | text                   | ISO timestamp                            |
 
 Unique: `(organization_id, email)`.
 Index: `(organization_id, external_id, external_source)`.
+
+`user_id` is optional. Support customers are separate from workspace users, but an internal user can be attached to a customer for cases like bug submissions or org-internal support.
 
 ### `support_companies`
 
@@ -81,6 +83,8 @@ Index: `(organization_id, external_id, external_source)`.
 Unique: `(organization_id, name)`.
 Index: `(organization_id, domain)`.
 
+`domain` is used for auto-resolution: an incoming email like `jane@acme.com` attaches to the company with `domain = acme.com` if one exists in the workspace.
+
 ### `support_customer_identities`
 
 | Column        | Type                        | Notes                             |
@@ -95,6 +99,21 @@ Index: `(organization_id, domain)`.
 Unique: `(customer_id, type, value)`.
 
 This table lets a customer have multiple identities (work email, personal email, phone, Slack DM id) without overloading the `support_customers` table.
+
+### `support_customer_companies`
+
+| Column        | Type                        | Notes                          |
+| ------------- | --------------------------- | ------------------------------ |
+| `id`          | text PK                     | Vortex UUID                    |
+| `customer_id` | text FK → support_customers | not null                       |
+| `company_id`  | text FK → support_companies | not null                       |
+| `is_primary`  | boolean                     | default false; primary company |
+| `created_at`  | text                        | ISO timestamp                  |
+
+Unique: `(customer_id, company_id)`.
+Index: `(company_id)`.
+
+A customer can belong to multiple companies (Plain-style tenants). v1 always writes one row per customer, but the schema supports many from the start.
 
 ## Code Style
 
@@ -199,17 +218,17 @@ upsertCustomerByExternal(db, organizationId, {
 
 ## Success Criteria
 
-- [ ] D1 tables `support_customers`, `support_companies`, `support_customer_identities` exist.
+- [ ] D1 tables `support_customers`, `support_companies`, `support_customer_identities`, `support_customer_companies` exist.
 - [ ] REST routes for create/list/get/update customers and companies return correct JSON.
 - [ ] OpenAPI/MCP/CLI artifacts are regenerated.
 - [ ] `vp check` passes.
 - [ ] `pnpm test` passes with new tests.
 - [ ] `support-migration` can upsert contacts by `external_id` + `external_source`.
 
-## Open Questions
+## Decisions
 
-1. Should a customer be linked to a Vortex `user` record when the email matches a workspace member, or are support customers always distinct from internal users?
-2. Do we need `support_leads` (pre-signup contacts) as a separate table, or is a `role`/`status` column on `support_customers` enough?
-3. Should `company` resolution be automatic by email domain (`@acme.com` → `Acme`)?
-4. Do contacts need a `tenant` concept (one customer in multiple companies/tenants) like Plain, or is one `company_id` enough for the first ship?
-5. Should the API be namespaced under `/support/...` or use a top-level `/customers` and `/companies`?
+1. **Vortex `user` vs support customer** — keep them separate. `support_customers` has an optional `user_id` for internal bug submissions, but the support contact is a separate entity.
+2. **Leads** — no `support_leads` table for v1. `support_customers` covers all contacts; sales leads will be a future concern.
+3. **Company auto-resolution** — yes. Match incoming email domain to `support_companies.domain` when a company with that domain exists.
+4. **Tenants** — use a join table `support_customer_companies` so one customer can belong to multiple companies. v1 creates one row per customer, but the schema supports many.
+5. **URL namespace** — use `/support/customers` and `/support/companies` to avoid collision with existing `/users` and `/teams` and to keep the support surface namespaced.
