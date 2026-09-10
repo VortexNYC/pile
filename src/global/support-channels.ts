@@ -82,18 +82,22 @@ export async function processIncomingMessage(
     `${input.channel} message`;
 
   if (!ticket) {
-    ticket = await createTicket(db, {
-      organizationId,
-      customerId: customer.id,
-      title,
-      sourceChannel: input.channel,
-      externalId: input.externalTicketId ?? null,
-      externalSource,
-      status: "todo",
-      priority: "medium",
-      createdAt: input.createdAt,
-      updatedAt: input.createdAt,
-    });
+    ticket = await createTicket(
+      db,
+      {
+        organizationId,
+        customerId: customer.id,
+        title,
+        sourceChannel: input.channel,
+        externalId: input.externalTicketId ?? null,
+        externalSource,
+        status: "todo",
+        priority: "medium",
+        createdAt: input.createdAt,
+        updatedAt: input.createdAt,
+      },
+      env
+    );
 
     if (env) {
       await maybeEscalate(env, db, organizationId, ticket, {
@@ -106,18 +110,24 @@ export async function processIncomingMessage(
     }
   }
 
-  await addTicketMessage(db, organizationId, ticket.id, {
-    direction: "inbound",
-    textContent: input.text,
-    markdownContent: input.html,
-    channel: input.channel,
-    customerId: customer.id,
-    subType: input.externalMessageId ?? null,
-    metadata: input.externalMessageId
-      ? { externalMessageId: input.externalMessageId }
-      : undefined,
-    createdAt: input.createdAt,
-  });
+  await addTicketMessage(
+    db,
+    organizationId,
+    ticket.id,
+    {
+      direction: "inbound",
+      textContent: input.text,
+      markdownContent: input.html,
+      channel: input.channel,
+      customerId: customer.id,
+      subType: input.externalMessageId ?? null,
+      metadata: input.externalMessageId
+        ? { externalMessageId: input.externalMessageId }
+        : undefined,
+      createdAt: input.createdAt,
+    },
+    env
+  );
 
   return ticket;
 }

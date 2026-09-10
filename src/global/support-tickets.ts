@@ -14,6 +14,8 @@ import { z } from "zod";
 
 import type { AppEnv } from "../platform/env.js";
 import { VortexError } from "../platform/errors.js";
+import type { WorkerEnv } from "../platform/middleware.js";
+import type { RealtimeEvent } from "../types/workspace.js";
 import type { D1Client } from "./db.js";
 import {
   labels,
@@ -190,6 +192,21 @@ export type SupportTicketEventWithDetails = SupportTicketEvent & {
   note?: SupportTicketNote;
 };
 
+function getWorkspaceStub(env: WorkerEnv, organizationId: string) {
+  return env.WORKSPACE_DURABLE_OBJECT.get(
+    env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+  );
+}
+
+async function dispatchSupportTicketEvent(
+  env: WorkerEnv,
+  organizationId: string,
+  event: RealtimeEvent
+): Promise<void> {
+  const stub = getWorkspaceStub(env, organizationId);
+  await stub.deliverWebhooks(event);
+}
+
 export async function nextTicketNumber(
   db: D1Client,
   organizationId: string
@@ -209,7 +226,8 @@ export async function nextTicketNumber(
 
 export async function createTicket(
   db: D1Client,
-  input: SupportTicketInput
+  input: SupportTicketInput,
+  env?: WorkerEnv
 ): Promise<SupportTicket> {
   const customer = await getCustomerById(
     db,
@@ -250,6 +268,14 @@ export async function createTicket(
     createdAt,
     updatedAt,
   });
+
+  if (env) {
+    await dispatchSupportTicketEvent(env, input.organizationId, {
+      type: "support_ticket.created",
+      organizationId: input.organizationId,
+      ticketId: id,
+    });
+  }
 
   return {
     id,
@@ -577,7 +603,8 @@ export async function updateTicket(
     issueId?: string | null;
     actorType?: SupportTicketActorType;
     actorId?: string | null;
-  }
+  },
+  env?: WorkerEnv
 ): Promise<SupportTicket | null> {
   const [existing] = await db
     .select()
@@ -683,6 +710,16 @@ export async function updateTicket(
 
   if (eventsToCreate.length > 0) {
     await db.insert(supportTicketEvents).values(eventsToCreate);
+  }
+
+  const hasMeaningfulUpdate =
+    Object.keys(updates).length > 1 || eventsToCreate.length > 0;
+  if (env && hasMeaningfulUpdate) {
+    await dispatchSupportTicketEvent(env, organizationId, {
+      type: "support_ticket.updated",
+      organizationId,
+      ticketId,
+    });
   }
 
   const [updated] = await db
@@ -846,7 +883,8 @@ export async function addTicketMessage(
     subType?: string | null;
     metadata?: Record<string, unknown>;
     createdAt?: string;
-  }
+  },
+  env?: WorkerEnv
 ): Promise<SupportTicketEventWithDetails> {
   await ensureTicket(db, organizationId, ticketId);
 
@@ -897,6 +935,15 @@ export async function addTicketMessage(
       )
     );
 
+  if (env) {
+    await dispatchSupportTicketEvent(env, organizationId, {
+      type: "support_ticket.message_created",
+      organizationId,
+      ticketId,
+      messageId,
+    });
+  }
+
   return {
     id: eventId,
     ticketId,
@@ -931,7 +978,8 @@ export async function addTicketNote(
     subType?: string | null;
     metadata?: Record<string, unknown>;
     createdAt?: string;
-  }
+  },
+  env?: WorkerEnv
 ): Promise<SupportTicketEventWithDetails> {
   await ensureTicket(db, organizationId, ticketId);
 
@@ -969,6 +1017,15 @@ export async function addTicketNote(
         eq(supportTickets.organizationId, organizationId)
       )
     );
+
+  if (env) {
+    await dispatchSupportTicketEvent(env, organizationId, {
+      type: "support_ticket.note_created",
+      organizationId,
+      ticketId,
+      noteId,
+    });
+  }
 
   return {
     id: eventId,

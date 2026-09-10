@@ -579,17 +579,21 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
     const body = c.req.valid("json");
     const db = createD1(c.env.D1);
 
-    const ticket = await createTicket(db, {
-      organizationId,
-      customerId: body.customerId,
-      title: body.title,
-      sourceChannel: body.sourceChannel,
-      priority: body.priority,
-      status: body.status,
-      externalId: body.externalId,
-      externalSource: body.externalSource,
-      issueId: body.issueId,
-    });
+    const ticket = await createTicket(
+      db,
+      {
+        organizationId,
+        customerId: body.customerId,
+        title: body.title,
+        sourceChannel: body.sourceChannel,
+        priority: body.priority,
+        status: body.status,
+        externalId: body.externalId,
+        externalSource: body.externalSource,
+        issueId: body.issueId,
+      },
+      c.env
+    );
 
     const customer = await getCustomerById(
       db,
@@ -605,13 +609,19 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
     });
 
     if (body.message) {
-      await addTicketMessage(db, organizationId, ticket.id, {
-        direction: "inbound",
-        textContent: body.message.textContent,
-        markdownContent: body.message.markdownContent,
-        channel: body.message.channel,
-        customerId: ticket.customerId,
-      });
+      await addTicketMessage(
+        db,
+        organizationId,
+        ticket.id,
+        {
+          direction: "inbound",
+          textContent: body.message.textContent,
+          markdownContent: body.message.markdownContent,
+          channel: body.message.channel,
+          customerId: ticket.customerId,
+        },
+        c.env
+      );
     }
 
     const full =
@@ -661,11 +671,17 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
     const { actorType, actorId } = resolveActor(identity, body);
     const db = createD1(c.env.D1);
     const { actorType: _actorType, actorId: _actorId, ...updates } = body;
-    const ticket = await updateTicket(db, organizationId, ticketId, {
-      ...updates,
-      actorType,
-      actorId,
-    });
+    const ticket = await updateTicket(
+      db,
+      organizationId,
+      ticketId,
+      {
+        ...updates,
+        actorType,
+        actorId,
+      },
+      c.env
+    );
     if (!ticket) {
       ticketNotFound();
     }
@@ -680,11 +696,17 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
     const identity = c.get("workspaceIdentity");
     const { actorType, actorId } = resolveActor(identity, body);
     const db = createD1(c.env.D1);
-    const event = await addTicketMessage(db, organizationId, ticketId, {
-      ...body,
-      actorType,
-      actorId,
-    });
+    const event = await addTicketMessage(
+      db,
+      organizationId,
+      ticketId,
+      {
+        ...body,
+        actorType,
+        actorId,
+      },
+      c.env
+    );
     return c.json({ event }, 201);
   });
 
@@ -694,11 +716,17 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
     const identity = c.get("workspaceIdentity");
     const { actorType, actorId } = resolveActor(identity, body);
     const db = createD1(c.env.D1);
-    const event = await addTicketNote(db, organizationId, ticketId, {
-      ...body,
-      actorType,
-      actorId,
-    });
+    const event = await addTicketNote(
+      db,
+      organizationId,
+      ticketId,
+      {
+        ...body,
+        actorType,
+        actorId,
+      },
+      c.env
+    );
     return c.json({ event }, 201);
   });
 
@@ -724,11 +752,17 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
     const identity = c.get("workspaceIdentity");
     const { actorType, actorId } = resolveActor(identity);
     const db = createD1(c.env.D1);
-    await updateTicket(db, organizationId, ticketId, {
-      status: "done",
-      actorType,
-      actorId,
-    });
+    await updateTicket(
+      db,
+      organizationId,
+      ticketId,
+      {
+        status: "done",
+        actorType,
+        actorId,
+      },
+      c.env
+    );
     const full =
       (await getTicketById(db, organizationId, ticketId)) ?? ticketNotFound();
     return c.json({ ticket: full });
@@ -739,11 +773,17 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
     const identity = c.get("workspaceIdentity");
     const { actorType, actorId } = resolveActor(identity);
     const db = createD1(c.env.D1);
-    await updateTicket(db, organizationId, ticketId, {
-      status: "todo",
-      actorType,
-      actorId,
-    });
+    await updateTicket(
+      db,
+      organizationId,
+      ticketId,
+      {
+        status: "todo",
+        actorType,
+        actorId,
+      },
+      c.env
+    );
     const full =
       (await getTicketById(db, organizationId, ticketId)) ?? ticketNotFound();
     return c.json({ ticket: full });
@@ -755,11 +795,17 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
     const identity = c.get("workspaceIdentity");
     const { actorType, actorId } = resolveActor(identity, body);
     const db = createD1(c.env.D1);
-    await updateTicket(db, organizationId, ticketId, {
-      status: "snoozed",
-      actorType,
-      actorId,
-    });
+    await updateTicket(
+      db,
+      organizationId,
+      ticketId,
+      {
+        status: "snoozed",
+        actorType,
+        actorId,
+      },
+      c.env
+    );
     const full =
       (await getTicketById(db, organizationId, ticketId)) ?? ticketNotFound();
     return c.json({ ticket: full });

@@ -19,7 +19,7 @@ import {
   recordWebhookDelivery,
 } from "../global/webhook-deliveries.js";
 import { VortexError } from "../platform/errors.js";
-import type { AppContext } from "../platform/middleware.js";
+import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 
 const intercomWebhookAuthorSchema = z.object({
   type: z.enum(["admin", "user", "lead", "bot", "contact"]),
@@ -173,7 +173,8 @@ export async function processIntercomSupportWebhook(
       db,
       organizationId,
       conversation.data.id,
-      "done"
+      "done",
+      c.env
     );
     await recordWebhookDelivery(
       db,
@@ -189,7 +190,8 @@ export async function processIntercomSupportWebhook(
       db,
       organizationId,
       conversation.data.id,
-      "todo"
+      "todo",
+      c.env
     );
     await recordWebhookDelivery(
       db,
@@ -205,7 +207,8 @@ export async function processIntercomSupportWebhook(
       db,
       organizationId,
       conversation.data.id,
-      "snoozed"
+      "snoozed",
+      c.env
     );
     await recordWebhookDelivery(
       db,
@@ -246,15 +249,21 @@ export async function processIntercomSupportWebhook(
 
   if (existing) {
     if (isAdminReply) {
-      await addTicketMessage(db, organizationId, existing.id, {
-        direction: "outbound",
-        textContent: text,
-        channel: "intercom",
-        actorType: "user",
-        actorId: sourceAuthor?.id ?? null,
-        subType: conversation.data.id,
-        createdAt,
-      });
+      await addTicketMessage(
+        db,
+        organizationId,
+        existing.id,
+        {
+          direction: "outbound",
+          textContent: text,
+          channel: "intercom",
+          actorType: "user",
+          actorId: sourceAuthor?.id ?? null,
+          subType: conversation.data.id,
+          createdAt,
+        },
+        c.env
+      );
     } else if (sourceAuthor?.email) {
       const customer = await findOrCreateCustomerByEmail(
         db,
@@ -263,21 +272,33 @@ export async function processIntercomSupportWebhook(
         sourceAuthor.name,
         "intercom"
       );
-      await addTicketMessage(db, organizationId, existing.id, {
-        direction: "inbound",
-        textContent: text,
-        channel: "intercom",
-        customerId: customer.id,
-        subType: conversation.data.id,
-        createdAt,
-      });
+      await addTicketMessage(
+        db,
+        organizationId,
+        existing.id,
+        {
+          direction: "inbound",
+          textContent: text,
+          channel: "intercom",
+          customerId: customer.id,
+          subType: conversation.data.id,
+          createdAt,
+        },
+        c.env
+      );
     }
-    await updateTicket(db, organizationId, existing.id, {
-      status,
-      priority,
-      actorType: "automation",
-      actorId: null,
-    });
+    await updateTicket(
+      db,
+      organizationId,
+      existing.id,
+      {
+        status,
+        priority,
+        actorType: "automation",
+        actorId: null,
+      },
+      c.env
+    );
     await recordWebhookDelivery(
       db,
       notification.data.id,
@@ -310,18 +331,22 @@ export async function processIntercomSupportWebhook(
       sourceBody.slice(0, 120) ||
       `Intercom conversation ${conversation.data.id}`);
 
-  const ticket = await createTicket(db, {
-    organizationId,
-    customerId: customer.id,
-    title,
-    sourceChannel: "intercom",
-    status,
-    priority,
-    externalId: conversation.data.id,
-    externalSource: "intercom",
-    createdAt,
-    updatedAt: createdAt,
-  });
+  const ticket = await createTicket(
+    db,
+    {
+      organizationId,
+      customerId: customer.id,
+      title,
+      sourceChannel: "intercom",
+      status,
+      priority,
+      externalId: conversation.data.id,
+      externalSource: "intercom",
+      createdAt,
+      updatedAt: createdAt,
+    },
+    c.env
+  );
 
   await maybeEscalate(c.env, db, organizationId, ticket, {
     text,
@@ -331,14 +356,20 @@ export async function processIntercomSupportWebhook(
     channel: "intercom",
   });
 
-  await addTicketMessage(db, organizationId, ticket.id, {
-    direction: isAdminReply ? "outbound" : "inbound",
-    textContent: text,
-    channel: "intercom",
-    customerId: customer.id,
-    subType: conversation.data.id,
-    createdAt,
-  });
+  await addTicketMessage(
+    db,
+    organizationId,
+    ticket.id,
+    {
+      direction: isAdminReply ? "outbound" : "inbound",
+      textContent: text,
+      channel: "intercom",
+      customerId: customer.id,
+      subType: conversation.data.id,
+      createdAt,
+    },
+    c.env
+  );
 
   await recordWebhookDelivery(
     db,
@@ -354,7 +385,8 @@ async function updateStatusIfExists(
   db: D1Client,
   organizationId: string,
   externalId: string,
-  status: SupportTicketStatus
+  status: SupportTicketStatus,
+  env: WorkerEnv
 ): Promise<void> {
   const ticket = await findSupportTicketByExternalId(
     db,
@@ -363,11 +395,17 @@ async function updateStatusIfExists(
     "intercom"
   );
   if (ticket) {
-    await updateTicket(db, organizationId, ticket.id, {
-      status,
-      actorType: "automation",
-      actorId: null,
-    });
+    await updateTicket(
+      db,
+      organizationId,
+      ticket.id,
+      {
+        status,
+        actorType: "automation",
+        actorId: null,
+      },
+      env
+    );
   }
 }
 

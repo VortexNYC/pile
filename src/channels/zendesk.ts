@@ -157,32 +157,50 @@ export async function processZendeskSupportWebhook(
         "zendesk"
       );
       if (text) {
-        await addTicketMessage(db, organizationId, existing.id, {
-          direction: comment ? "outbound" : "inbound",
-          textContent: text,
-          channel: "zendesk",
-          customerId: comment ? undefined : customer.id,
-          actorType: comment ? "automation" : undefined,
-          actorId: comment ? null : undefined,
-          subType: comment ? String(comment.id ?? "") : externalId,
-          createdAt,
-        });
+        await addTicketMessage(
+          db,
+          organizationId,
+          existing.id,
+          {
+            direction: comment ? "outbound" : "inbound",
+            textContent: text,
+            channel: "zendesk",
+            customerId: comment ? undefined : customer.id,
+            actorType: comment ? "automation" : undefined,
+            actorId: comment ? null : undefined,
+            subType: comment ? String(comment.id ?? "") : externalId,
+            createdAt,
+          },
+          c.env
+        );
       }
     } else if (text) {
-      await addTicketMessage(db, organizationId, existing.id, {
-        direction: "inbound",
-        textContent: text,
-        channel: "zendesk",
-        subType: externalId,
-        createdAt,
-      });
+      await addTicketMessage(
+        db,
+        organizationId,
+        existing.id,
+        {
+          direction: "inbound",
+          textContent: text,
+          channel: "zendesk",
+          subType: externalId,
+          createdAt,
+        },
+        c.env
+      );
     }
-    await updateTicket(db, organizationId, existing.id, {
-      status,
-      priority,
-      actorType: "automation",
-      actorId: null,
-    });
+    await updateTicket(
+      db,
+      organizationId,
+      existing.id,
+      {
+        status,
+        priority,
+        actorType: "automation",
+        actorId: null,
+      },
+      c.env
+    );
     return { ok: true };
   }
 
@@ -204,18 +222,22 @@ export async function processZendeskSupportWebhook(
 
   const title = subject || text.slice(0, 120) || `Zendesk ticket ${externalId}`;
 
-  const ticket = await createTicket(db, {
-    organizationId,
-    customerId: customer.id,
-    title,
-    sourceChannel: "zendesk",
-    status,
-    priority,
-    externalId,
-    externalSource: "zendesk",
-    createdAt,
-    updatedAt: ticketData.updated_at ?? createdAt,
-  });
+  const ticket = await createTicket(
+    db,
+    {
+      organizationId,
+      customerId: customer.id,
+      title,
+      sourceChannel: "zendesk",
+      status,
+      priority,
+      externalId,
+      externalSource: "zendesk",
+      createdAt,
+      updatedAt: ticketData.updated_at ?? createdAt,
+    },
+    c.env
+  );
 
   await maybeEscalate(c.env, db, organizationId, ticket, {
     text,
@@ -226,14 +248,20 @@ export async function processZendeskSupportWebhook(
   });
 
   if (text) {
-    await addTicketMessage(db, organizationId, ticket.id, {
-      direction: "inbound",
-      textContent: text,
-      channel: "zendesk",
-      customerId: customer.id,
-      subType: externalId,
-      createdAt,
-    });
+    await addTicketMessage(
+      db,
+      organizationId,
+      ticket.id,
+      {
+        direction: "inbound",
+        textContent: text,
+        channel: "zendesk",
+        customerId: customer.id,
+        subType: externalId,
+        createdAt,
+      },
+      c.env
+    );
   }
 
   return { ok: true };

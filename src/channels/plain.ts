@@ -200,7 +200,7 @@ export async function processPlainSupportWebhook(
       break;
     case "thread.thread_status_transitioned":
     case "thread.thread_priority_changed":
-      await updatePlainTicket(db, organizationId, payload.thread);
+      await updatePlainTicket(db, c.env, organizationId, payload.thread);
       break;
     case "thread.email_received":
       await addMessageFromPlainPayload(
@@ -303,18 +303,22 @@ async function createTicketFromPlainPayload(
     "plain"
   );
 
-  const ticket = await createTicket(db, {
-    organizationId,
-    customerId: supportCustomer.id,
-    title,
-    sourceChannel: "plain",
-    status,
-    priority,
-    externalId: thread.id,
-    externalSource: "plain",
-    createdAt,
-    updatedAt: createdAt,
-  });
+  const ticket = await createTicket(
+    db,
+    {
+      organizationId,
+      customerId: supportCustomer.id,
+      title,
+      sourceChannel: "plain",
+      status,
+      priority,
+      externalId: thread.id,
+      externalSource: "plain",
+      createdAt,
+      updatedAt: createdAt,
+    },
+    env
+  );
 
   await maybeEscalate(env, db, organizationId, ticket, {
     text,
@@ -325,19 +329,26 @@ async function createTicketFromPlainPayload(
   });
 
   if (text) {
-    await addTicketMessage(db, organizationId, ticket.id, {
-      direction: "inbound",
-      textContent: text,
-      channel: "plain",
-      customerId: supportCustomer.id,
-      subType: thread.id,
-      createdAt,
-    });
+    await addTicketMessage(
+      db,
+      organizationId,
+      ticket.id,
+      {
+        direction: "inbound",
+        textContent: text,
+        channel: "plain",
+        customerId: supportCustomer.id,
+        subType: thread.id,
+        createdAt,
+      },
+      env
+    );
   }
 }
 
 async function updatePlainTicket(
   db: D1Client,
+  env: WorkerEnv,
   organizationId: string,
   thread: z.infer<typeof plainThreadSchema>
 ): Promise<void> {
@@ -352,12 +363,18 @@ async function updatePlainTicket(
   }
   const status = plainStatusToTicketStatus(thread.status);
   const priority = plainPriorityToTicketPriority(thread.priority);
-  await updateTicket(db, organizationId, existing.id, {
-    status,
-    priority,
-    actorType: "automation",
-    actorId: null,
-  });
+  await updateTicket(
+    db,
+    organizationId,
+    existing.id,
+    {
+      status,
+      priority,
+      actorType: "automation",
+      actorId: null,
+    },
+    env
+  );
 }
 
 async function addMessageFromPlainPayload(
@@ -404,14 +421,20 @@ async function addMessageFromPlainPayload(
   const createdAt = thread.updatedAt ?? new Date().toISOString();
 
   if (direction === "outbound" || !fromEmail) {
-    await addTicketMessage(db, organizationId, existing.id, {
-      direction,
-      textContent: body,
-      channel: "plain",
-      actorType: direction === "outbound" ? "user" : undefined,
-      subType: externalMessageId,
-      createdAt,
-    });
+    await addTicketMessage(
+      db,
+      organizationId,
+      existing.id,
+      {
+        direction,
+        textContent: body,
+        channel: "plain",
+        actorType: direction === "outbound" ? "user" : undefined,
+        subType: externalMessageId,
+        createdAt,
+      },
+      env
+    );
     return;
   }
 
@@ -422,14 +445,20 @@ async function addMessageFromPlainPayload(
     fromName ?? null,
     "plain"
   );
-  await addTicketMessage(db, organizationId, existing.id, {
-    direction: "inbound",
-    textContent: body,
-    channel: "plain",
-    customerId: customer.id,
-    subType: externalMessageId,
-    createdAt,
-  });
+  await addTicketMessage(
+    db,
+    organizationId,
+    existing.id,
+    {
+      direction: "inbound",
+      textContent: body,
+      channel: "plain",
+      customerId: customer.id,
+      subType: externalMessageId,
+      createdAt,
+    },
+    env
+  );
 }
 
 function plainStatusToTicketStatus(status: string): SupportTicketStatus {
