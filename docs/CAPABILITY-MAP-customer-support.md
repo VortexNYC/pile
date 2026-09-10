@@ -10,22 +10,23 @@ Build order follows the data dependencies, but migration adapters from Intercom 
 
 1. The support model is centered on **tickets** (a.k.a. conversations) and **contacts** (customers / companies / leads).
 2. The first channel is **email** + a webhook/POST endpoint; Slack, SMS and in-app messenger come later.
-3. Agent identity, assignment and team membership reuse existing Vortex `users`, `teams` and `organization_role` where possible.
-4. Macros, canned replies and tags reuse the existing `labels` and `templates` concepts where possible.
-5. Webhook HMAC verification follows the same pattern as the GitHub and GitLab handlers.
+3. In-app chat and agent-side messaging use the **Vercel AI SDK** (`ai` package) rather than a custom chat layer.
+4. Agent identity, assignment and team membership reuse existing Vortex `users`, `teams` and `organization_role` where possible.
+5. Macros, canned replies and tags reuse the existing `labels` and `templates` concepts where possible.
+6. Webhook HMAC verification follows the same pattern as the GitHub and GitLab handlers.
 
 ## Capabilities
 
-| Module id           | Responsibility                                                       | Depends on                            |
-| ------------------- | -------------------------------------------------------------------- | ------------------------------------- |
-| `support-contacts`  | Customers, companies, leads and contact methods                      | `organization`, `user`                |
-| `support-tickets`   | Conversations / tickets: state, priority, source channel, assignment | `support-contacts`                    |
-| `support-team`      | Agent assignment, away status, teams, SLA rules                      | `support-tickets`, existing `teams`   |
-| `support-content`   | Macros, canned replies, tags, auto-replies                           | `support-tickets`                     |
-| `support-channels`  | Ingestion endpoints: email, webhook, Slack, SMS, in-app              | `support-tickets`                     |
-| `support-inbox`     | Inbox views, queues, filters, real-time updates                      | `support-tickets`, `support-team`     |
-| `support-migration` | Import and webhook sync from Intercom and Zendesk                    | `support-contacts`, `support-tickets` |
-| `support-analytics` | Reporting, ratings, volume, SLA compliance                           | `support-tickets`, `support-team`     |
+| Module id           | Responsibility                                                                                | Depends on                            |
+| ------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------- |
+| `support-contacts`  | Customers, companies, leads and contact methods                                               | `organization`, `user`                |
+| `support-tickets`   | Conversations / tickets: state, priority, source channel, assignment                          | `support-contacts`                    |
+| `support-team`      | Agent assignment, away status, teams, SLA rules                                               | `support-tickets`, existing `teams`   |
+| `support-content`   | Macros, canned replies, tags, auto-replies                                                    | `support-tickets`                     |
+| `support-channels`  | Ingestion endpoints: email, webhook, Slack, SMS, in-app; in-app/agent chat uses Vercel AI SDK | `support-tickets`                     |
+| `support-inbox`     | Inbox views, queues, filters, real-time updates                                               | `support-tickets`, `support-team`     |
+| `support-migration` | Import and webhook sync from Intercom and Zendesk                                             | `support-contacts`, `support-tickets` |
+| `support-analytics` | Reporting, ratings, volume, SLA compliance                                                    | `support-tickets`, `support-team`     |
 
 ## Build Order
 
@@ -48,5 +49,6 @@ Build order follows the data dependencies, but migration adapters from Intercom 
 
 1. Do we store support data in the per-workspace Durable Object SQLite or in D1?
 2. Should tickets use the existing `workspaceIssues` table (with a `kind` or `source`) or a separate `support_tickets` table?
-3. Should the in-app chat widget be a separate Worker or part of the issue tracker Worker?
+3. Should the in-app chat widget be a separate Worker or part of the issue tracker Worker? (Vercel AI SDK handles the chat layer in either case.)
 4. Which channels are required for the first ship: email, Slack, SMS, in-app, or a subset?
+5. Does the Vercel AI SDK chat use the same `support-tickets` data or a separate real-time conversation store?
