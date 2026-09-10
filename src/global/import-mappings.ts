@@ -11,7 +11,8 @@ export type ImportMappingType =
   | "project"
   | "cycle"
   | "user"
-  | "team";
+  | "team"
+  | "template";
 
 export async function recordImportMapping(
   db: D1Client,

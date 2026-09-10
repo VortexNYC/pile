@@ -2,7 +2,9 @@ import { z } from "zod";
 
 import {
   findImportMapping,
+  findImportMappingsByJob,
   recordImportMapping,
+  type ImportMappingType,
 } from "../global/import-mappings.js";
 import {
   recordImportParentLink,
@@ -843,6 +845,15 @@ export const linearImportSource: ImportSource<
       });
     }
 
+    const existingMappings = await findImportMappingsByJob(ctx.db, ctx.jobId);
+    const byType = new Map<ImportMappingType, Map<string, string>>();
+    for (const m of existingMappings) {
+      if (!byType.has(m.type as ImportMappingType)) {
+        byType.set(m.type as ImportMappingType, new Map());
+      }
+      byType.get(m.type as ImportMappingType)!.set(m.externalId, m.vortexId);
+    }
+
     const [
       statesData,
       labelsData,
@@ -867,15 +878,23 @@ export const linearImportSource: ImportSource<
     const templates = templatesData.team?.templates.nodes ?? [];
 
     const userCache = new Map<string, string | null>();
-    let membershipCount = 0;
+    let newUsers = 0;
+    let newMemberships = 0;
 
     for (const lu of linearUsers) {
+      const existingUserId = byType.get("user")?.get(lu.id);
+      if (existingUserId) {
+        userCache.set(lu.id, existingUserId);
+        continue;
+      }
+
       await ctx.stub.createLinearUser({
         linearId: lu.id,
         name: lu.name,
         email: lu.email,
       });
 
+      let vortexId: string | null = null;
       if (lu.email) {
         const existing = await findUserByEmail(ctx.db, lu.email);
         const localUser =
@@ -888,35 +907,42 @@ export const linearImportSource: ImportSource<
             }),
             "Failed to create user"
           );
-        await createMembership(
+        vortexId = localUser.id;
+        userCache.set(lu.id, vortexId);
+        if (!existing) {
+          newUsers++;
+        }
+        const createdMembership = await createMembership(
           ctx.db,
           ctx.organizationId,
           localUser.id,
           "member"
         );
-        userCache.set(lu.id, localUser.id);
-        membershipCount++;
+        if (createdMembership) {
+          newMemberships++;
+        }
+        await recordImportMapping(
+          ctx.db,
+          ctx.organizationId,
+          ctx.jobId,
+          "linear",
+          "user",
+          lu.id,
+          vortexId
+        );
       } else {
         userCache.set(lu.id, null);
       }
     }
 
     const stateMap = new Map(states.map((s) => [s.id, s]));
-
-    const labelMap = new Map<string, string>();
-    for (const label of labels) {
-      const created = unwrap(
-        await createLabel(ctx.db, ctx.organizationId, {
-          name: label.name,
-          color: label.color ?? null,
-        }),
-        "Failed to create label"
-      );
-      labelMap.set(label.id, created.id);
-    }
+    let newStates = 0;
 
     for (const state of states) {
-      unwrap(
+      if (byType.get("state")?.has(state.id)) {
+        continue;
+      }
+      const created = unwrap(
         await createState(ctx.db, ctx.organizationId, {
           linearId: state.id,
           name: state.name,
@@ -929,10 +955,52 @@ export const linearImportSource: ImportSource<
         }),
         "Failed to create state"
       );
+      newStates++;
+      await recordImportMapping(
+        ctx.db,
+        ctx.organizationId,
+        ctx.jobId,
+        "linear",
+        "state",
+        state.id,
+        created.id
+      );
     }
 
+    const labelMap = new Map<string, string>();
+    let newLabels = 0;
+    for (const label of labels) {
+      const existingLabelId = byType.get("label")?.get(label.id);
+      if (existingLabelId) {
+        labelMap.set(label.id, existingLabelId);
+        continue;
+      }
+      const created = unwrap(
+        await createLabel(ctx.db, ctx.organizationId, {
+          name: label.name,
+          color: label.color ?? null,
+        }),
+        "Failed to create label"
+      );
+      labelMap.set(label.id, created.id);
+      newLabels++;
+      await recordImportMapping(
+        ctx.db,
+        ctx.organizationId,
+        ctx.jobId,
+        "linear",
+        "label",
+        label.id,
+        created.id
+      );
+    }
+
+    let newTemplates = 0;
     for (const tmpl of templates) {
-      unwrap(
+      if (byType.get("template")?.has(tmpl.id)) {
+        continue;
+      }
+      const created = unwrap(
         await createTemplate(ctx.db, ctx.organizationId, {
           linearId: tmpl.id,
           name: tmpl.name,
@@ -940,10 +1008,26 @@ export const linearImportSource: ImportSource<
         }),
         "Failed to create template"
       );
+      newTemplates++;
+      await recordImportMapping(
+        ctx.db,
+        ctx.organizationId,
+        ctx.jobId,
+        "linear",
+        "template",
+        tmpl.id,
+        created.id
+      );
     }
 
     const projectMap = new Map<string, string>();
+    let newProjects = 0;
     for (const project of projects) {
+      const existingProjectId = byType.get("project")?.get(project.id);
+      if (existingProjectId) {
+        projectMap.set(project.id, existingProjectId);
+        continue;
+      }
       const created = unwrap(
         await createProject(ctx.db, ctx.organizationId, {
           name: project.name,
@@ -954,10 +1038,26 @@ export const linearImportSource: ImportSource<
         "Failed to create project"
       );
       projectMap.set(project.id, created.id);
+      newProjects++;
+      await recordImportMapping(
+        ctx.db,
+        ctx.organizationId,
+        ctx.jobId,
+        "linear",
+        "project",
+        project.id,
+        created.id
+      );
     }
 
     const cycleMap = new Map<string, string>();
+    let newCycles = 0;
     for (const cycle of cycles) {
+      const existingCycleId = byType.get("cycle")?.get(cycle.id);
+      if (existingCycleId) {
+        cycleMap.set(cycle.id, existingCycleId);
+        continue;
+      }
       const created = unwrap(
         await createCycle(ctx.db, ctx.organizationId, {
           name: cycle.name,
@@ -967,6 +1067,16 @@ export const linearImportSource: ImportSource<
         "Failed to create cycle"
       );
       cycleMap.set(cycle.id, created.id);
+      newCycles++;
+      await recordImportMapping(
+        ctx.db,
+        ctx.organizationId,
+        ctx.jobId,
+        "linear",
+        "cycle",
+        cycle.id,
+        created.id
+      );
     }
 
     const limit = runState?.limit ?? parsedOptions.limit;
@@ -1159,18 +1269,18 @@ export const linearImportSource: ImportSource<
     return {
       counts: {
         issues: issueCount,
-        labels: labels.length,
-        states: states.length,
-        projects: projects.length,
-        cycles: cycles.length,
-        users: linearUsers.length,
+        labels: newLabels,
+        states: newStates,
+        projects: newProjects,
+        cycles: newCycles,
+        users: newUsers,
         comments: commentCount,
         relations: relationCount,
         attachments: attachmentCount,
         history: historyCount,
         subscribers: subscriberCount,
-        memberships: membershipCount,
-        templates: templates.length,
+        memberships: newMemberships,
+        templates: newTemplates,
         parentLinks: parentLinkCount,
       },
       nextCursor,
