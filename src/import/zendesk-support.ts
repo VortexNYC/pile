@@ -18,8 +18,10 @@ import type {
 } from "../global/support-tickets.js";
 import {
   createTicketFromZendesk,
+  findOrCreateTeam,
   findUserByEmail,
   setTicketAssignees,
+  type SupportTicketAssigneeInput,
 } from "../global/support-tickets.js";
 import { VortexError } from "../platform/errors.js";
 import type {
@@ -108,6 +110,24 @@ const zendeskOrganizationSchema = z
 
 const zendeskOrganizationListSchema = z.object({
   organizations: z.array(zendeskOrganizationSchema),
+  meta: z
+    .object({
+      has_more: z.boolean(),
+      after_cursor: z.string().optional(),
+    })
+    .optional()
+    .default({ has_more: false }),
+});
+
+const zendeskGroupSchema = z
+  .object({
+    id: z.number().int(),
+    name: z.string().optional().nullable(),
+  })
+  .passthrough();
+
+const zendeskGroupListSchema = z.object({
+  groups: z.array(zendeskGroupSchema),
   meta: z
     .object({
       has_more: z.boolean(),
@@ -299,6 +319,48 @@ async function listAllZendeskOrganizations(
   return organizations;
 }
 
+type ZendeskGroup = z.infer<typeof zendeskGroupSchema>;
+
+async function listAllZendeskGroups(
+  credentials: ZendeskCredentials
+): Promise<Map<number, ZendeskGroup>> {
+  const groups = new Map<number, ZendeskGroup>();
+
+  const fetchPage = async (cursor?: string): Promise<void> => {
+    const params = new URLSearchParams();
+    params.set("page[size]", "100");
+    if (cursor) {
+      params.set("page[after]", cursor);
+    }
+
+    const raw = await zendeskRequest(
+      credentials,
+      `/api/v2/groups.json?${params.toString()}`
+    );
+    const parsed = zendeskGroupListSchema.safeParse(raw);
+    if (!parsed.success) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 500,
+        message: "Invalid Zendesk groups response",
+        hint: parsed.error.message,
+      });
+    }
+
+    for (const group of parsed.data.groups) {
+      groups.set(group.id, group);
+    }
+
+    const meta = parsed.data.meta;
+    if (meta?.has_more && meta.after_cursor) {
+      await fetchPage(meta.after_cursor);
+    }
+  };
+
+  await fetchPage();
+  return groups;
+}
+
 function userById(users: ZendeskUser[], id: number): ZendeskUser | null {
   return users.find((user) => user.id === id) ?? null;
 }
@@ -385,16 +447,40 @@ async function syncZendeskTicketAssignees(
   ctx: ImportContext,
   ticketId: string,
   ticket: ZendeskTicket,
-  users: ZendeskUser[]
+  users: ZendeskUser[],
+  groups: Map<number, ZendeskGroup>
 ): Promise<void> {
-  if (!ticket.assignee_id) return;
-  const assignee = userById(users, ticket.assignee_id);
-  if (!assignee?.email) return;
-  const user = await findUserByEmail(ctx.db, assignee.email);
-  if (!user) return;
-  await setTicketAssignees(ctx.db, ctx.organizationId, ticketId, [
-    { userId: user.id, isPrimary: true },
-  ]);
+  const assignees: SupportTicketAssigneeInput[] = [];
+
+  if (ticket.assignee_id) {
+    const assignee = userById(users, ticket.assignee_id);
+    if (assignee?.email) {
+      const user = await findUserByEmail(ctx.db, assignee.email);
+      if (user) {
+        assignees.push({ userId: user.id, isPrimary: true });
+      }
+    }
+  }
+
+  if (ticket.group_id) {
+    const group = groups.get(ticket.group_id);
+    if (group?.name) {
+      const team = await findOrCreateTeam(
+        ctx.db,
+        ctx.organizationId,
+        group.name,
+        ctx.importerId
+      );
+      assignees.push({
+        teamId: team.id,
+        isPrimary: assignees.length === 0,
+      });
+    }
+  }
+
+  if (assignees.length > 0) {
+    await setTicketAssignees(ctx.db, ctx.organizationId, ticketId, assignees);
+  }
 }
 
 function commentActor(
@@ -796,6 +882,7 @@ export const zendeskSupportImportSource: ImportSource<
     let nextCursor: string | null = null;
 
     const organizations = await listAllZendeskOrganizations(credentials);
+    const groups = await listAllZendeskGroups(credentials);
 
     const processPage = async (cursor?: string): Promise<void> => {
       const {
@@ -866,7 +953,13 @@ export const zendeskSupportImportSource: ImportSource<
               {}
             );
 
-            await syncZendeskTicketAssignees(ctx, result.id, ticket, allUsers);
+            await syncZendeskTicketAssignees(
+              ctx,
+              result.id,
+              ticket,
+              allUsers,
+              groups
+            );
 
             await recordImportMapping(
               ctx.db,

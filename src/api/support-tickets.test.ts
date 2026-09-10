@@ -841,4 +841,58 @@ describe("support-tickets API", () => {
     expect(fetched?.assignees[0]?.assigneeId).toBe(team.id);
     expect(fetched?.assignees[0]?.isPrimary).toBe(true);
   });
+
+  it("populates ticket assignments for both a user and a team", async () => {
+    const db = createD1(env.D1);
+    const user = await findUserByEmail(db, "user-1@example.com");
+    const team = await findOrCreateTeam(
+      db,
+      organizationId,
+      "Zendesk Group",
+      "user-1"
+    );
+
+    const customer = await createSupportCustomer(db, {
+      organizationId,
+      email: "mixed-assigned@example.com",
+      fullName: "Mixed Assigned Customer",
+      externalId: null,
+      externalSource: null,
+    });
+
+    const ticket = await createTicketFromPlain(
+      db,
+      organizationId,
+      customer.id,
+      {
+        id: "thread-mixed",
+        status: "todo",
+        priority: "medium",
+        source: {
+          type: "chat",
+          body: "I need help",
+        },
+        createdAt: "2023-11-14T14:00:00.000Z",
+        updatedAt: "2023-11-14T14:00:00.000Z",
+        replies: [],
+        events: [],
+      }
+    );
+
+    await setTicketAssignees(db, organizationId, ticket.id, [
+      { userId: user!.id, isPrimary: true },
+      { teamId: team.id, isPrimary: false },
+    ]);
+
+    const fetched = await getTicketById(db, organizationId, ticket.id);
+    expect(fetched?.assignees.length).toBe(2);
+
+    const userAssignee = fetched?.assignees.find((a) => a.type === "user");
+    expect(userAssignee?.assigneeId).toBe(user!.id);
+    expect(userAssignee?.isPrimary).toBe(true);
+
+    const teamAssignee = fetched?.assignees.find((a) => a.type === "team");
+    expect(teamAssignee?.assigneeId).toBe(team.id);
+    expect(teamAssignee?.isPrimary).toBe(false);
+  });
 });
