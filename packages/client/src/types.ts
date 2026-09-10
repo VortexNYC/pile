@@ -9173,6 +9173,596 @@ export interface paths {
         };
         trace?: never;
     };
+    "/workspaces/{organizationId}/support/customers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List support customers */
+        get: {
+            parameters: {
+                query?: {
+                    limit?: number;
+                    cursor?: string;
+                    companyId?: string;
+                    q?: string;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Customers list */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            customers: {
+                                id: string;
+                                organizationId: string;
+                                userId: string | null;
+                                externalId: string | null;
+                                externalSource: string;
+                                email: string;
+                                fullName: string | null;
+                                phone: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                companies: {
+                                    id: string;
+                                    customerId: string;
+                                    companyId: string;
+                                    name: string;
+                                    isPrimary: boolean;
+                                    createdAt: string;
+                                }[];
+                                identities: {
+                                    id: string;
+                                    customerId: string;
+                                    /** @enum {string} */
+                                    type: "email" | "phone" | "slack" | "chat";
+                                    value: string;
+                                    isPrimary: boolean;
+                                    createdAt: string;
+                                }[];
+                            }[];
+                            nextCursor: string | null;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create support customer */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** Format: email */
+                        email: string;
+                        fullName?: string;
+                        phone?: string;
+                        userId?: string;
+                        externalId?: string;
+                        externalSource?: string;
+                        companies?: {
+                            companyId: string;
+                            /** @default false */
+                            isPrimary?: boolean;
+                        }[];
+                        identities?: {
+                            /** @enum {string} */
+                            type: "email" | "phone" | "slack" | "chat";
+                            value: string;
+                            /** @default false */
+                            isPrimary?: boolean;
+                        }[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Customer created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            customer: {
+                                id: string;
+                                organizationId: string;
+                                userId: string | null;
+                                externalId: string | null;
+                                externalSource: string;
+                                email: string;
+                                fullName: string | null;
+                                phone: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                companies: {
+                                    id: string;
+                                    customerId: string;
+                                    companyId: string;
+                                    name: string;
+                                    isPrimary: boolean;
+                                    createdAt: string;
+                                }[];
+                                identities: {
+                                    id: string;
+                                    customerId: string;
+                                    /** @enum {string} */
+                                    type: "email" | "phone" | "slack" | "chat";
+                                    value: string;
+                                    isPrimary: boolean;
+                                    createdAt: string;
+                                }[];
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/support/customers/{customerId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get support customer */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    customerId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Customer */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            customer: {
+                                id: string;
+                                organizationId: string;
+                                userId: string | null;
+                                externalId: string | null;
+                                externalSource: string;
+                                email: string;
+                                fullName: string | null;
+                                phone: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                companies: {
+                                    id: string;
+                                    customerId: string;
+                                    companyId: string;
+                                    name: string;
+                                    isPrimary: boolean;
+                                    createdAt: string;
+                                }[];
+                                identities: {
+                                    id: string;
+                                    customerId: string;
+                                    /** @enum {string} */
+                                    type: "email" | "phone" | "slack" | "chat";
+                                    value: string;
+                                    isPrimary: boolean;
+                                    createdAt: string;
+                                }[];
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update support customer */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    customerId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** Format: email */
+                        email?: string;
+                        fullName?: string;
+                        phone?: string;
+                        userId?: string;
+                        externalId?: string;
+                        externalSource?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Customer updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            customer: {
+                                id: string;
+                                organizationId: string;
+                                userId: string | null;
+                                externalId: string | null;
+                                externalSource: string;
+                                email: string;
+                                fullName: string | null;
+                                phone: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                companies: {
+                                    id: string;
+                                    customerId: string;
+                                    companyId: string;
+                                    name: string;
+                                    isPrimary: boolean;
+                                    createdAt: string;
+                                }[];
+                                identities: {
+                                    id: string;
+                                    customerId: string;
+                                    /** @enum {string} */
+                                    type: "email" | "phone" | "slack" | "chat";
+                                    value: string;
+                                    isPrimary: boolean;
+                                    createdAt: string;
+                                }[];
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/support/customers/{customerId}/companies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update support customer companies */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    customerId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        companies: {
+                            companyId: string;
+                            /** @default false */
+                            isPrimary?: boolean;
+                        }[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Customer companies updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            customer: {
+                                id: string;
+                                organizationId: string;
+                                userId: string | null;
+                                externalId: string | null;
+                                externalSource: string;
+                                email: string;
+                                fullName: string | null;
+                                phone: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                companies: {
+                                    id: string;
+                                    customerId: string;
+                                    companyId: string;
+                                    name: string;
+                                    isPrimary: boolean;
+                                    createdAt: string;
+                                }[];
+                                identities: {
+                                    id: string;
+                                    customerId: string;
+                                    /** @enum {string} */
+                                    type: "email" | "phone" | "slack" | "chat";
+                                    value: string;
+                                    isPrimary: boolean;
+                                    createdAt: string;
+                                }[];
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/support/customers/{customerId}/identities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update support customer identities */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    customerId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        identities: {
+                            /** @enum {string} */
+                            type: "email" | "phone" | "slack" | "chat";
+                            value: string;
+                            /** @default false */
+                            isPrimary?: boolean;
+                        }[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Customer identities updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            customer: {
+                                id: string;
+                                organizationId: string;
+                                userId: string | null;
+                                externalId: string | null;
+                                externalSource: string;
+                                email: string;
+                                fullName: string | null;
+                                phone: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                companies: {
+                                    id: string;
+                                    customerId: string;
+                                    companyId: string;
+                                    name: string;
+                                    isPrimary: boolean;
+                                    createdAt: string;
+                                }[];
+                                identities: {
+                                    id: string;
+                                    customerId: string;
+                                    /** @enum {string} */
+                                    type: "email" | "phone" | "slack" | "chat";
+                                    value: string;
+                                    isPrimary: boolean;
+                                    createdAt: string;
+                                }[];
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/support/companies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List support companies */
+        get: {
+            parameters: {
+                query?: {
+                    limit?: number;
+                    cursor?: string;
+                    q?: string;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Companies list */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            companies: {
+                                id: string;
+                                organizationId: string;
+                                name: string;
+                                domain: string | null;
+                                externalId: string | null;
+                                externalSource: string;
+                                createdAt: string;
+                                updatedAt: string;
+                            }[];
+                            nextCursor: string | null;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create support company */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        name: string;
+                        domain?: string;
+                        externalId?: string;
+                        externalSource?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Company created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            company: {
+                                id: string;
+                                organizationId: string;
+                                name: string;
+                                domain: string | null;
+                                externalId: string | null;
+                                externalSource: string;
+                                createdAt: string;
+                                updatedAt: string;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/support/companies/{companyId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get support company */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    companyId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Company */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            company: {
+                                id: string;
+                                organizationId: string;
+                                name: string;
+                                domain: string | null;
+                                externalId: string | null;
+                                externalSource: string;
+                                createdAt: string;
+                                updatedAt: string;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/csv-exports": {
         parameters: {
             query?: never;

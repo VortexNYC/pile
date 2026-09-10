@@ -4216,6 +4216,249 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "support customers list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/customers",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "limit",
+        flag: "limit",
+      },
+      {
+        name: "cursor",
+        flag: "cursor",
+      },
+      {
+        name: "companyId",
+        flag: "company-id",
+      },
+      {
+        name: "q",
+        flag: "q",
+      },
+    ],
+    body: [],
+  },
+  "support customers create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/customers",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "email",
+        flag: "email",
+      },
+      {
+        name: "fullName",
+        flag: "full-name",
+      },
+      {
+        name: "phone",
+        flag: "phone",
+      },
+      {
+        name: "userId",
+        flag: "user",
+      },
+      {
+        name: "externalId",
+        flag: "external-id",
+      },
+      {
+        name: "externalSource",
+        flag: "external-source",
+      },
+      {
+        name: "companies",
+        flag: "companies",
+      },
+      {
+        name: "identities",
+        flag: "identities",
+      },
+    ],
+  },
+  "support customers get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/customers/{customerId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "customerId",
+        flag: "customer-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support customers update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/support/customers/{customerId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "customerId",
+        flag: "customer-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "email",
+        flag: "email",
+      },
+      {
+        name: "fullName",
+        flag: "full-name",
+      },
+      {
+        name: "phone",
+        flag: "phone",
+      },
+      {
+        name: "userId",
+        flag: "user",
+      },
+      {
+        name: "externalId",
+        flag: "external-id",
+      },
+      {
+        name: "externalSource",
+        flag: "external-source",
+      },
+    ],
+  },
+  "support customers companies update": {
+    method: "PUT",
+    path: "/workspaces/{organizationId}/support/customers/{customerId}/companies",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "customerId",
+        flag: "customer-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "companies",
+        flag: "companies",
+      },
+    ],
+  },
+  "support customers identities update": {
+    method: "PUT",
+    path: "/workspaces/{organizationId}/support/customers/{customerId}/identities",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "customerId",
+        flag: "customer-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "identities",
+        flag: "identities",
+      },
+    ],
+  },
+  "support companies list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/companies",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "limit",
+        flag: "limit",
+      },
+      {
+        name: "cursor",
+        flag: "cursor",
+      },
+      {
+        name: "q",
+        flag: "q",
+      },
+    ],
+    body: [],
+  },
+  "support companies create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/companies",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "domain",
+        flag: "domain",
+      },
+      {
+        name: "externalId",
+        flag: "external-id",
+      },
+      {
+        name: "externalSource",
+        flag: "external-source",
+      },
+    ],
+  },
+  "support companies get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/companies/{companyId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "companyId",
+        flag: "company-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "csv exports create": {
     method: "POST",
     path: "/workspaces/{organizationId}/csv-exports",
@@ -6034,6 +6277,18 @@ export const COMMANDS: Record<string, CommandDef> = {
     method: "POST",
     path: "/gitlab",
     params: [],
+    query: [],
+    body: [],
+  },
+  "intercom create": {
+    method: "POST",
+    path: "/intercom/{organizationId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
     query: [],
     body: [],
   },

@@ -3186,6 +3186,109 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdSupportCompanies",
+    "description": "List support companies (GET /workspaces/{organizationId}/support/companies)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/companies",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 20
+        },
+        "cursor": {
+          "type": "string"
+        },
+        "q": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportCompaniesCompanyId",
+    "description": "Get support company (GET /workspaces/{organizationId}/support/companies/{companyId})",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/companies/{companyId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "companyId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "companyId",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportCustomers",
+    "description": "List support customers (GET /workspaces/{organizationId}/support/customers)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/customers",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 20
+        },
+        "cursor": {
+          "type": "string"
+        },
+        "companyId": {
+          "type": "string"
+        },
+        "q": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportCustomersCustomerId",
+    "description": "Get support customer (GET /workspaces/{organizationId}/support/customers/{customerId})",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/customers/{customerId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "customerId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "customerId",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdTeams",
     "description": "List teams (GET /workspaces/{organizationId}/teams)",
     "method": "GET",
@@ -4886,6 +4989,51 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "patchWorkspacesOrganizationIdSupportCustomersCustomerId",
+    "description": "Update support customer (PATCH /workspaces/{organizationId}/support/customers/{customerId})",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/support/customers/{customerId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "customerId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "email": {
+              "type": "string",
+              "format": "email"
+            },
+            "fullName": {
+              "type": "string"
+            },
+            "phone": {
+              "type": "string"
+            },
+            "userId": {
+              "type": "string"
+            },
+            "externalId": {
+              "type": "string"
+            },
+            "externalSource": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "customerId",
         "organizationId"
       ]
     }
@@ -8013,6 +8161,134 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdSupportCompanies",
+    "description": "Create support company (POST /workspaces/{organizationId}/support/companies)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/companies",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "domain": {
+              "type": "string"
+            },
+            "externalId": {
+              "type": "string"
+            },
+            "externalSource": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSupportCustomers",
+    "description": "Create support customer (POST /workspaces/{organizationId}/support/customers)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/customers",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "email": {
+              "type": "string",
+              "format": "email"
+            },
+            "fullName": {
+              "type": "string"
+            },
+            "phone": {
+              "type": "string"
+            },
+            "userId": {
+              "type": "string"
+            },
+            "externalId": {
+              "type": "string"
+            },
+            "externalSource": {
+              "type": "string"
+            },
+            "companies": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "companyId": {
+                    "type": "string"
+                  },
+                  "isPrimary": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                },
+                "required": [
+                  "companyId"
+                ]
+              }
+            },
+            "identities": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "email",
+                      "phone",
+                      "slack",
+                      "chat"
+                    ]
+                  },
+                  "value": {
+                    "type": "string"
+                  },
+                  "isPrimary": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                },
+                "required": [
+                  "type",
+                  "value"
+                ]
+              }
+            }
+          },
+          "required": [
+            "email"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdTeams",
     "description": "Create team (POST /workspaces/{organizationId}/teams)",
     "method": "POST",
@@ -8519,6 +8795,110 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "organizationId",
         "projectId"
+      ]
+    }
+  },
+  {
+    "name": "putWorkspacesOrganizationIdSupportCustomersCustomerIdCompanies",
+    "description": "Update support customer companies (PUT /workspaces/{organizationId}/support/customers/{customerId}/companies)",
+    "method": "PUT",
+    "path": "/workspaces/{organizationId}/support/customers/{customerId}/companies",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "customerId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "companies": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "companyId": {
+                    "type": "string"
+                  },
+                  "isPrimary": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                },
+                "required": [
+                  "companyId"
+                ]
+              }
+            }
+          },
+          "required": [
+            "companies"
+          ]
+        }
+      },
+      "required": [
+        "customerId",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "putWorkspacesOrganizationIdSupportCustomersCustomerIdIdentities",
+    "description": "Update support customer identities (PUT /workspaces/{organizationId}/support/customers/{customerId}/identities)",
+    "method": "PUT",
+    "path": "/workspaces/{organizationId}/support/customers/{customerId}/identities",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "customerId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "identities": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "email",
+                      "phone",
+                      "slack",
+                      "chat"
+                    ]
+                  },
+                  "value": {
+                    "type": "string"
+                  },
+                  "isPrimary": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                },
+                "required": [
+                  "type",
+                  "value"
+                ]
+              }
+            }
+          },
+          "required": [
+            "identities"
+          ]
+        }
+      },
+      "required": [
+        "customerId",
+        "organizationId"
       ]
     }
   },
