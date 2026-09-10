@@ -5,6 +5,12 @@ import { z } from "zod";
 
 import { createD1 } from "../global/db.js";
 import { apikey as apikeyTable, user as userTable } from "../global/schema.js";
+import { createCustomer as createSupportCustomer } from "../global/support-contacts.js";
+import {
+  createTicketFromIntercom,
+  createTicketFromPlain,
+  createTicketFromZendesk,
+} from "../global/support-tickets.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
@@ -282,126 +288,117 @@ describe("support-tickets API", () => {
   });
 
   it("imports an Intercom conversation as a support ticket", async () => {
-    const customerId = await createCustomer({
+    const db = createD1(env.D1);
+    const customer = await createSupportCustomer(db, {
+      organizationId,
       email: "intercom@example.com",
       fullName: "Intercom Customer",
+      externalId: null,
+      externalSource: null,
     });
 
-    const res = await fetch(
-      `/workspaces/${organizationId}/support/tickets/import/intercom`,
+    const ticket = await createTicketFromIntercom(
+      db,
+      organizationId,
+      customer.id,
       {
-        method: "POST",
-        body: JSON.stringify({
-          customerId,
-          conversation: {
-            id: "conv-123",
-            state: "open",
-            priority: "high",
-            source: {
-              type: "email",
-              subject: "Cannot log in",
-              body: "<p>I forgot my password</p>",
-            },
-            created_at: 1700000000,
-            updated_at: 1700000100,
-            replies: [
-              {
-                body: "We can reset it for you",
-                direction: "outbound",
-                createdAt: "2023-11-14T11:15:00.000Z",
-              },
-              {
-                body: "That worked, thanks",
-                direction: "inbound",
-                createdAt: "2023-11-14T11:20:00.000Z",
-              },
-            ],
+        id: "conv-123",
+        state: "open",
+        priority: "high",
+        source: {
+          type: "email",
+          subject: "Cannot log in",
+          body: "<p>I forgot my password</p>",
+        },
+        created_at: 1700000000,
+        updated_at: 1700000100,
+        replies: [
+          {
+            body: "We can reset it for you",
+            direction: "outbound",
+            createdAt: "2023-11-14T11:15:00.000Z",
           },
-        }),
+          {
+            body: "That worked, thanks",
+            direction: "inbound",
+            createdAt: "2023-11-14T11:20:00.000Z",
+          },
+        ],
       }
     );
-    expect(res.status).toBe(201);
-    const imported = (await res.json()) as {
-      ticket: { status: string; priority: string; events: unknown[] };
-    };
-    expect(imported.ticket.status).toBe("todo");
-    expect(imported.ticket.priority).toBe("high");
-    expect(imported.ticket.events.length).toBeGreaterThanOrEqual(3);
+
+    expect(ticket.status).toBe("todo");
+    expect(ticket.priority).toBe("high");
+    expect(ticket.events.length).toBeGreaterThanOrEqual(3);
   });
 
   it("imports a Plain thread as a support ticket", async () => {
-    const customerId = await createCustomer({
+    const db = createD1(env.D1);
+    const customer = await createSupportCustomer(db, {
+      organizationId,
       email: "plain@example.com",
       fullName: "Plain Customer",
+      externalId: null,
+      externalSource: null,
     });
 
-    const res = await fetch(
-      `/workspaces/${organizationId}/support/tickets/import/plain`,
+    const ticket = await createTicketFromPlain(
+      db,
+      organizationId,
+      customer.id,
       {
-        method: "POST",
-        body: JSON.stringify({
-          customerId,
-          thread: {
-            id: "thread-456",
-            status: "done",
-            priority: "low",
-            source: {
-              type: "chat",
-              body: "Feature request: dark mode",
-            },
-            createdAt: "2023-11-14T12:00:00.000Z",
-            updatedAt: "2023-11-14T12:05:00.000Z",
-            replies: [],
-          },
-        }),
+        id: "thread-456",
+        status: "done",
+        priority: "low",
+        source: {
+          type: "chat",
+          body: "Feature request: dark mode",
+        },
+        createdAt: "2023-11-14T12:00:00.000Z",
+        updatedAt: "2023-11-14T12:05:00.000Z",
+        replies: [],
       }
     );
-    expect(res.status).toBe(201);
-    const imported = (await res.json()) as {
-      ticket: { status: string; priority: string; externalSource: string };
-    };
-    expect(imported.ticket.status).toBe("done");
-    expect(imported.ticket.priority).toBe("low");
-    expect(imported.ticket.externalSource).toBe("plain");
+
+    expect(ticket.status).toBe("done");
+    expect(ticket.priority).toBe("low");
+    expect(ticket.externalSource).toBe("plain");
   });
 
   it("imports a Zendesk ticket as a support ticket", async () => {
-    const customerId = await createCustomer({
+    const db = createD1(env.D1);
+    const customer = await createSupportCustomer(db, {
+      organizationId,
       email: "zendesk@example.com",
       fullName: "Zendesk Customer",
+      externalId: null,
+      externalSource: null,
     });
 
-    const res = await fetch(
-      `/workspaces/${organizationId}/support/tickets/import/zendesk`,
+    const ticket = await createTicketFromZendesk(
+      db,
+      organizationId,
+      customer.id,
       {
-        method: "POST",
-        body: JSON.stringify({
-          customerId,
-          ticket: {
-            id: "zd-789",
-            status: "open",
-            priority: "urgent",
-            subject: "Refund request",
-            description: "I need a refund for my last purchase",
-            createdAt: "2023-11-14T13:00:00.000Z",
-            updatedAt: "2023-11-14T13:05:00.000Z",
-            replies: [
-              {
-                body: "Can you provide the order number?",
-                direction: "outbound",
-                createdAt: "2023-11-14T13:02:00.000Z",
-              },
-            ],
+        id: "zd-789",
+        status: "open",
+        priority: "urgent",
+        subject: "Refund request",
+        description: "I need a refund for my last purchase",
+        createdAt: "2023-11-14T13:00:00.000Z",
+        updatedAt: "2023-11-14T13:05:00.000Z",
+        replies: [
+          {
+            body: "Can you provide the order number?",
+            direction: "outbound",
+            createdAt: "2023-11-14T13:02:00.000Z",
           },
-        }),
+        ],
       }
     );
-    expect(res.status).toBe(201);
-    const imported = (await res.json()) as {
-      ticket: { status: string; priority: string; externalSource: string };
-    };
-    expect(imported.ticket.status).toBe("todo");
-    expect(imported.ticket.priority).toBe("urgent");
-    expect(imported.ticket.externalSource).toBe("zendesk");
+
+    expect(ticket.status).toBe("todo");
+    expect(ticket.priority).toBe("urgent");
+    expect(ticket.externalSource).toBe("zendesk");
   });
 });
