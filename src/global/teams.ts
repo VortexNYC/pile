@@ -5,17 +5,7 @@ import { createAuth } from "../platform/auth.js";
 import type { AppEnv } from "../platform/env.js";
 import type { D1Client } from "./db.js";
 import { apikey, team, teamMember, user as userTable } from "./schema.js";
-
-const teamMetadataSchema = z.object({
-  key: z.string(),
-  ownerId: z.string(),
-  isDefault: z.boolean(),
-  isPublic: z.boolean(),
-  parentAutoClose: z.boolean(),
-  subIssueAutoClose: z.boolean(),
-  triageAssigneeId: z.string().nullable().optional(),
-  defaultTemplateId: z.string().nullable().optional(),
-});
+import { parseTeamMetadata, teamMetadataString } from "./team-metadata.js";
 
 export interface TeamRecord {
   id: string;
@@ -31,14 +21,6 @@ export interface TeamRecord {
   defaultTemplateId: string | null;
   createdAt: string;
   updatedAt: string;
-}
-
-function parseTeamMetadata(raw: string | null | undefined) {
-  if (!raw) {
-    return null;
-  }
-  const parsed = teamMetadataSchema.safeParse(JSON.parse(raw));
-  return parsed.success ? parsed.data : null;
 }
 
 function teamRecordFromRow(row: typeof team.$inferSelect): TeamRecord {
@@ -67,19 +49,6 @@ function teamRecordFromRow(row: typeof team.$inferSelect): TeamRecord {
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
-}
-
-function teamMetadataString(values: {
-  key: string;
-  ownerId: string;
-  isDefault: boolean;
-  isPublic: boolean;
-  parentAutoClose: boolean;
-  subIssueAutoClose: boolean;
-  triageAssigneeId?: string | null;
-  defaultTemplateId?: string | null;
-}) {
-  return JSON.stringify(values);
 }
 
 export async function getTeamById(

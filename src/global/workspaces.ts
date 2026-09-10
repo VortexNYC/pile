@@ -5,7 +5,6 @@ import { createAuth } from "../platform/auth.js";
 import type { AppEnv } from "../platform/env.js";
 import type { D1Client } from "./db.js";
 import { member, organization } from "./schema.js";
-import { createDefaultTeam } from "./teams.js";
 import { createState } from "./workspace-entities.js";
 
 const workspaceMetadataSchema = z
@@ -109,18 +108,6 @@ export async function createWorkspace(
     headers,
   });
   const orgId = z.object({ id: z.string() }).parse(orgResult).id;
-  const workspaceKey = values.key ?? "general";
-  const now = new Date();
-
-  const defaultTeam = await createDefaultTeam(
-    db,
-    env,
-    headers,
-    orgId,
-    workspaceKey,
-    values.ownerId
-  );
-  const teamId = defaultTeam.id;
 
   const defaultStates = [
     { linearId: "backlog", name: "Backlog", type: "backlog" },
@@ -133,17 +120,6 @@ export async function createWorkspace(
   await Promise.all(
     defaultStates.map((state) => createState(db, orgId, state))
   );
-
-  await db
-    .update(organization)
-    .set({
-      metadata: JSON.stringify({
-        key: values.key ?? null,
-        defaultTeamId: teamId,
-      }),
-      updatedAt: now,
-    })
-    .where(eq(organization.id, orgId));
 
   const row = await db
     .select()
