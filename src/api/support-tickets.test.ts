@@ -77,7 +77,10 @@ describe("support-tickets API", () => {
     return app.fetch(request, env);
   }
 
-  async function createCustomer(overrides: { email: string; fullName?: string }) {
+  async function createCustomer(overrides: {
+    email: string;
+    fullName?: string;
+  }) {
     const res = await fetch(`/workspaces/${organizationId}/support/customers`, {
       method: "POST",
       body: JSON.stringify(overrides),
@@ -93,18 +96,21 @@ describe("support-tickets API", () => {
       fullName: "Ticket Tester",
     });
 
-    const createRes = await fetch(`/workspaces/${organizationId}/support/tickets`, {
-      method: "POST",
-      body: JSON.stringify({
-        customerId,
-        title: "Cannot log in",
-        sourceChannel: "email",
-        priority: "high",
-        message: {
-          textContent: "I forgot my password",
-        },
-      }),
-    });
+    const createRes = await fetch(
+      `/workspaces/${organizationId}/support/tickets`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          customerId,
+          title: "Cannot log in",
+          sourceChannel: "email",
+          priority: "high",
+          message: {
+            textContent: "I forgot my password",
+          },
+        }),
+      }
+    );
     expect(createRes.status).toBe(201);
     const created = (await createRes.json()) as {
       ticket: { id: string; number: number; status: string; events: unknown[] };
@@ -117,10 +123,14 @@ describe("support-tickets API", () => {
       `/workspaces/${organizationId}/support/tickets/${created.ticket.id}`
     );
     expect(getRes.status).toBe(200);
-    const got = (await getRes.json()) as { ticket: { id: string; title: string } };
+    const got = (await getRes.json()) as {
+      ticket: { id: string; title: string };
+    };
     expect(got.ticket.title).toBe("Cannot log in");
 
-    const listRes = await fetch(`/workspaces/${organizationId}/support/tickets?q=log+in`);
+    const listRes = await fetch(
+      `/workspaces/${organizationId}/support/tickets?q=log+in`
+    );
     expect(listRes.status).toBe(200);
     const list = (await listRes.json()) as { tickets: unknown[] };
     expect(list.tickets.length).toBeGreaterThanOrEqual(1);
@@ -149,14 +159,17 @@ describe("support-tickets API", () => {
       fullName: "Timeline Tester",
     });
 
-    const createRes = await fetch(`/workspaces/${organizationId}/support/tickets`, {
-      method: "POST",
-      body: JSON.stringify({
-        customerId,
-        title: "Bug report",
-        sourceChannel: "chat",
-      }),
-    });
+    const createRes = await fetch(
+      `/workspaces/${organizationId}/support/tickets`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          customerId,
+          title: "Bug report",
+          sourceChannel: "chat",
+        }),
+      }
+    );
     const { ticket } = (await createRes.json()) as { ticket: { id: string } };
 
     const messageRes = await fetch(
