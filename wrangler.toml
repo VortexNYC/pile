@@ -70,3 +70,6 @@ bucket_name = "issuetracker-attachments"
 [[env.production.durable_objects.bindings]]
 name = "WORKSPACE_DURABLE_OBJECT"
 class_name = "WorkspaceDO"
+
+[[env.production.send_email]]
+name = "EMAIL"
