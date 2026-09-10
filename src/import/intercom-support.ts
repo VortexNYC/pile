@@ -150,6 +150,15 @@ function partActor(part: IntercomConversationPart): {
   return { actorType: "user", actorId: part.author?.id ?? null };
 }
 
+const intercomMessagePartTypes = new Set([
+  "comment",
+  "note",
+  "whatsapp",
+  "linked_message",
+]);
+
+const intercomCustomPartTypes = new Set(["custom_bot", "custom_card"]);
+
 function partEventType(part: IntercomConversationPart): SupportTicketEventType {
   const partType = part.part_type.toLowerCase();
   if (
@@ -171,11 +180,31 @@ function partEventType(part: IntercomConversationPart): SupportTicketEventType {
     partType === "conversation_rating" ||
     partType === "rating" ||
     partType === "survey" ||
-    partType === "feedback" ||
     partType === "csat" ||
     partType === "nps"
   ) {
+    return "survey_received";
+  }
+  if (partType === "feedback") {
     return "customer_event";
+  }
+  if (intercomCustomPartTypes.has(partType)) {
+    return "custom_entry";
+  }
+  if (partType === "follow_up" || partType === "push_notification") {
+    return "notification";
+  }
+  if (intercomMessagePartTypes.has(partType)) {
+    return "notification";
+  }
+  if (
+    partType === "source_add" ||
+    partType === "ticket_shared" ||
+    partType === "automation_flywheel" ||
+    partType === "log_event" ||
+    partType === "default"
+  ) {
+    return "thread_event";
   }
   return "field_change";
 }
@@ -223,31 +252,44 @@ async function getIntercomConversationParts(
     const { actorType, actorId } = partActor(part);
     const createdAt = new Date(part.created_at * 1000).toISOString();
     const attachments = partAttachments(part);
+    const partType = part.part_type.toLowerCase();
+    const metadata = {
+      partType: part.part_type,
+      body: part.body,
+      author: part.author,
+      attachments: part.attachments,
+      part,
+    };
 
-    if (part.part_type === "comment" || part.part_type === "note") {
+    const isReply =
+      intercomMessagePartTypes.has(partType) &&
+      part.body !== null &&
+      part.body !== undefined &&
+      part.body.length > 0 &&
+      !intercomCustomPartTypes.has(partType);
+
+    if (isReply) {
       replies.push({
         body: part.body ?? "(no content)",
         direction: partDirection(part),
-        kind: part.part_type === "note" ? "note" : "message",
+        kind: partType === "note" ? "note" : "message",
         actorType,
         actorId,
+        subType: part.part_type,
         createdAt,
         attachments,
+        metadata,
       });
       continue;
     }
 
     events.push({
       type: partEventType(part),
+      subType: part.part_type,
       actorType,
       actorId,
       createdAt,
-      metadata: {
-        partType: part.part_type,
-        body: part.body,
-        author: part.author,
-        attachments: part.attachments,
-      },
+      metadata,
     });
   }
 

@@ -324,6 +324,7 @@ describe("support-tickets API", () => {
             direction: "outbound",
             actorType: "user",
             actorId: "admin-1",
+            subType: "comment",
             createdAt: "2023-11-14T11:15:00.000Z",
             attachments: [
               {
@@ -341,6 +342,7 @@ describe("support-tickets API", () => {
             kind: "note",
             actorType: "user",
             actorId: "admin-2",
+            subType: "note",
             createdAt: "2023-11-14T11:16:00.000Z",
           },
           {
@@ -352,10 +354,19 @@ describe("support-tickets API", () => {
         events: [
           {
             type: "status_change",
+            subType: "close",
             actorType: "system",
             actorId: null,
             createdAt: "2023-11-14T11:21:00.000Z",
             metadata: { previousStatus: "open", newStatus: "closed" },
+          },
+          {
+            type: "survey_received",
+            subType: "conversation_rating",
+            actorType: "customer",
+            actorId: "contact-1",
+            createdAt: "2023-11-14T11:22:00.000Z",
+            metadata: { rating: "5" },
           },
         ],
       }
@@ -374,6 +385,7 @@ describe("support-tickets API", () => {
     expect(noteEvent).toBeDefined();
     expect(noteEvent?.actorType).toBe("user");
     expect(noteEvent?.actorId).toBe("admin-2");
+    expect(noteEvent?.subType).toBe("note");
     if (!noteEvent) {
       throw new Error("note event missing");
     }
@@ -388,6 +400,7 @@ describe("support-tickets API", () => {
       (e) => e.type === "message" && e.actorType === "user"
     );
     expect(messageEvent?.actorId).toBe("admin-1");
+    expect(messageEvent?.subType).toBe("comment");
     if (!messageEvent) {
       throw new Error("message event missing");
     }
@@ -403,7 +416,13 @@ describe("support-tickets API", () => {
 
     const statusEvent = events.find((e) => e.type === "status_change");
     expect(statusEvent).toBeDefined();
+    expect(statusEvent?.subType).toBe("close");
     expect(statusEvent?.metadata).toContain("previousStatus");
+
+    const surveyEvent = events.find((e) => e.type === "survey_received");
+    expect(surveyEvent).toBeDefined();
+    expect(surveyEvent?.subType).toBe("conversation_rating");
+    expect(surveyEvent?.actorType).toBe("customer");
   });
 
   it("imports a Plain thread as a support ticket", async () => {
@@ -436,6 +455,7 @@ describe("support-tickets API", () => {
             direction: "outbound",
             actorType: "machine",
             actorId: "bot-1",
+            subType: "ChatEntry",
             createdAt: "2023-11-14T12:02:00.000Z",
           },
           {
@@ -444,16 +464,53 @@ describe("support-tickets API", () => {
             kind: "note",
             actorType: "user",
             actorId: "agent-1",
+            subType: "NoteEntry",
             createdAt: "2023-11-14T12:03:00.000Z",
           },
         ],
         events: [
           {
             type: "priority_change",
+            subType: "ThreadPriorityChangedEntry",
             actorType: "system",
             actorId: null,
             createdAt: "2023-11-14T12:04:00.000Z",
             metadata: { previousPriority: "medium", newPriority: "low" },
+          },
+          {
+            type: "sla_change",
+            subType: "ServiceLevelAgreementStatusTransitionedEntry",
+            actorType: "system",
+            actorId: null,
+            createdAt: "2023-11-14T12:04:30.000Z",
+            metadata: {
+              previousStatus: "IMMINENT_BREACH",
+              nextStatus: "BREACHED",
+            },
+          },
+          {
+            type: "survey_requested",
+            subType: "CustomerSurveyRequestedEntry",
+            actorType: "system",
+            actorId: null,
+            createdAt: "2023-11-14T12:04:45.000Z",
+            metadata: { customerSurveyId: "survey-1" },
+          },
+          {
+            type: "link_added",
+            subType: "ThreadLinkCreatedEntry",
+            actorType: "user",
+            actorId: "agent-1",
+            createdAt: "2023-11-14T12:05:00.000Z",
+            metadata: { threadLink: { id: "link-1", title: "Related bug" } },
+          },
+          {
+            type: "custom_entry",
+            subType: "CustomEntry",
+            actorType: "system",
+            actorId: null,
+            createdAt: "2023-11-14T12:05:30.000Z",
+            metadata: { title: "Order status", type: "tracking" },
           },
         ],
       }
@@ -472,15 +529,36 @@ describe("support-tickets API", () => {
       (e) => e.type === "note" && e.actorType === "user"
     );
     expect(noteEvent?.actorId).toBe("agent-1");
+    expect(noteEvent?.subType).toBe("NoteEntry");
 
     const machineEvent = events.find(
       (e) => e.type === "message" && e.actorType === "machine"
     );
     expect(machineEvent?.actorId).toBe("bot-1");
+    expect(machineEvent?.subType).toBe("ChatEntry");
 
     const priorityEvent = events.find((e) => e.type === "priority_change");
     expect(priorityEvent).toBeDefined();
+    expect(priorityEvent?.subType).toBe("ThreadPriorityChangedEntry");
     expect(priorityEvent?.metadata).toContain("previousPriority");
+
+    const slaEvent = events.find((e) => e.type === "sla_change");
+    expect(slaEvent).toBeDefined();
+    expect(slaEvent?.subType).toBe(
+      "ServiceLevelAgreementStatusTransitionedEntry"
+    );
+
+    const surveyEvent = events.find((e) => e.type === "survey_requested");
+    expect(surveyEvent).toBeDefined();
+    expect(surveyEvent?.subType).toBe("CustomerSurveyRequestedEntry");
+
+    const linkEvent = events.find((e) => e.type === "link_added");
+    expect(linkEvent).toBeDefined();
+    expect(linkEvent?.subType).toBe("ThreadLinkCreatedEntry");
+
+    const customEvent = events.find((e) => e.type === "custom_entry");
+    expect(customEvent).toBeDefined();
+    expect(customEvent?.subType).toBe("CustomEntry");
   });
 
   it("imports a Zendesk ticket as a support ticket", async () => {
@@ -511,6 +589,7 @@ describe("support-tickets API", () => {
             direction: "outbound",
             actorType: "user",
             actorId: "agent-1",
+            subType: "Comment",
             createdAt: "2023-11-14T13:02:00.000Z",
             attachments: [
               {
@@ -528,16 +607,34 @@ describe("support-tickets API", () => {
             kind: "note",
             actorType: "user",
             actorId: "agent-2",
+            subType: "InternalComment",
             createdAt: "2023-11-14T13:03:00.000Z",
           },
         ],
         events: [
           {
             type: "assignment_change",
+            subType: "Change:group_id",
             actorType: "system",
             actorId: null,
             createdAt: "2023-11-14T13:04:00.000Z",
             metadata: { assigneeId: "group-billing" },
+          },
+          {
+            type: "label_added",
+            subType: "Change:tags",
+            actorType: "user",
+            actorId: "agent-1",
+            createdAt: "2023-11-14T13:04:30.000Z",
+            metadata: { tag: "billing" },
+          },
+          {
+            type: "survey_received",
+            subType: "SatisfactionRating",
+            actorType: "customer",
+            actorId: "requester-1",
+            createdAt: "2023-11-14T13:05:00.000Z",
+            metadata: { score: "good" },
           },
         ],
       }
@@ -555,11 +652,13 @@ describe("support-tickets API", () => {
     const noteEvent = events.find((e) => e.type === "note");
     expect(noteEvent?.actorType).toBe("user");
     expect(noteEvent?.actorId).toBe("agent-2");
+    expect(noteEvent?.subType).toBe("InternalComment");
 
     const messageEvent = events.find(
       (e) => e.type === "message" && e.actorId === "agent-1"
     );
     expect(messageEvent).toBeDefined();
+    expect(messageEvent?.subType).toBe("Comment");
 
     const attachments = messageEvent
       ? await db
@@ -573,6 +672,16 @@ describe("support-tickets API", () => {
 
     const assignmentEvent = events.find((e) => e.type === "assignment_change");
     expect(assignmentEvent).toBeDefined();
+    expect(assignmentEvent?.subType).toBe("Change:group_id");
     expect(assignmentEvent?.metadata).toContain("assigneeId");
+
+    const labelEvent = events.find((e) => e.type === "label_added");
+    expect(labelEvent).toBeDefined();
+    expect(labelEvent?.subType).toBe("Change:tags");
+
+    const surveyEvent = events.find((e) => e.type === "survey_received");
+    expect(surveyEvent).toBeDefined();
+    expect(surveyEvent?.subType).toBe("SatisfactionRating");
+    expect(surveyEvent?.actorType).toBe("customer");
   });
 });

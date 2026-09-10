@@ -418,6 +418,35 @@ function timelineAttachments(
   }));
 }
 
+function entryLabelDiffs(entry: PlainTimelineEntry["entry"]): {
+  added: string[];
+  removed: string[];
+} {
+  const schema = z.object({
+    previousLabels: z
+      .array(z.object({ id: z.string() }))
+      .optional()
+      .nullable(),
+    nextLabels: z
+      .array(z.object({ id: z.string() }))
+      .optional()
+      .nullable(),
+  });
+  const parsed = schema.safeParse(entry);
+  if (!parsed.success) {
+    return { added: [], removed: [] };
+  }
+  const previousIds = new Set(
+    (parsed.data.previousLabels ?? []).map((label) => label.id)
+  );
+  const nextIds = new Set(
+    (parsed.data.nextLabels ?? []).map((label) => label.id)
+  );
+  const added = [...nextIds].filter((id) => !previousIds.has(id));
+  const removed = [...previousIds].filter((id) => !nextIds.has(id));
+  return { added, removed };
+}
+
 function entryEventType(
   entry: PlainTimelineEntry["entry"]
 ): SupportTicketEventType {
@@ -439,10 +468,47 @@ function entryEventType(
   }
   if (
     typename === "CustomerEventEntry" ||
-    typename === "CustomerSurveyRequestedEntry" ||
-    typename === "CustomEntry"
+    typename === "CustomerSurveyRequestedEntry"
   ) {
-    return "customer_event";
+    return typename === "CustomerSurveyRequestedEntry"
+      ? "survey_requested"
+      : "customer_event";
+  }
+  if (
+    typename === "ThreadServiceLevelAgreementPolicyChangedEntry" ||
+    typename === "ServiceLevelAgreementStatusTransitionedEntry"
+  ) {
+    return "sla_change";
+  }
+  if (
+    typename === "ThreadLinkCreatedEntry" ||
+    typename === "ThreadLinkTargetCreatedEntry"
+  ) {
+    return "link_added";
+  }
+  if (typename === "ThreadLinkUpdatedEntry") {
+    return "link_changed";
+  }
+  if (
+    typename === "ThreadLinkDeletedEntry" ||
+    typename === "ThreadLinkTargetDeletedEntry"
+  ) {
+    return "link_removed";
+  }
+  if (typename === "ThreadDiscussionEntry") {
+    return "discussion";
+  }
+  if (typename === "ThreadDiscussionResolvedEntry") {
+    return "discussion_resolved";
+  }
+  if (typename === "ThreadEventEntry") {
+    return "thread_event";
+  }
+  if (typename === "CustomEntry") {
+    return "custom_entry";
+  }
+  if (typename === "LinearIssueThreadLinkStateTransitionedEntry") {
+    return "external_reference_changed";
   }
   return "field_change";
 }
@@ -551,7 +617,6 @@ async function getPlainThreadTimeline(
     "ThreadDiscussionMessageEntry",
     "MergedThreadMessageEntry",
     "HelpCenterAiConversationMessageEntry",
-    "CustomEntry",
   ]);
 
   for (const node of nodes) {
@@ -560,6 +625,10 @@ async function getPlainThreadTimeline(
     const body = timelineBody(node.entry, node.llmText);
     const attachments = timelineAttachments(node.entry);
     const typename = node.entry.typename;
+    const metadata = {
+      llmText: node.llmText,
+      entry: node.entry,
+    };
 
     if (typename === "NoteEntry") {
       replies.push({
@@ -568,8 +637,10 @@ async function getPlainThreadTimeline(
         kind: "note",
         actorType,
         actorId,
+        subType: typename,
         attachments,
         createdAt,
+        metadata,
       });
       continue;
     }
@@ -582,22 +653,59 @@ async function getPlainThreadTimeline(
         channel: timelineChannel(node.entry),
         actorType,
         actorId,
+        subType: typename,
         attachments,
         createdAt,
+        metadata,
       });
+      continue;
+    }
+
+    if (typename === "ThreadLabelsChangedEntry") {
+      const { added, removed } = entryLabelDiffs(node.entry);
+      const labelEvents: ExternalSupportEvent[] = [];
+      for (const labelId of added) {
+        labelEvents.push({
+          type: "label_added",
+          subType: typename,
+          actorType,
+          actorId,
+          createdAt,
+          metadata: { ...metadata, labelId },
+        });
+      }
+      for (const labelId of removed) {
+        labelEvents.push({
+          type: "label_removed",
+          subType: typename,
+          actorType,
+          actorId,
+          createdAt,
+          metadata: { ...metadata, labelId },
+        });
+      }
+      if (labelEvents.length === 0) {
+        events.push({
+          type: "field_change",
+          subType: typename,
+          actorType,
+          actorId,
+          createdAt,
+          metadata,
+        });
+      } else {
+        events.push(...labelEvents);
+      }
       continue;
     }
 
     events.push({
       type: entryEventType(node.entry),
+      subType: typename,
       actorType,
       actorId,
       createdAt,
-      metadata: {
-        entryType: typename,
-        llmText: node.llmText,
-        entry: node.entry,
-      },
+      metadata,
     });
   }
 

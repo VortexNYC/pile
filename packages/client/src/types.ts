@@ -9850,6 +9850,7 @@ export interface paths {
                                     id: string;
                                     ticketId: string;
                                     type: string;
+                                    subType: string | null;
                                     actorType: string;
                                     actorId: string | null;
                                     metadata: string | null;
@@ -9987,6 +9988,7 @@ export interface paths {
                                     id: string;
                                     ticketId: string;
                                     type: string;
+                                    subType: string | null;
                                     actorType: string;
                                     actorId: string | null;
                                     metadata: string | null;
@@ -10101,6 +10103,7 @@ export interface paths {
                                     id: string;
                                     ticketId: string;
                                     type: string;
+                                    subType: string | null;
                                     actorType: string;
                                     actorId: string | null;
                                     metadata: string | null;
@@ -10218,6 +10221,7 @@ export interface paths {
                                     id: string;
                                     ticketId: string;
                                     type: string;
+                                    subType: string | null;
                                     actorType: string;
                                     actorId: string | null;
                                     metadata: string | null;
@@ -10282,6 +10286,7 @@ export interface paths {
                         /** @enum {string} */
                         actorType?: "customer" | "user" | "machine" | "system";
                         actorId?: string | null;
+                        subType?: string | null;
                         metadata?: {
                             [key: string]: unknown;
                         };
@@ -10300,6 +10305,7 @@ export interface paths {
                                 id: string;
                                 ticketId: string;
                                 type: string;
+                                subType: string | null;
                                 actorType: string;
                                 actorId: string | null;
                                 metadata: string | null;
@@ -10361,6 +10367,7 @@ export interface paths {
                         /** @enum {string} */
                         actorType?: "customer" | "user" | "machine" | "system";
                         actorId?: string | null;
+                        subType?: string | null;
                         metadata?: {
                             [key: string]: unknown;
                         };
@@ -10379,6 +10386,7 @@ export interface paths {
                                 id: string;
                                 ticketId: string;
                                 type: string;
+                                subType: string | null;
                                 actorType: string;
                                 actorId: string | null;
                                 metadata: string | null;
@@ -10446,6 +10454,7 @@ export interface paths {
                                 id: string;
                                 ticketId: string;
                                 type: string;
+                                subType: string | null;
                                 actorType: string;
                                 actorId: string | null;
                                 metadata: string | null;
@@ -10564,6 +10573,7 @@ export interface paths {
                                     id: string;
                                     ticketId: string;
                                     type: string;
+                                    subType: string | null;
                                     actorType: string;
                                     actorId: string | null;
                                     metadata: string | null;
@@ -10680,6 +10690,7 @@ export interface paths {
                                     id: string;
                                     ticketId: string;
                                     type: string;
+                                    subType: string | null;
                                     actorType: string;
                                     actorId: string | null;
                                     metadata: string | null;
@@ -10802,6 +10813,7 @@ export interface paths {
                                     id: string;
                                     ticketId: string;
                                     type: string;
+                                    subType: string | null;
                                     actorType: string;
                                     actorId: string | null;
                                     metadata: string | null;

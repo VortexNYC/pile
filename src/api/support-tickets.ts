@@ -111,6 +111,7 @@ const supportTicketEventSchema = z.object({
   id: z.string(),
   ticketId: z.string(),
   type: z.string(),
+  subType: z.string().nullable(),
   actorType: z.string(),
   actorId: z.string().nullable(),
   metadata: z.string().nullable(),
@@ -177,6 +178,7 @@ const addMessageBodySchema = z.object({
   userId: z.string().optional(),
   actorType: supportTicketActorTypeEnum.optional(),
   actorId: z.string().optional().nullable(),
+  subType: z.string().optional().nullable(),
   metadata: z.record(z.unknown()).optional(),
 });
 
@@ -185,6 +187,7 @@ const addNoteBodySchema = z.object({
   userId: z.string().optional(),
   actorType: supportTicketActorTypeEnum.optional(),
   actorId: z.string().optional().nullable(),
+  subType: z.string().optional().nullable(),
   metadata: z.record(z.unknown()).optional(),
 });
 

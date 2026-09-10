@@ -19111,6 +19111,10 @@
                               "type": {
                                 "type": "string"
                               },
+                              "subType": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "actorType": {
                                 "type": "string"
                               },
@@ -19203,6 +19207,7 @@
                               "id",
                               "ticketId",
                               "type",
+                              "subType",
                               "actorType",
                               "actorId",
                               "metadata",
@@ -19562,6 +19567,10 @@
                                 "type": {
                                   "type": "string"
                                 },
+                                "subType": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
                                 "actorType": {
                                   "type": "string"
                                 },
@@ -19654,6 +19663,7 @@
                                 "id",
                                 "ticketId",
                                 "type",
+                                "subType",
                                 "actorType",
                                 "actorId",
                                 "metadata",
@@ -19957,6 +19967,10 @@
                               "type": {
                                 "type": "string"
                               },
+                              "subType": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "actorType": {
                                 "type": "string"
                               },
@@ -20049,6 +20063,7 @@
                               "id",
                               "ticketId",
                               "type",
+                              "subType",
                               "actorType",
                               "actorId",
                               "metadata",
@@ -20380,6 +20395,10 @@
                               "type": {
                                 "type": "string"
                               },
+                              "subType": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "actorType": {
                                 "type": "string"
                               },
@@ -20472,6 +20491,7 @@
                               "id",
                               "ticketId",
                               "type",
+                              "subType",
                               "actorType",
                               "actorId",
                               "metadata",
@@ -20588,6 +20608,10 @@
                     "type": "string",
                     "nullable": true
                   },
+                  "subType": {
+                    "type": "string",
+                    "nullable": true
+                  },
                   "metadata": {
                     "type": "object",
                     "additionalProperties": {
@@ -20623,6 +20647,10 @@
                         },
                         "type": {
                           "type": "string"
+                        },
+                        "subType": {
+                          "type": "string",
+                          "nullable": true
                         },
                         "actorType": {
                           "type": "string"
@@ -20716,6 +20744,7 @@
                         "id",
                         "ticketId",
                         "type",
+                        "subType",
                         "actorType",
                         "actorId",
                         "metadata",
@@ -20782,6 +20811,10 @@
                     "type": "string",
                     "nullable": true
                   },
+                  "subType": {
+                    "type": "string",
+                    "nullable": true
+                  },
                   "metadata": {
                     "type": "object",
                     "additionalProperties": {
@@ -20815,6 +20848,10 @@
                         },
                         "type": {
                           "type": "string"
+                        },
+                        "subType": {
+                          "type": "string",
+                          "nullable": true
                         },
                         "actorType": {
                           "type": "string"
@@ -20908,6 +20945,7 @@
                         "id",
                         "ticketId",
                         "type",
+                        "subType",
                         "actorType",
                         "actorId",
                         "metadata",
@@ -20989,6 +21027,10 @@
                           },
                           "type": {
                             "type": "string"
+                          },
+                          "subType": {
+                            "type": "string",
+                            "nullable": true
                           },
                           "actorType": {
                             "type": "string"
@@ -21082,6 +21124,7 @@
                           "id",
                           "ticketId",
                           "type",
+                          "subType",
                           "actorType",
                           "actorId",
                           "metadata",
@@ -21359,6 +21402,10 @@
                               "type": {
                                 "type": "string"
                               },
+                              "subType": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "actorType": {
                                 "type": "string"
                               },
@@ -21451,6 +21498,7 @@
                               "id",
                               "ticketId",
                               "type",
+                              "subType",
                               "actorType",
                               "actorId",
                               "metadata",
@@ -21748,6 +21796,10 @@
                               "type": {
                                 "type": "string"
                               },
+                              "subType": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "actorType": {
                                 "type": "string"
                               },
@@ -21840,6 +21892,7 @@
                               "id",
                               "ticketId",
                               "type",
+                              "subType",
                               "actorType",
                               "actorId",
                               "metadata",
@@ -22154,6 +22207,10 @@
                               "type": {
                                 "type": "string"
                               },
+                              "subType": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "actorType": {
                                 "type": "string"
                               },
@@ -22246,6 +22303,7 @@
                               "id",
                               "ticketId",
                               "type",
+                              "subType",
                               "actorType",
                               "actorId",
                               "metadata",

@@ -8642,6 +8642,10 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string",
               "nullable": true
             },
+            "subType": {
+              "type": "string",
+              "nullable": true
+            },
             "metadata": {
               "type": "object",
               "additionalProperties": {
@@ -8695,6 +8699,10 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               ]
             },
             "actorId": {
+              "type": "string",
+              "nullable": true
+            },
+            "subType": {
               "type": "string",
               "nullable": true
             },

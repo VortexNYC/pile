@@ -72,6 +72,21 @@ export type SupportTicketEventType =
   | "label_added"
   | "label_removed"
   | "customer_event"
+  | "thread_event"
+  | "survey_requested"
+  | "survey_received"
+  | "sla_change"
+  | "link_added"
+  | "link_changed"
+  | "link_removed"
+  | "discussion"
+  | "discussion_resolved"
+  | "external_reference_changed"
+  | "notification"
+  | "watchers_changed"
+  | "call"
+  | "voicemail"
+  | "custom_entry"
   | "field_change";
 export type SupportTicketActorType = "customer" | "user" | "machine" | "system";
 
@@ -131,6 +146,7 @@ export type SupportTicketEvent = {
   id: string;
   ticketId: string;
   type: SupportTicketEventType;
+  subType: string | null;
   actorType: SupportTicketActorType;
   actorId: string | null;
   metadata: string | null;
@@ -503,6 +519,7 @@ export async function addTicketMessage(
     userId?: string | null;
     actorType?: SupportTicketActorType;
     actorId?: string | null;
+    subType?: string | null;
     metadata?: Record<string, unknown>;
     createdAt?: string;
   }
@@ -523,6 +540,7 @@ export async function addTicketMessage(
     id: eventId,
     ticketId,
     type: "message",
+    subType: input.subType ?? null,
     actorType,
     actorId,
     metadata,
@@ -559,6 +577,7 @@ export async function addTicketMessage(
     id: eventId,
     ticketId,
     type: "message",
+    subType: input.subType ?? null,
     actorType,
     actorId,
     metadata,
@@ -585,6 +604,7 @@ export async function addTicketNote(
     userId?: string | null;
     actorType?: SupportTicketActorType;
     actorId?: string | null;
+    subType?: string | null;
     metadata?: Record<string, unknown>;
     createdAt?: string;
   }
@@ -603,6 +623,7 @@ export async function addTicketNote(
     id: eventId,
     ticketId,
     type: "note",
+    subType: input.subType ?? null,
     actorType,
     actorId,
     metadata,
@@ -629,6 +650,7 @@ export async function addTicketNote(
     id: eventId,
     ticketId,
     type: "note",
+    subType: input.subType ?? null,
     actorType,
     actorId,
     metadata,
@@ -647,6 +669,7 @@ export async function addTicketEvent(
   ticketId: string,
   input: {
     type: SupportTicketEventType;
+    subType?: string | null;
     actorType?: SupportTicketActorType;
     actorId?: string | null;
     metadata?: Record<string, unknown>;
@@ -666,6 +689,7 @@ export async function addTicketEvent(
     id: eventId,
     ticketId,
     type: input.type,
+    subType: input.subType ?? null,
     actorType,
     actorId,
     metadata,
@@ -686,6 +710,7 @@ export async function addTicketEvent(
     id: eventId,
     ticketId,
     type: input.type,
+    subType: input.subType ?? null,
     actorType,
     actorId,
     metadata,
@@ -802,6 +827,7 @@ export async function listTicketEvents(
     id: event.id,
     ticketId: event.ticketId,
     type: event.type,
+    subType: event.subType,
     actorType: event.actorType,
     actorId: event.actorId,
     metadata: event.metadata,
@@ -848,6 +874,7 @@ export type ExternalSupportReply = {
   userId?: string | null;
   actorType?: SupportTicketActorType;
   actorId?: string | null;
+  subType?: string | null;
   attachments?: ExternalSupportAttachment[];
   metadata?: Record<string, unknown>;
   createdAt?: string;
@@ -855,6 +882,7 @@ export type ExternalSupportReply = {
 
 export type ExternalSupportEvent = {
   type: SupportTicketEventType;
+  subType?: string | null;
   actorType?: SupportTicketActorType;
   actorId?: string | null;
   createdAt?: string;
@@ -1019,6 +1047,7 @@ async function ingestSupportTimeline(
           userId: reply.userId,
           actorType: reply.actorType,
           actorId: reply.actorId,
+          subType: reply.subType,
           metadata: reply.metadata,
           createdAt: reply.createdAt,
         });
@@ -1033,6 +1062,7 @@ async function ingestSupportTimeline(
           userId: reply.userId,
           actorType: reply.actorType,
           actorId: reply.actorId,
+          subType: reply.subType,
           metadata: reply.metadata,
           createdAt: reply.createdAt,
         });
@@ -1053,7 +1083,14 @@ async function ingestSupportTimeline(
 
   await Promise.all(
     sortedEvents.map((eventInput) =>
-      addTicketEvent(db, organizationId, ticketId, eventInput)
+      addTicketEvent(db, organizationId, ticketId, {
+        type: eventInput.type,
+        subType: eventInput.subType,
+        actorType: eventInput.actorType,
+        actorId: eventInput.actorId,
+        metadata: eventInput.metadata,
+        createdAt: eventInput.createdAt,
+      })
     )
   );
 

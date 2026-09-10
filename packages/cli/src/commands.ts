@@ -4646,6 +4646,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "actor",
       },
       {
+        name: "subType",
+        flag: "sub-type",
+      },
+      {
         name: "metadata",
         flag: "metadata",
       },
@@ -4681,6 +4685,10 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "actorId",
         flag: "actor",
+      },
+      {
+        name: "subType",
+        flag: "sub-type",
       },
       {
         name: "metadata",

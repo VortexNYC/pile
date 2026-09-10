@@ -55,9 +55,11 @@ function zendeskAuthHeader(credentials: ZendeskCredentials): string {
 
 async function zendeskRequest(
   credentials: ZendeskCredentials,
-  path: string
+  pathOrUrl: string
 ): Promise<unknown> {
-  const url = `https://${credentials.subdomain}.zendesk.com${path}`;
+  const url = pathOrUrl.startsWith("http")
+    ? pathOrUrl
+    : `https://${credentials.subdomain}.zendesk.com${pathOrUrl}`;
   const response = await fetch(url, {
     headers: {
       Authorization: zendeskAuthHeader(credentials),
@@ -145,6 +147,44 @@ const zendeskCommentSchema = z
 const zendeskCommentListSchema = z.object({
   comments: z.array(zendeskCommentSchema),
   users: z.array(zendeskUserSchema).optional().default([]),
+});
+
+const zendeskAuditEventSchema = z
+  .object({
+    id: z.number().int().optional(),
+    type: z.string(),
+    field_name: z.string().optional().nullable(),
+    value: z.unknown().optional(),
+    previous_value: z.unknown().optional(),
+    body: z.string().optional().nullable(),
+    html_body: z.string().optional().nullable(),
+    public: z.boolean().optional().nullable(),
+    attachments: z.array(zendeskAttachmentSchema).optional().default([]),
+    via: z
+      .object({
+        channel: z.string().optional().nullable(),
+      })
+      .passthrough()
+      .optional()
+      .nullable(),
+    recipients: z.array(z.number()).optional().nullable(),
+  })
+  .passthrough();
+
+const zendeskAuditSchema = z
+  .object({
+    id: z.number().int(),
+    ticket_id: z.number().int(),
+    created_at: z.string(),
+    author_id: z.number().int(),
+    events: z.array(zendeskAuditEventSchema).optional().default([]),
+  })
+  .passthrough();
+
+const zendeskAuditListSchema = z.object({
+  audits: z.array(zendeskAuditSchema),
+  next_page: z.string().optional().nullable(),
+  previous_page: z.string().optional().nullable(),
 });
 
 type ZendeskTicket = z.infer<typeof zendeskTicketSchema>;
@@ -263,7 +303,7 @@ function commentChannel(
 async function getZendeskTicketComments(
   credentials: ZendeskCredentials,
   ticket: ZendeskTicket
-): Promise<ExternalSupportReply[]> {
+): Promise<{ replies: ExternalSupportReply[]; users: ZendeskUser[] }> {
   const raw = await zendeskRequest(
     credentials,
     `/api/v2/tickets/${ticket.id}/comments.json?include=users`
@@ -278,16 +318,13 @@ async function getZendeskTicketComments(
     });
   }
 
+  const users = parsed.data.users ?? [];
   const sorted = parsed.data.comments.toSorted(
     (a, b) => Date.parse(a.created_at) - Date.parse(b.created_at)
   );
 
-  return sorted.map((comment) => {
-    const { actorType, actorId } = commentActor(
-      comment,
-      ticket,
-      parsed.data.users ?? []
-    );
+  const replies = sorted.map((comment) => {
+    const { actorType, actorId } = commentActor(comment, ticket, users);
     const attachments: ExternalSupportAttachment[] = comment.attachments.map(
       (attachment) => ({
         externalId: String(attachment.id),
@@ -305,11 +342,294 @@ async function getZendeskTicketComments(
       channel: commentChannel(comment),
       actorType,
       actorId,
+      subType: comment.public === false ? "InternalComment" : "Comment",
       createdAt: comment.created_at,
       attachments,
       metadata: { comment },
     };
   });
+
+  return { replies, users };
+}
+
+function auditActor(
+  audit: z.infer<typeof zendeskAuditSchema>,
+  ticket: ZendeskTicket,
+  users: ZendeskUser[]
+): { actorType: SupportTicketActorType; actorId: string | null } {
+  if (audit.author_id === ticket.requester_id) {
+    return { actorType: "customer", actorId: String(audit.author_id) };
+  }
+  const author = userById(users, audit.author_id);
+  const role = author?.role?.toLowerCase() ?? "";
+  if (role === "system") {
+    return { actorType: "system", actorId: String(audit.author_id) };
+  }
+  if (role === "agent" || role === "admin") {
+    return { actorType: "user", actorId: String(audit.author_id) };
+  }
+  if (role === "end-user") {
+    return { actorType: "customer", actorId: String(audit.author_id) };
+  }
+  return { actorType: "user", actorId: String(audit.author_id) };
+}
+
+function parseStringArray(value: unknown): string[] | null {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === "string");
+  }
+  return null;
+}
+
+function auditTagEvents(
+  audit: z.infer<typeof zendeskAuditSchema>,
+  event: z.infer<typeof zendeskAuditEventSchema>,
+  actorType: SupportTicketActorType,
+  actorId: string | null,
+  subType: string
+): ExternalSupportEvent[] {
+  const previous = parseStringArray(event.previous_value) ?? [];
+  const next = parseStringArray(event.value) ?? [];
+  const previousSet = new Set(previous);
+  const nextSet = new Set(next);
+  const added = [...nextSet].filter((tag) => !previousSet.has(tag));
+  const removed = [...previousSet].filter((tag) => !nextSet.has(tag));
+
+  const events: ExternalSupportEvent[] = [];
+  for (const tag of added) {
+    events.push({
+      type: "label_added",
+      subType,
+      actorType,
+      actorId,
+      createdAt: audit.created_at,
+      metadata: { audit, event, tag },
+    });
+  }
+  for (const tag of removed) {
+    events.push({
+      type: "label_removed",
+      subType,
+      actorType,
+      actorId,
+      createdAt: audit.created_at,
+      metadata: { audit, event, tag },
+    });
+  }
+  if (events.length === 0) {
+    events.push({
+      type: "field_change",
+      subType,
+      actorType,
+      actorId,
+      createdAt: audit.created_at,
+      metadata: { audit, event },
+    });
+  }
+  return events;
+}
+
+function mapZendeskAuditEvent(
+  audit: z.infer<typeof zendeskAuditSchema>,
+  event: z.infer<typeof zendeskAuditEventSchema>,
+  actorType: SupportTicketActorType,
+  actorId: string | null
+): ExternalSupportEvent[] {
+  const createdAt = audit.created_at;
+  const metadata = { audit, event };
+
+  if (event.type === "Comment" || event.type === "VoiceComment") {
+    return [];
+  }
+
+  if (event.type === "Change" && event.field_name) {
+    const fieldName = event.field_name;
+    const subType = `Change:${fieldName}`;
+
+    switch (fieldName) {
+      case "status":
+        return [
+          {
+            type: "status_change",
+            subType,
+            actorType,
+            actorId,
+            createdAt,
+            metadata,
+          },
+        ];
+      case "priority":
+        return [
+          {
+            type: "priority_change",
+            subType,
+            actorType,
+            actorId,
+            createdAt,
+            metadata,
+          },
+        ];
+      case "assignee_id":
+      case "group_id":
+        return [
+          {
+            type: "assignment_change",
+            subType,
+            actorType,
+            actorId,
+            createdAt,
+            metadata,
+          },
+        ];
+      case "tags":
+        return auditTagEvents(audit, event, actorType, actorId, subType);
+      default:
+        return [
+          {
+            type: "field_change",
+            subType,
+            actorType,
+            actorId,
+            createdAt,
+            metadata,
+          },
+        ];
+    }
+  }
+
+  switch (event.type) {
+    case "SatisfactionRating":
+      return [
+        {
+          type: "survey_received",
+          subType: event.type,
+          actorType,
+          actorId,
+          createdAt,
+          metadata,
+        },
+      ];
+    case "Notification":
+    case "NotificationWithCcs":
+    case "ForwardingEvent":
+      return [
+        {
+          type: "notification",
+          subType: event.type,
+          actorType,
+          actorId,
+          createdAt,
+          metadata,
+        },
+      ];
+    case "Cc":
+    case "FollowersCc":
+    case "FollowerChangeAction":
+      return [
+        {
+          type: "watchers_changed",
+          subType: event.type,
+          actorType,
+          actorId,
+          createdAt,
+          metadata,
+        },
+      ];
+    case "VoiceComment":
+      return [
+        {
+          type: "call",
+          subType: event.type,
+          actorType,
+          actorId,
+          createdAt,
+          metadata,
+        },
+      ];
+    case "ProblemSolvedEvent":
+    case "ProblemsSolvedEvent":
+      return [
+        {
+          type: "status_change",
+          subType: event.type,
+          actorType,
+          actorId,
+          createdAt,
+          metadata,
+        },
+      ];
+    case "Create":
+    case "AgentWorkspaceSwitch":
+    case "ExternalEvent":
+    case "ChannelFrameworkEvent":
+    case "AgentMacroReference":
+    case "OrganizationActivity":
+    case "Error":
+    case "CommentPrivacyChange":
+      return [
+        {
+          type: "thread_event",
+          subType: event.type,
+          actorType,
+          actorId,
+          createdAt,
+          metadata,
+        },
+      ];
+    default:
+      return [
+        {
+          type: "field_change",
+          subType: event.type,
+          actorType,
+          actorId,
+          createdAt,
+          metadata,
+        },
+      ];
+  }
+}
+
+async function getZendeskTicketAudits(
+  credentials: ZendeskCredentials,
+  ticket: ZendeskTicket,
+  users: ZendeskUser[],
+  pathOrUrl: string = `/api/v2/tickets/${ticket.id}/audits.json?limit=100`
+): Promise<ExternalSupportEvent[]> {
+  const raw = await zendeskRequest(credentials, pathOrUrl);
+  const parsed = zendeskAuditListSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 500,
+      message: "Invalid Zendesk audits response",
+      hint: parsed.error.message,
+    });
+  }
+
+  const events: ExternalSupportEvent[] = [];
+  for (const audit of parsed.data.audits) {
+    const { actorType, actorId } = auditActor(audit, ticket, users);
+    for (const event of audit.events ?? []) {
+      const mapped = mapZendeskAuditEvent(audit, event, actorType, actorId);
+      events.push(...mapped);
+    }
+  }
+
+  const nextPage = parsed.data.next_page;
+  if (nextPage) {
+    const nextUrl = new URL(nextPage);
+    const nextPath = `${nextUrl.pathname}${nextUrl.search}`;
+    const rest = await getZendeskTicketAudits(
+      credentials,
+      ticket,
+      users,
+      nextPath
+    );
+    return [...events, ...rest];
+  }
+
+  return events;
 }
 
 export const zendeskSupportImportSource: ImportSource<
@@ -364,10 +684,16 @@ export const zendeskSupportImportSource: ImportSource<
               return;
             }
 
-            const [customerId, replies] = await Promise.all([
+            const [customerId, comments] = await Promise.all([
               getOrCreateZendeskSupportCustomer(ctx, requester),
               getZendeskTicketComments(credentials, ticket),
             ]);
+
+            const auditEvents = await getZendeskTicketAudits(
+              credentials,
+              ticket,
+              comments.users
+            );
 
             const ticketEvent: ExternalSupportEvent = {
               type: "field_change",
@@ -390,8 +716,8 @@ export const zendeskSupportImportSource: ImportSource<
                 source: {},
                 createdAt: ticket.created_at,
                 updatedAt: ticket.updated_at,
-                replies,
-                events: [ticketEvent],
+                replies: comments.replies,
+                events: [ticketEvent, ...auditEvents],
               },
               {}
             );

@@ -1,0 +1,1 @@
+ALTER TABLE `support_ticket_events` ADD `sub_type` text;
