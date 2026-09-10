@@ -40,7 +40,10 @@ const workspaceMetadataSchema = z
   })
   .passthrough();
 
-function parseWorkspaceMetadata(raw: unknown) {
+function parseWorkspaceMetadata(raw: unknown): {
+  key: string | null;
+  defaultTeamId: string | null;
+} {
   if (!raw) return { key: null, defaultTeamId: null };
   const parsed = workspaceMetadataSchema.safeParse(safeJSON(raw));
   return parsed.success

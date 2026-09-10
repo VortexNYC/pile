@@ -15,16 +15,18 @@ const workspaceMetadataSchema = z
   })
   .passthrough();
 
-function parseWorkspaceMetadata(metadata: string | null) {
-  if (!metadata)
-    return { key: null as string | null, defaultTeamId: null as string | null };
+function parseWorkspaceMetadata(metadata: string | null): {
+  key: string | null;
+  defaultTeamId: string | null;
+} {
+  if (!metadata) return { key: null, defaultTeamId: null };
   const parsed = workspaceMetadataSchema.safeParse(safeJSON(metadata));
   return parsed.success
     ? {
         key: parsed.data.key ?? null,
         defaultTeamId: parsed.data.defaultTeamId ?? null,
       }
-    : { key: null as string | null, defaultTeamId: null as string | null };
+    : { key: null, defaultTeamId: null };
 }
 
 export interface WorkspaceRecord {
