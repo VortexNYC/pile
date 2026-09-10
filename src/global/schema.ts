@@ -487,7 +487,13 @@ export const labels = sqliteTable(
       .references(() => organization.id),
     name: text("name" as string).notNull(),
     color: text("color" as string),
+    kind: text("kind" as string)
+      .notNull()
+      .default("issue"),
     createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
   },
@@ -2529,6 +2535,74 @@ export const supportSavedViews = sqliteTable(
     index("support_saved_views_org_user_idx" as string).on(
       table.organizationId,
       table.userId
+    ),
+  ]
+);
+
+export const supportSnippets = sqliteTable(
+  "support_snippets" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    name: text("name" as string).notNull(),
+    textContent: text("text_content" as string).notNull(),
+    markdownContent: text("markdown_content" as string),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("support_snippets_organization_name_idx" as string).on(
+      table.organizationId,
+      table.name
+    ),
+    index("support_snippets_organization_idx" as string).on(
+      table.organizationId
+    ),
+  ]
+);
+
+export const supportAutoresponders = sqliteTable(
+  "support_autoresponders" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    name: text("name" as string).notNull(),
+    enabled: integer("enabled" as string, { mode: "boolean" })
+      .notNull()
+      .default(true),
+    trigger: text("trigger" as string, {
+      enum: ["ticket_created", "customer_replied", "out_of_hours"] as const,
+    }).notNull(),
+    order: integer("order" as string).notNull(),
+    snippetId: text("snippet_id" as string).references(
+      () => supportSnippets.id,
+      {
+        onDelete: "set null",
+      }
+    ),
+    conditions: text("conditions" as string)
+      .notNull()
+      .default("{}"),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("support_autoresponders_org_enabled_order_idx" as string).on(
+      table.organizationId,
+      table.enabled,
+      table.order
     ),
   ]
 );

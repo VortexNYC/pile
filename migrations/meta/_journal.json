@@ -505,6 +505,13 @@
       "when": 1789081684065,
       "tag": "0071_workable_loa",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "6",
+      "when": 1789082073386,
+      "tag": "0072_even_fantastic_four",
+      "breakpoints": true
     }
   ]
 }
