@@ -22,6 +22,7 @@ import {
   createTicketFromIntercom,
   createTicketFromPlain,
   createTicketFromZendesk,
+  findOrCreateTeam,
   findUserByEmail,
   getTicketById,
   setTicketAssignees,
@@ -789,7 +790,55 @@ describe("support-tickets API", () => {
 
     const fetched = await getTicketById(db, organizationId, ticket.id);
     expect(fetched?.assignees.length).toBe(1);
-    expect(fetched?.assignees[0]?.userId).toBe(user!.id);
+    expect(fetched?.assignees[0]?.type).toBe("user");
+    expect(fetched?.assignees[0]?.assigneeId).toBe(user!.id);
+    expect(fetched?.assignees[0]?.isPrimary).toBe(true);
+  });
+
+  it("populates ticket assignments for a team", async () => {
+    const db = createD1(env.D1);
+    const team = await findOrCreateTeam(
+      db,
+      organizationId,
+      "Support",
+      "user-1"
+    );
+
+    const customer = await createSupportCustomer(db, {
+      organizationId,
+      email: "team-assigned@example.com",
+      fullName: "Team Assigned Customer",
+      externalId: null,
+      externalSource: null,
+    });
+
+    const ticket = await createTicketFromPlain(
+      db,
+      organizationId,
+      customer.id,
+      {
+        id: "thread-team",
+        status: "todo",
+        priority: "medium",
+        source: {
+          type: "chat",
+          body: "I need help",
+        },
+        createdAt: "2023-11-14T14:00:00.000Z",
+        updatedAt: "2023-11-14T14:00:00.000Z",
+        replies: [],
+        events: [],
+      }
+    );
+
+    await setTicketAssignees(db, organizationId, ticket.id, [
+      { teamId: team.id, isPrimary: true },
+    ]);
+
+    const fetched = await getTicketById(db, organizationId, ticket.id);
+    expect(fetched?.assignees.length).toBe(1);
+    expect(fetched?.assignees[0]?.type).toBe("team");
+    expect(fetched?.assignees[0]?.assigneeId).toBe(team.id);
     expect(fetched?.assignees[0]?.isPrimary).toBe(true);
   });
 });

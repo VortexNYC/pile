@@ -18,6 +18,7 @@ import type {
 } from "../global/support-tickets.js";
 import {
   createTicketFromIntercom,
+  findOrCreateTeam,
   findUserByEmail,
   setTicketAssignees,
 } from "../global/support-tickets.js";
@@ -431,18 +432,38 @@ async function getIntercomConversationParts(
 async function syncIntercomTicketAssignees(
   ctx: ImportContext,
   ticketId: string,
-  assignee: { type?: string; email?: string | null } | null | undefined
+  assignee:
+    | {
+        type?: string;
+        name?: string;
+        email?: string | null;
+      }
+    | null
+    | undefined
 ): Promise<void> {
-  if (!assignee || assignee.type !== "admin" || !assignee.email) {
+  if (!assignee?.type) return;
+
+  if (assignee.type === "admin" && assignee.email) {
+    const user = await findUserByEmail(ctx.db, assignee.email);
+    if (user) {
+      await setTicketAssignees(ctx.db, ctx.organizationId, ticketId, [
+        { userId: user.id, isPrimary: true },
+      ]);
+    }
     return;
   }
-  const user = await findUserByEmail(ctx.db, assignee.email);
-  if (!user) {
-    return;
+
+  if (assignee.type === "team" && assignee.name) {
+    const team = await findOrCreateTeam(
+      ctx.db,
+      ctx.organizationId,
+      assignee.name,
+      ctx.importerId
+    );
+    await setTicketAssignees(ctx.db, ctx.organizationId, ticketId, [
+      { teamId: team.id, isPrimary: true },
+    ]);
   }
-  await setTicketAssignees(ctx.db, ctx.organizationId, ticketId, [
-    { userId: user.id, isPrimary: true },
-  ]);
 }
 
 export const intercomSupportImportSource: ImportSource<

@@ -1,5 +1,6 @@
-import { relations, sql } from "drizzle-orm";
+import { isNotNull, relations, sql } from "drizzle-orm";
 import {
+  check,
   index,
   integer,
   primaryKey,
@@ -2157,18 +2158,30 @@ export const supportTicketAssignments = sqliteTable(
     ticketId: text("ticket_id" as string)
       .notNull()
       .references(() => supportTickets.id, { onDelete: "cascade" }),
-    userId: text("user_id" as string)
-      .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
+    userId: text("user_id" as string).references(() => user.id, {
+      onDelete: "cascade",
+    }),
+    teamId: text("team_id" as string).references(() => team.id, {
+      onDelete: "cascade",
+    }),
     isPrimary: integer("is_primary" as string, { mode: "boolean" })
       .notNull()
       .default(false),
   },
   (table) => [
-    uniqueIndex("support_ticket_assignments_unique_idx" as string).on(
-      table.ticketId,
-      table.userId
+    check(
+      "support_ticket_assignments_assignee_check" as string,
+      sql`(
+        (${table.userId} IS NOT NULL AND ${table.teamId} IS NULL)
+        OR (${table.userId} IS NULL AND ${table.teamId} IS NOT NULL)
+      )`
     ),
+    uniqueIndex("support_ticket_assignments_user_unique_idx" as string)
+      .on(table.ticketId, table.userId)
+      .where(isNotNull(table.userId)),
+    uniqueIndex("support_ticket_assignments_team_unique_idx" as string)
+      .on(table.ticketId, table.teamId)
+      .where(isNotNull(table.teamId)),
     index("support_ticket_assignments_ticket_idx" as string).on(
       table.ticketId,
       table.isPrimary

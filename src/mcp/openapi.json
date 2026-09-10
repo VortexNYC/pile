@@ -19025,11 +19025,21 @@
                                   "email",
                                   "phone",
                                   "slack",
-                                  "chat"
+                                  "msteams",
+                                  "discord",
+                                  "whatsapp",
+                                  "chat",
+                                  "api",
+                                  "social",
+                                  "custom"
                                 ]
                               },
                               "value": {
                                 "type": "string"
+                              },
+                              "subType": {
+                                "type": "string",
+                                "nullable": true
                               },
                               "isPrimary": {
                                 "type": "boolean"
@@ -19039,6 +19049,7 @@
                               "id",
                               "type",
                               "value",
+                              "subType",
                               "isPrimary"
                             ]
                           }
@@ -19078,7 +19089,14 @@
                               "id": {
                                 "type": "string"
                               },
-                              "userId": {
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "user",
+                                  "team"
+                                ]
+                              },
+                              "assigneeId": {
                                 "type": "string"
                               },
                               "name": {
@@ -19091,7 +19109,8 @@
                             },
                             "required": [
                               "id",
-                              "userId",
+                              "type",
+                              "assigneeId",
                               "name",
                               "isPrimary"
                             ]
@@ -19481,11 +19500,21 @@
                                     "email",
                                     "phone",
                                     "slack",
-                                    "chat"
+                                    "msteams",
+                                    "discord",
+                                    "whatsapp",
+                                    "chat",
+                                    "api",
+                                    "social",
+                                    "custom"
                                   ]
                                 },
                                 "value": {
                                   "type": "string"
+                                },
+                                "subType": {
+                                  "type": "string",
+                                  "nullable": true
                                 },
                                 "isPrimary": {
                                   "type": "boolean"
@@ -19495,6 +19524,7 @@
                                 "id",
                                 "type",
                                 "value",
+                                "subType",
                                 "isPrimary"
                               ]
                             }
@@ -19534,7 +19564,14 @@
                                 "id": {
                                   "type": "string"
                                 },
-                                "userId": {
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "user",
+                                    "team"
+                                  ]
+                                },
+                                "assigneeId": {
                                   "type": "string"
                                 },
                                 "name": {
@@ -19547,7 +19584,8 @@
                               },
                               "required": [
                                 "id",
-                                "userId",
+                                "type",
+                                "assigneeId",
                                 "name",
                                 "isPrimary"
                               ]
@@ -19881,11 +19919,21 @@
                                   "email",
                                   "phone",
                                   "slack",
-                                  "chat"
+                                  "msteams",
+                                  "discord",
+                                  "whatsapp",
+                                  "chat",
+                                  "api",
+                                  "social",
+                                  "custom"
                                 ]
                               },
                               "value": {
                                 "type": "string"
+                              },
+                              "subType": {
+                                "type": "string",
+                                "nullable": true
                               },
                               "isPrimary": {
                                 "type": "boolean"
@@ -19895,6 +19943,7 @@
                               "id",
                               "type",
                               "value",
+                              "subType",
                               "isPrimary"
                             ]
                           }
@@ -19934,7 +19983,14 @@
                               "id": {
                                 "type": "string"
                               },
-                              "userId": {
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "user",
+                                  "team"
+                                ]
+                              },
+                              "assigneeId": {
                                 "type": "string"
                               },
                               "name": {
@@ -19947,7 +20003,8 @@
                             },
                             "required": [
                               "id",
-                              "userId",
+                              "type",
+                              "assigneeId",
                               "name",
                               "isPrimary"
                             ]
@@ -20309,11 +20366,21 @@
                                   "email",
                                   "phone",
                                   "slack",
-                                  "chat"
+                                  "msteams",
+                                  "discord",
+                                  "whatsapp",
+                                  "chat",
+                                  "api",
+                                  "social",
+                                  "custom"
                                 ]
                               },
                               "value": {
                                 "type": "string"
+                              },
+                              "subType": {
+                                "type": "string",
+                                "nullable": true
                               },
                               "isPrimary": {
                                 "type": "boolean"
@@ -20323,6 +20390,7 @@
                               "id",
                               "type",
                               "value",
+                              "subType",
                               "isPrimary"
                             ]
                           }
@@ -20362,7 +20430,14 @@
                               "id": {
                                 "type": "string"
                               },
-                              "userId": {
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "user",
+                                  "team"
+                                ]
+                              },
+                              "assigneeId": {
                                 "type": "string"
                               },
                               "name": {
@@ -20375,7 +20450,8 @@
                             },
                             "required": [
                               "id",
-                              "userId",
+                              "type",
+                              "assigneeId",
                               "name",
                               "isPrimary"
                             ]
@@ -21316,11 +21392,21 @@
                                   "email",
                                   "phone",
                                   "slack",
-                                  "chat"
+                                  "msteams",
+                                  "discord",
+                                  "whatsapp",
+                                  "chat",
+                                  "api",
+                                  "social",
+                                  "custom"
                                 ]
                               },
                               "value": {
                                 "type": "string"
+                              },
+                              "subType": {
+                                "type": "string",
+                                "nullable": true
                               },
                               "isPrimary": {
                                 "type": "boolean"
@@ -21330,6 +21416,7 @@
                               "id",
                               "type",
                               "value",
+                              "subType",
                               "isPrimary"
                             ]
                           }
@@ -21369,7 +21456,14 @@
                               "id": {
                                 "type": "string"
                               },
-                              "userId": {
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "user",
+                                  "team"
+                                ]
+                              },
+                              "assigneeId": {
                                 "type": "string"
                               },
                               "name": {
@@ -21382,7 +21476,8 @@
                             },
                             "required": [
                               "id",
-                              "userId",
+                              "type",
+                              "assigneeId",
                               "name",
                               "isPrimary"
                             ]
@@ -21710,11 +21805,21 @@
                                   "email",
                                   "phone",
                                   "slack",
-                                  "chat"
+                                  "msteams",
+                                  "discord",
+                                  "whatsapp",
+                                  "chat",
+                                  "api",
+                                  "social",
+                                  "custom"
                                 ]
                               },
                               "value": {
                                 "type": "string"
+                              },
+                              "subType": {
+                                "type": "string",
+                                "nullable": true
                               },
                               "isPrimary": {
                                 "type": "boolean"
@@ -21724,6 +21829,7 @@
                               "id",
                               "type",
                               "value",
+                              "subType",
                               "isPrimary"
                             ]
                           }
@@ -21763,7 +21869,14 @@
                               "id": {
                                 "type": "string"
                               },
-                              "userId": {
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "user",
+                                  "team"
+                                ]
+                              },
+                              "assigneeId": {
                                 "type": "string"
                               },
                               "name": {
@@ -21776,7 +21889,8 @@
                             },
                             "required": [
                               "id",
-                              "userId",
+                              "type",
+                              "assigneeId",
                               "name",
                               "isPrimary"
                             ]
@@ -22121,11 +22235,21 @@
                                   "email",
                                   "phone",
                                   "slack",
-                                  "chat"
+                                  "msteams",
+                                  "discord",
+                                  "whatsapp",
+                                  "chat",
+                                  "api",
+                                  "social",
+                                  "custom"
                                 ]
                               },
                               "value": {
                                 "type": "string"
+                              },
+                              "subType": {
+                                "type": "string",
+                                "nullable": true
                               },
                               "isPrimary": {
                                 "type": "boolean"
@@ -22135,6 +22259,7 @@
                               "id",
                               "type",
                               "value",
+                              "subType",
                               "isPrimary"
                             ]
                           }
@@ -22174,7 +22299,14 @@
                               "id": {
                                 "type": "string"
                               },
-                              "userId": {
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "user",
+                                  "team"
+                                ]
+                              },
+                              "assigneeId": {
                                 "type": "string"
                               },
                               "name": {
@@ -22187,7 +22319,8 @@
                             },
                             "required": [
                               "id",
-                              "userId",
+                              "type",
+                              "assigneeId",
                               "name",
                               "isPrimary"
                             ]

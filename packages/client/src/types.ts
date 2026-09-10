@@ -9830,8 +9830,9 @@ export interface paths {
                                 identities: {
                                     id: string;
                                     /** @enum {string} */
-                                    type: "email" | "phone" | "slack" | "chat";
+                                    type: "email" | "phone" | "slack" | "msteams" | "discord" | "whatsapp" | "chat" | "api" | "social" | "custom";
                                     value: string;
+                                    subType: string | null;
                                     isPrimary: boolean;
                                 }[];
                                 labels: {
@@ -9842,7 +9843,9 @@ export interface paths {
                                 }[];
                                 assignees: {
                                     id: string;
-                                    userId: string;
+                                    /** @enum {string} */
+                                    type: "user" | "team";
+                                    assigneeId: string;
                                     name: string | null;
                                     isPrimary: boolean;
                                 }[];
@@ -9968,8 +9971,9 @@ export interface paths {
                                 identities: {
                                     id: string;
                                     /** @enum {string} */
-                                    type: "email" | "phone" | "slack" | "chat";
+                                    type: "email" | "phone" | "slack" | "msteams" | "discord" | "whatsapp" | "chat" | "api" | "social" | "custom";
                                     value: string;
+                                    subType: string | null;
                                     isPrimary: boolean;
                                 }[];
                                 labels: {
@@ -9980,7 +9984,9 @@ export interface paths {
                                 }[];
                                 assignees: {
                                     id: string;
-                                    userId: string;
+                                    /** @enum {string} */
+                                    type: "user" | "team";
+                                    assigneeId: string;
                                     name: string | null;
                                     isPrimary: boolean;
                                 }[];
@@ -10083,8 +10089,9 @@ export interface paths {
                                 identities: {
                                     id: string;
                                     /** @enum {string} */
-                                    type: "email" | "phone" | "slack" | "chat";
+                                    type: "email" | "phone" | "slack" | "msteams" | "discord" | "whatsapp" | "chat" | "api" | "social" | "custom";
                                     value: string;
+                                    subType: string | null;
                                     isPrimary: boolean;
                                 }[];
                                 labels: {
@@ -10095,7 +10102,9 @@ export interface paths {
                                 }[];
                                 assignees: {
                                     id: string;
-                                    userId: string;
+                                    /** @enum {string} */
+                                    type: "user" | "team";
+                                    assigneeId: string;
                                     name: string | null;
                                     isPrimary: boolean;
                                 }[];
@@ -10201,8 +10210,9 @@ export interface paths {
                                 identities: {
                                     id: string;
                                     /** @enum {string} */
-                                    type: "email" | "phone" | "slack" | "chat";
+                                    type: "email" | "phone" | "slack" | "msteams" | "discord" | "whatsapp" | "chat" | "api" | "social" | "custom";
                                     value: string;
+                                    subType: string | null;
                                     isPrimary: boolean;
                                 }[];
                                 labels: {
@@ -10213,7 +10223,9 @@ export interface paths {
                                 }[];
                                 assignees: {
                                     id: string;
-                                    userId: string;
+                                    /** @enum {string} */
+                                    type: "user" | "team";
+                                    assigneeId: string;
                                     name: string | null;
                                     isPrimary: boolean;
                                 }[];
@@ -10553,8 +10565,9 @@ export interface paths {
                                 identities: {
                                     id: string;
                                     /** @enum {string} */
-                                    type: "email" | "phone" | "slack" | "chat";
+                                    type: "email" | "phone" | "slack" | "msteams" | "discord" | "whatsapp" | "chat" | "api" | "social" | "custom";
                                     value: string;
+                                    subType: string | null;
                                     isPrimary: boolean;
                                 }[];
                                 labels: {
@@ -10565,7 +10578,9 @@ export interface paths {
                                 }[];
                                 assignees: {
                                     id: string;
-                                    userId: string;
+                                    /** @enum {string} */
+                                    type: "user" | "team";
+                                    assigneeId: string;
                                     name: string | null;
                                     isPrimary: boolean;
                                 }[];
@@ -10670,8 +10685,9 @@ export interface paths {
                                 identities: {
                                     id: string;
                                     /** @enum {string} */
-                                    type: "email" | "phone" | "slack" | "chat";
+                                    type: "email" | "phone" | "slack" | "msteams" | "discord" | "whatsapp" | "chat" | "api" | "social" | "custom";
                                     value: string;
+                                    subType: string | null;
                                     isPrimary: boolean;
                                 }[];
                                 labels: {
@@ -10682,7 +10698,9 @@ export interface paths {
                                 }[];
                                 assignees: {
                                     id: string;
-                                    userId: string;
+                                    /** @enum {string} */
+                                    type: "user" | "team";
+                                    assigneeId: string;
                                     name: string | null;
                                     isPrimary: boolean;
                                 }[];
@@ -10793,8 +10811,9 @@ export interface paths {
                                 identities: {
                                     id: string;
                                     /** @enum {string} */
-                                    type: "email" | "phone" | "slack" | "chat";
+                                    type: "email" | "phone" | "slack" | "msteams" | "discord" | "whatsapp" | "chat" | "api" | "social" | "custom";
                                     value: string;
+                                    subType: string | null;
                                     isPrimary: boolean;
                                 }[];
                                 labels: {
@@ -10805,7 +10824,9 @@ export interface paths {
                                 }[];
                                 assignees: {
                                     id: string;
-                                    userId: string;
+                                    /** @enum {string} */
+                                    type: "user" | "team";
+                                    assigneeId: string;
                                     name: string | null;
                                     isPrimary: boolean;
                                 }[];

@@ -27,9 +27,11 @@ import {
   supportTicketMessages,
   supportTicketNotes,
   supportTickets,
+  team,
   user,
 } from "./schema.js";
 import { getCustomerById } from "./support-contacts.js";
+import { createTeam } from "./teams.js";
 
 export type SupportTicketStatus = "todo" | "done" | "snoozed";
 export type SupportTicketPriority = "low" | "medium" | "high" | "urgent";
@@ -139,7 +141,8 @@ export type SupportTicketWithRelations = SupportTicket & {
   labels: { id: string; labelId: string; name: string; color: string | null }[];
   assignees: {
     id: string;
-    userId: string;
+    type: "user" | "team";
+    assigneeId: string;
     name: string | null;
     isPrimary: boolean;
   }[];
@@ -321,11 +324,14 @@ export async function getTicketById(
         .select({
           id: supportTicketAssignments.id,
           userId: supportTicketAssignments.userId,
-          name: user.name,
+          teamId: supportTicketAssignments.teamId,
+          userName: user.name,
+          teamName: team.name,
           isPrimary: supportTicketAssignments.isPrimary,
         })
         .from(supportTicketAssignments)
-        .innerJoin(user, eq(supportTicketAssignments.userId, user.id))
+        .leftJoin(user, eq(supportTicketAssignments.userId, user.id))
+        .leftJoin(team, eq(supportTicketAssignments.teamId, team.id))
         .where(eq(supportTicketAssignments.ticketId, ticketId)),
       listTicketEvents(db, organizationId, ticketId, { limit: 20 }),
     ]);
@@ -345,7 +351,23 @@ export async function getTicketById(
     })),
     identities,
     labels: labelsList,
-    assignees,
+    assignees: assignees.map((a) => {
+      const assigneeId = a.userId ?? a.teamId;
+      if (!assigneeId) {
+        throw new VortexError({
+          code: "INTERNAL_ERROR",
+          status: 500,
+          message: "Invalid support ticket assignment",
+        });
+      }
+      return {
+        id: a.id,
+        type: a.userId ? "user" : "team",
+        assigneeId,
+        name: a.userName ?? a.teamName ?? null,
+        isPrimary: a.isPrimary,
+      };
+    }),
     events,
   };
 }
@@ -382,7 +404,12 @@ export async function listTickets(
     const ticketIds = await db
       .select({ ticketId: supportTicketAssignments.ticketId })
       .from(supportTicketAssignments)
-      .where(eq(supportTicketAssignments.userId, options.assignedTo));
+      .where(
+        or(
+          eq(supportTicketAssignments.userId, options.assignedTo),
+          eq(supportTicketAssignments.teamId, options.assignedTo)
+        )
+      );
 
     if (ticketIds.length === 0) {
       return { tickets: [], nextCursor: null };
@@ -522,11 +549,47 @@ export async function findUserByEmail(
   return found ?? null;
 }
 
+export async function findTeamByName(
+  db: D1Client,
+  organizationId: string,
+  name: string
+): Promise<{ id: string } | null> {
+  const [found] = await db
+    .select({ id: team.id })
+    .from(team)
+    .where(and(eq(team.organizationId, organizationId), eq(team.name, name)))
+    .limit(1);
+  return found ?? null;
+}
+
+export async function findOrCreateTeam(
+  db: D1Client,
+  organizationId: string,
+  name: string,
+  ownerId: string
+) {
+  const existing = await findTeamByName(db, organizationId, name);
+  if (existing) return existing;
+
+  const key =
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 30) || "team";
+
+  return createTeam(db, { organizationId, name, key, ownerId });
+}
+
+export type SupportTicketAssigneeInput =
+  | { userId: string; isPrimary?: boolean }
+  | { teamId: string; isPrimary?: boolean };
+
 export async function setTicketAssignees(
   db: D1Client,
   organizationId: string,
   ticketId: string,
-  assignees: { userId: string; isPrimary: boolean }[]
+  assignees: SupportTicketAssigneeInput[]
 ): Promise<void> {
   await ensureTicket(db, organizationId, ticketId);
 
@@ -534,16 +597,35 @@ export async function setTicketAssignees(
     .delete(supportTicketAssignments)
     .where(eq(supportTicketAssignments.ticketId, ticketId));
 
-  if (assignees.length > 0) {
-    await db.insert(supportTicketAssignments).values(
-      assignees.map((assignee) => ({
+  if (assignees.length === 0) return;
+
+  const rows = assignees.map((assignee) => {
+    if ("userId" in assignee) {
+      return {
         id: crypto.randomUUID(),
         ticketId,
         userId: assignee.userId,
-        isPrimary: assignee.isPrimary,
-      }))
-    );
-  }
+        teamId: null,
+        isPrimary: assignee.isPrimary ?? false,
+      };
+    }
+    if ("teamId" in assignee) {
+      return {
+        id: crypto.randomUUID(),
+        ticketId,
+        userId: null,
+        teamId: assignee.teamId,
+        isPrimary: assignee.isPrimary ?? false,
+      };
+    }
+    throw new VortexError({
+      code: "UNPROCESSABLE_CONTENT",
+      status: 422,
+      message: "Invalid support ticket assignee",
+    });
+  });
+
+  await db.insert(supportTicketAssignments).values(rows);
 }
 
 export async function addTicketMessage(

@@ -71,8 +71,20 @@ const supportCompanySummarySchema = z.object({
 
 const supportCustomerIdentitySummarySchema = z.object({
   id: z.string(),
-  type: z.enum(["email", "phone", "slack", "chat"]),
+  type: z.enum([
+    "email",
+    "phone",
+    "slack",
+    "msteams",
+    "discord",
+    "whatsapp",
+    "chat",
+    "api",
+    "social",
+    "custom",
+  ]),
   value: z.string(),
+  subType: z.string().nullable(),
   isPrimary: z.boolean(),
 });
 
@@ -85,7 +97,8 @@ const supportLabelSummarySchema = z.object({
 
 const supportAssigneeSummarySchema = z.object({
   id: z.string(),
-  userId: z.string(),
+  type: z.enum(["user", "team"]),
+  assigneeId: z.string(),
   name: z.string().nullable(),
   isPrimary: z.boolean(),
 });
