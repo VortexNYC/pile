@@ -10823,7 +10823,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create support ticket import intercom */
+        /**
+         * Create support ticket import intercom
+         * @deprecated
+         */
         post: {
             parameters: {
                 query?: never;
@@ -10973,7 +10976,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create support ticket import plain */
+        /**
+         * Create support ticket import plain
+         * @deprecated
+         */
         post: {
             parameters: {
                 query?: never;
@@ -11123,7 +11129,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create support ticket import zendesk */
+        /**
+         * Create support ticket import zendesk
+         * @deprecated
+         */
         post: {
             parameters: {
                 query?: never;

@@ -22208,6 +22208,7 @@
         "tags": [
           "support-tickets"
         ],
+        "deprecated": true,
         "parameters": [
           {
             "schema": {
@@ -22703,6 +22704,7 @@
         "tags": [
           "support-tickets"
         ],
+        "deprecated": true,
         "parameters": [
           {
             "schema": {
@@ -23198,6 +23200,7 @@
         "tags": [
           "support-tickets"
         ],
+        "deprecated": true,
         "parameters": [
           {
             "schema": {

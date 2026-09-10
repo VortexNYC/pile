@@ -533,6 +533,7 @@ const importIntercomRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/tickets/import/intercom",
   tags: ["support-tickets"],
+  deprecated: true,
   middleware: [rls("write")],
   request: {
     params: orgParam,
@@ -558,6 +559,7 @@ const importPlainRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/tickets/import/plain",
   tags: ["support-tickets"],
+  deprecated: true,
   middleware: [rls("write")],
   request: {
     params: orgParam,
@@ -583,6 +585,7 @@ const importZendeskRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/tickets/import/zendesk",
   tags: ["support-tickets"],
+  deprecated: true,
   middleware: [rls("write")],
   request: {
     params: orgParam,
