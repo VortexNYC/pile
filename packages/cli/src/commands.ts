@@ -2330,6 +2330,83 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "support channels list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support-channels",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support channels create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support-channels",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "type",
+        flag: "type",
+      },
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "config",
+        flag: "config",
+      },
+      {
+        name: "isActive",
+        flag: "is-active",
+      },
+    ],
+  },
+  "support webhooks intercom create": {
+    method: "POST",
+    path: "/support/webhooks/intercom/{organizationId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support webhooks zendesk create": {
+    method: "POST",
+    path: "/support/webhooks/zendesk/{organizationId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support webhooks plain create": {
+    method: "POST",
+    path: "/support/webhooks/plain/{organizationId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "available users list": {
     method: "GET",
     path: "/workspaces/{organizationId}/available-users",

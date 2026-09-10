@@ -1046,7 +1046,7 @@ export type PlainSupportThread = {
   events?: ExternalSupportEvent[];
 };
 
-function stripHtml(html: string | null | undefined): string {
+export function stripHtml(html: string | null | undefined): string {
   if (!html) return "";
   return html
     .replace(/<[^>]+>/g, " ")
@@ -1090,7 +1090,7 @@ function asTicketChannel(
   return "chat";
 }
 
-function intercomStateToTicketStatus(
+export function intercomStateToTicketStatus(
   state: IntercomSupportConversation["state"]
 ): SupportTicketStatus {
   const map: Record<string, SupportTicketStatus> = {
@@ -1112,7 +1112,7 @@ function plainStateToTicketStatus(
   return map[status] ?? "todo";
 }
 
-function externalPriorityToTicketPriority(
+export function externalPriorityToTicketPriority(
   priority: "none" | "low" | "medium" | "high" | "urgent" | undefined
 ): SupportTicketPriority {
   if (!priority || priority === "none") return "medium";

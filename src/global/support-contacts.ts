@@ -128,6 +128,35 @@ export async function createCustomer(
   };
 }
 
+export async function findOrCreateCustomerByEmail(
+  db: D1Client,
+  organizationId: string,
+  email: string,
+  fullName?: string | null,
+  externalSource?: string
+): Promise<SupportCustomer> {
+  const normalizedEmail = email.toLowerCase().trim();
+  const [existing] = await db
+    .select()
+    .from(supportCustomers)
+    .where(
+      and(
+        eq(supportCustomers.organizationId, organizationId),
+        eq(supportCustomers.email, normalizedEmail)
+      )
+    )
+    .limit(1);
+  if (existing) {
+    return existing;
+  }
+  return createCustomer(db, {
+    organizationId,
+    email: normalizedEmail,
+    fullName,
+    externalSource: externalSource ?? "email",
+  });
+}
+
 export async function findCustomerByExternalId(
   db: D1Client,
   organizationId: string,

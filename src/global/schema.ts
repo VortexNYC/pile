@@ -2207,3 +2207,43 @@ export const supportTicketLabels = sqliteTable(
     ),
   ]
 );
+
+export const supportChannels = sqliteTable(
+  "support_channels",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id),
+    type: text("type", {
+      enum: [
+        "email",
+        "slack",
+        "msteams",
+        "discord",
+        "chat",
+        "capture",
+        "api",
+        "intercom",
+        "zendesk",
+        "plain",
+      ] as const,
+    }).notNull(),
+    name: text("name").notNull(),
+    isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+    config: text("config").notNull().default("{}"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("support_channels_org_type_name_idx").on(
+      table.organizationId,
+      table.type,
+      table.name
+    ),
+  ]
+);

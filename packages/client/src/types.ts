@@ -4762,6 +4762,244 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/support-channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List support channels */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Support channels list */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            channels: {
+                                id: string;
+                                organizationId: string;
+                                /** @enum {string} */
+                                type: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                                name: string;
+                                isActive: boolean;
+                                config: {
+                                    [key: string]: unknown;
+                                };
+                                createdAt: string;
+                                updatedAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create support channel */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        type: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                        name: string;
+                        config?: {
+                            [key: string]: unknown;
+                        };
+                        /** @default true */
+                        isActive?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description Support channel created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            /** @enum {string} */
+                            type: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                            name: string;
+                            isActive: boolean;
+                            config: {
+                                [key: string]: unknown;
+                            };
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/support/webhooks/intercom/{organizationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Receive Intercom support webhook notifications */
+        post: {
+            parameters: {
+                query?: never;
+                header?: {
+                    "x-hub-signature"?: string;
+                };
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/support/webhooks/zendesk/{organizationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Receive Zendesk support webhook notifications */
+        post: {
+            parameters: {
+                query?: never;
+                header?: {
+                    "x-zendesk-webhook-signature"?: string;
+                    "x-zendesk-webhook-signature-timestamp"?: string;
+                };
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/support/webhooks/plain/{organizationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Receive Plain support webhook notifications */
+        post: {
+            parameters: {
+                query?: never;
+                header?: {
+                    "plain-request-signature"?: string;
+                };
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/available-users": {
         parameters: {
             query?: never;
