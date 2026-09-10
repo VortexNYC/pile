@@ -74,11 +74,19 @@ export const zendeskSupportWebhookRoute = createRoute({
 export async function processZendeskSupportWebhook(
   c: Context<AppContext>
 ): Promise<{ ok: boolean }> {
-  const { organizationId } = c.req.valid("param");
+  const organizationId = c.req.param("organizationId");
+  if (!organizationId) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Missing organization ID",
+    });
+  }
+
   const secret = c.env.ZENDESK_WEBHOOK_SECRET;
   if (!secret) {
     throw new VortexError({
-      code: "NOT_CONFIGURED",
+      code: "CONFIG_ERROR",
       status: 500,
       message: "Zendesk webhook secret is not configured",
     });

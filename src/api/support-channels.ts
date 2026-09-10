@@ -36,7 +36,7 @@ const supportChannelSchema = z.object({
   ]),
   name: z.string(),
   isActive: z.boolean(),
-  config: z.record(z.unknown()),
+  config: z.record(z.string(), z.unknown()),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -44,7 +44,7 @@ const supportChannelSchema = z.object({
 const createSupportChannelSchema = z.object({
   type: supportChannelSchema.shape.type,
   name: z.string().min(1).max(200),
-  config: z.record(z.unknown()).optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
   isActive: z.boolean().default(true),
 });
 

@@ -2128,7 +2128,18 @@ export const supportTicketMessages = sqliteTable(
     textContent: text("text_content" as string).notNull(),
     markdownContent: text("markdown_content" as string),
     channel: text("channel" as string, {
-      enum: ["email", "slack", "msteams", "discord", "chat", "api"] as const,
+      enum: [
+        "email",
+        "slack",
+        "msteams",
+        "discord",
+        "chat",
+        "capture",
+        "api",
+        "intercom",
+        "zendesk",
+        "plain",
+      ] as const,
     }).notNull(),
     customerId: text("customer_id" as string).references(
       () => supportCustomers.id,

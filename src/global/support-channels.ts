@@ -9,12 +9,14 @@ import {
   findSupportTicketByExternalId,
   type SupportTicket,
   type SupportTicketMessageChannel,
+  type SupportTicketSource,
 } from "./support-tickets.js";
 
 export type SupportChannel = typeof supportChannels.$inferSelect;
 
 export type ChannelIncomingMessage = {
   channel: SupportTicketMessageChannel;
+  externalSource?: SupportTicketSource;
   fromEmail: string;
   fromName?: string | null;
   subject: string;
@@ -60,7 +62,7 @@ export async function processIncomingMessage(
     input.channel
   );
 
-  const externalSource = input.channel;
+  const externalSource: SupportTicketSource = input.externalSource ?? "manual";
   let ticket: SupportTicket | null = null;
   if (input.externalTicketId) {
     ticket = await findSupportTicketByExternalId(

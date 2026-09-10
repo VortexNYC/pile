@@ -16,6 +16,10 @@ declare namespace Cloudflare {
     DEVIN_ORG_ID?: string;
     DAYTONA_LABEL_ID?: string;
     TOKEN_HASH_SECRET?: string;
+    // Support-channel provider secrets.
+    INTERCOM_CLIENT_SECRET?: string;
+    ZENDESK_WEBHOOK_SECRET?: string;
+    PLAIN_WEBHOOK_SECRET?: string;
     TEST_MIGRATIONS: D1Migration[];
   }
 }

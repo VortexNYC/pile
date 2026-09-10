@@ -134,11 +134,19 @@ export const plainSupportWebhookRoute = createRoute({
 export async function processPlainSupportWebhook(
   c: Context<AppContext>
 ): Promise<{ ok: boolean }> {
-  const { organizationId } = c.req.valid("param");
+  const organizationId = c.req.param("organizationId");
+  if (!organizationId) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Missing organization ID",
+    });
+  }
+
   const secret = c.env.PLAIN_WEBHOOK_SECRET;
   if (!secret) {
     throw new VortexError({
-      code: "NOT_CONFIGURED",
+      code: "CONFIG_ERROR",
       status: 500,
       message: "Plain webhook secret is not configured",
     });

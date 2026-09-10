@@ -10,7 +10,7 @@ import {
 } from "../global/schema.js";
 import { createWorkspace } from "../global/workspaces.js";
 import { createAdminHeaders } from "../platform/test-auth.js";
-import { handleIncomingEmail } from "./email.js";
+import { handleIncomingEmail, type IncomingEmailMessage } from "./email.js";
 
 let organizationId: string;
 
@@ -56,7 +56,7 @@ function makeEmailMessage(
   envelopeFrom: string,
   body: string,
   overrides: { subject?: string; messageId?: string; inReplyTo?: string } = {}
-) {
+): IncomingEmailMessage & { get rejectedReason(): string } {
   const mime = [
     `From: ${envelopeFrom}`,
     `To: ${envelopeTo}`,
@@ -81,17 +81,12 @@ function makeEmailMessage(
         controller.close();
       },
     }),
-    rawSize: bytes.length,
-    headers: new Headers(),
-    canBeForwarded: false,
     get rejectedReason() {
       return rejectedReason;
     },
     setReject(reason: string) {
       rejectedReason = reason;
     },
-    forward: async () => undefined,
-    reply: async () => undefined,
   };
 }
 

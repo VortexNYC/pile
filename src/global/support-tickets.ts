@@ -65,7 +65,11 @@ export type SupportTicketMessageChannel =
   | "msteams"
   | "discord"
   | "chat"
-  | "api";
+  | "capture"
+  | "api"
+  | "intercom"
+  | "zendesk"
+  | "plain";
 export type SupportTicketEventType =
   | "message"
   | "note"

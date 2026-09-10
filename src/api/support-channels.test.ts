@@ -99,7 +99,7 @@ describe("support channel webhooks", () => {
   it("accepts a valid Intercom webhook and creates a support ticket", async () => {
     const body = intercomNotification();
     const raw = JSON.stringify(body);
-    const signature = `sha1=${await hmacSha1Hex(env.INTERCOM_CLIENT_SECRET, raw)}`;
+    const signature = `sha1=${await hmacSha1Hex(env.INTERCOM_CLIENT_SECRET ?? "", raw)}`;
 
     const res = await post(
       `/support/webhooks/intercom/${organizationId}`,
@@ -145,7 +145,7 @@ describe("support channel webhooks", () => {
   it("does not duplicate Intercom ticket messages on replay", async () => {
     const body = intercomNotification();
     const raw = JSON.stringify(body);
-    const signature = `sha1=${await hmacSha1Hex(env.INTERCOM_CLIENT_SECRET, raw)}`;
+    const signature = `sha1=${await hmacSha1Hex(env.INTERCOM_CLIENT_SECRET ?? "", raw)}`;
 
     const first = await post(
       `/support/webhooks/intercom/${organizationId}`,
@@ -193,7 +193,7 @@ describe("support channel webhooks", () => {
     const raw = JSON.stringify(body);
     const timestamp = "2023-10-27T10:00:00Z";
     const signature = await hmacSha256Base64(
-      env.ZENDESK_WEBHOOK_SECRET,
+      env.ZENDESK_WEBHOOK_SECRET ?? "",
       timestamp + raw
     );
 
@@ -265,7 +265,7 @@ describe("support channel webhooks", () => {
       webhookMetadata: {},
     };
     const raw = JSON.stringify(body);
-    const signature = await hmacSha256Hex(env.PLAIN_WEBHOOK_SECRET, raw);
+    const signature = await hmacSha256Hex(env.PLAIN_WEBHOOK_SECRET ?? "", raw);
 
     const res = await post(`/support/webhooks/plain/${organizationId}`, body, {
       "Plain-Request-Signature": signature,

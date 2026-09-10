@@ -1,4 +1,3 @@
-import type { ForwardableEmailMessage } from "@cloudflare/workers-types";
 import { and, eq } from "drizzle-orm";
 import PostalMime from "postal-mime";
 
@@ -6,6 +5,13 @@ import { createD1, type D1Client } from "../global/db.js";
 import { supportChannels } from "../global/schema.js";
 import { processIncomingMessage } from "../global/support-channels.js";
 import type { WorkerEnv } from "../platform/middleware.js";
+
+export interface IncomingEmailMessage {
+  from: string;
+  to: string | { address?: string; name?: string }[];
+  raw: ReadableStream<Uint8Array>;
+  setReject(reason: string): void;
+}
 
 function isAddressLike(
   value: unknown
@@ -82,7 +88,7 @@ async function findChannelByEmailAddress(
 }
 
 export async function handleIncomingEmail(
-  message: ForwardableEmailMessage,
+  message: IncomingEmailMessage,
   env: WorkerEnv
 ): Promise<void> {
   const to = firstAddress(message.to);
@@ -125,6 +131,7 @@ export async function handleIncomingEmail(
 
   await processIncomingMessage(db, channel.organizationId, {
     channel: "email",
+    externalSource: "email",
     fromEmail: from.address,
     fromName: from.name,
     subject,
