@@ -4,6 +4,7 @@ import {
   createCustomer,
   findCustomerByExternalId,
 } from "../global/support-contacts.js";
+import type { ExternalSupportReply } from "../global/support-tickets.js";
 import { createTicketFromZendesk } from "../global/support-tickets.js";
 import { VortexError } from "../platform/errors.js";
 import type {
@@ -104,6 +105,22 @@ const zendeskTicketListSchema = z.object({
     .default({ has_more: false }),
 });
 
+const zendeskCommentSchema = z
+  .object({
+    id: z.number().int(),
+    body: z.string().optional().nullable(),
+    html_body: z.string().optional().nullable(),
+    public: z.boolean().optional(),
+    author_id: z.number().int(),
+    created_at: z.string(),
+  })
+  .passthrough();
+
+const zendeskCommentListSchema = z.object({
+  comments: z.array(zendeskCommentSchema),
+  users: z.array(zendeskUserSchema).optional().default([]),
+});
+
 type ZendeskTicket = z.infer<typeof zendeskTicketSchema>;
 type ZendeskUser = z.infer<typeof zendeskUserSchema>;
 
@@ -178,6 +195,41 @@ async function getOrCreateZendeskSupportCustomer(
   return customer.id;
 }
 
+async function getZendeskTicketComments(
+  credentials: ZendeskCredentials,
+  ticket: ZendeskTicket
+): Promise<ExternalSupportReply[]> {
+  const raw = await zendeskRequest(
+    credentials,
+    `/api/v2/tickets/${ticket.id}/comments.json?include=users`
+  );
+  const parsed = zendeskCommentListSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 500,
+      message: "Invalid Zendesk comments response",
+      hint: parsed.error.message,
+    });
+  }
+
+  const sorted = parsed.data.comments.toSorted(
+    (a, b) => Date.parse(a.created_at) - Date.parse(b.created_at)
+  );
+
+  return sorted.map((comment) => {
+    const isInbound = comment.author_id === ticket.requester_id;
+    return {
+      body: comment.html_body ?? comment.body ?? "(no content)",
+      direction: isInbound ? "inbound" : "outbound",
+      channel: "email",
+      customerId: null,
+      userId: null,
+      createdAt: comment.created_at,
+    };
+  });
+}
+
 export const zendeskSupportImportSource: ImportSource<
   ZendeskSupportCredentials,
   ZendeskSupportOptions
@@ -229,10 +281,10 @@ export const zendeskSupportImportSource: ImportSource<
               return;
             }
 
-            const customerId = await getOrCreateZendeskSupportCustomer(
-              ctx,
-              requester
-            );
+            const [customerId, replies] = await Promise.all([
+              getOrCreateZendeskSupportCustomer(ctx, requester),
+              getZendeskTicketComments(credentials, ticket),
+            ]);
 
             const result = await createTicketFromZendesk(
               ctx.db,
@@ -247,7 +299,7 @@ export const zendeskSupportImportSource: ImportSource<
                 source: {},
                 createdAt: ticket.created_at,
                 updatedAt: ticket.updated_at,
-                replies: [],
+                replies,
               },
               {}
             );
