@@ -4,6 +4,7 @@ import type { Context } from "hono";
 import { hmacSha256Base64, timingSafeEqualHex } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
 import { findOrCreateCustomerByEmail } from "../global/support-contacts.js";
+import { maybeEscalate } from "../global/support-escalation.js";
 import {
   addTicketMessage,
   createTicket,
@@ -207,6 +208,14 @@ export async function processZendeskSupportWebhook(
     externalSource: "zendesk",
     createdAt,
     updatedAt: ticketData.updated_at ?? createdAt,
+  });
+
+  await maybeEscalate(c.env, db, organizationId, ticket, {
+    text,
+    subject: subject ?? undefined,
+    customer,
+    source: "zendesk",
+    channel: "zendesk",
   });
 
   if (text) {

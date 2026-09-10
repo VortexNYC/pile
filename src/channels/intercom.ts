@@ -4,6 +4,7 @@ import type { Context } from "hono";
 import { hmacSha1Hex, timingSafeEqualHex } from "../global/crypto.js";
 import { createD1, type D1Client } from "../global/db.js";
 import { findOrCreateCustomerByEmail } from "../global/support-contacts.js";
+import { maybeEscalate } from "../global/support-escalation.js";
 import {
   addTicketMessage,
   createTicket,
@@ -315,6 +316,14 @@ export async function processIntercomSupportWebhook(
     externalSource: "intercom",
     createdAt,
     updatedAt: createdAt,
+  });
+
+  await maybeEscalate(c.env, db, organizationId, ticket, {
+    text,
+    subject: sourceSubject,
+    customer,
+    source: "intercom",
+    channel: "intercom",
   });
 
   await addTicketMessage(db, organizationId, ticket.id, {

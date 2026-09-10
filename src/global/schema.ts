@@ -2020,6 +2020,38 @@ export const supportTickets = sqliteTable(
   ]
 );
 
+export const supportEscalationRules = sqliteTable(
+  "support_escalation_rules" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    name: text("name" as string).notNull(),
+    isActive: integer("is_active" as string, { mode: "boolean" })
+      .notNull()
+      .default(true),
+    sortOrder: integer("sort_order" as string)
+      .notNull()
+      .default(0),
+    conditions: text("conditions" as string).notNull(),
+    action: text("action" as string).notNull(),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("support_escalation_rules_org_active_order_idx" as string).on(
+      table.organizationId,
+      table.isActive,
+      table.sortOrder
+    ),
+  ]
+);
+
 export const supportTicketCounters = sqliteTable(
   "support_ticket_counters" as string,
   {

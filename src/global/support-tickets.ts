@@ -498,9 +498,52 @@ export async function updateTicket(
   };
 
   if (input.title !== undefined) updates.title = input.title;
-  if (input.issueId !== undefined) updates.issueId = input.issueId;
 
   const eventsToCreate: (typeof supportTicketEvents.$inferInsert)[] = [];
+
+  if (input.issueId !== undefined && input.issueId !== existing.issueId) {
+    updates.issueId = input.issueId;
+    const actorType = input.actorType ?? "user";
+    const actorId = input.actorId ?? null;
+    if (!existing.issueId && input.issueId) {
+      eventsToCreate.push({
+        id: crypto.randomUUID(),
+        ticketId,
+        type: "link_added",
+        actorType,
+        actorId,
+        metadata: JSON.stringify({ issueId: input.issueId }),
+        createdAt: now,
+      });
+    } else if (existing.issueId && !input.issueId) {
+      eventsToCreate.push({
+        id: crypto.randomUUID(),
+        ticketId,
+        type: "link_removed",
+        actorType,
+        actorId,
+        metadata: JSON.stringify({ issueId: existing.issueId }),
+        createdAt: now,
+      });
+    } else if (
+      existing.issueId &&
+      input.issueId &&
+      existing.issueId !== input.issueId
+    ) {
+      eventsToCreate.push({
+        id: crypto.randomUUID(),
+        ticketId,
+        type: "link_changed",
+        actorType,
+        actorId,
+        metadata: JSON.stringify({
+          fromIssueId: existing.issueId,
+          toIssueId: input.issueId,
+        }),
+        createdAt: now,
+      });
+    }
+  }
 
   if (input.status !== undefined && input.status !== existing.status) {
     updates.status = input.status;

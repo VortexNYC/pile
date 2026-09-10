@@ -883,6 +883,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdSupportEscalationrulesRuleId",
+    "description": "Delete support escalation rule (DELETE /workspaces/{organizationId}/support/escalation-rules/{ruleId})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/support/escalation-rules/{ruleId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "ruleId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "ruleId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdTeamsId",
     "description": "Delete team (DELETE /workspaces/{organizationId}/teams/{id})",
     "method": "DELETE",
@@ -3306,6 +3327,44 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdSupportEscalationrules",
+    "description": "List support escalation rules (GET /workspaces/{organizationId}/support/escalation-rules)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/escalation-rules",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportEscalationrulesRuleId",
+    "description": "Get support escalation rule (GET /workspaces/{organizationId}/support/escalation-rules/{ruleId})",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/escalation-rules/{ruleId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "ruleId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "ruleId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdSupportTickets",
     "description": "List support tickets (GET /workspaces/{organizationId}/support/tickets)",
     "method": "GET",
@@ -5155,6 +5214,162 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "customerId",
         "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "patchWorkspacesOrganizationIdSupportEscalationrulesRuleId",
+    "description": "Update support escalation rule (PATCH /workspaces/{organizationId}/support/escalation-rules/{ruleId})",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/support/escalation-rules/{ruleId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "ruleId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "isActive": {
+              "type": "boolean"
+            },
+            "sortOrder": {
+              "type": "integer"
+            },
+            "conditions": {
+              "type": "object",
+              "properties": {
+                "keywords": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "channels": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "email",
+                      "slack",
+                      "msteams",
+                      "discord",
+                      "chat",
+                      "capture",
+                      "api",
+                      "intercom",
+                      "zendesk",
+                      "plain"
+                    ]
+                  }
+                },
+                "priorities": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "low",
+                      "medium",
+                      "high",
+                      "urgent"
+                    ]
+                  }
+                },
+                "statuses": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "todo",
+                      "done",
+                      "snoozed"
+                    ]
+                  }
+                },
+                "sources": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "intercom",
+                      "zendesk",
+                      "plain",
+                      "email",
+                      "slack",
+                      "msteams",
+                      "discord",
+                      "chat",
+                      "api",
+                      "manual"
+                    ]
+                  }
+                },
+                "customerDomains": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "action": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "create_issue"
+                  ]
+                },
+                "teamId": {
+                  "type": "string"
+                },
+                "priority": {
+                  "type": "string",
+                  "enum": [
+                    "low",
+                    "medium",
+                    "high",
+                    "urgent"
+                  ]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "triage",
+                    "backlog",
+                    "todo",
+                    "in_progress",
+                    "done",
+                    "canceled"
+                  ]
+                },
+                "labelIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "type"
+              ]
+            }
+          }
+        }
+      },
+      "required": [
+        "organizationId",
+        "ruleId"
       ]
     }
   },
@@ -8582,6 +8797,163 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           },
           "required": [
             "email"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSupportEscalationrules",
+    "description": "Create support escalation rule (POST /workspaces/{organizationId}/support/escalation-rules)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/escalation-rules",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "isActive": {
+              "type": "boolean"
+            },
+            "sortOrder": {
+              "type": "integer"
+            },
+            "conditions": {
+              "type": "object",
+              "properties": {
+                "keywords": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "channels": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "email",
+                      "slack",
+                      "msteams",
+                      "discord",
+                      "chat",
+                      "capture",
+                      "api",
+                      "intercom",
+                      "zendesk",
+                      "plain"
+                    ]
+                  }
+                },
+                "priorities": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "low",
+                      "medium",
+                      "high",
+                      "urgent"
+                    ]
+                  }
+                },
+                "statuses": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "todo",
+                      "done",
+                      "snoozed"
+                    ]
+                  }
+                },
+                "sources": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "intercom",
+                      "zendesk",
+                      "plain",
+                      "email",
+                      "slack",
+                      "msteams",
+                      "discord",
+                      "chat",
+                      "api",
+                      "manual"
+                    ]
+                  }
+                },
+                "customerDomains": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "action": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "create_issue"
+                  ]
+                },
+                "teamId": {
+                  "type": "string"
+                },
+                "priority": {
+                  "type": "string",
+                  "enum": [
+                    "low",
+                    "medium",
+                    "high",
+                    "urgent"
+                  ]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "triage",
+                    "backlog",
+                    "todo",
+                    "in_progress",
+                    "done",
+                    "canceled"
+                  ]
+                },
+                "labelIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "type"
+              ]
+            }
+          },
+          "required": [
+            "name",
+            "conditions",
+            "action"
           ]
         }
       },

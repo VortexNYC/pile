@@ -2,6 +2,8 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
 import { createD1 } from "../global/db.js";
+import { getCustomerById } from "../global/support-contacts.js";
+import { maybeEscalate } from "../global/support-escalation.js";
 import {
   addTicketMessage,
   addTicketNote,
@@ -565,6 +567,19 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
       issueId: body.issueId,
     });
 
+    const customer = await getCustomerById(
+      db,
+      organizationId,
+      ticket.customerId
+    );
+    await maybeEscalate(c.env, db, organizationId, ticket, {
+      text: body.message?.textContent ?? body.title,
+      subject: body.title,
+      customer,
+      source: ticket.externalSource,
+      channel: ticket.sourceChannel,
+    });
+
     if (body.message) {
       await addTicketMessage(db, organizationId, ticket.id, {
         direction: "inbound",
@@ -623,6 +638,7 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
     const ticket = await updateTicket(db, organizationId, ticketId, {
       ...body,
       actorType: "user",
+      actorId: c.var.userId ?? null,
     });
     if (!ticket) {
       ticketNotFound();

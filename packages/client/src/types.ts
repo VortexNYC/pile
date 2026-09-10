@@ -11377,6 +11377,334 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/support/escalation-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List support escalation rules */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Escalation rules */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            rules: {
+                                id: string;
+                                organizationId: string;
+                                name: string;
+                                isActive: boolean;
+                                sortOrder: number;
+                                conditions: {
+                                    keywords?: string[];
+                                    channels?: ("email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain")[];
+                                    priorities?: ("low" | "medium" | "high" | "urgent")[];
+                                    statuses?: ("todo" | "done" | "snoozed")[];
+                                    sources?: ("intercom" | "zendesk" | "plain" | "email" | "slack" | "msteams" | "discord" | "chat" | "api" | "manual")[];
+                                    customerDomains?: string[];
+                                };
+                                action: {
+                                    /** @enum {string} */
+                                    type: "create_issue";
+                                    teamId?: string;
+                                    /** @enum {string} */
+                                    priority?: "low" | "medium" | "high" | "urgent";
+                                    /** @enum {string} */
+                                    status?: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
+                                    labelIds?: string[];
+                                };
+                                createdAt: string;
+                                updatedAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create support escalation rule */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        name: string;
+                        isActive?: boolean;
+                        sortOrder?: number;
+                        conditions: {
+                            keywords?: string[];
+                            channels?: ("email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain")[];
+                            priorities?: ("low" | "medium" | "high" | "urgent")[];
+                            statuses?: ("todo" | "done" | "snoozed")[];
+                            sources?: ("intercom" | "zendesk" | "plain" | "email" | "slack" | "msteams" | "discord" | "chat" | "api" | "manual")[];
+                            customerDomains?: string[];
+                        };
+                        action: {
+                            /** @enum {string} */
+                            type: "create_issue";
+                            teamId?: string;
+                            /** @enum {string} */
+                            priority?: "low" | "medium" | "high" | "urgent";
+                            /** @enum {string} */
+                            status?: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
+                            labelIds?: string[];
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Rule created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            rule: {
+                                id: string;
+                                organizationId: string;
+                                name: string;
+                                isActive: boolean;
+                                sortOrder: number;
+                                conditions: {
+                                    keywords?: string[];
+                                    channels?: ("email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain")[];
+                                    priorities?: ("low" | "medium" | "high" | "urgent")[];
+                                    statuses?: ("todo" | "done" | "snoozed")[];
+                                    sources?: ("intercom" | "zendesk" | "plain" | "email" | "slack" | "msteams" | "discord" | "chat" | "api" | "manual")[];
+                                    customerDomains?: string[];
+                                };
+                                action: {
+                                    /** @enum {string} */
+                                    type: "create_issue";
+                                    teamId?: string;
+                                    /** @enum {string} */
+                                    priority?: "low" | "medium" | "high" | "urgent";
+                                    /** @enum {string} */
+                                    status?: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
+                                    labelIds?: string[];
+                                };
+                                createdAt: string;
+                                updatedAt: string;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/support/escalation-rules/{ruleId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get support escalation rule */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    ruleId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Rule */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            rule: {
+                                id: string;
+                                organizationId: string;
+                                name: string;
+                                isActive: boolean;
+                                sortOrder: number;
+                                conditions: {
+                                    keywords?: string[];
+                                    channels?: ("email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain")[];
+                                    priorities?: ("low" | "medium" | "high" | "urgent")[];
+                                    statuses?: ("todo" | "done" | "snoozed")[];
+                                    sources?: ("intercom" | "zendesk" | "plain" | "email" | "slack" | "msteams" | "discord" | "chat" | "api" | "manual")[];
+                                    customerDomains?: string[];
+                                };
+                                action: {
+                                    /** @enum {string} */
+                                    type: "create_issue";
+                                    teamId?: string;
+                                    /** @enum {string} */
+                                    priority?: "low" | "medium" | "high" | "urgent";
+                                    /** @enum {string} */
+                                    status?: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
+                                    labelIds?: string[];
+                                };
+                                createdAt: string;
+                                updatedAt: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        /** Delete support escalation rule */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    ruleId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Deleted */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /** Update support escalation rule */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    ruleId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        name?: string;
+                        isActive?: boolean;
+                        sortOrder?: number;
+                        conditions?: {
+                            keywords?: string[];
+                            channels?: ("email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain")[];
+                            priorities?: ("low" | "medium" | "high" | "urgent")[];
+                            statuses?: ("todo" | "done" | "snoozed")[];
+                            sources?: ("intercom" | "zendesk" | "plain" | "email" | "slack" | "msteams" | "discord" | "chat" | "api" | "manual")[];
+                            customerDomains?: string[];
+                        };
+                        action?: {
+                            /** @enum {string} */
+                            type: "create_issue";
+                            teamId?: string;
+                            /** @enum {string} */
+                            priority?: "low" | "medium" | "high" | "urgent";
+                            /** @enum {string} */
+                            status?: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
+                            labelIds?: string[];
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Rule updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            rule: {
+                                id: string;
+                                organizationId: string;
+                                name: string;
+                                isActive: boolean;
+                                sortOrder: number;
+                                conditions: {
+                                    keywords?: string[];
+                                    channels?: ("email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain")[];
+                                    priorities?: ("low" | "medium" | "high" | "urgent")[];
+                                    statuses?: ("todo" | "done" | "snoozed")[];
+                                    sources?: ("intercom" | "zendesk" | "plain" | "email" | "slack" | "msteams" | "discord" | "chat" | "api" | "manual")[];
+                                    customerDomains?: string[];
+                                };
+                                action: {
+                                    /** @enum {string} */
+                                    type: "create_issue";
+                                    teamId?: string;
+                                    /** @enum {string} */
+                                    priority?: "low" | "medium" | "high" | "urgent";
+                                    /** @enum {string} */
+                                    status?: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
+                                    labelIds?: string[];
+                                };
+                                createdAt: string;
+                                updatedAt: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        trace?: never;
+    };
     "/workspaces/{organizationId}/csv-exports": {
         parameters: {
             query?: never;

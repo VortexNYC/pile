@@ -4893,6 +4893,120 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "support escalation rules list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/escalation-rules",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support escalation rules create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/escalation-rules",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "isActive",
+        flag: "is-active",
+      },
+      {
+        name: "sortOrder",
+        flag: "sort-order",
+      },
+      {
+        name: "conditions",
+        flag: "conditions",
+      },
+      {
+        name: "action",
+        flag: "action",
+      },
+    ],
+  },
+  "support escalation rules get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/escalation-rules/{ruleId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "ruleId",
+        flag: "rule-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support escalation rules update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/support/escalation-rules/{ruleId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "ruleId",
+        flag: "rule-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "isActive",
+        flag: "is-active",
+      },
+      {
+        name: "sortOrder",
+        flag: "sort-order",
+      },
+      {
+        name: "conditions",
+        flag: "conditions",
+      },
+      {
+        name: "action",
+        flag: "action",
+      },
+    ],
+  },
+  "support escalation rules delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/support/escalation-rules/{ruleId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "ruleId",
+        flag: "rule-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "csv exports create": {
     method: "POST",
     path: "/workspaces/{organizationId}/csv-exports",

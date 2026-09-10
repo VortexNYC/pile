@@ -1,8 +1,10 @@
 import { and, eq } from "drizzle-orm";
 
+import type { WorkerEnv } from "../platform/middleware.js";
 import type { D1Client } from "./db.js";
 import { supportChannels } from "./schema.js";
 import { findOrCreateCustomerByEmail } from "./support-contacts.js";
+import { maybeEscalate } from "./support-escalation.js";
 import {
   addTicketMessage,
   createTicket,
@@ -52,7 +54,8 @@ export async function getActiveSupportChannel(
 export async function processIncomingMessage(
   db: D1Client,
   organizationId: string,
-  input: ChannelIncomingMessage
+  input: ChannelIncomingMessage,
+  env?: WorkerEnv
 ): Promise<SupportTicket> {
   const customer = await findOrCreateCustomerByEmail(
     db,
@@ -91,6 +94,16 @@ export async function processIncomingMessage(
       createdAt: input.createdAt,
       updatedAt: input.createdAt,
     });
+
+    if (env) {
+      await maybeEscalate(env, db, organizationId, ticket, {
+        text: input.text,
+        subject: input.subject,
+        customer,
+        source: externalSource,
+        channel: input.channel,
+      });
+    }
   }
 
   await addTicketMessage(db, organizationId, ticket.id, {

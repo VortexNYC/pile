@@ -129,15 +129,20 @@ export async function handleIncomingEmail(
   const inReplyToValue = extractReferenceMessageId(inReplyTo);
   const externalTicketId = inReplyToValue ?? messageIdValue;
 
-  await processIncomingMessage(db, channel.organizationId, {
-    channel: "email",
-    externalSource: "email",
-    fromEmail: from.address,
-    fromName: from.name,
-    subject,
-    text,
-    html,
-    externalTicketId,
-    externalMessageId: messageIdValue,
-  });
+  await processIncomingMessage(
+    db,
+    channel.organizationId,
+    {
+      channel: "email",
+      externalSource: "email",
+      fromEmail: from.address,
+      fromName: from.name,
+      subject,
+      text,
+      html,
+      externalTicketId,
+      externalMessageId: messageIdValue,
+    },
+    env
+  );
 }

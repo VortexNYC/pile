@@ -36,7 +36,9 @@ export const supportEscalationRules = sqliteTable(
     isActive: integer("is_active" as string, { mode: "boolean" })
       .notNull()
       .default(true),
-    sortOrder: integer("sort_order" as string).notNull().default(0),
+    sortOrder: integer("sort_order" as string)
+      .notNull()
+      .default(0),
     conditions: text("conditions" as string).notNull(), // JSON
     action: text("action" as string).notNull(), // JSON
     createdAt: text("created_at" as string)

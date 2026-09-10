@@ -4,6 +4,7 @@ import type { Context } from "hono";
 import { hmacSha256Hex, timingSafeEqualHex } from "../global/crypto.js";
 import { createD1, type D1Client } from "../global/db.js";
 import { findOrCreateCustomerByEmail } from "../global/support-contacts.js";
+import { maybeEscalate } from "../global/support-escalation.js";
 import {
   addTicketMessage,
   createTicket,
@@ -14,7 +15,7 @@ import {
   type SupportTicketStatus,
 } from "../global/support-tickets.js";
 import { VortexError } from "../platform/errors.js";
-import type { AppContext } from "../platform/middleware.js";
+import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 
 const plainCustomerSchema = z.object({
   id: z.string(),
@@ -187,9 +188,15 @@ export async function processPlainSupportWebhook(
 
   switch (payload.eventType) {
     case "thread.thread_created":
-      await createTicketFromPlainPayload(db, organizationId, payload.thread, {
-        text: payload.thread.previewText ?? null,
-      });
+      await createTicketFromPlainPayload(
+        db,
+        c.env,
+        organizationId,
+        payload.thread,
+        {
+          text: payload.thread.previewText ?? null,
+        }
+      );
       break;
     case "thread.thread_status_transitioned":
     case "thread.thread_priority_changed":
@@ -198,6 +205,7 @@ export async function processPlainSupportWebhook(
     case "thread.email_received":
       await addMessageFromPlainPayload(
         db,
+        c.env,
         organizationId,
         payload.thread,
         payload.email.textContent ?? payload.email.markdownContent ?? null,
@@ -210,6 +218,7 @@ export async function processPlainSupportWebhook(
     case "thread.email_sent":
       await addMessageFromPlainPayload(
         db,
+        c.env,
         organizationId,
         payload.thread,
         payload.email.textContent ?? payload.email.markdownContent ?? null,
@@ -222,6 +231,7 @@ export async function processPlainSupportWebhook(
     case "thread.chat_received":
       await addMessageFromPlainPayload(
         db,
+        c.env,
         organizationId,
         payload.thread,
         payload.chat.text,
@@ -234,6 +244,7 @@ export async function processPlainSupportWebhook(
     case "thread.chat_sent":
       await addMessageFromPlainPayload(
         db,
+        c.env,
         organizationId,
         payload.thread,
         payload.chat.text,
@@ -252,6 +263,7 @@ export async function processPlainSupportWebhook(
 
 async function createTicketFromPlainPayload(
   db: D1Client,
+  env: WorkerEnv,
   organizationId: string,
   thread: z.infer<typeof plainThreadSchema>,
   firstMessage: { text: string | null }
@@ -304,6 +316,14 @@ async function createTicketFromPlainPayload(
     updatedAt: createdAt,
   });
 
+  await maybeEscalate(env, db, organizationId, ticket, {
+    text,
+    subject: thread.title ?? undefined,
+    customer: supportCustomer,
+    source: "plain",
+    channel: "plain",
+  });
+
   if (text) {
     await addTicketMessage(db, organizationId, ticket.id, {
       direction: "inbound",
@@ -340,6 +360,7 @@ async function updatePlainTicket(
 
 async function addMessageFromPlainPayload(
   db: D1Client,
+  env: WorkerEnv,
   organizationId: string,
   thread: z.infer<typeof plainThreadSchema>,
   text: string | null,
@@ -363,7 +384,7 @@ async function addMessageFromPlainPayload(
         message: "Missing customer email for new Plain thread",
       });
     }
-    await createTicketFromPlainPayload(db, organizationId, thread, {
+    await createTicketFromPlainPayload(db, env, organizationId, thread, {
       text,
     });
     existing = await findSupportTicketByExternalId(
