@@ -7,7 +7,7 @@ import {
 } from "better-auth/plugins/organization/access";
 import { z } from "zod";
 
-import { teamMetadataString } from "../global/team-metadata.js";
+import { safeJSON, teamMetadataString } from "../global/team-metadata.js";
 
 // Workspace-level statements layered on Better Auth's defaults.
 // `document` is the org-level doc policy: which actions a *role* may take
@@ -42,9 +42,7 @@ const workspaceMetadataSchema = z
 
 function parseWorkspaceMetadata(raw: unknown) {
   if (!raw) return { key: null, defaultTeamId: null };
-  const parsed = workspaceMetadataSchema.safeParse(
-    typeof raw === "string" ? JSON.parse(raw) : raw
-  );
+  const parsed = workspaceMetadataSchema.safeParse(safeJSON(raw));
   return parsed.success
     ? {
         key: parsed.data.key ?? null,

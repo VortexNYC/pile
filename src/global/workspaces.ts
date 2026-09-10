@@ -5,6 +5,7 @@ import { createAuth } from "../platform/auth.js";
 import type { AppEnv } from "../platform/env.js";
 import type { D1Client } from "./db.js";
 import { member, organization } from "./schema.js";
+import { safeJSON } from "./team-metadata.js";
 import { createState } from "./workspace-entities.js";
 
 const workspaceMetadataSchema = z
@@ -17,11 +18,13 @@ const workspaceMetadataSchema = z
 function parseWorkspaceMetadata(metadata: string | null) {
   if (!metadata)
     return { key: null as string | null, defaultTeamId: null as string | null };
-  const parsed = workspaceMetadataSchema.parse(JSON.parse(metadata));
-  return {
-    key: parsed.key ?? null,
-    defaultTeamId: parsed.defaultTeamId ?? null,
-  };
+  const parsed = workspaceMetadataSchema.safeParse(safeJSON(metadata));
+  return parsed.success
+    ? {
+        key: parsed.data.key ?? null,
+        defaultTeamId: parsed.data.defaultTeamId ?? null,
+      }
+    : { key: null as string | null, defaultTeamId: null as string | null };
 }
 
 export interface WorkspaceRecord {

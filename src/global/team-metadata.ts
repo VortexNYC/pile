@@ -13,13 +13,20 @@ export const teamMetadataSchema = z.object({
 
 export type TeamMetadata = z.infer<typeof teamMetadataSchema>;
 
+export function safeJSON(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
 export function parseTeamMetadata(
   raw: string | null | undefined
 ): TeamMetadata | null {
   if (!raw) return null;
-  const parsed = teamMetadataSchema.safeParse(
-    typeof raw === "string" ? JSON.parse(raw) : raw
-  );
+  const parsed = teamMetadataSchema.safeParse(safeJSON(raw));
   return parsed.success ? parsed.data : null;
 }
 
