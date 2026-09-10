@@ -1,4 +1,5 @@
 import { createAccessControl } from "better-auth/plugins/access";
+import type { OrganizationOptions } from "better-auth/plugins/organization";
 import {
   adminAc,
   defaultStatements,
@@ -60,16 +61,29 @@ export const organizationOptions = {
     defaultTeam: {
       enabled: true,
       async customCreateDefaultTeam(organization, ctx) {
-        const meta = parseWorkspaceMetadata(organization.metadata);
+        if (!ctx) {
+          throw new Error("customCreateDefaultTeam missing endpoint context");
+        }
+
+        const organizationId = z.string().parse(organization.id);
+        const rawMetadata: unknown = organization.metadata;
+        const meta = parseWorkspaceMetadata(rawMetadata);
         const workspaceKey = meta.key ?? "general";
-        const ownerId =
-          ctx.context.session?.user.id ??
-          z.object({ userId: z.string() }).safeParse(ctx.body).data?.userId;
+
+        const requestBody: unknown = ctx.body;
+        const sessionUserId = z
+          .string()
+          .safeParse(ctx.context.session?.user.id).data;
+        const bodyUserId = z
+          .object({ userId: z.string() })
+          .safeParse(requestBody).data?.userId;
+        const ownerId = sessionUserId ?? bodyUserId;
         if (!ownerId) {
           throw new Error(
             "customCreateDefaultTeam could not resolve the creating user"
           );
         }
+
         const now = new Date();
         const metadata = teamMetadataString({
           key: workspaceKey,
@@ -78,32 +92,45 @@ export const organizationOptions = {
           isPublic: false,
         });
 
-        const team = await ctx.context.adapter.create({
-          model: "team",
-          data: {
-            name: "General",
-            organizationId: organization.id,
-            memberCount: 0,
-            metadata,
-            createdAt: now,
-            updatedAt: now,
-          },
-        });
+        const teamResultSchema = z
+          .object({
+            id: z.string(),
+            name: z.string(),
+            organizationId: z.string(),
+            createdAt: z.coerce.date(),
+            updatedAt: z.coerce.date().optional(),
+            memberCount: z.coerce.number().optional(),
+          })
+          .passthrough();
+
+        const created = teamResultSchema.parse(
+          await ctx.context.adapter.create({
+            model: "team",
+            data: {
+              name: "General",
+              organizationId,
+              memberCount: 0,
+              metadata,
+              createdAt: now,
+              updatedAt: now,
+            },
+          })
+        );
 
         const updatedMeta = {
           ...meta,
-          defaultTeamId: team.id,
+          defaultTeamId: created.id,
         };
         await ctx.context.adapter.update({
           model: "organization",
-          where: [{ field: "id", value: organization.id }],
+          where: [{ field: "id", value: organizationId }],
           update: {
             metadata: JSON.stringify(updatedMeta),
             updatedAt: now,
           },
         });
 
-        return team;
+        return created;
       },
     },
   },
@@ -114,4 +141,4 @@ export const organizationOptions = {
     member: memberRole,
   },
   dynamicAccessControl: { enabled: true },
-};
+} satisfies OrganizationOptions;

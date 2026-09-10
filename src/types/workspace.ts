@@ -122,6 +122,7 @@ export interface Issue {
   branch: string | null;
   prUrl: string | null;
   prState: string | null;
+  prCheckState: string | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }

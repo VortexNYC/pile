@@ -4762,6 +4762,244 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/support-channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List support channels */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Support channels list */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            channels: {
+                                id: string;
+                                organizationId: string;
+                                /** @enum {string} */
+                                type: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                                name: string;
+                                isActive: boolean;
+                                config: {
+                                    [key: string]: unknown;
+                                };
+                                createdAt: string;
+                                updatedAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create support channel */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        type: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                        name: string;
+                        config?: {
+                            [key: string]: unknown;
+                        };
+                        /** @default true */
+                        isActive?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description Support channel created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            /** @enum {string} */
+                            type: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                            name: string;
+                            isActive: boolean;
+                            config: {
+                                [key: string]: unknown;
+                            };
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/support/webhooks/intercom/{organizationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Receive Intercom support webhook notifications */
+        post: {
+            parameters: {
+                query?: never;
+                header?: {
+                    "x-hub-signature"?: string;
+                };
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/support/webhooks/zendesk/{organizationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Receive Zendesk support webhook notifications */
+        post: {
+            parameters: {
+                query?: never;
+                header?: {
+                    "x-zendesk-webhook-signature"?: string;
+                    "x-zendesk-webhook-signature-timestamp"?: string;
+                };
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/support/webhooks/plain/{organizationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Receive Plain support webhook notifications */
+        post: {
+            parameters: {
+                query?: never;
+                header?: {
+                    "plain-request-signature"?: string;
+                };
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/available-users": {
         parameters: {
             query?: never;
@@ -9227,7 +9465,8 @@ export interface paths {
                                     id: string;
                                     customerId: string;
                                     /** @enum {string} */
-                                    type: "email" | "phone" | "slack" | "chat";
+                                    type: "email" | "phone" | "slack" | "msteams" | "discord" | "whatsapp" | "chat" | "api" | "social" | "custom";
+                                    subType: string | null;
                                     value: string;
                                     isPrimary: boolean;
                                     createdAt: string;
@@ -9267,7 +9506,8 @@ export interface paths {
                         }[];
                         identities?: {
                             /** @enum {string} */
-                            type: "email" | "phone" | "slack" | "chat";
+                            type: "email" | "phone" | "slack" | "msteams" | "discord" | "whatsapp" | "chat" | "api" | "social" | "custom";
+                            subType?: string;
                             value: string;
                             /** @default false */
                             isPrimary?: boolean;
@@ -9306,7 +9546,8 @@ export interface paths {
                                     id: string;
                                     customerId: string;
                                     /** @enum {string} */
-                                    type: "email" | "phone" | "slack" | "chat";
+                                    type: "email" | "phone" | "slack" | "msteams" | "discord" | "whatsapp" | "chat" | "api" | "social" | "custom";
+                                    subType: string | null;
                                     value: string;
                                     isPrimary: boolean;
                                     createdAt: string;
@@ -9373,7 +9614,8 @@ export interface paths {
                                     id: string;
                                     customerId: string;
                                     /** @enum {string} */
-                                    type: "email" | "phone" | "slack" | "chat";
+                                    type: "email" | "phone" | "slack" | "msteams" | "discord" | "whatsapp" | "chat" | "api" | "social" | "custom";
+                                    subType: string | null;
                                     value: string;
                                     isPrimary: boolean;
                                     createdAt: string;
@@ -9444,7 +9686,8 @@ export interface paths {
                                     id: string;
                                     customerId: string;
                                     /** @enum {string} */
-                                    type: "email" | "phone" | "slack" | "chat";
+                                    type: "email" | "phone" | "slack" | "msteams" | "discord" | "whatsapp" | "chat" | "api" | "social" | "custom";
+                                    subType: string | null;
                                     value: string;
                                     isPrimary: boolean;
                                     createdAt: string;
@@ -9518,7 +9761,8 @@ export interface paths {
                                     id: string;
                                     customerId: string;
                                     /** @enum {string} */
-                                    type: "email" | "phone" | "slack" | "chat";
+                                    type: "email" | "phone" | "slack" | "msteams" | "discord" | "whatsapp" | "chat" | "api" | "social" | "custom";
+                                    subType: string | null;
                                     value: string;
                                     isPrimary: boolean;
                                     createdAt: string;
@@ -9560,7 +9804,8 @@ export interface paths {
                     "application/json": {
                         identities: {
                             /** @enum {string} */
-                            type: "email" | "phone" | "slack" | "chat";
+                            type: "email" | "phone" | "slack" | "msteams" | "discord" | "whatsapp" | "chat" | "api" | "social" | "custom";
+                            subType?: string;
                             value: string;
                             /** @default false */
                             isPrimary?: boolean;
@@ -9599,7 +9844,8 @@ export interface paths {
                                     id: string;
                                     customerId: string;
                                     /** @enum {string} */
-                                    type: "email" | "phone" | "slack" | "chat";
+                                    type: "email" | "phone" | "slack" | "msteams" | "discord" | "whatsapp" | "chat" | "api" | "social" | "custom";
+                                    subType: string | null;
                                     value: string;
                                     isPrimary: boolean;
                                     createdAt: string;
@@ -9866,7 +10112,7 @@ export interface paths {
                                         textContent: string;
                                         markdownContent: string | null;
                                         /** @enum {string} */
-                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "api";
+                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
                                         customerId: string | null;
                                         userId: string | null;
                                     };
@@ -9925,7 +10171,7 @@ export interface paths {
                              * @default chat
                              * @enum {string}
                              */
-                            channel?: "email" | "slack" | "msteams" | "discord" | "chat" | "api";
+                            channel?: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
                         };
                     };
                 };
@@ -10007,7 +10253,7 @@ export interface paths {
                                         textContent: string;
                                         markdownContent: string | null;
                                         /** @enum {string} */
-                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "api";
+                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
                                         customerId: string | null;
                                         userId: string | null;
                                     };
@@ -10125,7 +10371,7 @@ export interface paths {
                                         textContent: string;
                                         markdownContent: string | null;
                                         /** @enum {string} */
-                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "api";
+                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
                                         customerId: string | null;
                                         userId: string | null;
                                     };
@@ -10246,7 +10492,7 @@ export interface paths {
                                         textContent: string;
                                         markdownContent: string | null;
                                         /** @enum {string} */
-                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "api";
+                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
                                         customerId: string | null;
                                         userId: string | null;
                                     };
@@ -10292,7 +10538,7 @@ export interface paths {
                         textContent: string;
                         markdownContent?: string;
                         /** @enum {string} */
-                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "api";
+                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
                         customerId?: string;
                         userId?: string;
                         /** @enum {string} */
@@ -10330,7 +10576,7 @@ export interface paths {
                                     textContent: string;
                                     markdownContent: string | null;
                                     /** @enum {string} */
-                                    channel: "email" | "slack" | "msteams" | "discord" | "chat" | "api";
+                                    channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
                                     customerId: string | null;
                                     userId: string | null;
                                 };
@@ -10411,7 +10657,7 @@ export interface paths {
                                     textContent: string;
                                     markdownContent: string | null;
                                     /** @enum {string} */
-                                    channel: "email" | "slack" | "msteams" | "discord" | "chat" | "api";
+                                    channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
                                     customerId: string | null;
                                     userId: string | null;
                                 };
@@ -10479,7 +10725,7 @@ export interface paths {
                                     textContent: string;
                                     markdownContent: string | null;
                                     /** @enum {string} */
-                                    channel: "email" | "slack" | "msteams" | "discord" | "chat" | "api";
+                                    channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
                                     customerId: string | null;
                                     userId: string | null;
                                 };
@@ -10601,7 +10847,7 @@ export interface paths {
                                         textContent: string;
                                         markdownContent: string | null;
                                         /** @enum {string} */
-                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "api";
+                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
                                         customerId: string | null;
                                         userId: string | null;
                                     };
@@ -10721,7 +10967,7 @@ export interface paths {
                                         textContent: string;
                                         markdownContent: string | null;
                                         /** @enum {string} */
-                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "api";
+                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
                                         customerId: string | null;
                                         userId: string | null;
                                     };
@@ -10847,7 +11093,7 @@ export interface paths {
                                         textContent: string;
                                         markdownContent: string | null;
                                         /** @enum {string} */
-                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "api";
+                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
                                         customerId: string | null;
                                         userId: string | null;
                                     };
@@ -10863,6 +11109,268 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/support/tickets/{ticketId}/assignees": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update support ticket assignees */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    ticketId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        assignees: ({
+                            userId: string;
+                            teamId?: string;
+                            /** @default false */
+                            isPrimary?: boolean;
+                        } | {
+                            userId?: string;
+                            teamId: string;
+                            /** @default false */
+                            isPrimary?: boolean;
+                        })[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Ticket assignees updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ticket: {
+                                id: string;
+                                organizationId: string;
+                                customerId: string;
+                                number: number;
+                                externalId: string | null;
+                                externalSource: string;
+                                title: string;
+                                /** @enum {string} */
+                                status: "todo" | "done" | "snoozed";
+                                /** @enum {string} */
+                                priority: "low" | "medium" | "high" | "urgent";
+                                /** @enum {string} */
+                                sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                                issueId: string | null;
+                                lastCustomerMessageAt: string | null;
+                                lastAgentMessageAt: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                customer: {
+                                    id: string;
+                                    email: string;
+                                    fullName: string | null;
+                                    phone: string | null;
+                                };
+                                companies: {
+                                    id: string;
+                                    name: string;
+                                    isPrimary: boolean;
+                                }[];
+                                identities: {
+                                    id: string;
+                                    /** @enum {string} */
+                                    type: "email" | "phone" | "slack" | "msteams" | "discord" | "whatsapp" | "chat" | "api" | "social" | "custom";
+                                    value: string;
+                                    subType: string | null;
+                                    isPrimary: boolean;
+                                }[];
+                                labels: {
+                                    id: string;
+                                    labelId: string;
+                                    name: string;
+                                    color: string | null;
+                                }[];
+                                assignees: {
+                                    id: string;
+                                    /** @enum {string} */
+                                    type: "user" | "team";
+                                    assigneeId: string;
+                                    name: string | null;
+                                    isPrimary: boolean;
+                                }[];
+                                events: {
+                                    id: string;
+                                    ticketId: string;
+                                    type: string;
+                                    subType: string | null;
+                                    actorType: string;
+                                    actorId: string | null;
+                                    metadata: string | null;
+                                    createdAt: string;
+                                    message?: {
+                                        id: string;
+                                        eventId: string;
+                                        /** @enum {string} */
+                                        direction: "inbound" | "outbound";
+                                        textContent: string;
+                                        markdownContent: string | null;
+                                        /** @enum {string} */
+                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                                        customerId: string | null;
+                                        userId: string | null;
+                                    };
+                                    note?: {
+                                        id: string;
+                                        eventId: string;
+                                        body: string;
+                                    };
+                                }[];
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/support/tickets/{ticketId}/labels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update support ticket labels */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    ticketId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        labels: string[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Ticket labels updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ticket: {
+                                id: string;
+                                organizationId: string;
+                                customerId: string;
+                                number: number;
+                                externalId: string | null;
+                                externalSource: string;
+                                title: string;
+                                /** @enum {string} */
+                                status: "todo" | "done" | "snoozed";
+                                /** @enum {string} */
+                                priority: "low" | "medium" | "high" | "urgent";
+                                /** @enum {string} */
+                                sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                                issueId: string | null;
+                                lastCustomerMessageAt: string | null;
+                                lastAgentMessageAt: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                customer: {
+                                    id: string;
+                                    email: string;
+                                    fullName: string | null;
+                                    phone: string | null;
+                                };
+                                companies: {
+                                    id: string;
+                                    name: string;
+                                    isPrimary: boolean;
+                                }[];
+                                identities: {
+                                    id: string;
+                                    /** @enum {string} */
+                                    type: "email" | "phone" | "slack" | "msteams" | "discord" | "whatsapp" | "chat" | "api" | "social" | "custom";
+                                    value: string;
+                                    subType: string | null;
+                                    isPrimary: boolean;
+                                }[];
+                                labels: {
+                                    id: string;
+                                    labelId: string;
+                                    name: string;
+                                    color: string | null;
+                                }[];
+                                assignees: {
+                                    id: string;
+                                    /** @enum {string} */
+                                    type: "user" | "team";
+                                    assigneeId: string;
+                                    name: string | null;
+                                    isPrimary: boolean;
+                                }[];
+                                events: {
+                                    id: string;
+                                    ticketId: string;
+                                    type: string;
+                                    subType: string | null;
+                                    actorType: string;
+                                    actorId: string | null;
+                                    metadata: string | null;
+                                    createdAt: string;
+                                    message?: {
+                                        id: string;
+                                        eventId: string;
+                                        /** @enum {string} */
+                                        direction: "inbound" | "outbound";
+                                        textContent: string;
+                                        markdownContent: string | null;
+                                        /** @enum {string} */
+                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                                        customerId: string | null;
+                                        userId: string | null;
+                                    };
+                                    note?: {
+                                        id: string;
+                                        eventId: string;
+                                        body: string;
+                                    };
+                                }[];
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;

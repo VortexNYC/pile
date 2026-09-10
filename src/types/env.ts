@@ -33,6 +33,10 @@ export interface AppEnv {
   GITLAB_API_URL?: string;
   // Intercom integration.
   INTERCOM_CLIENT_SECRET?: string;
+  // Zendesk integration.
+  ZENDESK_WEBHOOK_SECRET?: string;
+  // Plain integration.
+  PLAIN_WEBHOOK_SECRET?: string;
   // Cloudflare Email Service send binding.
   EMAIL?: SendEmail;
   EMAIL_FROM?: string;

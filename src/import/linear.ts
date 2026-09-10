@@ -914,6 +914,7 @@ export const linearImportSource: ImportSource<
         }
         const createdMembership = await createMembership(
           ctx.db,
+          ctx.env,
           ctx.organizationId,
           localUser.id,
           "member"

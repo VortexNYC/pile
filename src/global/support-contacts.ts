@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, like, or } from "drizzle-orm";
+import { and, asc, eq, gt, like, or, type SQL } from "drizzle-orm";
 
 import type { D1Client } from "./db.js";
 import {
@@ -128,6 +128,35 @@ export async function createCustomer(
   };
 }
 
+export async function findOrCreateCustomerByEmail(
+  db: D1Client,
+  organizationId: string,
+  email: string,
+  fullName?: string | null,
+  externalSource?: string
+): Promise<SupportCustomer> {
+  const normalizedEmail = email.toLowerCase().trim();
+  const [existing] = await db
+    .select()
+    .from(supportCustomers)
+    .where(
+      and(
+        eq(supportCustomers.organizationId, organizationId),
+        eq(supportCustomers.email, normalizedEmail)
+      )
+    )
+    .limit(1);
+  if (existing) {
+    return existing;
+  }
+  return createCustomer(db, {
+    organizationId,
+    email: normalizedEmail,
+    fullName,
+    externalSource: externalSource ?? "email",
+  });
+}
+
 export async function findCustomerByExternalId(
   db: D1Client,
   organizationId: string,
@@ -216,7 +245,9 @@ export async function listCustomers(
   organizationId: string,
   options: ListCustomersOptions
 ): Promise<{ customers: SupportCustomer[]; nextCursor: string | null }> {
-  const conditions = [eq(supportCustomers.organizationId, organizationId)];
+  const conditions: (SQL<unknown> | undefined)[] = [
+    eq(supportCustomers.organizationId, organizationId),
+  ];
 
   if (options.companyId) {
     const customerIds = await db
@@ -502,7 +533,9 @@ export async function listCompanies(
   organizationId: string,
   options: ListCompaniesOptions
 ): Promise<{ companies: SupportCompany[]; nextCursor: string | null }> {
-  const conditions = [eq(supportCompanies.organizationId, organizationId)];
+  const conditions: (SQL<unknown> | undefined)[] = [
+    eq(supportCompanies.organizationId, organizationId),
+  ];
 
   if (options.q) {
     const query = `%${options.q}%`;

@@ -1,6 +1,8 @@
 import { and, asc, desc, eq, lte } from "drizzle-orm";
 import { z } from "zod";
 
+import { createAuth } from "../platform/auth.js";
+import type { AppEnv } from "../platform/env.js";
 import type { D1Client } from "./db.js";
 import {
   cycles,
@@ -409,6 +411,7 @@ export async function listMemberships(db: D1Client, organizationId: string) {
 
 export async function createMembership(
   db: D1Client,
+  env: AppEnv,
   organizationId: string,
   userId: string,
   role: "owner" | "admin" | "member" = "member"
@@ -423,16 +426,24 @@ export async function createMembership(
   if (existing) {
     return mapMember(existing);
   }
-  const id = crypto.randomUUID();
-  await db.insert(member).values({
-    id,
-    organizationId: organizationId,
-    userId,
-    role,
-    createdAt: new Date(),
+  const auth = createAuth(env);
+  const result = await auth.api.addMember({
+    body: { userId, role, organizationId },
   });
-  const row = await db.select().from(member).where(eq(member.id, id)).get();
-  return mapMember(row!);
+  const row = z
+    .object({
+      id: z.string(),
+      organizationId: z.string(),
+      userId: z.string(),
+      role: z.string(),
+      createdAt: z.coerce.date(),
+    })
+    .parse(result);
+  return mapMember({
+    ...row,
+    role: membershipRoleSchema.parse(row.role),
+    createdAt: row.createdAt,
+  });
 }
 
 // Roadmaps

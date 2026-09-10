@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 
 import { createD1 } from "../global/db.js";
 import { teamMember } from "../global/schema.js";
-import { createAuth } from "../platform/auth.js";
+import { adminRole, memberRole, ownerRole } from "../platform/access.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
@@ -135,22 +135,20 @@ async function assertDocAccess(
   documentId: string,
   required: "view" | "edit"
 ) {
-  const organizationId = c.req.param("organizationId");
   const identity = c.get("workspaceIdentity");
   if (identity.permissions.includes("admin")) return;
   // Type-level ceiling: the member's Better Auth role (incl. dynamic
   // organizationRole rows) must allow the action on `document`. Agents
   // authenticate by org-scoped API key, not session — instance grants only.
   if (identity.type === "user" && identity.role) {
-    const auth = createAuth(c.env);
-    const result = await auth.api.hasPermission({
-      body: {
-        organizationId,
-        permissions: { document: [required] },
-      },
-      headers: c.req.raw.headers,
-    });
-    if (!result.success) {
+    const role =
+      identity.role === "owner"
+        ? ownerRole
+        : identity.role === "admin"
+          ? adminRole
+          : memberRole;
+    const authorization = role.authorize({ document: [required] });
+    if (!authorization.success) {
       throw new VortexError({
         code: "FORBIDDEN",
         status: 403,

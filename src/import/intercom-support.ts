@@ -80,7 +80,7 @@ const intercomContactDetailSchema = z
     name: z.string().optional().nullable(),
     phone: z.string().optional().nullable(),
     external_id: z.string().optional().nullable(),
-    custom_attributes: z.record(z.unknown()).optional(),
+    custom_attributes: z.record(z.string(), z.unknown()).optional(),
     companies: z.array(intercomCompanySchema).optional().default([]),
     social_profiles: z
       .array(intercomSocialProfileSchema)
@@ -143,6 +143,7 @@ async function getOrCreateIntercomSupportCustomer(
   if (!detail) return customerId;
 
   const companyInputs = (detail.companies ?? []).map((company) => ({
+    organizationId: ctx.organizationId,
     name: company.name ?? "Unknown company",
     domain: company.website ?? null,
     externalId: company.company_id ?? company.id,

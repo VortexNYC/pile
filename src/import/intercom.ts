@@ -26,6 +26,7 @@ export const intercomOptionsSchema = z.object({
   teamId: z.string().optional(),
   state: z.enum(["open", "closed", "snoozed", "all"]).optional().default("all"),
   limit: z.number().int().min(1).max(1000).optional(),
+  cursor: z.string().optional(),
 });
 
 export type IntercomOptions = z.infer<typeof intercomOptionsSchema>;

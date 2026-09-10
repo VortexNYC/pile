@@ -3,7 +3,8 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { eq } from "drizzle-orm";
 
 import { createD1 } from "../global/db.js";
-import { apikey, member, user as userTable } from "../global/schema.js";
+import { apikey, user as userTable } from "../global/schema.js";
+import { createMembership } from "../global/workspace-entities.js";
 import { getWorkspaceById } from "../global/workspaces.js";
 import { createAuth } from "../platform/auth.js";
 import { VortexError } from "../platform/errors.js";
@@ -157,13 +158,7 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
         createdAt: now,
         updatedAt: now,
       });
-      await db.insert(member).values({
-        id: crypto.randomUUID(),
-        organizationId,
-        userId: agentId,
-        role: "member",
-        createdAt: now,
-      });
+      await createMembership(db, c.env, organizationId, agentId, "member");
       userId = agentId;
     } else if (identity.type === "agent") {
       const workspace = await getWorkspaceById(db, organizationId);

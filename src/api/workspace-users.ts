@@ -7,6 +7,7 @@ import { createD1 } from "../global/db.js";
 import { invitation, member, user as userTable } from "../global/schema.js";
 import { createAuth } from "../platform/auth.js";
 import { VortexError } from "../platform/errors.js";
+import { workspaceRoleSchema } from "../platform/identity.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 
@@ -192,7 +193,7 @@ export function registerWorkspaceUserRoutes(app: OpenAPIHono<AppContext>) {
         body: {
           email: invite.email,
           organizationId,
-          role: invite.role,
+          role: workspaceRoleSchema.parse(invite.role),
           resend: true,
           teamId: invite.teamId ?? undefined,
         },

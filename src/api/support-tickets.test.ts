@@ -314,7 +314,6 @@ describe("support-tickets API", () => {
       email: "intercom@example.com",
       fullName: "Intercom Customer",
       externalId: null,
-      externalSource: null,
     });
 
     const ticket = await createTicketFromIntercom(
@@ -446,7 +445,6 @@ describe("support-tickets API", () => {
       email: "plain@example.com",
       fullName: "Plain Customer",
       externalId: null,
-      externalSource: null,
     });
 
     const ticket = await createTicketFromPlain(
@@ -582,7 +580,6 @@ describe("support-tickets API", () => {
       email: "zendesk@example.com",
       fullName: "Zendesk Customer",
       externalId: null,
-      externalSource: null,
     });
 
     const ticket = await createTicketFromZendesk(
@@ -593,8 +590,11 @@ describe("support-tickets API", () => {
         id: "zd-789",
         status: "open",
         priority: "urgent",
-        subject: "Refund request",
-        description: "I need a refund for my last purchase",
+        source: {
+          type: "email",
+          subject: "Refund request",
+          body: "I need a refund for my last purchase",
+        },
         createdAt: "2023-11-14T13:00:00.000Z",
         updatedAt: "2023-11-14T13:05:00.000Z",
         replies: [
@@ -706,7 +706,6 @@ describe("support-tickets API", () => {
       email: "contact@acme.example",
       fullName: "Contact Person",
       externalId: null,
-      externalSource: null,
     });
 
     const company = await createCompany(db, {
@@ -766,7 +765,6 @@ describe("support-tickets API", () => {
       email: "assigned@example.com",
       fullName: "Assigned Customer",
       externalId: null,
-      externalSource: null,
     });
 
     const ticket = await createTicketFromPlain(
@@ -815,7 +813,6 @@ describe("support-tickets API", () => {
       email: "team-assigned@example.com",
       fullName: "Team Assigned Customer",
       externalId: null,
-      externalSource: null,
     });
 
     const ticket = await createTicketFromPlain(
@@ -865,7 +862,6 @@ describe("support-tickets API", () => {
       email: "mixed-assigned@example.com",
       fullName: "Mixed Assigned Customer",
       externalId: null,
-      externalSource: null,
     });
 
     const ticket = await createTicketFromPlain(
