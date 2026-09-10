@@ -30252,7 +30252,8 @@
                       "linear",
                       "notion",
                       "github-issues",
-                      "intercom"
+                      "intercom",
+                      "intercom-support"
                     ]
                   },
                   "credentials": {

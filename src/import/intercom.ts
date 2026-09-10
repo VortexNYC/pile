@@ -36,6 +36,12 @@ const intercomConversationSourceSchema = z.object({
   body: z.string().nullable().default(null),
 });
 
+const intercomContactSchema = z.object({
+  id: z.string(),
+  email: z.string().optional(),
+  name: z.string().optional(),
+});
+
 const intercomConversationSchema = z.object({
   type: z.literal("conversation"),
   id: z.string(),
@@ -48,6 +54,12 @@ const intercomConversationSchema = z.object({
     .optional()
     .default("none"),
   source: intercomConversationSourceSchema.nullable().default(null),
+  contacts: z
+    .object({
+      type: z.string(),
+      contacts: z.array(intercomContactSchema.passthrough()).default([]),
+    })
+    .optional(),
 });
 
 const intercomConversationListSchema = z.object({
@@ -69,7 +81,10 @@ const intercomConversationListSchema = z.object({
 
 type IntercomConversation = z.infer<typeof intercomConversationSchema>;
 
-async function intercomRequest(token: string, path: string): Promise<unknown> {
+export async function intercomRequest(
+  token: string,
+  path: string
+): Promise<unknown> {
   const response = await fetch(`${INTERCOM_API_BASE}${path}`, {
     headers: {
       Authorization: `Bearer ${token}`,
@@ -131,7 +146,7 @@ function conversationBody(conversation: IntercomConversation): string {
   return "";
 }
 
-async function listIntercomConversations(
+export async function listIntercomConversations(
   token: string,
   perPage: number,
   startingAfter?: string

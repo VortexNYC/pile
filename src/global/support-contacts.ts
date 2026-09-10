@@ -115,6 +115,26 @@ export async function createCustomer(
   };
 }
 
+export async function findCustomerByExternalId(
+  db: D1Client,
+  organizationId: string,
+  externalId: string,
+  externalSource: string
+): Promise<SupportCustomer | null> {
+  const [customer] = await db
+    .select()
+    .from(supportCustomers)
+    .where(
+      and(
+        eq(supportCustomers.organizationId, organizationId),
+        eq(supportCustomers.externalId, externalId),
+        eq(supportCustomers.externalSource, externalSource)
+      )
+    )
+    .limit(1);
+  return customer ?? null;
+}
+
 export async function getCustomerById(
   db: D1Client,
   organizationId: string,
