@@ -4917,6 +4917,43 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "support snippets list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/snippets",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support snippets create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/snippets",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "textContent",
+        flag: "text-content",
+      },
+      {
+        name: "markdownContent",
+        flag: "markdown-content",
+      },
+    ],
+  },
   "support escalation rules list": {
     method: "GET",
     path: "/workspaces/{organizationId}/support/escalation-rules",

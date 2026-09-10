@@ -62,6 +62,7 @@ import {
 import { registerStateRoutes } from "./states.js";
 import { registerSupportChannelRoutes } from "./support-channels.js";
 import { registerSupportContactRoutes } from "./support-contacts.js";
+import { registerSupportContentRoutes } from "./support-content.js";
 import { registerSupportEscalationRoutes } from "./support-escalation.js";
 import { registerSupportInboxRoutes } from "./support-inbox.js";
 import { registerSupportTeamRoutes } from "./support-team.js";
@@ -127,6 +128,7 @@ registerAuditRoutes(app);
 registerCustomerRoutes(app);
 registerSupportContactRoutes(app);
 registerSupportTicketRoutes(app);
+registerSupportContentRoutes(app);
 registerSupportEscalationRoutes(app);
 registerSupportInboxRoutes(app);
 registerSupportTeamRoutes(app);

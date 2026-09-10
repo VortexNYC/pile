@@ -3654,6 +3654,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdSupportSnippets",
+    "description": "List support snippets (GET /workspaces/{organizationId}/support/snippets)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/snippets",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdSupportTickets",
     "description": "List support tickets (GET /workspaces/{organizationId}/support/tickets)",
     "method": "GET",
@@ -9547,6 +9564,41 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "required": [
             "name",
             "priority"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSupportSnippets",
+    "description": "Create support snippet (POST /workspaces/{organizationId}/support/snippets)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/snippets",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "textContent": {
+              "type": "string"
+            },
+            "markdownContent": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "textContent"
           ]
         }
       },
