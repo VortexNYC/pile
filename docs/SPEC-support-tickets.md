@@ -54,6 +54,7 @@ migrations/                         # Drizzle-generated D1 migrations
 | `status`                   | text                        | `todo`, `done`, `snoozed`                                                             |
 | `priority`                 | text                        | `low`, `medium`, `high`, `urgent`                                                     |
 | `source_channel`           | text                        | `email`, `slack`, `msteams`, `discord`, `chat`, `api`, `intercom`, `zendesk`, `plain` |
+| `issue_id`                 | text                        | optional; links to a Vortex issue when a ticket is promoted to engineering work       |
 | `last_customer_message_at` | text                        | ISO timestamp, nullable                                                               |
 | `last_agent_message_at`    | text                        | ISO timestamp, nullable                                                               |
 | `created_at`               | text                        | ISO timestamp                                                                         |
@@ -174,6 +175,7 @@ export const supportTicketSchema = z.object({
     "zendesk",
     "plain",
   ]),
+  issueId: z.string().optional(),
   lastCustomerMessageAt: z.string().datetime().optional(),
   lastAgentMessageAt: z.string().datetime().optional(),
   createdAt: z.string().datetime(),
@@ -297,9 +299,9 @@ createTicketFromIntercom(db, organizationId, customerId, conversation, {
 - [ ] `pnpm test` passes with new tests.
 - [ ] Intercom conversation import maps to a `support_ticket` with the correct status and timeline.
 
-## Open Questions
+## Decisions
 
-1. Do we need a `waiting` status for "awaiting customer reply," or is `todo` + `last_customer_message_at` enough?
-2. Should `support_tickets` reuse Vortex `issues` and `issue_history` tables with a `kind = support`, or is a dedicated table correct?
-3. Should outbound messages be composed with the Vercel AI SDK or is the SDK only for the in-app chat widget?
-4. Does the `number` counter need to be in a separate `support_ticket_counters` table, or can we use a single `workspace_counters` table for issues and tickets?
+1. **No `waiting` status for v1.** `todo` + `last_customer_message_at` is enough. Add a `waiting` status later if the inbox needs it.
+2. **Dedicated `support_tickets` table.** Vortex `issues` and support tickets have different lifecycles. `support_tickets` has an optional `issue_id` for the clean link when a ticket is promoted to engineering work.
+3. **Vercel AI SDK is a primitive, not an autonomous agent.** It powers the in-app chat widget and agent-generated suggestions. Final outbound messages are sent through the API by a user or an external agent the customer builds. Vortex provides the primitives; it does not run the support agent.
+4. **`support_ticket_counters` stays separate for v1.** A generic `workspace_counters` table is cleaner but would require touching existing issue numbering. Separate is safer until support is stable.
