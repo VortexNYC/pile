@@ -8,7 +8,11 @@ import {
   hmacSha256Hex,
 } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
-import { supportTickets, user as userTable } from "../global/schema.js";
+import {
+  supportChannels,
+  supportTickets,
+  user as userTable,
+} from "../global/schema.js";
 import { getTicketById } from "../global/support-tickets.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
@@ -37,7 +41,42 @@ async function seedWorkspace() {
     key: `W${crypto.randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase()}`,
     ownerId: "user-1",
   });
-  return workspace!.id;
+  const organizationId = workspace!.id;
+
+  await db.insert(supportChannels).values([
+    {
+      id: crypto.randomUUID(),
+      organizationId,
+      type: "intercom",
+      name: "intercom",
+      isActive: true,
+      config: JSON.stringify({ secretName: "INTERCOM_CLIENT_SECRET" }),
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+    },
+    {
+      id: crypto.randomUUID(),
+      organizationId,
+      type: "zendesk",
+      name: "zendesk",
+      isActive: true,
+      config: JSON.stringify({ secretName: "ZENDESK_WEBHOOK_SECRET" }),
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+    },
+    {
+      id: crypto.randomUUID(),
+      organizationId,
+      type: "plain",
+      name: "plain",
+      isActive: true,
+      config: JSON.stringify({ secretName: "PLAIN_WEBHOOK_SECRET" }),
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+    },
+  ]);
+
+  return organizationId;
 }
 
 async function post(

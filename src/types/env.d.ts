@@ -3,6 +3,13 @@ interface D1Migration {
   queries: string[];
 }
 
+// Wrangler-generated `Env`/`Cloudflare.Env` extend `__BaseEnv_Env`.
+// Adding an index lets runtime env objects (and test `env`) hold extra
+// per-channel secret bindings and remain assignable to `AppEnv`/`WorkerEnv`.
+interface __BaseEnv_Env {
+  [key: string]: unknown;
+}
+
 declare namespace Cloudflare {
   interface Env {
     BETTER_AUTH_SECRET: string;

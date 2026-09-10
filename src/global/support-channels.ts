@@ -1,4 +1,5 @@
 import { and, eq } from "drizzle-orm";
+import { z } from "zod";
 
 import type { D1Client } from "./db.js";
 import { supportChannels } from "./schema.js";
@@ -11,8 +12,45 @@ import {
   type SupportTicketMessageChannel,
   type SupportTicketSource,
 } from "./support-tickets.js";
+import { safeJSON } from "./team-metadata.js";
 
 export type SupportChannel = typeof supportChannels.$inferSelect;
+
+export const supportChannelConfigSchema = z
+  .object({
+    secretName: z.string().min(1).optional(),
+  })
+  .passthrough();
+
+export type SupportChannelConfig = z.infer<typeof supportChannelConfigSchema>;
+
+export function parseSupportChannelConfig(raw: string): SupportChannelConfig {
+  const parsed = safeJSON(raw);
+  const result = supportChannelConfigSchema.safeParse(parsed);
+  if (!result.success) {
+    throw new Error(`Invalid support channel config: ${result.error.message}`);
+  }
+  return result.data;
+}
+
+export async function getActiveSupportChannelByType(
+  db: D1Client,
+  organizationId: string,
+  type: SupportChannel["type"]
+): Promise<SupportChannel | null> {
+  const [row] = await db
+    .select()
+    .from(supportChannels)
+    .where(
+      and(
+        eq(supportChannels.organizationId, organizationId),
+        eq(supportChannels.type, type),
+        eq(supportChannels.isActive, true)
+      )
+    )
+    .limit(1);
+  return row ?? null;
+}
 
 export type ChannelIncomingMessage = {
   channel: SupportTicketMessageChannel;

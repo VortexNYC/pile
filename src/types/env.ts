@@ -40,4 +40,7 @@ export interface AppEnv {
   // Cloudflare Email Service send binding.
   EMAIL?: SendEmail;
   EMAIL_FROM?: string;
+
+  // Additional Worker secrets / bindings referenced by name (e.g. per-channel webhook secrets).
+  [key: string]: unknown;
 }
