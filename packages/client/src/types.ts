@@ -11711,6 +11711,116 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/support/autoresponders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List support autoresponders */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Autoresponders list */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            autoresponders: {
+                                id: string;
+                                organizationId: string;
+                                name: string;
+                                enabled: boolean;
+                                /** @enum {string} */
+                                trigger: "ticket_created" | "customer_replied" | "out_of_hours";
+                                order: number;
+                                snippetId: string | null;
+                                conditions: {
+                                    [key: string]: string;
+                                };
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create support autoresponder */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        name: string;
+                        enabled?: boolean;
+                        /** @enum {string} */
+                        trigger: "ticket_created" | "customer_replied" | "out_of_hours";
+                        order: number;
+                        snippetId?: string;
+                        conditions?: {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Autoresponder created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            autoresponder: {
+                                id: string;
+                                organizationId: string;
+                                name: string;
+                                enabled: boolean;
+                                /** @enum {string} */
+                                trigger: "ticket_created" | "customer_replied" | "out_of_hours";
+                                order: number;
+                                snippetId: string | null;
+                                conditions: {
+                                    [key: string]: string;
+                                };
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/support/escalation-rules": {
         parameters: {
             query?: never;

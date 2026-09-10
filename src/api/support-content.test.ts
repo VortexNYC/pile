@@ -101,4 +101,60 @@ describe("support-content API", () => {
     expect(listBody.snippets).toHaveLength(1);
     expect(listBody.snippets[0].name).toBe("greeting");
   });
+
+  it("creates and lists support autoresponders", async () => {
+    const snippetRes = await fetch(
+      `/workspaces/${organizationId}/support/snippets`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "thanks",
+          textContent: "Thanks for reaching out.",
+        }),
+      }
+    );
+    expect(snippetRes.status).toBe(201);
+    const { snippet } = (await snippetRes.json()) as {
+      snippet: { id: string };
+    };
+
+    const createRes = await fetch(
+      `/workspaces/${organizationId}/support/autoresponders`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "new ticket reply",
+          trigger: "ticket_created",
+          order: 1,
+          snippetId: snippet.id,
+          conditions: { sourceChannel: "email" },
+        }),
+      }
+    );
+    expect(createRes.status).toBe(201);
+    const createBody = (await createRes.json()) as {
+      autoresponder: {
+        name: string;
+        trigger: string;
+        snippetId: string | null;
+        conditions: Record<string, string>;
+      };
+    };
+    expect(createBody.autoresponder.name).toBe("new ticket reply");
+    expect(createBody.autoresponder.trigger).toBe("ticket_created");
+    expect(createBody.autoresponder.snippetId).toBe(snippet.id);
+    expect(createBody.autoresponder.conditions).toEqual({
+      sourceChannel: "email",
+    });
+
+    const listRes = await fetch(
+      `/workspaces/${organizationId}/support/autoresponders`
+    );
+    expect(listRes.status).toBe(200);
+    const listBody = (await listRes.json()) as {
+      autoresponders: { name: string }[];
+    };
+    expect(listBody.autoresponders).toHaveLength(1);
+    expect(listBody.autoresponders[0].name).toBe("new ticket reply");
+  });
 });

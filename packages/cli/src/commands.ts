@@ -4954,6 +4954,55 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "support autoresponders list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/autoresponders",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support autoresponders create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/autoresponders",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "enabled",
+        flag: "enabled",
+      },
+      {
+        name: "trigger",
+        flag: "trigger",
+      },
+      {
+        name: "order",
+        flag: "order",
+      },
+      {
+        name: "snippetId",
+        flag: "snippet-id",
+      },
+      {
+        name: "conditions",
+        flag: "conditions",
+      },
+    ],
+  },
   "support escalation rules list": {
     method: "GET",
     path: "/workspaces/{organizationId}/support/escalation-rules",

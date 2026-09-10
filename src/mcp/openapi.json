@@ -25066,6 +25066,235 @@
         "summary": "List support snippets"
       }
     },
+    "/workspaces/{organizationId}/support/autoresponders": {
+      "post": {
+        "tags": [
+          "support-content"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "trigger": {
+                    "type": "string",
+                    "enum": [
+                      "ticket_created",
+                      "customer_replied",
+                      "out_of_hours"
+                    ]
+                  },
+                  "order": {
+                    "type": "integer"
+                  },
+                  "snippetId": {
+                    "type": "string"
+                  },
+                  "conditions": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "name",
+                  "trigger",
+                  "order"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Autoresponder created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "autoresponder": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "enabled": {
+                          "type": "boolean"
+                        },
+                        "trigger": {
+                          "type": "string",
+                          "enum": [
+                            "ticket_created",
+                            "customer_replied",
+                            "out_of_hours"
+                          ]
+                        },
+                        "order": {
+                          "type": "integer"
+                        },
+                        "snippetId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "conditions": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "name",
+                        "enabled",
+                        "trigger",
+                        "order",
+                        "snippetId",
+                        "conditions",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "autoresponder"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create support autoresponder"
+      },
+      "get": {
+        "tags": [
+          "support-content"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Autoresponders list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "autoresponders": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "trigger": {
+                            "type": "string",
+                            "enum": [
+                              "ticket_created",
+                              "customer_replied",
+                              "out_of_hours"
+                            ]
+                          },
+                          "order": {
+                            "type": "integer"
+                          },
+                          "snippetId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "conditions": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "name",
+                          "enabled",
+                          "trigger",
+                          "order",
+                          "snippetId",
+                          "conditions",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "autoresponders"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List support autoresponders"
+      }
+    },
     "/workspaces/{organizationId}/support/escalation-rules": {
       "get": {
         "tags": [

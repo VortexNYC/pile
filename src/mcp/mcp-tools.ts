@@ -3291,6 +3291,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdSupportAutoresponders",
+    "description": "List support autoresponders (GET /workspaces/{organizationId}/support/autoresponders)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/autoresponders",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdSupportchannels",
     "description": "List support channels (GET /workspaces/{organizationId}/support-channels)",
     "method": "GET",
@@ -9115,6 +9132,59 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "linearId",
             "name",
             "type"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSupportAutoresponders",
+    "description": "Create support autoresponder (POST /workspaces/{organizationId}/support/autoresponders)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/autoresponders",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "trigger": {
+              "type": "string",
+              "enum": [
+                "ticket_created",
+                "customer_replied",
+                "out_of_hours"
+              ]
+            },
+            "order": {
+              "type": "integer"
+            },
+            "snippetId": {
+              "type": "string"
+            },
+            "conditions": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "name",
+            "trigger",
+            "order"
           ]
         }
       },

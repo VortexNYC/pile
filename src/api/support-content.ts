@@ -3,8 +3,11 @@ import { createRoute, z } from "@hono/zod-openapi";
 
 import { createD1 } from "../global/db.js";
 import {
+  createSupportAutoresponder,
   createSupportSnippet,
+  listSupportAutoresponders,
   listSupportSnippets,
+  type SupportAutoresponder,
   type SupportSnippet,
 } from "../global/support-content.js";
 import type { AppContext } from "../platform/middleware.js";
@@ -26,6 +29,28 @@ const createSnippetBodySchema = z.object({
   name: z.string(),
   textContent: z.string(),
   markdownContent: z.string().optional(),
+});
+
+const supportAutoresponderSchema = z.object({
+  id: z.string(),
+  organizationId: z.string(),
+  name: z.string(),
+  enabled: z.boolean(),
+  trigger: z.enum(["ticket_created", "customer_replied", "out_of_hours"]),
+  order: z.number().int(),
+  snippetId: z.string().nullable(),
+  conditions: z.record(z.string(), z.string()),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+
+const createAutoresponderBodySchema = z.object({
+  name: z.string(),
+  enabled: z.boolean().optional(),
+  trigger: z.enum(["ticket_created", "customer_replied", "out_of_hours"]),
+  order: z.number().int(),
+  snippetId: z.string().optional(),
+  conditions: z.record(z.string(), z.string()).optional(),
 });
 
 const createSnippetRoute = createRoute({
@@ -73,6 +98,53 @@ const listSnippetsRoute = createRoute({
   },
 });
 
+const createAutoresponderRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/support/autoresponders",
+  tags: ["support-content"],
+  middleware: [rls("write")],
+  request: {
+    params: orgParam,
+    body: {
+      content: {
+        "application/json": { schema: createAutoresponderBodySchema },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "Autoresponder created",
+      content: {
+        "application/json": {
+          schema: z.object({ autoresponder: supportAutoresponderSchema }),
+        },
+      },
+    },
+  },
+});
+
+const listAutorespondersRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/support/autoresponders",
+  tags: ["support-content"],
+  middleware: [rls("read")],
+  request: {
+    params: orgParam,
+  },
+  responses: {
+    200: {
+      description: "Autoresponders list",
+      content: {
+        "application/json": {
+          schema: z.object({
+            autoresponders: z.array(supportAutoresponderSchema),
+          }),
+        },
+      },
+    },
+  },
+});
+
 export function registerSupportContentRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(createSnippetRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
@@ -94,5 +166,35 @@ export function registerSupportContentRoutes(app: OpenAPIHono<AppContext>) {
     const db = createD1(c.env.D1);
     const snippets = await listSupportSnippets(db, organizationId);
     return c.json({ snippets } as { snippets: SupportSnippet[] });
+  });
+
+  app.openapi(createAutoresponderRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const db = createD1(c.env.D1);
+
+    const autoresponder = await createSupportAutoresponder(db, {
+      organizationId,
+      name: body.name,
+      enabled: body.enabled,
+      trigger: body.trigger,
+      order: body.order,
+      snippetId: body.snippetId,
+      conditions: body.conditions,
+    });
+
+    return c.json(
+      { autoresponder } as { autoresponder: SupportAutoresponder },
+      201
+    );
+  });
+
+  app.openapi(listAutorespondersRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const autoresponders = await listSupportAutoresponders(db, organizationId);
+    return c.json({ autoresponders } as {
+      autoresponders: SupportAutoresponder[];
+    });
   });
 }
