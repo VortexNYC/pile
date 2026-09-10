@@ -940,6 +940,21 @@ export async function createTicketFromIntercom(
     });
   }
 
+  const lastReply = sortedReplies.at(-1);
+  const finalUpdatedAt =
+    lastReply?.createdAt && lastReply.createdAt > updatedAt
+      ? lastReply.createdAt
+      : updatedAt;
+  await db
+    .update(supportTickets)
+    .set({ updatedAt: finalUpdatedAt })
+    .where(
+      and(
+        eq(supportTickets.id, ticket.id),
+        eq(supportTickets.organizationId, organizationId)
+      )
+    );
+
   const full = await getTicketById(db, organizationId, ticket.id);
   return (
     full ?? {
@@ -1048,6 +1063,21 @@ export async function createTicketFromPlain(
     });
   }
 
+  const lastReply = sortedReplies.at(-1);
+  const finalUpdatedAt =
+    lastReply?.createdAt && lastReply.createdAt > updatedAt
+      ? lastReply.createdAt
+      : updatedAt;
+  await db
+    .update(supportTickets)
+    .set({ updatedAt: finalUpdatedAt })
+    .where(
+      and(
+        eq(supportTickets.id, ticket.id),
+        eq(supportTickets.organizationId, organizationId)
+      )
+    );
+
   const full = await getTicketById(db, organizationId, ticket.id);
   return (
     full ?? {
@@ -1084,7 +1114,7 @@ function zendeskStatusToTicketStatus(
   const map: Record<string, SupportTicketStatus> = {
     open: "todo",
     pending: "todo",
-    hold: "snoozed",
+    hold: "todo",
     solved: "done",
     closed: "done",
   };
@@ -1195,6 +1225,21 @@ export async function createTicketFromZendesk(
       createdAt: reply.createdAt,
     });
   }
+
+  const lastReply = sortedReplies.at(-1);
+  const finalUpdatedAt =
+    lastReply?.createdAt && lastReply.createdAt > updatedAt
+      ? lastReply.createdAt
+      : updatedAt;
+  await db
+    .update(supportTickets)
+    .set({ updatedAt: finalUpdatedAt })
+    .where(
+      and(
+        eq(supportTickets.id, created.id),
+        eq(supportTickets.organizationId, organizationId)
+      )
+    );
 
   const full = await getTicketById(db, organizationId, created.id);
   return (
