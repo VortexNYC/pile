@@ -3,7 +3,15 @@ import { and, eq } from "drizzle-orm";
 import type { D1Client } from "./db.js";
 import { importMappings } from "./schema.js";
 
-export type ImportMappingType = "issue" | "document";
+export type ImportMappingType =
+  | "issue"
+  | "document"
+  | "state"
+  | "label"
+  | "project"
+  | "cycle"
+  | "user"
+  | "team";
 
 export async function recordImportMapping(
   db: D1Client,
@@ -60,4 +68,12 @@ export async function findImportMapping(
       )
     )
     .get();
+}
+
+export async function findImportMappingsByJob(db: D1Client, jobId: string) {
+  return db
+    .select()
+    .from(importMappings)
+    .where(eq(importMappings.jobId, jobId))
+    .all();
 }

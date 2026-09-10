@@ -981,10 +981,10 @@ export const linearImportSource: ImportSource<
     let cursor = runState?.cursor ?? parsedOptions.cursor ?? undefined;
     let hasNextPage = true;
     let nextCursor: string | null = null;
-    const issueIds = new Set<string>();
+    const issueIdMap = new Map<string, string>();
     const relationLinks = new Map<
       string,
-      { fromIssueId: string; toIssueId: string; type: string }
+      { fromIssueId: string; toExternalId: string; type: string }
     >();
 
     while (hasNextPage) {
@@ -1027,7 +1027,7 @@ export const linearImportSource: ImportSource<
             ctx.importerId
           );
           issueCount++;
-          issueIds.add(issue.id);
+          issueIdMap.set(issue.id, createdIssue.id);
 
           await recordImportMapping(
             ctx.db,
@@ -1044,8 +1044,8 @@ export const linearImportSource: ImportSource<
               const type = mapRelationType(rel.type);
               if (type) {
                 relationLinks.set(rel.id, {
-                  fromIssueId: issue.id,
-                  toIssueId: rel.relatedIssue.id,
+                  fromIssueId: createdIssue.id,
+                  toExternalId: rel.relatedIssue.id,
                   type,
                 });
               }
@@ -1058,8 +1058,8 @@ export const linearImportSource: ImportSource<
               if (type) {
                 // Normalize inverse direction so type describes the outgoing edge.
                 relationLinks.set(rel.id, {
-                  fromIssueId: issue.id,
-                  toIssueId: rel.issue.id,
+                  fromIssueId: createdIssue.id,
+                  toExternalId: rel.issue.id,
                   type: type === "blocks" ? "blocks" : type,
                 });
               }
@@ -1114,7 +1114,8 @@ export const linearImportSource: ImportSource<
         ctx.db,
         ctx.jobId,
         async (parentId) => {
-          if (issueIds.has(parentId)) return parentId;
+          const localId = issueIdMap.get(parentId);
+          if (localId) return localId;
           const mapping = await findImportMapping(ctx.db, ctx.jobId, parentId);
           return mapping?.vortexId;
         },
@@ -1135,11 +1136,19 @@ export const linearImportSource: ImportSource<
 
     if (!nextCursor) {
       for (const rel of relationLinks.values()) {
-        if (!issueIds.has(rel.fromIssueId) || !issueIds.has(rel.toIssueId)) {
+        const toLocal =
+          issueIdMap.get(rel.toExternalId) ??
+          (await findImportMapping(ctx.db, ctx.jobId, rel.toExternalId))
+            ?.vortexId;
+        if (!toLocal) {
           continue;
         }
         try {
-          await ctx.stub.createIssueRelation(rel);
+          await ctx.stub.createIssueRelation({
+            fromIssueId: rel.fromIssueId,
+            toIssueId: toLocal,
+            type: rel.type,
+          });
           relationCount++;
         } catch {
           // Skip invalid or malformed relation edges.
