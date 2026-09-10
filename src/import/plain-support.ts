@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { recordImportMapping } from "../global/import-mappings.js";
 import {
   createCustomer,
   findCustomerByExternalId,
@@ -435,6 +436,16 @@ export const plainSupportImportSource: ImportSource<
                 replies,
               },
               {}
+            );
+
+            await recordImportMapping(
+              ctx.db,
+              ctx.organizationId,
+              ctx.jobId,
+              "plain-support",
+              "ticket",
+              thread.id,
+              result.id
             );
 
             const isExisting =

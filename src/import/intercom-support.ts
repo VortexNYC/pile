@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { recordImportMapping } from "../global/import-mappings.js";
 import {
   createCustomer,
   findCustomerByExternalId,
@@ -210,6 +211,16 @@ export const intercomSupportImportSource: ImportSource<
                 replies,
               },
               {}
+            );
+
+            await recordImportMapping(
+              ctx.db,
+              ctx.organizationId,
+              ctx.jobId,
+              "intercom-support",
+              "ticket",
+              conversation.id,
+              result.id
             );
 
             const isExisting =
