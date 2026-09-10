@@ -39,6 +39,23 @@ pnpm run check
 - For stacked PRs in this repo, use the `github/gh-stack` extension (`gh stack init`, `gh stack add`, `gh stack submit`).
 - Do not use `gt` / Graphite for this repo.
 
+## Dogfooding
+
+Vortex is our own engineering source of truth. While working on this repo, agents must use the production Vortex instance rather than Linear or Notion.
+
+- Workspace: `org_vortex_main`
+- Team for this repo: `Issue Tracker` (`ISS`)
+- Backlog: `ISS-1` through `ISS-8`
+
+For every non-trivial chunk of work:
+
+1. Check `GET /workspaces/org_vortex_main/issues?identifier=ISS-N` for context.
+2. Create or update an `ISS-*` issue describing the work.
+3. Use the issue identifier in branch names and commit messages where practical.
+4. Verify the change through the product API before reporting completion.
+
+Do not create parallel local issue trackers or todo files.
+
 ## Where things live
 
 - `src/api/index.ts` — main Hono/OpenAPIHono app, serves `/openapi.json`.
