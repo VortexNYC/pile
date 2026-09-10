@@ -1096,22 +1096,10 @@ export async function createTicketFromPlain(
   );
   if (existing) {
     const full = await getTicketById(db, organizationId, existing.id);
-    return (
-      full ?? {
-        ...existing,
-        customer: {
-          id: existing.customerId,
-          email: "",
-          fullName: null,
-          phone: null,
-        },
-        companies: [],
-        identities: [],
-        labels: [],
-        assignees: [],
-        events: [],
-      }
-    );
+    if (!full) {
+      throw new VortexError("Imported ticket not found", 500);
+    }
+    return full;
   }
 
   const body = stripHtml(thread.source?.body);
