@@ -9763,6 +9763,1057 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/support/tickets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List support tickets */
+        get: {
+            parameters: {
+                query?: {
+                    limit?: number;
+                    cursor?: string;
+                    customerId?: string;
+                    status?: "todo" | "done" | "snoozed";
+                    priority?: "low" | "medium" | "high" | "urgent";
+                    assignedTo?: string;
+                    q?: string;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Tickets list */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            tickets: {
+                                id: string;
+                                organizationId: string;
+                                customerId: string;
+                                number: number;
+                                externalId: string | null;
+                                externalSource: string;
+                                title: string;
+                                /** @enum {string} */
+                                status: "todo" | "done" | "snoozed";
+                                /** @enum {string} */
+                                priority: "low" | "medium" | "high" | "urgent";
+                                /** @enum {string} */
+                                sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                                issueId: string | null;
+                                lastCustomerMessageAt: string | null;
+                                lastAgentMessageAt: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                customer: {
+                                    id: string;
+                                    email: string;
+                                    fullName: string | null;
+                                    phone: string | null;
+                                };
+                                companies: {
+                                    id: string;
+                                    name: string;
+                                    isPrimary: boolean;
+                                }[];
+                                identities: {
+                                    id: string;
+                                    /** @enum {string} */
+                                    type: "email" | "phone" | "slack" | "chat";
+                                    value: string;
+                                    isPrimary: boolean;
+                                }[];
+                                labels: {
+                                    id: string;
+                                    labelId: string;
+                                    name: string;
+                                    color: string | null;
+                                }[];
+                                assignees: {
+                                    id: string;
+                                    userId: string;
+                                    name: string | null;
+                                    isPrimary: boolean;
+                                }[];
+                                events: {
+                                    id: string;
+                                    ticketId: string;
+                                    type: string;
+                                    actorType: string;
+                                    actorId: string | null;
+                                    createdAt: string;
+                                    message?: {
+                                        id: string;
+                                        eventId: string;
+                                        /** @enum {string} */
+                                        direction: "inbound" | "outbound";
+                                        textContent: string;
+                                        markdownContent: string | null;
+                                        /** @enum {string} */
+                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "api";
+                                        customerId: string | null;
+                                        userId: string | null;
+                                    };
+                                    note?: {
+                                        id: string;
+                                        eventId: string;
+                                        body: string;
+                                    };
+                                }[];
+                            }[];
+                            nextCursor: string | null;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create support ticket */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        customerId: string;
+                        title: string;
+                        /** @enum {string} */
+                        sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                        /**
+                         * @default medium
+                         * @enum {string}
+                         */
+                        priority?: "low" | "medium" | "high" | "urgent";
+                        /**
+                         * @default todo
+                         * @enum {string}
+                         */
+                        status?: "todo" | "done" | "snoozed";
+                        externalId?: string;
+                        /**
+                         * @default manual
+                         * @enum {string}
+                         */
+                        externalSource?: "intercom" | "zendesk" | "plain" | "email" | "slack" | "msteams" | "discord" | "chat" | "api" | "manual";
+                        issueId?: string;
+                        message?: {
+                            textContent: string;
+                            markdownContent?: string;
+                            /**
+                             * @default chat
+                             * @enum {string}
+                             */
+                            channel?: "email" | "slack" | "msteams" | "discord" | "chat" | "api";
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Ticket created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ticket: {
+                                id: string;
+                                organizationId: string;
+                                customerId: string;
+                                number: number;
+                                externalId: string | null;
+                                externalSource: string;
+                                title: string;
+                                /** @enum {string} */
+                                status: "todo" | "done" | "snoozed";
+                                /** @enum {string} */
+                                priority: "low" | "medium" | "high" | "urgent";
+                                /** @enum {string} */
+                                sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                                issueId: string | null;
+                                lastCustomerMessageAt: string | null;
+                                lastAgentMessageAt: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                customer: {
+                                    id: string;
+                                    email: string;
+                                    fullName: string | null;
+                                    phone: string | null;
+                                };
+                                companies: {
+                                    id: string;
+                                    name: string;
+                                    isPrimary: boolean;
+                                }[];
+                                identities: {
+                                    id: string;
+                                    /** @enum {string} */
+                                    type: "email" | "phone" | "slack" | "chat";
+                                    value: string;
+                                    isPrimary: boolean;
+                                }[];
+                                labels: {
+                                    id: string;
+                                    labelId: string;
+                                    name: string;
+                                    color: string | null;
+                                }[];
+                                assignees: {
+                                    id: string;
+                                    userId: string;
+                                    name: string | null;
+                                    isPrimary: boolean;
+                                }[];
+                                events: {
+                                    id: string;
+                                    ticketId: string;
+                                    type: string;
+                                    actorType: string;
+                                    actorId: string | null;
+                                    createdAt: string;
+                                    message?: {
+                                        id: string;
+                                        eventId: string;
+                                        /** @enum {string} */
+                                        direction: "inbound" | "outbound";
+                                        textContent: string;
+                                        markdownContent: string | null;
+                                        /** @enum {string} */
+                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "api";
+                                        customerId: string | null;
+                                        userId: string | null;
+                                    };
+                                    note?: {
+                                        id: string;
+                                        eventId: string;
+                                        body: string;
+                                    };
+                                }[];
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/support/tickets/{ticketId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get support ticket */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    ticketId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Ticket */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ticket: {
+                                id: string;
+                                organizationId: string;
+                                customerId: string;
+                                number: number;
+                                externalId: string | null;
+                                externalSource: string;
+                                title: string;
+                                /** @enum {string} */
+                                status: "todo" | "done" | "snoozed";
+                                /** @enum {string} */
+                                priority: "low" | "medium" | "high" | "urgent";
+                                /** @enum {string} */
+                                sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                                issueId: string | null;
+                                lastCustomerMessageAt: string | null;
+                                lastAgentMessageAt: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                customer: {
+                                    id: string;
+                                    email: string;
+                                    fullName: string | null;
+                                    phone: string | null;
+                                };
+                                companies: {
+                                    id: string;
+                                    name: string;
+                                    isPrimary: boolean;
+                                }[];
+                                identities: {
+                                    id: string;
+                                    /** @enum {string} */
+                                    type: "email" | "phone" | "slack" | "chat";
+                                    value: string;
+                                    isPrimary: boolean;
+                                }[];
+                                labels: {
+                                    id: string;
+                                    labelId: string;
+                                    name: string;
+                                    color: string | null;
+                                }[];
+                                assignees: {
+                                    id: string;
+                                    userId: string;
+                                    name: string | null;
+                                    isPrimary: boolean;
+                                }[];
+                                events: {
+                                    id: string;
+                                    ticketId: string;
+                                    type: string;
+                                    actorType: string;
+                                    actorId: string | null;
+                                    createdAt: string;
+                                    message?: {
+                                        id: string;
+                                        eventId: string;
+                                        /** @enum {string} */
+                                        direction: "inbound" | "outbound";
+                                        textContent: string;
+                                        markdownContent: string | null;
+                                        /** @enum {string} */
+                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "api";
+                                        customerId: string | null;
+                                        userId: string | null;
+                                    };
+                                    note?: {
+                                        id: string;
+                                        eventId: string;
+                                        body: string;
+                                    };
+                                }[];
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update support ticket */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    ticketId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        title?: string;
+                        /** @enum {string} */
+                        status?: "todo" | "done" | "snoozed";
+                        /** @enum {string} */
+                        priority?: "low" | "medium" | "high" | "urgent";
+                        issueId?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Ticket updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ticket: {
+                                id: string;
+                                organizationId: string;
+                                customerId: string;
+                                number: number;
+                                externalId: string | null;
+                                externalSource: string;
+                                title: string;
+                                /** @enum {string} */
+                                status: "todo" | "done" | "snoozed";
+                                /** @enum {string} */
+                                priority: "low" | "medium" | "high" | "urgent";
+                                /** @enum {string} */
+                                sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                                issueId: string | null;
+                                lastCustomerMessageAt: string | null;
+                                lastAgentMessageAt: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                customer: {
+                                    id: string;
+                                    email: string;
+                                    fullName: string | null;
+                                    phone: string | null;
+                                };
+                                companies: {
+                                    id: string;
+                                    name: string;
+                                    isPrimary: boolean;
+                                }[];
+                                identities: {
+                                    id: string;
+                                    /** @enum {string} */
+                                    type: "email" | "phone" | "slack" | "chat";
+                                    value: string;
+                                    isPrimary: boolean;
+                                }[];
+                                labels: {
+                                    id: string;
+                                    labelId: string;
+                                    name: string;
+                                    color: string | null;
+                                }[];
+                                assignees: {
+                                    id: string;
+                                    userId: string;
+                                    name: string | null;
+                                    isPrimary: boolean;
+                                }[];
+                                events: {
+                                    id: string;
+                                    ticketId: string;
+                                    type: string;
+                                    actorType: string;
+                                    actorId: string | null;
+                                    createdAt: string;
+                                    message?: {
+                                        id: string;
+                                        eventId: string;
+                                        /** @enum {string} */
+                                        direction: "inbound" | "outbound";
+                                        textContent: string;
+                                        markdownContent: string | null;
+                                        /** @enum {string} */
+                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "api";
+                                        customerId: string | null;
+                                        userId: string | null;
+                                    };
+                                    note?: {
+                                        id: string;
+                                        eventId: string;
+                                        body: string;
+                                    };
+                                }[];
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/support/tickets/{ticketId}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create support ticket message */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    ticketId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        direction: "inbound" | "outbound";
+                        textContent: string;
+                        markdownContent?: string;
+                        /** @enum {string} */
+                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "api";
+                        customerId?: string;
+                        userId?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Message added */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            event: {
+                                id: string;
+                                ticketId: string;
+                                type: string;
+                                actorType: string;
+                                actorId: string | null;
+                                createdAt: string;
+                                message?: {
+                                    id: string;
+                                    eventId: string;
+                                    /** @enum {string} */
+                                    direction: "inbound" | "outbound";
+                                    textContent: string;
+                                    markdownContent: string | null;
+                                    /** @enum {string} */
+                                    channel: "email" | "slack" | "msteams" | "discord" | "chat" | "api";
+                                    customerId: string | null;
+                                    userId: string | null;
+                                };
+                                note?: {
+                                    id: string;
+                                    eventId: string;
+                                    body: string;
+                                };
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/support/tickets/{ticketId}/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create support ticket note */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    ticketId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        body: string;
+                        userId: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Note added */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            event: {
+                                id: string;
+                                ticketId: string;
+                                type: string;
+                                actorType: string;
+                                actorId: string | null;
+                                createdAt: string;
+                                message?: {
+                                    id: string;
+                                    eventId: string;
+                                    /** @enum {string} */
+                                    direction: "inbound" | "outbound";
+                                    textContent: string;
+                                    markdownContent: string | null;
+                                    /** @enum {string} */
+                                    channel: "email" | "slack" | "msteams" | "discord" | "chat" | "api";
+                                    customerId: string | null;
+                                    userId: string | null;
+                                };
+                                note?: {
+                                    id: string;
+                                    eventId: string;
+                                    body: string;
+                                };
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/support/tickets/{ticketId}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List support ticket events */
+        get: {
+            parameters: {
+                query?: {
+                    limit?: number;
+                    cursor?: string;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                    ticketId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Ticket events */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            events: {
+                                id: string;
+                                ticketId: string;
+                                type: string;
+                                actorType: string;
+                                actorId: string | null;
+                                createdAt: string;
+                                message?: {
+                                    id: string;
+                                    eventId: string;
+                                    /** @enum {string} */
+                                    direction: "inbound" | "outbound";
+                                    textContent: string;
+                                    markdownContent: string | null;
+                                    /** @enum {string} */
+                                    channel: "email" | "slack" | "msteams" | "discord" | "chat" | "api";
+                                    customerId: string | null;
+                                    userId: string | null;
+                                };
+                                note?: {
+                                    id: string;
+                                    eventId: string;
+                                    body: string;
+                                };
+                            }[];
+                            nextCursor: string | null;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/support/tickets/{ticketId}/done": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create support ticket done */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    ticketId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Ticket marked done */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ticket: {
+                                id: string;
+                                organizationId: string;
+                                customerId: string;
+                                number: number;
+                                externalId: string | null;
+                                externalSource: string;
+                                title: string;
+                                /** @enum {string} */
+                                status: "todo" | "done" | "snoozed";
+                                /** @enum {string} */
+                                priority: "low" | "medium" | "high" | "urgent";
+                                /** @enum {string} */
+                                sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                                issueId: string | null;
+                                lastCustomerMessageAt: string | null;
+                                lastAgentMessageAt: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                customer: {
+                                    id: string;
+                                    email: string;
+                                    fullName: string | null;
+                                    phone: string | null;
+                                };
+                                companies: {
+                                    id: string;
+                                    name: string;
+                                    isPrimary: boolean;
+                                }[];
+                                identities: {
+                                    id: string;
+                                    /** @enum {string} */
+                                    type: "email" | "phone" | "slack" | "chat";
+                                    value: string;
+                                    isPrimary: boolean;
+                                }[];
+                                labels: {
+                                    id: string;
+                                    labelId: string;
+                                    name: string;
+                                    color: string | null;
+                                }[];
+                                assignees: {
+                                    id: string;
+                                    userId: string;
+                                    name: string | null;
+                                    isPrimary: boolean;
+                                }[];
+                                events: {
+                                    id: string;
+                                    ticketId: string;
+                                    type: string;
+                                    actorType: string;
+                                    actorId: string | null;
+                                    createdAt: string;
+                                    message?: {
+                                        id: string;
+                                        eventId: string;
+                                        /** @enum {string} */
+                                        direction: "inbound" | "outbound";
+                                        textContent: string;
+                                        markdownContent: string | null;
+                                        /** @enum {string} */
+                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "api";
+                                        customerId: string | null;
+                                        userId: string | null;
+                                    };
+                                    note?: {
+                                        id: string;
+                                        eventId: string;
+                                        body: string;
+                                    };
+                                }[];
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/support/tickets/{ticketId}/todo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create support ticket todo */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    ticketId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Ticket marked todo */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ticket: {
+                                id: string;
+                                organizationId: string;
+                                customerId: string;
+                                number: number;
+                                externalId: string | null;
+                                externalSource: string;
+                                title: string;
+                                /** @enum {string} */
+                                status: "todo" | "done" | "snoozed";
+                                /** @enum {string} */
+                                priority: "low" | "medium" | "high" | "urgent";
+                                /** @enum {string} */
+                                sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                                issueId: string | null;
+                                lastCustomerMessageAt: string | null;
+                                lastAgentMessageAt: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                customer: {
+                                    id: string;
+                                    email: string;
+                                    fullName: string | null;
+                                    phone: string | null;
+                                };
+                                companies: {
+                                    id: string;
+                                    name: string;
+                                    isPrimary: boolean;
+                                }[];
+                                identities: {
+                                    id: string;
+                                    /** @enum {string} */
+                                    type: "email" | "phone" | "slack" | "chat";
+                                    value: string;
+                                    isPrimary: boolean;
+                                }[];
+                                labels: {
+                                    id: string;
+                                    labelId: string;
+                                    name: string;
+                                    color: string | null;
+                                }[];
+                                assignees: {
+                                    id: string;
+                                    userId: string;
+                                    name: string | null;
+                                    isPrimary: boolean;
+                                }[];
+                                events: {
+                                    id: string;
+                                    ticketId: string;
+                                    type: string;
+                                    actorType: string;
+                                    actorId: string | null;
+                                    createdAt: string;
+                                    message?: {
+                                        id: string;
+                                        eventId: string;
+                                        /** @enum {string} */
+                                        direction: "inbound" | "outbound";
+                                        textContent: string;
+                                        markdownContent: string | null;
+                                        /** @enum {string} */
+                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "api";
+                                        customerId: string | null;
+                                        userId: string | null;
+                                    };
+                                    note?: {
+                                        id: string;
+                                        eventId: string;
+                                        body: string;
+                                    };
+                                }[];
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/support/tickets/{ticketId}/snooze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create support ticket snooze */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    ticketId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        until: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Ticket snoozed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ticket: {
+                                id: string;
+                                organizationId: string;
+                                customerId: string;
+                                number: number;
+                                externalId: string | null;
+                                externalSource: string;
+                                title: string;
+                                /** @enum {string} */
+                                status: "todo" | "done" | "snoozed";
+                                /** @enum {string} */
+                                priority: "low" | "medium" | "high" | "urgent";
+                                /** @enum {string} */
+                                sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                                issueId: string | null;
+                                lastCustomerMessageAt: string | null;
+                                lastAgentMessageAt: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                customer: {
+                                    id: string;
+                                    email: string;
+                                    fullName: string | null;
+                                    phone: string | null;
+                                };
+                                companies: {
+                                    id: string;
+                                    name: string;
+                                    isPrimary: boolean;
+                                }[];
+                                identities: {
+                                    id: string;
+                                    /** @enum {string} */
+                                    type: "email" | "phone" | "slack" | "chat";
+                                    value: string;
+                                    isPrimary: boolean;
+                                }[];
+                                labels: {
+                                    id: string;
+                                    labelId: string;
+                                    name: string;
+                                    color: string | null;
+                                }[];
+                                assignees: {
+                                    id: string;
+                                    userId: string;
+                                    name: string | null;
+                                    isPrimary: boolean;
+                                }[];
+                                events: {
+                                    id: string;
+                                    ticketId: string;
+                                    type: string;
+                                    actorType: string;
+                                    actorId: string | null;
+                                    createdAt: string;
+                                    message?: {
+                                        id: string;
+                                        eventId: string;
+                                        /** @enum {string} */
+                                        direction: "inbound" | "outbound";
+                                        textContent: string;
+                                        markdownContent: string | null;
+                                        /** @enum {string} */
+                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "api";
+                                        customerId: string | null;
+                                        userId: string | null;
+                                    };
+                                    note?: {
+                                        id: string;
+                                        eventId: string;
+                                        body: string;
+                                    };
+                                }[];
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/csv-exports": {
         parameters: {
             query?: never;

@@ -4459,6 +4459,289 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "support tickets list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/tickets",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "limit",
+        flag: "limit",
+      },
+      {
+        name: "cursor",
+        flag: "cursor",
+      },
+      {
+        name: "customerId",
+        flag: "customer-id",
+      },
+      {
+        name: "status",
+        flag: "status",
+      },
+      {
+        name: "priority",
+        flag: "priority",
+      },
+      {
+        name: "assignedTo",
+        flag: "assigned-to",
+      },
+      {
+        name: "q",
+        flag: "q",
+      },
+    ],
+    body: [],
+  },
+  "support tickets create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/tickets",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "customerId",
+        flag: "customer-id",
+      },
+      {
+        name: "title",
+        flag: "title",
+      },
+      {
+        name: "sourceChannel",
+        flag: "source-channel",
+      },
+      {
+        name: "priority",
+        flag: "priority",
+      },
+      {
+        name: "status",
+        flag: "status",
+      },
+      {
+        name: "externalId",
+        flag: "external-id",
+      },
+      {
+        name: "externalSource",
+        flag: "external-source",
+      },
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+      {
+        name: "message",
+        flag: "message",
+      },
+    ],
+  },
+  "support tickets get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/tickets/{ticketId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "ticketId",
+        flag: "ticket-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support tickets update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/support/tickets/{ticketId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "ticketId",
+        flag: "ticket-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "title",
+        flag: "title",
+      },
+      {
+        name: "status",
+        flag: "status",
+      },
+      {
+        name: "priority",
+        flag: "priority",
+      },
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+    ],
+  },
+  "support tickets messages create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/tickets/{ticketId}/messages",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "ticketId",
+        flag: "ticket-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "direction",
+        flag: "direction",
+      },
+      {
+        name: "textContent",
+        flag: "text-content",
+      },
+      {
+        name: "markdownContent",
+        flag: "markdown-content",
+      },
+      {
+        name: "channel",
+        flag: "channel",
+      },
+      {
+        name: "customerId",
+        flag: "customer-id",
+      },
+      {
+        name: "userId",
+        flag: "user",
+      },
+    ],
+  },
+  "support tickets notes create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/tickets/{ticketId}/notes",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "ticketId",
+        flag: "ticket-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "body",
+        flag: "body",
+      },
+      {
+        name: "userId",
+        flag: "user",
+      },
+    ],
+  },
+  "support tickets events list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/tickets/{ticketId}/events",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "ticketId",
+        flag: "ticket-id",
+      },
+    ],
+    query: [
+      {
+        name: "limit",
+        flag: "limit",
+      },
+      {
+        name: "cursor",
+        flag: "cursor",
+      },
+    ],
+    body: [],
+  },
+  "support tickets done create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/tickets/{ticketId}/done",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "ticketId",
+        flag: "ticket-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support tickets todo create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/tickets/{ticketId}/todo",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "ticketId",
+        flag: "ticket-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support tickets snooze create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/tickets/{ticketId}/snooze",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "ticketId",
+        flag: "ticket-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "until",
+        flag: "until",
+      },
+    ],
+  },
   "csv exports create": {
     method: "POST",
     path: "/workspaces/{organizationId}/csv-exports",
