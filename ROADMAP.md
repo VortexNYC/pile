@@ -43,6 +43,7 @@ This is the durable tracker for the open-source Linear alternative. Operational 
 - Issue templates: `templateId` on create + per-team `defaultTemplateId` defaults.
 - Cycles: status/number/auto-rollover, scheduled cron rollover, capacity endpoint.
 - Issue analytics: `groupBy` aggregates and per-cycle burndown series.
+- Linear workspace migration and dogfooding: imported the Vortex Linear workspace (148 issues, 75 parent links, VOR team) into the production Vortex instance.
 - One-command Cloudflare self-host (`pnpm run selfhost`) + Deploy-to-Cloudflare button for forks.
 - GitLab integration:
   - Issue and note/comment webhook sync
@@ -69,12 +70,10 @@ This is the durable tracker for the open-source Linear alternative. Operational 
 
 ## Next
 
-- Linear workspace migration and dogfooding.
+- Self-host the issue tracker and use it as the source of truth for this project (#21).
 - Zendesk / Intercom integrations.
 
 ## Later
-
-- Self-host the issue tracker and use it as the source of truth for this project (#21).
 - GitHub check run sync.
 - Billing and metering.
 - Full CLI parity.
