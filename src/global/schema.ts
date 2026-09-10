@@ -1907,3 +1907,216 @@ export const supportCustomerCompanies = sqliteTable(
     ),
   ]
 );
+
+export const supportTickets = sqliteTable(
+  "support_tickets" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    customerId: text("customer_id" as string)
+      .notNull()
+      .references(() => supportCustomers.id, { onDelete: "cascade" }),
+    number: integer("number" as string).notNull(),
+    externalId: text("external_id" as string),
+    externalSource: text("external_source" as string, {
+      enum: [
+        "intercom",
+        "zendesk",
+        "plain",
+        "email",
+        "slack",
+        "msteams",
+        "discord",
+        "chat",
+        "api",
+        "manual",
+      ] as const,
+    })
+      .notNull()
+      .default("manual"),
+    title: text("title" as string).notNull(),
+    status: text("status" as string, {
+      enum: ["todo", "done", "snoozed"] as const,
+    })
+      .notNull()
+      .default("todo"),
+    priority: text("priority" as string, {
+      enum: ["low", "medium", "high", "urgent"] as const,
+    })
+      .notNull()
+      .default("medium"),
+    sourceChannel: text("source_channel" as string, {
+      enum: [
+        "email",
+        "slack",
+        "msteams",
+        "discord",
+        "chat",
+        "capture",
+        "api",
+        "intercom",
+        "zendesk",
+        "plain",
+      ] as const,
+    }).notNull(),
+    issueId: text("issue_id" as string),
+    lastCustomerMessageAt: text("last_customer_message_at" as string),
+    lastAgentMessageAt: text("last_agent_message_at" as string),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("support_tickets_org_number_idx" as string).on(
+      table.organizationId,
+      table.number
+    ),
+    index("support_tickets_org_customer_idx" as string).on(
+      table.organizationId,
+      table.customerId
+    ),
+    index("support_tickets_org_status_idx" as string).on(
+      table.organizationId,
+      table.status
+    ),
+    index("support_tickets_org_priority_idx" as string).on(
+      table.organizationId,
+      table.priority
+    ),
+  ]
+);
+
+export const supportTicketCounters = sqliteTable(
+  "support_ticket_counters" as string,
+  {
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    nextNumber: integer("next_number" as string)
+      .notNull()
+      .default(1),
+  },
+  (table) => [primaryKey({ columns: [table.organizationId] })]
+);
+
+export const supportTicketEvents = sqliteTable(
+  "support_ticket_events" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    ticketId: text("ticket_id" as string)
+      .notNull()
+      .references(() => supportTickets.id, { onDelete: "cascade" }),
+    type: text("type" as string, {
+      enum: [
+        "message",
+        "note",
+        "status_change",
+        "priority_change",
+        "assignment_change",
+        "label_added",
+        "label_removed",
+        "customer_event",
+        "field_change",
+      ] as const,
+    }).notNull(),
+    actorType: text("actor_type" as string, {
+      enum: ["customer", "user", "machine", "system"] as const,
+    }).notNull(),
+    actorId: text("actor_id" as string),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("support_ticket_events_ticket_created_idx" as string).on(
+      table.ticketId,
+      table.createdAt
+    ),
+  ]
+);
+
+export const supportTicketMessages = sqliteTable(
+  "support_ticket_messages" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    eventId: text("event_id" as string)
+      .notNull()
+      .references(() => supportTicketEvents.id, { onDelete: "cascade" }),
+    direction: text("direction" as string, {
+      enum: ["inbound", "outbound"] as const,
+    }).notNull(),
+    textContent: text("text_content" as string).notNull(),
+    markdownContent: text("markdown_content" as string),
+    channel: text("channel" as string, {
+      enum: ["email", "slack", "msteams", "discord", "chat", "api"] as const,
+    }).notNull(),
+    customerId: text("customer_id" as string).references(
+      () => supportCustomers.id,
+      { onDelete: "set null" }
+    ),
+    userId: text("user_id" as string).references(() => user.id, {
+      onDelete: "set null",
+    }),
+  }
+);
+
+export const supportTicketNotes = sqliteTable(
+  "support_ticket_notes" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    eventId: text("event_id" as string)
+      .notNull()
+      .references(() => supportTicketEvents.id, { onDelete: "cascade" }),
+    body: text("body" as string).notNull(),
+  }
+);
+
+export const supportTicketAssignments = sqliteTable(
+  "support_ticket_assignments" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    ticketId: text("ticket_id" as string)
+      .notNull()
+      .references(() => supportTickets.id, { onDelete: "cascade" }),
+    userId: text("user_id" as string)
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    isPrimary: integer("is_primary" as string, { mode: "boolean" })
+      .notNull()
+      .default(false),
+  },
+  (table) => [
+    uniqueIndex("support_ticket_assignments_unique_idx" as string).on(
+      table.ticketId,
+      table.userId
+    ),
+    index("support_ticket_assignments_ticket_idx" as string).on(
+      table.ticketId,
+      table.isPrimary
+    ),
+  ]
+);
+
+export const supportTicketLabels = sqliteTable(
+  "support_ticket_labels" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    ticketId: text("ticket_id" as string)
+      .notNull()
+      .references(() => supportTickets.id, { onDelete: "cascade" }),
+    labelId: text("label_id" as string)
+      .notNull()
+      .references(() => labels.id, { onDelete: "cascade" }),
+  },
+  (table) => [
+    uniqueIndex("support_ticket_labels_unique_idx" as string).on(
+      table.ticketId,
+      table.labelId
+    ),
+  ]
+);
