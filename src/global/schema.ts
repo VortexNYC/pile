@@ -2017,6 +2017,10 @@ export const supportTickets = sqliteTable(
       table.externalId,
       table.externalSource
     ),
+    index("support_tickets_org_issue_idx" as string).on(
+      table.organizationId,
+      table.issueId
+    ),
   ]
 );
 
