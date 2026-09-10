@@ -121,6 +121,7 @@ A customer can belong to multiple companies (Plain-style tenants). v1 always wri
 export const supportCustomerSchema = z.object({
   id: z.string(),
   organizationId: z.string(),
+  userId: z.string().optional(),
   externalId: z.string().optional(),
   externalSource: z
     .enum(["intercom", "zendesk", "plain", "manual"])
@@ -128,7 +129,23 @@ export const supportCustomerSchema = z.object({
   email: z.string().email(),
   fullName: z.string().optional(),
   phone: z.string().optional(),
-  companyId: z.string().optional(),
+  companies: z
+    .array(
+      z.object({
+        companyId: z.string(),
+        isPrimary: z.boolean().default(false),
+      })
+    )
+    .default([]),
+  identities: z
+    .array(
+      z.object({
+        type: z.enum(["email", "phone", "slack", "chat"]),
+        value: z.string(),
+        isPrimary: z.boolean().default(false),
+      })
+    )
+    .default([]),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -144,7 +161,7 @@ export type SupportCustomer = z.infer<typeof supportCustomerSchema>;
 
 ### `POST /workspaces/{organizationId}/support/customers`
 
-Create a customer. Body is `SupportCustomerInput` (without `id`, `createdAt`, `updatedAt`).
+Create a customer. Body is `SupportCustomerInput` (without `id`, `createdAt`, `updatedAt`, `companies`, `identities` — those are populated by separate endpoints or nested upserts).
 
 ### `GET /workspaces/{organizationId}/support/customers`
 
@@ -152,11 +169,19 @@ Paginated list. Query params: `limit`, `cursor`, `companyId`, `q` (search email/
 
 ### `GET /workspaces/{organizationId}/support/customers/{customerId}`
 
-Get one customer with identities and company.
+Get one customer with companies and identities.
 
 ### `PATCH /workspaces/{organizationId}/support/customers/{customerId}`
 
-Update fields and identities.
+Update fields. To change companies or identities, use the nested endpoints.
+
+### `PUT /workspaces/{organizationId}/support/customers/{customerId}/companies`
+
+Set the customer's company memberships (replaces existing rows).
+
+### `PUT /workspaces/{organizationId}/support/customers/{customerId}/identities`
+
+Set the customer's identities (replaces existing rows).
 
 ### `POST /workspaces/{organizationId}/support/companies`
 
@@ -192,9 +217,12 @@ upsertCustomerByExternal(db, organizationId, {
   email,
   fullName,
   phone,
-  company,
+  companyId,
+  identities,
 });
 ```
+
+The helper creates or updates `support_customers`, then syncs `support_customer_companies` and `support_customer_identities` using the primary company and identity list.
 
 ## Boundaries
 
