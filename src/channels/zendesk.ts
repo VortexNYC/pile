@@ -1,14 +1,13 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 
+import { hmacSha256Base64, timingSafeEqualHex } from "../global/crypto.js";
+import { createD1 } from "../global/db.js";
 import {
-  hmacSha256Base64,
-  sha256Hex,
-  timingSafeEqualHex,
-} from "../global/crypto.js";
-import { createD1, type D1Client } from "../global/db.js";
+  getActiveSupportChannelByType,
+  parseSupportChannelConfig,
+} from "../global/support-channels.js";
 import { findOrCreateCustomerByEmail } from "../global/support-contacts.js";
-import { maybeEscalate } from "../global/support-escalation.js";
 import {
   addTicketMessage,
   createTicket,
@@ -18,10 +17,8 @@ import {
   type SupportTicketPriority,
   type SupportTicketStatus,
 } from "../global/support-tickets.js";
-import { scopedDeliveryId } from "../global/webhook-queue.js";
-import { enqueueWebhook } from "../global/webhook-queue.js";
 import { VortexError } from "../platform/errors.js";
-import type { AppContext, WorkerEnv } from "../platform/middleware.js";
+import type { AppContext } from "../platform/middleware.js";
 
 const zendeskRequesterSchema = z.object({
   email: z.string().email(),
@@ -78,11 +75,6 @@ export const zendeskSupportWebhookRoute = createRoute({
   },
 });
 
-const zendeskQueuePayloadSchema = z.object({
-  payload: zendeskWebhookPayloadSchema,
-  organizationId: z.string(),
-});
-
 export async function processZendeskSupportWebhook(
   c: Context<AppContext>
 ): Promise<{ ok: boolean }> {
@@ -95,14 +87,31 @@ export async function processZendeskSupportWebhook(
     });
   }
 
-  const secret = c.env.ZENDESK_WEBHOOK_SECRET;
-  if (!secret) {
+  const db = createD1(c.env.D1);
+  const channel = await getActiveSupportChannelByType(
+    db,
+    organizationId,
+    "zendesk"
+  );
+  if (!channel) {
+    throw new VortexError({
+      code: "UNAUTHORIZED",
+      status: 401,
+      message: "Invalid Zendesk signature",
+    });
+  }
+
+  const config = parseSupportChannelConfig(channel.config);
+  const secretName = config.secretName ?? "ZENDESK_WEBHOOK_SECRET";
+  const secretResult = z.string().min(1).safeParse(c.env[secretName]);
+  if (!secretResult.success) {
     throw new VortexError({
       code: "CONFIG_ERROR",
       status: 500,
-      message: "Zendesk webhook secret is not configured",
+      message: `Worker secret ${secretName} is not configured`,
     });
   }
+  const secret = secretResult.data;
 
   const rawBody = await c.req.text();
   const signature = c.req.header("X-Zendesk-Webhook-Signature");
@@ -125,63 +134,20 @@ export async function processZendeskSupportWebhook(
   }
 
   const parsed = safeJsonParse(rawBody);
-  const webhook = zendeskWebhookPayloadSchema.safeParse(parsed);
-  if (!webhook.success) {
+  const payload = zendeskWebhookPayloadSchema.safeParse(parsed);
+  if (!payload.success) {
     throw new VortexError({
       code: "BAD_REQUEST",
       status: 400,
       message: "Invalid Zendesk webhook payload",
-      hint: webhook.error.message,
+      hint: payload.error.message,
     });
   }
 
-  const ticketData = webhook.data.ticket;
+  const ticketData = payload.data.ticket;
+  const comment = payload.data.comment;
   if (!ticketData) {
     return { ok: true };
-  }
-
-  const db = createD1(c.env.D1);
-  const deliveryId = scopedDeliveryId(
-    "zendesk",
-    organizationId,
-    await sha256Hex(`${timestamp}:${rawBody}`)
-  );
-  await enqueueWebhook(
-    db,
-    c.env,
-    {
-      deliveryId,
-      source: "zendesk",
-      event: "ticket",
-      organizationId,
-      payload: { payload: webhook.data, organizationId },
-    },
-    new Map([["zendesk", processZendeskSupportWebhookPayload]])
-  );
-
-  return { ok: true };
-}
-
-export async function processZendeskSupportWebhookPayload(
-  db: D1Client,
-  env: WorkerEnv,
-  payload: unknown
-): Promise<void> {
-  const parsed = zendeskQueuePayloadSchema.safeParse(payload);
-  if (!parsed.success) {
-    throw new VortexError({
-      code: "BAD_REQUEST",
-      status: 400,
-      message: "Invalid Zendesk queue payload",
-      hint: parsed.error.message,
-    });
-  }
-
-  const { payload: webhookPayload, organizationId } = parsed.data;
-  const ticketData = webhookPayload.ticket;
-  const comment = webhookPayload.comment;
-  if (!ticketData) {
-    return;
   }
 
   const externalId = String(ticketData.id);
@@ -199,8 +165,6 @@ export async function processZendeskSupportWebhookPayload(
   const text = stripHtml(comment?.body ?? ticketData.description ?? "");
   const subject = ticketData.subject;
   const createdAt = ticketData.created_at ?? new Date().toISOString();
-  const messageExternalId = comment?.id ? String(comment.id) : externalId;
-  const messageSubType = comment?.id ? "comment" : "description";
 
   if (existing) {
     if (requester?.email) {
@@ -212,53 +176,26 @@ export async function processZendeskSupportWebhookPayload(
         "zendesk"
       );
       if (text) {
-        await addTicketMessage(
-          db,
-          organizationId,
-          existing.id,
-          {
-            direction: comment ? "outbound" : "inbound",
-            textContent: text,
-            channel: "zendesk",
-            customerId: comment ? undefined : customer.id,
-            actorType: comment ? "automation" : undefined,
-            actorId: comment ? null : undefined,
-            subType: messageSubType,
-            externalId: messageExternalId,
-            createdAt,
-          },
-          env
-        );
-      }
-    } else if (text) {
-      await addTicketMessage(
-        db,
-        organizationId,
-        existing.id,
-        {
-          direction: "inbound",
+        await addTicketMessage(db, organizationId, existing.id, {
+          direction: comment ? "outbound" : "inbound",
           textContent: text,
           channel: "zendesk",
-          subType: messageSubType,
-          externalId: messageExternalId,
+          customerId: customer.id,
+          subType: comment ? String(comment.id ?? "") : externalId,
           createdAt,
-        },
-        env
-      );
+        });
+      }
+    } else if (text) {
+      await addTicketMessage(db, organizationId, existing.id, {
+        direction: "inbound",
+        textContent: text,
+        channel: "zendesk",
+        subType: externalId,
+        createdAt,
+      });
     }
-    await updateTicket(
-      db,
-      organizationId,
-      existing.id,
-      {
-        status,
-        priority,
-        actorType: "automation",
-        actorId: null,
-      },
-      env
-    );
-    return;
+    await updateTicket(db, organizationId, existing.id, { status, priority });
+    return { ok: true };
   }
 
   if (!requester?.email) {
@@ -279,49 +216,31 @@ export async function processZendeskSupportWebhookPayload(
 
   const title = subject || text.slice(0, 120) || `Zendesk ticket ${externalId}`;
 
-  const ticket = await createTicket(
-    db,
-    {
-      organizationId,
-      customerId: customer.id,
-      title,
-      sourceChannel: "zendesk",
-      status,
-      priority,
-      externalId,
-      externalSource: "zendesk",
-      createdAt,
-      updatedAt: ticketData.updated_at ?? createdAt,
-      ifExists: "return",
-    },
-    env
-  );
-
-  await maybeEscalate(env, db, organizationId, ticket, {
-    text,
-    subject: subject ?? undefined,
-    customer,
-    source: "zendesk",
-    channel: "zendesk",
+  const ticket = await createTicket(db, {
+    organizationId,
+    customerId: customer.id,
+    title,
+    sourceChannel: "zendesk",
+    status,
+    priority,
+    externalId,
+    externalSource: "zendesk",
+    createdAt,
+    updatedAt: ticketData.updated_at ?? createdAt,
   });
 
   if (text) {
-    await addTicketMessage(
-      db,
-      organizationId,
-      ticket.id,
-      {
-        direction: "inbound",
-        textContent: text,
-        channel: "zendesk",
-        customerId: customer.id,
-        subType: messageSubType,
-        externalId: messageExternalId,
-        createdAt,
-      },
-      env
-    );
+    await addTicketMessage(db, organizationId, ticket.id, {
+      direction: "inbound",
+      textContent: text,
+      channel: "zendesk",
+      customerId: customer.id,
+      subType: externalId,
+      createdAt,
+    });
   }
+
+  return { ok: true };
 }
 
 function zendeskStatusToTicketStatus(status: string): SupportTicketStatus {
@@ -346,36 +265,6 @@ function zendeskPriorityToTicketPriority(
     urgent: "urgent",
   };
   return map[priority?.toLowerCase() ?? ""] ?? "medium";
-}
-
-export async function sendZendeskMessage(input: {
-  subdomain: string;
-  accessToken: string;
-  email: string;
-  ticketId: string;
-  text: string;
-}): Promise<boolean> {
-  try {
-    const auth = btoa(`${input.email}/token:${input.accessToken}`);
-    const res = await fetch(
-      `https://${input.subdomain}.zendesk.com/api/v2/tickets/${input.ticketId}.json`,
-      {
-        method: "PUT",
-        headers: {
-          Authorization: `Basic ${auth}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          ticket: {
-            comment: { body: input.text, public: true },
-          },
-        }),
-      }
-    );
-    return res.ok;
-  } catch {
-    return false;
-  }
 }
 
 function safeJsonParse(value: string): unknown {
