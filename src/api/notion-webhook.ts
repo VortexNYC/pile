@@ -154,6 +154,7 @@ export function registerNotionWebhookRoute(app: OpenAPIHono<AppContext>) {
 
     const ctx: ImportContext = {
       env: c.env,
+      requestHeaders: c.req.raw.headers,
       organizationId,
       importerId: workspace.ownerId,
       jobId: "notion-webhook",

@@ -126,7 +126,7 @@ const supportTicketNoteSchema = z.object({
   body: z.string(),
 });
 
-const supportTicketEventSchema = z.object({
+export const supportTicketEventSchema = z.object({
   id: z.string(),
   ticketId: z.string(),
   type: z.string(),
@@ -139,7 +139,7 @@ const supportTicketEventSchema = z.object({
   note: supportTicketNoteSchema.optional(),
 });
 
-const supportTicketSchema = z.object({
+export const supportTicketSchema = z.object({
   id: z.string(),
   organizationId: z.string(),
   customerId: z.string(),

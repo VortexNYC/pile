@@ -49,7 +49,7 @@ const rolePermissionsMap = {
   member: ["read", "write"],
 } as const;
 
-const workspaceRoleSchema = z.enum(["owner", "admin", "member"]);
+export const workspaceRoleSchema = z.enum(["owner", "admin", "member"]);
 
 export function toUserWorkspaceIdentity(
   userId: string,

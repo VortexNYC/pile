@@ -15,6 +15,7 @@ import type {
   ExternalSupportReply,
   SupportTicketActorType,
   SupportTicketMessageChannel,
+  SupportTicketMessageDirection,
 } from "../global/support-tickets.js";
 import {
   createTicketFromZendesk,
@@ -400,6 +401,7 @@ async function getOrCreateZendeskSupportCustomer(
   if (org) {
     const domain = org.domain_names?.[0] ?? null;
     const company = await findOrCreateCompany(ctx.db, ctx.organizationId, {
+      organizationId: ctx.organizationId,
       name: org.name ?? "Unknown organization",
       domain,
       externalId: org.external_id ?? String(org.id),
@@ -547,7 +549,7 @@ async function getZendeskTicketComments(
     (a, b) => Date.parse(a.created_at) - Date.parse(b.created_at)
   );
 
-  const replies = sorted.map((comment) => {
+  const replies: ExternalSupportReply[] = sorted.map((comment) => {
     const { actorType, actorId } = commentActor(comment, ticket, users);
     const attachments: ExternalSupportAttachment[] = comment.attachments.map(
       (attachment) => ({
@@ -559,14 +561,21 @@ async function getZendeskTicketComments(
       })
     );
 
+    const direction: SupportTicketMessageDirection =
+      actorType === "customer" ? "inbound" : "outbound";
+    const kind: "message" | "note" =
+      comment.public === false ? "note" : "message";
+    const subType: "Comment" | "InternalComment" =
+      comment.public === false ? "InternalComment" : "Comment";
+
     return {
       body: comment.html_body ?? comment.body ?? "(no content)",
-      direction: actorType === "customer" ? "inbound" : "outbound",
-      kind: comment.public === false ? "note" : "message",
+      direction,
+      kind,
       channel: commentChannel(comment),
       actorType,
       actorId,
-      subType: comment.public === false ? "InternalComment" : "Comment",
+      subType,
       createdAt: comment.created_at,
       attachments,
       metadata: { comment },

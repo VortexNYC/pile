@@ -145,7 +145,7 @@ export async function processIntercomWebhook(
   const secret = c.env.INTERCOM_CLIENT_SECRET;
   if (!secret) {
     throw new VortexError({
-      code: "NOT_CONFIGURED",
+      code: "CONFIG_ERROR",
       status: 500,
       message: "Intercom webhook secret is not configured",
     });
@@ -192,7 +192,14 @@ export async function processIntercomWebhook(
     });
   }
 
-  const { organizationId } = c.req.valid("param");
+  const organizationId = c.req.param("organizationId");
+  if (!organizationId) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Missing organizationId",
+    });
+  }
   const { id: deliveryId, topic } = payload.data;
 
   if (topic === "ping") {

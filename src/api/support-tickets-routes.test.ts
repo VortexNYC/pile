@@ -9,6 +9,17 @@ import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
 import { createAdminHeaders } from "../platform/test-auth.js";
+import {
+  supportTicketEventSchema,
+  supportTicketSchema,
+} from "./support-tickets.js";
+
+const ticketResponseSchema = z.object({ ticket: supportTicketSchema });
+const listTicketsResponseSchema = z.object({
+  tickets: z.array(z.object({ id: z.string() })),
+});
+const eventResponseSchema = z.object({ event: supportTicketEventSchema });
+const labelResponseSchema = z.object({ id: z.string() });
 
 let organizationId: string;
 let adminToken: string;
@@ -103,7 +114,7 @@ describe("support ticket routes", () => {
     );
 
     expect(res.status).toBe(201);
-    const body = await res.json();
+    const body = ticketResponseSchema.parse(await res.json());
     expect(body.ticket.title).toBe("Cannot log in");
     expect(body.ticket.status).toBe("todo");
     expect(body.ticket.priority).toBe("high");
@@ -121,7 +132,7 @@ describe("support ticket routes", () => {
         sourceChannel: "chat",
       }
     );
-    const createBody = await createRes.json();
+    const createBody = ticketResponseSchema.parse(await createRes.json());
     const ticketId = createBody.ticket.id;
 
     const getRes = await request(
@@ -129,7 +140,7 @@ describe("support ticket routes", () => {
       `/workspaces/${organizationId}/support/tickets/${ticketId}`
     );
     expect(getRes.status).toBe(200);
-    const getBody = await getRes.json();
+    const getBody = ticketResponseSchema.parse(await getRes.json());
     expect(getBody.ticket.id).toBe(ticketId);
 
     const listRes = await request(
@@ -137,10 +148,8 @@ describe("support ticket routes", () => {
       `/workspaces/${organizationId}/support/tickets`
     );
     expect(listRes.status).toBe(200);
-    const listBody = await listRes.json();
-    expect(
-      listBody.tickets.some((t: { id: string }) => t.id === ticketId)
-    ).toBe(true);
+    const listBody = listTicketsResponseSchema.parse(await listRes.json());
+    expect(listBody.tickets.some((t) => t.id === ticketId)).toBe(true);
   });
 
   it("updates a support ticket", async () => {
@@ -153,7 +162,7 @@ describe("support ticket routes", () => {
         sourceChannel: "email",
       }
     );
-    const { ticket } = await createRes.json();
+    const { ticket } = ticketResponseSchema.parse(await createRes.json());
 
     const patchRes = await request(
       "PATCH",
@@ -161,7 +170,7 @@ describe("support ticket routes", () => {
       { title: "Updated title", priority: "urgent" }
     );
     expect(patchRes.status).toBe(200);
-    const body = await patchRes.json();
+    const body = ticketResponseSchema.parse(await patchRes.json());
     expect(body.ticket.title).toBe("Updated title");
     expect(body.ticket.priority).toBe("urgent");
   });
@@ -176,7 +185,7 @@ describe("support ticket routes", () => {
         sourceChannel: "email",
       }
     );
-    const { ticket } = await createRes.json();
+    const { ticket } = ticketResponseSchema.parse(await createRes.json());
 
     const messageRes = await request(
       "POST",
@@ -189,7 +198,7 @@ describe("support ticket routes", () => {
       }
     );
     expect(messageRes.status).toBe(201);
-    const messageBody = await messageRes.json();
+    const messageBody = eventResponseSchema.parse(await messageRes.json());
     expect(messageBody.event.message?.textContent).toBe(
       "Can you try resetting?"
     );
@@ -200,7 +209,7 @@ describe("support ticket routes", () => {
       { body: "Internal note", userId: "user-1" }
     );
     expect(noteRes.status).toBe(201);
-    const noteBody = await noteRes.json();
+    const noteBody = eventResponseSchema.parse(await noteRes.json());
     expect(noteBody.event.note?.body).toBe("Internal note");
   });
 
@@ -214,14 +223,14 @@ describe("support ticket routes", () => {
         sourceChannel: "email",
       }
     );
-    const { ticket } = await createRes.json();
+    const { ticket } = ticketResponseSchema.parse(await createRes.json());
 
     const doneRes = await request(
       "POST",
       `/workspaces/${organizationId}/support/tickets/${ticket.id}/done`
     );
     expect(doneRes.status).toBe(200);
-    const doneBody = await doneRes.json();
+    const doneBody = ticketResponseSchema.parse(await doneRes.json());
     expect(doneBody.ticket.status).toBe("done");
 
     const todoRes = await request(
@@ -229,7 +238,7 @@ describe("support ticket routes", () => {
       `/workspaces/${organizationId}/support/tickets/${ticket.id}/todo`
     );
     expect(todoRes.status).toBe(200);
-    const todoBody = await todoRes.json();
+    const todoBody = ticketResponseSchema.parse(await todoRes.json());
     expect(todoBody.ticket.status).toBe("todo");
   });
 
@@ -243,7 +252,7 @@ describe("support ticket routes", () => {
         sourceChannel: "email",
       }
     );
-    const { ticket } = await createRes.json();
+    const { ticket } = ticketResponseSchema.parse(await createRes.json());
 
     const assigneesRes = await request(
       "PUT",
@@ -251,7 +260,7 @@ describe("support ticket routes", () => {
       { assignees: [{ userId: "user-1", isPrimary: true }] }
     );
     expect(assigneesRes.status).toBe(200);
-    const assigneesBody = await assigneesRes.json();
+    const assigneesBody = ticketResponseSchema.parse(await assigneesRes.json());
     expect(assigneesBody.ticket.assignees.length).toBe(1);
     expect(assigneesBody.ticket.assignees[0].assigneeId).toBe("user-1");
 
@@ -261,7 +270,7 @@ describe("support ticket routes", () => {
       { name: "bug", color: "#ff0000" }
     );
     expect(labelRes.status).toBe(201);
-    const label = await labelRes.json();
+    const label = labelResponseSchema.parse(await labelRes.json());
 
     const labelsRes = await request(
       "PUT",
@@ -269,7 +278,7 @@ describe("support ticket routes", () => {
       { labels: [label.id] }
     );
     expect(labelsRes.status).toBe(200);
-    const labelsBody = await labelsRes.json();
+    const labelsBody = ticketResponseSchema.parse(await labelsRes.json());
     expect(labelsBody.ticket.labels.length).toBe(1);
     expect(labelsBody.ticket.labels[0].labelId).toBe(label.id);
   });
