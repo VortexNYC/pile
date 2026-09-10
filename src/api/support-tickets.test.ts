@@ -28,6 +28,7 @@ import {
   setTicketAssignees,
 } from "../global/support-tickets.js";
 import { createWorkspace } from "../global/workspaces.js";
+import { intercomSupportOptionsSchema } from "../import/intercom-support.js";
 import { plainSupportOptionsSchema } from "../import/plain-support.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
@@ -905,6 +906,18 @@ describe("support-tickets API", () => {
     expect(byId.success).toBe(true);
 
     const byName = plainSupportOptionsSchema.safeParse({
+      teamName: "Support",
+    });
+    expect(byName.success).toBe(true);
+  });
+
+  it("accepts teamId or teamName for Intercom support imports", () => {
+    const byId = intercomSupportOptionsSchema.safeParse({
+      teamId: "team-id",
+    });
+    expect(byId.success).toBe(true);
+
+    const byName = intercomSupportOptionsSchema.safeParse({
       teamName: "Support",
     });
     expect(byName.success).toBe(true);

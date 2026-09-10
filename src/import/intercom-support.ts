@@ -15,6 +15,7 @@ import type {
   ExternalSupportReply,
   SupportTicketActorType,
   SupportTicketEventType,
+  SupportTicketAssigneeInput,
 } from "../global/support-tickets.js";
 import {
   createTicketFromIntercom,
@@ -41,7 +42,9 @@ export type IntercomSupportCredentials = z.infer<
   typeof intercomSupportCredentialsSchema
 >;
 
-export const intercomSupportOptionsSchema = intercomOptionsSchema;
+export const intercomSupportOptionsSchema = intercomOptionsSchema.extend({
+  teamName: z.string().optional(),
+});
 export type IntercomSupportOptions = z.infer<
   typeof intercomSupportOptionsSchema
 >;
@@ -439,30 +442,48 @@ async function syncIntercomTicketAssignees(
         email?: string | null;
       }
     | null
-    | undefined
+    | undefined,
+  options: { teamId?: string; teamName?: string }
 ): Promise<void> {
-  if (!assignee?.type) return;
+  const assignees: SupportTicketAssigneeInput[] = [];
 
-  if (assignee.type === "admin" && assignee.email) {
+  if (assignee?.type === "admin" && assignee.email) {
     const user = await findUserByEmail(ctx.db, assignee.email);
     if (user) {
-      await setTicketAssignees(ctx.db, ctx.organizationId, ticketId, [
-        { userId: user.id, isPrimary: true },
-      ]);
+      assignees.push({ userId: user.id, isPrimary: true });
     }
-    return;
   }
 
-  if (assignee.type === "team" && assignee.name) {
+  if (assignee?.type === "team" && assignee.name) {
     const team = await findOrCreateTeam(
       ctx.db,
       ctx.organizationId,
       assignee.name,
       ctx.importerId
     );
-    await setTicketAssignees(ctx.db, ctx.organizationId, ticketId, [
-      { teamId: team.id, isPrimary: true },
-    ]);
+    assignees.push({ teamId: team.id, isPrimary: assignees.length === 0 });
+  }
+
+  if (
+    assignees.find((a) => "teamId" in a) === undefined &&
+    (options.teamId || options.teamName)
+  ) {
+    const team = options.teamId
+      ? { id: options.teamId }
+      : await findOrCreateTeam(
+          ctx.db,
+          ctx.organizationId,
+          options.teamName!,
+          ctx.importerId
+        );
+    assignees.push({
+      teamId: team.id,
+      isPrimary: assignees.length === 0,
+    });
+  }
+
+  if (assignees.length > 0) {
+    await setTicketAssignees(ctx.db, ctx.organizationId, ticketId, assignees);
   }
 }
 
@@ -483,7 +504,7 @@ export const intercomSupportImportSource: ImportSource<
   async run(ctx, credentials, options, runState): Promise<ImportBatchResult> {
     const { token } = credentials;
     const parsedOptions = intercomSupportOptionsSchema.parse(options ?? {});
-    const { state: filterState } = parsedOptions;
+    const { state: filterState, teamId, teamName } = parsedOptions;
     const perPage = 100;
     const limit = runState?.limit ?? parsedOptions.limit;
 
@@ -548,7 +569,8 @@ export const intercomSupportImportSource: ImportSource<
               syncIntercomTicketAssignees(
                 ctx,
                 result.id,
-                conversation.assignee
+                conversation.assignee,
+                { teamId, teamName }
               ),
               recordImportMapping(
                 ctx.db,
