@@ -53,16 +53,16 @@ migrations/                     # Drizzle-generated D1 migrations
 
 Configuration for each enabled channel in a workspace.
 
-| Column            | Type                   | Notes                                                                                 |
-| ----------------- | ---------------------- | ------------------------------------------------------------------------------------- |
-| `id`              | text PK                | Vortex UUID                                                                           |
-| `organization_id` | text FK → organization | workspace                                                                             |
-| `type`            | text                   | `email`, `slack`, `msteams`, `discord`, `chat`, `api`, `intercom`, `zendesk`, `plain` |
-| `name`            | text                   | not null                                                                              |
-| `is_active`       | boolean                | default true                                                                          |
-| `config`          | text                   | JSON string; channel-specific non-secret settings                                     |
-| `created_at`      | text                   | ISO timestamp                                                                         |
-| `updated_at`      | text                   | ISO timestamp                                                                         |
+| Column            | Type                   | Notes                                                                                            |
+| ----------------- | ---------------------- | ------------------------------------------------------------------------------------------------ |
+| `id`              | text PK                | Vortex UUID                                                                                      |
+| `organization_id` | text FK → organization | workspace                                                                                        |
+| `type`            | text                   | `email`, `slack`, `msteams`, `discord`, `chat`, `capture`, `api`, `intercom`, `zendesk`, `plain` |
+| `name`            | text                   | not null                                                                                         |
+| `is_active`       | boolean                | default true                                                                                     |
+| `config`          | text                   | JSON string; channel-specific non-secret settings                                                |
+| `created_at`      | text                   | ISO timestamp                                                                                    |
+| `updated_at`      | text                   | ISO timestamp                                                                                    |
 
 Unique: `(organization_id, type, name)`.
 
@@ -95,6 +95,7 @@ export const supportChannelSchema = z.object({
     "msteams",
     "discord",
     "chat",
+    "capture",
     "api",
     "intercom",
     "zendesk",

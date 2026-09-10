@@ -42,23 +42,23 @@ migrations/                         # Drizzle-generated D1 migrations
 
 ### `support_tickets`
 
-| Column                     | Type                        | Notes                                                                                 |
-| -------------------------- | --------------------------- | ------------------------------------------------------------------------------------- |
-| `id`                       | text PK                     | Vortex UUID                                                                           |
-| `organization_id`          | text FK → organization      | workspace                                                                             |
-| `customer_id`              | text FK → support_customers | who opened it                                                                         |
-| `number`                   | integer                     | per-workspace ticket number, monotonic, not null                                      |
-| `external_id`              | text                        | optional source id                                                                    |
-| `external_source`          | text                        | `intercom`, `zendesk`, `plain`, `email`, `slack`, `chat`, `api`, ...                  |
-| `title`                    | text                        | not null; auto from subject or first message preview                                  |
-| `status`                   | text                        | `todo`, `done`, `snoozed`                                                             |
-| `priority`                 | text                        | `low`, `medium`, `high`, `urgent`                                                     |
-| `source_channel`           | text                        | `email`, `slack`, `msteams`, `discord`, `chat`, `api`, `intercom`, `zendesk`, `plain` |
-| `issue_id`                 | text                        | optional; links to a Vortex issue when a ticket is promoted to engineering work       |
-| `last_customer_message_at` | text                        | ISO timestamp, nullable                                                               |
-| `last_agent_message_at`    | text                        | ISO timestamp, nullable                                                               |
-| `created_at`               | text                        | ISO timestamp                                                                         |
-| `updated_at`               | text                        | ISO timestamp                                                                         |
+| Column                     | Type                        | Notes                                                                                            |
+| -------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------ |
+| `id`                       | text PK                     | Vortex UUID                                                                                      |
+| `organization_id`          | text FK → organization      | workspace                                                                                        |
+| `customer_id`              | text FK → support_customers | who opened it                                                                                    |
+| `number`                   | integer                     | per-workspace ticket number, monotonic, not null                                                 |
+| `external_id`              | text                        | optional source id                                                                               |
+| `external_source`          | text                        | `intercom`, `zendesk`, `plain`, `email`, `slack`, `chat`, `api`, ...                             |
+| `title`                    | text                        | not null; auto from subject or first message preview                                             |
+| `status`                   | text                        | `todo`, `done`, `snoozed`                                                                        |
+| `priority`                 | text                        | `low`, `medium`, `high`, `urgent`                                                                |
+| `source_channel`           | text                        | `email`, `slack`, `msteams`, `discord`, `chat`, `capture`, `api`, `intercom`, `zendesk`, `plain` |
+| `issue_id`                 | text                        | optional; links to a Vortex issue when a ticket is promoted to engineering work                  |
+| `last_customer_message_at` | text                        | ISO timestamp, nullable                                                                          |
+| `last_agent_message_at`    | text                        | ISO timestamp, nullable                                                                          |
+| `created_at`               | text                        | ISO timestamp                                                                                    |
+| `updated_at`               | text                        | ISO timestamp                                                                                    |
 
 Unique: `(organization_id, number)`.
 Index: `(organization_id, customer_id)`, `(organization_id, status)`, `(organization_id, priority)`.
@@ -170,6 +170,7 @@ export const supportTicketSchema = z.object({
     "msteams",
     "discord",
     "chat",
+    "capture",
     "api",
     "intercom",
     "zendesk",
