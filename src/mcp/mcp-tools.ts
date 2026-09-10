@@ -904,6 +904,73 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdSupportSlasSlaId",
+    "description": "Delete support sla (DELETE /workspaces/{organizationId}/support/slas/{slaId})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/support/slas/{slaId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "slaId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "slaId"
+      ]
+    }
+  },
+  {
+    "name": "deleteWorkspacesOrganizationIdSupportTiersTierId",
+    "description": "Delete support tier (DELETE /workspaces/{organizationId}/support/tiers/{tierId})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/support/tiers/{tierId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "tierId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "tierId"
+      ]
+    }
+  },
+  {
+    "name": "deleteWorkspacesOrganizationIdSupportTiersTierIdMembersUserId",
+    "description": "Delete support tier member (DELETE /workspaces/{organizationId}/support/tiers/{tierId}/members/{userId})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/support/tiers/{tierId}/members/{userId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "tierId": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "tierId",
+        "userId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdTeamsId",
     "description": "Delete team (DELETE /workspaces/{organizationId}/teams/{id})",
     "method": "DELETE",
@@ -3207,6 +3274,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdSupportAgents",
+    "description": "List support agents (GET /workspaces/{organizationId}/support/agents)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/agents",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdSupportchannels",
     "description": "List support channels (GET /workspaces/{organizationId}/support-channels)",
     "method": "GET",
@@ -3365,6 +3449,44 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdSupportSlas",
+    "description": "List support slas (GET /workspaces/{organizationId}/support/slas)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/slas",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportSlasSlaId",
+    "description": "Get support sla (GET /workspaces/{organizationId}/support/slas/{slaId})",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/slas/{slaId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "slaId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "slaId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdSupportTickets",
     "description": "List support tickets (GET /workspaces/{organizationId}/support/tickets)",
     "method": "GET",
@@ -3494,6 +3616,65 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "organizationId",
         "ticketId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportTiers",
+    "description": "List support tiers (GET /workspaces/{organizationId}/support/tiers)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/tiers",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportTiersTierId",
+    "description": "Get support tier (GET /workspaces/{organizationId}/support/tiers/{tierId})",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/tiers/{tierId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "tierId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "tierId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportTiersTierIdMembers",
+    "description": "List support tier members (GET /workspaces/{organizationId}/support/tiers/{tierId}/members)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/tiers/{tierId}/members",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "tierId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "tierId"
       ]
     }
   },
@@ -5407,6 +5588,67 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "patchWorkspacesOrganizationIdSupportSlasSlaId",
+    "description": "Update support sla (PATCH /workspaces/{organizationId}/support/slas/{slaId})",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/support/slas/{slaId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "slaId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "tierId": {
+              "type": "string",
+              "nullable": true
+            },
+            "priority": {
+              "type": "string",
+              "enum": [
+                "low",
+                "medium",
+                "high",
+                "urgent"
+              ]
+            },
+            "firstResponseMinutes": {
+              "type": "integer",
+              "nullable": true,
+              "minimum": 1
+            },
+            "nextResponseMinutes": {
+              "type": "integer",
+              "nullable": true,
+              "minimum": 1
+            },
+            "resolutionMinutes": {
+              "type": "integer",
+              "nullable": true,
+              "minimum": 1
+            },
+            "businessHoursOnly": {
+              "type": "boolean"
+            }
+          }
+        }
+      },
+      "required": [
+        "organizationId",
+        "slaId"
+      ]
+    }
+  },
+  {
     "name": "patchWorkspacesOrganizationIdSupportTicketsTicketId",
     "description": "Update support ticket (PATCH /workspaces/{organizationId}/support/tickets/{ticketId})",
     "method": "PATCH",
@@ -5467,6 +5709,39 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "organizationId",
         "ticketId"
+      ]
+    }
+  },
+  {
+    "name": "patchWorkspacesOrganizationIdSupportTiersTierId",
+    "description": "Update support tier (PATCH /workspaces/{organizationId}/support/tiers/{tierId})",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/support/tiers/{tierId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "tierId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "level": {
+              "type": "integer"
+            }
+          }
+        }
+      },
+      "required": [
+        "organizationId",
+        "tierId"
       ]
     }
   },
@@ -9015,6 +9290,63 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdSupportSlas",
+    "description": "Create support sla (POST /workspaces/{organizationId}/support/slas)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/slas",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "tierId": {
+              "type": "string"
+            },
+            "priority": {
+              "type": "string",
+              "enum": [
+                "low",
+                "medium",
+                "high",
+                "urgent"
+              ]
+            },
+            "firstResponseMinutes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "nextResponseMinutes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "resolutionMinutes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "businessHoursOnly": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "name",
+            "priority"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdSupportTickets",
     "description": "Create support ticket (POST /workspaces/{organizationId}/support/tickets)",
     "method": "POST",
@@ -9364,6 +9696,113 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "organizationId",
         "ticketId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSupportTiers",
+    "description": "Create support tier (POST /workspaces/{organizationId}/support/tiers)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/tiers",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "level": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "name",
+            "level"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSupportTiersTierIdMembers",
+    "description": "Create support tier member (POST /workspaces/{organizationId}/support/tiers/{tierId}/members)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/tiers/{tierId}/members",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "tierId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "userId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "userId"
+          ]
+        }
+      },
+      "required": [
+        "organizationId",
+        "tierId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSupportUsersUserIdStatus",
+    "description": "Create support user statu (POST /workspaces/{organizationId}/support/users/{userId}/status)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/users/{userId}/status",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "active",
+                "away",
+                "snoozed",
+                "offline"
+              ]
+            },
+            "until": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": [
+            "status"
+          ]
+        }
+      },
+      "required": [
+        "organizationId",
+        "userId"
       ]
     }
   },

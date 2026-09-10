@@ -5031,6 +5031,304 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "support users status create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/users/{userId}/status",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "userId",
+        flag: "user",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "status",
+        flag: "status",
+      },
+      {
+        name: "until",
+        flag: "until",
+      },
+    ],
+  },
+  "support agents list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/agents",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support tiers list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/tiers",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support tiers create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/tiers",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "level",
+        flag: "level",
+      },
+    ],
+  },
+  "support tiers get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/tiers/{tierId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "tierId",
+        flag: "tier-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support tiers update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/support/tiers/{tierId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "tierId",
+        flag: "tier-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "level",
+        flag: "level",
+      },
+    ],
+  },
+  "support tiers delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/support/tiers/{tierId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "tierId",
+        flag: "tier-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support tiers members": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/tiers/{tierId}/members",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "tierId",
+        flag: "tier-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "userId",
+        flag: "user",
+      },
+    ],
+  },
+  "support tiers members delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/support/tiers/{tierId}/members/{userId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "tierId",
+        flag: "tier-id",
+      },
+      {
+        name: "userId",
+        flag: "user",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support slas list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/slas",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support slas create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/slas",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "tierId",
+        flag: "tier-id",
+      },
+      {
+        name: "priority",
+        flag: "priority",
+      },
+      {
+        name: "firstResponseMinutes",
+        flag: "first-response-minutes",
+      },
+      {
+        name: "nextResponseMinutes",
+        flag: "next-response-minutes",
+      },
+      {
+        name: "resolutionMinutes",
+        flag: "resolution-minutes",
+      },
+      {
+        name: "businessHoursOnly",
+        flag: "business-hours-only",
+      },
+    ],
+  },
+  "support slas get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/slas/{slaId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "slaId",
+        flag: "sla-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support slas update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/support/slas/{slaId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "slaId",
+        flag: "sla-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "tierId",
+        flag: "tier-id",
+      },
+      {
+        name: "priority",
+        flag: "priority",
+      },
+      {
+        name: "firstResponseMinutes",
+        flag: "first-response-minutes",
+      },
+      {
+        name: "nextResponseMinutes",
+        flag: "next-response-minutes",
+      },
+      {
+        name: "resolutionMinutes",
+        flag: "resolution-minutes",
+      },
+      {
+        name: "businessHoursOnly",
+        flag: "business-hours-only",
+      },
+    ],
+  },
+  "support slas delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/support/slas/{slaId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "slaId",
+        flag: "sla-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "csv exports create": {
     method: "POST",
     path: "/workspaces/{organizationId}/csv-exports",

@@ -26003,6 +26003,1233 @@
         "summary": "Delete support escalation rule"
       }
     },
+    "/workspaces/{organizationId}/support/users/{userId}/status": {
+      "post": {
+        "tags": [
+          "support-team"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "userId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "away",
+                      "snoozed",
+                      "offline"
+                    ]
+                  },
+                  "until": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                },
+                "required": [
+                  "status"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Status updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "userId": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "active",
+                            "away",
+                            "snoozed",
+                            "offline"
+                          ]
+                        },
+                        "until": {
+                          "type": "string",
+                          "nullable": true,
+                          "format": "date-time"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "userId",
+                        "status",
+                        "updatedAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create support user statu"
+      }
+    },
+    "/workspaces/{organizationId}/support/agents": {
+      "get": {
+        "tags": [
+          "support-team"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Agents",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "agents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "userId": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "active",
+                              "away",
+                              "snoozed",
+                              "offline"
+                            ]
+                          },
+                          "until": {
+                            "type": "string",
+                            "nullable": true,
+                            "format": "date-time"
+                          },
+                          "openTickets": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "userId",
+                          "name",
+                          "email",
+                          "status",
+                          "openTickets"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "agents"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List support agents"
+      }
+    },
+    "/workspaces/{organizationId}/support/tiers": {
+      "post": {
+        "tags": [
+          "support-team"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "level": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "name",
+                  "level"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Tier created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "tier": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "level": {
+                          "type": "integer"
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "name",
+                        "level",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "tier"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create support tier"
+      },
+      "get": {
+        "tags": [
+          "support-team"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tiers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "tiers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "level": {
+                            "type": "integer"
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "name",
+                          "level",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "tiers"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List support tiers"
+      }
+    },
+    "/workspaces/{organizationId}/support/tiers/{tierId}": {
+      "get": {
+        "tags": [
+          "support-team"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "tierId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tier",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "tier": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "level": {
+                          "type": "integer"
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "name",
+                        "level",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "tier"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "summary": "Get support tier"
+      },
+      "patch": {
+        "tags": [
+          "support-team"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "tierId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "level": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Tier updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "tier": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "level": {
+                          "type": "integer"
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "name",
+                        "level",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "tier"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "summary": "Update support tier"
+      },
+      "delete": {
+        "tags": [
+          "support-team"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "tierId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "summary": "Delete support tier"
+      }
+    },
+    "/workspaces/{organizationId}/support/tiers/{tierId}/members": {
+      "post": {
+        "tags": [
+          "support-team"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "tierId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "userId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "userId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Member added"
+          },
+          "404": {
+            "description": "Tier not found"
+          }
+        },
+        "summary": "Create support tier member"
+      },
+      "get": {
+        "tags": [
+          "support-team"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "tierId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tier members",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "members": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "userId": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "userId",
+                          "name",
+                          "email"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "members"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List support tier members"
+      }
+    },
+    "/workspaces/{organizationId}/support/tiers/{tierId}/members/{userId}": {
+      "delete": {
+        "tags": [
+          "support-team"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "tierId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "userId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Member removed"
+          },
+          "404": {
+            "description": "Member not found"
+          }
+        },
+        "summary": "Delete support tier member"
+      }
+    },
+    "/workspaces/{organizationId}/support/slas": {
+      "post": {
+        "tags": [
+          "support-team"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "tierId": {
+                    "type": "string"
+                  },
+                  "priority": {
+                    "type": "string",
+                    "enum": [
+                      "low",
+                      "medium",
+                      "high",
+                      "urgent"
+                    ]
+                  },
+                  "firstResponseMinutes": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "nextResponseMinutes": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "resolutionMinutes": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "businessHoursOnly": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "name",
+                  "priority"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "SLA created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sla": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "tierId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "priority": {
+                          "type": "string",
+                          "enum": [
+                            "low",
+                            "medium",
+                            "high",
+                            "urgent"
+                          ]
+                        },
+                        "firstResponseMinutes": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "nextResponseMinutes": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "resolutionMinutes": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "businessHoursOnly": {
+                          "type": "boolean"
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "name",
+                        "priority",
+                        "businessHoursOnly",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "sla"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create support sla"
+      },
+      "get": {
+        "tags": [
+          "support-team"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SLAs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "slas": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "tierId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "priority": {
+                            "type": "string",
+                            "enum": [
+                              "low",
+                              "medium",
+                              "high",
+                              "urgent"
+                            ]
+                          },
+                          "firstResponseMinutes": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "nextResponseMinutes": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "resolutionMinutes": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "businessHoursOnly": {
+                            "type": "boolean"
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "name",
+                          "priority",
+                          "businessHoursOnly",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "slas"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List support slas"
+      }
+    },
+    "/workspaces/{organizationId}/support/slas/{slaId}": {
+      "get": {
+        "tags": [
+          "support-team"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "slaId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SLA",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sla": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "tierId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "priority": {
+                          "type": "string",
+                          "enum": [
+                            "low",
+                            "medium",
+                            "high",
+                            "urgent"
+                          ]
+                        },
+                        "firstResponseMinutes": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "nextResponseMinutes": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "resolutionMinutes": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "businessHoursOnly": {
+                          "type": "boolean"
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "name",
+                        "priority",
+                        "businessHoursOnly",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "sla"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "summary": "Get support sla"
+      },
+      "patch": {
+        "tags": [
+          "support-team"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "slaId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "tierId": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "priority": {
+                    "type": "string",
+                    "enum": [
+                      "low",
+                      "medium",
+                      "high",
+                      "urgent"
+                    ]
+                  },
+                  "firstResponseMinutes": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 1
+                  },
+                  "nextResponseMinutes": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 1
+                  },
+                  "resolutionMinutes": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 1
+                  },
+                  "businessHoursOnly": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "SLA updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sla": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "tierId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "priority": {
+                          "type": "string",
+                          "enum": [
+                            "low",
+                            "medium",
+                            "high",
+                            "urgent"
+                          ]
+                        },
+                        "firstResponseMinutes": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "nextResponseMinutes": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "resolutionMinutes": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "businessHoursOnly": {
+                          "type": "boolean"
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "name",
+                        "priority",
+                        "businessHoursOnly",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "sla"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "summary": "Update support sla"
+      },
+      "delete": {
+        "tags": [
+          "support-team"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "slaId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "summary": "Delete support sla"
+      }
+    },
     "/workspaces/{organizationId}/csv-exports": {
       "post": {
         "tags": [

@@ -484,6 +484,13 @@
       "when": 1789068301617,
       "tag": "0068_happy_mantis",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "6",
+      "when": 1789077632056,
+      "tag": "0069_tough_wiccan",
+      "breakpoints": true
     }
   ]
 }

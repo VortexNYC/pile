@@ -4,6 +4,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { createD1 } from "../global/db.js";
 import { getCustomerById } from "../global/support-contacts.js";
 import { maybeEscalate } from "../global/support-escalation.js";
+import { createSlaEventsForTicket } from "../global/support-team.js";
 import {
   addTicketMessage,
   addTicketNote,
@@ -607,6 +608,8 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
       source: ticket.externalSource,
       channel: ticket.sourceChannel,
     });
+
+    await createSlaEventsForTicket(db, ticket);
 
     if (body.message) {
       await addTicketMessage(
