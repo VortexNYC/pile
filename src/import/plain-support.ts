@@ -4,6 +4,7 @@ import {
   createCustomer,
   findCustomerByExternalId,
 } from "../global/support-contacts.js";
+import type { ExternalSupportReply } from "../global/support-tickets.js";
 import { createTicketFromPlain } from "../global/support-tickets.js";
 import { VortexError } from "../platform/errors.js";
 import type {
@@ -220,6 +221,140 @@ async function listPlainThreads(
   return { threads: threads.nodes, nextCursor };
 }
 
+const plainActorSchema = z
+  .object({
+    customer: z.object({ id: z.string() }).passthrough().optional().nullable(),
+    user: z.object({ id: z.string() }).passthrough().optional().nullable(),
+    machineUser: z
+      .object({ id: z.string() })
+      .passthrough()
+      .optional()
+      .nullable(),
+  })
+  .passthrough();
+
+const plainTimelineEntrySchema = z.object({
+  id: z.string(),
+  timestamp: plainTimestampSchema,
+  actor: plainActorSchema.optional().nullable(),
+  entry: z
+    .object({
+      chatId: z.string().optional().nullable(),
+      text: z.string().optional().nullable(),
+      title: z.string().optional().nullable(),
+      components: z
+        .array(
+          z
+            .object({
+              text: z.string().optional().nullable(),
+            })
+            .passthrough()
+        )
+        .optional()
+        .nullable(),
+    })
+    .passthrough(),
+});
+
+type PlainTimelineEntry = z.infer<typeof plainTimelineEntrySchema>;
+
+const plainTimelineResponseSchema = z.object({
+  thread: z.object({
+    timelineEntries: z.object({
+      nodes: z.array(plainTimelineEntrySchema),
+      pageInfo: plainPageInfoSchema,
+    }),
+  }),
+});
+
+function timelineBody(entry: PlainTimelineEntry["entry"]): string {
+  if (entry.chatId) return entry.text ?? "";
+  if (entry.title) {
+    const parts = [
+      entry.title,
+      ...(entry.components ?? []).map((component) => component.text),
+    ];
+    return parts
+      .filter(
+        (text): text is string => typeof text === "string" && text.length > 0
+      )
+      .join("\n");
+  }
+  return "";
+}
+
+function timelineDirection(entry: PlainTimelineEntry): "inbound" | "outbound" {
+  return entry.actor?.customer != null ? "inbound" : "outbound";
+}
+
+async function getPlainThreadTimeline(
+  token: string,
+  threadId: string,
+  after?: string
+): Promise<ExternalSupportReply[]> {
+  const query = `
+    query ThreadTimeline($threadId: ID!, $first: Int, $after: String) {
+      thread(threadId: $threadId) {
+        timelineEntries(first: $first, after: $after) {
+          nodes {
+            id
+            timestamp { iso8601 }
+            actor {
+              customer { id }
+              user { id }
+              machineUser { id }
+            }
+            entry {
+              ... on ChatEntry { chatId text }
+              ... on CustomEntry { title components { ... on ComponentText { text } } }
+            }
+          }
+          pageInfo {
+            endCursor
+            hasNextPage
+          }
+        }
+      }
+    }
+  `;
+
+  const data = await plainRequest(token, query, {
+    threadId,
+    first: 100,
+    after: after ?? null,
+  });
+  const parsed = plainTimelineResponseSchema.safeParse(data);
+  if (!parsed.success) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 500,
+      message: "Invalid Plain thread timeline response",
+      hint: parsed.error.message,
+    });
+  }
+
+  const nodes = parsed.data.thread.timelineEntries.nodes;
+  const pageInfo = parsed.data.thread.timelineEntries.pageInfo;
+  const mapped = nodes.map((node) => ({
+    body: timelineBody(node),
+    direction: timelineDirection(node),
+    customerId: null,
+    userId: null,
+    createdAt: node.timestamp.iso8601,
+  }));
+
+  if (pageInfo.hasNextPage && pageInfo.endCursor) {
+    const next = await getPlainThreadTimeline(
+      token,
+      threadId,
+      pageInfo.endCursor
+    );
+    return [...mapped, ...next];
+  }
+
+  return mapped;
+}
+
 export const plainSupportImportSource: ImportSource<
   PlainSupportCredentials,
   PlainSupportOptions
@@ -238,7 +373,7 @@ export const plainSupportImportSource: ImportSource<
     const { token } = credentials;
     const parsedOptions = plainSupportOptionsSchema.parse(options ?? {});
     const { state: filterState } = parsedOptions;
-    const first = 100;
+    const pageSize = 100;
     const limit = runState?.limit ?? parsedOptions.limit;
     let after: string | undefined =
       runState?.cursor ?? parsedOptions.cursor ?? undefined;
@@ -253,7 +388,7 @@ export const plainSupportImportSource: ImportSource<
     while (true) {
       const { threads, nextCursor: pageNext } = await listPlainThreads(
         token,
-        first,
+        pageSize,
         after
       );
       if (threads.length === 0) break;
@@ -273,10 +408,17 @@ export const plainSupportImportSource: ImportSource<
               return;
             }
 
-            const customerId = await getOrCreatePlainSupportCustomer(
-              ctx,
-              customer
-            );
+            const [customerId, timeline] = await Promise.all([
+              getOrCreatePlainSupportCustomer(ctx, customer),
+              getPlainThreadTimeline(token, thread.id),
+            ]);
+
+            const firstEntry = timeline[0];
+            const source = {
+              type: "plain",
+              body: firstEntry?.body ?? thread.description,
+            };
+            const replies = firstEntry ? timeline.slice(1) : timeline;
 
             const result = await createTicketFromPlain(
               ctx.db,
@@ -287,13 +429,10 @@ export const plainSupportImportSource: ImportSource<
                 title: thread.title,
                 status,
                 priority: plainPriorityToVortex(thread.priority),
-                source: {
-                  type: "plain",
-                  body: thread.description,
-                },
+                source,
                 createdAt: thread.createdAt?.iso8601,
                 updatedAt: thread.updatedAt?.iso8601,
-                replies: [],
+                replies,
               },
               {}
             );
