@@ -19,8 +19,10 @@ import type {
 } from "../global/support-tickets.js";
 import {
   createTicketFromPlain,
+  findOrCreateTeam,
   findUserByEmail,
   setTicketAssignees,
+  type SupportTicketAssigneeInput,
 } from "../global/support-tickets.js";
 import { VortexError } from "../platform/errors.js";
 import type {
@@ -40,11 +42,19 @@ export type PlainSupportCredentials = z.infer<
   typeof plainSupportCredentialsSchema
 >;
 
-export const plainSupportOptionsSchema = z.object({
-  state: z.enum(["todo", "done", "snoozed", "all"]).optional().default("all"),
-  limit: z.number().int().min(1).max(1000).optional(),
-  cursor: z.string().optional(),
-});
+export const plainSupportOptionsSchema = z
+  .object({
+    state: z.enum(["todo", "done", "snoozed", "all"]).optional().default("all"),
+    limit: z.number().int().min(1).max(1000).optional(),
+    cursor: z.string().optional(),
+    teamId: z.string().optional(),
+    teamName: z.string().optional(),
+  })
+  .refine((data) => data.teamId || data.teamName, {
+    message:
+      "Plain support import requires a teamId or teamName because Plain threads do not include team assignments.",
+    path: ["teamId"],
+  });
 
 export type PlainSupportOptions = z.infer<typeof plainSupportOptionsSchema>;
 
@@ -346,9 +356,10 @@ async function syncPlainTicketAssignees(
   ctx: ImportContext,
   ticketId: string,
   assignedTo: PlainAssignee | null | undefined,
-  additionalAssignees: PlainAssignee[]
+  additionalAssignees: PlainAssignee[],
+  options: { teamId?: string; teamName?: string }
 ): Promise<void> {
-  const assignees: { userId: string; isPrimary: boolean }[] = [];
+  const assignees: SupportTicketAssigneeInput[] = [];
   const seen = new Set<string>();
 
   const resolveUser = async (assignee: PlainAssignee): Promise<void> => {
@@ -370,6 +381,21 @@ async function syncPlainTicketAssignees(
   }
 
   await Promise.all(additionalAssignees.map(resolveUser));
+
+  if (options.teamId || options.teamName) {
+    const team = options.teamId
+      ? { id: options.teamId }
+      : await findOrCreateTeam(
+          ctx.db,
+          ctx.organizationId,
+          options.teamName!,
+          ctx.importerId
+        );
+    assignees.push({
+      teamId: team.id,
+      isPrimary: assignees.length === 0,
+    });
+  }
 
   if (assignees.length > 0) {
     await setTicketAssignees(ctx.db, ctx.organizationId, ticketId, assignees);
@@ -947,7 +973,7 @@ export const plainSupportImportSource: ImportSource<
   async run(ctx, credentials, options, runState): Promise<ImportBatchResult> {
     const { token } = credentials;
     const parsedOptions = plainSupportOptionsSchema.parse(options ?? {});
-    const { state: filterState } = parsedOptions;
+    const { state: filterState, teamId, teamName } = parsedOptions;
     const pageSize = 100;
     const limit = runState?.limit ?? parsedOptions.limit;
 
@@ -1021,7 +1047,8 @@ export const plainSupportImportSource: ImportSource<
                 ctx,
                 result.id,
                 thread.assignedTo,
-                thread.additionalAssignees ?? []
+                thread.additionalAssignees ?? [],
+                { teamId, teamName }
               ),
               recordImportMapping(
                 ctx.db,

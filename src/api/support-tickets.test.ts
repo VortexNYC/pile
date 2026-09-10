@@ -28,6 +28,7 @@ import {
   setTicketAssignees,
 } from "../global/support-tickets.js";
 import { createWorkspace } from "../global/workspaces.js";
+import { plainSupportOptionsSchema } from "../import/plain-support.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
 
@@ -894,5 +895,18 @@ describe("support-tickets API", () => {
     const teamAssignee = fetched?.assignees.find((a) => a.type === "team");
     expect(teamAssignee?.assigneeId).toBe(team.id);
     expect(teamAssignee?.isPrimary).toBe(false);
+  });
+
+  it("requires a teamId or teamName for Plain support imports", () => {
+    const missing = plainSupportOptionsSchema.safeParse({});
+    expect(missing.success).toBe(false);
+
+    const byId = plainSupportOptionsSchema.safeParse({ teamId: "team-id" });
+    expect(byId.success).toBe(true);
+
+    const byName = plainSupportOptionsSchema.safeParse({
+      teamName: "Support",
+    });
+    expect(byName.success).toBe(true);
   });
 });
