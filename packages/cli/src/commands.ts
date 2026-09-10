@@ -4784,6 +4784,27 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "support tickets import zendesk create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/tickets/import/zendesk",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "customerId",
+        flag: "customer-id",
+      },
+      {
+        name: "ticket",
+        flag: "ticket",
+      },
+    ],
+  },
   "csv exports create": {
     method: "POST",
     path: "/workspaces/{organizationId}/csv-exports",

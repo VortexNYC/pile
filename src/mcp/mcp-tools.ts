@@ -8819,6 +8819,141 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdSupportTicketsImportZendesk",
+    "description": "Create support ticket import zendesk (POST /workspaces/{organizationId}/support/tickets/import/zendesk)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/tickets/import/zendesk",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "customerId": {
+              "type": "string"
+            },
+            "ticket": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "subject": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "description": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "open",
+                    "pending",
+                    "hold",
+                    "solved",
+                    "closed"
+                  ]
+                },
+                "priority": {
+                  "type": "string",
+                  "enum": [
+                    "urgent",
+                    "high",
+                    "normal",
+                    "low"
+                  ],
+                  "default": "normal"
+                },
+                "source": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "subject": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "body": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "default": {}
+                },
+                "createdAt": {
+                  "type": "string"
+                },
+                "updatedAt": {
+                  "type": "string"
+                },
+                "replies": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "body": {
+                        "type": "string"
+                      },
+                      "direction": {
+                        "type": "string",
+                        "enum": [
+                          "inbound",
+                          "outbound"
+                        ]
+                      },
+                      "channel": {
+                        "type": "string",
+                        "enum": [
+                          "email",
+                          "slack",
+                          "msteams",
+                          "discord",
+                          "chat",
+                          "api"
+                        ]
+                      },
+                      "customerId": {
+                        "type": "string"
+                      },
+                      "userId": {
+                        "type": "string"
+                      },
+                      "createdAt": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "body",
+                      "direction"
+                    ]
+                  },
+                  "default": []
+                }
+              },
+              "required": [
+                "id",
+                "status"
+              ]
+            }
+          },
+          "required": [
+            "customerId",
+            "ticket"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdSupportTicketsTicketIdDone",
     "description": "Create support ticket done (POST /workspaces/{organizationId}/support/tickets/{ticketId}/done)",
     "method": "POST",

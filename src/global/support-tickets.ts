@@ -1061,3 +1061,151 @@ export async function createTicketFromPlain(
     }
   );
 }
+
+export type ZendeskSupportTicket = {
+  id: string;
+  subject?: string | null;
+  description?: string | null;
+  status: "open" | "pending" | "hold" | "solved" | "closed";
+  priority?: "urgent" | "high" | "normal" | "low";
+  source: {
+    type?: string;
+    subject?: string | null;
+    body?: string | null;
+  };
+  createdAt?: string;
+  updatedAt?: string;
+  replies: ExternalSupportReply[];
+};
+
+function zendeskStatusToTicketStatus(
+  status: ZendeskSupportTicket["status"]
+): SupportTicketStatus {
+  const map: Record<string, SupportTicketStatus> = {
+    open: "todo",
+    pending: "todo",
+    hold: "snoozed",
+    solved: "done",
+    closed: "done",
+  };
+  return map[status] ?? "todo";
+}
+
+function zendeskPriorityToTicketPriority(
+  priority: ZendeskSupportTicket["priority"]
+): SupportTicketPriority {
+  const map: Record<string, SupportTicketPriority> = {
+    urgent: "urgent",
+    high: "high",
+    normal: "medium",
+    low: "low",
+  };
+  return map[priority ?? "normal"] ?? "medium";
+}
+
+export async function createTicketFromZendesk(
+  db: D1Client,
+  organizationId: string,
+  customerId: string,
+  ticket: ZendeskSupportTicket,
+  overrides: {
+    title?: string;
+    status?: SupportTicketStatus;
+    priority?: SupportTicketPriority;
+  } = {}
+): Promise<SupportTicketWithRelations> {
+  const existing = await findSupportTicketByExternalId(
+    db,
+    organizationId,
+    ticket.id,
+    "zendesk"
+  );
+  if (existing) {
+    const full = await getTicketById(db, organizationId, existing.id);
+    return (
+      full ?? {
+        ...existing,
+        customer: {
+          id: existing.customerId,
+          email: "",
+          fullName: null,
+          phone: null,
+        },
+        companies: [],
+        identities: [],
+        labels: [],
+        assignees: [],
+        events: [],
+      }
+    );
+  }
+
+  const body = stripHtml(ticket.description ?? ticket.source?.body);
+  const subject = ticket.subject ?? ticket.source?.subject ?? null;
+  const title =
+    overrides.title ??
+    subject ??
+    (body.slice(0, 120) || `Zendesk ticket ${ticket.id}`);
+
+  const createdAt = ticket.createdAt ?? new Date().toISOString();
+  const updatedAt = ticket.updatedAt ?? createdAt;
+
+  const sourceChannel = asTicketChannel(ticket.source?.type);
+  const messageChannel = asMessageChannel(ticket.source?.type);
+
+  const created = await createTicket(db, {
+    organizationId,
+    customerId,
+    title,
+    sourceChannel,
+    status: overrides.status ?? zendeskStatusToTicketStatus(ticket.status),
+    priority:
+      overrides.priority ?? zendeskPriorityToTicketPriority(ticket.priority),
+    externalId: ticket.id,
+    externalSource: "zendesk",
+    createdAt,
+    updatedAt,
+  });
+
+  const firstMessage = body || subject || "(no content)";
+  await addTicketMessage(db, organizationId, created.id, {
+    direction: "inbound",
+    textContent: firstMessage,
+    channel: messageChannel,
+    customerId,
+    createdAt,
+  });
+
+  const sortedReplies = ticket.replies.toSorted(
+    (a, b) =>
+      (a.createdAt ? Date.parse(a.createdAt) : 0) -
+      (b.createdAt ? Date.parse(b.createdAt) : 0)
+  );
+
+  for (const reply of sortedReplies) {
+    const replyCustomerId =
+      reply.direction === "inbound" ? customerId : undefined;
+    await addTicketMessage(db, organizationId, created.id, {
+      direction: reply.direction,
+      textContent: stripHtml(reply.body) || "(no content)",
+      markdownContent: reply.body,
+      channel: reply.channel ?? messageChannel,
+      customerId: replyCustomerId ?? reply.customerId,
+      userId: reply.userId,
+      createdAt: reply.createdAt,
+    });
+  }
+
+  const full = await getTicketById(db, organizationId, created.id);
+  return (
+    full ?? {
+      ...created,
+      customer: { id: customerId, email: "", fullName: null, phone: null },
+      companies: [],
+      identities: [],
+      labels: [],
+      assignees: [],
+      events: [],
+    }
+  );
+}

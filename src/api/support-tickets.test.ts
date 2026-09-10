@@ -364,4 +364,44 @@ describe("support-tickets API", () => {
     expect(imported.ticket.priority).toBe("low");
     expect(imported.ticket.externalSource).toBe("plain");
   });
+
+  it("imports a Zendesk ticket as a support ticket", async () => {
+    const customerId = await createCustomer({
+      email: "zendesk@example.com",
+      fullName: "Zendesk Customer",
+    });
+
+    const res = await fetch(
+      `/workspaces/${organizationId}/support/tickets/import/zendesk`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          customerId,
+          ticket: {
+            id: "zd-789",
+            status: "open",
+            priority: "urgent",
+            subject: "Refund request",
+            description: "I need a refund for my last purchase",
+            createdAt: "2023-11-14T13:00:00.000Z",
+            updatedAt: "2023-11-14T13:05:00.000Z",
+            replies: [
+              {
+                body: "Can you provide the order number?",
+                direction: "outbound",
+                createdAt: "2023-11-14T13:02:00.000Z",
+              },
+            ],
+          },
+        }),
+      }
+    );
+    expect(res.status).toBe(201);
+    const imported = (await res.json()) as {
+      ticket: { status: string; priority: string; externalSource: string };
+    };
+    expect(imported.ticket.status).toBe("todo");
+    expect(imported.ticket.priority).toBe("urgent");
+    expect(imported.ticket.externalSource).toBe("zendesk");
+  });
 });

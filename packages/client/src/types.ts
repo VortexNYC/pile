@@ -11114,6 +11114,157 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/support/tickets/import/zendesk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create support ticket import zendesk */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        customerId: string;
+                        ticket: {
+                            id: string;
+                            subject?: string | null;
+                            description?: string | null;
+                            /** @enum {string} */
+                            status: "open" | "pending" | "hold" | "solved" | "closed";
+                            /**
+                             * @default normal
+                             * @enum {string}
+                             */
+                            priority?: "urgent" | "high" | "normal" | "low";
+                            /** @default {} */
+                            source?: {
+                                type?: string;
+                                subject?: string | null;
+                                body?: string | null;
+                            };
+                            createdAt?: string;
+                            updatedAt?: string;
+                            /** @default [] */
+                            replies?: {
+                                body: string;
+                                /** @enum {string} */
+                                direction: "inbound" | "outbound";
+                                /** @enum {string} */
+                                channel?: "email" | "slack" | "msteams" | "discord" | "chat" | "api";
+                                customerId?: string;
+                                userId?: string;
+                                createdAt?: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Zendesk ticket imported as support ticket */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ticket: {
+                                id: string;
+                                organizationId: string;
+                                customerId: string;
+                                number: number;
+                                externalId: string | null;
+                                externalSource: string;
+                                title: string;
+                                /** @enum {string} */
+                                status: "todo" | "done" | "snoozed";
+                                /** @enum {string} */
+                                priority: "low" | "medium" | "high" | "urgent";
+                                /** @enum {string} */
+                                sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                                issueId: string | null;
+                                lastCustomerMessageAt: string | null;
+                                lastAgentMessageAt: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                customer: {
+                                    id: string;
+                                    email: string;
+                                    fullName: string | null;
+                                    phone: string | null;
+                                };
+                                companies: {
+                                    id: string;
+                                    name: string;
+                                    isPrimary: boolean;
+                                }[];
+                                identities: {
+                                    id: string;
+                                    /** @enum {string} */
+                                    type: "email" | "phone" | "slack" | "chat";
+                                    value: string;
+                                    isPrimary: boolean;
+                                }[];
+                                labels: {
+                                    id: string;
+                                    labelId: string;
+                                    name: string;
+                                    color: string | null;
+                                }[];
+                                assignees: {
+                                    id: string;
+                                    userId: string;
+                                    name: string | null;
+                                    isPrimary: boolean;
+                                }[];
+                                events: {
+                                    id: string;
+                                    ticketId: string;
+                                    type: string;
+                                    actorType: string;
+                                    actorId: string | null;
+                                    createdAt: string;
+                                    message?: {
+                                        id: string;
+                                        eventId: string;
+                                        /** @enum {string} */
+                                        direction: "inbound" | "outbound";
+                                        textContent: string;
+                                        markdownContent: string | null;
+                                        /** @enum {string} */
+                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "api";
+                                        customerId: string | null;
+                                        userId: string | null;
+                                    };
+                                    note?: {
+                                        id: string;
+                                        eventId: string;
+                                        body: string;
+                                    };
+                                }[];
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/csv-exports": {
         parameters: {
             query?: never;

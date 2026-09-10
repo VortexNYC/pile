@@ -8,6 +8,7 @@ import {
   createTicket,
   createTicketFromIntercom,
   createTicketFromPlain,
+  createTicketFromZendesk,
   getTicketById,
   listTicketEvents,
   listTickets,
@@ -253,6 +254,32 @@ const importIntercomBodySchema = z.object({
 const importPlainBodySchema = z.object({
   customerId: z.string(),
   thread: plainSupportThreadSchema,
+});
+
+const zendeskSupportSourceSchema = z.object({
+  type: z.string().optional(),
+  subject: z.string().nullable().optional(),
+  body: z.string().nullable().optional(),
+});
+
+const zendeskSupportTicketSchema = z.object({
+  id: z.string(),
+  subject: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
+  status: z.enum(["open", "pending", "hold", "solved", "closed"]),
+  priority: z
+    .enum(["urgent", "high", "normal", "low"])
+    .optional()
+    .default("normal"),
+  source: zendeskSupportSourceSchema.default({}),
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
+  replies: z.array(externalSupportReplySchema).default([]),
+});
+
+const importZendeskBodySchema = z.object({
+  customerId: z.string(),
+  ticket: zendeskSupportTicketSchema,
 });
 
 const orgParam = z.object({ organizationId: z.string() });
@@ -552,6 +579,31 @@ const importPlainRoute = createRoute({
   },
 });
 
+const importZendeskRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/support/tickets/import/zendesk",
+  tags: ["support-tickets"],
+  middleware: [rls("write")],
+  request: {
+    params: orgParam,
+    body: {
+      content: {
+        "application/json": { schema: importZendeskBodySchema },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "Zendesk ticket imported as support ticket",
+      content: {
+        "application/json": {
+          schema: z.object({ ticket: supportTicketSchema }),
+        },
+      },
+    },
+  },
+});
+
 export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(createTicketRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
@@ -726,5 +778,18 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
       thread
     );
     return c.json({ ticket }, 201);
+  });
+
+  app.openapi(importZendeskRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const { customerId, ticket } = c.req.valid("json");
+    const db = createD1(c.env.D1);
+    const imported = await createTicketFromZendesk(
+      db,
+      organizationId,
+      customerId,
+      ticket
+    );
+    return c.json({ ticket: imported }, 201);
   });
 }
