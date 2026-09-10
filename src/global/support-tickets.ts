@@ -390,6 +390,8 @@ export type ListTicketsOptions = {
   customerId?: string;
   status?: SupportTicketStatus;
   priority?: SupportTicketPriority;
+  sourceChannel?: SupportTicketChannel;
+  externalSource?: SupportTicketSource;
   assignedTo?: string;
   q?: string;
 };
@@ -411,6 +413,12 @@ export async function listTickets(
   }
   if (options.priority) {
     conditions.push(eq(supportTickets.priority, options.priority));
+  }
+  if (options.sourceChannel) {
+    conditions.push(eq(supportTickets.sourceChannel, options.sourceChannel));
+  }
+  if (options.externalSource) {
+    conditions.push(eq(supportTickets.externalSource, options.externalSource));
   }
   if (options.assignedTo) {
     const ticketIds = await db

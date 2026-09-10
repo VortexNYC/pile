@@ -4567,6 +4567,14 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "priority",
       },
       {
+        name: "sourceChannel",
+        flag: "source-channel",
+      },
+      {
+        name: "externalSource",
+        flag: "external-source",
+      },
+      {
         name: "assignedTo",
         flag: "assigned-to",
       },

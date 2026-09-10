@@ -10025,6 +10025,8 @@ export interface paths {
                     customerId?: string;
                     status?: "todo" | "done" | "snoozed";
                     priority?: "low" | "medium" | "high" | "urgent";
+                    sourceChannel?: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                    externalSource?: "intercom" | "zendesk" | "plain" | "email" | "slack" | "msteams" | "discord" | "chat" | "api" | "manual";
                     assignedTo?: string;
                     q?: string;
                 };

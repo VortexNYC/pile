@@ -221,6 +221,8 @@ const listTicketsQuerySchema = z.object({
   customerId: z.string().optional(),
   status: supportTicketStatusEnum.optional(),
   priority: supportTicketPriorityEnum.optional(),
+  sourceChannel: supportTicketChannelEnum.optional(),
+  externalSource: supportTicketSourceEnum.optional(),
   assignedTo: z.string().optional(),
   q: z.string().optional(),
 });
@@ -626,6 +628,8 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
       customerId: query.customerId,
       status: query.status,
       priority: query.priority,
+      sourceChannel: query.sourceChannel,
+      externalSource: query.externalSource,
       assignedTo: query.assignedTo,
       q: query.q,
     });

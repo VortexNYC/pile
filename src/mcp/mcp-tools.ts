@@ -3404,6 +3404,36 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "urgent"
           ]
         },
+        "sourceChannel": {
+          "type": "string",
+          "enum": [
+            "email",
+            "slack",
+            "msteams",
+            "discord",
+            "chat",
+            "capture",
+            "api",
+            "intercom",
+            "zendesk",
+            "plain"
+          ]
+        },
+        "externalSource": {
+          "type": "string",
+          "enum": [
+            "intercom",
+            "zendesk",
+            "plain",
+            "email",
+            "slack",
+            "msteams",
+            "discord",
+            "chat",
+            "api",
+            "manual"
+          ]
+        },
         "assignedTo": {
           "type": "string"
         },

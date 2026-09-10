@@ -19832,6 +19832,46 @@
           },
           {
             "schema": {
+              "type": "string",
+              "enum": [
+                "email",
+                "slack",
+                "msteams",
+                "discord",
+                "chat",
+                "capture",
+                "api",
+                "intercom",
+                "zendesk",
+                "plain"
+              ]
+            },
+            "required": false,
+            "name": "sourceChannel",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "intercom",
+                "zendesk",
+                "plain",
+                "email",
+                "slack",
+                "msteams",
+                "discord",
+                "chat",
+                "api",
+                "manual"
+              ]
+            },
+            "required": false,
+            "name": "externalSource",
+            "in": "query"
+          },
+          {
+            "schema": {
               "type": "string"
             },
             "required": false,
