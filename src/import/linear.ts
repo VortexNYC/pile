@@ -8,7 +8,7 @@ import {
   recordImportParentLink,
   resolveImportParentLinks,
 } from "../global/import-parent-links.js";
-import { getDefaultTeam } from "../global/teams.js";
+import { createTeam, getDefaultTeam } from "../global/teams.js";
 import { createTemplate } from "../global/templates.js";
 import { createUser, findUserByEmail } from "../global/users.js";
 import {
@@ -40,8 +40,10 @@ export const linearCredentialsSchema = z.object({
 export type LinearCredentials = z.infer<typeof linearCredentialsSchema>;
 
 export const linearOptionsSchema = z.object({
-  linearTeamId: z.string().min(1),
+  linearTeamId: z.string().min(1).optional(),
   teamId: z.string().optional(),
+  workspace: z.boolean().optional(),
+  teamIds: z.array(z.string()).optional(),
   limit: z.number().int().min(1).optional(),
   cursor: z.string().optional(),
 });
@@ -110,6 +112,12 @@ const linearRelationSchema = z.object({
   type: z.string(),
   relatedIssue: z.object({ id: z.string() }).nullable().optional(),
   issue: z.object({ id: z.string() }).nullable().optional(),
+});
+
+const linearTeamSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  key: z.string().optional(),
 });
 
 const linearHistorySchema = z.object({
@@ -549,6 +557,34 @@ class LinearClient {
       })
     );
   }
+
+  async getTeams(cursor?: string, first = 50) {
+    return this.request(
+      `query GetTeams($after: String, $first: Int!) {
+        teams(first: $first, after: $after) {
+          nodes {
+            id
+            name
+            key
+          }
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+        }
+      }`,
+      { after: cursor ?? null, first },
+      z.object({
+        teams: z.object({
+          nodes: z.array(linearTeamSchema),
+          pageInfo: z.object({
+            hasNextPage: z.boolean(),
+            endCursor: z.string().nullable().optional(),
+          }),
+        }),
+      })
+    );
+  }
 }
 
 function mapStatus(
@@ -760,8 +796,25 @@ export const linearImportSource: ImportSource<
     runState?: ImportRunState
   ): Promise<ImportBatchResult> {
     const parsedOptions = linearOptionsSchema.parse(options ?? {});
-    const linearTeamId = parsedOptions.linearTeamId;
     const client = new LinearClient(credentials.token);
+
+    if (parsedOptions.workspace) {
+      return importLinearWorkspace(
+        ctx,
+        client,
+        credentials,
+        parsedOptions,
+        runState
+      );
+    }
+
+    const linearTeamId = parsedOptions.linearTeamId;
+    if (!linearTeamId) {
+      return {
+        counts: { errors: 1 },
+        nextCursor: null,
+      };
+    }
 
     const teamId =
       parsedOptions.teamId ??
@@ -1100,3 +1153,132 @@ export const linearImportSource: ImportSource<
     };
   },
 };
+
+interface LinearWorkspaceState {
+  phase: "teams" | "issues";
+  teamCursor?: string | null;
+  teamIds?: string[];
+  teamIndex?: number;
+  issueCursor?: string | null;
+}
+
+function encodeWorkspaceState(state: LinearWorkspaceState): string {
+  return JSON.stringify(state);
+}
+
+function decodeWorkspaceState(cursor?: string): LinearWorkspaceState {
+  if (!cursor) return { phase: "teams" };
+  try {
+    const parsed = JSON.parse(cursor) as LinearWorkspaceState;
+    if (parsed.phase === "teams" || parsed.phase === "issues") return parsed;
+    return { phase: "teams" };
+  } catch {
+    return { phase: "teams" };
+  }
+}
+
+async function importLinearWorkspace(
+  ctx: ImportContext,
+  client: LinearClient,
+  credentials: LinearCredentials,
+  parsedOptions: LinearOptions,
+  runState?: ImportRunState
+): Promise<ImportBatchResult> {
+  const state = decodeWorkspaceState(runState?.cursor ?? parsedOptions.cursor);
+
+  if (state.phase === "teams") {
+    const limit = runState?.limit ?? parsedOptions.limit;
+    const first = limit ? Math.min(50, limit) : 50;
+    const page = await client.getTeams(state.teamCursor ?? undefined, first);
+    const teams = page.teams.nodes;
+    const teamIds = [...(state.teamIds ?? []), ...teams.map((t) => t.id)];
+    const hasNextPage = page.teams.pageInfo.hasNextPage;
+
+    if (hasNextPage) {
+      return {
+        counts: { teams: teams.length },
+        nextCursor: encodeWorkspaceState({
+          phase: "teams",
+          teamCursor: page.teams.pageInfo.endCursor ?? null,
+          teamIds,
+        }),
+      };
+    }
+
+    return {
+      counts: { teams: teamIds.length },
+      nextCursor:
+        teamIds.length > 0
+          ? encodeWorkspaceState({
+              phase: "issues",
+              teamIds,
+              teamIndex: 0,
+              issueCursor: undefined,
+            })
+          : null,
+    };
+  }
+
+  const teamIds = state.teamIds ?? [];
+  const teamIndex = state.teamIndex ?? 0;
+  if (teamIndex >= teamIds.length) {
+    return { counts: {}, nextCursor: null };
+  }
+
+  const linearTeamId = teamIds[teamIndex];
+  if (!linearTeamId) {
+    return {
+      counts: { errors: 1 },
+      nextCursor: null,
+    };
+  }
+
+  const vortexTeam = await createTeam(ctx.db, {
+    organizationId: ctx.organizationId,
+    name: `Linear team ${teamIndex + 1}`,
+    key: `LINEAR-${teamIndex + 1}`,
+    ownerId: ctx.importerId,
+  });
+
+  const teamResult = await linearImportSource.run(
+    ctx,
+    credentials,
+    {
+      ...parsedOptions,
+      workspace: undefined,
+      linearTeamId,
+      teamId: vortexTeam.id,
+    },
+    {
+      cursor: state.issueCursor ?? undefined,
+      limit: runState?.limit ?? parsedOptions.limit,
+    }
+  );
+
+  const hasMoreIssues =
+    teamResult.nextCursor !== undefined && teamResult.nextCursor !== null;
+  const nextState: LinearWorkspaceState = hasMoreIssues
+    ? {
+        phase: "issues",
+        teamIds,
+        teamIndex,
+        issueCursor: teamResult.nextCursor,
+      }
+    : {
+        phase: "issues",
+        teamIds,
+        teamIndex: teamIndex + 1,
+        issueCursor: undefined,
+      };
+
+  return {
+    counts: {
+      ...teamResult.counts,
+      teams: hasMoreIssues ? teamIndex + 1 : teamIndex + 1,
+    },
+    nextCursor:
+      hasMoreIssues || nextState.teamIndex! < teamIds.length
+        ? encodeWorkspaceState(nextState)
+        : null,
+  };
+}
