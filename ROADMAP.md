@@ -74,6 +74,7 @@ This is the durable tracker for the open-source Linear alternative. Operational 
 - Zendesk / Intercom integrations.
 
 ## Later
+
 - GitHub check run sync.
 - Billing and metering.
 - Full CLI parity.

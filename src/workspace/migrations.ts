@@ -629,6 +629,8 @@ CREATE TABLE IF NOT EXISTS git_automation_target_branches (
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS git_automation_target_branches_organization_idx ON git_automation_target_branches (organization_id)`;
 
+const v25 = `ALTER TABLE issues ADD COLUMN pr_check_state TEXT`;
+
 const v24 = `ALTER TABLE issue_external_links RENAME TO external_links
 --> statement-breakpoint
 ALTER TABLE external_links ADD COLUMN entity_type TEXT
@@ -668,6 +670,7 @@ export const workspaceMigrations = {
       { idx: 21, when: 21, tag: "v22", breakpoints: true },
       { idx: 22, when: 22, tag: "v23", breakpoints: true },
       { idx: 23, when: 23, tag: "v24", breakpoints: true },
+      { idx: 24, when: 24, tag: "v25", breakpoints: false },
     ],
   },
   migrations: {
@@ -695,5 +698,6 @@ export const workspaceMigrations = {
     m0021: v22,
     m0022: v23,
     m0023: v24,
+    m0024: v25,
   },
 } satisfies Parameters<typeof migrate>[1];

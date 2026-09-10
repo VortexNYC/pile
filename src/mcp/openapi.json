@@ -118,6 +118,10 @@
             "type": "string",
             "nullable": true
           },
+          "prCheckState": {
+            "type": "string",
+            "nullable": true
+          },
           "createdAt": {
             "type": "string"
           },
@@ -149,6 +153,7 @@
           "branch",
           "prUrl",
           "prState",
+          "prCheckState",
           "createdAt",
           "updatedAt"
         ]

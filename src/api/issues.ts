@@ -251,6 +251,7 @@ const issueApiSchema = z
     branch: z.string().nullable(),
     prUrl: z.string().nullable(),
     prState: z.string().nullable(),
+    prCheckState: z.string().nullable(),
     createdAt: z.string(),
     updatedAt: z.string(),
   })

@@ -13736,6 +13736,7 @@ export interface components {
             branch: string | null;
             prUrl: string | null;
             prState: string | null;
+            prCheckState: string | null;
             createdAt: string;
             updatedAt: string;
         };

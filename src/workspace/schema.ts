@@ -56,6 +56,7 @@ export const workspaceIssues = sqliteTable(
     branch: text("branch" as string),
     prUrl: text("pr_url" as string),
     prState: text("pr_state" as string),
+    prCheckState: text("pr_check_state" as string),
     createdAt: text("created_at" as string).notNull(),
     updatedAt: text("updated_at" as string).notNull(),
   },

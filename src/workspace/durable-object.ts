@@ -2449,6 +2449,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         branch: input.branch ?? null,
         prUrl: null,
         prState: null,
+        prCheckState: null,
         createdAt: input.createdAt ?? now,
         updatedAt: input.updatedAt ?? now,
       })
@@ -3516,6 +3517,53 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         field: "status",
         fromValue: old.status,
         toValue: issue.status,
+      });
+    }
+    if (historyEntries.length > 0) {
+      await this.recordIssueHistory(issue.id, historyEntries, actorId);
+    }
+
+    await this.emit({
+      type: "pr.updated",
+      organizationId: this.organizationId,
+      issue,
+    });
+    return issue;
+  }
+
+  async updatePrCheckState(
+    repo: string,
+    branch: string,
+    prCheckState: string,
+    actorId?: string
+  ): Promise<Issue | undefined> {
+    await this.ready;
+    const old = await this.getIssueByBranch(repo, branch);
+    if (!old) return undefined;
+
+    const issue = await this.db
+      .update(workspaceIssues)
+      .set({
+        prCheckState,
+        updatedAt: new Date().toISOString(),
+      })
+      .where(
+        and(eq(workspaceIssues.repo, repo), eq(workspaceIssues.branch, branch))
+      )
+      .returning()
+      .get();
+    if (!issue) return undefined;
+
+    const historyEntries: Array<{
+      field: string;
+      fromValue: string | null;
+      toValue: string | null;
+    }> = [];
+    if (old.prCheckState !== issue.prCheckState) {
+      historyEntries.push({
+        field: "pr_check_state",
+        fromValue: old.prCheckState,
+        toValue: issue.prCheckState,
       });
     }
     if (historyEntries.length > 0) {

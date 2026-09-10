@@ -43,6 +43,38 @@ const pullRequestPayloadSchema = z.object({
   }),
 });
 
+const checkRunPayloadSchema = z.object({
+  action: z.enum(["created", "completed", "rerequested", "requested_action"]),
+  check_run: z.object({
+    name: z.string(),
+    head_branch: z.string(),
+    head_sha: z.string(),
+    status: z.enum([
+      "queued",
+      "in_progress",
+      "completed",
+      "pending",
+      "waiting",
+    ]),
+    conclusion: z
+      .enum([
+        "success",
+        "failure",
+        "neutral",
+        "cancelled",
+        "skipped",
+        "timed_out",
+        "action_required",
+        "stale",
+      ])
+      .nullable()
+      .default(null),
+  }),
+  repository: z.object({
+    full_name: z.string(),
+  }),
+});
+
 function parseIssueIdentifiers(text: string) {
   const regex = /\b([A-Za-z][A-Za-z0-9_-]*-\d+)\b/g;
   const matches: string[] = [];
@@ -250,6 +282,9 @@ export async function processGithubWebhook(c: Context<AppContext>) {
   }
   if (event === "pull_request_review_comment") {
     return processPullRequestReviewComment(c, db, deliveryId, event, rawBody);
+  }
+  if (event === "check_run" || event === "check_suite") {
+    return processCheckRun(c, db, deliveryId, event, rawBody);
   }
   return c.json({ ok: true }, 200);
 }
@@ -991,5 +1026,65 @@ async function processGitHubIssue(
       organizationId
     );
   }
+  return c.json({ ok: true }, 200);
+}
+
+async function processCheckRun(
+  c: Context<AppContext>,
+  db: D1Client,
+  deliveryId: string | undefined,
+  event: string,
+  rawBody: string
+) {
+  let parsedBody: unknown;
+  try {
+    parsedBody = JSON.parse(rawBody);
+  } catch {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Invalid JSON",
+    });
+  }
+
+  const payload = checkRunPayloadSchema.safeParse(parsedBody);
+  if (!payload.success) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Invalid check_run payload",
+      hint: payload.error.message,
+    });
+  }
+
+  const { check_run, repository } = payload.data;
+  const repo = repository.full_name;
+  const branch = check_run.head_branch;
+  const prCheckState =
+    check_run.status === "completed"
+      ? (check_run.conclusion ?? "completed")
+      : check_run.status;
+
+  const workspaceRecord = await findWorkspaceByRepo(db, repo);
+  if (!workspaceRecord) {
+    return c.json({ ok: true }, 200);
+  }
+
+  const doId = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(
+    workspaceRecord.organizationId
+  );
+  const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(doId);
+  await stub.updatePrCheckState(repo, branch, prCheckState, "github");
+
+  if (deliveryId) {
+    await recordWebhookDelivery(
+      db,
+      deliveryId,
+      "github",
+      event,
+      workspaceRecord.organizationId
+    );
+  }
+
   return c.json({ ok: true }, 200);
 }
