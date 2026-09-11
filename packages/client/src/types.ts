@@ -178,6 +178,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/onboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create workspace onboard */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        name: string;
+                        slug: string;
+                        key?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Workspace onboarded with default team and admin token */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            workspace: {
+                                id: string;
+                                name: string;
+                                slug: string;
+                                key: string | null;
+                                ownerId: string;
+                                createdAt: string;
+                                updatedAt: string;
+                            };
+                            team: {
+                                id: string;
+                                organizationId: string;
+                                key: string;
+                                name: string;
+                                ownerId: string;
+                                isDefault: boolean;
+                                isPublic: boolean;
+                                parentAutoClose: boolean;
+                                triageAssigneeId: string | null;
+                                defaultTemplateId: string | null;
+                                subIssueAutoClose: boolean;
+                                createdAt: string;
+                                updatedAt: string;
+                            };
+                            token: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/tokens": {
         parameters: {
             query?: never;

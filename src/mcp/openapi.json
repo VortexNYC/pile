@@ -429,6 +429,159 @@
         "summary": "Get workspace by slug"
       }
     },
+    "/workspaces/onboard": {
+      "post": {
+        "tags": [
+          "workspaces"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "slug": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "key": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name",
+                  "slug"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Workspace onboarded with default team and admin token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "workspace": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "slug": {
+                          "type": "string"
+                        },
+                        "key": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "ownerId": {
+                          "type": "string"
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "slug",
+                        "key",
+                        "ownerId",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    },
+                    "team": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "key": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "ownerId": {
+                          "type": "string"
+                        },
+                        "isDefault": {
+                          "type": "boolean"
+                        },
+                        "isPublic": {
+                          "type": "boolean"
+                        },
+                        "parentAutoClose": {
+                          "type": "boolean"
+                        },
+                        "triageAssigneeId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "defaultTemplateId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "subIssueAutoClose": {
+                          "type": "boolean"
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "key",
+                        "name",
+                        "ownerId",
+                        "isDefault",
+                        "isPublic",
+                        "parentAutoClose",
+                        "triageAssigneeId",
+                        "defaultTemplateId",
+                        "subIssueAutoClose",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    },
+                    "token": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "workspace",
+                    "team",
+                    "token"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create workspace onboard"
+      }
+    },
     "/workspaces/{organizationId}/tokens": {
       "get": {
         "tags": [
