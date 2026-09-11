@@ -689,12 +689,13 @@ const jamWebhookRoute = createRoute({
 function assertSessionActive(session: { status: string; expiresAt: string }) {
   if (
     session.status === "expired" ||
+    session.status === "finalized" ||
     new Date(session.expiresAt) < new Date()
   ) {
     throw new VortexError({
       status: 401,
       code: "UNAUTHORIZED",
-      message: "Capture session expired",
+      message: "Capture session is no longer active",
     });
   }
 }
@@ -1094,6 +1095,24 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
         message: "Invalid capture token",
       });
     }
+
+    if (session.ticketId) {
+      const existingTicket = await getTicketById(
+        db,
+        session.organizationId,
+        session.ticketId
+      );
+      if (existingTicket) {
+        const origin = new URL(c.req.url).origin;
+        const meta = session.metadata;
+        const shareUrl =
+          meta.visibility === "public"
+            ? `${origin}/support/capture/public/${existingTicket.id}`
+            : undefined;
+        return c.json({ ticketId: existingTicket.id, shareUrl });
+      }
+    }
+
     assertSessionActive(session);
 
     const meta = session.metadata;

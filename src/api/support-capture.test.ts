@@ -353,6 +353,66 @@ describe("support-capture API", () => {
     expect(customer!.organizationId).toBe(organizationId);
   });
 
+  it("finalize is idempotent and returns the same ticket", async () => {
+    const publicKey = await createPublicKey();
+    const { token: sessionToken } = await issueCaptureToken(publicKey);
+
+    const sessionRes = await captureFetch("/support/capture/upload-session", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-vortex-capture-token": sessionToken,
+      },
+      body: JSON.stringify({
+        title: "Idempotent finalize",
+        metadata: {
+          email: "idempotent@example.com",
+          contentType: "image/png",
+        },
+      }),
+    });
+    expect(sessionRes.status).toBe(200);
+
+    const finalizeRes1 = await captureFetch("/support/capture/finalize", {
+      method: "POST",
+      headers: { "x-vortex-capture-token": sessionToken },
+    });
+    expect(finalizeRes1.status).toBe(200);
+    const final1 = (await finalizeRes1.json()) as {
+      ticketId: string;
+      shareUrl?: string;
+    };
+
+    const finalizeRes2 = await captureFetch("/support/capture/finalize", {
+      method: "POST",
+      headers: { "x-vortex-capture-token": sessionToken },
+    });
+    expect(finalizeRes2.status).toBe(200);
+    const final2 = (await finalizeRes2.json()) as {
+      ticketId: string;
+      shareUrl?: string;
+    };
+
+    expect(final2.ticketId).toBe(final1.ticketId);
+
+    const uploadAfterRes = await captureFetch(
+      "/support/capture/upload-session",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-vortex-capture-token": sessionToken,
+        },
+        body: JSON.stringify({
+          title: "After finalize",
+          attachmentType: "log",
+          fileName: "after.json",
+        }),
+      }
+    );
+    expect(uploadAfterRes.status).toBe(401);
+  });
+
   it("receives a Jam webhook for an Intercom conversation and attaches to the existing ticket", async () => {
     const publicKey = await createPublicKey();
     const db = createD1(env.D1);
