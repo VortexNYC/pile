@@ -116,7 +116,9 @@ describe("support-channels API", () => {
   });
 
   it("receives a Slack message event and creates a ticket", async () => {
-    env.SLACK_SIGNING_SECRET = "slack-secret";
+    Object.assign(env as unknown as Record<string, unknown>, {
+      SLACK_SIGNING_SECRET: "slack-secret",
+    });
 
     const channelRes = await fetch(
       `/workspaces/${organizationId}/support-channels`,

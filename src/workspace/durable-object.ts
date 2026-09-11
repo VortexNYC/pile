@@ -469,7 +469,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return index;
   }
 
-  private async emit(event: RealtimeEvent) {
+  private emitWebSockets(event: RealtimeEvent): void {
     for (const ws of this.ctx.getWebSockets()) {
       try {
         ws.send(JSON.stringify(event));
@@ -477,7 +477,15 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         // socket may be closing
       }
     }
+  }
+
+  private async emit(event: RealtimeEvent) {
+    this.emitWebSockets(event);
     this.ctx.waitUntil(this.sendWebhookEvent(event));
+  }
+
+  async broadcast(event: RealtimeEvent): Promise<void> {
+    this.emitWebSockets(event);
   }
 
   private async sendWebhookEvent(event: RealtimeEvent) {

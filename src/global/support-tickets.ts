@@ -207,6 +207,7 @@ async function dispatchSupportTicketEvent(
   event: RealtimeEvent
 ): Promise<void> {
   const stub = getWorkspaceStub(env, organizationId);
+  await stub.broadcast(event);
   await stub.deliverWebhooks(event);
 }
 
