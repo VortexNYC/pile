@@ -409,6 +409,44 @@ async function updateStatusIfExists(
   }
 }
 
+const intercomReplyResponseSchema = z.object({
+  id: z.string(),
+});
+
+export async function sendIntercomMessage(input: {
+  accessToken: string;
+  adminId: string;
+  conversationId: string;
+  text: string;
+}): Promise<boolean> {
+  try {
+    const res = await fetch(
+      `https://api.intercom.io/conversations/${input.conversationId}/reply`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${input.accessToken}`,
+          "Content-Type": "application/json; charset=utf-8",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          message_type: "comment",
+          from: { type: "admin", id: input.adminId },
+          body: input.text,
+        }),
+      }
+    );
+    if (!res.ok) {
+      return false;
+    }
+    const data = (await res.json()) as unknown;
+    const parsed = intercomReplyResponseSchema.safeParse(data);
+    return parsed.success;
+  } catch {
+    return false;
+  }
+}
+
 function safeJsonParse(value: string): unknown {
   try {
     return JSON.parse(value);

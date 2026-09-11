@@ -5304,6 +5304,8 @@ export interface paths {
                                 isActive: boolean;
                                 config: {
                                     appId?: string;
+                                    accessToken?: string;
+                                    adminId?: string;
                                 };
                                 createdAt: string;
                                 updatedAt: string;
@@ -5316,6 +5318,8 @@ export interface paths {
                                 isActive: boolean;
                                 config: {
                                     subdomain?: string;
+                                    accessToken?: string;
+                                    email?: string;
                                 };
                                 createdAt: string;
                                 updatedAt: string;
@@ -5328,6 +5332,7 @@ export interface paths {
                                 isActive: boolean;
                                 config: {
                                     workspaceId?: string;
+                                    accessToken?: string;
                                 };
                                 createdAt: string;
                                 updatedAt: string;
@@ -5472,6 +5477,8 @@ export interface paths {
                             isActive: boolean;
                             config: {
                                 appId?: string;
+                                accessToken?: string;
+                                adminId?: string;
                             };
                             createdAt: string;
                             updatedAt: string;
@@ -5484,6 +5491,8 @@ export interface paths {
                             isActive: boolean;
                             config: {
                                 subdomain?: string;
+                                accessToken?: string;
+                                email?: string;
                             };
                             createdAt: string;
                             updatedAt: string;
@@ -5496,6 +5505,7 @@ export interface paths {
                             isActive: boolean;
                             config: {
                                 workspaceId?: string;
+                                accessToken?: string;
                             };
                             createdAt: string;
                             updatedAt: string;

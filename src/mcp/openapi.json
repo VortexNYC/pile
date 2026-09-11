@@ -10491,6 +10491,12 @@
                                 "properties": {
                                   "appId": {
                                     "type": "string"
+                                  },
+                                  "accessToken": {
+                                    "type": "string"
+                                  },
+                                  "adminId": {
+                                    "type": "string"
                                   }
                                 }
                               },
@@ -10538,6 +10544,12 @@
                                 "properties": {
                                   "subdomain": {
                                     "type": "string"
+                                  },
+                                  "accessToken": {
+                                    "type": "string"
+                                  },
+                                  "email": {
+                                    "type": "string"
                                   }
                                 }
                               },
@@ -10584,6 +10596,9 @@
                                 "type": "object",
                                 "properties": {
                                   "workspaceId": {
+                                    "type": "string"
+                                  },
+                                  "accessToken": {
                                     "type": "string"
                                   }
                                 }
@@ -11071,6 +11086,12 @@
                           "properties": {
                             "appId": {
                               "type": "string"
+                            },
+                            "accessToken": {
+                              "type": "string"
+                            },
+                            "adminId": {
+                              "type": "string"
                             }
                           }
                         },
@@ -11118,6 +11139,12 @@
                           "properties": {
                             "subdomain": {
                               "type": "string"
+                            },
+                            "accessToken": {
+                              "type": "string"
+                            },
+                            "email": {
+                              "type": "string"
                             }
                           }
                         },
@@ -11164,6 +11191,9 @@
                           "type": "object",
                           "properties": {
                             "workspaceId": {
+                              "type": "string"
+                            },
+                            "accessToken": {
                               "type": "string"
                             }
                           }

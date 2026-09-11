@@ -1,6 +1,9 @@
 import { and, eq } from "drizzle-orm";
 
+import { sendIntercomMessage } from "../channels/intercom.js";
+import { sendPlainMessage } from "../channels/plain.js";
 import { sendSlackMessage } from "../channels/slack.js";
+import { sendZendeskMessage } from "../channels/zendesk.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { D1Client } from "./db.js";
@@ -226,6 +229,49 @@ export async function processOutgoingMessage(
       botToken: channelConfig.botToken,
       channelId: channelConfig.channelId,
       text: input.textContent,
+    });
+  }
+
+  if (
+    channel.type === "intercom" &&
+    typeof channelConfig.accessToken === "string" &&
+    typeof channelConfig.adminId === "string" &&
+    ticket.externalId
+  ) {
+    sent = await sendIntercomMessage({
+      accessToken: channelConfig.accessToken,
+      adminId: channelConfig.adminId,
+      conversationId: ticket.externalId,
+      text: input.textContent,
+    });
+  }
+
+  if (
+    channel.type === "zendesk" &&
+    typeof channelConfig.subdomain === "string" &&
+    typeof channelConfig.accessToken === "string" &&
+    typeof channelConfig.email === "string" &&
+    ticket.externalId
+  ) {
+    sent = await sendZendeskMessage({
+      subdomain: channelConfig.subdomain,
+      accessToken: channelConfig.accessToken,
+      email: channelConfig.email,
+      ticketId: ticket.externalId,
+      text: input.textContent,
+    });
+  }
+
+  if (
+    channel.type === "plain" &&
+    typeof channelConfig.accessToken === "string" &&
+    ticket.externalId
+  ) {
+    sent = await sendPlainMessage({
+      accessToken: channelConfig.accessToken,
+      threadId: ticket.externalId,
+      textContent: input.textContent,
+      markdownContent: input.markdownContent ?? null,
     });
   }
 

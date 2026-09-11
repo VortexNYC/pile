@@ -291,4 +291,168 @@ describe("support-channels API", () => {
     expect(sendBody.ok).toBe(true);
     expect(sendBody.messageId).toBeDefined();
   });
+
+  it("attempts to send an outbound message through an Intercom channel", async () => {
+    const channelRes = await fetch(
+      `/workspaces/${organizationId}/support-channels`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "intercom",
+          name: "intercom",
+          config: { accessToken: "fake-token", adminId: "admin-123" },
+        }),
+      }
+    );
+    expect(channelRes.status).toBe(201);
+    const { id: channelId } = (await channelRes.json()) as { id: string };
+
+    const db = createD1(env.D1);
+    const customer = await createCustomer(db, {
+      organizationId,
+      email: "intercom-outbound@example.com",
+    });
+    const ticket = await createTicket(
+      db,
+      {
+        organizationId,
+        customerId: customer.id,
+        title: "Intercom help",
+        sourceChannel: "intercom",
+        externalId: "conv-123",
+        externalSource: "intercom",
+      },
+      env
+    );
+
+    const sendRes = await fetch(
+      `/workspaces/${organizationId}/support/channels/${channelId}/send`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          ticketId: ticket.id,
+          textContent: "Answer on Intercom.",
+        }),
+      }
+    );
+    expect(sendRes.status).toBe(200);
+    const sendBody = (await sendRes.json()) as {
+      ok: boolean;
+      messageId: string;
+      sent: boolean;
+    };
+    expect(sendBody.ok).toBe(true);
+    expect(sendBody.messageId).toBeDefined();
+  });
+
+  it("attempts to send an outbound message through a Zendesk channel", async () => {
+    const channelRes = await fetch(
+      `/workspaces/${organizationId}/support-channels`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "zendesk",
+          name: "zendesk",
+          config: {
+            subdomain: "vortex-test",
+            accessToken: "fake-token",
+            email: "agent@example.com",
+          },
+        }),
+      }
+    );
+    expect(channelRes.status).toBe(201);
+    const { id: channelId } = (await channelRes.json()) as { id: string };
+
+    const db = createD1(env.D1);
+    const customer = await createCustomer(db, {
+      organizationId,
+      email: "zendesk-outbound@example.com",
+    });
+    const ticket = await createTicket(
+      db,
+      {
+        organizationId,
+        customerId: customer.id,
+        title: "Zendesk help",
+        sourceChannel: "zendesk",
+        externalId: "987654321",
+        externalSource: "zendesk",
+      },
+      env
+    );
+
+    const sendRes = await fetch(
+      `/workspaces/${organizationId}/support/channels/${channelId}/send`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          ticketId: ticket.id,
+          textContent: "Answer on Zendesk.",
+        }),
+      }
+    );
+    expect(sendRes.status).toBe(200);
+    const sendBody = (await sendRes.json()) as {
+      ok: boolean;
+      messageId: string;
+      sent: boolean;
+    };
+    expect(sendBody.ok).toBe(true);
+    expect(sendBody.messageId).toBeDefined();
+  });
+
+  it("attempts to send an outbound message through a Plain channel", async () => {
+    const channelRes = await fetch(
+      `/workspaces/${organizationId}/support-channels`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "plain",
+          name: "plain",
+          config: { accessToken: "fake-token" },
+        }),
+      }
+    );
+    expect(channelRes.status).toBe(201);
+    const { id: channelId } = (await channelRes.json()) as { id: string };
+
+    const db = createD1(env.D1);
+    const customer = await createCustomer(db, {
+      organizationId,
+      email: "plain-outbound@example.com",
+    });
+    const ticket = await createTicket(
+      db,
+      {
+        organizationId,
+        customerId: customer.id,
+        title: "Plain help",
+        sourceChannel: "plain",
+        externalId: "thread-123",
+        externalSource: "plain",
+      },
+      env
+    );
+
+    const sendRes = await fetch(
+      `/workspaces/${organizationId}/support/channels/${channelId}/send`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          ticketId: ticket.id,
+          textContent: "Answer on Plain.",
+          markdownContent: "**Answer** on Plain.",
+        }),
+      }
+    );
+    expect(sendRes.status).toBe(200);
+    const sendBody = (await sendRes.json()) as {
+      ok: boolean;
+      messageId: string;
+      sent: boolean;
+    };
+    expect(sendBody.ok).toBe(true);
+    expect(sendBody.messageId).toBeDefined();
+  });
 });
