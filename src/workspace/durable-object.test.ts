@@ -496,4 +496,21 @@ describe("WorkspaceDO", () => {
     expect(b.id).toBe(id);
     expect(a.id).toBe(b.id);
   });
+
+  it("assigns distinct numbers for concurrent createIssue with different ids", async () => {
+    const stub = getStub();
+    await stub.setOrganizationId(WORKSPACE_ID);
+    const [a, b] = await Promise.all([
+      stub.createIssue({
+        id: `repo:github:vortexnyc:issuetracker:${crypto.randomUUID()}`,
+        title: "Concurrent A",
+      }),
+      stub.createIssue({
+        id: `repo:github:vortexnyc:issuetracker:${crypto.randomUUID()}`,
+        title: "Concurrent B",
+      }),
+    ]);
+    expect(a.number).not.toBe(b.number);
+    expect(a.identifier).not.toBe(b.identifier);
+  });
 });

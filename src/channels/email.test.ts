@@ -163,4 +163,14 @@ describe("incoming email handler", () => {
     await handleIncomingEmail(message, env);
     expect(message.rejectedReason).toBe("Missing sender");
   });
+
+  it("rejects email with no Message-ID header", async () => {
+    const message = makeEmailMessage(
+      "support@example.com",
+      "user@example.com",
+      "body"
+    );
+    await handleIncomingEmail(message, env);
+    expect(message.rejectedReason).toBe("Missing Message-ID header");
+  });
 });

@@ -172,10 +172,15 @@ export async function handleIncomingEmail(
   const messageIdValue = extractReferenceMessageId(messageId);
   const inReplyToValue = extractReferenceMessageId(inReplyTo);
 
+  if (!messageIdValue) {
+    message.setReject("Missing Message-ID header");
+    return;
+  }
+
   const deliveryId = scopedDeliveryId(
     "email",
     channel.organizationId,
-    messageIdValue ?? crypto.randomUUID()
+    messageIdValue
   );
 
   const processors = new Map<WebhookSource, WebhookProcessor>([

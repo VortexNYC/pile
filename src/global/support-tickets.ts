@@ -204,6 +204,10 @@ export type SupportTicketEventWithDetails = SupportTicketEvent & {
   note?: SupportTicketNote;
 };
 
+export type AddTicketMessageResult = SupportTicketEventWithDetails & {
+  isNew: boolean;
+};
+
 function getWorkspaceStub(env: WorkerEnv, organizationId: string) {
   return env.WORKSPACE_DURABLE_OBJECT.get(
     env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
@@ -1140,7 +1144,7 @@ export async function addTicketMessage(
     reopenOnCustomerReply?: boolean;
   },
   env?: WorkerEnv
-): Promise<SupportTicketEventWithDetails> {
+): Promise<AddTicketMessageResult> {
   await ensureTicket(db, organizationId, ticketId);
 
   if (!input.textContent || input.textContent.trim().length === 0) {
@@ -1184,6 +1188,7 @@ export async function addTicketMessage(
   const externalId = input.externalId ?? null;
 
   let event: SupportTicketEvent;
+  let isNew = true;
 
   if (externalId) {
     const inserted = await db
@@ -1215,7 +1220,7 @@ export async function addTicketMessage(
         externalId,
         "message"
       );
-      if (existing) return existing;
+      if (existing) return { ...existing, isNew: false };
       throw new VortexError({
         code: "INTERNAL_ERROR",
         status: 500,
@@ -1362,6 +1367,7 @@ export async function addTicketMessage(
     metadata,
     externalId,
     createdAt: messageCreatedAt,
+    isNew,
     message: {
       id: message.id,
       eventId: event.id,

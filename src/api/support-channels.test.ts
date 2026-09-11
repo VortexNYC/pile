@@ -11,7 +11,11 @@ import {
   hmacSha256Hex,
 } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
-import { supportTicketEvents, user as userTable } from "../global/schema.js";
+import {
+  supportChannels,
+  supportTicketEvents,
+  user as userTable,
+} from "../global/schema.js";
 import { getCustomerByEmail } from "../global/support-contacts.js";
 import { createCustomer } from "../global/support-contacts.js";
 import { createTicket } from "../global/support-tickets.js";
@@ -387,6 +391,86 @@ describe("support-channels API", () => {
     expect(sendBody.ok).toBe(true);
     expect(sendBody.sent).toBe(true);
     expect(sendBody.messageId).toBeDefined();
+  });
+
+  it("deduplicates an outbound send by idempotencyKey", async () => {
+    const db = createD1(env.D1);
+    const customer = await createCustomer(db, {
+      organizationId,
+      email: "idempotent@example.com",
+    });
+    const ticket = await createTicket(db, {
+      organizationId,
+      customerId: customer.id,
+      title: "Idempotent send",
+      sourceChannel: "email",
+    });
+
+    const channelId = crypto.randomUUID();
+    const channelNow = new Date();
+    await db.insert(supportChannels).values({
+      id: channelId,
+      organizationId,
+      type: "email",
+      name: "idempotent-support@example.com",
+      isActive: true,
+      config: "{}",
+      createdAt: channelNow.toISOString(),
+      updatedAt: channelNow.toISOString(),
+    });
+
+    let sends = 0;
+    Object.assign(env as unknown as Record<string, unknown>, {
+      EMAIL: {
+        send: async () => {
+          sends++;
+          return undefined;
+        },
+      },
+    });
+
+    const key = `idempotency-${crypto.randomUUID()}`;
+    const sendOnce = await fetch(
+      `/workspaces/${organizationId}/support/channels/${channelId}/send`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          ticketId: ticket.id,
+          textContent: "Here is the answer.",
+          subject: "Re: Need help",
+          idempotencyKey: key,
+        }),
+      }
+    );
+    expect(sendOnce.status).toBe(200);
+    const bodyOnce = (await sendOnce.json()) as {
+      ok: boolean;
+      messageId: string;
+      sent: boolean;
+    };
+    expect(bodyOnce.sent).toBe(true);
+
+    const sendAgain = await fetch(
+      `/workspaces/${organizationId}/support/channels/${channelId}/send`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          ticketId: ticket.id,
+          textContent: "Here is the answer.",
+          subject: "Re: Need help",
+          idempotencyKey: key,
+        }),
+      }
+    );
+    expect(sendAgain.status).toBe(200);
+    const bodyAgain = (await sendAgain.json()) as {
+      ok: boolean;
+      messageId: string;
+      sent: boolean;
+    };
+    expect(bodyAgain.messageId).toBe(bodyOnce.messageId);
+    expect(bodyAgain.sent).toBe(true);
+    expect(sends).toBe(1);
   });
 
   it("attempts to send an outbound message through a Slack channel", async () => {

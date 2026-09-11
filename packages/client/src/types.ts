@@ -6627,6 +6627,7 @@ export interface paths {
                         textContent: string;
                         markdownContent?: string;
                         subject?: string;
+                        idempotencyKey?: string;
                     };
                 };
             };

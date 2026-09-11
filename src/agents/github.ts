@@ -22,7 +22,6 @@ import {
   findRepoIssue,
   findRepoWorkspace,
 } from "../global/repo-issues.js";
-import { recordWebhookDelivery } from "../global/webhook-deliveries.js";
 import { scopedDeliveryId } from "../global/webhook-queue.js";
 import { enqueueWebhook } from "../global/webhook-queue.js";
 import { VortexError } from "../platform/errors.js";
@@ -360,9 +359,6 @@ async function processInstallation(
 
   if (action === "deleted") {
     await deleteGithubInstallationsByInstallationId(db, installationId);
-    if (deliveryId) {
-      await recordWebhookDelivery(db, deliveryId, "github", event, "deleted");
-    }
     return;
   }
 
@@ -380,27 +376,9 @@ async function processInstallation(
         }
       })
     );
-    if (deliveryId) {
-      await recordWebhookDelivery(
-        db,
-        deliveryId,
-        "github",
-        event,
-        installationId
-      );
-    }
     return;
   }
 
-  if (deliveryId) {
-    await recordWebhookDelivery(
-      db,
-      deliveryId,
-      "github",
-      event,
-      installationId
-    );
-  }
   return;
 }
 
@@ -442,15 +420,6 @@ async function processInstallationRepositories(
         deleteGithubInstallation(db, repo.full_name)
       )
     );
-    if (deliveryId) {
-      await recordWebhookDelivery(
-        db,
-        deliveryId,
-        "github",
-        event,
-        installationId
-      );
-    }
     return;
   }
 
@@ -467,15 +436,6 @@ async function processInstallationRepositories(
       }
     })
   );
-  if (deliveryId) {
-    await recordWebhookDelivery(
-      db,
-      deliveryId,
-      "github",
-      event,
-      installationId
-    );
-  }
   return;
 }
 
@@ -512,17 +472,11 @@ async function processIssueComment(
 
   if (issue.pull_request) {
     // PR issue comments are handled with PR review comments for mapping.
-    if (deliveryId) {
-      await recordWebhookDelivery(db, deliveryId, "github", event);
-    }
     return;
   }
 
   const mapping = await findRepoIssue(db, repo, issue.number);
   if (!mapping) {
-    if (deliveryId) {
-      await recordWebhookDelivery(db, deliveryId, "github", event);
-    }
     return;
   }
 
@@ -570,15 +524,6 @@ async function processIssueComment(
     }
   }
 
-  if (deliveryId) {
-    await recordWebhookDelivery(
-      db,
-      deliveryId,
-      "github",
-      event,
-      organizationId
-    );
-  }
   return;
 }
 
@@ -616,9 +561,6 @@ async function processPullRequestReviewComment(
 
   const workspaceRecord = await findWorkspaceByRepo(db, repo);
   if (!workspaceRecord) {
-    if (deliveryId) {
-      await recordWebhookDelivery(db, deliveryId, "github", event);
-    }
     return;
   }
 
@@ -629,13 +571,9 @@ async function processPullRequestReviewComment(
   await stub.setOrganizationId(workspaceRecord.organizationId);
   const issue = await stub.getIssueByBranch(repo, branch);
   if (!issue) {
-    if (deliveryId) {
-      await recordWebhookDelivery(db, deliveryId, "github", event);
-    }
     return;
   }
 
-  const organizationId = workspaceRecord.organizationId;
   const issueId = issue.id;
   const externalId = comment.id.toString();
   const externalSource = "github";
@@ -676,15 +614,6 @@ async function processPullRequestReviewComment(
     }
   }
 
-  if (deliveryId) {
-    await recordWebhookDelivery(
-      db,
-      deliveryId,
-      "github",
-      event,
-      organizationId
-    );
-  }
   return;
 }
 
@@ -751,16 +680,6 @@ async function processPullRequest(
       )
     )
   );
-
-  if (deliveryId) {
-    await recordWebhookDelivery(
-      db,
-      deliveryId,
-      "github",
-      event,
-      workspaceRecord.organizationId
-    );
-  }
 
   return;
 }
@@ -853,15 +772,6 @@ async function processGitHubIssue(
       );
       await createRepoIssue(db, organizationId, repo, issue.number, created.id);
     }
-    if (deliveryId) {
-      await recordWebhookDelivery(
-        db,
-        deliveryId,
-        "github",
-        event,
-        organizationId
-      );
-    }
     return;
   }
 
@@ -893,15 +803,6 @@ async function processGitHubIssue(
         });
       }
     }
-    if (deliveryId) {
-      await recordWebhookDelivery(
-        db,
-        deliveryId,
-        "github",
-        event,
-        organizationId
-      );
-    }
     return;
   }
 
@@ -920,15 +821,6 @@ async function processGitHubIssue(
         });
       }
     }
-    if (deliveryId) {
-      await recordWebhookDelivery(
-        db,
-        deliveryId,
-        "github",
-        event,
-        organizationId
-      );
-    }
     return;
   }
 
@@ -936,15 +828,6 @@ async function processGitHubIssue(
     if (mapping) {
       await stub.updateIssue(mapping.issueId, { status: "canceled" }, "github");
       await deleteRepoIssue(db, repo, issue.number);
-    }
-    if (deliveryId) {
-      await recordWebhookDelivery(
-        db,
-        deliveryId,
-        "github",
-        event,
-        organizationId
-      );
     }
     return;
   }
@@ -971,15 +854,6 @@ async function processGitHubIssue(
           message: "Mapped issue not found in workspace",
         });
       }
-    }
-    if (deliveryId) {
-      await recordWebhookDelivery(
-        db,
-        deliveryId,
-        "github",
-        event,
-        organizationId
-      );
     }
     return;
   }
@@ -1009,15 +883,6 @@ async function processGitHubIssue(
         });
       }
     }
-    if (deliveryId) {
-      await recordWebhookDelivery(
-        db,
-        deliveryId,
-        "github",
-        event,
-        organizationId
-      );
-    }
     return;
   }
 
@@ -1044,27 +909,9 @@ async function processGitHubIssue(
         });
       }
     }
-    if (deliveryId) {
-      await recordWebhookDelivery(
-        db,
-        deliveryId,
-        "github",
-        event,
-        organizationId
-      );
-    }
     return;
   }
 
-  if (deliveryId) {
-    await recordWebhookDelivery(
-      db,
-      deliveryId,
-      "github",
-      event,
-      organizationId
-    );
-  }
   return;
 }
 
@@ -1114,16 +961,6 @@ async function processCheckRun(
   );
   const stub = env.WORKSPACE_DURABLE_OBJECT.get(doId);
   await stub.updatePrCheckState(repo, branch, prCheckState, "github");
-
-  if (deliveryId) {
-    await recordWebhookDelivery(
-      db,
-      deliveryId,
-      "github",
-      event,
-      workspaceRecord.organizationId
-    );
-  }
 
   return;
 }

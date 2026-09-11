@@ -7,7 +7,7 @@ import { sendZendeskMessage } from "../channels/zendesk.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { D1Client } from "./db.js";
-import { supportChannels } from "./schema.js";
+import { supportChannels, supportTicketEvents } from "./schema.js";
 import {
   findOrCreateCustomerByEmail,
   getCustomerById,
@@ -164,6 +164,7 @@ export async function processOutgoingMessage(
     textContent: string;
     markdownContent?: string | null;
     subject?: string | null;
+    idempotencyKey?: string | null;
   },
   userId: string
 ): Promise<{ ok: true; messageId: string; sent: boolean }> {
@@ -200,6 +201,8 @@ export async function processOutgoingMessage(
     });
   }
 
+  const idempotencyKey = input.idempotencyKey ?? null;
+  const metadata = idempotencyKey ? { idempotencyKey } : undefined;
   const event = await addTicketMessage(
     db,
     channel.organizationId,
@@ -212,6 +215,9 @@ export async function processOutgoingMessage(
       userId,
       actorType: "user",
       actorId: userId,
+      subType: idempotencyKey ? "outbound" : null,
+      externalId: idempotencyKey,
+      metadata,
     },
     env
   );
@@ -219,74 +225,88 @@ export async function processOutgoingMessage(
   const channelConfig: Record<string, unknown> = JSON.parse(channel.config);
 
   let sent = false;
-  if (channel.type === "email" && env.EMAIL) {
-    try {
-      await env.EMAIL.send({
-        from: channel.name,
-        to: customer.email,
-        subject: input.subject ?? ticket.title,
-        text: input.textContent,
-        html: input.markdownContent ?? undefined,
-      });
-      sent = true;
-    } catch {
-      sent = false;
+  if (event.isNew) {
+    if (channel.type === "email" && env.EMAIL) {
+      try {
+        await env.EMAIL.send({
+          from: channel.name,
+          to: customer.email,
+          subject: input.subject ?? ticket.title,
+          text: input.textContent,
+          html: input.markdownContent ?? undefined,
+        });
+        sent = true;
+      } catch {
+        sent = false;
+      }
     }
-  }
 
-  if (
-    channel.type === "slack" &&
-    typeof channelConfig.botToken === "string" &&
-    typeof channelConfig.channelId === "string"
-  ) {
-    sent = await sendSlackMessage({
-      botToken: channelConfig.botToken,
-      channelId: channelConfig.channelId,
-      text: input.textContent,
-    });
-  }
+    if (
+      channel.type === "slack" &&
+      typeof channelConfig.botToken === "string" &&
+      typeof channelConfig.channelId === "string"
+    ) {
+      sent = await sendSlackMessage({
+        botToken: channelConfig.botToken,
+        channelId: channelConfig.channelId,
+        text: input.textContent,
+      });
+    }
 
-  if (
-    channel.type === "intercom" &&
-    typeof channelConfig.accessToken === "string" &&
-    typeof channelConfig.adminId === "string" &&
-    ticket.externalId
-  ) {
-    sent = await sendIntercomMessage({
-      accessToken: channelConfig.accessToken,
-      adminId: channelConfig.adminId,
-      conversationId: ticket.externalId,
-      text: input.textContent,
-    });
-  }
+    if (
+      channel.type === "intercom" &&
+      typeof channelConfig.accessToken === "string" &&
+      typeof channelConfig.adminId === "string" &&
+      ticket.externalId
+    ) {
+      sent = await sendIntercomMessage({
+        accessToken: channelConfig.accessToken,
+        adminId: channelConfig.adminId,
+        conversationId: ticket.externalId,
+        text: input.textContent,
+      });
+    }
 
-  if (
-    channel.type === "zendesk" &&
-    typeof channelConfig.subdomain === "string" &&
-    typeof channelConfig.accessToken === "string" &&
-    typeof channelConfig.email === "string" &&
-    ticket.externalId
-  ) {
-    sent = await sendZendeskMessage({
-      subdomain: channelConfig.subdomain,
-      accessToken: channelConfig.accessToken,
-      email: channelConfig.email,
-      ticketId: ticket.externalId,
-      text: input.textContent,
-    });
-  }
+    if (
+      channel.type === "zendesk" &&
+      typeof channelConfig.subdomain === "string" &&
+      typeof channelConfig.accessToken === "string" &&
+      typeof channelConfig.email === "string" &&
+      ticket.externalId
+    ) {
+      sent = await sendZendeskMessage({
+        subdomain: channelConfig.subdomain,
+        accessToken: channelConfig.accessToken,
+        email: channelConfig.email,
+        ticketId: ticket.externalId,
+        text: input.textContent,
+      });
+    }
 
-  if (
-    channel.type === "plain" &&
-    typeof channelConfig.accessToken === "string" &&
-    ticket.externalId
-  ) {
-    sent = await sendPlainMessage({
-      accessToken: channelConfig.accessToken,
-      threadId: ticket.externalId,
-      textContent: input.textContent,
-      markdownContent: input.markdownContent ?? null,
-    });
+    if (
+      channel.type === "plain" &&
+      typeof channelConfig.accessToken === "string" &&
+      ticket.externalId
+    ) {
+      sent = await sendPlainMessage({
+        accessToken: channelConfig.accessToken,
+        threadId: ticket.externalId,
+        textContent: input.textContent,
+        markdownContent: input.markdownContent ?? null,
+      });
+    }
+
+    if (idempotencyKey) {
+      await db
+        .update(supportTicketEvents)
+        .set({
+          metadata: JSON.stringify({ idempotencyKey, sent }),
+        })
+        .where(eq(supportTicketEvents.id, event.id));
+    }
+  } else if (idempotencyKey && event.metadata) {
+    const parsed = JSON.parse(event.metadata) as Record<string, unknown>;
+    sent = parsed.sent === true;
   }
 
   return { ok: true, messageId: event.id, sent };

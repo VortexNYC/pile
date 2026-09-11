@@ -10266,6 +10266,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "subject": {
               "type": "string"
+            },
+            "idempotencyKey": {
+              "type": "string"
             }
           },
           "required": [

@@ -2977,6 +2977,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "subject",
         flag: "subject",
       },
+      {
+        name: "idempotencyKey",
+        flag: "idempotency-key",
+      },
     ],
   },
   "support channels validate create": {

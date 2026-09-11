@@ -429,6 +429,7 @@ export function registerSupportChannelRoutes(app: OpenAPIHono<AppContext>) {
                 textContent: z.string(),
                 markdownContent: z.string().optional(),
                 subject: z.string().optional(),
+                idempotencyKey: z.string().optional(),
               }),
             },
           },

@@ -12932,6 +12932,9 @@
                   },
                   "subject": {
                     "type": "string"
+                  },
+                  "idempotencyKey": {
+                    "type": "string"
                   }
                 },
                 "required": [
