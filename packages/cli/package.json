@@ -4,10 +4,17 @@
   "description": "CLI for the Vortex issue tracker.",
   "license": "MIT",
   "bin": {
-    "issuetracker": "./src/index.ts"
+    "issuetracker": "./bin/issuetracker.js"
   },
+  "files": [
+    "dist",
+    "bin"
+  ],
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "cli": "tsx src/index.ts"
   },
   "devDependencies": {

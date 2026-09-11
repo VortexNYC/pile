@@ -523,7 +523,16 @@ async function captureRunCommand(
         "x-vortex-capture-token": token,
         "content-type": contentType,
       },
-      body: new Blob([buffer], { type: contentType }),
+      body: new Blob(
+        [
+          new Uint8Array(
+            buffer.buffer as ArrayBuffer,
+            buffer.byteOffset,
+            buffer.byteLength
+          ),
+        ],
+        { type: contentType }
+      ),
     });
     if (!uploadRes.ok) {
       const text = await uploadRes.text();
