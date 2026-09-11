@@ -483,4 +483,17 @@ describe("WorkspaceDO", () => {
     expect(stats.length).toBeGreaterThan(0);
     expect(stats.reduce((sum, g) => sum + g.count, 0)).toBeGreaterThan(0);
   });
+
+  it("returns the same issue for concurrent createIssue with the same id", async () => {
+    const stub = getStub();
+    await stub.setOrganizationId(WORKSPACE_ID);
+    const id = `repo:github:vortexnyc:issuetracker:race`;
+    const [a, b] = await Promise.all([
+      stub.createIssue({ id, title: "Race A" }),
+      stub.createIssue({ id, title: "Race B" }),
+    ]);
+    expect(a.id).toBe(id);
+    expect(b.id).toBe(id);
+    expect(a.id).toBe(b.id);
+  });
 });
