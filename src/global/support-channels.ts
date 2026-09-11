@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 
+import { sendSlackMessage } from "../channels/slack.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { D1Client } from "./db.js";
@@ -198,6 +199,8 @@ export async function processOutgoingMessage(
     env
   );
 
+  const channelConfig: Record<string, unknown> = JSON.parse(channel.config);
+
   let sent = false;
   if (channel.type === "email" && env.EMAIL) {
     try {
@@ -212,6 +215,18 @@ export async function processOutgoingMessage(
     } catch {
       sent = false;
     }
+  }
+
+  if (
+    channel.type === "slack" &&
+    typeof channelConfig.botToken === "string" &&
+    typeof channelConfig.channelId === "string"
+  ) {
+    sent = await sendSlackMessage({
+      botToken: channelConfig.botToken,
+      channelId: channelConfig.channelId,
+      text: input.textContent,
+    });
   }
 
   return { ok: true, messageId: event.id, sent };

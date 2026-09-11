@@ -10188,6 +10188,9 @@
                                   },
                                   "color": {
                                     "type": "string"
+                                  },
+                                  "botToken": {
+                                    "type": "string"
                                   }
                                 }
                               },
@@ -10764,6 +10767,9 @@
                               "type": "string"
                             },
                             "color": {
+                              "type": "string"
+                            },
+                            "botToken": {
                               "type": "string"
                             }
                           }

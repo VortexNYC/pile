@@ -240,4 +240,55 @@ describe("support-channels API", () => {
     expect(sendBody.sent).toBe(true);
     expect(sendBody.messageId).toBeDefined();
   });
+
+  it("attempts to send an outbound message through a Slack channel", async () => {
+    const channelRes = await fetch(
+      `/workspaces/${organizationId}/support-channels`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "slack",
+          name: "C123",
+          config: { botToken: "xoxb-fake", channelId: "C123" },
+        }),
+      }
+    );
+    expect(channelRes.status).toBe(201);
+    const { id: channelId } = (await channelRes.json()) as { id: string };
+
+    const db = createD1(env.D1);
+    const customer = await createCustomer(db, {
+      organizationId,
+      email: "slack-outbound@example.com",
+    });
+    const ticket = await createTicket(
+      db,
+      {
+        organizationId,
+        customerId: customer.id,
+        title: "Slack help",
+        sourceChannel: "slack",
+      },
+      env
+    );
+
+    const sendRes = await fetch(
+      `/workspaces/${organizationId}/support/channels/${channelId}/send`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          ticketId: ticket.id,
+          textContent: "Answer on Slack.",
+        }),
+      }
+    );
+    expect(sendRes.status).toBe(200);
+    const sendBody = (await sendRes.json()) as {
+      ok: boolean;
+      messageId: string;
+      sent: boolean;
+    };
+    expect(sendBody.ok).toBe(true);
+    expect(sendBody.messageId).toBeDefined();
+  });
 });

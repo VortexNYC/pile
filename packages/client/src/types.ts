@@ -5225,6 +5225,7 @@ export interface paths {
                                     channelId?: string;
                                     webhookUrl?: string;
                                     color?: string;
+                                    botToken?: string;
                                 };
                                 createdAt: string;
                                 updatedAt: string;
@@ -5392,6 +5393,7 @@ export interface paths {
                                 channelId?: string;
                                 webhookUrl?: string;
                                 color?: string;
+                                botToken?: string;
                             };
                             createdAt: string;
                             updatedAt: string;

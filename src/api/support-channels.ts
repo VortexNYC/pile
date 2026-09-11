@@ -46,6 +46,10 @@ const baseMessagingConfig = z.object({
   color: z.string().optional(),
 });
 
+const slackMessagingConfig = baseMessagingConfig.extend({
+  botToken: z.string().optional(),
+});
+
 const supportChannelSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("email"),
@@ -66,7 +70,7 @@ const supportChannelSchema = z.discriminatedUnion("type", [
     organizationId: z.string(),
     name: z.string(),
     isActive: z.boolean(),
-    config: baseMessagingConfig,
+    config: slackMessagingConfig,
     createdAt: z.string(),
     updatedAt: z.string(),
   }),

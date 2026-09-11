@@ -177,3 +177,35 @@ export async function processSlackSupportWebhook(
 
   return { ok: true };
 }
+
+const slackPostMessageResponseSchema = z.object({
+  ok: z.boolean(),
+});
+
+export async function sendSlackMessage(input: {
+  botToken: string;
+  channelId: string;
+  text: string;
+}): Promise<boolean> {
+  try {
+    const res = await fetch("https://slack.com/api/chat.postMessage", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${input.botToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        channel: input.channelId,
+        text: input.text,
+      }),
+    });
+    if (!res.ok) {
+      return false;
+    }
+    const data = (await res.json()) as unknown;
+    const parsed = slackPostMessageResponseSchema.safeParse(data);
+    return parsed.success && parsed.data.ok;
+  } catch {
+    return false;
+  }
+}
