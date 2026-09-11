@@ -8,7 +8,7 @@ import {
   createIntercomConversation,
   findIntercomConversation,
 } from "../global/intercom-conversations.js";
-import { enqueueWebhook } from "../global/webhook-queue.js";
+import { enqueueWebhook, scopedDeliveryId } from "../global/webhook-queue.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import type { IssueInput } from "../types/workspace.js";
@@ -214,7 +214,11 @@ export async function processIntercomWebhook(
     db,
     c.env,
     {
-      deliveryId,
+      deliveryId: scopedDeliveryId(
+        "intercom-agent",
+        organizationId,
+        deliveryId
+      ),
       source: "intercom-agent",
       event: topic,
       organizationId,
@@ -282,6 +286,7 @@ export async function processIntercomAgentWebhookPayload(
     ).toISOString();
     const issue = await stub.createIssue(
       {
+        id: `intercom:${organizationId}:${conversation.data.id}`,
         title: conversationTitle(conversation.data),
         description: conversationBody(conversation.data) || undefined,
         status: intercomStateToVortexStatus(conversation.data.state),

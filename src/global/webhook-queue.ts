@@ -10,6 +10,9 @@ export type WebhookSource =
   | "intercom"
   | "intercom-agent"
   | "github"
+  | "gitlab"
+  | "email"
+  | "notion"
   | "slack"
   | "zendesk"
   | "plain"
@@ -17,6 +20,16 @@ export type WebhookSource =
   | "jam-intercom-recorded"
   | "jam-intercom-opted-out"
   | "jam-recording-link";
+
+export function scopedDeliveryId(
+  source: WebhookSource,
+  organizationId: string | undefined | null,
+  id: string
+): string {
+  return organizationId
+    ? `${source}:${organizationId}:${id}`
+    : `${source}:${id}`;
+}
 
 export interface WebhookQueueMessage {
   deliveryId: string;

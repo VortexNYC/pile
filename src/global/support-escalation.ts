@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 
 import type { WorkerEnv } from "../platform/middleware.js";
@@ -393,8 +393,10 @@ async function createIssueFromTicket(
 
   const description = buildEscalationDescription(ticket, ctx);
   const now = new Date().toISOString();
+  const issueId = `escalation:${ticket.id}`;
 
   const issue = await stub.createIssue({
+    id: issueId,
     title: ticket.title,
     description,
     status: action.status ?? "triage",
@@ -408,15 +410,26 @@ async function createIssueFromTicket(
     updatedAt: now,
   });
 
-  await db
+  const updated = await db
     .update(supportTickets)
-    .set({ issueId: issue.id, updatedAt: now })
+    .set({ issueId, updatedAt: now })
     .where(
       and(
         eq(supportTickets.id, ticket.id),
-        eq(supportTickets.organizationId, organizationId)
+        eq(supportTickets.organizationId, organizationId),
+        isNull(supportTickets.issueId)
       )
-    );
+    )
+    .returning({ issueId: supportTickets.issueId })
+    .get();
+
+  if (!updated) {
+    const existing = await stub.getIssue(issueId);
+    if (!existing) {
+      throw new Error("Escalated issue not found");
+    }
+    return existing;
+  }
 
   await db.insert(supportTicketEvents).values({
     id: crypto.randomUUID(),
@@ -424,7 +437,7 @@ async function createIssueFromTicket(
     type: "link_added",
     actorType: "automation",
     actorId: ruleId,
-    metadata: JSON.stringify({ issueId: issue.id, ruleId }),
+    metadata: JSON.stringify({ issueId, ruleId }),
     createdAt: now,
   });
 

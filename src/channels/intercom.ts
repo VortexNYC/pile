@@ -14,7 +14,7 @@ import {
   updateTicket,
   type SupportTicketStatus,
 } from "../global/support-tickets.js";
-import { enqueueWebhook } from "../global/webhook-queue.js";
+import { enqueueWebhook, scopedDeliveryId } from "../global/webhook-queue.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 
@@ -149,7 +149,11 @@ export async function processIntercomSupportWebhook(
     db,
     c.env,
     {
-      deliveryId: notification.data.id,
+      deliveryId: scopedDeliveryId(
+        "intercom",
+        organizationId,
+        notification.data.id
+      ),
       source: "intercom",
       event: topic,
       organizationId,
@@ -262,7 +266,8 @@ export async function processIntercomSupportWebhookPayload(
           channel: "intercom",
           actorType: "user",
           actorId: sourceAuthor?.id ?? null,
-          subType: conversation.data.id,
+          subType: topic,
+          externalId: notification.id,
           createdAt,
         },
         env
@@ -284,7 +289,8 @@ export async function processIntercomSupportWebhookPayload(
           textContent: text,
           channel: "intercom",
           customerId: customer.id,
-          subType: conversation.data.id,
+          subType: topic,
+          externalId: notification.id,
           createdAt,
         },
         env
@@ -363,8 +369,8 @@ export async function processIntercomSupportWebhookPayload(
       textContent: text,
       channel: "intercom",
       customerId: customer.id,
-      subType: conversation.data.id,
-      externalId: conversation.data.id,
+      subType: topic,
+      externalId: notification.id,
       createdAt,
     },
     env

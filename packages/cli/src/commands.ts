@@ -2937,6 +2937,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "external-message-id",
       },
       {
+        name: "subType",
+        flag: "sub-type",
+      },
+      {
         name: "createdAt",
         flag: "created-at",
       },

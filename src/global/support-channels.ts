@@ -36,6 +36,7 @@ export type ChannelIncomingMessage = {
   html?: string | null;
   externalTicketId?: string | null;
   externalMessageId?: string | null;
+  subType?: string | null;
   createdAt?: string;
 };
 
@@ -137,11 +138,15 @@ export async function processIncomingMessage(
       markdownContent: input.html,
       channel: input.channel,
       customerId: customer.id,
-      subType: input.externalMessageId ?? null,
+      subType: input.subType ?? null,
       externalId: input.externalMessageId ?? null,
-      metadata: input.externalMessageId
-        ? { externalMessageId: input.externalMessageId }
-        : undefined,
+      metadata:
+        input.externalMessageId || input.subType
+          ? {
+              externalMessageId: input.externalMessageId,
+              subType: input.subType,
+            }
+          : undefined,
       createdAt: input.createdAt,
     },
     env

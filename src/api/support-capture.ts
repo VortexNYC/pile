@@ -30,7 +30,7 @@ import {
   getTicketById,
   type SupportTicketSource,
 } from "../global/support-tickets.js";
-import { enqueueWebhook } from "../global/webhook-queue.js";
+import { enqueueWebhook, scopedDeliveryId } from "../global/webhook-queue.js";
 import { createAuth } from "../platform/auth.js";
 import { VortexError } from "../platform/errors.js";
 import { toApiKeyWorkspaceIdentity } from "../platform/identity.js";
@@ -1558,7 +1558,7 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
       db,
       c.env,
       {
-        deliveryId: svixId,
+        deliveryId: scopedDeliveryId("jam", publicKey.organizationId, svixId),
         source: "jam",
         event: "jam.created",
         payload: {
@@ -1624,7 +1624,11 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
       db,
       c.env,
       {
-        deliveryId: svixId,
+        deliveryId: scopedDeliveryId(
+          "jam-intercom-recorded",
+          publicKey.organizationId,
+          svixId
+        ),
         source: "jam-intercom-recorded",
         event: "intercom.recorder.recorded",
         payload: {
@@ -1692,7 +1696,11 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
       db,
       c.env,
       {
-        deliveryId: svixId,
+        deliveryId: scopedDeliveryId(
+          "jam-intercom-opted-out",
+          publicKey.organizationId,
+          svixId
+        ),
         source: "jam-intercom-opted-out",
         event: "intercom.recorder.opted_out",
         payload: {
@@ -1760,7 +1768,11 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
       db,
       c.env,
       {
-        deliveryId: svixId,
+        deliveryId: scopedDeliveryId(
+          "jam-recording-link",
+          publicKey.organizationId,
+          svixId
+        ),
         source: "jam-recording-link",
         event: "recording_link.created",
         payload: {
@@ -2233,6 +2245,7 @@ export async function processJamCreatedWebhookPayload(
       issueId,
       externalSource,
       externalId: intercomConversationId ?? linearIssueId ?? parsed.jamId,
+      ifExists: "return",
     });
   }
 
@@ -2246,6 +2259,8 @@ export async function processJamCreatedWebhookPayload(
     customerId,
     actorType: "customer",
     actorId: customerId,
+    subType: "jam_created",
+    externalId: parsed.jamId,
   });
 
   const remoteAttachments: {
@@ -2361,6 +2376,7 @@ export async function processJamIntercomRecordedWebhookPayload(
     actorType: "customer",
     actorId: ticket.customerId,
     subType: "intercom_recorder_recorded",
+    externalId: `${parsed.conversationId}:${parsed.jamId}`,
     runAutoresponders: false,
     reopenOnCustomerReply: false,
   });
@@ -2394,6 +2410,7 @@ export async function processJamIntercomOptedOutWebhookPayload(
     channel: "intercom",
     actorType: "automation",
     subType: "intercom_recorder_opted_out",
+    externalId: `opted-out:${parsed.conversationId}`,
     runAutoresponders: false,
     reopenOnCustomerReply: false,
   });
@@ -2427,6 +2444,7 @@ export async function processJamRecordingLinkCreatedWebhookPayload(
     channel: "capture",
     actorType: "automation",
     subType: "recording_link_created",
+    externalId: parsed.recordingLinkId,
     runAutoresponders: false,
     reopenOnCustomerReply: false,
   });

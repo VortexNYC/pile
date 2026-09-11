@@ -41,10 +41,18 @@ export async function createRepoIssue(
   source: RepoSource = "github"
 ) {
   const id = crypto.randomUUID();
-  await db
+  const inserted = await db
     .insert(repoIssues)
-    .values({ id, organizationId, source, repo, issueNumber, issueId });
-  return { id, organizationId, source, repo, issueNumber, issueId };
+    .values({ id, organizationId, source, repo, issueNumber, issueId })
+    .onConflictDoNothing({
+      target: [repoIssues.source, repoIssues.repo, repoIssues.issueNumber],
+    })
+    .returning()
+    .get();
+  if (inserted) return inserted;
+  const existing = await findRepoIssue(db, repo, issueNumber, source);
+  if (existing) return existing;
+  throw new Error("Failed to create repo issue mapping");
 }
 
 export async function deleteRepoIssue(

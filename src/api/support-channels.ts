@@ -197,6 +197,7 @@ const incomingMessageSchema = z.object({
   html: z.string().optional(),
   externalTicketId: z.string().optional(),
   externalMessageId: z.string().optional(),
+  subType: z.string().optional(),
   createdAt: z.string().datetime().optional(),
 });
 
@@ -395,6 +396,7 @@ export function registerSupportChannelRoutes(app: OpenAPIHono<AppContext>) {
           html: input.html ?? null,
           externalTicketId: input.externalTicketId ?? null,
           externalMessageId: input.externalMessageId ?? null,
+          subType: input.subType ?? null,
           createdAt: input.createdAt,
         },
         c.env

@@ -317,7 +317,7 @@ describe("support-channels API", () => {
     const events = await db
       .select()
       .from(supportTicketEvents)
-      .where(eq(supportTicketEvents.externalId, conversationId));
+      .where(eq(supportTicketEvents.externalId, deliveryId));
     expect(events.length).toBe(1);
   });
 

@@ -27,11 +27,23 @@ export async function createIntercomConversation(
   issueId: string
 ) {
   const id = crypto.randomUUID();
-  await db.insert(intercomConversations).values({
-    id,
+  const inserted = await db
+    .insert(intercomConversations)
+    .values({ id, organizationId, conversationId, issueId })
+    .onConflictDoNothing({
+      target: [
+        intercomConversations.organizationId,
+        intercomConversations.conversationId,
+      ],
+    })
+    .returning()
+    .get();
+  if (inserted) return inserted;
+  const existing = await findIntercomConversation(
+    db,
     organizationId,
-    conversationId,
-    issueId,
-  });
-  return { id, organizationId, conversationId, issueId };
+    conversationId
+  );
+  if (existing) return existing;
+  throw new Error("Failed to create Intercom conversation mapping");
 }

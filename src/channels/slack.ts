@@ -7,7 +7,7 @@ import {
   getActiveSupportChannel,
   processIncomingMessage,
 } from "../global/support-channels.js";
-import { enqueueWebhook } from "../global/webhook-queue.js";
+import { enqueueWebhook, scopedDeliveryId } from "../global/webhook-queue.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 
@@ -146,7 +146,7 @@ export async function processSlackSupportWebhook(
     db,
     c.env,
     {
-      deliveryId: ev.ts,
+      deliveryId: scopedDeliveryId("slack", organizationId, ev.ts),
       source: "slack",
       event: ev.type,
       organizationId,
@@ -213,6 +213,7 @@ export async function processSlackSupportWebhookPayload(
       text: ev.text,
       externalTicketId: ev.thread_ts ?? ev.ts,
       externalMessageId: ev.ts,
+      subType: "message",
       createdAt,
     },
     env

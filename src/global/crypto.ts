@@ -64,6 +64,14 @@ export async function hmacSha256Base64(
   return btoa(binary);
 }
 
+export async function sha256Hex(message: string): Promise<string> {
+  const encoded = new TextEncoder().encode(message);
+  const hash = await crypto.subtle.digest("SHA-256", encoded);
+  return [...new Uint8Array(hash)]
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 export function timingSafeEqualHex(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let diff = 0;

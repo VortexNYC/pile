@@ -6565,6 +6565,7 @@ export interface paths {
                         html?: string;
                         externalTicketId?: string;
                         externalMessageId?: string;
+                        subType?: string;
                         /** Format: date-time */
                         createdAt?: string;
                     };

@@ -2373,6 +2373,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     await this.ready;
     const now = new Date().toISOString();
     const id = input.id ?? crypto.randomUUID();
+
+    const existing = await this.getIssue(id);
+    if (existing) return existing;
+
     const status = input.status ?? "backlog";
     const resolution = validateIssueResolution(
       status,

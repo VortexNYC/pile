@@ -1,7 +1,11 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 
-import { hmacSha256Hex, timingSafeEqualHex } from "../global/crypto.js";
+import {
+  hmacSha256Hex,
+  sha256Hex,
+  timingSafeEqualHex,
+} from "../global/crypto.js";
 import { findOrCreateCycleByName } from "../global/cycles.js";
 import { createD1, type D1Client } from "../global/db.js";
 import {
@@ -19,6 +23,7 @@ import {
   findRepoWorkspace,
 } from "../global/repo-issues.js";
 import { recordWebhookDelivery } from "../global/webhook-deliveries.js";
+import { scopedDeliveryId } from "../global/webhook-queue.js";
 import { enqueueWebhook } from "../global/webhook-queue.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
@@ -259,7 +264,12 @@ export async function processGithubWebhook(c: Context<AppContext>) {
   }
 
   const event = c.req.header("x-github-event") ?? "unknown";
-  const deliveryId = c.req.header("x-github-delivery") ?? crypto.randomUUID();
+  const deliveryHeader = c.req.header("x-github-delivery");
+  const deliveryId = scopedDeliveryId(
+    "github",
+    null,
+    deliveryHeader ?? (await sha256Hex(rawBody))
+  );
   const db = createD1(c.env.D1);
 
   await enqueueWebhook(
@@ -832,6 +842,7 @@ async function processGitHubIssue(
     } else {
       const created = await stub.createIssue(
         {
+          id: `repo:github:${repo.replace(/\//g, ":")}:${issue.number}`,
           title: issue.title,
           description: issue.body ?? undefined,
           cycleId,

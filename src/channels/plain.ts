@@ -14,7 +14,7 @@ import {
   type SupportTicketPriority,
   type SupportTicketStatus,
 } from "../global/support-tickets.js";
-import { enqueueWebhook } from "../global/webhook-queue.js";
+import { enqueueWebhook, scopedDeliveryId } from "../global/webhook-queue.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 
@@ -194,7 +194,7 @@ export async function processPlainSupportWebhook(
     db,
     c.env,
     {
-      deliveryId: webhook.data.id,
+      deliveryId: scopedDeliveryId("plain", organizationId, webhook.data.id),
       source: "plain",
       event: webhook.data.payload.eventType,
       organizationId,
@@ -233,6 +233,7 @@ export async function processPlainSupportWebhookPayload(
         eventPayload.thread,
         {
           text: eventPayload.thread.previewText ?? null,
+          subType: "thread_created",
         }
       );
       break;
@@ -253,7 +254,8 @@ export async function processPlainSupportWebhookPayload(
           eventPayload.thread.customer?.email.email,
         eventPayload.email.from?.name ?? null,
         eventPayload.email.id,
-        "inbound"
+        "inbound",
+        eventPayload.eventType
       );
       break;
     case "thread.email_sent":
@@ -268,7 +270,8 @@ export async function processPlainSupportWebhookPayload(
         eventPayload.email.from?.email ?? null,
         eventPayload.email.from?.name ?? null,
         eventPayload.email.id,
-        "outbound"
+        "outbound",
+        eventPayload.eventType
       );
       break;
     case "thread.chat_received":
@@ -281,7 +284,8 @@ export async function processPlainSupportWebhookPayload(
         eventPayload.thread.customer?.email.email ?? null,
         eventPayload.thread.customer?.fullName ?? null,
         eventPayload.chat.chatId,
-        "inbound"
+        "inbound",
+        eventPayload.eventType
       );
       break;
     case "thread.chat_sent":
@@ -294,7 +298,8 @@ export async function processPlainSupportWebhookPayload(
         null,
         null,
         eventPayload.chat.chatId,
-        "outbound"
+        "outbound",
+        eventPayload.eventType
       );
       break;
     default:
@@ -307,7 +312,7 @@ async function createTicketFromPlainPayload(
   env: WorkerEnv,
   organizationId: string,
   thread: z.infer<typeof plainThreadSchema>,
-  firstMessage: { text: string | null }
+  firstMessage: { text: string | null; subType?: string | null }
 ): Promise<void> {
   const customer = thread.customer;
   const email = customer?.email.email;
@@ -380,7 +385,7 @@ async function createTicketFromPlainPayload(
         textContent: text,
         channel: "plain",
         customerId: supportCustomer.id,
-        subType: thread.id,
+        subType: firstMessage.subType ?? "thread_created",
         externalId: thread.id,
         createdAt,
       },
@@ -429,7 +434,8 @@ async function addMessageFromPlainPayload(
   fromEmail: string | null | undefined,
   fromName: string | null | undefined,
   externalMessageId: string,
-  direction: "inbound" | "outbound"
+  direction: "inbound" | "outbound",
+  subType: string
 ): Promise<void> {
   let existing = await findSupportTicketByExternalId(
     db,
@@ -473,7 +479,7 @@ async function addMessageFromPlainPayload(
         textContent: body,
         channel: "plain",
         actorType: direction === "outbound" ? "user" : undefined,
-        subType: externalMessageId,
+        subType,
         externalId: externalMessageId,
         createdAt,
       },
@@ -498,7 +504,7 @@ async function addMessageFromPlainPayload(
       textContent: body,
       channel: "plain",
       customerId: customer.id,
-      subType: externalMessageId,
+      subType,
       externalId: externalMessageId,
       createdAt,
     },

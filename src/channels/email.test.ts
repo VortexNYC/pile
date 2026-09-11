@@ -12,6 +12,8 @@ import { createWorkspace } from "../global/workspaces.js";
 import { createAdminHeaders } from "../platform/test-auth.js";
 import { handleIncomingEmail, type IncomingEmailMessage } from "./email.js";
 
+env.WEBHOOK_QUEUE = null as unknown as typeof env.WEBHOOK_QUEUE;
+
 let organizationId: string;
 
 async function seedWorkspace() {

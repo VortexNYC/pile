@@ -49,7 +49,7 @@ export const repoIssues = sqliteTable(
       .default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
-    index("repo_issues_source_repo_number_idx" as string).on(
+    uniqueIndex("repo_issues_source_repo_number_idx" as string).on(
       table.source,
       table.repo,
       table.issueNumber

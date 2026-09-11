@@ -6611,6 +6611,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "externalMessageId": {
               "type": "string"
             },
+            "subType": {
+              "type": "string"
+            },
             "createdAt": {
               "type": "string",
               "format": "date-time"
