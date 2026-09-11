@@ -406,6 +406,7 @@ async function captureRunCommand(
     flagString(flags, "title") ??
     (command.length > 60 ? `${command.slice(0, 60)}...` : command);
   const description = flagString(flags, "description") ?? "";
+  const visibility = flagString(flags, "visibility") ?? "private";
   const artifactsDir = flagString(flags, "artifacts-dir") ?? "test-results";
 
   const doFetch = deps.fetch ?? fetch;
@@ -503,6 +504,7 @@ async function captureRunCommand(
         contentType,
         fileName,
         title,
+        visibility,
         metadata: { email: "ci@vortex.local" },
       }),
     });

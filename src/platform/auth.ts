@@ -30,6 +30,9 @@ export function createAuth(env: AppEnv) {
             vortex: ["read"],
           },
         },
+        rateLimit: {
+          enabled: false,
+        },
         customAPIKeyGetter: (ctx) => {
           const auth = ctx.headers?.get("Authorization") ?? "";
           const bearerPrefix = "Bearer ";

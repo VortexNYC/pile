@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { VortexError } from "../platform/errors.js";
 import {
   ISSUE_PRIORITIES,
   ISSUE_STATUSES,
@@ -54,7 +55,11 @@ export function decodeCursor(cursor: string): IssueCursor {
   try {
     parsed = JSON.parse(decodeURIComponent(cursor));
   } catch {
-    throw new Error("Invalid cursor");
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Invalid cursor",
+    });
   }
 
   if (
@@ -69,7 +74,11 @@ export function decodeCursor(cursor: string): IssueCursor {
     }
   }
 
-  throw new Error("Invalid cursor");
+  throw new VortexError({
+    code: "BAD_REQUEST",
+    status: 400,
+    message: "Invalid cursor",
+  });
 }
 
 export function toListArgs(query: ListIssuesQuery): ListIssuesArgs {

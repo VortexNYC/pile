@@ -3,7 +3,11 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { and, eq } from "drizzle-orm";
 
 import { createD1, type D1Client } from "../global/db.js";
-import { supportTicketAttachments, supportTickets } from "../global/schema.js";
+import {
+  supportCaptureSessions,
+  supportTicketAttachments,
+  supportTickets,
+} from "../global/schema.js";
 import {
   createCapturePublicKey,
   createCaptureSession,
@@ -1325,6 +1329,22 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
       .where(eq(supportTickets.id, ticketId))
       .limit(1);
     if (!ticket) {
+      throw new VortexError({
+        status: 404,
+        code: "NOT_FOUND",
+        message: "Ticket not found",
+      });
+    }
+
+    const [session] = await db
+      .select({ metadata: supportCaptureSessions.metadata })
+      .from(supportCaptureSessions)
+      .where(eq(supportCaptureSessions.ticketId, ticketId))
+      .limit(1);
+    const meta = session
+      ? (JSON.parse(session.metadata ?? "{}") as Record<string, unknown>)
+      : null;
+    if (!session || meta?.visibility !== "public") {
       throw new VortexError({
         status: 404,
         code: "NOT_FOUND",
