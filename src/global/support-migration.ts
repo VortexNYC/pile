@@ -3,6 +3,8 @@ import { z } from "zod";
 import {
   intercomSupportCredentialsSchema,
   intercomSupportOptionsSchema,
+  jamSupportCredentialsSchema,
+  jamSupportOptionsSchema,
   plainSupportCredentialsSchema,
   plainSupportOptionsSchema,
   zendeskSupportCredentialsSchema,
@@ -11,12 +13,14 @@ import {
 
 export const supportMigrationSourceSchema = z.enum([
   "intercom",
+  "jam",
   "plain",
   "zendesk",
 ]);
 
 export const supportMigrationSourceNames = [
   "intercom",
+  "jam",
   "plain",
   "zendesk",
 ] as const;
@@ -26,6 +30,11 @@ export const supportMigrationRunBodySchema = z.discriminatedUnion("source", [
     source: z.literal("intercom"),
     credentials: intercomSupportCredentialsSchema,
     options: intercomSupportOptionsSchema.optional(),
+  }),
+  z.object({
+    source: z.literal("jam"),
+    credentials: jamSupportCredentialsSchema,
+    options: jamSupportOptionsSchema.optional(),
   }),
   z.object({
     source: z.literal("plain"),
@@ -49,6 +58,10 @@ export const supportMigrationValidateBodySchema = z.discriminatedUnion(
     z.object({
       source: z.literal("intercom"),
       credentials: intercomSupportCredentialsSchema,
+    }),
+    z.object({
+      source: z.literal("jam"),
+      credentials: jamSupportCredentialsSchema,
     }),
     z.object({
       source: z.literal("plain"),

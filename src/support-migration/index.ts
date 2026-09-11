@@ -6,6 +6,13 @@ export {
   type IntercomSupportOptions,
 } from "./intercom.js";
 export {
+  jamSupportCredentialsSchema,
+  jamSupportImportSource,
+  jamSupportOptionsSchema,
+  type JamSupportCredentials,
+  type JamSupportOptions,
+} from "./jam.js";
+export {
   plainSupportCredentialsSchema,
   plainSupportImportSource,
   plainSupportOptionsSchema,

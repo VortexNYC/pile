@@ -10528,6 +10528,52 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "source": {
                   "type": "string",
                   "enum": [
+                    "jam"
+                  ]
+                },
+                "credentials": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "nullable": true
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                },
+                "options": {
+                  "type": "object",
+                  "properties": {
+                    "limit": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 1000,
+                      "default": 50
+                    },
+                    "cursor": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "required": [
+                "source",
+                "credentials"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "enum": [
                     "plain"
                   ]
                 },
@@ -10747,6 +10793,52 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "source": {
                   "type": "string",
                   "enum": [
+                    "jam"
+                  ]
+                },
+                "credentials": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "nullable": true
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                },
+                "options": {
+                  "type": "object",
+                  "properties": {
+                    "limit": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 1000,
+                      "default": 50
+                    },
+                    "cursor": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "required": [
+                "source",
+                "credentials"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "enum": [
                     "plain"
                   ]
                 },
@@ -10900,6 +10992,38 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                   },
                   "required": [
                     "token"
+                  ]
+                }
+              },
+              "required": [
+                "source",
+                "credentials"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "jam"
+                  ]
+                },
+                "credentials": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "nullable": true
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
                   ]
                 }
               },

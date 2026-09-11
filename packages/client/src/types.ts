@@ -14112,6 +14112,19 @@ export interface paths {
                         };
                     } | {
                         /** @enum {string} */
+                        source: "jam";
+                        credentials: {
+                            data: {
+                                [key: string]: unknown;
+                            }[];
+                        };
+                        options?: {
+                            /** @default 50 */
+                            limit?: number;
+                            cursor?: string;
+                        };
+                    } | {
+                        /** @enum {string} */
                         source: "plain";
                         credentials: {
                             token: string;
@@ -14278,6 +14291,19 @@ export interface paths {
                         };
                     } | {
                         /** @enum {string} */
+                        source: "jam";
+                        credentials: {
+                            data: {
+                                [key: string]: unknown;
+                            }[];
+                        };
+                        options?: {
+                            /** @default 50 */
+                            limit?: number;
+                            cursor?: string;
+                        };
+                    } | {
+                        /** @enum {string} */
                         source: "plain";
                         credentials: {
                             token: string;
@@ -14423,6 +14449,14 @@ export interface paths {
                         source: "intercom";
                         credentials: {
                             token: string;
+                        };
+                    } | {
+                        /** @enum {string} */
+                        source: "jam";
+                        credentials: {
+                            data: {
+                                [key: string]: unknown;
+                            }[];
                         };
                     } | {
                         /** @enum {string} */
