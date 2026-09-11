@@ -2553,6 +2553,22 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "media",
       },
       {
+        name: "systemInfo",
+        flag: "system-info",
+      },
+      {
+        name: "consoleLogs",
+        flag: "console-logs",
+      },
+      {
+        name: "networkRequests",
+        flag: "network-requests",
+      },
+      {
+        name: "userEvents",
+        flag: "user-events",
+      },
+      {
         name: "recordingLink",
         flag: "recording-link",
       },

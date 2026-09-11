@@ -530,6 +530,81 @@ describe("support-capture API", () => {
     expect(attachments[0]!.type).toBe("screenshot");
   });
 
+  it("stores Jam debugger artifacts as R2-backed attachments", async () => {
+    const publicKey = await createPublicKey();
+    const db = createD1(env.D1);
+
+    const payload = JSON.stringify({
+      jamId: "jam-debug-1",
+      jamUrl: "https://jam.dev/c/jam-debug-1",
+      teamId: "team-123",
+      type: "screenshot",
+      createdAt: new Date().toISOString(),
+      title: "Bug with debugger data",
+      author: {
+        email: "debug@example.com",
+        name: "Debug Reporter",
+      },
+      media: { screenshotUrl: "https://media.jam.dev/screenshot.png" },
+      systemInfo: {
+        browser: "Chrome",
+        os: "macOS",
+        userAgent:
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+      },
+      consoleLogs: [
+        { level: "error", message: "Uncaught ReferenceError" },
+        { level: "warn", message: "Deprecated API" },
+      ],
+      networkRequests: [
+        {
+          url: "https://api.example.com/data",
+          method: "GET",
+          status: 500,
+          duration: 120,
+        },
+      ],
+      userEvents: [{ type: "click", selector: "#submit" }],
+    });
+    const svixId = "msg-debug";
+    const svixTimestamp = Math.floor(Date.now() / 1000).toString();
+    const signature = await signJamWebhook({
+      payload,
+      svixId,
+      svixTimestamp,
+      secret: publicKey.webhookSecret,
+    });
+
+    const res = await captureFetch(`/support/webhooks/jam/${publicKey.id}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "svix-id": svixId,
+        "svix-timestamp": svixTimestamp,
+        "svix-signature": signature,
+      },
+      body: payload,
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ticketId: string };
+
+    const attachments = await db
+      .select()
+      .from(supportTicketAttachments)
+      .where(eq(supportTicketAttachments.ticketId, body.ticketId));
+    expect(attachments.length).toBe(5);
+    expect(attachments.some((a) => a.type === "screenshot")).toBe(true);
+    expect(
+      attachments.some((a) => a.type === "debugger_json" && a.r2Key !== null)
+    ).toBe(true);
+    expect(
+      attachments.filter((a) => a.type === "log" && a.r2Key !== null).length
+    ).toBe(2);
+    expect(
+      attachments.some((a) => a.type === "network" && a.r2Key !== null)
+    ).toBe(true);
+  });
+
   it("deduplicates a repeated Jam webhook by jamId", async () => {
     const publicKey = await createPublicKey();
     const db = createD1(env.D1);

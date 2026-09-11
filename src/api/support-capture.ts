@@ -362,6 +362,39 @@ const jamProviderSchema = z.object({
   issueId: z.string().optional(),
 });
 
+const jamDeviceInfoSchema = z.object({
+  browser: z.string().optional(),
+  browserVersion: z.string().optional(),
+  os: z.string().optional(),
+  osVersion: z.string().optional(),
+  screen: z.string().optional(),
+  connection: z.string().optional(),
+  userAgent: z.string().optional(),
+});
+
+const jamConsoleLogSchema = z.object({
+  level: z.string().optional(),
+  message: z.string().optional(),
+  timestamp: z.string().optional(),
+});
+
+const jamNetworkRequestSchema = z.object({
+  url: z.string().optional(),
+  method: z.string().optional(),
+  status: z.number().optional(),
+  duration: z.number().optional(),
+  requestHeaders: z.record(z.string(), z.string()).optional(),
+  responseHeaders: z.record(z.string(), z.string()).optional(),
+});
+
+const jamUserEventSchema = z.object({
+  type: z.string().optional(),
+  timestamp: z.string().optional(),
+  selector: z.string().optional(),
+  target: z.string().optional(),
+  value: z.string().optional(),
+});
+
 const jamWebhookBodySchema = z.object({
   jamId: z.string(),
   jamUrl: z.string(),
@@ -374,6 +407,10 @@ const jamWebhookBodySchema = z.object({
   origin: z.string().optional(),
   author: jamAuthorSchema.default({}),
   media: jamMediaSchema.default({}),
+  systemInfo: jamDeviceInfoSchema.optional(),
+  consoleLogs: z.array(jamConsoleLogSchema).optional(),
+  networkRequests: z.array(jamNetworkRequestSchema).optional(),
+  userEvents: z.array(jamUserEventSchema).optional(),
   recordingLink: jamRecordingLinkSchema.optional(),
   intercom: jamProviderSchema.optional(),
   linear: jamProviderSchema.optional(),
@@ -1201,35 +1238,117 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
     const bucket = c.env.ATTACHMENTS_BUCKET;
     const origin = new URL(c.req.url).origin;
 
+    const debuggerArtifacts: {
+      type: "debugger_json" | "log" | "network";
+      name: string;
+      data: unknown;
+    }[] = [];
+    if (parsed.consoleLogs?.length) {
+      debuggerArtifacts.push({
+        type: "log",
+        name: "console-logs.json",
+        data: parsed.consoleLogs,
+      });
+    }
+    if (parsed.networkRequests?.length) {
+      debuggerArtifacts.push({
+        type: "network",
+        name: "network-requests.json",
+        data: parsed.networkRequests,
+      });
+    }
+    if (parsed.userEvents?.length) {
+      debuggerArtifacts.push({
+        type: "log",
+        name: "user-events.json",
+        data: parsed.userEvents,
+      });
+    }
+    if (
+      parsed.systemInfo &&
+      Object.keys(parsed.systemInfo).some(
+        (k) =>
+          parsed.systemInfo![k as keyof typeof parsed.systemInfo] !== undefined
+      )
+    ) {
+      debuggerArtifacts.push({
+        type: "debugger_json",
+        name: "device-info.json",
+        data: parsed.systemInfo,
+      });
+    }
+
+    const allAttachmentInputs = [
+      ...attachmentInputs.map((input) => ({ source: "url" as const, input })),
+      ...debuggerArtifacts.map((artifact) => ({
+        source: "inline" as const,
+        artifact,
+      })),
+    ];
+
     await Promise.all(
-      attachmentInputs.map(async (input) => {
-        const r2Key = `${publicKey.organizationId}/jam/${parsed.jamId}/${input.type}`;
-        let url = input.url;
+      allAttachmentInputs.map(async (entry) => {
+        if (entry.source === "url") {
+          const { input } = entry;
+          const r2Key = `${publicKey.organizationId}/jam/${parsed.jamId}/${input.type}`;
+          let url = input.url;
+          let r2Stored: string | null = null;
+          if (bucket) {
+            try {
+              const resp = await fetch(input.url);
+              if (resp.ok) {
+                const buffer = await resp.arrayBuffer();
+                const contentType =
+                  resp.headers.get("content-type") ?? input.contentType;
+                await bucket.put(r2Key, buffer, {
+                  httpMetadata: { contentType },
+                });
+                r2Stored = r2Key;
+                url = `${origin}/support/capture/artifacts?r2Key=${encodeURIComponent(r2Key)}`;
+              }
+            } catch {
+              // Remote media is not available locally; keep the original URL.
+            }
+          }
+          return db.insert(supportTicketAttachments).values({
+            id: crypto.randomUUID(),
+            organizationId: publicKey.organizationId,
+            ticketId: ticket.id,
+            eventId: event.id,
+            type: input.type,
+            contentType: input.contentType,
+            url,
+            r2Key: r2Stored,
+            createdAt: new Date().toISOString(),
+          });
+        }
+
+        const { artifact } = entry;
+        const r2Key = `${publicKey.organizationId}/jam/${parsed.jamId}/${artifact.name}`;
+        let url = "";
         let r2Stored: string | null = null;
         if (bucket) {
           try {
-            const resp = await fetch(input.url);
-            if (resp.ok) {
-              const buffer = await resp.arrayBuffer();
-              const contentType =
-                resp.headers.get("content-type") ?? input.contentType;
-              await bucket.put(r2Key, buffer, {
-                httpMetadata: { contentType },
-              });
-              r2Stored = r2Key;
-              url = `${origin}/support/capture/artifacts?r2Key=${encodeURIComponent(r2Key)}`;
-            }
+            const buffer = new TextEncoder().encode(
+              JSON.stringify(artifact.data)
+            );
+            await bucket.put(r2Key, buffer, {
+              httpMetadata: { contentType: "application/json" },
+            });
+            r2Stored = r2Key;
+            url = `${origin}/support/capture/artifacts?r2Key=${encodeURIComponent(r2Key)}`;
           } catch {
-            // Remote media is not available locally; keep the original URL.
+            // Inline artifact storage failed; skip it.
           }
         }
+        if (!r2Stored) return;
         return db.insert(supportTicketAttachments).values({
           id: crypto.randomUUID(),
           organizationId: publicKey.organizationId,
           ticketId: ticket.id,
           eventId: event.id,
-          type: input.type,
-          contentType: input.contentType,
+          type: artifact.type,
+          contentType: "application/json",
           url,
           r2Key: r2Stored,
           createdAt: new Date().toISOString(),

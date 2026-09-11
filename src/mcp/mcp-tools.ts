@@ -6565,6 +6565,104 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               },
               "default": {}
             },
+            "systemInfo": {
+              "type": "object",
+              "properties": {
+                "browser": {
+                  "type": "string"
+                },
+                "browserVersion": {
+                  "type": "string"
+                },
+                "os": {
+                  "type": "string"
+                },
+                "osVersion": {
+                  "type": "string"
+                },
+                "screen": {
+                  "type": "string"
+                },
+                "connection": {
+                  "type": "string"
+                },
+                "userAgent": {
+                  "type": "string"
+                }
+              }
+            },
+            "consoleLogs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "level": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "timestamp": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "networkRequests": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string"
+                  },
+                  "method": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "number"
+                  },
+                  "duration": {
+                    "type": "number"
+                  },
+                  "requestHeaders": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  },
+                  "responseHeaders": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "userEvents": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string"
+                  },
+                  "timestamp": {
+                    "type": "string"
+                  },
+                  "selector": {
+                    "type": "string"
+                  },
+                  "target": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
             "recordingLink": {
               "type": "object",
               "properties": {

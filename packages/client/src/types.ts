@@ -5330,6 +5330,39 @@ export interface paths {
                             screenshotUrl?: string;
                             thumbnailUrl?: string;
                         };
+                        systemInfo?: {
+                            browser?: string;
+                            browserVersion?: string;
+                            os?: string;
+                            osVersion?: string;
+                            screen?: string;
+                            connection?: string;
+                            userAgent?: string;
+                        };
+                        consoleLogs?: {
+                            level?: string;
+                            message?: string;
+                            timestamp?: string;
+                        }[];
+                        networkRequests?: {
+                            url?: string;
+                            method?: string;
+                            status?: number;
+                            duration?: number;
+                            requestHeaders?: {
+                                [key: string]: string;
+                            };
+                            responseHeaders?: {
+                                [key: string]: string;
+                            };
+                        }[];
+                        userEvents?: {
+                            type?: string;
+                            timestamp?: string;
+                            selector?: string;
+                            target?: string;
+                            value?: string;
+                        }[];
                         recordingLink?: {
                             publicId?: string;
                             /** @enum {string} */
