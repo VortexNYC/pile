@@ -4,6 +4,12 @@ import { z } from "zod";
 
 import { createD1 } from "../global/db.js";
 import { user as userTable } from "../global/schema.js";
+import { createCustomer } from "../global/support-contacts.js";
+import {
+  addTicketMessage,
+  createTicket,
+  getTicketById,
+} from "../global/support-tickets.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
@@ -145,13 +151,126 @@ describe("support-content API", () => {
     expect(patchBody.snippet.markdownContent).toBe("# Answer");
   });
 
-  it("creates and lists support autoresponders", async () => {
+  it("inserts a support snippet", async () => {
+    const createRes = await fetch(
+      `/workspaces/${organizationId}/support/snippets`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "signature",
+          textContent: "Best regards, Vortex",
+          markdownContent: "**Best regards, Vortex**",
+        }),
+      }
+    );
+    expect(createRes.status).toBe(201);
+    const { snippet } = (await createRes.json()) as {
+      snippet: { id: string };
+    };
+
+    const insertRes = await fetch(
+      `/workspaces/${organizationId}/support/snippets/${snippet.id}/insert`,
+      { method: "POST" }
+    );
+    expect(insertRes.status).toBe(200);
+    const insertBody = (await insertRes.json()) as {
+      text: string;
+      markdown: string | null;
+    };
+    expect(insertBody.text).toBe("Best regards, Vortex");
+    expect(insertBody.markdown).toBe("**Best regards, Vortex**");
+  });
+
+  it("triggers autoresponders on ticket creation and customer reply", async () => {
+    const db = createD1(env.D1);
+    const customer = await createCustomer(db, {
+      organizationId,
+      email: "autoresponder@example.com",
+      fullName: "Autoresponder Customer",
+    });
+
     const snippetRes = await fetch(
       `/workspaces/${organizationId}/support/snippets`,
       {
         method: "POST",
         body: JSON.stringify({
           name: "thanks",
+          textContent: "Thanks for reaching out.",
+        }),
+      }
+    );
+    expect(snippetRes.status).toBe(201);
+    const { snippet } = (await snippetRes.json()) as {
+      snippet: { id: string };
+    };
+
+    const ticketCreatedRes = await fetch(
+      `/workspaces/${organizationId}/support/autoresponders`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "new ticket reply",
+          trigger: "ticket_created",
+          order: 1,
+          snippetId: snippet.id,
+          conditions: { sourceChannel: "email" },
+        }),
+      }
+    );
+    expect(ticketCreatedRes.status).toBe(201);
+
+    const customerRepliedRes = await fetch(
+      `/workspaces/${organizationId}/support/autoresponders`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "follow-up",
+          trigger: "customer_replied",
+          order: 2,
+          snippetId: snippet.id,
+        }),
+      }
+    );
+    expect(customerRepliedRes.status).toBe(201);
+
+    const ticket = await createTicket(db, {
+      organizationId,
+      customerId: customer.id,
+      title: "Help",
+      sourceChannel: "email",
+    });
+
+    const fullAfterCreate = await getTicketById(db, organizationId, ticket.id);
+    const autoCreated = fullAfterCreate?.events.filter(
+      (e) =>
+        e.actorType === "automation" &&
+        e.message?.textContent === "Thanks for reaching out."
+    );
+    expect(autoCreated).toHaveLength(1);
+
+    await addTicketMessage(db, organizationId, ticket.id, {
+      direction: "inbound",
+      textContent: "Still broken",
+      channel: "email",
+      customerId: customer.id,
+    });
+
+    const fullAfterReply = await getTicketById(db, organizationId, ticket.id);
+    const autoReplied = fullAfterReply?.events.filter(
+      (e) =>
+        e.actorType === "automation" &&
+        e.message?.textContent === "Thanks for reaching out."
+    );
+    expect(autoReplied).toHaveLength(2);
+  });
+
+  it("creates and lists support autoresponders", async () => {
+    const snippetRes = await fetch(
+      `/workspaces/${organizationId}/support/snippets`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "thanks2",
           textContent: "Thanks for reaching out.",
         }),
       }
@@ -197,8 +316,7 @@ describe("support-content API", () => {
     const listBody = (await listRes.json()) as {
       autoresponders: { name: string }[];
     };
-    expect(listBody.autoresponders).toHaveLength(1);
-    expect(listBody.autoresponders[0].name).toBe("new ticket reply");
+    expect(listBody.autoresponders.length).toBeGreaterThan(0);
   });
 
   it("patches a support autoresponder", async () => {

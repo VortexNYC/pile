@@ -25247,6 +25247,57 @@
         "summary": "Update support snippet"
       }
     },
+    "/workspaces/{organizationId}/support/snippets/{snippetId}/insert": {
+      "post": {
+        "tags": [
+          "support-content"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "snippetId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Snippet rendered for context",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    },
+                    "markdown": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "text",
+                    "markdown"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create support snippet insert"
+      }
+    },
     "/workspaces/{organizationId}/support/autoresponders": {
       "post": {
         "tags": [

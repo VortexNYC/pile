@@ -4999,6 +4999,22 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "support snippets insert create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/snippets/{snippetId}/insert",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "snippetId",
+        flag: "snippet-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "support autoresponders list": {
     method: "GET",
     path: "/workspaces/{organizationId}/support/autoresponders",

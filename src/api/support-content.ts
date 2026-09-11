@@ -193,6 +193,29 @@ const patchSnippetRoute = createRoute({
   },
 });
 
+const insertSnippetRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/support/snippets/{snippetId}/insert",
+  tags: ["support-content"],
+  middleware: [rls("read")],
+  request: {
+    params: snippetParams,
+  },
+  responses: {
+    200: {
+      description: "Snippet rendered for context",
+      content: {
+        "application/json": {
+          schema: z.object({
+            text: z.string(),
+            markdown: z.string().nullable(),
+          }),
+        },
+      },
+    },
+  },
+});
+
 const createAutoresponderRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/autoresponders",
@@ -352,6 +375,16 @@ export function registerSupportContentRoutes(app: OpenAPIHono<AppContext>) {
     });
 
     return c.json({ snippet } as { snippet: SupportSnippet });
+  });
+
+  app.openapi(insertSnippetRoute, async (c) => {
+    const { organizationId, snippetId } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const snippet = await getSupportSnippet(db, organizationId, snippetId);
+    return c.json({
+      text: snippet.textContent,
+      markdown: snippet.markdownContent,
+    });
   });
 
   app.openapi(createAutoresponderRoute, async (c) => {

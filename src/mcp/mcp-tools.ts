@@ -9836,6 +9836,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdSupportSnippetsSnippetIdInsert",
+    "description": "Create support snippet insert (POST /workspaces/{organizationId}/support/snippets/{snippetId}/insert)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/snippets/{snippetId}/insert",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "snippetId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "snippetId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdSupportTickets",
     "description": "Create support ticket (POST /workspaces/{organizationId}/support/tickets)",
     "method": "POST",

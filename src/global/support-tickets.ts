@@ -38,6 +38,11 @@ import {
   getCustomerById,
   type SupportCustomerIdentity,
 } from "./support-contacts.js";
+import {
+  getSupportSnippet,
+  listSupportAutoresponders,
+  type SupportAutoresponder,
+} from "./support-content.js";
 import { createTeam } from "./teams.js";
 
 export type SupportTicketStatus = "todo" | "done" | "snoozed";
@@ -269,6 +274,8 @@ export async function createTicket(
     createdAt,
     updatedAt,
   });
+
+  await runAutoresponders(db, env, input.organizationId, id, "ticket_created");
 
   if (env) {
     await dispatchSupportTicketEvent(env, input.organizationId, {
@@ -999,6 +1006,16 @@ export async function addTicketMessage(
       )
     );
 
+  if (input.direction === "inbound" && actorType === "customer") {
+    await runAutoresponders(
+      db,
+      env,
+      organizationId,
+      ticketId,
+      "customer_replied"
+    );
+  }
+
   if (env) {
     await dispatchSupportTicketEvent(env, organizationId, {
       type: "support_ticket.message_created",
@@ -1028,6 +1045,80 @@ export async function addTicketMessage(
       userId: input.userId ?? null,
     },
   };
+}
+
+export async function runAutoresponders(
+  db: D1Client,
+  env: WorkerEnv | undefined,
+  organizationId: string,
+  ticketId: string,
+  trigger: SupportAutoresponder["trigger"]
+): Promise<void> {
+  const [ticket] = await db
+    .select({
+      sourceChannel: supportTickets.sourceChannel,
+      priority: supportTickets.priority,
+    })
+    .from(supportTickets)
+    .where(
+      and(
+        eq(supportTickets.id, ticketId),
+        eq(supportTickets.organizationId, organizationId)
+      )
+    );
+
+  if (!ticket) return;
+
+  const autoresponders = await listSupportAutoresponders(db, organizationId);
+
+  const tasks = autoresponders
+    .filter((autoresponder) => {
+      if (!autoresponder.enabled || autoresponder.trigger !== trigger) {
+        return false;
+      }
+      const { conditions } = autoresponder;
+      if (
+        conditions.sourceChannel &&
+        conditions.sourceChannel !== ticket.sourceChannel
+      ) {
+        return false;
+      }
+      if (conditions.priority && conditions.priority !== ticket.priority) {
+        return false;
+      }
+      return !!autoresponder.snippetId;
+    })
+    .map(async (autoresponder) => {
+      if (!autoresponder.snippetId) return;
+
+      try {
+        const snippet = await getSupportSnippet(
+          db,
+          organizationId,
+          autoresponder.snippetId
+        );
+
+        await addTicketMessage(
+          db,
+          organizationId,
+          ticketId,
+          {
+            direction: "outbound",
+            textContent: snippet.textContent,
+            markdownContent: snippet.markdownContent,
+            channel: asMessageChannel(ticket.sourceChannel),
+            actorType: "automation",
+            actorId: autoresponder.id,
+            metadata: { autoresponderId: autoresponder.id },
+          },
+          env
+        );
+      } catch {
+        // Skip autoresponders that fail to resolve or send.
+      }
+    });
+
+  await Promise.all(tasks);
 }
 
 export async function addTicketNote(
