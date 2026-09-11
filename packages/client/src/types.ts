@@ -17534,6 +17534,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/observability/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List observability metrics */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Workspace metrics */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            supportTickets: {
+                                total: number;
+                                open: number;
+                                done: number;
+                                snoozed: number;
+                            };
+                            supportCustomers: {
+                                total: number;
+                            };
+                            webhookDeliveries: {
+                                total: number;
+                                pending: number;
+                                processing: number;
+                                completed: number;
+                                failed: number;
+                            };
+                            tokens: {
+                                total: number;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/push-tokens": {
         parameters: {
             query?: never;

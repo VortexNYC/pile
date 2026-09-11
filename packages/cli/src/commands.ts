@@ -7206,6 +7206,18 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "observability metrics list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/observability/metrics",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "push tokens list": {
     method: "GET",
     path: "/workspaces/{organizationId}/push-tokens",
