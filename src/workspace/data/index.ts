@@ -17,8 +17,8 @@ import {
 } from "drizzle-orm";
 import type { DrizzleSqliteDODatabase } from "drizzle-orm/durable-sqlite";
 
-import type { FilterCondition } from "./filter.js";
-import type { workspaceSchema } from "./schema-map.js";
+import type { FilterCondition } from "../filter.js";
+import type { workspaceSchema } from "../schema-map.js";
 import {
   workspaceAgentActivities,
   workspaceDocumentHistory,
@@ -55,7 +55,7 @@ import {
   workspaceViewFavorites,
   workspaceWebhookSubscriptions,
   workspaceOutboundWebhookDeliveries,
-} from "./schema.js";
+} from "../schema.js";
 
 export type WorkspaceDb = DrizzleSqliteDODatabase<typeof workspaceSchema>;
 

@@ -4,7 +4,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
-import type { SavedViewRecord } from "../workspace/data.js";
+import type { SavedViewRecord } from "../workspace/data/index.js";
 import {
   filterConditionSchema,
   type FilterCondition,

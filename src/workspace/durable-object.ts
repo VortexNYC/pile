@@ -64,7 +64,7 @@ import {
   type ListIssuesArgs,
   type RealtimeEvent,
 } from "../types/workspace.js";
-import * as data from "./data.js";
+import * as data from "./data/index.js";
 import { filterToSql } from "./filter.js";
 import { workspaceMigrations } from "./migrations.js";
 import { workspaceSchema } from "./schema-map.js";
