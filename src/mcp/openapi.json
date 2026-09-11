@@ -35803,6 +35803,116 @@
         "summary": "Update notification preferences"
       }
     },
+    "/workspaces/{organizationId}/observability/metrics": {
+      "get": {
+        "tags": [
+          "observability"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workspace metrics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "supportTickets": {
+                      "type": "object",
+                      "properties": {
+                        "total": {
+                          "type": "number"
+                        },
+                        "open": {
+                          "type": "number"
+                        },
+                        "done": {
+                          "type": "number"
+                        },
+                        "snoozed": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "total",
+                        "open",
+                        "done",
+                        "snoozed"
+                      ]
+                    },
+                    "supportCustomers": {
+                      "type": "object",
+                      "properties": {
+                        "total": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "total"
+                      ]
+                    },
+                    "webhookDeliveries": {
+                      "type": "object",
+                      "properties": {
+                        "total": {
+                          "type": "number"
+                        },
+                        "pending": {
+                          "type": "number"
+                        },
+                        "processing": {
+                          "type": "number"
+                        },
+                        "completed": {
+                          "type": "number"
+                        },
+                        "failed": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "total",
+                        "pending",
+                        "processing",
+                        "completed",
+                        "failed"
+                      ]
+                    },
+                    "tokens": {
+                      "type": "object",
+                      "properties": {
+                        "total": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "total"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "supportTickets",
+                    "supportCustomers",
+                    "webhookDeliveries",
+                    "tokens"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List observability metrics"
+      }
+    },
     "/workspaces/{organizationId}/push-tokens": {
       "get": {
         "tags": [

@@ -2897,6 +2897,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdObservabilityMetrics",
+    "description": "List observability metrics (GET /workspaces/{organizationId}/observability/metrics)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/observability/metrics",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdProjects",
     "description": "List projects (GET /workspaces/{organizationId}/projects)",
     "method": "GET",
