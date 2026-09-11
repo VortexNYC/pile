@@ -162,6 +162,7 @@ export const importJobs = sqliteTable(
         "completed",
         "failed",
         "paused",
+        "canceled",
       ],
     })
       .notNull()

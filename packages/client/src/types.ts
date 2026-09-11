@@ -17697,7 +17697,7 @@ export interface paths {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        source: "jira" | "confluence" | "linear" | "notion" | "github-issues" | "intercom" | "intercom-support" | "plain-support" | "zendesk-support";
+                        source: "jira" | "confluence" | "linear" | "notion" | "github-issues" | "intercom";
                         credentials?: unknown;
                         options?: unknown;
                     };

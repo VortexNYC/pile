@@ -36342,10 +36342,7 @@
                       "linear",
                       "notion",
                       "github-issues",
-                      "intercom",
-                      "intercom-support",
-                      "plain-support",
-                      "zendesk-support"
+                      "intercom"
                     ]
                   },
                   "credentials": {

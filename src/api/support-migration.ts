@@ -331,10 +331,10 @@ export function registerSupportMigrationRoutes(app: OpenAPIHono<AppContext>) {
       return c.json({ error: "Import not found" }, 404);
     }
 
-    await updateImportJobStatus(db, importId, "failed", {
+    await updateImportJobStatus(db, importId, "canceled", {
       error: "canceled",
     });
-    return c.json({ id: importId, status: "failed" });
+    return c.json({ id: importId, status: "canceled" });
   });
 
   app.openapi(validateImportRoute, async (c) => {

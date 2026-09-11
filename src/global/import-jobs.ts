@@ -9,7 +9,8 @@ export type ImportJobStatus =
   | "running"
   | "completed"
   | "failed"
-  | "paused";
+  | "paused"
+  | "canceled";
 
 export type ImportJobRecord = {
   id: string;
