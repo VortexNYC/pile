@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { hmacSha256Hex } from "../global/crypto.js";
+import { hmacSha1Hex, hmacSha256Hex } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
 import { supportTicketEvents, user as userTable } from "../global/schema.js";
 import { getCustomerByEmail } from "../global/support-contacts.js";
@@ -251,6 +251,72 @@ describe("support-channels API", () => {
       e.metadata?.includes("1234567890.999999")
     );
     expect(messageEvents.length).toBe(1);
+  });
+
+  it("deduplicates a repeated Intercom conversation webhook", async () => {
+    const secret = "test-intercom-client-secret";
+    Object.assign(env as unknown as Record<string, unknown>, {
+      INTERCOM_CLIENT_SECRET: secret,
+    });
+
+    const conversationId = `conv-${crypto.randomUUID()}`;
+    const deliveryId = `intercom-delivery-${crypto.randomUUID()}`;
+    const createdAtSeconds = Math.floor(Date.now() / 1000);
+    const payload = JSON.stringify({
+      type: "notification_event",
+      id: deliveryId,
+      topic: "conversation.user.created",
+      app_id: "test-app",
+      created_at: createdAtSeconds,
+      data: {
+        item: {
+          id: conversationId,
+          title: "Intercom dedup",
+          state: "open",
+          priority: "not_priority",
+          source: {
+            body: "<p>Hello from Intercom</p>",
+            author: {
+              type: "user",
+              id: "intercom-user-1",
+              name: "Intercom User",
+              email: "intercom-dedup@example.com",
+            },
+          },
+          created_at: createdAtSeconds,
+          updated_at: createdAtSeconds,
+        },
+      },
+    });
+    const signature = `sha1=${await hmacSha1Hex(secret, payload)}`;
+
+    const send = () =>
+      app.fetch(
+        new Request(
+          `https://example.com/support/webhooks/intercom/${organizationId}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Hub-Signature": signature,
+            },
+            body: payload,
+          }
+        ),
+        env
+      );
+
+    const res1 = await send();
+    expect(res1.status).toBe(200);
+    const res2 = await send();
+    expect(res2.status).toBe(200);
+
+    const db = createD1(env.D1);
+    const events = await db
+      .select()
+      .from(supportTicketEvents)
+      .where(eq(supportTicketEvents.externalId, conversationId));
+    expect(events.length).toBe(1);
   });
 
   it("sends an outbound message through an email channel", async () => {

@@ -24,6 +24,7 @@ export default defineConfig({
           SLACK_ENCRYPTION_KEY:
             "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
           SLACK_REDIRECT_URI: "http://localhost/slack/oauth",
+          INTERCOM_CLIENT_SECRET: "test-intercom-client-secret",
         },
       },
     }),

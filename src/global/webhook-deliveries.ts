@@ -11,6 +11,27 @@ export function findWebhookDelivery(db: D1Client, deliveryId: string) {
     .get();
 }
 
+export async function claimWebhookDelivery(
+  db: D1Client,
+  deliveryId: string,
+  source: string,
+  event: string,
+  organizationId?: string
+): Promise<boolean> {
+  const inserted = await db
+    .insert(webhookDeliveries)
+    .values({
+      deliveryId,
+      source,
+      event,
+      organizationId: organizationId ?? null,
+    })
+    .onConflictDoNothing()
+    .returning()
+    .get();
+  return inserted !== undefined;
+}
+
 export async function recordWebhookDelivery(
   db: D1Client,
   deliveryId: string,
@@ -26,5 +47,8 @@ export async function recordWebhookDelivery(
       event,
       organizationId: organizationId ?? null,
     })
-    .onConflictDoNothing();
+    .onConflictDoUpdate({
+      target: webhookDeliveries.deliveryId,
+      set: { organizationId: organizationId ?? null },
+    });
 }

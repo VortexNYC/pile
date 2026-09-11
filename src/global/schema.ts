@@ -2271,7 +2271,12 @@ export const supportTicketMessages = sqliteTable(
     userId: text("user_id" as string).references(() => user.id, {
       onDelete: "set null",
     }),
-  }
+  },
+  (table) => [
+    uniqueIndex("support_ticket_messages_event_unique_idx" as string).on(
+      table.eventId
+    ),
+  ]
 );
 
 export const supportTicketNotes = sqliteTable(
@@ -2282,7 +2287,12 @@ export const supportTicketNotes = sqliteTable(
       .notNull()
       .references(() => supportTicketEvents.id, { onDelete: "cascade" }),
     body: text("body" as string).notNull(),
-  }
+  },
+  (table) => [
+    uniqueIndex("support_ticket_notes_event_unique_idx" as string).on(
+      table.eventId
+    ),
+  ]
 );
 
 export const supportTicketAssignments = sqliteTable(

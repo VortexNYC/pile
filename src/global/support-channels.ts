@@ -18,6 +18,7 @@ import {
   createTicket,
   findSupportTicketByExternalId,
   getTicketById,
+  stripHtml,
   type SupportTicket,
   type SupportTicketMessageChannel,
   type SupportTicketSource,
@@ -120,13 +121,19 @@ export async function processIncomingMessage(
     }
   }
 
+  const textContent =
+    input.text.trim() ||
+    (input.html ? stripHtml(input.html).trim() : "") ||
+    input.subject.trim() ||
+    `${input.channel} message`;
+
   await addTicketMessage(
     db,
     organizationId,
     ticket.id,
     {
       direction: "inbound",
-      textContent: input.text,
+      textContent,
       markdownContent: input.html,
       channel: input.channel,
       customerId: customer.id,

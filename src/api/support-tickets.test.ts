@@ -20,6 +20,7 @@ import {
   setCustomerIdentities,
 } from "../global/support-contacts.js";
 import {
+  createTicket,
   createTicketFromIntercom,
   createTicketFromPlain,
   createTicketFromZendesk,
@@ -1009,5 +1010,71 @@ describe("support-tickets API", () => {
       teamName: "Support",
     });
     expect(byName.success).toBe(true);
+  });
+
+  it("rejects empty messages and invalid actor configurations", async () => {
+    const db = createD1(env.D1);
+    const customer = await createSupportCustomer(db, {
+      organizationId,
+      email: "empty-msg@example.com",
+      fullName: "Empty",
+    });
+    const ticket = await createTicket(db, {
+      organizationId,
+      customerId: customer.id,
+      title: "Actor validation",
+      sourceChannel: "email",
+    });
+
+    const emptyRes = await fetch(
+      `/workspaces/${organizationId}/support/tickets/${ticket.id}/messages`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          direction: "inbound",
+          textContent: "   ",
+          channel: "email",
+        }),
+      }
+    );
+    expect(emptyRes.status).toBe(400);
+
+    const bothRes = await fetch(
+      `/workspaces/${organizationId}/support/tickets/${ticket.id}/messages`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          direction: "inbound",
+          textContent: "Hello",
+          channel: "email",
+          customerId: customer.id,
+          userId: "user-id",
+        }),
+      }
+    );
+    expect(bothRes.status).toBe(400);
+
+    const badActorRes = await fetch(
+      `/workspaces/${organizationId}/support/tickets/${ticket.id}/messages`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          direction: "inbound",
+          textContent: "Hello",
+          channel: "email",
+          actorType: "customer",
+        }),
+      }
+    );
+    expect(badActorRes.status).toBe(400);
+
+    const emptyNoteRes = await fetch(
+      `/workspaces/${organizationId}/support/tickets/${ticket.id}/notes`,
+      {
+        method: "POST",
+        body: JSON.stringify({ body: "   " }),
+      }
+    );
+    expect(emptyNoteRes.status).toBe(400);
   });
 });

@@ -316,6 +316,7 @@ async function createTicketFromPlainPayload(
       externalSource: "plain",
       createdAt,
       updatedAt: createdAt,
+      ifExists: "return",
     },
     env
   );

@@ -19,7 +19,7 @@ import {
   findRepoWorkspace,
 } from "../global/repo-issues.js";
 import {
-  findWebhookDelivery,
+  claimWebhookDelivery,
   recordWebhookDelivery,
 } from "../global/webhook-deliveries.js";
 import { VortexError } from "../platform/errors.js";
@@ -259,8 +259,13 @@ export async function processGithubWebhook(c: Context<AppContext>) {
   const db = createD1(c.env.D1);
 
   if (deliveryId) {
-    const existing = await findWebhookDelivery(db, deliveryId);
-    if (existing) {
+    const claimed = await claimWebhookDelivery(
+      db,
+      deliveryId,
+      "github",
+      event ?? "unknown"
+    );
+    if (!claimed) {
       return c.json({ ok: true }, 200);
     }
   }

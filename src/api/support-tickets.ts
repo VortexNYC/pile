@@ -283,7 +283,9 @@ function resolveActor(
 } {
   const actorType =
     input?.actorType ?? (identity.type === "agent" ? "agent" : "user");
-  const actorId = input?.actorId ?? identity.id;
+  const identityActor =
+    actorType === "customer" ? null : (input?.actorId ?? identity.id);
+  const actorId = input?.actorId ?? identityActor;
   return { actorType, actorId };
 }
 

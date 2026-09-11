@@ -14,10 +14,7 @@ import {
   updateTicket,
   type SupportTicketStatus,
 } from "../global/support-tickets.js";
-import {
-  findWebhookDelivery,
-  recordWebhookDelivery,
-} from "../global/webhook-deliveries.js";
+import { claimWebhookDelivery } from "../global/webhook-deliveries.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 
@@ -143,8 +140,14 @@ export async function processIntercomSupportWebhook(
   }
 
   const db = createD1(c.env.D1);
-  const existingDelivery = await findWebhookDelivery(db, notification.data.id);
-  if (existingDelivery) {
+  const claimed = await claimWebhookDelivery(
+    db,
+    notification.data.id,
+    "intercom",
+    topic,
+    organizationId
+  );
+  if (!claimed) {
     return { ok: true };
   }
 
@@ -176,13 +179,7 @@ export async function processIntercomSupportWebhook(
       "done",
       c.env
     );
-    await recordWebhookDelivery(
-      db,
-      notification.data.id,
-      "intercom",
-      topic,
-      organizationId
-    );
+
     return { ok: true };
   }
   if (topic.endsWith(".opened")) {
@@ -193,13 +190,7 @@ export async function processIntercomSupportWebhook(
       "todo",
       c.env
     );
-    await recordWebhookDelivery(
-      db,
-      notification.data.id,
-      "intercom",
-      topic,
-      organizationId
-    );
+
     return { ok: true };
   }
   if (topic.endsWith(".snoozed")) {
@@ -210,13 +201,7 @@ export async function processIntercomSupportWebhook(
       "snoozed",
       c.env
     );
-    await recordWebhookDelivery(
-      db,
-      notification.data.id,
-      "intercom",
-      topic,
-      organizationId
-    );
+
     return { ok: true };
   }
 
@@ -225,13 +210,6 @@ export async function processIntercomSupportWebhook(
   const isCreated = topic.startsWith("conversation.user.created");
 
   if (!isCreated && !isUserReply && !isAdminReply) {
-    await recordWebhookDelivery(
-      db,
-      notification.data.id,
-      "intercom",
-      topic,
-      organizationId
-    );
     return { ok: true };
   }
 
@@ -299,13 +277,7 @@ export async function processIntercomSupportWebhook(
       },
       c.env
     );
-    await recordWebhookDelivery(
-      db,
-      notification.data.id,
-      "intercom",
-      topic,
-      organizationId
-    );
+
     return { ok: true };
   }
 
@@ -344,6 +316,7 @@ export async function processIntercomSupportWebhook(
       externalSource: "intercom",
       createdAt,
       updatedAt: createdAt,
+      ifExists: "return",
     },
     c.env
   );
@@ -366,18 +339,12 @@ export async function processIntercomSupportWebhook(
       channel: "intercom",
       customerId: customer.id,
       subType: conversation.data.id,
+      externalId: conversation.data.id,
       createdAt,
     },
     c.env
   );
 
-  await recordWebhookDelivery(
-    db,
-    notification.data.id,
-    "intercom",
-    topic,
-    organizationId
-  );
   return { ok: true };
 }
 

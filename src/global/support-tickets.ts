@@ -1143,6 +1143,35 @@ export async function addTicketMessage(
 ): Promise<SupportTicketEventWithDetails> {
   await ensureTicket(db, organizationId, ticketId);
 
+  if (!input.textContent || input.textContent.trim().length === 0) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Message text cannot be empty",
+    });
+  }
+  if (input.customerId && input.userId) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "A message cannot have both a customer and a user actor",
+    });
+  }
+  if (input.actorType === "customer" && !input.customerId && !input.actorId) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Customer actor requires customerId or actorId",
+    });
+  }
+  if (input.actorType === "user" && !input.userId && !input.actorId) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "User actor requires userId or actorId",
+    });
+  }
+
   const now = new Date().toISOString();
   const messageCreatedAt = sanitizeTimestamp(input.createdAt) ?? now;
   const eventId = crypto.randomUUID();
@@ -1154,38 +1183,104 @@ export async function addTicketMessage(
   const metadata = input.metadata ? JSON.stringify(input.metadata) : null;
   const externalId = input.externalId ?? null;
 
+  let event: SupportTicketEvent;
+
   if (externalId) {
-    const existing = await findTicketEventByExternalId(
-      db,
+    const inserted = await db
+      .insert(supportTicketEvents)
+      .values({
+        id: eventId,
+        ticketId,
+        type: "message",
+        subType: input.subType ?? null,
+        actorType,
+        actorId,
+        metadata,
+        externalId,
+        createdAt: messageCreatedAt,
+      })
+      .onConflictDoNothing({
+        target: [
+          supportTicketEvents.ticketId,
+          supportTicketEvents.externalId,
+          supportTicketEvents.type,
+        ],
+      })
+      .returning()
+      .get();
+    if (!inserted) {
+      const existing = await findTicketEventByExternalId(
+        db,
+        ticketId,
+        externalId,
+        "message"
+      );
+      if (existing) return existing;
+      throw new VortexError({
+        code: "INTERNAL_ERROR",
+        status: 500,
+        message: "Failed to create support ticket message event",
+      });
+    }
+    event = inserted;
+  } else {
+    await db.insert(supportTicketEvents).values({
+      id: eventId,
       ticketId,
+      type: "message",
+      subType: input.subType ?? null,
+      actorType,
+      actorId,
+      metadata,
       externalId,
-      "message"
-    );
-    if (existing) return existing;
+      createdAt: messageCreatedAt,
+    });
+    event = {
+      id: eventId,
+      ticketId,
+      type: "message",
+      subType: input.subType ?? null,
+      actorType,
+      actorId,
+      metadata,
+      externalId,
+      createdAt: messageCreatedAt,
+    };
   }
 
-  await db.insert(supportTicketEvents).values({
-    id: eventId,
-    ticketId,
-    type: "message",
-    subType: input.subType ?? null,
-    actorType,
-    actorId,
-    metadata,
-    externalId,
-    createdAt: messageCreatedAt,
-  });
+  const messageRow = await db
+    .insert(supportTicketMessages)
+    .values({
+      id: messageId,
+      eventId: event.id,
+      direction: input.direction,
+      textContent: input.textContent,
+      markdownContent: input.markdownContent ?? null,
+      channel: input.channel,
+      customerId: input.customerId ?? null,
+      userId: input.userId ?? null,
+    })
+    .onConflictDoNothing({
+      target: supportTicketMessages.eventId,
+    })
+    .returning()
+    .get();
 
-  await db.insert(supportTicketMessages).values({
-    id: messageId,
-    eventId,
-    direction: input.direction,
-    textContent: input.textContent,
-    markdownContent: input.markdownContent ?? null,
-    channel: input.channel,
-    customerId: input.customerId ?? null,
-    userId: input.userId ?? null,
-  });
+  const message =
+    messageRow ??
+    (await db
+      .select()
+      .from(supportTicketMessages)
+      .where(eq(supportTicketMessages.eventId, event.id))
+      .get());
+
+  if (!message) {
+    throw new VortexError({
+      code: "INTERNAL_ERROR",
+      status: 500,
+      message: "Failed to create support ticket message",
+    });
+  }
 
   await db
     .update(supportTickets)
@@ -1253,12 +1348,12 @@ export async function addTicketMessage(
       type: "support_ticket.message_created",
       organizationId,
       ticketId,
-      messageId,
+      messageId: message.id,
     });
   }
 
   return {
-    id: eventId,
+    id: event.id,
     ticketId,
     type: "message",
     subType: input.subType ?? null,
@@ -1268,8 +1363,8 @@ export async function addTicketMessage(
     externalId,
     createdAt: messageCreatedAt,
     message: {
-      id: messageId,
-      eventId,
+      id: message.id,
+      eventId: event.id,
       direction: input.direction,
       textContent: input.textContent,
       markdownContent: input.markdownContent ?? null,
@@ -1378,6 +1473,21 @@ export async function addTicketNote(
   env?: WorkerEnv
 ): Promise<SupportTicketEventWithDetails> {
   await ensureTicket(db, organizationId, ticketId);
+
+  if (!input.body || input.body.trim().length === 0) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Note body cannot be empty",
+    });
+  }
+  if (input.actorType === "user" && !input.userId && !input.actorId) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "User actor requires userId or actorId",
+    });
+  }
 
   const now = new Date().toISOString();
   const noteCreatedAt = sanitizeTimestamp(input.createdAt) ?? now;

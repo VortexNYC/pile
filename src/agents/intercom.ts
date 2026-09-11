@@ -7,10 +7,7 @@ import {
   createIntercomConversation,
   findIntercomConversation,
 } from "../global/intercom-conversations.js";
-import {
-  findWebhookDelivery,
-  recordWebhookDelivery,
-} from "../global/webhook-deliveries.js";
+import { claimWebhookDelivery } from "../global/webhook-deliveries.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import type { IssueInput } from "../types/workspace.js";
@@ -223,8 +220,14 @@ export async function processIntercomWebhook(
   }
 
   const db = createD1(c.env.D1);
-  const existingDelivery = await findWebhookDelivery(db, deliveryId);
-  if (existingDelivery) {
+  const claimed = await claimWebhookDelivery(
+    db,
+    deliveryId,
+    "intercom",
+    topic,
+    organizationId
+  );
+  if (!claimed) {
     return { ok: true };
   }
 
@@ -272,14 +275,6 @@ export async function processIntercomWebhook(
       issue.id
     );
   }
-
-  await recordWebhookDelivery(
-    db,
-    deliveryId,
-    "intercom",
-    topic,
-    organizationId
-  );
 
   return { ok: true };
 }

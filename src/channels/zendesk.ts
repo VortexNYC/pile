@@ -237,6 +237,7 @@ export async function processZendeskSupportWebhook(
       externalSource: "zendesk",
       createdAt,
       updatedAt: ticketData.updated_at ?? createdAt,
+      ifExists: "return",
     },
     c.env
   );
