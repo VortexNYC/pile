@@ -2485,6 +2485,18 @@ export const COMMANDS: Record<string, CommandDef> = {
     ],
     body: [],
   },
+  "support capture sessions get": {
+    method: "GET",
+    path: "/support/capture/sessions/{sessionId}",
+    params: [
+      {
+        name: "sessionId",
+        flag: "session",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "support capture public get": {
     method: "GET",
     path: "/support/capture/public/{ticketId}",

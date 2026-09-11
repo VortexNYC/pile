@@ -4939,6 +4939,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             token: string;
+                            recordingUrl: string;
                         };
                     };
                 };
@@ -5212,6 +5213,63 @@ export interface paths {
                     content?: never;
                 };
                 /** @description Artifact not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/support/capture/sessions/{sessionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get support capture session */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    sessionId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Capture recording session */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            sessionId: string;
+                            status: string;
+                            expiresAt: string;
+                            ticketId: string | null;
+                            reference: string | null;
+                            uploads: {
+                                attachmentType: string;
+                                contentType?: string | null;
+                                r2Key: string;
+                                uploaded: boolean;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Session not found */
                 404: {
                     headers: {
                         [name: string]: unknown;

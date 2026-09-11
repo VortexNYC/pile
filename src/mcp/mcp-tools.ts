@@ -1188,6 +1188,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getSupportCaptureSessionsSessionId",
+    "description": "Get support capture session (GET /support/capture/sessions/{sessionId})",
+    "method": "GET",
+    "path": "/support/capture/sessions/{sessionId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspaces",
     "description": "List workspaces (GET /workspaces)",
     "method": "GET",

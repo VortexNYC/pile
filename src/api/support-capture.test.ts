@@ -141,7 +141,7 @@ describe("support-capture API", () => {
     publicKey: { key: string },
     origin = "https://example.com",
     reference?: string
-  ): Promise<string> {
+  ): Promise<{ token: string; recordingUrl: string }> {
     const res = await captureFetch("/support/capture/token", {
       method: "POST",
       headers: {
@@ -151,8 +151,7 @@ describe("support-capture API", () => {
       },
     });
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { token: string };
-    return body.token;
+    return (await res.json()) as { token: string; recordingUrl: string };
   }
 
   it("rejects public key creation without auth", async () => {
@@ -200,6 +199,24 @@ describe("support-capture API", () => {
     expect(tokenRes.status).toBe(401);
   });
 
+  it("returns a public recording URL with the capture token", async () => {
+    const publicKey = await createPublicKey();
+    const { token: sessionToken, recordingUrl } =
+      await issueCaptureToken(publicKey);
+    expect(recordingUrl).toContain(`/support/capture/sessions/${sessionToken}`);
+
+    const sessionRes = await captureFetch(new URL(recordingUrl).pathname);
+    expect(sessionRes.status).toBe(200);
+    const body = (await sessionRes.json()) as {
+      sessionId: string;
+      status: string;
+      uploads: unknown[];
+    };
+    expect(body.sessionId).toBe(sessionToken);
+    expect(body.status).toBe("pending");
+    expect(body.uploads).toEqual([]);
+  });
+
   it("rejects upload-session without a token", async () => {
     const res = await captureFetch("/support/capture/upload-session", {
       method: "POST",
@@ -227,7 +244,7 @@ describe("support-capture API", () => {
 
   it("rejects finalize when email is missing", async () => {
     const publicKey = await createPublicKey();
-    const sessionToken = await issueCaptureToken(publicKey);
+    const { token: sessionToken } = await issueCaptureToken(publicKey);
 
     const sessionRes = await captureFetch("/support/capture/upload-session", {
       method: "POST",
@@ -271,7 +288,7 @@ describe("support-capture API", () => {
     });
     expect(badOriginRes.status).toBe(401);
 
-    const sessionToken = await issueCaptureToken(publicKey);
+    const { token: sessionToken } = await issueCaptureToken(publicKey);
 
     const sessionRes = await captureFetch("/support/capture/upload-session", {
       method: "POST",
@@ -691,7 +708,7 @@ describe("support-capture API", () => {
     });
 
     const publicKey = await createPublicKey();
-    const sessionToken = await issueCaptureToken(
+    const { token: sessionToken } = await issueCaptureToken(
       publicKey,
       "https://example.com",
       existing.id
@@ -782,7 +799,7 @@ describe("support-capture API", () => {
     });
 
     const publicKey = await createPublicKey();
-    const sessionToken = await issueCaptureToken(
+    const { token: sessionToken } = await issueCaptureToken(
       publicKey,
       "https://example.com",
       issue.id

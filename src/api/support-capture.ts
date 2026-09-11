@@ -47,6 +47,7 @@ const createPublicKeyBodySchema = z.object({
 
 const tokenResponseSchema = z.object({
   token: z.string(),
+  recordingUrl: z.string(),
 });
 
 const uploadSessionBodySchema = z.object({
@@ -292,6 +293,44 @@ const viewArtifactRoute = createRoute({
     },
     404: {
       description: "Artifact not found",
+    },
+  },
+});
+
+const captureSessionRoute = createRoute({
+  method: "get",
+  path: "/support/capture/sessions/{sessionId}",
+  tags: ["support-capture"],
+  request: {
+    params: z.object({
+      sessionId: z.string(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Capture recording session",
+      content: {
+        "application/json": {
+          schema: z.object({
+            sessionId: z.string(),
+            status: z.string(),
+            expiresAt: z.string(),
+            ticketId: z.string().nullable(),
+            reference: z.string().nullable(),
+            uploads: z.array(
+              z.object({
+                attachmentType: z.string(),
+                contentType: z.string().nullable().optional(),
+                r2Key: z.string(),
+                uploaded: z.boolean(),
+              })
+            ),
+          }),
+        },
+      },
+    },
+    404: {
+      description: "Session not found",
     },
   },
 });
@@ -630,7 +669,7 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(tokenRoute, async (c) => {
     const publicKeyValue = c.req.header("x-vortex-capture-public-key");
-    const origin = c.req.header("origin") ?? c.req.header("Origin");
+    const requestOrigin = c.req.header("origin") ?? c.req.header("Origin");
     if (!publicKeyValue) {
       throw new VortexError({
         status: 401,
@@ -649,7 +688,7 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
 
-    assertOriginAllowed(publicKey, origin);
+    assertOriginAllowed(publicKey, requestOrigin);
 
     const reference = c.req.header("x-vortex-capture-reference");
     const session = await createCaptureSession(
@@ -659,7 +698,9 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
       30,
       reference ? { reference } : {}
     );
-    return c.json({ token: session.id });
+    const origin = new URL(c.req.url).origin;
+    const recordingUrl = `${origin}/support/capture/sessions/${session.id}`;
+    return c.json({ token: session.id, recordingUrl });
   });
 
   app.openapi(uploadSessionRoute, async (c) => {
@@ -988,6 +1029,37 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
     }
     return c.body(object.body, 200, {
       "Content-Type": contentType,
+    });
+  });
+
+  app.openapi(captureSessionRoute, async (c) => {
+    const { sessionId } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const session = await getCaptureSession(db, sessionId);
+    if (!session) {
+      throw new VortexError({
+        status: 404,
+        code: "NOT_FOUND",
+        message: "Capture session not found",
+      });
+    }
+    const reference =
+      typeof session.metadata.reference === "string"
+        ? session.metadata.reference
+        : null;
+    const uploads = uploadsFromSession(session);
+    return c.json({
+      sessionId: session.id,
+      status: session.status,
+      expiresAt: session.expiresAt,
+      ticketId: session.ticketId,
+      reference,
+      uploads: uploads.map((u) => ({
+        attachmentType: u.attachmentType,
+        contentType: u.contentType ?? null,
+        r2Key: u.r2Key,
+        uploaded: u.uploaded,
+      })),
     });
   });
 

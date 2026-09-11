@@ -9839,10 +9839,14 @@
                   "properties": {
                     "token": {
                       "type": "string"
+                    },
+                    "recordingUrl": {
+                      "type": "string"
                     }
                   },
                   "required": [
-                    "token"
+                    "token",
+                    "recordingUrl"
                   ]
                 }
               }
@@ -10159,6 +10163,92 @@
           }
         },
         "summary": "List support capture artifacts"
+      }
+    },
+    "/support/capture/sessions/{sessionId}": {
+      "get": {
+        "tags": [
+          "support-capture"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "sessionId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Capture recording session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sessionId": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "expiresAt": {
+                      "type": "string"
+                    },
+                    "ticketId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "reference": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "uploads": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "attachmentType": {
+                            "type": "string"
+                          },
+                          "contentType": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "r2Key": {
+                            "type": "string"
+                          },
+                          "uploaded": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "attachmentType",
+                          "r2Key",
+                          "uploaded"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "sessionId",
+                    "status",
+                    "expiresAt",
+                    "ticketId",
+                    "reference",
+                    "uploads"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found"
+          }
+        },
+        "summary": "Get support capture session"
       }
     },
     "/support/capture/public/{ticketId}": {
