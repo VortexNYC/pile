@@ -1154,19 +1154,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
-    "name": "getSupportCaptureArtifacts",
-    "description": "List support capture artifacts (GET /support/capture/artifacts)",
+    "name": "getSupportCaptureArtifactsAttachmentId",
+    "description": "Get support capture artifact (GET /support/capture/artifacts/{attachmentId})",
     "method": "GET",
-    "path": "/support/capture/artifacts",
+    "path": "/support/capture/artifacts/{attachmentId}",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "r2Key": {
+        "attachmentId": {
           "type": "string"
         }
       },
       "required": [
-        "r2Key"
+        "attachmentId"
       ]
     }
   },

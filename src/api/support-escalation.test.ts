@@ -6,9 +6,13 @@ import { z } from "zod";
 import { createD1 } from "../global/db.js";
 import {
   apikey as apikeyTable,
+  supportTicketEvents,
   supportTickets,
   user as userTable,
 } from "../global/schema.js";
+import { getCustomerById } from "../global/support-contacts.js";
+import { maybeEscalate } from "../global/support-escalation.js";
+import { createTicket, getTicketById } from "../global/support-tickets.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
@@ -204,5 +208,66 @@ describe("support-escalation API", () => {
       ticket: { issueId: string | null };
     };
     expect(ticketBody.ticket.issueId).toBeNull();
+  });
+
+  it("creates only one escalated issue under concurrent escalation calls", async () => {
+    const db = createD1(env.D1);
+    const ruleRes = await fetch(
+      `/workspaces/${organizationId}/support/escalation-rules`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "concurrent bug",
+          conditions: { keywords: ["bug"], channels: ["api"] },
+          action: { type: "create_issue", status: "triage", priority: "high" },
+        }),
+      }
+    );
+    expect(ruleRes.status).toBe(201);
+
+    const customerId = await createCustomer("concurrent@example.com");
+    const customer = await getCustomerById(db, organizationId, customerId);
+
+    const ticket = await createTicket(db, {
+      organizationId,
+      customerId,
+      title: "bug in login",
+      sourceChannel: "api",
+      priority: "high",
+      status: "todo",
+      externalSource: "api",
+    });
+
+    const ctx = {
+      text: "Login is broken",
+      customer,
+      source: "api" as const,
+      channel: "api" as const,
+    };
+
+    const [first, second] = await Promise.all([
+      maybeEscalate(env, db, organizationId, ticket, ctx),
+      maybeEscalate(env, db, organizationId, ticket, ctx),
+    ]);
+
+    expect(first?.id).toBeTruthy();
+    expect(second?.id).toBe(first?.id);
+
+    const refreshed = await getTicketById(db, organizationId, ticket.id);
+    expect(refreshed?.issueId).toBe(first?.id);
+
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const issues = await stub.listIssues({});
+    expect(issues.filter((i) => i.title === ticket.title)).toHaveLength(1);
+
+    const linkEvents = await db
+      .select()
+      .from(supportTicketEvents)
+      .where(eq(supportTicketEvents.ticketId, ticket.id))
+      .all();
+    expect(linkEvents.filter((e) => e.type === "link_added")).toHaveLength(1);
   });
 });

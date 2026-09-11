@@ -5184,21 +5184,21 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/support/capture/artifacts": {
+    "/support/capture/artifacts/{attachmentId}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List support capture artifacts */
+        /** Get support capture artifact */
         get: {
             parameters: {
-                query: {
-                    r2Key: string;
-                };
+                query?: never;
                 header?: never;
-                path?: never;
+                path: {
+                    attachmentId: string;
+                };
                 cookie?: never;
             };
             requestBody?: never;

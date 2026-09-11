@@ -2477,16 +2477,16 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
-  "support capture artifacts list": {
+  "support capture artifacts get": {
     method: "GET",
-    path: "/support/capture/artifacts",
-    params: [],
-    query: [
+    path: "/support/capture/artifacts/{attachmentId}",
+    params: [
       {
-        name: "r2Key",
-        flag: "r2-key",
+        name: "attachmentId",
+        flag: "attachment",
       },
     ],
+    query: [],
     body: [],
   },
   "support capture sessions get": {

@@ -291,11 +291,11 @@ const metadataRoute = createRoute({
 
 const viewArtifactRoute = createRoute({
   method: "get",
-  path: "/support/capture/artifacts",
+  path: "/support/capture/artifacts/{attachmentId}",
   tags: ["support-capture"],
   request: {
-    query: z.object({
-      r2Key: z.string(),
+    params: z.object({
+      attachmentId: z.string(),
     }),
   },
   responses: {
@@ -915,12 +915,16 @@ async function findAttachmentFileName(
 
 async function getArtifactAccess(
   db: D1Client,
-  r2Key: string
-): Promise<{ organizationId: string; isPublic: boolean } | null> {
+  attachmentId: string
+): Promise<{
+  organizationId: string;
+  r2Key: string | null;
+  isPublic: boolean;
+} | null> {
   const [attachment] = await db
     .select()
     .from(supportTicketAttachments)
-    .where(eq(supportTicketAttachments.r2Key, r2Key))
+    .where(eq(supportTicketAttachments.id, attachmentId))
     .limit(1);
   if (!attachment) {
     return null;
@@ -941,7 +945,11 @@ async function getArtifactAccess(
     isPublic = metadata.visibility === "public";
   }
 
-  return { organizationId: attachment.organizationId, isPublic };
+  return {
+    organizationId: attachment.organizationId,
+    r2Key: attachment.r2Key,
+    isPublic,
+  };
 }
 
 async function requireArtifactAuthorization(
@@ -1159,7 +1167,9 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
       attachmentType,
       fileName,
     });
-    await bucket.put(r2Key, new Blob([arrayBuffer], { type: contentType }));
+    await bucket.put(r2Key, new Blob([arrayBuffer], { type: contentType }), {
+      httpMetadata: { contentType },
+    });
 
     const existingUploads = uploadsFromSession(session);
     const nextUploads = existingUploads.map((u) =>
@@ -1311,11 +1321,12 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
             ? upload.contentType
             : "application/octet-stream";
         const size = typeof upload.size === "number" ? upload.size : null;
+        const attachmentId = crypto.randomUUID();
         const url = r2Key
-          ? `${origin}/support/capture/artifacts?r2Key=${encodeURIComponent(r2Key)}`
+          ? `${origin}/support/capture/artifacts/${attachmentId}`
           : null;
         return db.insert(supportTicketAttachments).values({
-          id: crypto.randomUUID(),
+          id: attachmentId,
           organizationId: session.organizationId,
           ticketId: ticket.id,
           eventId: event.id,
@@ -1377,7 +1388,7 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(viewArtifactRoute, async (c) => {
-    const { r2Key } = c.req.valid("query");
+    const { attachmentId } = c.req.valid("param");
     const bucket = c.env.ATTACHMENTS_BUCKET;
     if (!bucket) {
       throw new VortexError({
@@ -1388,8 +1399,8 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
     }
 
     const db = createD1(c.env.D1);
-    const access = await getArtifactAccess(db, r2Key);
-    if (!access) {
+    const access = await getArtifactAccess(db, attachmentId);
+    if (!access || !access.r2Key) {
       throw new VortexError({
         status: 404,
         code: "NOT_FOUND",
@@ -1401,7 +1412,7 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
       await requireArtifactAuthorization(c, access.organizationId);
     }
 
-    const object = await bucket.get(r2Key);
+    const object = await bucket.get(access.r2Key);
     if (!object) {
       throw new VortexError({
         status: 404,

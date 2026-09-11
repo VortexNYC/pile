@@ -30,6 +30,7 @@ export async function storeJamCaptureArtifacts(
   const remoteRows = await Promise.all(
     remoteAttachments.map(async (input) => {
       const r2Key = `${organizationId}/jam/${jamId}/${input.type}`;
+      const attachmentId = crypto.randomUUID();
       let url = input.url;
       let r2Stored: string | null = null;
       if (bucket) {
@@ -43,14 +44,14 @@ export async function storeJamCaptureArtifacts(
               httpMetadata: { contentType },
             });
             r2Stored = r2Key;
-            url = `${origin}/support/capture/artifacts?r2Key=${encodeURIComponent(r2Key)}`;
+            url = `${origin}/support/capture/artifacts/${attachmentId}`;
           }
         } catch {
           // Remote media is not available locally; keep the original URL.
         }
       }
       return {
-        id: crypto.randomUUID(),
+        id: attachmentId,
         organizationId,
         ticketId,
         eventId,
@@ -68,6 +69,7 @@ export async function storeJamCaptureArtifacts(
     await Promise.all(
       inlineArtifacts.map(async (artifact) => {
         const r2Key = `${organizationId}/jam/${jamId}/${artifact.name}`;
+        const attachmentId = crypto.randomUUID();
         if (!bucket) return null;
         try {
           const buffer = new TextEncoder().encode(
@@ -76,9 +78,9 @@ export async function storeJamCaptureArtifacts(
           await bucket.put(r2Key, buffer, {
             httpMetadata: { contentType: "application/json" },
           });
-          const url = `${origin}/support/capture/artifacts?r2Key=${encodeURIComponent(r2Key)}`;
+          const url = `${origin}/support/capture/artifacts/${attachmentId}`;
           return {
-            id: crypto.randomUUID(),
+            id: attachmentId,
             organizationId,
             ticketId,
             eventId,

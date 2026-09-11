@@ -63,7 +63,8 @@ async function seedWorkspace() {
 }
 
 function captureFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  const request = new Request(`https://example.com${path}`, init);
+  const url = path.startsWith("http") ? path : `https://example.com${path}`;
+  const request = new Request(url, init);
   return app.fetch(request, env) as Promise<Response>;
 }
 
@@ -1079,9 +1080,12 @@ describe("support-capture API", () => {
     ).toBe(true);
   });
 
-  async function captureWithArtifacts(): Promise<{
+  async function captureWithArtifacts(
+    visibility: "public" | "private" = "private"
+  ): Promise<{
     ticketId: string;
     sessionToken: string;
+    attachments: { id: string; url: string | null; type: string }[];
   }> {
     const publicKey = await createPublicKey();
     const { token: sessionToken } = await issueCaptureToken(publicKey);
@@ -1106,6 +1110,7 @@ describe("support-capture API", () => {
           title: "Artifact reader test",
           description: "Testing capture read routes",
           priority: "medium",
+          visibility,
           metadata: { email: "reader@example.com" },
           ...extra,
         }),
@@ -1148,6 +1153,7 @@ describe("support-capture API", () => {
         title: "Artifact reader test",
         description: "Testing capture read routes",
         priority: "medium",
+        visibility,
         metadata: { email: "reader@example.com" },
       }
     );
@@ -1211,7 +1217,18 @@ describe("support-capture API", () => {
     });
     expect(finalizeRes.status).toBe(200);
     const body = (await finalizeRes.json()) as { ticketId: string };
-    return { ticketId: body.ticketId, sessionToken };
+
+    const db = createD1(env.D1);
+    const attachments = await db
+      .select({
+        id: supportTicketAttachments.id,
+        url: supportTicketAttachments.url,
+        type: supportTicketAttachments.type,
+      })
+      .from(supportTicketAttachments)
+      .where(eq(supportTicketAttachments.ticketId, body.ticketId));
+
+    return { ticketId: body.ticketId, sessionToken, attachments };
   }
 
   it("reads console logs from a capture", async () => {
@@ -1282,5 +1299,57 @@ describe("support-capture API", () => {
     };
     expect(body.deviceInfo?.browser).toBe("Chrome");
     expect(body.metadata?.customKey).toBe("customValue");
+  });
+
+  it("requires auth to view a private capture artifact", async () => {
+    const { attachments } = await captureWithArtifacts("private");
+    const screenshot = attachments.find((a) => a.type === "screenshot");
+    expect(screenshot?.url).toBeTruthy();
+
+    const publicRes = await captureFetch(screenshot!.url!);
+    expect(publicRes.status).toBe(401);
+
+    const authedRes = await captureFetch(screenshot!.url!, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(authedRes.status).toBe(200);
+    expect(authedRes.headers.get("content-type")).toBe("image/png");
+  });
+
+  it("rejects a wrong-org token for a private capture artifact", async () => {
+    const { attachments } = await captureWithArtifacts("private");
+    const screenshot = attachments.find((a) => a.type === "screenshot");
+    const other = await seedWorkspace();
+
+    const res = await captureFetch(screenshot!.url!, {
+      headers: { Authorization: `Bearer ${other.token}` },
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it("allows public access to a public capture artifact", async () => {
+    const { attachments, ticketId } = await captureWithArtifacts("public");
+    const screenshot = attachments.find((a) => a.type === "screenshot");
+
+    const shareRes = await captureFetch(`/support/capture/public/${ticketId}`);
+    expect(shareRes.status).toBe(200);
+
+    const publicRes = await captureFetch(screenshot!.url!);
+    expect(publicRes.status).toBe(200);
+    expect(publicRes.headers.get("content-type")).toBe("image/png");
+  });
+
+  it("rejects legacy r2Key artifact URLs", async () => {
+    const { attachments } = await captureWithArtifacts("private");
+    const screenshot = attachments.find((a) => a.type === "screenshot");
+    expect(screenshot?.url).toContain("/support/capture/artifacts/");
+
+    const legacy = `https://example.com/support/capture/artifacts?r2Key=${encodeURIComponent(
+      "any"
+    )}`;
+    const res = await captureFetch(
+      new URL(legacy).pathname + new URL(legacy).search
+    );
+    expect(res.status).toBe(404);
   });
 });

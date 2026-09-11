@@ -2465,10 +2465,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         createdAt: input.createdAt ?? now,
         updatedAt: input.updatedAt ?? now,
       })
+      .onConflictDoNothing({ target: workspaceIssues.id })
       .returning()
       .get();
 
     if (!issue) {
+      const recovered = await this.getIssue(id);
+      if (recovered) return recovered;
       throw new Error("Failed to create issue");
     }
 

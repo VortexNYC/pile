@@ -1498,33 +1498,65 @@ export async function addTicketNote(
   const metadata = input.metadata ? JSON.stringify(input.metadata) : null;
   const externalId = input.externalId ?? null;
 
-  if (externalId) {
-    const existing = await findTicketEventByExternalId(
-      db,
+  const insertedEvent = await db
+    .insert(supportTicketEvents)
+    .values({
+      id: eventId,
       ticketId,
+      type: "note",
+      subType: input.subType ?? null,
+      actorType,
+      actorId,
+      metadata,
       externalId,
-      "note"
-    );
-    if (existing) return existing;
+      createdAt: noteCreatedAt,
+    })
+    .onConflictDoNothing({
+      target: externalId
+        ? [
+            supportTicketEvents.ticketId,
+            supportTicketEvents.externalId,
+            supportTicketEvents.type,
+          ]
+        : undefined,
+    })
+    .returning()
+    .get();
+
+  const event = insertedEvent
+    ? {
+        ...insertedEvent,
+        subType: insertedEvent.subType as string | null,
+        metadata: insertedEvent.metadata as string | null,
+      }
+    : await findTicketEventByExternalId(db, ticketId, externalId ?? "", "note");
+
+  if (!event) {
+    throw new VortexError({
+      code: "INTERNAL_ERROR",
+      status: 500,
+      message: "Failed to create support ticket note event",
+    });
   }
 
-  await db.insert(supportTicketEvents).values({
-    id: eventId,
-    ticketId,
-    type: "note",
-    subType: input.subType ?? null,
-    actorType,
-    actorId,
-    metadata,
-    externalId,
-    createdAt: noteCreatedAt,
-  });
+  await db
+    .insert(supportTicketNotes)
+    .values({
+      id: noteId,
+      eventId: event.id,
+      body: input.body,
+    })
+    .onConflictDoNothing({ target: supportTicketNotes.eventId })
+    .returning()
+    .get();
 
-  await db.insert(supportTicketNotes).values({
-    id: noteId,
-    eventId,
-    body: input.body,
-  });
+  const note =
+    (event as SupportTicketEventWithDetails).note ??
+    (await db
+      .select()
+      .from(supportTicketNotes)
+      .where(eq(supportTicketNotes.eventId, event.id))
+      .get());
 
   await db
     .update(supportTickets)
@@ -1536,7 +1568,7 @@ export async function addTicketNote(
       )
     );
 
-  if (env) {
+  if (env && insertedEvent) {
     await dispatchSupportTicketEvent(env, organizationId, {
       type: "support_ticket.note_created",
       organizationId,
@@ -1546,20 +1578,16 @@ export async function addTicketNote(
   }
 
   return {
-    id: eventId,
-    ticketId,
+    id: event.id,
+    ticketId: event.ticketId,
     type: "note",
-    subType: input.subType ?? null,
-    actorType,
-    actorId,
-    metadata,
-    externalId,
-    createdAt: noteCreatedAt,
-    note: {
-      id: noteId,
-      eventId,
-      body: input.body,
-    },
+    subType: event.subType,
+    actorType: event.actorType as SupportTicketActorType,
+    actorId: event.actorId,
+    metadata: event.metadata,
+    externalId: event.externalId,
+    createdAt: event.createdAt,
+    note: note ?? { id: noteId, eventId: event.id, body: input.body },
   };
 }
 
@@ -1587,27 +1615,45 @@ export async function addTicketEvent(
   const metadata = input.metadata ? JSON.stringify(input.metadata) : null;
   const externalId = input.externalId ?? null;
 
-  if (externalId) {
+  const insertedEvent = await db
+    .insert(supportTicketEvents)
+    .values({
+      id: eventId,
+      ticketId,
+      type: input.type,
+      subType: input.subType ?? null,
+      actorType,
+      actorId,
+      metadata,
+      externalId,
+      createdAt: eventCreatedAt,
+    })
+    .onConflictDoNothing({
+      target: externalId
+        ? [
+            supportTicketEvents.ticketId,
+            supportTicketEvents.externalId,
+            supportTicketEvents.type,
+          ]
+        : undefined,
+    })
+    .returning()
+    .get();
+
+  if (!insertedEvent) {
     const existing = await findTicketEventByExternalId(
       db,
       ticketId,
-      externalId,
+      externalId ?? "",
       input.type
     );
     if (existing) return existing;
+    throw new VortexError({
+      code: "INTERNAL_ERROR",
+      status: 500,
+      message: "Failed to create support ticket event",
+    });
   }
-
-  await db.insert(supportTicketEvents).values({
-    id: eventId,
-    ticketId,
-    type: input.type,
-    subType: input.subType ?? null,
-    actorType,
-    actorId,
-    metadata,
-    externalId,
-    createdAt: eventCreatedAt,
-  });
 
   await db
     .update(supportTickets)
@@ -1620,15 +1666,15 @@ export async function addTicketEvent(
     );
 
   return {
-    id: eventId,
-    ticketId,
-    type: input.type,
-    subType: input.subType ?? null,
-    actorType,
-    actorId,
-    metadata,
-    externalId,
-    createdAt: eventCreatedAt,
+    id: insertedEvent.id,
+    ticketId: insertedEvent.ticketId,
+    type: insertedEvent.type as SupportTicketEventType,
+    subType: insertedEvent.subType as string | null,
+    actorType: insertedEvent.actorType as SupportTicketActorType,
+    actorId: insertedEvent.actorId,
+    metadata: insertedEvent.metadata as string | null,
+    externalId: insertedEvent.externalId,
+    createdAt: insertedEvent.createdAt,
   };
 }
 
