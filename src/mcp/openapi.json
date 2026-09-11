@@ -10404,6 +10404,9 @@
                   "origin": {
                     "type": "string"
                   },
+                  "isIncognito": {
+                    "type": "boolean"
+                  },
                   "author": {
                     "type": "object",
                     "properties": {
@@ -10414,7 +10417,10 @@
                         "type": "string"
                       }
                     },
-                    "default": {}
+                    "default": {},
+                    "additionalProperties": {
+                      "nullable": true
+                    }
                   },
                   "media": {
                     "type": "object",
@@ -10429,32 +10435,90 @@
                         "type": "string"
                       }
                     },
-                    "default": {}
+                    "default": {},
+                    "additionalProperties": {
+                      "nullable": true
+                    }
                   },
                   "systemInfo": {
                     "type": "object",
                     "properties": {
                       "browser": {
-                        "type": "string"
-                      },
-                      "browserVersion": {
-                        "type": "string"
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "version": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": {
+                          "nullable": true
+                        }
                       },
                       "os": {
-                        "type": "string"
-                      },
-                      "osVersion": {
-                        "type": "string"
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "version": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": {
+                          "nullable": true
+                        }
                       },
                       "screen": {
-                        "type": "string"
+                        "type": "object",
+                        "properties": {
+                          "width": {
+                            "type": "number"
+                          },
+                          "height": {
+                            "type": "number"
+                          }
+                        },
+                        "additionalProperties": {
+                          "nullable": true
+                        }
+                      },
+                      "battery": {
+                        "type": "object",
+                        "properties": {
+                          "charging": {
+                            "type": "boolean"
+                          },
+                          "level": {
+                            "type": "number"
+                          }
+                        },
+                        "additionalProperties": {
+                          "nullable": true
+                        }
                       },
                       "connection": {
-                        "type": "string"
-                      },
-                      "userAgent": {
-                        "type": "string"
+                        "type": "object",
+                        "properties": {
+                          "effectiveType": {
+                            "type": "string"
+                          },
+                          "downlinkMbps": {
+                            "type": "number"
+                          },
+                          "rttMs": {
+                            "type": "number"
+                          }
+                        },
+                        "additionalProperties": {
+                          "nullable": true
+                        }
                       }
+                    },
+                    "additionalProperties": {
+                      "nullable": true
                     }
                   },
                   "consoleLogs": {
@@ -10471,6 +10535,9 @@
                         "timestamp": {
                           "type": "string"
                         }
+                      },
+                      "additionalProperties": {
+                        "nullable": true
                       }
                     }
                   },
@@ -10503,6 +10570,9 @@
                             "type": "string"
                           }
                         }
+                      },
+                      "additionalProperties": {
+                        "nullable": true
                       }
                     }
                   },
@@ -10526,6 +10596,9 @@
                         "value": {
                           "type": "string"
                         }
+                      },
+                      "additionalProperties": {
+                        "nullable": true
                       }
                     }
                   },
@@ -10554,6 +10627,9 @@
                       "submitterComment": {
                         "type": "string"
                       }
+                    },
+                    "additionalProperties": {
+                      "nullable": true
                     }
                   },
                   "intercom": {
@@ -10565,6 +10641,9 @@
                       "issueId": {
                         "type": "string"
                       }
+                    },
+                    "additionalProperties": {
+                      "nullable": true
                     }
                   },
                   "linear": {
@@ -10576,6 +10655,9 @@
                       "issueId": {
                         "type": "string"
                       }
+                    },
+                    "additionalProperties": {
+                      "nullable": true
                     }
                   }
                 },
@@ -10585,7 +10667,10 @@
                   "teamId",
                   "type",
                   "createdAt"
-                ]
+                ],
+                "additionalProperties": {
+                  "nullable": true
+                }
               }
             }
           }
@@ -10617,6 +10702,190 @@
           }
         },
         "summary": "Create support webhook jam"
+      }
+    },
+    "/support/webhooks/jam/{publicKeyId}/intercom/recorded": {
+      "post": {
+        "tags": [
+          "support-capture"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "publicKeyId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "svix-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "svix-timestamp",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "svix-signature",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "conversationId": {
+                    "type": "string"
+                  },
+                  "jamId": {
+                    "type": "string"
+                  },
+                  "jamUrl": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "conversationId",
+                  "jamId",
+                  "jamUrl"
+                ],
+                "additionalProperties": {
+                  "nullable": true
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Intercom recorder recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ticketId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ticketId"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid webhook"
+          },
+          "404": {
+            "description": "Public key or ticket not found"
+          }
+        },
+        "summary": "Create support webhook jam intercom recorded"
+      }
+    },
+    "/support/webhooks/jam/{publicKeyId}/intercom/opted-out": {
+      "post": {
+        "tags": [
+          "support-capture"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "publicKeyId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "svix-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "svix-timestamp",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "svix-signature",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "conversationId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "conversationId"
+                ],
+                "additionalProperties": {
+                  "nullable": true
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Intercom recorder opted out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ticketId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ticketId"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid webhook"
+          },
+          "404": {
+            "description": "Public key or ticket not found"
+          }
+        },
+        "summary": "Create support webhook jam intercom opted out"
       }
     },
     "/workspaces/{organizationId}/support-channels": {

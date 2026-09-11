@@ -570,10 +570,9 @@ describe("support-capture API", () => {
       },
       media: { screenshotUrl: "https://media.jam.dev/screenshot.png" },
       systemInfo: {
-        browser: "Chrome",
-        os: "macOS",
-        userAgent:
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+        browser: { name: "Chrome", version: "120.0" },
+        os: { name: "macOS", version: "14.0" },
+        connection: { effectiveType: "4g", downlinkMbps: 10, rttMs: 20 },
       },
       consoleLogs: [
         { level: "error", message: "Uncaught ReferenceError" },
@@ -847,5 +846,115 @@ describe("support-capture API", () => {
     expect(ticket).not.toBeNull();
     expect(ticket!.issueId).toBe(issue.id);
     expect(ticket!.sourceChannel).toBe("capture");
+  });
+
+  it("receives an intercom.recorder.recorded webhook", async () => {
+    const publicKey = await createPublicKey();
+    const db = createD1(env.D1);
+    const customer = await findOrCreateCustomerByEmail(
+      db,
+      organizationId,
+      "intercom-customer@example.com",
+      null,
+      "intercom"
+    );
+    const existing = await createTicket(db, {
+      organizationId,
+      customerId: customer.id,
+      title: "Intercom issue",
+      sourceChannel: "intercom",
+      externalId: "conversation-123",
+      externalSource: "intercom",
+    });
+
+    const payload = JSON.stringify({
+      conversationId: "conversation-123",
+      jamId: "jam-intercom-1",
+      jamUrl: "https://jam.dev/c/jam-intercom-1",
+    });
+    const svixId = crypto.randomUUID();
+    const svixTimestamp = Math.floor(Date.now() / 1000).toString();
+    const signature = await signJamWebhook({
+      payload,
+      svixId,
+      svixTimestamp,
+      secret: publicKey.webhookSecret,
+    });
+
+    const res = await captureFetch(
+      `/support/webhooks/jam/${publicKey.id}/intercom/recorded`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "svix-id": svixId,
+          "svix-timestamp": svixTimestamp,
+          "svix-signature": signature,
+        },
+        body: payload,
+      }
+    );
+    expect(res.status).toBe(200);
+
+    const ticket = await getTicketById(db, organizationId, existing.id);
+    expect(
+      ticket!.events.some((e) =>
+        e.message?.textContent?.includes("https://jam.dev/c/jam-intercom-1")
+      )
+    ).toBe(true);
+  });
+
+  it("receives an intercom.recorder.opted_out webhook", async () => {
+    const publicKey = await createPublicKey();
+    const db = createD1(env.D1);
+    const customer = await findOrCreateCustomerByEmail(
+      db,
+      organizationId,
+      "opt-out-customer@example.com",
+      null,
+      "intercom"
+    );
+    const existing = await createTicket(db, {
+      organizationId,
+      customerId: customer.id,
+      title: "Intercom opt-out",
+      sourceChannel: "intercom",
+      externalId: "conversation-456",
+      externalSource: "intercom",
+    });
+
+    const payload = JSON.stringify({
+      conversationId: "conversation-456",
+    });
+    const svixId = crypto.randomUUID();
+    const svixTimestamp = Math.floor(Date.now() / 1000).toString();
+    const signature = await signJamWebhook({
+      payload,
+      svixId,
+      svixTimestamp,
+      secret: publicKey.webhookSecret,
+    });
+
+    const res = await captureFetch(
+      `/support/webhooks/jam/${publicKey.id}/intercom/opted-out`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "svix-id": svixId,
+          "svix-timestamp": svixTimestamp,
+          "svix-signature": signature,
+        },
+        body: payload,
+      }
+    );
+    expect(res.status).toBe(200);
+
+    const ticket = await getTicketById(db, organizationId, existing.id);
+    expect(
+      ticket!.events.some((e) =>
+        e.message?.textContent?.includes("declined to record")
+      )
+    ).toBe(true);
   });
 });

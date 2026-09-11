@@ -6555,6 +6555,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "origin": {
               "type": "string"
             },
+            "isIncognito": {
+              "type": "boolean"
+            },
             "author": {
               "type": "object",
               "properties": {
@@ -6565,7 +6568,10 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                   "type": "string"
                 }
               },
-              "default": {}
+              "default": {},
+              "additionalProperties": {
+                "nullable": true
+              }
             },
             "media": {
               "type": "object",
@@ -6580,32 +6586,90 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                   "type": "string"
                 }
               },
-              "default": {}
+              "default": {},
+              "additionalProperties": {
+                "nullable": true
+              }
             },
             "systemInfo": {
               "type": "object",
               "properties": {
                 "browser": {
-                  "type": "string"
-                },
-                "browserVersion": {
-                  "type": "string"
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": {
+                    "nullable": true
+                  }
                 },
                 "os": {
-                  "type": "string"
-                },
-                "osVersion": {
-                  "type": "string"
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": {
+                    "nullable": true
+                  }
                 },
                 "screen": {
-                  "type": "string"
+                  "type": "object",
+                  "properties": {
+                    "width": {
+                      "type": "number"
+                    },
+                    "height": {
+                      "type": "number"
+                    }
+                  },
+                  "additionalProperties": {
+                    "nullable": true
+                  }
+                },
+                "battery": {
+                  "type": "object",
+                  "properties": {
+                    "charging": {
+                      "type": "boolean"
+                    },
+                    "level": {
+                      "type": "number"
+                    }
+                  },
+                  "additionalProperties": {
+                    "nullable": true
+                  }
                 },
                 "connection": {
-                  "type": "string"
-                },
-                "userAgent": {
-                  "type": "string"
+                  "type": "object",
+                  "properties": {
+                    "effectiveType": {
+                      "type": "string"
+                    },
+                    "downlinkMbps": {
+                      "type": "number"
+                    },
+                    "rttMs": {
+                      "type": "number"
+                    }
+                  },
+                  "additionalProperties": {
+                    "nullable": true
+                  }
                 }
+              },
+              "additionalProperties": {
+                "nullable": true
               }
             },
             "consoleLogs": {
@@ -6622,6 +6686,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                   "timestamp": {
                     "type": "string"
                   }
+                },
+                "additionalProperties": {
+                  "nullable": true
                 }
               }
             },
@@ -6654,6 +6721,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                       "type": "string"
                     }
                   }
+                },
+                "additionalProperties": {
+                  "nullable": true
                 }
               }
             },
@@ -6677,6 +6747,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                   "value": {
                     "type": "string"
                   }
+                },
+                "additionalProperties": {
+                  "nullable": true
                 }
               }
             },
@@ -6705,6 +6778,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "submitterComment": {
                   "type": "string"
                 }
+              },
+              "additionalProperties": {
+                "nullable": true
               }
             },
             "intercom": {
@@ -6716,6 +6792,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "issueId": {
                   "type": "string"
                 }
+              },
+              "additionalProperties": {
+                "nullable": true
               }
             },
             "linear": {
@@ -6727,6 +6806,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "issueId": {
                   "type": "string"
                 }
+              },
+              "additionalProperties": {
+                "nullable": true
               }
             }
           },
@@ -6736,7 +6818,80 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "teamId",
             "type",
             "createdAt"
-          ]
+          ],
+          "additionalProperties": {
+            "nullable": true
+          }
+        }
+      },
+      "required": [
+        "publicKeyId"
+      ]
+    }
+  },
+  {
+    "name": "postSupportWebhooksJamPublicKeyIdIntercomOptedout",
+    "description": "Create support webhook jam intercom opted out (POST /support/webhooks/jam/{publicKeyId}/intercom/opted-out)",
+    "method": "POST",
+    "path": "/support/webhooks/jam/{publicKeyId}/intercom/opted-out",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "publicKeyId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "conversationId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "conversationId"
+          ],
+          "additionalProperties": {
+            "nullable": true
+          }
+        }
+      },
+      "required": [
+        "publicKeyId"
+      ]
+    }
+  },
+  {
+    "name": "postSupportWebhooksJamPublicKeyIdIntercomRecorded",
+    "description": "Create support webhook jam intercom recorded (POST /support/webhooks/jam/{publicKeyId}/intercom/recorded)",
+    "method": "POST",
+    "path": "/support/webhooks/jam/{publicKeyId}/intercom/recorded",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "publicKeyId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "conversationId": {
+              "type": "string"
+            },
+            "jamId": {
+              "type": "string"
+            },
+            "jamUrl": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "conversationId",
+            "jamId",
+            "jamUrl"
+          ],
+          "additionalProperties": {
+            "nullable": true
+          }
         }
       },
       "required": [

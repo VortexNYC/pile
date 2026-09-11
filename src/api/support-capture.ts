@@ -20,6 +20,7 @@ import { findOrCreateCustomerByEmail } from "../global/support-contacts.js";
 import {
   addTicketMessage,
   createTicket,
+  findSupportTicketByExternalId,
   getTicketById,
   type SupportTicketSource,
 } from "../global/support-tickets.js";
@@ -376,83 +377,216 @@ const shareTicketRoute = createRoute({
   },
 });
 
-const jamAuthorSchema = z.object({
-  email: z.string().optional(),
-  name: z.string().optional(),
+const jamAuthorSchema = z
+  .object({
+    email: z.string().optional(),
+    name: z.string().optional(),
+  })
+  .passthrough();
+
+const jamMediaSchema = z
+  .object({
+    videoUrl: z.string().optional(),
+    screenshotUrl: z.string().optional(),
+    thumbnailUrl: z.string().optional(),
+  })
+  .passthrough();
+
+const jamRecordingLinkSchema = z
+  .object({
+    publicId: z.string().optional(),
+    type: z.enum(["one_time", "reusable"]).optional(),
+    recordingUrl: z.string().optional(),
+    description: z.string().optional(),
+    reference: z.string().optional(),
+    submitterComment: z.string().optional(),
+  })
+  .passthrough();
+
+const jamProviderSchema = z
+  .object({
+    conversationId: z.string().optional(),
+    issueId: z.string().optional(),
+  })
+  .passthrough();
+
+const jamBrowserSchema = z
+  .object({
+    name: z.string().optional(),
+    version: z.string().optional(),
+  })
+  .passthrough();
+
+const jamOsSchema = z
+  .object({
+    name: z.string().optional(),
+    version: z.string().optional(),
+  })
+  .passthrough();
+
+const jamScreenSchema = z
+  .object({
+    width: z.number().optional(),
+    height: z.number().optional(),
+  })
+  .passthrough();
+
+const jamBatterySchema = z
+  .object({
+    charging: z.boolean().optional(),
+    level: z.number().optional(),
+  })
+  .passthrough();
+
+const jamConnectionSchema = z
+  .object({
+    effectiveType: z.string().optional(),
+    downlinkMbps: z.number().optional(),
+    rttMs: z.number().optional(),
+  })
+  .passthrough();
+
+const jamSystemInfoSchema = z
+  .object({
+    browser: jamBrowserSchema.optional(),
+    os: jamOsSchema.optional(),
+    screen: jamScreenSchema.optional(),
+    battery: jamBatterySchema.optional(),
+    connection: jamConnectionSchema.optional(),
+  })
+  .passthrough();
+
+const jamConsoleLogSchema = z
+  .object({
+    level: z.string().optional(),
+    message: z.string().optional(),
+    timestamp: z.string().optional(),
+  })
+  .passthrough();
+
+const jamNetworkRequestSchema = z
+  .object({
+    url: z.string().optional(),
+    method: z.string().optional(),
+    status: z.number().optional(),
+    duration: z.number().optional(),
+    requestHeaders: z.record(z.string(), z.string()).optional(),
+    responseHeaders: z.record(z.string(), z.string()).optional(),
+  })
+  .passthrough();
+
+const jamUserEventSchema = z
+  .object({
+    type: z.string().optional(),
+    timestamp: z.string().optional(),
+    selector: z.string().optional(),
+    target: z.string().optional(),
+    value: z.string().optional(),
+  })
+  .passthrough();
+
+const jamWebhookBodySchema = z
+  .object({
+    jamId: z.string(),
+    jamUrl: z.string(),
+    teamId: z.string(),
+    type: z.enum(["video", "screenshot", "sessionReplay"]),
+    createdAt: z.string(),
+    title: z.string().optional(),
+    description: z.string().optional(),
+    originalUrl: z.string().optional(),
+    origin: z.string().optional(),
+    isIncognito: z.boolean().optional(),
+    author: jamAuthorSchema.default({}),
+    media: jamMediaSchema.default({}),
+    systemInfo: jamSystemInfoSchema.optional(),
+    consoleLogs: z.array(jamConsoleLogSchema).optional(),
+    networkRequests: z.array(jamNetworkRequestSchema).optional(),
+    userEvents: z.array(jamUserEventSchema).optional(),
+    recordingLink: jamRecordingLinkSchema.optional(),
+    intercom: jamProviderSchema.optional(),
+    linear: jamProviderSchema.optional(),
+  })
+  .passthrough();
+
+const jamIntercomRecordedSchema = z
+  .object({
+    conversationId: z.string(),
+    jamId: z.string(),
+    jamUrl: z.string(),
+  })
+  .passthrough();
+
+const jamIntercomOptedOutSchema = z
+  .object({
+    conversationId: z.string(),
+  })
+  .passthrough();
+
+const jamIntercomRecordedRoute = createRoute({
+  method: "post",
+  path: "/support/webhooks/jam/{publicKeyId}/intercom/recorded",
+  tags: ["support-capture"],
+  request: {
+    params: z.object({ publicKeyId: z.string() }),
+    headers: z.object({
+      "svix-id": z.string(),
+      "svix-timestamp": z.string(),
+      "svix-signature": z.string(),
+    }),
+    body: {
+      content: {
+        "application/json": { schema: jamIntercomRecordedSchema },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Intercom recorder recorded",
+      content: {
+        "application/json": { schema: z.object({ ticketId: z.string() }) },
+      },
+    },
+    401: {
+      description: "Invalid webhook",
+    },
+    404: {
+      description: "Public key or ticket not found",
+    },
+  },
 });
 
-const jamMediaSchema = z.object({
-  videoUrl: z.string().optional(),
-  screenshotUrl: z.string().optional(),
-  thumbnailUrl: z.string().optional(),
-});
-
-const jamRecordingLinkSchema = z.object({
-  publicId: z.string().optional(),
-  type: z.enum(["one_time", "reusable"]).optional(),
-  recordingUrl: z.string().optional(),
-  description: z.string().optional(),
-  reference: z.string().optional(),
-  submitterComment: z.string().optional(),
-});
-
-const jamProviderSchema = z.object({
-  conversationId: z.string().optional(),
-  issueId: z.string().optional(),
-});
-
-const jamDeviceInfoSchema = z.object({
-  browser: z.string().optional(),
-  browserVersion: z.string().optional(),
-  os: z.string().optional(),
-  osVersion: z.string().optional(),
-  screen: z.string().optional(),
-  connection: z.string().optional(),
-  userAgent: z.string().optional(),
-});
-
-const jamConsoleLogSchema = z.object({
-  level: z.string().optional(),
-  message: z.string().optional(),
-  timestamp: z.string().optional(),
-});
-
-const jamNetworkRequestSchema = z.object({
-  url: z.string().optional(),
-  method: z.string().optional(),
-  status: z.number().optional(),
-  duration: z.number().optional(),
-  requestHeaders: z.record(z.string(), z.string()).optional(),
-  responseHeaders: z.record(z.string(), z.string()).optional(),
-});
-
-const jamUserEventSchema = z.object({
-  type: z.string().optional(),
-  timestamp: z.string().optional(),
-  selector: z.string().optional(),
-  target: z.string().optional(),
-  value: z.string().optional(),
-});
-
-const jamWebhookBodySchema = z.object({
-  jamId: z.string(),
-  jamUrl: z.string(),
-  teamId: z.string(),
-  type: z.enum(["video", "screenshot", "sessionReplay"]),
-  createdAt: z.string(),
-  title: z.string().optional(),
-  description: z.string().optional(),
-  originalUrl: z.string().optional(),
-  origin: z.string().optional(),
-  author: jamAuthorSchema.default({}),
-  media: jamMediaSchema.default({}),
-  systemInfo: jamDeviceInfoSchema.optional(),
-  consoleLogs: z.array(jamConsoleLogSchema).optional(),
-  networkRequests: z.array(jamNetworkRequestSchema).optional(),
-  userEvents: z.array(jamUserEventSchema).optional(),
-  recordingLink: jamRecordingLinkSchema.optional(),
-  intercom: jamProviderSchema.optional(),
-  linear: jamProviderSchema.optional(),
+const jamIntercomOptedOutRoute = createRoute({
+  method: "post",
+  path: "/support/webhooks/jam/{publicKeyId}/intercom/opted-out",
+  tags: ["support-capture"],
+  request: {
+    params: z.object({ publicKeyId: z.string() }),
+    headers: z.object({
+      "svix-id": z.string(),
+      "svix-timestamp": z.string(),
+      "svix-signature": z.string(),
+    }),
+    body: {
+      content: {
+        "application/json": { schema: jamIntercomOptedOutSchema },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Intercom recorder opted out",
+      content: {
+        "application/json": { schema: z.object({ ticketId: z.string() }) },
+      },
+    },
+    401: {
+      description: "Invalid webhook",
+    },
+    404: {
+      description: "Public key or ticket not found",
+    },
+  },
 });
 
 const jamWebhookRoute = createRoute({
@@ -1427,6 +1561,151 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
         });
       })
     );
+
+    return c.json({ ticketId: ticket.id });
+  });
+
+  app.openapi(jamIntercomRecordedRoute, async (c) => {
+    const { publicKeyId } = c.req.valid("param");
+    const svixId = c.req.header("svix-id") ?? "";
+    const svixTimestamp = c.req.header("svix-timestamp") ?? "";
+    const svixSignature = c.req.header("svix-signature") ?? "";
+
+    const db = createD1(c.env.D1);
+    const publicKey = await getCapturePublicKeyById(db, publicKeyId);
+    if (!publicKey || !publicKey.isActive || !publicKey.webhookSecret) {
+      throw new VortexError({
+        status: 401,
+        code: "UNAUTHORIZED",
+        message: "Invalid Jam webhook key",
+      });
+    }
+
+    const payload = await c.req.text();
+    const verified = await verifySvixSignature({
+      payload,
+      svixId,
+      svixTimestamp,
+      svixSignature,
+      secret: publicKey.webhookSecret,
+    });
+    if (!verified) {
+      throw new VortexError({
+        status: 401,
+        code: "UNAUTHORIZED",
+        message: "Invalid Jam webhook signature",
+      });
+    }
+
+    const timestamp = Number(svixTimestamp);
+    const now = Math.floor(Date.now() / 1000);
+    if (Number.isNaN(timestamp) || Math.abs(now - timestamp) > 300) {
+      throw new VortexError({
+        status: 401,
+        code: "UNAUTHORIZED",
+        message: "Jam webhook timestamp out of tolerance",
+      });
+    }
+
+    const parsed = jamIntercomRecordedSchema.parse(JSON.parse(payload));
+    const ticket = await findSupportTicketByExternalId(
+      db,
+      publicKey.organizationId,
+      parsed.conversationId,
+      "intercom"
+    );
+    if (!ticket) {
+      throw new VortexError({
+        status: 404,
+        code: "NOT_FOUND",
+        message: "Intercom conversation not found",
+      });
+    }
+
+    const text = `Customer recorded a Jam: ${parsed.jamUrl}`;
+    await addTicketMessage(db, publicKey.organizationId, ticket.id, {
+      direction: "inbound",
+      textContent: text,
+      markdownContent: text,
+      channel: "intercom",
+      customerId: ticket.customerId,
+      actorType: "customer",
+      actorId: ticket.customerId,
+      subType: "intercom_recorder_recorded",
+      runAutoresponders: false,
+      reopenOnCustomerReply: false,
+    });
+
+    return c.json({ ticketId: ticket.id });
+  });
+
+  app.openapi(jamIntercomOptedOutRoute, async (c) => {
+    const { publicKeyId } = c.req.valid("param");
+    const svixId = c.req.header("svix-id") ?? "";
+    const svixTimestamp = c.req.header("svix-timestamp") ?? "";
+    const svixSignature = c.req.header("svix-signature") ?? "";
+
+    const db = createD1(c.env.D1);
+    const publicKey = await getCapturePublicKeyById(db, publicKeyId);
+    if (!publicKey || !publicKey.isActive || !publicKey.webhookSecret) {
+      throw new VortexError({
+        status: 401,
+        code: "UNAUTHORIZED",
+        message: "Invalid Jam webhook key",
+      });
+    }
+
+    const payload = await c.req.text();
+    const verified = await verifySvixSignature({
+      payload,
+      svixId,
+      svixTimestamp,
+      svixSignature,
+      secret: publicKey.webhookSecret,
+    });
+    if (!verified) {
+      throw new VortexError({
+        status: 401,
+        code: "UNAUTHORIZED",
+        message: "Invalid Jam webhook signature",
+      });
+    }
+
+    const timestamp = Number(svixTimestamp);
+    const now = Math.floor(Date.now() / 1000);
+    if (Number.isNaN(timestamp) || Math.abs(now - timestamp) > 300) {
+      throw new VortexError({
+        status: 401,
+        code: "UNAUTHORIZED",
+        message: "Jam webhook timestamp out of tolerance",
+      });
+    }
+
+    const parsed = jamIntercomOptedOutSchema.parse(JSON.parse(payload));
+    const ticket = await findSupportTicketByExternalId(
+      db,
+      publicKey.organizationId,
+      parsed.conversationId,
+      "intercom"
+    );
+    if (!ticket) {
+      throw new VortexError({
+        status: 404,
+        code: "NOT_FOUND",
+        message: "Intercom conversation not found",
+      });
+    }
+
+    await addTicketMessage(db, publicKey.organizationId, ticket.id, {
+      direction: "inbound",
+      textContent: "Customer declined to record a Jam.",
+      markdownContent: "Customer declined to record a Jam.",
+      channel: "intercom",
+      actorType: "automation",
+      subType: "intercom_recorder_opted_out",
+      runAutoresponders: false,
+      reopenOnCustomerReply: false,
+    });
 
     return c.json({ ticketId: ticket.id });
   });

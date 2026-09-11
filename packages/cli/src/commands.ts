@@ -2557,6 +2557,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "origin",
       },
       {
+        name: "isIncognito",
+        flag: "is-incognito",
+      },
+      {
         name: "author",
         flag: "author",
       },
@@ -2591,6 +2595,48 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "linear",
         flag: "linear",
+      },
+    ],
+  },
+  "support webhooks jam intercom recorded create": {
+    method: "POST",
+    path: "/support/webhooks/jam/{publicKeyId}/intercom/recorded",
+    params: [
+      {
+        name: "publicKeyId",
+        flag: "public-key-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "conversationId",
+        flag: "conversation-id",
+      },
+      {
+        name: "jamId",
+        flag: "jam-id",
+      },
+      {
+        name: "jamUrl",
+        flag: "jam-url",
+      },
+    ],
+  },
+  "support webhooks jam intercom opted out create": {
+    method: "POST",
+    path: "/support/webhooks/jam/{publicKeyId}/intercom/opted-out",
+    params: [
+      {
+        name: "publicKeyId",
+        flag: "public-key-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "conversationId",
+        flag: "conversation-id",
       },
     ],
   },

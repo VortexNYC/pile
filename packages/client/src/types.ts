@@ -5377,32 +5377,65 @@ export interface paths {
                         description?: string;
                         originalUrl?: string;
                         origin?: string;
+                        isIncognito?: boolean;
                         /** @default {} */
                         author?: {
                             email?: string;
                             name?: string;
+                        } & {
+                            [key: string]: unknown;
                         };
                         /** @default {} */
                         media?: {
                             videoUrl?: string;
                             screenshotUrl?: string;
                             thumbnailUrl?: string;
+                        } & {
+                            [key: string]: unknown;
                         };
                         systemInfo?: {
-                            browser?: string;
-                            browserVersion?: string;
-                            os?: string;
-                            osVersion?: string;
-                            screen?: string;
-                            connection?: string;
-                            userAgent?: string;
+                            browser?: {
+                                name?: string;
+                                version?: string;
+                            } & {
+                                [key: string]: unknown;
+                            };
+                            os?: {
+                                name?: string;
+                                version?: string;
+                            } & {
+                                [key: string]: unknown;
+                            };
+                            screen?: {
+                                width?: number;
+                                height?: number;
+                            } & {
+                                [key: string]: unknown;
+                            };
+                            battery?: {
+                                charging?: boolean;
+                                level?: number;
+                            } & {
+                                [key: string]: unknown;
+                            };
+                            connection?: {
+                                effectiveType?: string;
+                                downlinkMbps?: number;
+                                rttMs?: number;
+                            } & {
+                                [key: string]: unknown;
+                            };
+                        } & {
+                            [key: string]: unknown;
                         };
-                        consoleLogs?: {
+                        consoleLogs?: ({
                             level?: string;
                             message?: string;
                             timestamp?: string;
-                        }[];
-                        networkRequests?: {
+                        } & {
+                            [key: string]: unknown;
+                        })[];
+                        networkRequests?: ({
                             url?: string;
                             method?: string;
                             status?: number;
@@ -5413,14 +5446,18 @@ export interface paths {
                             responseHeaders?: {
                                 [key: string]: string;
                             };
-                        }[];
-                        userEvents?: {
+                        } & {
+                            [key: string]: unknown;
+                        })[];
+                        userEvents?: ({
                             type?: string;
                             timestamp?: string;
                             selector?: string;
                             target?: string;
                             value?: string;
-                        }[];
+                        } & {
+                            [key: string]: unknown;
+                        })[];
                         recordingLink?: {
                             publicId?: string;
                             /** @enum {string} */
@@ -5429,20 +5466,162 @@ export interface paths {
                             description?: string;
                             reference?: string;
                             submitterComment?: string;
+                        } & {
+                            [key: string]: unknown;
                         };
                         intercom?: {
                             conversationId?: string;
                             issueId?: string;
+                        } & {
+                            [key: string]: unknown;
                         };
                         linear?: {
                             conversationId?: string;
                             issueId?: string;
+                        } & {
+                            [key: string]: unknown;
                         };
+                    } & {
+                        [key: string]: unknown;
                     };
                 };
             };
             responses: {
                 /** @description Jam captured */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ticketId: string;
+                        };
+                    };
+                };
+                /** @description Invalid webhook */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Public key or ticket not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/support/webhooks/jam/{publicKeyId}/intercom/recorded": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create support webhook jam intercom recorded */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "svix-id": string;
+                    "svix-timestamp": string;
+                    "svix-signature": string;
+                };
+                path: {
+                    publicKeyId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        conversationId: string;
+                        jamId: string;
+                        jamUrl: string;
+                    } & {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            responses: {
+                /** @description Intercom recorder recorded */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ticketId: string;
+                        };
+                    };
+                };
+                /** @description Invalid webhook */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Public key or ticket not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/support/webhooks/jam/{publicKeyId}/intercom/opted-out": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create support webhook jam intercom opted out */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "svix-id": string;
+                    "svix-timestamp": string;
+                    "svix-signature": string;
+                };
+                path: {
+                    publicKeyId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        conversationId: string;
+                    } & {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            responses: {
+                /** @description Intercom recorder opted out */
                 200: {
                     headers: {
                         [name: string]: unknown;
