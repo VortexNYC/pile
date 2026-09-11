@@ -1043,6 +1043,10 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
     const intercomConversationId = parsed.intercom?.conversationId;
     const linearIssueId = parsed.linear?.issueId;
 
+    const text = [parsed.description, parsed.recordingLink?.submitterComment]
+      .filter((s): s is string => typeof s === "string" && s.length > 0)
+      .join("\n\n");
+
     let ticket = null;
     if (reference) {
       const existing = await getTicketById(
@@ -1068,6 +1072,21 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
       if (existing) ticket = existing;
     }
 
+    if (!ticket && linearIssueId) {
+      const existing = await db
+        .select()
+        .from(supportTickets)
+        .where(
+          and(
+            eq(supportTickets.organizationId, publicKey.organizationId),
+            eq(supportTickets.externalSource, "linear"),
+            eq(supportTickets.externalId, linearIssueId)
+          )
+        )
+        .get();
+      if (existing) ticket = existing;
+    }
+
     if (!ticket) {
       if (!customer) {
         throw new VortexError({
@@ -1082,20 +1101,30 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
         : linearIssueId
           ? "linear"
           : "jam";
+      let issueId: string | undefined;
+      if (linearIssueId) {
+        const stub = getWorkspaceStub(c.env, publicKey.organizationId);
+        await stub.setOrganizationId(publicKey.organizationId);
+        const issue = await stub.createIssue({
+          title: parsed.title ?? `Jam ${parsed.type} from ${parsed.jamUrl}`,
+          description: text,
+          status: "backlog",
+          priority: "medium",
+        });
+        issueId = issue.id;
+      }
       ticket = await createTicket(db, {
         organizationId: publicKey.organizationId,
         customerId: customer.id,
         title: parsed.title ?? `Jam ${parsed.type} from ${parsed.jamUrl}`,
         priority: "medium",
         sourceChannel: "capture",
+        issueId,
         externalSource,
         externalId: intercomConversationId ?? linearIssueId ?? parsed.jamId,
       });
     }
 
-    const text = [parsed.description, parsed.recordingLink?.submitterComment]
-      .filter((s): s is string => typeof s === "string" && s.length > 0)
-      .join("\n\n");
     const customerId = customer?.id ?? ticket.customerId;
 
     const event = await addTicketMessage(
