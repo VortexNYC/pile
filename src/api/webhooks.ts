@@ -190,7 +190,9 @@ const listInboundWebhookDeliveriesRoute = createRoute({
   request: {
     params: z.object({ organizationId: z.string() }),
     query: z.object({
-      status: z.enum(["pending", "processing", "completed", "failed"]).optional(),
+      status: z
+        .enum(["pending", "processing", "completed", "failed"])
+        .optional(),
       limit: z.coerce.number().int().min(1).max(100).optional(),
     }),
   },

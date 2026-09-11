@@ -155,7 +155,11 @@ describe("webhooks API", () => {
       payload: "{}",
     });
 
-    const res = await fetch(`/workspaces/${organizationId}/webhook-deliveries`, {}, token);
+    const res = await fetch(
+      `/workspaces/${organizationId}/webhook-deliveries`,
+      {},
+      token
+    );
     expect(res.status).toBe(200);
     const body = await res.json<{ deliveries: unknown[] }>();
     expect(body.deliveries.length).toBeGreaterThanOrEqual(1);
