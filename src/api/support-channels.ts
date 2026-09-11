@@ -10,11 +10,16 @@ import {
   processPlainSupportWebhook,
 } from "../channels/plain.js";
 import {
+  slackSupportWebhookRoute,
+  processSlackSupportWebhook,
+} from "../channels/slack.js";
+import {
   zendeskSupportWebhookRoute,
   processZendeskSupportWebhook,
 } from "../channels/zendesk.js";
 import { createD1 } from "../global/db.js";
 import { supportChannels } from "../global/schema.js";
+import { processIncomingMessage } from "../global/support-channels.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
@@ -161,6 +166,21 @@ const supportChannelParamsSchema = z.object({
   organizationId: z.string(),
 });
 
+const channelIdParamSchema = z.object({
+  channelId: z.string(),
+});
+
+const incomingMessageSchema = z.object({
+  fromEmail: z.string().email(),
+  fromName: z.string().optional(),
+  subject: z.string().default(""),
+  text: z.string(),
+  html: z.string().optional(),
+  externalTicketId: z.string().optional(),
+  externalMessageId: z.string().optional(),
+  createdAt: z.string().datetime().optional(),
+});
+
 export function registerSupportChannelRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(
     createRoute({
@@ -281,5 +301,90 @@ export function registerSupportChannelRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(plainSupportWebhookRoute, async (c) =>
     c.json(await processPlainSupportWebhook(c))
+  );
+
+  app.openapi(slackSupportWebhookRoute, async (c) =>
+    c.json(await processSlackSupportWebhook(c))
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/support/incoming/{channelId}",
+      tags: ["support-channels"],
+      summary: "Receive a generic incoming support message",
+      middleware: [],
+      request: {
+        params: channelIdParamSchema,
+        body: {
+          content: {
+            "application/json": { schema: incomingMessageSchema },
+          },
+        },
+      },
+      responses: {
+        201: {
+          description: "Message processed",
+          content: {
+            "application/json": {
+              schema: z.object({
+                ok: z.boolean(),
+                ticketId: z.string(),
+                ticketNumber: z.number(),
+              }),
+            },
+          },
+        },
+        404: { description: "Channel not found or inactive" },
+      },
+    }),
+    async (c) => {
+      const { channelId } = c.req.valid("param");
+      const input = c.req.valid("json");
+      const db = createD1(c.env.D1);
+      const [channel] = await db
+        .select()
+        .from(supportChannels)
+        .where(
+          and(
+            eq(supportChannels.id, channelId),
+            eq(supportChannels.isActive, true)
+          )
+        )
+        .limit(1);
+
+      if (!channel) {
+        throw new VortexError({
+          code: "NOT_FOUND",
+          status: 404,
+          message: "Channel not found or inactive",
+        });
+      }
+
+      const channelType = supportChannelTypeEnum.parse(channel.type);
+
+      const ticket = await processIncomingMessage(
+        db,
+        channel.organizationId,
+        {
+          channel: channelType,
+          externalSource: channelType,
+          fromEmail: input.fromEmail,
+          fromName: input.fromName ?? null,
+          subject: input.subject,
+          text: input.text,
+          html: input.html ?? null,
+          externalTicketId: input.externalTicketId ?? null,
+          externalMessageId: input.externalMessageId ?? null,
+          createdAt: input.createdAt,
+        },
+        c.env
+      );
+
+      return c.json(
+        { ok: true, ticketId: ticket.id, ticketNumber: ticket.number },
+        201
+      );
+    }
   );
 }

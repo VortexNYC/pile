@@ -2538,6 +2538,63 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "support webhooks slack create": {
+    method: "POST",
+    path: "/support/webhooks/slack/{organizationId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support incoming create": {
+    method: "POST",
+    path: "/support/incoming/{channelId}",
+    params: [
+      {
+        name: "channelId",
+        flag: "channel-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "fromEmail",
+        flag: "from-email",
+      },
+      {
+        name: "fromName",
+        flag: "from-name",
+      },
+      {
+        name: "subject",
+        flag: "subject",
+      },
+      {
+        name: "text",
+        flag: "text",
+      },
+      {
+        name: "html",
+        flag: "html",
+      },
+      {
+        name: "externalTicketId",
+        flag: "external-ticket-id",
+      },
+      {
+        name: "externalMessageId",
+        flag: "external-message-id",
+      },
+      {
+        name: "createdAt",
+        flag: "created-at",
+      },
+    ],
+  },
   "available users list": {
     method: "GET",
     path: "/workspaces/{organizationId}/available-users",

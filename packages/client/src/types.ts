@@ -5647,6 +5647,119 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/support/webhooks/slack/{organizationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Receive Slack support events */
+        post: {
+            parameters: {
+                query?: never;
+                header?: {
+                    "x-slack-signature"?: string;
+                    "x-slack-request-timestamp"?: string;
+                };
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                            challenge?: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/support/incoming/{channelId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Receive a generic incoming support message */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    channelId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** Format: email */
+                        fromEmail: string;
+                        fromName?: string;
+                        /** @default  */
+                        subject?: string;
+                        text: string;
+                        html?: string;
+                        externalTicketId?: string;
+                        externalMessageId?: string;
+                        /** Format: date-time */
+                        createdAt?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Message processed */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                            ticketId: string;
+                            ticketNumber: number;
+                        };
+                    };
+                };
+                /** @description Channel not found or inactive */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/available-users": {
         parameters: {
             query?: never;

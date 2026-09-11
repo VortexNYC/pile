@@ -6371,6 +6371,59 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postSupportIncomingChannelId",
+    "description": "Receive a generic incoming support message (POST /support/incoming/{channelId})",
+    "method": "POST",
+    "path": "/support/incoming/{channelId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "channelId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "fromEmail": {
+              "type": "string",
+              "format": "email"
+            },
+            "fromName": {
+              "type": "string"
+            },
+            "subject": {
+              "type": "string",
+              "default": ""
+            },
+            "text": {
+              "type": "string"
+            },
+            "html": {
+              "type": "string"
+            },
+            "externalTicketId": {
+              "type": "string"
+            },
+            "externalMessageId": {
+              "type": "string"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": [
+            "fromEmail",
+            "text"
+          ]
+        }
+      },
+      "required": [
+        "channelId"
+      ]
+    }
+  },
+  {
     "name": "postSupportWebhooksIntercomOrganizationId",
     "description": "Receive Intercom support webhook notifications (POST /support/webhooks/intercom/{organizationId})",
     "method": "POST",
@@ -6396,6 +6449,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "description": "Receive Plain support webhook notifications (POST /support/webhooks/plain/{organizationId})",
     "method": "POST",
     "path": "/support/webhooks/plain/{organizationId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "nullable": true
+        }
+      },
+      "required": [
+        "body",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postSupportWebhooksSlackOrganizationId",
+    "description": "Receive Slack support events (POST /support/webhooks/slack/{organizationId})",
+    "method": "POST",
+    "path": "/support/webhooks/slack/{organizationId}",
     "inputSchema": {
       "type": "object",
       "properties": {

@@ -11365,6 +11365,164 @@
         }
       }
     },
+    "/support/webhooks/slack/{organizationId}": {
+      "post": {
+        "tags": [
+          "support-channels"
+        ],
+        "summary": "Receive Slack support events",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "x-slack-signature",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "x-slack-request-timestamp",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "nullable": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "challenge": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/support/incoming/{channelId}": {
+      "post": {
+        "tags": [
+          "support-channels"
+        ],
+        "summary": "Receive a generic incoming support message",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "channelId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "fromEmail": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "fromName": {
+                    "type": "string"
+                  },
+                  "subject": {
+                    "type": "string",
+                    "default": ""
+                  },
+                  "text": {
+                    "type": "string"
+                  },
+                  "html": {
+                    "type": "string"
+                  },
+                  "externalTicketId": {
+                    "type": "string"
+                  },
+                  "externalMessageId": {
+                    "type": "string"
+                  },
+                  "createdAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                },
+                "required": [
+                  "fromEmail",
+                  "text"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Message processed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "ticketId": {
+                      "type": "string"
+                    },
+                    "ticketNumber": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "ticketId",
+                    "ticketNumber"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Channel not found or inactive"
+          }
+        }
+      }
+    },
     "/workspaces/{organizationId}/available-users": {
       "get": {
         "tags": [
