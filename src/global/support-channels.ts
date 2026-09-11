@@ -1,14 +1,19 @@
 import { and, eq } from "drizzle-orm";
 
+import { VortexError } from "../platform/errors.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { D1Client } from "./db.js";
 import { supportChannels } from "./schema.js";
-import { findOrCreateCustomerByEmail } from "./support-contacts.js";
+import {
+  findOrCreateCustomerByEmail,
+  getCustomerById,
+} from "./support-contacts.js";
 import { maybeEscalate } from "./support-escalation.js";
 import {
   addTicketMessage,
   createTicket,
   findSupportTicketByExternalId,
+  getTicketById,
   type SupportTicket,
   type SupportTicketMessageChannel,
   type SupportTicketSource,
@@ -130,4 +135,84 @@ export async function processIncomingMessage(
   );
 
   return ticket;
+}
+
+export async function processOutgoingMessage(
+  db: D1Client,
+  env: WorkerEnv,
+  channel: SupportChannel,
+  input: {
+    ticketId: string;
+    textContent: string;
+    markdownContent?: string | null;
+    subject?: string | null;
+  },
+  userId: string
+): Promise<{ ok: true; messageId: string; sent: boolean }> {
+  const ticket = await getTicketById(
+    db,
+    channel.organizationId,
+    input.ticketId
+  );
+  if (!ticket) {
+    throw new VortexError({
+      code: "NOT_FOUND",
+      status: 404,
+      message: "Ticket not found",
+    });
+  }
+  if (!ticket.customerId) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Ticket has no customer",
+    });
+  }
+
+  const customer = await getCustomerById(
+    db,
+    channel.organizationId,
+    ticket.customerId
+  );
+  if (!customer) {
+    throw new VortexError({
+      code: "NOT_FOUND",
+      status: 404,
+      message: "Customer not found",
+    });
+  }
+
+  const event = await addTicketMessage(
+    db,
+    channel.organizationId,
+    ticket.id,
+    {
+      direction: "outbound",
+      textContent: input.textContent,
+      markdownContent: input.markdownContent ?? null,
+      channel: channel.type as SupportTicketMessageChannel,
+      userId,
+      actorType: "user",
+      actorId: userId,
+    },
+    env
+  );
+
+  let sent = false;
+  if (channel.type === "email" && env.EMAIL) {
+    try {
+      await env.EMAIL.send({
+        from: channel.name,
+        to: customer.email,
+        subject: input.subject ?? ticket.title,
+        text: input.textContent,
+        html: input.markdownContent ?? undefined,
+      });
+      sent = true;
+    } catch {
+      sent = false;
+    }
+  }
+
+  return { ok: true, messageId: event.id, sent };
 }

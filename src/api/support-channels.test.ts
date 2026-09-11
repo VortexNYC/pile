@@ -6,6 +6,8 @@ import { hmacSha256Hex } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
 import { user as userTable } from "../global/schema.js";
 import { getCustomerByEmail } from "../global/support-contacts.js";
+import { createCustomer } from "../global/support-contacts.js";
+import { createTicket } from "../global/support-tickets.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
@@ -178,5 +180,64 @@ describe("support-channels API", () => {
       "slack-user@example.com"
     );
     expect(customer).toBeDefined();
+  });
+
+  it("sends an outbound message through an email channel", async () => {
+    const channelRes = await fetch(
+      `/workspaces/${organizationId}/support-channels`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "email",
+          name: "support@example.com",
+          config: { emailAddress: "support@example.com" },
+        }),
+      }
+    );
+    expect(channelRes.status).toBe(201);
+    const { id: channelId } = (await channelRes.json()) as { id: string };
+
+    const db = createD1(env.D1);
+    const customer = await createCustomer(db, {
+      organizationId,
+      email: "help-me@example.com",
+    });
+    const ticket = await createTicket(
+      db,
+      {
+        organizationId,
+        customerId: customer.id,
+        title: "Need help",
+        sourceChannel: "email",
+      },
+      env
+    );
+
+    Object.assign(env as unknown as Record<string, unknown>, {
+      EMAIL: {
+        send: async () => undefined,
+      },
+    });
+
+    const sendRes = await fetch(
+      `/workspaces/${organizationId}/support/channels/${channelId}/send`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          ticketId: ticket.id,
+          textContent: "Here is the answer.",
+          subject: "Re: Need help",
+        }),
+      }
+    );
+    expect(sendRes.status).toBe(200);
+    const sendBody = (await sendRes.json()) as {
+      ok: boolean;
+      messageId: string;
+      sent: boolean;
+    };
+    expect(sendBody.ok).toBe(true);
+    expect(sendBody.sent).toBe(true);
+    expect(sendBody.messageId).toBeDefined();
   });
 });

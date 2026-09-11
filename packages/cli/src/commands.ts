@@ -2595,6 +2595,39 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "support channels send create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/channels/{channelId}/send",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "channelId",
+        flag: "channel-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "ticketId",
+        flag: "ticket-id",
+      },
+      {
+        name: "textContent",
+        flag: "text-content",
+      },
+      {
+        name: "markdownContent",
+        flag: "markdown-content",
+      },
+      {
+        name: "subject",
+        flag: "subject",
+      },
+    ],
+  },
   "available users list": {
     method: "GET",
     path: "/workspaces/{organizationId}/available-users",

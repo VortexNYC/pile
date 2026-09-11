@@ -11523,6 +11523,93 @@
         }
       }
     },
+    "/workspaces/{organizationId}/support/channels/{channelId}/send": {
+      "post": {
+        "tags": [
+          "support-channels"
+        ],
+        "summary": "Send an outbound support message",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "channelId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ticketId": {
+                    "type": "string"
+                  },
+                  "textContent": {
+                    "type": "string"
+                  },
+                  "markdownContent": {
+                    "type": "string"
+                  },
+                  "subject": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "ticketId",
+                  "textContent"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Message sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "messageId": {
+                      "type": "string"
+                    },
+                    "sent": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "messageId",
+                    "sent"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "404": {
+            "description": "Ticket, customer, or channel not found"
+          }
+        }
+      }
+    },
     "/workspaces/{organizationId}/available-users": {
       "get": {
         "tags": [

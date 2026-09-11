@@ -19,7 +19,10 @@ import {
 } from "../channels/zendesk.js";
 import { createD1 } from "../global/db.js";
 import { supportChannels } from "../global/schema.js";
-import { processIncomingMessage } from "../global/support-channels.js";
+import {
+  processIncomingMessage,
+  processOutgoingMessage,
+} from "../global/support-channels.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
@@ -385,6 +388,84 @@ export function registerSupportChannelRoutes(app: OpenAPIHono<AppContext>) {
         { ok: true, ticketId: ticket.id, ticketNumber: ticket.number },
         201
       );
+    }
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/workspaces/{organizationId}/support/channels/{channelId}/send",
+      tags: ["support-channels"],
+      summary: "Send an outbound support message",
+      middleware: [rls("write")],
+      request: {
+        params: z.object({
+          organizationId: z.string(),
+          channelId: z.string(),
+        }),
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({
+                ticketId: z.string(),
+                textContent: z.string(),
+                markdownContent: z.string().optional(),
+                subject: z.string().optional(),
+              }),
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: "Message sent",
+          content: {
+            "application/json": {
+              schema: z.object({
+                ok: z.boolean(),
+                messageId: z.string(),
+                sent: z.boolean(),
+              }),
+            },
+          },
+        },
+        400: { description: "Bad request" },
+        404: { description: "Ticket, customer, or channel not found" },
+      },
+    }),
+    async (c) => {
+      const { organizationId, channelId } = c.req.valid("param");
+      const input = c.req.valid("json");
+      const db = createD1(c.env.D1);
+      const [channel] = await db
+        .select()
+        .from(supportChannels)
+        .where(
+          and(
+            eq(supportChannels.id, channelId),
+            eq(supportChannels.organizationId, organizationId),
+            eq(supportChannels.isActive, true)
+          )
+        )
+        .limit(1);
+
+      if (!channel) {
+        throw new VortexError({
+          code: "NOT_FOUND",
+          status: 404,
+          message: "Channel not found or inactive",
+        });
+      }
+
+      const result = await processOutgoingMessage(
+        db,
+        c.env,
+        channel,
+        input,
+        c.var.workspaceIdentity.id
+      );
+
+      return c.json(result, 200);
     }
   );
 }

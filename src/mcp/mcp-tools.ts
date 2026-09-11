@@ -9557,6 +9557,48 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdSupportChannelsChannelIdSend",
+    "description": "Send an outbound support message (POST /workspaces/{organizationId}/support/channels/{channelId}/send)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/channels/{channelId}/send",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "channelId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "ticketId": {
+              "type": "string"
+            },
+            "textContent": {
+              "type": "string"
+            },
+            "markdownContent": {
+              "type": "string"
+            },
+            "subject": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "ticketId",
+            "textContent"
+          ]
+        }
+      },
+      "required": [
+        "channelId",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdSupportCompanies",
     "description": "Create support company (POST /workspaces/{organizationId}/support/companies)",
     "method": "POST",
