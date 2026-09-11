@@ -11,6 +11,7 @@ import {
   startWebhookDelivery,
   type WebhookProcessor,
   type WebhookQueueMessage,
+  type WebhookSource,
 } from "./webhook-queue.js";
 
 // Route-level webhook tests exercise the inline fallback; queue behavior tests
@@ -57,7 +58,9 @@ describe("webhook queue state machine", () => {
         event: "conversation.user.created",
         payload: { test: true },
       },
-      new Map<string, WebhookProcessor>([["intercom", () => Promise.resolve()]])
+      new Map<WebhookSource, WebhookProcessor>([
+        ["intercom", () => Promise.resolve()],
+      ])
     );
     const row = await db
       .select()
