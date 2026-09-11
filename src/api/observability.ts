@@ -34,6 +34,10 @@ const metricsSchema = z.object({
   }),
 });
 
+function toNumber(value: { n: number | string } | undefined): number {
+  return Number(value?.n ?? 0);
+}
+
 const getMetricsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/observability/metrics",
@@ -126,10 +130,6 @@ export function registerObservabilityRoutes(app: OpenAPIHono<AppContext>) {
         return false;
       }
     });
-
-    function toNumber(value: { n: number | string } | undefined): number {
-      return Number(value?.n ?? 0);
-    }
 
     return c.json({
       supportTickets: {

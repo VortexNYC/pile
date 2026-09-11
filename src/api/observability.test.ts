@@ -75,7 +75,9 @@ describe("observability API", () => {
   });
 
   it("rejects metrics without auth", async () => {
-    const res = await fetch(`/workspaces/${organizationId}/observability/metrics`);
+    const res = await fetch(
+      `/workspaces/${organizationId}/observability/metrics`
+    );
     expect(res.status).toBe(401);
   });
 
