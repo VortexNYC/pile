@@ -1154,6 +1154,40 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getSupportCaptureArtifacts",
+    "description": "List support capture artifacts (GET /support/capture/artifacts)",
+    "method": "GET",
+    "path": "/support/capture/artifacts",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "r2Key": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "r2Key"
+      ]
+    }
+  },
+  {
+    "name": "getSupportCapturePublicTicketId",
+    "description": "Get support capture public (GET /support/capture/public/{ticketId})",
+    "method": "GET",
+    "path": "/support/capture/public/{ticketId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "ticketId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "ticketId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspaces",
     "description": "List workspaces (GET /workspaces)",
     "method": "GET",
@@ -6320,6 +6354,12 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               ],
               "default": "screenshot"
             },
+            "contentType": {
+              "type": "string"
+            },
+            "fileName": {
+              "type": "string"
+            },
             "visibility": {
               "type": "string",
               "enum": [
@@ -6350,18 +6390,29 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
-    "name": "postSupportCaptureUploadSessionId",
-    "description": "Create support capture upload (POST /support/capture/upload/{sessionId})",
+    "name": "postSupportCaptureUploadSessionIdAttachmentType",
+    "description": "POST /support/capture/upload/{sessionId}/{attachmentType} (POST /support/capture/upload/{sessionId}/{attachmentType})",
     "method": "POST",
-    "path": "/support/capture/upload/{sessionId}",
+    "path": "/support/capture/upload/{sessionId}/{attachmentType}",
     "inputSchema": {
       "type": "object",
       "properties": {
         "sessionId": {
           "type": "string"
+        },
+        "attachmentType": {
+          "type": "string",
+          "enum": [
+            "screenshot",
+            "video",
+            "debugger_json",
+            "log",
+            "network"
+          ]
         }
       },
       "required": [
+        "attachmentType",
         "sessionId"
       ]
     }

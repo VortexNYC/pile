@@ -2206,6 +2206,11 @@ export const supportTicketAttachments = sqliteTable(
     eventId: text("event_id" as string)
       .notNull()
       .references(() => supportTicketEvents.id, { onDelete: "cascade" }),
+    type: text("type" as string, {
+      enum: ["screenshot", "video", "debugger_json", "log", "network"] as const,
+    })
+      .notNull()
+      .default("screenshot"),
     externalId: text("external_id" as string),
     url: text("url" as string),
     fileName: text("file_name" as string),

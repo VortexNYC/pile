@@ -155,10 +155,13 @@ describe("support-capture API", () => {
   it("rejects upload for an unknown session", async () => {
     const image = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
     const res = await captureFetch(
-      "/support/capture/upload/00000000-0000-0000-0000-000000000000",
+      "/support/capture/upload/00000000-0000-0000-0000-000000000000/screenshot",
       {
         method: "POST",
-        headers: { "Content-Type": "image/png" },
+        headers: {
+          "Content-Type": "image/png",
+          "x-vortex-capture-token": "00000000-0000-0000-0000-000000000000",
+        },
         body: image,
       }
     );
@@ -238,7 +241,10 @@ describe("support-capture API", () => {
     const image = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
     const uploadRes = await captureFetch(session.uploadUrl, {
       method: "POST",
-      headers: { "Content-Type": "image/png" },
+      headers: {
+        "Content-Type": "image/png",
+        "x-vortex-capture-token": sessionToken,
+      },
       body: image,
     });
     expect(uploadRes.status).toBe(200);
@@ -252,8 +258,12 @@ describe("support-capture API", () => {
       headers: { "x-vortex-capture-token": sessionToken },
     });
     expect(finalizeRes.status).toBe(200);
-    const final = (await finalizeRes.json()) as { ticketId: string };
+    const final = (await finalizeRes.json()) as {
+      ticketId: string;
+      shareUrl?: string;
+    };
     expect(final.ticketId).toBeTruthy();
+    expect(final.shareUrl).toBeUndefined();
 
     const db = createD1(env.D1);
     const ticket = await getTicketById(db, organizationId, final.ticketId);

@@ -1,8 +1,9 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
+import { eq } from "drizzle-orm";
 
 import { createD1 } from "../global/db.js";
-import { supportTicketAttachments } from "../global/schema.js";
+import { supportTicketAttachments, supportTickets } from "../global/schema.js";
 import {
   createCapturePublicKey,
   createCaptureSession,
@@ -49,6 +50,8 @@ const uploadSessionBodySchema = z.object({
   attachmentType: z
     .enum(["screenshot", "video", "debugger_json", "log", "network"])
     .default("screenshot"),
+  contentType: z.string().optional(),
+  fileName: z.string().optional(),
   visibility: z.enum(["public", "private"]).default("private"),
   metadata: z.record(z.string(), z.unknown()).default({}),
   deviceInfo: z.record(z.string(), z.unknown()).optional(),
@@ -56,6 +59,7 @@ const uploadSessionBodySchema = z.object({
 
 const uploadSessionResponseSchema = z.object({
   uploadUrl: z.string(),
+  r2Key: z.string(),
   sessionId: z.string(),
 });
 
@@ -188,10 +192,22 @@ const uploadSessionRoute = createRoute({
 
 const uploadRoute = createRoute({
   method: "post",
-  path: "/support/capture/upload/{sessionId}",
+  path: "/support/capture/upload/{sessionId}/{attachmentType}",
   tags: ["support-capture"],
   request: {
-    params: z.object({ sessionId: z.string() }),
+    params: z.object({
+      sessionId: z.string(),
+      attachmentType: z.enum([
+        "screenshot",
+        "video",
+        "debugger_json",
+        "log",
+        "network",
+      ]),
+    }),
+    headers: z.object({
+      "x-vortex-capture-token": z.string(),
+    }),
   },
   responses: {
     200: {
@@ -252,6 +268,66 @@ const metadataRoute = createRoute({
   },
 });
 
+const viewArtifactRoute = createRoute({
+  method: "get",
+  path: "/support/capture/artifacts",
+  tags: ["support-capture"],
+  request: {
+    query: z.object({
+      r2Key: z.string(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Artifact binary",
+    },
+    404: {
+      description: "Artifact not found",
+    },
+  },
+});
+
+const shareTicketRoute = createRoute({
+  method: "get",
+  path: "/support/capture/public/{ticketId}",
+  tags: ["support-capture"],
+  request: {
+    params: z.object({
+      ticketId: z.string(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Public capture share",
+      content: {
+        "application/json": {
+          schema: z.object({
+            ticketId: z.string(),
+            title: z.string(),
+            attachments: z.array(
+              z.object({
+                type: z.enum([
+                  "screenshot",
+                  "video",
+                  "debugger_json",
+                  "log",
+                  "network",
+                ]),
+                contentType: z.string().optional(),
+                url: z.string().optional(),
+                size: z.number().optional(),
+              })
+            ),
+          }),
+        },
+      },
+    },
+    404: {
+      description: "Ticket not found",
+    },
+  },
+});
+
 function assertSessionActive(session: { status: string; expiresAt: string }) {
   if (
     session.status === "expired" ||
@@ -284,6 +360,52 @@ function assertOriginAllowed(
       message: "Origin not allowed",
     });
   }
+}
+
+function defaultContentTypeForAttachment(attachmentType: string): string {
+  switch (attachmentType) {
+    case "screenshot":
+      return "image/png";
+    case "video":
+      return "video/webm";
+    case "debugger_json":
+    case "network":
+      return "application/json";
+    case "log":
+      return "text/plain";
+    default:
+      return "application/octet-stream";
+  }
+}
+
+function buildCaptureArtifactKey(
+  organizationId: string,
+  sessionId: string,
+  { attachmentType }: { attachmentType: string }
+) {
+  return `${organizationId}/capture/${sessionId}/${attachmentType}`;
+}
+
+type CaptureUploadRecord = {
+  attachmentType: string;
+  contentType: unknown;
+  fileName: unknown;
+  r2Key: string;
+  uploaded: boolean;
+  size: unknown;
+};
+
+function uploadsFromSession(session: {
+  metadata: Record<string, unknown>;
+}): CaptureUploadRecord[] {
+  const uploads = session.metadata.uploads;
+  if (!Array.isArray(uploads)) return [];
+  return uploads.filter(
+    (u): u is Record<string, unknown> =>
+      typeof u === "object" &&
+      u !== null &&
+      typeof u.attachmentType === "string"
+  ) as CaptureUploadRecord[];
 }
 
 export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
@@ -366,18 +488,53 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
     assertSessionActive(session);
 
     await updateCaptureSessionStatus(db, session.id, "uploading");
-    const metadata: Record<string, unknown> =
-      body.metadata && typeof body.metadata === "object"
-        ? { ...body, ...body.metadata }
-        : { ...body };
-    await updateCaptureSessionMetadata(db, session.id, metadata);
 
-    const uploadUrl = `/support/capture/upload/${session.id}`;
-    return c.json({ uploadUrl, sessionId: session.id });
+    const attachmentType = body.attachmentType;
+    const contentType =
+      body.contentType ?? defaultContentTypeForAttachment(attachmentType);
+    const r2Key = buildCaptureArtifactKey(session.organizationId, session.id, {
+      attachmentType,
+    });
+    const uploadUrl = `/support/capture/upload/${session.id}/${attachmentType}`;
+
+    const existingUploads = uploadsFromSession(session);
+    const nextUploads = [
+      ...existingUploads.filter((u) => u.attachmentType !== attachmentType),
+      {
+        attachmentType,
+        contentType,
+        fileName: body.fileName ?? null,
+        r2Key,
+        uploaded: false,
+        size: null,
+      },
+    ];
+
+    const { metadata: customMetadata, ...rest } = body;
+    const merged: Record<string, unknown> = {
+      ...session.metadata,
+      ...rest,
+      ...(customMetadata && typeof customMetadata === "object"
+        ? customMetadata
+        : {}),
+      uploads: nextUploads,
+    };
+    await updateCaptureSessionMetadata(db, session.id, merged);
+
+    return c.json({ uploadUrl, r2Key, sessionId: session.id });
   });
 
   app.openapi(uploadRoute, async (c) => {
-    const { sessionId } = c.req.valid("param");
+    const { sessionId, attachmentType } = c.req.valid("param");
+    const token = c.req.header("x-vortex-capture-token");
+    if (token !== sessionId) {
+      throw new VortexError({
+        status: 401,
+        code: "UNAUTHORIZED",
+        message: "Invalid capture token",
+      });
+    }
+
     const db = createD1(c.env.D1);
     const session = await getCaptureSession(db, sessionId);
     if (!session) {
@@ -401,8 +558,25 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
     const contentType =
       c.req.header("content-type") ?? "application/octet-stream";
     const arrayBuffer = await c.req.arrayBuffer();
-    const r2Key = `${session.organizationId}/${session.id}`;
+    const r2Key = buildCaptureArtifactKey(session.organizationId, session.id, {
+      attachmentType,
+    });
     await bucket.put(r2Key, new Blob([arrayBuffer], { type: contentType }));
+
+    const existingUploads = uploadsFromSession(session);
+    const nextUploads = existingUploads.map((u) =>
+      u.attachmentType === attachmentType
+        ? (Object.assign({}, u, {
+            uploaded: true,
+            contentType,
+            size: arrayBuffer.byteLength,
+          }) as CaptureUploadRecord)
+        : u
+    );
+    await updateCaptureSessionMetadata(db, session.id, {
+      ...session.metadata,
+      uploads: nextUploads,
+    });
 
     return c.json({ r2Key });
   });
@@ -484,22 +658,41 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
       c.env
     );
 
-    const r2Key = `${session.organizationId}/${session.id}`;
-    const contentType =
-      typeof meta.contentType === "string" ? meta.contentType : "image/png";
-    const size =
-      typeof meta.captureSizeBytes === "number" ? meta.captureSizeBytes : null;
-    await db.insert(supportTicketAttachments).values({
-      id: crypto.randomUUID(),
-      organizationId: session.organizationId,
-      ticketId: ticket.id,
-      eventId: event.id,
-      contentType,
-      r2Key,
-      size,
-      url: null,
-      createdAt: new Date().toISOString(),
-    });
+    const origin = new URL(c.req.url).origin;
+    const uploads = uploadsFromSession(session).filter((u) => u.uploaded);
+
+    await Promise.all(
+      uploads.map((upload) => {
+        const r2Key = typeof upload.r2Key === "string" ? upload.r2Key : "";
+        const contentType =
+          typeof upload.contentType === "string"
+            ? upload.contentType
+            : "application/octet-stream";
+        const size = typeof upload.size === "number" ? upload.size : null;
+        const url = r2Key
+          ? `${origin}/support/capture/artifacts?r2Key=${encodeURIComponent(r2Key)}`
+          : null;
+        return db.insert(supportTicketAttachments).values({
+          id: crypto.randomUUID(),
+          organizationId: session.organizationId,
+          ticketId: ticket.id,
+          eventId: event.id,
+          type: upload.attachmentType as
+            | "screenshot"
+            | "video"
+            | "debugger_json"
+            | "log"
+            | "network",
+          contentType,
+          r2Key,
+          size,
+          url,
+          fileName:
+            typeof upload.fileName === "string" ? upload.fileName : null,
+          createdAt: new Date().toISOString(),
+        });
+      })
+    );
 
     await finalizeCaptureSession(db, session.id, {
       customerId: customer.id,
@@ -507,7 +700,12 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
       status: "finalized",
     });
 
-    return c.json({ ticketId: ticket.id });
+    const shareUrl =
+      meta.visibility === "public"
+        ? `${origin}/support/capture/public/${ticket.id}`
+        : undefined;
+
+    return c.json({ ticketId: ticket.id, shareUrl });
   });
 
   app.openapi(metadataRoute, async (c) => {
@@ -534,5 +732,78 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
 
     await updateCaptureSessionMetadata(db, session.id, body.metadata);
     return c.json({ ok: true });
+  });
+
+  app.openapi(viewArtifactRoute, async (c) => {
+    const { r2Key } = c.req.valid("query");
+    const bucket = c.env.ATTACHMENTS_BUCKET;
+    if (!bucket) {
+      throw new VortexError({
+        status: 500,
+        code: "CONFIG_ERROR",
+        message: "Attachments bucket not configured",
+      });
+    }
+
+    const object = await bucket.get(r2Key);
+    if (!object) {
+      throw new VortexError({
+        status: 404,
+        code: "NOT_FOUND",
+        message: "Artifact not found",
+      });
+    }
+
+    const contentType =
+      object.httpMetadata?.contentType ?? "application/octet-stream";
+    if (!object.body) {
+      throw new VortexError({
+        status: 404,
+        code: "NOT_FOUND",
+        message: "Artifact not found",
+      });
+    }
+    return c.body(object.body, 200, {
+      "Content-Type": contentType,
+    });
+  });
+
+  app.openapi(shareTicketRoute, async (c) => {
+    const { ticketId } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+
+    const [ticket] = await db
+      .select({ id: supportTickets.id, title: supportTickets.title })
+      .from(supportTickets)
+      .where(eq(supportTickets.id, ticketId))
+      .limit(1);
+    if (!ticket) {
+      throw new VortexError({
+        status: 404,
+        code: "NOT_FOUND",
+        message: "Ticket not found",
+      });
+    }
+
+    const attachments = await db
+      .select({
+        type: supportTicketAttachments.type,
+        contentType: supportTicketAttachments.contentType,
+        url: supportTicketAttachments.url,
+        size: supportTicketAttachments.size,
+      })
+      .from(supportTicketAttachments)
+      .where(eq(supportTicketAttachments.ticketId, ticketId));
+
+    return c.json({
+      ticketId: ticket.id,
+      title: ticket.title,
+      attachments: attachments.map((a) => ({
+        type: a.type,
+        contentType: a.contentType,
+        url: a.url,
+        size: a.size,
+      })),
+    });
   });
 }

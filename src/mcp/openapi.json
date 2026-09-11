@@ -9889,6 +9889,12 @@
                     ],
                     "default": "screenshot"
                   },
+                  "contentType": {
+                    "type": "string"
+                  },
+                  "fileName": {
+                    "type": "string"
+                  },
                   "visibility": {
                     "type": "string",
                     "enum": [
@@ -9929,12 +9935,16 @@
                     "uploadUrl": {
                       "type": "string"
                     },
+                    "r2Key": {
+                      "type": "string"
+                    },
                     "sessionId": {
                       "type": "string"
                     }
                   },
                   "required": [
                     "uploadUrl",
+                    "r2Key",
                     "sessionId"
                   ]
                 }
@@ -9948,7 +9958,7 @@
         "summary": "Create support capture upload session"
       }
     },
-    "/support/capture/upload/{sessionId}": {
+    "/support/capture/upload/{sessionId}/{attachmentType}": {
       "post": {
         "tags": [
           "support-capture"
@@ -9961,6 +9971,29 @@
             "required": true,
             "name": "sessionId",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "screenshot",
+                "video",
+                "debugger_json",
+                "log",
+                "network"
+              ]
+            },
+            "required": true,
+            "name": "attachmentType",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "x-vortex-capture-token",
+            "in": "header"
           }
         ],
         "responses": {
@@ -9986,7 +10019,7 @@
             "description": "Invalid or expired session"
           }
         },
-        "summary": "Create support capture upload"
+        "summary": "POST /support/capture/upload/{sessionId}/{attachmentType}"
       }
     },
     "/support/capture/finalize": {
@@ -10077,6 +10110,108 @@
           }
         },
         "summary": "Create support capture metadata"
+      }
+    },
+    "/support/capture/artifacts": {
+      "get": {
+        "tags": [
+          "support-capture"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "r2Key",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Artifact binary"
+          },
+          "404": {
+            "description": "Artifact not found"
+          }
+        },
+        "summary": "List support capture artifacts"
+      }
+    },
+    "/support/capture/public/{ticketId}": {
+      "get": {
+        "tags": [
+          "support-capture"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "ticketId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Public capture share",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ticketId": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "attachments": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "screenshot",
+                              "video",
+                              "debugger_json",
+                              "log",
+                              "network"
+                            ]
+                          },
+                          "contentType": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          },
+                          "size": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "type"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "ticketId",
+                    "title",
+                    "attachments"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Ticket not found"
+          }
+        },
+        "summary": "Get support capture public"
       }
     },
     "/workspaces/{organizationId}/support-channels": {

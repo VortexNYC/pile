@@ -4986,6 +4986,8 @@ export interface paths {
                          * @enum {string}
                          */
                         attachmentType?: "screenshot" | "video" | "debugger_json" | "log" | "network";
+                        contentType?: string;
+                        fileName?: string;
                         /**
                          * @default private
                          * @enum {string}
@@ -5010,6 +5012,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             uploadUrl: string;
+                            r2Key: string;
                             sessionId: string;
                         };
                     };
@@ -5029,7 +5032,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/support/capture/upload/{sessionId}": {
+    "/support/capture/upload/{sessionId}/{attachmentType}": {
         parameters: {
             query?: never;
             header?: never;
@@ -5038,13 +5041,16 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create support capture upload */
+        /** POST /support/capture/upload/{sessionId}/{attachmentType} */
         post: {
             parameters: {
                 query?: never;
-                header?: never;
+                header: {
+                    "x-vortex-capture-token": string;
+                };
                 path: {
                     sessionId: string;
+                    attachmentType: "screenshot" | "video" | "debugger_json" | "log" | "network";
                 };
                 cookie?: never;
             };
@@ -5169,6 +5175,104 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/support/capture/artifacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List support capture artifacts */
+        get: {
+            parameters: {
+                query: {
+                    r2Key: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Artifact binary */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Artifact not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/support/capture/public/{ticketId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get support capture public */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    ticketId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Public capture share */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ticketId: string;
+                            title: string;
+                            attachments: {
+                                /** @enum {string} */
+                                type: "screenshot" | "video" | "debugger_json" | "log" | "network";
+                                contentType?: string;
+                                url?: string;
+                                size?: number;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Ticket not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;

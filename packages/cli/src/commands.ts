@@ -2417,6 +2417,14 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "attachment-type",
       },
       {
+        name: "contentType",
+        flag: "content-type",
+      },
+      {
+        name: "fileName",
+        flag: "file-name",
+      },
+      {
         name: "visibility",
         flag: "visibility",
       },
@@ -2432,11 +2440,15 @@ export const COMMANDS: Record<string, CommandDef> = {
   },
   "support capture upload create": {
     method: "POST",
-    path: "/support/capture/upload/{sessionId}",
+    path: "/support/capture/upload/{sessionId}/{attachmentType}",
     params: [
       {
         name: "sessionId",
         flag: "session",
+      },
+      {
+        name: "attachmentType",
+        flag: "attachment-type",
       },
     ],
     query: [],
@@ -2460,6 +2472,30 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "metadata",
       },
     ],
+  },
+  "support capture artifacts list": {
+    method: "GET",
+    path: "/support/capture/artifacts",
+    params: [],
+    query: [
+      {
+        name: "r2Key",
+        flag: "r2-key",
+      },
+    ],
+    body: [],
+  },
+  "support capture public get": {
+    method: "GET",
+    path: "/support/capture/public/{ticketId}",
+    params: [
+      {
+        name: "ticketId",
+        flag: "ticket-id",
+      },
+    ],
+    query: [],
+    body: [],
   },
   "support channels list": {
     method: "GET",
