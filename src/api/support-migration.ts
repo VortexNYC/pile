@@ -9,6 +9,7 @@ import {
 } from "../global/support-migration.js";
 import { resumeImport, runImport } from "../import/runner.js";
 import type { ImportCounts } from "../import/types.js";
+import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 import {
@@ -216,7 +217,17 @@ function jobOutput(job: {
 export function registerSupportMigrationRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(startImportRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
-    const body = c.req.valid("json");
+    const raw = await c.req.json();
+    const parsed = supportMigrationRunBodySchema.safeParse(raw);
+    if (!parsed.success) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: "Invalid import request",
+        hint: parsed.error.message,
+      });
+    }
+    const body = parsed.data;
     const importerId = c.var.userId ?? c.var.workspaceIdentity?.id ?? "unknown";
 
     switch (body.source) {
@@ -271,7 +282,17 @@ export function registerSupportMigrationRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(resumeImportRoute, async (c) => {
     const { organizationId, importId } = c.req.valid("param");
-    const body = c.req.valid("json");
+    const raw = await c.req.json();
+    const parsed = supportMigrationRunBodySchema.safeParse(raw);
+    if (!parsed.success) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: "Invalid import request",
+        hint: parsed.error.message,
+      });
+    }
+    const body = parsed.data;
     const importerId = c.var.userId ?? c.var.workspaceIdentity?.id ?? "unknown";
 
     const db = createD1(c.env.D1);
@@ -338,7 +359,17 @@ export function registerSupportMigrationRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(validateImportRoute, async (c) => {
-    const body = c.req.valid("json");
+    const raw = await c.req.json();
+    const parsed = supportMigrationValidateBodySchema.safeParse(raw);
+    if (!parsed.success) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: "Invalid import request",
+        hint: parsed.error.message,
+      });
+    }
+    const body = parsed.data;
 
     let validation;
     switch (body.source) {

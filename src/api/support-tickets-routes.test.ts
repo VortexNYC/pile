@@ -282,4 +282,63 @@ describe("support ticket routes", () => {
     expect(labelsBody.ticket.labels.length).toBe(1);
     expect(labelsBody.ticket.labels[0].labelId).toBe(label.id);
   });
+
+  it("rejects ticket creation without a customer", async () => {
+    const res = await request(
+      "POST",
+      `/workspaces/${organizationId}/support/tickets`,
+      {
+        title: "No customer",
+        sourceChannel: "email",
+      }
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects an unknown ticket", async () => {
+    const res = await request(
+      "GET",
+      `/workspaces/${organizationId}/support/tickets/00000000-0000-0000-0000-000000000000`
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it("rejects a message with an invalid channel", async () => {
+    const createRes = await request(
+      "POST",
+      `/workspaces/${organizationId}/support/tickets`,
+      {
+        customerId,
+        title: "Channel test",
+        sourceChannel: "email",
+      }
+    );
+    const { ticket } = ticketResponseSchema.parse(await createRes.json());
+
+    const res = await request(
+      "POST",
+      `/workspaces/${organizationId}/support/tickets/${ticket.id}/messages`,
+      {
+        direction: "outbound",
+        textContent: "Hello",
+        channel: "fax",
+        userId: "user-1",
+      }
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects an invalid priority", async () => {
+    const res = await request(
+      "POST",
+      `/workspaces/${organizationId}/support/tickets`,
+      {
+        customerId,
+        title: "Bad priority",
+        sourceChannel: "email",
+        priority: "critical",
+      }
+    );
+    expect(res.status).toBe(400);
+  });
 });

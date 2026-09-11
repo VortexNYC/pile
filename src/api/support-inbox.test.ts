@@ -141,4 +141,36 @@ describe("support-inbox API", () => {
     );
     expect(run.status).toBe(200);
   });
+
+  it("rejects inbox requests without auth", async () => {
+    const res = await app.fetch(
+      new Request(
+        `https://example.com/workspaces/${organizationId}/support/inbox`
+      ),
+      env
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it("rejects an unknown view run", async () => {
+    const res = await fetch(
+      `/workspaces/${organizationId}/support/inbox/views/00000000-0000-0000-0000-000000000000/run`
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it("rejects a malformed saved view payload", async () => {
+    const res = await fetch(
+      `/workspaces/${organizationId}/support/inbox/views`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "Bad view",
+          filter: "not-an-object",
+          sort: { by: "updated_at" },
+        }),
+      }
+    );
+    expect(res.status).toBe(400);
+  });
 });
