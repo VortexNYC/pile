@@ -10574,6 +10574,71 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "source": {
                   "type": "string",
                   "enum": [
+                    "jam-mcp"
+                  ]
+                },
+                "credentials": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "token"
+                  ]
+                },
+                "options": {
+                  "type": "object",
+                  "properties": {
+                    "limit": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 100,
+                      "default": 25
+                    },
+                    "after": {
+                      "type": "string"
+                    },
+                    "text": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "video",
+                        "screenshot",
+                        "sessionReplay",
+                        "recording"
+                      ]
+                    },
+                    "folder": {
+                      "type": "string"
+                    },
+                    "author": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "required": [
+                "source",
+                "credentials"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "enum": [
                     "plain"
                   ]
                 },
@@ -10839,6 +10904,71 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "source": {
                   "type": "string",
                   "enum": [
+                    "jam-mcp"
+                  ]
+                },
+                "credentials": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "token"
+                  ]
+                },
+                "options": {
+                  "type": "object",
+                  "properties": {
+                    "limit": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 100,
+                      "default": 25
+                    },
+                    "after": {
+                      "type": "string"
+                    },
+                    "text": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "video",
+                        "screenshot",
+                        "sessionReplay",
+                        "recording"
+                      ]
+                    },
+                    "folder": {
+                      "type": "string"
+                    },
+                    "author": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "required": [
+                "source",
+                "credentials"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "enum": [
                     "plain"
                   ]
                 },
@@ -11024,6 +11154,33 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                   },
                   "required": [
                     "data"
+                  ]
+                }
+              },
+              "required": [
+                "source",
+                "credentials"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "jam-mcp"
+                  ]
+                },
+                "credentials": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "token"
                   ]
                 }
               },

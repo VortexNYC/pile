@@ -14125,6 +14125,24 @@ export interface paths {
                         };
                     } | {
                         /** @enum {string} */
+                        source: "jam-mcp";
+                        credentials: {
+                            token: string;
+                        };
+                        options?: {
+                            /** @default 25 */
+                            limit?: number;
+                            after?: string;
+                            text?: string;
+                            /** @enum {string} */
+                            type?: "video" | "screenshot" | "sessionReplay" | "recording";
+                            folder?: string;
+                            author?: string;
+                            url?: string;
+                            createdAt?: string;
+                        };
+                    } | {
+                        /** @enum {string} */
                         source: "plain";
                         credentials: {
                             token: string;
@@ -14304,6 +14322,24 @@ export interface paths {
                         };
                     } | {
                         /** @enum {string} */
+                        source: "jam-mcp";
+                        credentials: {
+                            token: string;
+                        };
+                        options?: {
+                            /** @default 25 */
+                            limit?: number;
+                            after?: string;
+                            text?: string;
+                            /** @enum {string} */
+                            type?: "video" | "screenshot" | "sessionReplay" | "recording";
+                            folder?: string;
+                            author?: string;
+                            url?: string;
+                            createdAt?: string;
+                        };
+                    } | {
+                        /** @enum {string} */
                         source: "plain";
                         credentials: {
                             token: string;
@@ -14457,6 +14493,12 @@ export interface paths {
                             data: {
                                 [key: string]: unknown;
                             }[];
+                        };
+                    } | {
+                        /** @enum {string} */
+                        source: "jam-mcp";
+                        credentials: {
+                            token: string;
                         };
                     } | {
                         /** @enum {string} */

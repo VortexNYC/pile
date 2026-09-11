@@ -13,6 +13,13 @@ export {
   type JamSupportOptions,
 } from "./jam.js";
 export {
+  jamMcpSupportCredentialsSchema,
+  jamMcpSupportImportSource,
+  jamMcpSupportOptionsSchema,
+  type JamMcpSupportCredentials,
+  type JamMcpSupportOptions,
+} from "./jam-mcp.js";
+export {
   plainSupportCredentialsSchema,
   plainSupportImportSource,
   plainSupportOptionsSchema,

@@ -14,6 +14,7 @@ import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 import {
   intercomSupportImportSource,
+  jamMcpSupportImportSource,
   jamSupportImportSource,
   plainSupportImportSource,
   zendeskSupportImportSource,
@@ -256,6 +257,18 @@ export function registerSupportMigrationRoutes(app: OpenAPIHono<AppContext>) {
         );
         return c.json(importRunOutput(body.source, job, batch));
       }
+      case "jam-mcp": {
+        const { batch, job } = await runImport(
+          jamMcpSupportImportSource,
+          c.env,
+          c.req.raw.headers,
+          organizationId,
+          importerId,
+          body.credentials,
+          body.options ?? {}
+        );
+        return c.json(importRunOutput(body.source, job, batch));
+      }
       case "plain": {
         const { batch, job } = await runImport(
           plainSupportImportSource,
@@ -341,6 +354,19 @@ export function registerSupportMigrationRoutes(app: OpenAPIHono<AppContext>) {
         );
         return c.json(importRunOutput(body.source, job, batch));
       }
+      case "jam-mcp": {
+        const { batch, job } = await resumeImport(
+          jamMcpSupportImportSource,
+          c.env,
+          c.req.raw.headers,
+          organizationId,
+          importerId,
+          existing,
+          body.credentials,
+          body.options ?? {}
+        );
+        return c.json(importRunOutput(body.source, job, batch));
+      }
       case "plain": {
         const { batch, job } = await resumeImport(
           plainSupportImportSource,
@@ -406,6 +432,9 @@ export function registerSupportMigrationRoutes(app: OpenAPIHono<AppContext>) {
         break;
       case "jam":
         validation = await jamSupportImportSource.validate(body.credentials);
+        break;
+      case "jam-mcp":
+        validation = await jamMcpSupportImportSource.validate(body.credentials);
         break;
       case "plain":
         validation = await plainSupportImportSource.validate(body.credentials);
