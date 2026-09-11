@@ -6514,8 +6514,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "enum": [
                 "public",
                 "private"
-              ],
-              "default": "private"
+              ]
             },
             "metadata": {
               "type": "object",

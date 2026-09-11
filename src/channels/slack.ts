@@ -1,11 +1,12 @@
 import { createRoute, z } from "@hono/zod-openapi";
-import { and, eq } from "drizzle-orm";
 import type { Context } from "hono";
 
 import { hmacSha256Hex, timingSafeEqualHex } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
-import { supportChannels } from "../global/schema.js";
-import { processIncomingMessage } from "../global/support-channels.js";
+import {
+  getActiveSupportChannel,
+  processIncomingMessage,
+} from "../global/support-channels.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 
@@ -135,18 +136,12 @@ export async function processSlackSupportWebhook(
   }
 
   const db = createD1(c.env.D1);
-  const [channel] = await db
-    .select()
-    .from(supportChannels)
-    .where(
-      and(
-        eq(supportChannels.organizationId, organizationId),
-        eq(supportChannels.type, "slack"),
-        eq(supportChannels.isActive, true),
-        eq(supportChannels.name, ev.channel)
-      )
-    )
-    .limit(1);
+  const channel = await getActiveSupportChannel(
+    db,
+    organizationId,
+    "slack",
+    ev.channel
+  );
 
   if (!channel) {
     return { ok: true };

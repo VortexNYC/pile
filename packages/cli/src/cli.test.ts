@@ -291,7 +291,7 @@ describe("CLI integration", () => {
         "--title",
         "CLI capture run test",
       ],
-      { fetch: mockFetch, spawn: createMockSpawn }
+      { fetch: mockFetch, spawn: () => createMockSpawn() }
     );
 
     expect(exitCode).toBe(0);
@@ -386,7 +386,7 @@ describe("CLI integration", () => {
         "--artifacts-dir",
         artifactsDir,
       ],
-      { fetch: mockFetch, spawn: createMockSpawn }
+      { fetch: mockFetch, spawn: () => createMockSpawn() }
     );
 
     expect(exitCode).toBe(1);

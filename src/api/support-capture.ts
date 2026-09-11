@@ -1,6 +1,7 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 import { and, eq } from "drizzle-orm";
+import type { Context } from "hono";
 
 import { createD1, type D1Client } from "../global/db.js";
 import {
@@ -28,7 +29,9 @@ import {
   getTicketById,
   type SupportTicketSource,
 } from "../global/support-tickets.js";
+import { createAuth } from "../platform/auth.js";
 import { VortexError } from "../platform/errors.js";
+import { toApiKeyWorkspaceIdentity } from "../platform/identity.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 import { getWorkspaceStub } from "./stub.js";
@@ -66,7 +69,7 @@ const uploadSessionBodySchema = z.object({
     .default("screenshot"),
   contentType: z.string().optional(),
   fileName: z.string().optional(),
-  visibility: z.enum(["public", "private"]).default("private"),
+  visibility: z.enum(["public", "private"]).optional(),
   metadata: z.record(z.string(), z.unknown()).default({}),
   deviceInfo: z.record(z.string(), z.unknown()).optional(),
 });
@@ -892,6 +895,88 @@ async function findAttachmentFileName(
   return row.r2Key;
 }
 
+async function getArtifactAccess(
+  db: D1Client,
+  r2Key: string
+): Promise<{ organizationId: string; isPublic: boolean } | null> {
+  const [attachment] = await db
+    .select()
+    .from(supportTicketAttachments)
+    .where(eq(supportTicketAttachments.r2Key, r2Key))
+    .limit(1);
+  if (!attachment) {
+    return null;
+  }
+
+  const [session] = await db
+    .select()
+    .from(supportCaptureSessions)
+    .where(eq(supportCaptureSessions.ticketId, attachment.ticketId))
+    .limit(1);
+
+  let isPublic = false;
+  if (session) {
+    const metadata = JSON.parse(session.metadata ?? "{}") as Record<
+      string,
+      unknown
+    >;
+    isPublic = metadata.visibility === "public";
+  }
+
+  return { organizationId: attachment.organizationId, isPublic };
+}
+
+async function requireArtifactAuthorization(
+  c: Context<AppContext>,
+  organizationId: string
+): Promise<void> {
+  const header = c.req.header("Authorization") ?? "";
+  const token = header.replace(/^Bearer\s+/i, "").trim();
+  if (!token) {
+    throw new VortexError({
+      status: 401,
+      code: "UNAUTHORIZED",
+      message: "Authentication required",
+    });
+  }
+
+  const auth = createAuth(c.env);
+  let result: unknown;
+  try {
+    result = await auth.api.verifyApiKey({ body: { key: token } });
+  } catch {
+    throw new VortexError({
+      status: 401,
+      code: "UNAUTHORIZED",
+      message: "Invalid or expired token",
+    });
+  }
+
+  if (
+    !result ||
+    typeof result !== "object" ||
+    !("valid" in result) ||
+    !result.valid ||
+    !("key" in result) ||
+    !result.key
+  ) {
+    throw new VortexError({
+      status: 401,
+      code: "UNAUTHORIZED",
+      message: "Invalid or expired token",
+    });
+  }
+
+  const identity = toApiKeyWorkspaceIdentity(result.key);
+  if (identity.organizationId !== organizationId) {
+    throw new VortexError({
+      status: 403,
+      code: "FORBIDDEN",
+      message: "Token does not belong to this workspace",
+    });
+  }
+}
+
 export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(createPublicKeyRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
@@ -1282,6 +1367,20 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
         code: "CONFIG_ERROR",
         message: "Attachments bucket not configured",
       });
+    }
+
+    const db = createD1(c.env.D1);
+    const access = await getArtifactAccess(db, r2Key);
+    if (!access) {
+      throw new VortexError({
+        status: 404,
+        code: "NOT_FOUND",
+        message: "Artifact not found",
+      });
+    }
+
+    if (!access.isPublic) {
+      await requireArtifactAuthorization(c, access.organizationId);
     }
 
     const object = await bucket.get(r2Key);

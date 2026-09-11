@@ -4993,10 +4993,7 @@ export interface paths {
                         attachmentType?: "screenshot" | "video" | "debugger_json" | "log" | "network";
                         contentType?: string;
                         fileName?: string;
-                        /**
-                         * @default private
-                         * @enum {string}
-                         */
+                        /** @enum {string} */
                         visibility?: "public" | "private";
                         /** @default {} */
                         metadata?: {

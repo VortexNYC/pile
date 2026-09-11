@@ -9927,8 +9927,7 @@
                     "enum": [
                       "public",
                       "private"
-                    ],
-                    "default": "private"
+                    ]
                   },
                   "metadata": {
                     "type": "object",

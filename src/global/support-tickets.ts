@@ -255,6 +255,36 @@ export async function createTicket(
   const status: SupportTicketStatus = input.status ?? "todo";
   const priority: SupportTicketPriority = input.priority ?? "medium";
   const externalSource: SupportTicketSource = input.externalSource ?? "manual";
+
+  if (input.externalId) {
+    const existing = await findSupportTicketByExternalId(
+      db,
+      input.organizationId,
+      input.externalId,
+      externalSource
+    );
+    if (existing) {
+      throw new VortexError({
+        code: "CONFLICT",
+        status: 409,
+        message: "A ticket with this external ID already exists",
+      });
+    }
+  }
+
+  if (input.issueId && env) {
+    const stub = getWorkspaceStub(env, input.organizationId);
+    await stub.setOrganizationId(input.organizationId);
+    const issue = await stub.getIssue(input.issueId);
+    if (!issue) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: "Issue not found in workspace",
+      });
+    }
+  }
+
   const now = new Date().toISOString();
   const createdAt = input.createdAt ?? now;
   const updatedAt = input.updatedAt ?? now;
@@ -667,6 +697,19 @@ export async function updateTicket(
 
   if (!existing) {
     return null;
+  }
+
+  if (input.issueId && env) {
+    const stub = getWorkspaceStub(env, organizationId);
+    await stub.setOrganizationId(organizationId);
+    const issue = await stub.getIssue(input.issueId);
+    if (!issue) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: "Issue not found in workspace",
+      });
+    }
   }
 
   const now = new Date().toISOString();
