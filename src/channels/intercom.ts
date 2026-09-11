@@ -370,7 +370,7 @@ export async function processIntercomSupportWebhookPayload(
       channel: "intercom",
       customerId: customer.id,
       subType: topic,
-      externalId: notification.id,
+      externalId: isCreated ? conversation.data.id : notification.id,
       createdAt,
     },
     env

@@ -262,38 +262,42 @@ describe("support-channels API", () => {
     });
 
     const conversationId = `conv-${crypto.randomUUID()}`;
-    const deliveryId = `intercom-delivery-${crypto.randomUUID()}`;
+    const deliveryId1 = `intercom-delivery-${crypto.randomUUID()}`;
+    const deliveryId2 = `intercom-delivery-${crypto.randomUUID()}`;
     const createdAtSeconds = Math.floor(Date.now() / 1000);
-    const payload = JSON.stringify({
-      type: "notification_event",
-      id: deliveryId,
-      topic: "conversation.user.created",
-      app_id: "test-app",
-      created_at: createdAtSeconds,
-      data: {
-        item: {
-          id: conversationId,
-          title: "Intercom dedup",
-          state: "open",
-          priority: "not_priority",
-          source: {
-            body: "<p>Hello from Intercom</p>",
-            author: {
-              type: "user",
-              id: "intercom-user-1",
-              name: "Intercom User",
-              email: "intercom-dedup@example.com",
-            },
-          },
-          created_at: createdAtSeconds,
-          updated_at: createdAtSeconds,
-        },
-      },
-    });
-    const signature = `sha1=${await hmacSha1Hex(secret, payload)}`;
 
-    const send = () =>
-      app.fetch(
+    const makePayload = (deliveryId: string) =>
+      JSON.stringify({
+        type: "notification_event",
+        id: deliveryId,
+        topic: "conversation.user.created",
+        app_id: "test-app",
+        created_at: createdAtSeconds,
+        data: {
+          item: {
+            id: conversationId,
+            title: "Intercom dedup",
+            state: "open",
+            priority: "not_priority",
+            source: {
+              body: "<p>Hello from Intercom</p>",
+              author: {
+                type: "user",
+                id: "intercom-user-1",
+                name: "Intercom User",
+                email: "intercom-dedup@example.com",
+              },
+            },
+            created_at: createdAtSeconds,
+            updated_at: createdAtSeconds,
+          },
+        },
+      });
+
+    const send = async (deliveryId: string) => {
+      const payload = makePayload(deliveryId);
+      const signature = `sha1=${await hmacSha1Hex(secret, payload)}`;
+      return app.fetch(
         new Request(
           `https://example.com/support/webhooks/intercom/${organizationId}`,
           {
@@ -307,17 +311,18 @@ describe("support-channels API", () => {
         ),
         env
       );
+    };
 
-    const res1 = await send();
+    const res1 = await send(deliveryId1);
     expect(res1.status).toBe(200);
-    const res2 = await send();
+    const res2 = await send(deliveryId2);
     expect(res2.status).toBe(200);
 
     const db = createD1(env.D1);
     const events = await db
       .select()
       .from(supportTicketEvents)
-      .where(eq(supportTicketEvents.externalId, deliveryId));
+      .where(eq(supportTicketEvents.externalId, conversationId));
     expect(events.length).toBe(1);
   });
 
