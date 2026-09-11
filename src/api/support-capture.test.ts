@@ -50,7 +50,7 @@ async function seedWorkspace() {
 
 function captureFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const request = new Request(`https://example.com${path}`, init);
-  return app.fetch(request, env);
+  return app.fetch(request, env) as Promise<Response>;
 }
 
 describe("support-capture API", () => {

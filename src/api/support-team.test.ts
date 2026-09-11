@@ -1,10 +1,9 @@
 import { env } from "cloudflare:test";
-import { eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { createD1 } from "../global/db.js";
-import { supportTicketSlaEvents, user as userTable } from "../global/schema.js";
+import { user as userTable } from "../global/schema.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
@@ -130,64 +129,5 @@ describe("support-team API", () => {
       members: { userId: string }[];
     };
     expect(membersBody.members.some((m) => m.userId === "user-1")).toBe(true);
-  });
-
-  it("creates SLA rules", async () => {
-    const res = await fetch(`/workspaces/${organizationId}/support/slas`, {
-      method: "POST",
-      body: JSON.stringify({
-        name: "High priority SLA",
-        priority: "high",
-        firstResponseMinutes: 60,
-        resolutionMinutes: 480,
-      }),
-    });
-    expect(res.status).toBe(201);
-    const body = (await res.json()) as { sla: { id: string } };
-    expect(body.sla.id).toBeDefined();
-
-    const list = await fetch(`/workspaces/${organizationId}/support/slas`);
-    expect(list.status).toBe(200);
-    const listBody = (await list.json()) as { slas: { id: string }[] };
-    expect(listBody.slas.some((s) => s.id === body.sla.id)).toBe(true);
-  });
-
-  it("creates SLA events on new high-priority tickets", async () => {
-    const customerRes = await fetch(
-      `/workspaces/${organizationId}/support/customers`,
-      {
-        method: "POST",
-        body: JSON.stringify({
-          email: `sla-customer-${crypto.randomUUID()}@example.com`,
-        }),
-      }
-    );
-    expect(customerRes.status).toBe(201);
-    const customer = (await customerRes.json()) as { customer: { id: string } };
-
-    const ticketRes = await fetch(
-      `/workspaces/${organizationId}/support/tickets`,
-      {
-        method: "POST",
-        body: JSON.stringify({
-          customerId: customer.customer.id,
-          title: "SLA bug",
-          sourceChannel: "api",
-          priority: "high",
-        }),
-      }
-    );
-    expect(ticketRes.status).toBe(201);
-    const ticketBody = (await ticketRes.json()) as { ticket: { id: string } };
-
-    const db = createD1(env.D1);
-    const events = await db
-      .select()
-      .from(supportTicketSlaEvents)
-      .where(eq(supportTicketSlaEvents.ticketId, ticketBody.ticket.id))
-      .all();
-    expect(events.length).toBeGreaterThanOrEqual(1);
-    const first = events.find((e) => e.type === "first_response_target");
-    expect(first).toBeDefined();
   });
 });

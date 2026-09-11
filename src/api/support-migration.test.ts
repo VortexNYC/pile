@@ -59,7 +59,7 @@ function fetch(
     ...init,
     headers,
   });
-  return app.fetch(request, env);
+  return app.fetch(request, env) as Promise<Response>;
 }
 
 describe("support-migration API", () => {

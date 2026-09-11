@@ -2161,9 +2161,6 @@ export const supportTicketEvents = sqliteTable(
         "label_removed",
         "customer_event",
         "thread_event",
-        "survey_requested",
-        "survey_received",
-        "sla_change",
         "link_added",
         "link_changed",
         "link_removed",
@@ -2437,74 +2434,6 @@ export const supportTierMembers = sqliteTable(
     uniqueIndex("support_tier_members_tier_user_idx" as string).on(
       table.tierId,
       table.userId
-    ),
-  ]
-);
-
-export const supportSlas = sqliteTable(
-  "support_slas" as string,
-  {
-    id: text("id" as string).primaryKey(),
-    organizationId: text("organization_id" as string)
-      .notNull()
-      .references(() => organization.id),
-    name: text("name" as string).notNull(),
-    tierId: text("tier_id" as string).references(() => supportTiers.id, {
-      onDelete: "cascade",
-    }),
-    priority: text("priority" as string, {
-      enum: ["low", "medium", "high", "urgent"] as const,
-    }).notNull(),
-    firstResponseMinutes: integer("first_response_minutes" as string),
-    nextResponseMinutes: integer("next_response_minutes" as string),
-    resolutionMinutes: integer("resolution_minutes" as string),
-    businessHoursOnly: integer("business_hours_only" as string, {
-      mode: "boolean",
-    })
-      .notNull()
-      .default(false),
-    createdAt: text("created_at" as string)
-      .notNull()
-      .default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at" as string)
-      .notNull()
-      .default(sql`CURRENT_TIMESTAMP`),
-  },
-  (table) => [
-    uniqueIndex("support_slas_org_name_idx" as string).on(
-      table.organizationId,
-      table.name
-    ),
-  ]
-);
-
-export const supportTicketSlaEvents = sqliteTable(
-  "support_ticket_sla_events" as string,
-  {
-    id: text("id" as string).primaryKey(),
-    ticketId: text("ticket_id" as string)
-      .notNull()
-      .references(() => supportTickets.id, { onDelete: "cascade" }),
-    slaId: text("sla_id" as string)
-      .notNull()
-      .references(() => supportSlas.id, { onDelete: "cascade" }),
-    type: text("type" as string, {
-      enum: [
-        "first_response_target",
-        "next_response_target",
-        "resolution_target",
-      ] as const,
-    }).notNull(),
-    targetAt: text("target_at" as string).notNull(),
-    metAt: text("met_at" as string),
-    breached: integer("breached" as string, { mode: "boolean" })
-      .notNull()
-      .default(false),
-  },
-  (table) => [
-    index("support_ticket_sla_events_ticket_type_idx" as string).on(
-      table.ticketId,
-      table.type
     ),
   ]
 );

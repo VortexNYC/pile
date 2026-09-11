@@ -3,20 +3,15 @@ import { createRoute, z } from "@hono/zod-openapi";
 
 import { createD1 } from "../global/db.js";
 import {
-  createSupportSla,
   createSupportTier,
-  deleteSupportSla,
   deleteSupportTier,
-  getSupportSla,
   getSupportTier,
   listSupportAgents,
-  listSupportSlas,
   listSupportTierMembers,
   listSupportTiers,
   removeSupportTierMember,
   setSupportUserStatus,
   addSupportTierMember,
-  updateSupportSla,
   updateSupportTier,
 } from "../global/support-team.js";
 import { VortexError } from "../platform/errors.js";
@@ -24,8 +19,6 @@ import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 
 const statusEnum = ["active", "away", "snoozed", "offline"] as const;
-
-const priorityEnum = ["low", "medium", "high", "urgent"] as const;
 
 const supportUserStatusSchema = z.object({
   id: z.string(),
@@ -54,20 +47,6 @@ const supportTierSchema = z.object({
   updatedAt: z.string().datetime(),
 });
 
-const supportSlaSchema = z.object({
-  id: z.string(),
-  organizationId: z.string(),
-  name: z.string(),
-  tierId: z.string().optional().nullable(),
-  priority: z.enum(priorityEnum),
-  firstResponseMinutes: z.number().int().optional().nullable(),
-  nextResponseMinutes: z.number().int().optional().nullable(),
-  resolutionMinutes: z.number().int().optional().nullable(),
-  businessHoursOnly: z.boolean(),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
-});
-
 const orgParam = z.object({ organizationId: z.string() });
 const userIdParam = z.object({
   organizationId: z.string(),
@@ -81,10 +60,6 @@ const tierMemberParam = z.object({
   organizationId: z.string(),
   tierId: z.string(),
   userId: z.string(),
-});
-const slaIdParam = z.object({
-  organizationId: z.string(),
-  slaId: z.string(),
 });
 
 const setStatusRoute = createRoute({
@@ -296,120 +271,6 @@ const listTierMembersRoute = createRoute({
   },
 });
 
-const createSlaRoute = createRoute({
-  method: "post",
-  path: "/workspaces/{organizationId}/support/slas",
-  tags: ["support-team"],
-  middleware: [rls("write")],
-  request: {
-    params: orgParam,
-    body: {
-      content: {
-        "application/json": {
-          schema: z.object({
-            name: z.string().min(1),
-            tierId: z.string().optional(),
-            priority: z.enum(priorityEnum),
-            firstResponseMinutes: z.number().int().min(1).optional(),
-            nextResponseMinutes: z.number().int().min(1).optional(),
-            resolutionMinutes: z.number().int().min(1).optional(),
-            businessHoursOnly: z.boolean().optional(),
-          }),
-        },
-      },
-    },
-  },
-  responses: {
-    201: {
-      description: "SLA created",
-      content: {
-        "application/json": { schema: z.object({ sla: supportSlaSchema }) },
-      },
-    },
-  },
-});
-
-const listSlasRoute = createRoute({
-  method: "get",
-  path: "/workspaces/{organizationId}/support/slas",
-  tags: ["support-team"],
-  middleware: [rls("read")],
-  request: { params: orgParam },
-  responses: {
-    200: {
-      description: "SLAs",
-      content: {
-        "application/json": {
-          schema: z.object({ slas: z.array(supportSlaSchema) }),
-        },
-      },
-    },
-  },
-});
-
-const getSlaRoute = createRoute({
-  method: "get",
-  path: "/workspaces/{organizationId}/support/slas/{slaId}",
-  tags: ["support-team"],
-  middleware: [rls("read")],
-  request: { params: slaIdParam },
-  responses: {
-    200: {
-      description: "SLA",
-      content: {
-        "application/json": { schema: z.object({ sla: supportSlaSchema }) },
-      },
-    },
-    404: { description: "Not found" },
-  },
-});
-
-const updateSlaRoute = createRoute({
-  method: "patch",
-  path: "/workspaces/{organizationId}/support/slas/{slaId}",
-  tags: ["support-team"],
-  middleware: [rls("write")],
-  request: {
-    params: slaIdParam,
-    body: {
-      content: {
-        "application/json": {
-          schema: z.object({
-            name: z.string().min(1).optional(),
-            tierId: z.string().optional().nullable(),
-            priority: z.enum(priorityEnum).optional(),
-            firstResponseMinutes: z.number().int().min(1).optional().nullable(),
-            nextResponseMinutes: z.number().int().min(1).optional().nullable(),
-            resolutionMinutes: z.number().int().min(1).optional().nullable(),
-            businessHoursOnly: z.boolean().optional(),
-          }),
-        },
-      },
-    },
-  },
-  responses: {
-    200: {
-      description: "SLA updated",
-      content: {
-        "application/json": { schema: z.object({ sla: supportSlaSchema }) },
-      },
-    },
-    404: { description: "Not found" },
-  },
-});
-
-const deleteSlaRoute = createRoute({
-  method: "delete",
-  path: "/workspaces/{organizationId}/support/slas/{slaId}",
-  tags: ["support-team"],
-  middleware: [rls("write")],
-  request: { params: slaIdParam },
-  responses: {
-    204: { description: "Deleted" },
-    404: { description: "Not found" },
-  },
-});
-
 export function registerSupportTeamRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(setStatusRoute, async (c) => {
     const { organizationId, userId } = c.req.valid("param");
@@ -527,63 +388,5 @@ export function registerSupportTeamRoutes(app: OpenAPIHono<AppContext>) {
     }
     const members = await listSupportTierMembers(db, tierId);
     return c.json({ members });
-  });
-
-  app.openapi(createSlaRoute, async (c) => {
-    const { organizationId } = c.req.valid("param");
-    const body = c.req.valid("json");
-    const db = createD1(c.env.D1);
-    const sla = await createSupportSla(db, organizationId, body);
-    return c.json({ sla }, 201);
-  });
-
-  app.openapi(listSlasRoute, async (c) => {
-    const { organizationId } = c.req.valid("param");
-    const db = createD1(c.env.D1);
-    const slas = await listSupportSlas(db, organizationId);
-    return c.json({ slas });
-  });
-
-  app.openapi(getSlaRoute, async (c) => {
-    const { organizationId, slaId } = c.req.valid("param");
-    const db = createD1(c.env.D1);
-    const sla = await getSupportSla(db, organizationId, slaId);
-    if (!sla) {
-      throw new VortexError({
-        code: "NOT_FOUND",
-        status: 404,
-        message: "SLA not found",
-      });
-    }
-    return c.json({ sla });
-  });
-
-  app.openapi(updateSlaRoute, async (c) => {
-    const { organizationId, slaId } = c.req.valid("param");
-    const body = c.req.valid("json");
-    const db = createD1(c.env.D1);
-    const sla = await updateSupportSla(db, organizationId, slaId, body);
-    if (!sla) {
-      throw new VortexError({
-        code: "NOT_FOUND",
-        status: 404,
-        message: "SLA not found",
-      });
-    }
-    return c.json({ sla });
-  });
-
-  app.openapi(deleteSlaRoute, async (c) => {
-    const { organizationId, slaId } = c.req.valid("param");
-    const db = createD1(c.env.D1);
-    const deleted = await deleteSupportSla(db, organizationId, slaId);
-    if (!deleted) {
-      throw new VortexError({
-        code: "NOT_FOUND",
-        status: 404,
-        message: "SLA not found",
-      });
-    }
-    return c.body(null, 204);
   });
 }

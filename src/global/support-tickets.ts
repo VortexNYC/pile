@@ -29,7 +29,6 @@ import {
   supportTicketLabels,
   supportTicketMessages,
   supportTicketNotes,
-  supportTicketSlaEvents,
   supportTickets,
   team,
   user,
@@ -92,9 +91,6 @@ export type SupportTicketEventType =
   | "label_removed"
   | "customer_event"
   | "thread_event"
-  | "survey_requested"
-  | "survey_received"
-  | "sla_change"
   | "link_added"
   | "link_changed"
   | "link_removed"
@@ -523,7 +519,6 @@ export type ListTicketsOptions = {
   externalSource?: SupportTicketSource;
   assignedTo?: string;
   label?: string;
-  slaBreach?: boolean;
   q?: string;
 };
 
@@ -585,30 +580,6 @@ export async function listTickets(
       inArray(
         supportTickets.id,
         labelTicketIds.map((t) => t.ticketId)
-      )
-    );
-  }
-  if (options.slaBreach) {
-    const breachTicketIds = await db
-      .select({ ticketId: supportTicketSlaEvents.ticketId })
-      .from(supportTicketSlaEvents)
-      .innerJoin(
-        supportTickets,
-        eq(supportTicketSlaEvents.ticketId, supportTickets.id)
-      )
-      .where(
-        and(
-          eq(supportTickets.organizationId, organizationId),
-          eq(supportTicketSlaEvents.breached, true)
-        )
-      );
-    if (breachTicketIds.length === 0) {
-      return { tickets: [], nextCursor: null };
-    }
-    conditions.push(
-      inArray(
-        supportTickets.id,
-        breachTicketIds.map((t) => t.ticketId)
       )
     );
   }

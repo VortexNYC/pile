@@ -702,19 +702,15 @@ function entryEventType(
   if (typename === "ThreadLabelsChangedEntry") {
     return "label_added";
   }
-  if (
-    typename === "CustomerEventEntry" ||
-    typename === "CustomerSurveyRequestedEntry"
-  ) {
-    return typename === "CustomerSurveyRequestedEntry"
-      ? "survey_requested"
-      : "customer_event";
+  if (typename === "CustomerEventEntry") {
+    return "customer_event";
   }
   if (
+    typename === "CustomerSurveyRequestedEntry" ||
     typename === "ThreadServiceLevelAgreementPolicyChangedEntry" ||
     typename === "ServiceLevelAgreementStatusTransitionedEntry"
   ) {
-    return "sla_change";
+    return "custom_entry";
   }
   if (
     typename === "ThreadLinkCreatedEntry" ||

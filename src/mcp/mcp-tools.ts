@@ -925,27 +925,6 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
-    "name": "deleteWorkspacesOrganizationIdSupportSlasSlaId",
-    "description": "Delete support sla (DELETE /workspaces/{organizationId}/support/slas/{slaId})",
-    "method": "DELETE",
-    "path": "/workspaces/{organizationId}/support/slas/{slaId}",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "organizationId": {
-          "type": "string"
-        },
-        "slaId": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "organizationId",
-        "slaId"
-      ]
-    }
-  },
-  {
     "name": "deleteWorkspacesOrganizationIdSupportTiersTierId",
     "description": "Delete support tier (DELETE /workspaces/{organizationId}/support/tiers/{tierId})",
     "method": "DELETE",
@@ -3709,44 +3688,6 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
-    "name": "getWorkspacesOrganizationIdSupportSlas",
-    "description": "List support slas (GET /workspaces/{organizationId}/support/slas)",
-    "method": "GET",
-    "path": "/workspaces/{organizationId}/support/slas",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "organizationId": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "organizationId"
-      ]
-    }
-  },
-  {
-    "name": "getWorkspacesOrganizationIdSupportSlasSlaId",
-    "description": "Get support sla (GET /workspaces/{organizationId}/support/slas/{slaId})",
-    "method": "GET",
-    "path": "/workspaces/{organizationId}/support/slas/{slaId}",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "organizationId": {
-          "type": "string"
-        },
-        "slaId": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "organizationId",
-        "slaId"
-      ]
-    }
-  },
-  {
     "name": "getWorkspacesOrganizationIdSupportSnippets",
     "description": "List support snippets (GET /workspaces/{organizationId}/support/snippets)",
     "method": "GET",
@@ -5935,67 +5876,6 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "organizationId",
         "ruleId"
-      ]
-    }
-  },
-  {
-    "name": "patchWorkspacesOrganizationIdSupportSlasSlaId",
-    "description": "Update support sla (PATCH /workspaces/{organizationId}/support/slas/{slaId})",
-    "method": "PATCH",
-    "path": "/workspaces/{organizationId}/support/slas/{slaId}",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "organizationId": {
-          "type": "string"
-        },
-        "slaId": {
-          "type": "string"
-        },
-        "body": {
-          "type": "object",
-          "properties": {
-            "name": {
-              "type": "string",
-              "minLength": 1
-            },
-            "tierId": {
-              "type": "string",
-              "nullable": true
-            },
-            "priority": {
-              "type": "string",
-              "enum": [
-                "low",
-                "medium",
-                "high",
-                "urgent"
-              ]
-            },
-            "firstResponseMinutes": {
-              "type": "integer",
-              "nullable": true,
-              "minimum": 1
-            },
-            "nextResponseMinutes": {
-              "type": "integer",
-              "nullable": true,
-              "minimum": 1
-            },
-            "resolutionMinutes": {
-              "type": "integer",
-              "nullable": true,
-              "minimum": 1
-            },
-            "businessHoursOnly": {
-              "type": "boolean"
-            }
-          }
-        }
-      },
-      "required": [
-        "organizationId",
-        "slaId"
       ]
     }
   },
@@ -10492,63 +10372,6 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           },
           "required": [
             "name"
-          ]
-        }
-      },
-      "required": [
-        "organizationId"
-      ]
-    }
-  },
-  {
-    "name": "postWorkspacesOrganizationIdSupportSlas",
-    "description": "Create support sla (POST /workspaces/{organizationId}/support/slas)",
-    "method": "POST",
-    "path": "/workspaces/{organizationId}/support/slas",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "organizationId": {
-          "type": "string"
-        },
-        "body": {
-          "type": "object",
-          "properties": {
-            "name": {
-              "type": "string",
-              "minLength": 1
-            },
-            "tierId": {
-              "type": "string"
-            },
-            "priority": {
-              "type": "string",
-              "enum": [
-                "low",
-                "medium",
-                "high",
-                "urgent"
-              ]
-            },
-            "firstResponseMinutes": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "nextResponseMinutes": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "resolutionMinutes": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "businessHoursOnly": {
-              "type": "boolean"
-            }
-          },
-          "required": [
-            "name",
-            "priority"
           ]
         }
       },

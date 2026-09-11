@@ -373,14 +373,6 @@ describe("support-tickets API", () => {
             createdAt: "2023-11-14T11:21:00.000Z",
             metadata: { previousStatus: "open", newStatus: "closed" },
           },
-          {
-            type: "survey_received",
-            subType: "conversation_rating",
-            actorType: "customer",
-            actorId: "contact-1",
-            createdAt: "2023-11-14T11:22:00.000Z",
-            metadata: { rating: "5" },
-          },
         ],
       }
     );
@@ -431,11 +423,6 @@ describe("support-tickets API", () => {
     expect(statusEvent).toBeDefined();
     expect(statusEvent?.subType).toBe("close");
     expect(statusEvent?.metadata).toContain("previousStatus");
-
-    const surveyEvent = events.find((e) => e.type === "survey_received");
-    expect(surveyEvent).toBeDefined();
-    expect(surveyEvent?.subType).toBe("conversation_rating");
-    expect(surveyEvent?.actorType).toBe("customer");
   });
 
   it("imports a Plain thread as a support ticket", async () => {
@@ -490,25 +477,6 @@ describe("support-tickets API", () => {
             metadata: { previousPriority: "medium", newPriority: "low" },
           },
           {
-            type: "sla_change",
-            subType: "ServiceLevelAgreementStatusTransitionedEntry",
-            actorType: "automation",
-            actorId: null,
-            createdAt: "2023-11-14T12:04:30.000Z",
-            metadata: {
-              previousStatus: "IMMINENT_BREACH",
-              nextStatus: "BREACHED",
-            },
-          },
-          {
-            type: "survey_requested",
-            subType: "CustomerSurveyRequestedEntry",
-            actorType: "automation",
-            actorId: null,
-            createdAt: "2023-11-14T12:04:45.000Z",
-            metadata: { customerSurveyId: "survey-1" },
-          },
-          {
             type: "link_added",
             subType: "ThreadLinkCreatedEntry",
             actorType: "user",
@@ -553,16 +521,6 @@ describe("support-tickets API", () => {
     expect(priorityEvent).toBeDefined();
     expect(priorityEvent?.subType).toBe("ThreadPriorityChangedEntry");
     expect(priorityEvent?.metadata).toContain("previousPriority");
-
-    const slaEvent = events.find((e) => e.type === "sla_change");
-    expect(slaEvent).toBeDefined();
-    expect(slaEvent?.subType).toBe(
-      "ServiceLevelAgreementStatusTransitionedEntry"
-    );
-
-    const surveyEvent = events.find((e) => e.type === "survey_requested");
-    expect(surveyEvent).toBeDefined();
-    expect(surveyEvent?.subType).toBe("CustomerSurveyRequestedEntry");
 
     const linkEvent = events.find((e) => e.type === "link_added");
     expect(linkEvent).toBeDefined();
@@ -642,14 +600,6 @@ describe("support-tickets API", () => {
             createdAt: "2023-11-14T13:04:30.000Z",
             metadata: { tag: "billing" },
           },
-          {
-            type: "survey_received",
-            subType: "SatisfactionRating",
-            actorType: "customer",
-            actorId: "requester-1",
-            createdAt: "2023-11-14T13:05:00.000Z",
-            metadata: { score: "good" },
-          },
         ],
       }
     );
@@ -692,11 +642,6 @@ describe("support-tickets API", () => {
     const labelEvent = events.find((e) => e.type === "label_added");
     expect(labelEvent).toBeDefined();
     expect(labelEvent?.subType).toBe("Change:tags");
-
-    const surveyEvent = events.find((e) => e.type === "survey_received");
-    expect(surveyEvent).toBeDefined();
-    expect(surveyEvent?.subType).toBe("SatisfactionRating");
-    expect(surveyEvent?.actorType).toBe("customer");
   });
 
   it("preserves customer companies and identities", async () => {

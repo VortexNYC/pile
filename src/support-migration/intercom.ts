@@ -320,7 +320,7 @@ function partEventType(part: IntercomConversationPart): SupportTicketEventType {
     partType === "csat" ||
     partType === "nps"
   ) {
-    return "survey_received";
+    return "custom_entry";
   }
   if (partType === "feedback") {
     return "customer_event";

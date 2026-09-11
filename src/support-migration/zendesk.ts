@@ -734,7 +734,7 @@ function mapZendeskAuditEvent(
     case "SatisfactionRating":
       return [
         {
-          type: "survey_received",
+          type: "custom_entry",
           subType: event.type,
           actorType,
           actorId,

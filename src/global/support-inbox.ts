@@ -8,7 +8,6 @@ import {
   supportTicketAssignments,
   supportTicketEvents,
   supportTicketLabels,
-  supportTicketSlaEvents,
   supportTickets,
 } from "./schema.js";
 import type { SupportCustomer } from "./support-contacts.js";
@@ -31,12 +30,6 @@ export type SupportInboxTicket = {
   labels: string[];
   lastCustomerMessageAt: string | undefined;
   lastAgentMessageAt: string | undefined;
-  sla: {
-    firstResponseTargetAt?: string;
-    firstResponseBreached: boolean;
-    resolutionTargetAt?: string;
-    resolutionBreached: boolean;
-  } | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -50,7 +43,6 @@ export type ListInboxOptions = {
   customerId?: string;
   channel?: SupportTicketChannel;
   label?: string;
-  slaBreach?: boolean;
   q?: string;
 };
 
@@ -75,7 +67,6 @@ export async function listInboxTickets(
     ticketLabels,
     lastCustomerMessages,
     lastAgentMessages,
-    slaEvents,
   ] = await Promise.all([
     customerIds.length
       ? db
@@ -140,12 +131,6 @@ export async function listInboxTickets(
           )
           .groupBy(supportTicketEvents.ticketId)
       : Promise.resolve([]),
-    ticketIds.length
-      ? db
-          .select()
-          .from(supportTicketSlaEvents)
-          .where(inArray(supportTicketSlaEvents.ticketId, ticketIds))
-      : Promise.resolve([]),
   ]);
 
   const customerById = new Map<string, SupportCustomer>(
@@ -180,35 +165,8 @@ export async function listInboxTickets(
     if (row.lastAt) lastAgentByTicket.set(row.ticketId, row.lastAt);
   }
 
-  const slaByTicket = new Map<
-    string,
-    {
-      firstResponse?: { targetAt: string; breached: boolean };
-      resolution?: { targetAt: string; breached: boolean };
-    }
-  >();
-  for (const e of slaEvents as unknown as (typeof supportTicketSlaEvents.$inferSelect)[]) {
-    const existing = slaByTicket.get(e.ticketId) ?? {};
-    if (e.type === "first_response_target") {
-      existing.firstResponse = { targetAt: e.targetAt, breached: e.breached };
-    } else if (e.type === "resolution_target") {
-      existing.resolution = { targetAt: e.targetAt, breached: e.breached };
-    }
-    slaByTicket.set(e.ticketId, existing);
-  }
-
   const rows: SupportInboxTicket[] = tickets.map((t) => {
     const customer = customerById.get(t.customerId);
-    const slaData = slaByTicket.get(t.id);
-    const sla =
-      slaData?.firstResponse || slaData?.resolution
-        ? {
-            firstResponseTargetAt: slaData.firstResponse?.targetAt,
-            firstResponseBreached: slaData.firstResponse?.breached ?? false,
-            resolutionTargetAt: slaData.resolution?.targetAt,
-            resolutionBreached: slaData.resolution?.breached ?? false,
-          }
-        : null;
 
     return {
       id: t.id,
@@ -221,7 +179,6 @@ export async function listInboxTickets(
       labels: labelsByTicket.get(t.id) ?? [],
       lastCustomerMessageAt: lastCustomerByTicket.get(t.id),
       lastAgentMessageAt: lastAgentByTicket.get(t.id),
-      sla,
       createdAt: t.createdAt,
       updatedAt: t.updatedAt,
     };

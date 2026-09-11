@@ -21,13 +21,12 @@ Build order follows the data dependencies, but migration adapters from Intercom 
 | ------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------- |
 | `support-contacts`  | Customers, companies, leads and contact methods                                                        | `organization`, `user`                |
 | `support-tickets`   | Conversations / tickets: state, priority, source channel, assignment                                   | `support-contacts`                    |
-| `support-team`      | Agent assignment, away status, teams, SLA rules                                                        | `support-tickets`, existing `teams`   |
+| `support-team`      | Agent assignment, away status, teams                                                                   | `support-tickets`, existing `teams`   |
 | `support-content`   | Macros, canned replies, tags, auto-replies                                                             | `support-tickets`                     |
 | `support-capture`   | Bug capture: screenshot, screen recording, console logs, network requests, device info                 | `support-tickets`, `support-contacts` |
 | `support-channels`  | Ingestion endpoints: email, webhook, Slack, SMS, in-app, capture; in-app/agent chat uses Vercel AI SDK | `support-tickets`, `support-capture`  |
 | `support-inbox`     | Inbox views, queues, filters, real-time updates                                                        | `support-tickets`, `support-team`     |
 | `support-migration` | Import and webhook sync from Intercom and Zendesk                                                      | `support-contacts`, `support-tickets` |
-| `support-analytics` | Reporting, ratings, volume, SLA compliance                                                             | `support-tickets`, `support-team`     |
 
 ## Build Order
 
@@ -38,7 +37,6 @@ Build order follows the data dependencies, but migration adapters from Intercom 
 5. `support-migration` (Intercom + Zendesk adapters validate the `support-contacts` and `support-tickets` schema)
 6. `support-channels` (email, webhook, capture ingestion)
 7. `support-inbox`
-8. `support-analytics`
 
 ## Interfaces at the Boundaries
 
