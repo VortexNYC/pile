@@ -5492,7 +5492,8 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
-                            ticketId: string;
+                            ticketId: string | null;
+                            deliveryId?: string;
                         };
                     };
                 };
@@ -5560,7 +5561,8 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
-                            ticketId: string;
+                            ticketId: string | null;
+                            deliveryId?: string;
                         };
                     };
                 };
@@ -5626,7 +5628,8 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
-                            ticketId: string;
+                            ticketId: string | null;
+                            deliveryId?: string;
                         };
                     };
                 };
@@ -5709,6 +5712,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             ticketId: string | null;
+                            deliveryId?: string;
                         };
                     };
                 };

@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import type { Context } from "hono";
 
 import { createD1, type D1Client } from "../global/db.js";
+import { storeJamCaptureArtifacts } from "../global/jam-capture.js";
 import {
   supportCaptureSessions,
   supportTicketAttachments,
@@ -29,10 +30,11 @@ import {
   getTicketById,
   type SupportTicketSource,
 } from "../global/support-tickets.js";
+import { enqueueWebhook } from "../global/webhook-queue.js";
 import { createAuth } from "../platform/auth.js";
 import { VortexError } from "../platform/errors.js";
 import { toApiKeyWorkspaceIdentity } from "../platform/identity.js";
-import type { AppContext } from "../platform/middleware.js";
+import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 import { getWorkspaceStub } from "./stub.js";
 
@@ -574,7 +576,12 @@ const jamIntercomRecordedRoute = createRoute({
     200: {
       description: "Intercom recorder recorded",
       content: {
-        "application/json": { schema: z.object({ ticketId: z.string() }) },
+        "application/json": {
+          schema: z.object({
+            ticketId: z.string().nullable(),
+            deliveryId: z.string().optional(),
+          }),
+        },
       },
     },
     401: {
@@ -607,7 +614,12 @@ const jamIntercomOptedOutRoute = createRoute({
     200: {
       description: "Intercom recorder opted out",
       content: {
-        "application/json": { schema: z.object({ ticketId: z.string() }) },
+        "application/json": {
+          schema: z.object({
+            ticketId: z.string().nullable(),
+            deliveryId: z.string().optional(),
+          }),
+        },
       },
     },
     401: {
@@ -641,7 +653,10 @@ const jamRecordingLinkCreatedRoute = createRoute({
       description: "Recording link created",
       content: {
         "application/json": {
-          schema: z.object({ ticketId: z.string().nullable() }),
+          schema: z.object({
+            ticketId: z.string().nullable(),
+            deliveryId: z.string().optional(),
+          }),
         },
       },
     },
@@ -676,7 +691,10 @@ const jamWebhookRoute = createRoute({
       description: "Jam captured",
       content: {
         "application/json": {
-          schema: z.object({ ticketId: z.string() }),
+          schema: z.object({
+            ticketId: z.string().nullable(),
+            deliveryId: z.string().optional(),
+          }),
         },
       },
     },
@@ -1535,290 +1553,27 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
     }
 
     const parsed = jamWebhookBodySchema.parse(JSON.parse(payload));
-
-    const reference = parsed.recordingLink?.reference;
-    const email = parsed.author?.email;
-    const fullName = parsed.author?.name ?? null;
-    const customer = email
-      ? await findOrCreateCustomerByEmail(
-          db,
-          publicKey.organizationId,
-          email,
-          fullName,
-          "capture"
-        )
-      : null;
-
-    const intercomConversationId = parsed.intercom?.conversationId;
-    const linearIssueId = parsed.linear?.issueId;
-
-    const text = [parsed.description, parsed.recordingLink?.submitterComment]
-      .filter((s): s is string => typeof s === "string" && s.length > 0)
-      .join("\n\n");
-
-    if (!reference && !intercomConversationId && !linearIssueId) {
-      const existing = await db
-        .select()
-        .from(supportTickets)
-        .where(
-          and(
-            eq(supportTickets.organizationId, publicKey.organizationId),
-            eq(supportTickets.externalSource, "jam"),
-            eq(supportTickets.externalId, parsed.jamId)
-          )
-        )
-        .get();
-      if (existing) return c.json({ ticketId: existing.id });
-    }
-
-    let ticket = null;
-    if (reference) {
-      const existing = await getTicketById(
-        db,
-        publicKey.organizationId,
-        reference
-      );
-      if (existing) ticket = existing;
-    }
-
-    if (!ticket && intercomConversationId) {
-      const existing = await db
-        .select()
-        .from(supportTickets)
-        .where(
-          and(
-            eq(supportTickets.organizationId, publicKey.organizationId),
-            eq(supportTickets.externalSource, "intercom"),
-            eq(supportTickets.externalId, intercomConversationId)
-          )
-        )
-        .get();
-      if (existing) ticket = existing;
-    }
-
-    if (!ticket && linearIssueId) {
-      const existing = await db
-        .select()
-        .from(supportTickets)
-        .where(
-          and(
-            eq(supportTickets.organizationId, publicKey.organizationId),
-            eq(supportTickets.externalSource, "linear"),
-            eq(supportTickets.externalId, linearIssueId)
-          )
-        )
-        .get();
-      if (existing) ticket = existing;
-    }
-
-    if (!ticket) {
-      if (!customer) {
-        throw new VortexError({
-          status: 400,
-          code: "BAD_REQUEST",
-          message:
-            "Jam webhook must include an author email when creating a new ticket",
-        });
-      }
-      const externalSource: SupportTicketSource = intercomConversationId
-        ? "intercom"
-        : linearIssueId
-          ? "linear"
-          : "jam";
-      let issueId: string | undefined;
-      if (linearIssueId) {
-        const stub = getWorkspaceStub(c.env, publicKey.organizationId);
-        await stub.setOrganizationId(publicKey.organizationId);
-        const issue = await stub.createIssue({
-          title: parsed.title ?? `Jam ${parsed.type} from ${parsed.jamUrl}`,
-          description: text,
-          status: "backlog",
-          priority: "medium",
-        });
-        issueId = issue.id;
-      }
-      ticket = await createTicket(db, {
-        organizationId: publicKey.organizationId,
-        customerId: customer.id,
-        title: parsed.title ?? `Jam ${parsed.type} from ${parsed.jamUrl}`,
-        priority: "medium",
-        sourceChannel: "capture",
-        issueId,
-        externalSource,
-        externalId: intercomConversationId ?? linearIssueId ?? parsed.jamId,
-      });
-    }
-
-    const customerId = customer?.id ?? ticket.customerId;
-
-    const event = await addTicketMessage(
-      db,
-      publicKey.organizationId,
-      ticket.id,
-      {
-        direction: "inbound",
-        textContent: text || `Jam capture: ${parsed.jamUrl}`,
-        markdownContent: text,
-        channel: "capture",
-        customerId,
-        actorType: "customer",
-        actorId: customerId,
-      },
-      c.env
-    );
-
-    const attachmentInputs: {
-      type: "screenshot" | "video" | "debugger_json" | "log" | "network";
-      url: string;
-      contentType: string;
-    }[] = [];
-
-    if (parsed.type === "video" || parsed.type === "sessionReplay") {
-      if (parsed.media.videoUrl) {
-        attachmentInputs.push({
-          type: "video",
-          url: parsed.media.videoUrl,
-          contentType: "video/mp4",
-        });
-      }
-      if (parsed.media.thumbnailUrl) {
-        attachmentInputs.push({
-          type: "screenshot",
-          url: parsed.media.thumbnailUrl,
-          contentType: "image/jpeg",
-        });
-      }
-    }
-    if (parsed.type === "screenshot" && parsed.media.screenshotUrl) {
-      attachmentInputs.push({
-        type: "screenshot",
-        url: parsed.media.screenshotUrl,
-        contentType: "image/png",
-      });
-    }
-
-    const bucket = c.env.ATTACHMENTS_BUCKET;
     const origin = new URL(c.req.url).origin;
-
-    const debuggerArtifacts: {
-      type: "debugger_json" | "log" | "network";
-      name: string;
-      data: unknown;
-    }[] = [];
-    if (parsed.consoleLogs?.length) {
-      debuggerArtifacts.push({
-        type: "log",
-        name: "console-logs.json",
-        data: parsed.consoleLogs,
-      });
-    }
-    if (parsed.networkRequests?.length) {
-      debuggerArtifacts.push({
-        type: "network",
-        name: "network-requests.json",
-        data: parsed.networkRequests,
-      });
-    }
-    if (parsed.userEvents?.length) {
-      debuggerArtifacts.push({
-        type: "log",
-        name: "user-events.json",
-        data: parsed.userEvents,
-      });
-    }
-    if (
-      parsed.systemInfo &&
-      Object.keys(parsed.systemInfo).some(
-        (k) =>
-          parsed.systemInfo![k as keyof typeof parsed.systemInfo] !== undefined
-      )
-    ) {
-      debuggerArtifacts.push({
-        type: "debugger_json",
-        name: "device-info.json",
-        data: parsed.systemInfo,
-      });
-    }
-
-    const allAttachmentInputs = [
-      ...attachmentInputs.map((input) => ({ source: "url" as const, input })),
-      ...debuggerArtifacts.map((artifact) => ({
-        source: "inline" as const,
-        artifact,
-      })),
-    ];
-
-    await Promise.all(
-      allAttachmentInputs.map(async (entry) => {
-        if (entry.source === "url") {
-          const { input } = entry;
-          const r2Key = `${publicKey.organizationId}/jam/${parsed.jamId}/${input.type}`;
-          let url = input.url;
-          let r2Stored: string | null = null;
-          if (bucket) {
-            try {
-              const resp = await fetch(input.url);
-              if (resp.ok) {
-                const buffer = await resp.arrayBuffer();
-                const contentType =
-                  resp.headers.get("content-type") ?? input.contentType;
-                await bucket.put(r2Key, buffer, {
-                  httpMetadata: { contentType },
-                });
-                r2Stored = r2Key;
-                url = `${origin}/support/capture/artifacts?r2Key=${encodeURIComponent(r2Key)}`;
-              }
-            } catch {
-              // Remote media is not available locally; keep the original URL.
-            }
-          }
-          return db.insert(supportTicketAttachments).values({
-            id: crypto.randomUUID(),
-            organizationId: publicKey.organizationId,
-            ticketId: ticket.id,
-            eventId: event.id,
-            type: input.type,
-            contentType: input.contentType,
-            url,
-            r2Key: r2Stored,
-            createdAt: new Date().toISOString(),
-          });
-        }
-
-        const { artifact } = entry;
-        const r2Key = `${publicKey.organizationId}/jam/${parsed.jamId}/${artifact.name}`;
-        let url = "";
-        let r2Stored: string | null = null;
-        if (bucket) {
-          try {
-            const buffer = new TextEncoder().encode(
-              JSON.stringify(artifact.data)
-            );
-            await bucket.put(r2Key, buffer, {
-              httpMetadata: { contentType: "application/json" },
-            });
-            r2Stored = r2Key;
-            url = `${origin}/support/capture/artifacts?r2Key=${encodeURIComponent(r2Key)}`;
-          } catch {
-            // Inline artifact storage failed; skip it.
-          }
-        }
-        if (!r2Stored) return;
-        return db.insert(supportTicketAttachments).values({
-          id: crypto.randomUUID(),
-          organizationId: publicKey.organizationId,
-          ticketId: ticket.id,
-          eventId: event.id,
-          type: artifact.type,
-          contentType: "application/json",
-          url,
-          r2Key: r2Stored,
-          createdAt: new Date().toISOString(),
-        });
-      })
+    const { deliveryId, result } = await enqueueWebhook(
+      db,
+      c.env,
+      {
+        deliveryId: svixId,
+        source: "jam",
+        event: "jam.created",
+        payload: {
+          publicKey: { ...publicKey, webhookSecret: null },
+          origin,
+          body: parsed,
+        },
+      },
+      new Map([["jam", processJamCreatedWebhookPayload]])
     );
 
-    return c.json({ ticketId: ticket.id });
+    return c.json({
+      ticketId: ticketIdFromResult(result),
+      deliveryId,
+    });
   });
 
   app.openapi(jamIntercomRecordedRoute, async (c) => {
@@ -1864,35 +1619,29 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
     }
 
     const parsed = jamIntercomRecordedSchema.parse(JSON.parse(payload));
-    const ticket = await findSupportTicketByExternalId(
+    const origin = new URL(c.req.url).origin;
+    const { deliveryId, result } = await enqueueWebhook(
       db,
-      publicKey.organizationId,
-      parsed.conversationId,
-      "intercom"
+      c.env,
+      {
+        deliveryId: svixId,
+        source: "jam-intercom-recorded",
+        event: "intercom.recorder.recorded",
+        payload: {
+          publicKey: { ...publicKey, webhookSecret: null },
+          origin,
+          body: parsed,
+        },
+      },
+      new Map([
+        ["jam-intercom-recorded", processJamIntercomRecordedWebhookPayload],
+      ])
     );
-    if (!ticket) {
-      throw new VortexError({
-        status: 404,
-        code: "NOT_FOUND",
-        message: "Intercom conversation not found",
-      });
-    }
 
-    const text = `Customer recorded a Jam: ${parsed.jamUrl}`;
-    await addTicketMessage(db, publicKey.organizationId, ticket.id, {
-      direction: "inbound",
-      textContent: text,
-      markdownContent: text,
-      channel: "intercom",
-      customerId: ticket.customerId,
-      actorType: "customer",
-      actorId: ticket.customerId,
-      subType: "intercom_recorder_recorded",
-      runAutoresponders: false,
-      reopenOnCustomerReply: false,
+    return c.json({
+      ticketId: ticketIdFromResult(result),
+      deliveryId,
     });
-
-    return c.json({ ticketId: ticket.id });
   });
 
   app.openapi(jamIntercomOptedOutRoute, async (c) => {
@@ -1938,32 +1687,29 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
     }
 
     const parsed = jamIntercomOptedOutSchema.parse(JSON.parse(payload));
-    const ticket = await findSupportTicketByExternalId(
+    const origin = new URL(c.req.url).origin;
+    const { deliveryId, result } = await enqueueWebhook(
       db,
-      publicKey.organizationId,
-      parsed.conversationId,
-      "intercom"
+      c.env,
+      {
+        deliveryId: svixId,
+        source: "jam-intercom-opted-out",
+        event: "intercom.recorder.opted_out",
+        payload: {
+          publicKey: { ...publicKey, webhookSecret: null },
+          origin,
+          body: parsed,
+        },
+      },
+      new Map([
+        ["jam-intercom-opted-out", processJamIntercomOptedOutWebhookPayload],
+      ])
     );
-    if (!ticket) {
-      throw new VortexError({
-        status: 404,
-        code: "NOT_FOUND",
-        message: "Intercom conversation not found",
-      });
-    }
 
-    await addTicketMessage(db, publicKey.organizationId, ticket.id, {
-      direction: "inbound",
-      textContent: "Customer declined to record a Jam.",
-      markdownContent: "Customer declined to record a Jam.",
-      channel: "intercom",
-      actorType: "automation",
-      subType: "intercom_recorder_opted_out",
-      runAutoresponders: false,
-      reopenOnCustomerReply: false,
+    return c.json({
+      ticketId: ticketIdFromResult(result),
+      deliveryId,
     });
-
-    return c.json({ ticketId: ticket.id });
   });
 
   app.openapi(jamRecordingLinkCreatedRoute, async (c) => {
@@ -2009,33 +1755,29 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
     }
 
     const parsed = jamRecordingLinkCreatedSchema.parse(JSON.parse(payload));
-    const reference = parsed.reference;
-    if (!reference) {
-      return c.json({ ticketId: null });
-    }
+    const origin = new URL(c.req.url).origin;
+    const { deliveryId, result } = await enqueueWebhook(
+      db,
+      c.env,
+      {
+        deliveryId: svixId,
+        source: "jam-recording-link",
+        event: "recording_link.created",
+        payload: {
+          publicKey: { ...publicKey, webhookSecret: null },
+          origin,
+          body: parsed,
+        },
+      },
+      new Map([
+        ["jam-recording-link", processJamRecordingLinkCreatedWebhookPayload],
+      ])
+    );
 
-    const ticket = await getTicketById(db, publicKey.organizationId, reference);
-    if (!ticket) {
-      throw new VortexError({
-        status: 404,
-        code: "NOT_FOUND",
-        message: "Referenced ticket not found",
-      });
-    }
-
-    const text = `Recording link shared: ${parsed.url}`;
-    await addTicketMessage(db, publicKey.organizationId, ticket.id, {
-      direction: "outbound",
-      textContent: text,
-      markdownContent: text,
-      channel: "capture",
-      actorType: "automation",
-      subType: "recording_link_created",
-      runAutoresponders: false,
-      reopenOnCustomerReply: false,
+    return c.json({
+      ticketId: ticketIdFromResult(result),
+      deliveryId,
     });
-
-    return c.json({ ticketId: ticket.id });
   });
 
   const captureConsoleQuerySchema = z.object({
@@ -2365,4 +2107,329 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
     }
     return c.json(output);
   });
+}
+
+function ticketIdFromResult(result: unknown): string | null {
+  if (typeof result !== "object" || result === null) return null;
+  if ("ticketId" in result && typeof result.ticketId === "string") {
+    return result.ticketId;
+  }
+  return null;
+}
+
+const jamQueuePayloadSchema = z.object({
+  publicKey: capturePublicKeySchema,
+  origin: z.string(),
+  body: z.unknown(),
+});
+
+const jamIntercomQueuePayloadSchema = z.object({
+  publicKey: capturePublicKeySchema,
+  origin: z.string(),
+  body: z.unknown(),
+});
+
+export async function processJamCreatedWebhookPayload(
+  db: D1Client,
+  env: WorkerEnv,
+  payload: unknown
+): Promise<Record<string, unknown>> {
+  const { publicKey, origin, body } = jamQueuePayloadSchema.parse(payload);
+  const organizationId = publicKey.organizationId;
+  const parsed = jamWebhookBodySchema.parse(body);
+
+  const reference = parsed.recordingLink?.reference;
+  const email = parsed.author?.email;
+  const fullName = parsed.author?.name ?? null;
+  const customer = email
+    ? await findOrCreateCustomerByEmail(
+        db,
+        organizationId,
+        email,
+        fullName,
+        "capture"
+      )
+    : null;
+
+  const intercomConversationId = parsed.intercom?.conversationId;
+  const linearIssueId = parsed.linear?.issueId;
+
+  const text = [parsed.description, parsed.recordingLink?.submitterComment]
+    .filter((s): s is string => typeof s === "string" && s.length > 0)
+    .join("\n\n");
+
+  if (!reference && !intercomConversationId && !linearIssueId) {
+    const existing = await db
+      .select()
+      .from(supportTickets)
+      .where(
+        and(
+          eq(supportTickets.organizationId, organizationId),
+          eq(supportTickets.externalSource, "jam"),
+          eq(supportTickets.externalId, parsed.jamId)
+        )
+      )
+      .get();
+    if (existing) return { ticketId: existing.id };
+  }
+
+  let ticket:
+    | Awaited<ReturnType<typeof getTicketById>>
+    | Awaited<ReturnType<typeof findSupportTicketByExternalId>>
+    | null = null;
+
+  if (reference) {
+    const existing = await getTicketById(db, organizationId, reference);
+    if (existing) ticket = existing;
+  }
+  if (!ticket && intercomConversationId) {
+    const existing = await findSupportTicketByExternalId(
+      db,
+      organizationId,
+      intercomConversationId,
+      "intercom"
+    );
+    if (existing) ticket = existing;
+  }
+  if (!ticket && linearIssueId) {
+    const existing = await findSupportTicketByExternalId(
+      db,
+      organizationId,
+      linearIssueId,
+      "linear"
+    );
+    if (existing) ticket = existing;
+  }
+
+  if (!ticket) {
+    if (!customer) {
+      return { ticketId: null };
+    }
+
+    const externalSource: SupportTicketSource = intercomConversationId
+      ? "intercom"
+      : linearIssueId
+        ? "linear"
+        : "jam";
+    let issueId: string | undefined;
+    if (linearIssueId) {
+      const stub = getWorkspaceStub(env, organizationId);
+      await stub.setOrganizationId(organizationId);
+      const issue = await stub.createIssue({
+        title: parsed.title ?? `Jam ${parsed.type} from ${parsed.jamUrl}`,
+        description: text,
+        status: "backlog",
+        priority: "medium",
+      });
+      issueId = issue.id;
+    }
+
+    ticket = await createTicket(db, {
+      organizationId,
+      customerId: customer.id,
+      title: parsed.title ?? `Jam ${parsed.type} from ${parsed.jamUrl}`,
+      priority: "medium",
+      sourceChannel: "capture",
+      issueId,
+      externalSource,
+      externalId: intercomConversationId ?? linearIssueId ?? parsed.jamId,
+    });
+  }
+
+  const customerId = customer?.id ?? ticket.customerId;
+
+  const event = await addTicketMessage(db, organizationId, ticket.id, {
+    direction: "inbound",
+    textContent: text || `Jam capture: ${parsed.jamUrl}`,
+    markdownContent: text,
+    channel: "capture",
+    customerId,
+    actorType: "customer",
+    actorId: customerId,
+  });
+
+  const remoteAttachments: {
+    type: "screenshot" | "video";
+    url: string;
+    contentType: string;
+  }[] = [];
+  if (parsed.type === "video" || parsed.type === "sessionReplay") {
+    if (parsed.media.videoUrl) {
+      remoteAttachments.push({
+        type: "video",
+        url: parsed.media.videoUrl,
+        contentType: "video/mp4",
+      });
+    }
+    if (parsed.media.thumbnailUrl) {
+      remoteAttachments.push({
+        type: "screenshot",
+        url: parsed.media.thumbnailUrl,
+        contentType: "image/jpeg",
+      });
+    }
+  }
+  if (parsed.type === "screenshot" && parsed.media.screenshotUrl) {
+    remoteAttachments.push({
+      type: "screenshot",
+      url: parsed.media.screenshotUrl,
+      contentType: "image/png",
+    });
+  }
+
+  const inlineArtifacts: {
+    type: "debugger_json" | "log" | "network";
+    name: string;
+    data: unknown;
+  }[] = [];
+  if (parsed.consoleLogs?.length) {
+    inlineArtifacts.push({
+      type: "log",
+      name: "console-logs.json",
+      data: parsed.consoleLogs,
+    });
+  }
+  if (parsed.networkRequests?.length) {
+    inlineArtifacts.push({
+      type: "network",
+      name: "network-requests.json",
+      data: parsed.networkRequests,
+    });
+  }
+  if (parsed.userEvents?.length) {
+    inlineArtifacts.push({
+      type: "log",
+      name: "user-events.json",
+      data: parsed.userEvents,
+    });
+  }
+  if (
+    parsed.systemInfo &&
+    Object.keys(parsed.systemInfo).some(
+      (k) =>
+        parsed.systemInfo![k as keyof typeof parsed.systemInfo] !== undefined
+    )
+  ) {
+    inlineArtifacts.push({
+      type: "debugger_json",
+      name: "device-info.json",
+      data: parsed.systemInfo,
+    });
+  }
+
+  await storeJamCaptureArtifacts(
+    db,
+    env,
+    organizationId,
+    origin,
+    ticket.id,
+    event.id,
+    parsed.jamId,
+    remoteAttachments,
+    inlineArtifacts
+  );
+
+  return { ticketId: ticket.id };
+}
+
+export async function processJamIntercomRecordedWebhookPayload(
+  db: D1Client,
+  env: WorkerEnv,
+  payload: unknown
+): Promise<Record<string, unknown>> {
+  const { publicKey, body } = jamIntercomQueuePayloadSchema.parse(payload);
+  const parsed = jamIntercomRecordedSchema.parse(body);
+  const organizationId = publicKey.organizationId;
+
+  const ticket = await findSupportTicketByExternalId(
+    db,
+    organizationId,
+    parsed.conversationId,
+    "intercom"
+  );
+  if (!ticket) {
+    return { ticketId: null };
+  }
+
+  const text = `Customer recorded a Jam: ${parsed.jamUrl}`;
+  await addTicketMessage(db, organizationId, ticket.id, {
+    direction: "inbound",
+    textContent: text,
+    markdownContent: text,
+    channel: "intercom",
+    customerId: ticket.customerId,
+    actorType: "customer",
+    actorId: ticket.customerId,
+    subType: "intercom_recorder_recorded",
+    runAutoresponders: false,
+    reopenOnCustomerReply: false,
+  });
+
+  return { ticketId: ticket.id };
+}
+
+export async function processJamIntercomOptedOutWebhookPayload(
+  db: D1Client,
+  env: WorkerEnv,
+  payload: unknown
+): Promise<Record<string, unknown>> {
+  const { publicKey, body } = jamIntercomQueuePayloadSchema.parse(payload);
+  const parsed = jamIntercomOptedOutSchema.parse(body);
+  const organizationId = publicKey.organizationId;
+
+  const ticket = await findSupportTicketByExternalId(
+    db,
+    organizationId,
+    parsed.conversationId,
+    "intercom"
+  );
+  if (!ticket) {
+    return { ticketId: null };
+  }
+
+  await addTicketMessage(db, organizationId, ticket.id, {
+    direction: "inbound",
+    textContent: "Customer declined to record a Jam.",
+    markdownContent: "Customer declined to record a Jam.",
+    channel: "intercom",
+    actorType: "automation",
+    subType: "intercom_recorder_opted_out",
+    runAutoresponders: false,
+    reopenOnCustomerReply: false,
+  });
+
+  return { ticketId: ticket.id };
+}
+
+export async function processJamRecordingLinkCreatedWebhookPayload(
+  db: D1Client,
+  env: WorkerEnv,
+  payload: unknown
+): Promise<Record<string, unknown>> {
+  const { publicKey, body } = jamIntercomQueuePayloadSchema.parse(payload);
+  const parsed = jamRecordingLinkCreatedSchema.parse(body);
+  const organizationId = publicKey.organizationId;
+
+  if (!parsed.reference) {
+    return { ticketId: null };
+  }
+
+  const ticket = await getTicketById(db, organizationId, parsed.reference);
+  if (!ticket) {
+    return { ticketId: null };
+  }
+
+  const text = `Recording link shared: ${parsed.url}`;
+  await addTicketMessage(db, organizationId, ticket.id, {
+    direction: "outbound",
+    textContent: text,
+    markdownContent: text,
+    channel: "capture",
+    actorType: "automation",
+    subType: "recording_link_created",
+    runAutoresponders: false,
+    reopenOnCustomerReply: false,
+  });
+
+  return { ticketId: ticket.id };
 }

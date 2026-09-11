@@ -3,6 +3,8 @@ import { eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 
+env.WEBHOOK_QUEUE = null as unknown as typeof env.WEBHOOK_QUEUE;
+
 import { getWorkspaceStub } from "../api/stub.js";
 import { createD1 } from "../global/db.js";
 import { supportCustomers, user as userTable } from "../global/schema.js";

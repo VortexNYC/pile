@@ -38,7 +38,7 @@ export type WebhookProcessor = (
   db: D1Client,
   env: WorkerEnv,
   payload: unknown
-) => Promise<void>;
+) => Promise<Record<string, unknown> | void>;
 
 const MAX_WEBHOOK_ATTEMPTS = 3;
 const PROCESSING_LOCK_TIMEOUT_MS = 5 * 60 * 1000;
@@ -57,6 +57,7 @@ export interface WebhookDeliveryRow {
   lastError: string | null;
   nextRetryAt: string | null;
   lockedAt: string | null;
+  result: string | null;
 }
 
 function nowIso(): string {
@@ -68,7 +69,7 @@ export async function enqueueWebhook(
   env: WorkerEnv,
   input: EnqueueWebhookInput,
   processors?: Map<WebhookSource, WebhookProcessor>
-): Promise<{ deliveryId: string }> {
+): Promise<{ deliveryId: string; result?: unknown }> {
   const deliveryId = input.deliveryId ?? crypto.randomUUID();
   const payloadText =
     input.payload === undefined ? null : JSON.stringify(input.payload);
@@ -89,23 +90,38 @@ export async function enqueueWebhook(
     .get();
 
   if (inserted === undefined) {
+    const existing = await db
+      .select()
+      .from(webhookDeliveries)
+      .where(eq(webhookDeliveries.deliveryId, deliveryId))
+      .get();
+    if (existing?.status === "completed" && existing.result) {
+      return { deliveryId, result: JSON.parse(existing.result) };
+    }
     return { deliveryId };
   }
 
   if (env.WEBHOOK_QUEUE) {
     await env.WEBHOOK_QUEUE.send({ deliveryId } satisfies WebhookQueueMessage);
-  } else if (processors) {
-    await processWebhookDeliveryById(db, env, deliveryId, processors);
-  } else {
-    throw new VortexError({
-      code: "CONFIG_ERROR",
-      status: 500,
-      message:
-        "WEBHOOK_QUEUE is not configured and no inline processors provided",
-    });
+    return { deliveryId };
   }
 
-  return { deliveryId };
+  if (processors) {
+    const result = await processWebhookDeliveryById(
+      db,
+      env,
+      deliveryId,
+      processors
+    );
+    return { deliveryId, result };
+  }
+
+  throw new VortexError({
+    code: "CONFIG_ERROR",
+    status: 500,
+    message:
+      "WEBHOOK_QUEUE is not configured and no inline processors provided",
+  });
 }
 
 export async function startWebhookDelivery(
@@ -138,11 +154,18 @@ export async function startWebhookDelivery(
 
 export async function completeWebhookDelivery(
   db: D1Client,
-  deliveryId: string
+  deliveryId: string,
+  result?: unknown
 ): Promise<void> {
+  const resultText = result === undefined ? null : JSON.stringify(result);
   await db
     .update(webhookDeliveries)
-    .set({ status: "completed", lastError: null, nextRetryAt: null })
+    .set({
+      status: "completed",
+      lastError: null,
+      nextRetryAt: null,
+      result: resultText,
+    })
     .where(eq(webhookDeliveries.deliveryId, deliveryId));
 }
 
@@ -226,8 +249,13 @@ export async function processWebhookQueueBatch(
       }
 
       try {
-        await processWebhookDelivery(db, env, delivery, processors);
-        await completeWebhookDelivery(db, deliveryId);
+        const result = await processWebhookDelivery(
+          db,
+          env,
+          delivery,
+          processors
+        );
+        await completeWebhookDelivery(db, deliveryId, result);
         message.ack();
       } catch (error) {
         await failWebhookDelivery(db, deliveryId, error, delivery.attemptCount);
@@ -246,15 +274,16 @@ export async function processWebhookDeliveryById(
   env: WorkerEnv,
   deliveryId: string,
   processors: Map<WebhookSource, WebhookProcessor>
-): Promise<void> {
+): Promise<unknown> {
   const delivery = await startWebhookDelivery(db, deliveryId);
   if (!delivery) {
     return;
   }
 
   try {
-    await processWebhookDelivery(db, env, delivery, processors);
-    await completeWebhookDelivery(db, deliveryId);
+    const result = await processWebhookDelivery(db, env, delivery, processors);
+    await completeWebhookDelivery(db, deliveryId, result);
+    return result;
   } catch (error) {
     await failWebhookDelivery(db, deliveryId, error, delivery.attemptCount);
     throw error;
@@ -266,7 +295,7 @@ async function processWebhookDelivery(
   env: WorkerEnv,
   delivery: WebhookDeliveryRow,
   processors: Map<WebhookSource, WebhookProcessor>
-): Promise<void> {
+): Promise<unknown> {
   const source = delivery.source as WebhookSource;
   const processor = processors.get(source);
 
@@ -279,5 +308,5 @@ async function processWebhookDelivery(
   }
 
   const payload = delivery.payload ? JSON.parse(delivery.payload) : null;
-  await processor(db, env, payload);
+  return processor(db, env, payload);
 }

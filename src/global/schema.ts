@@ -911,6 +911,7 @@ export const webhookDeliveries = sqliteTable(
     lastError: text("last_error" as string),
     nextRetryAt: text("next_retry_at" as string),
     lockedAt: text("locked_at" as string),
+    result: text("result" as string),
   },
   (table) => [
     index("webhook_deliveries_organization_idx" as string).on(

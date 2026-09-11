@@ -10691,6 +10691,10 @@
                   "type": "object",
                   "properties": {
                     "ticketId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "deliveryId": {
                       "type": "string"
                     }
                   },
@@ -10787,6 +10791,10 @@
                   "type": "object",
                   "properties": {
                     "ticketId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "deliveryId": {
                       "type": "string"
                     }
                   },
@@ -10875,6 +10883,10 @@
                   "type": "object",
                   "properties": {
                     "ticketId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "deliveryId": {
                       "type": "string"
                     }
                   },
@@ -11015,6 +11027,9 @@
                     "ticketId": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "deliveryId": {
+                      "type": "string"
                     }
                   },
                   "required": [
