@@ -5398,6 +5398,78 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "support imports create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/imports",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support imports get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/imports/{importId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "importId",
+        flag: "import-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support imports resume create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/imports/{importId}/resume",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "importId",
+        flag: "import-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support imports cancel create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/imports/{importId}/cancel",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "importId",
+        flag: "import-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support imports validate create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/imports/validate",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "support users status create": {
     method: "POST",
     path: "/workspaces/{organizationId}/support/users/{userId}/status",

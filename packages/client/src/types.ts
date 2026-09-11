@@ -12875,6 +12875,397 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/support/imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create support import */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        source: "intercom";
+                        credentials: {
+                            token: string;
+                        };
+                        options?: {
+                            teamId?: string;
+                            /**
+                             * @default all
+                             * @enum {string}
+                             */
+                            state?: "open" | "closed" | "snoozed" | "all";
+                            limit?: number;
+                            cursor?: string;
+                            teamName?: string;
+                        };
+                    } | {
+                        /** @enum {string} */
+                        source: "plain";
+                        credentials: {
+                            token: string;
+                        };
+                        options?: {
+                            /**
+                             * @default all
+                             * @enum {string}
+                             */
+                            state?: "todo" | "done" | "snoozed" | "all";
+                            limit?: number;
+                            cursor?: string;
+                            teamId?: string;
+                            teamName?: string;
+                        };
+                    } | {
+                        /** @enum {string} */
+                        source: "zendesk";
+                        credentials: {
+                            subdomain: string;
+                            /** Format: email */
+                            email: string;
+                            token: string;
+                        };
+                        options?: {
+                            /**
+                             * @default all
+                             * @enum {string}
+                             */
+                            state?: "open" | "pending" | "hold" | "solved" | "closed" | "all";
+                            limit?: number;
+                            cursor?: string;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Import started */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                            source: string;
+                            jobId: string;
+                            status: string;
+                            counts?: {
+                                [key: string]: number;
+                            };
+                            nextCursor?: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/support/imports/{importId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get support import */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    importId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Import status */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            source: string;
+                            status: string;
+                            options?: {
+                                [key: string]: unknown;
+                            };
+                            counts?: {
+                                [key: string]: number;
+                            };
+                            cursor?: string;
+                            error: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                            completedAt: string | null;
+                        };
+                    };
+                };
+                /** @description Import not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/support/imports/{importId}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create support import resume */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    importId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        source: "intercom";
+                        credentials: {
+                            token: string;
+                        };
+                        options?: {
+                            teamId?: string;
+                            /**
+                             * @default all
+                             * @enum {string}
+                             */
+                            state?: "open" | "closed" | "snoozed" | "all";
+                            limit?: number;
+                            cursor?: string;
+                            teamName?: string;
+                        };
+                    } | {
+                        /** @enum {string} */
+                        source: "plain";
+                        credentials: {
+                            token: string;
+                        };
+                        options?: {
+                            /**
+                             * @default all
+                             * @enum {string}
+                             */
+                            state?: "todo" | "done" | "snoozed" | "all";
+                            limit?: number;
+                            cursor?: string;
+                            teamId?: string;
+                            teamName?: string;
+                        };
+                    } | {
+                        /** @enum {string} */
+                        source: "zendesk";
+                        credentials: {
+                            subdomain: string;
+                            /** Format: email */
+                            email: string;
+                            token: string;
+                        };
+                        options?: {
+                            /**
+                             * @default all
+                             * @enum {string}
+                             */
+                            state?: "open" | "pending" | "hold" | "solved" | "closed" | "all";
+                            limit?: number;
+                            cursor?: string;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Import resumed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                            source: string;
+                            jobId: string;
+                            status: string;
+                            counts?: {
+                                [key: string]: number;
+                            };
+                            nextCursor?: string;
+                        };
+                    };
+                };
+                /** @description Import not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/support/imports/{importId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create support import cancel */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    importId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Import canceled */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            status: string;
+                        };
+                    };
+                };
+                /** @description Import not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/support/imports/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create support import validate */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        source: "intercom";
+                        credentials: {
+                            token: string;
+                        };
+                    } | {
+                        /** @enum {string} */
+                        source: "plain";
+                        credentials: {
+                            token: string;
+                        };
+                    } | {
+                        /** @enum {string} */
+                        source: "zendesk";
+                        credentials: {
+                            subdomain: string;
+                            /** Format: email */
+                            email: string;
+                            token: string;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Validation result */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                            error?: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/support/users/{userId}/status": {
         parameters: {
             query?: never;

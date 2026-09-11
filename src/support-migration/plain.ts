@@ -24,13 +24,13 @@ import {
   setTicketAssignees,
   type SupportTicketAssigneeInput,
 } from "../global/support-tickets.js";
-import { VortexError } from "../platform/errors.js";
 import type {
   ImportBatchResult,
   ImportContext,
   ImportSource,
   ImportValidationResult,
-} from "./types.js";
+} from "../import/types.js";
+import { VortexError } from "../platform/errors.js";
 
 const PLAIN_API_BASE = "https://core-api.uk.plain.com/graphql/v1";
 

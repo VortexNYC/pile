@@ -28,11 +28,11 @@ import {
   setTicketAssignees,
 } from "../global/support-tickets.js";
 import { createWorkspace } from "../global/workspaces.js";
-import { intercomSupportOptionsSchema } from "../import/intercom-support.js";
-import { plainSupportOptionsSchema } from "../import/plain-support.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
 import { createAdminHeaders } from "../platform/test-auth.js";
+import { intercomSupportOptionsSchema } from "../support-migration/intercom.js";
+import { plainSupportOptionsSchema } from "../support-migration/plain.js";
 
 const ORIGIN = "https://your-domain.com";
 

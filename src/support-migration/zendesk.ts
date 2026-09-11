@@ -24,13 +24,13 @@ import {
   setTicketAssignees,
   type SupportTicketAssigneeInput,
 } from "../global/support-tickets.js";
-import { VortexError } from "../platform/errors.js";
 import type {
   ImportBatchResult,
   ImportContext,
   ImportSource,
   ImportValidationResult,
-} from "./types.js";
+} from "../import/types.js";
+import { VortexError } from "../platform/errors.js";
 
 export const zendeskSupportCredentialsSchema = z.object({
   subdomain: z.string().min(1),

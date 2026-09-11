@@ -24,11 +24,6 @@ import {
   githubIssuesOptionsSchema,
 } from "../import/github-issues.js";
 import {
-  intercomSupportCredentialsSchema,
-  intercomSupportImportSource,
-  intercomSupportOptionsSchema,
-} from "../import/intercom-support.js";
-import {
   intercomCredentialsSchema,
   intercomImportSource,
   intercomOptionsSchema,
@@ -48,20 +43,25 @@ import {
   notionImportSource,
   notionOptionsSchema,
 } from "../import/notion.js";
+import { resumeImport, runImport } from "../import/runner.js";
+import type { ImportCounts, ImportRunState } from "../import/types.js";
+import type { AppContext } from "../platform/middleware.js";
+import { rls } from "../platform/rls.js";
+import {
+  intercomSupportCredentialsSchema,
+  intercomSupportImportSource,
+  intercomSupportOptionsSchema,
+} from "../support-migration/intercom.js";
 import {
   plainSupportCredentialsSchema,
   plainSupportImportSource,
   plainSupportOptionsSchema,
-} from "../import/plain-support.js";
-import { resumeImport, runImport } from "../import/runner.js";
-import type { ImportCounts, ImportRunState } from "../import/types.js";
+} from "../support-migration/plain.js";
 import {
   zendeskSupportCredentialsSchema,
   zendeskSupportImportSource,
   zendeskSupportOptionsSchema,
-} from "../import/zendesk-support.js";
-import type { AppContext } from "../platform/middleware.js";
-import { rls } from "../platform/rls.js";
+} from "../support-migration/zendesk.js";
 
 const importBodySchema = z.object({
   source: z.enum([

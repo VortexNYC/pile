@@ -3466,6 +3466,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdSupportImportsImportId",
+    "description": "Get support import (GET /workspaces/{organizationId}/support/imports/{importId})",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/imports/{importId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "importId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "importId",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdSupportInbox",
     "description": "List support inbox (GET /workspaces/{organizationId}/support/inbox)",
     "method": "GET",
@@ -9662,6 +9683,533 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "name",
             "conditions",
             "action"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSupportImports",
+    "description": "Create support import (POST /workspaces/{organizationId}/support/imports)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/imports",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "intercom"
+                  ]
+                },
+                "credentials": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "token"
+                  ]
+                },
+                "options": {
+                  "type": "object",
+                  "properties": {
+                    "teamId": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "open",
+                        "closed",
+                        "snoozed",
+                        "all"
+                      ],
+                      "default": "all"
+                    },
+                    "limit": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 1000
+                    },
+                    "cursor": {
+                      "type": "string"
+                    },
+                    "teamName": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "required": [
+                "source",
+                "credentials"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "plain"
+                  ]
+                },
+                "credentials": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "token"
+                  ]
+                },
+                "options": {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "todo",
+                        "done",
+                        "snoozed",
+                        "all"
+                      ],
+                      "default": "all"
+                    },
+                    "limit": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 1000
+                    },
+                    "cursor": {
+                      "type": "string"
+                    },
+                    "teamId": {
+                      "type": "string"
+                    },
+                    "teamName": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "required": [
+                "source",
+                "credentials"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "zendesk"
+                  ]
+                },
+                "credentials": {
+                  "type": "object",
+                  "properties": {
+                    "subdomain": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "email": {
+                      "type": "string",
+                      "format": "email"
+                    },
+                    "token": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "subdomain",
+                    "email",
+                    "token"
+                  ]
+                },
+                "options": {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "open",
+                        "pending",
+                        "hold",
+                        "solved",
+                        "closed",
+                        "all"
+                      ],
+                      "default": "all"
+                    },
+                    "limit": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 1000
+                    },
+                    "cursor": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "required": [
+                "source",
+                "credentials"
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSupportImportsImportIdCancel",
+    "description": "Create support import cancel (POST /workspaces/{organizationId}/support/imports/{importId}/cancel)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/imports/{importId}/cancel",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "importId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "importId",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSupportImportsImportIdResume",
+    "description": "Create support import resume (POST /workspaces/{organizationId}/support/imports/{importId}/resume)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/imports/{importId}/resume",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "importId": {
+          "type": "string"
+        },
+        "body": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "intercom"
+                  ]
+                },
+                "credentials": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "token"
+                  ]
+                },
+                "options": {
+                  "type": "object",
+                  "properties": {
+                    "teamId": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "open",
+                        "closed",
+                        "snoozed",
+                        "all"
+                      ],
+                      "default": "all"
+                    },
+                    "limit": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 1000
+                    },
+                    "cursor": {
+                      "type": "string"
+                    },
+                    "teamName": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "required": [
+                "source",
+                "credentials"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "plain"
+                  ]
+                },
+                "credentials": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "token"
+                  ]
+                },
+                "options": {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "todo",
+                        "done",
+                        "snoozed",
+                        "all"
+                      ],
+                      "default": "all"
+                    },
+                    "limit": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 1000
+                    },
+                    "cursor": {
+                      "type": "string"
+                    },
+                    "teamId": {
+                      "type": "string"
+                    },
+                    "teamName": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "required": [
+                "source",
+                "credentials"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "zendesk"
+                  ]
+                },
+                "credentials": {
+                  "type": "object",
+                  "properties": {
+                    "subdomain": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "email": {
+                      "type": "string",
+                      "format": "email"
+                    },
+                    "token": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "subdomain",
+                    "email",
+                    "token"
+                  ]
+                },
+                "options": {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "open",
+                        "pending",
+                        "hold",
+                        "solved",
+                        "closed",
+                        "all"
+                      ],
+                      "default": "all"
+                    },
+                    "limit": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 1000
+                    },
+                    "cursor": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "required": [
+                "source",
+                "credentials"
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "importId",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSupportImportsValidate",
+    "description": "Create support import validate (POST /workspaces/{organizationId}/support/imports/validate)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/imports/validate",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "intercom"
+                  ]
+                },
+                "credentials": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "token"
+                  ]
+                }
+              },
+              "required": [
+                "source",
+                "credentials"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "plain"
+                  ]
+                },
+                "credentials": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "token"
+                  ]
+                }
+              },
+              "required": [
+                "source",
+                "credentials"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "zendesk"
+                  ]
+                },
+                "credentials": {
+                  "type": "object",
+                  "properties": {
+                    "subdomain": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "email": {
+                      "type": "string",
+                      "format": "email"
+                    },
+                    "token": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "subdomain",
+                    "email",
+                    "token"
+                  ]
+                }
+              },
+              "required": [
+                "source",
+                "credentials"
+              ]
+            }
           ]
         }
       },

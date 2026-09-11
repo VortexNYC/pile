@@ -23,19 +23,19 @@ import {
   findUserByEmail,
   setTicketAssignees,
 } from "../global/support-tickets.js";
-import { VortexError } from "../platform/errors.js";
 import {
   intercomCredentialsSchema,
   intercomOptionsSchema,
   intercomRequest,
   listIntercomConversations,
-} from "./intercom.js";
+} from "../import/intercom.js";
 import type {
   ImportBatchResult,
   ImportContext,
   ImportSource,
   ImportValidationResult,
-} from "./types.js";
+} from "../import/types.js";
+import { VortexError } from "../platform/errors.js";
 
 export const intercomSupportCredentialsSchema = intercomCredentialsSchema;
 export type IntercomSupportCredentials = z.infer<
