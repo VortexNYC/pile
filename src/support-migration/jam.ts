@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { recordImportMapping } from "../global/import-mappings.js";
+import { storeJamCaptureArtifacts } from "../global/jam-capture.js";
 import { findOrCreateCustomerByEmail } from "../global/support-contacts.js";
 import {
   addTicketMessage,
@@ -63,6 +64,20 @@ const jamItemSchema = z
       })
       .passthrough()
       .optional(),
+    media: z
+      .object({
+        videoUrl: z.string().optional(),
+        screenshotUrl: z.string().optional(),
+      })
+      .passthrough()
+      .optional(),
+    consoleLogs: z.array(z.unknown()).optional(),
+    networkRequests: z.array(z.unknown()).optional(),
+    userEvents: z.array(z.unknown()).optional(),
+    systemInfo: z.record(z.string(), z.unknown()).optional(),
+    eventsSummary: z.record(z.string(), z.unknown()).optional(),
+    postprocessing: z.record(z.string(), z.unknown()).optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
   })
   .passthrough();
 
@@ -166,16 +181,116 @@ export const jamSupportImportSource: ImportSource<
             createdAt: item.createdAt,
           });
 
-          await addTicketMessage(ctx.db, ctx.organizationId, ticket.id, {
-            direction: "inbound",
-            textContent: text || `Jam capture: ${item.jamUrl}`,
-            markdownContent: text,
-            channel: "capture",
-            customerId: customer.id,
-            actorType: "customer",
-            actorId: customer.id,
-            createdAt: item.createdAt,
-          });
+          const event = await addTicketMessage(
+            ctx.db,
+            ctx.organizationId,
+            ticket.id,
+            {
+              direction: "inbound",
+              textContent: text || `Jam capture: ${item.jamUrl}`,
+              markdownContent: text,
+              channel: "capture",
+              customerId: customer.id,
+              actorType: "customer",
+              actorId: customer.id,
+              createdAt: item.createdAt,
+            }
+          );
+
+          const origin =
+            ctx.requestHeaders.get("origin") ?? "https://vortex.nyc";
+          const remoteAttachments: {
+            type: "screenshot" | "video";
+            url: string;
+            contentType: string;
+          }[] = [];
+          if (item.media?.videoUrl) {
+            remoteAttachments.push({
+              type: "video",
+              url: item.media.videoUrl,
+              contentType: "video/webm",
+            });
+          }
+          if (item.media?.screenshotUrl) {
+            remoteAttachments.push({
+              type: "screenshot",
+              url: item.media.screenshotUrl,
+              contentType: "image/png",
+            });
+          }
+
+          const inlineArtifacts: {
+            type: "debugger_json" | "log" | "network";
+            name: string;
+            data: unknown;
+          }[] = [];
+          if (item.consoleLogs?.length) {
+            inlineArtifacts.push({
+              type: "log",
+              name: "console-logs.json",
+              data: item.consoleLogs,
+            });
+          }
+          if (item.networkRequests?.length) {
+            inlineArtifacts.push({
+              type: "network",
+              name: "network-requests.json",
+              data: item.networkRequests,
+            });
+          }
+          if (item.userEvents?.length) {
+            inlineArtifacts.push({
+              type: "log",
+              name: "user-events.json",
+              data: item.userEvents,
+            });
+          }
+          if (item.systemInfo && Object.keys(item.systemInfo).length > 0) {
+            inlineArtifacts.push({
+              type: "debugger_json",
+              name: "device-info.json",
+              data: item.systemInfo,
+            });
+          }
+          if (
+            item.eventsSummary &&
+            Object.keys(item.eventsSummary).length > 0
+          ) {
+            inlineArtifacts.push({
+              type: "debugger_json",
+              name: "events-summary.json",
+              data: item.eventsSummary,
+            });
+          }
+          if (
+            item.postprocessing &&
+            Object.keys(item.postprocessing).length > 0
+          ) {
+            inlineArtifacts.push({
+              type: "debugger_json",
+              name: "postprocessing.json",
+              data: item.postprocessing,
+            });
+          }
+          if (item.metadata && Object.keys(item.metadata).length > 0) {
+            inlineArtifacts.push({
+              type: "debugger_json",
+              name: "metadata.json",
+              data: item.metadata,
+            });
+          }
+
+          await storeJamCaptureArtifacts(
+            ctx.db,
+            ctx.env,
+            ctx.organizationId,
+            origin,
+            ticket.id,
+            event.id,
+            item.jamId,
+            remoteAttachments,
+            inlineArtifacts
+          );
 
           await recordImportMapping(
             ctx.db,

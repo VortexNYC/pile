@@ -175,7 +175,7 @@ function normalizeMcpJam(raw: unknown): Record<string, unknown> {
         ? item.jamType
         : undefined;
 
-  return {
+  const result: Record<string, unknown> = {
     jamId,
     jamUrl,
     teamId,
@@ -190,6 +190,124 @@ function normalizeMcpJam(raw: unknown): Record<string, unknown> {
         ? { email: authorEmail, name: authorName }
         : undefined,
   };
+
+  const detailFields = [
+    "consoleLogs",
+    "networkRequests",
+    "userEvents",
+    "systemInfo",
+    "eventsSummary",
+    "postprocessing",
+    "metadata",
+    "media",
+  ];
+  for (const key of detailFields) {
+    if (key in item) result[key] = item[key];
+  }
+
+  return result;
+}
+
+function parseMcpToolText(result: unknown): unknown {
+  if (!result || typeof result !== "object" || !("content" in result)) {
+    return undefined;
+  }
+  const record = result as { content?: unknown[] };
+  for (const item of record.content ?? []) {
+    if (
+      item &&
+      typeof item === "object" &&
+      "type" in item &&
+      (item as { type: string }).type === "text" &&
+      "text" in item &&
+      typeof (item as { text: string }).text === "string"
+    ) {
+      const text = (item as { text: string }).text;
+      try {
+        return JSON.parse(text);
+      } catch {
+        return text;
+      }
+    }
+  }
+  return undefined;
+}
+
+async function getJamMcpDetails(
+  token: string,
+  jamId: string
+): Promise<Record<string, unknown>> {
+  const [details, consoleLogs, networkRequests, userEvents, metadata] =
+    await Promise.allSettled([
+      jamMcpRequest(token, "getDetails", { jamId }),
+      jamMcpRequest(token, "getConsoleLogs", { jamId }),
+      jamMcpRequest(token, "getNetworkRequests", { jamId }),
+      jamMcpRequest(token, "getUserEvents", { jamId }),
+      jamMcpRequest(token, "getMetadata", { jamId }),
+    ]);
+
+  const result: Record<string, unknown> = {};
+
+  const detailsData =
+    details.status === "fulfilled"
+      ? (parseMcpToolText(details.value) as Record<string, unknown> | undefined)
+      : undefined;
+  if (
+    detailsData &&
+    typeof detailsData === "object" &&
+    !Array.isArray(detailsData)
+  ) {
+    if (
+      typeof detailsData.description === "string" &&
+      detailsData.description.length > 0
+    ) {
+      result.description = detailsData.description;
+    }
+    if (typeof detailsData.title === "string" && detailsData.title.length > 0) {
+      result.title = detailsData.title;
+    }
+    if (detailsData.systemInfo) result.systemInfo = detailsData.systemInfo;
+    if (detailsData.eventsSummary)
+      result.eventsSummary = detailsData.eventsSummary;
+    if (detailsData.postprocessing)
+      result.postprocessing = detailsData.postprocessing;
+    if (detailsData.metadata) result.metadata = detailsData.metadata;
+  }
+
+  function parseListResponse(
+    res: PromiseSettledResult<unknown>,
+    key: string
+  ): void {
+    if (res.status !== "fulfilled") return;
+    const data = parseMcpToolText(res.value);
+    if (
+      data &&
+      typeof data === "object" &&
+      !Array.isArray(data) &&
+      Array.isArray((data as Record<string, unknown>).events)
+    ) {
+      result[key] = (data as Record<string, unknown>).events;
+    }
+  }
+
+  parseListResponse(consoleLogs, "consoleLogs");
+  parseListResponse(networkRequests, "networkRequests");
+  parseListResponse(userEvents, "userEvents");
+
+  const metadataData =
+    metadata.status === "fulfilled"
+      ? parseMcpToolText(metadata.value)
+      : undefined;
+  if (
+    metadataData &&
+    typeof metadataData === "object" &&
+    !Array.isArray(metadataData) &&
+    Object.keys(metadataData).length > 0
+  ) {
+    result.metadata = metadataData;
+  }
+
+  return result;
 }
 
 async function jamMcpRequest(
@@ -319,7 +437,25 @@ export const jamMcpSupportImportSource: ImportSource<
       state?.cursor ?? undefined
     );
 
-    const data = items.map(normalizeMcpJam);
+    const detailed = await Promise.all(
+      items.map(async (raw) => {
+        const record =
+          raw && typeof raw === "object"
+            ? (raw as Record<string, unknown>)
+            : {};
+        const jamId =
+          typeof record.id === "string"
+            ? record.id
+            : typeof record.jamId === "string"
+              ? record.jamId
+              : undefined;
+        if (!jamId) return raw;
+        const details = await getJamMcpDetails(token, jamId);
+        return Object.assign({}, record, details);
+      })
+    );
+
+    const data = detailed.map(normalizeMcpJam);
     const batch = await jamSupportImportSource.run(
       ctx,
       { data },
