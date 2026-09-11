@@ -409,4 +409,100 @@ describe("CLI integration", () => {
     const exitCode = await runCli(["capture", "run", "--public-key", "pk"]);
     expect(exitCode).toBe(1);
   });
+
+  it("lists support tickets for a workspace", async () => {
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ tickets: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+    const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    const exitCode = await runCli(
+      ["support", "tickets", "list", "--workspace", "ws-1"],
+      { fetch: mockFetch }
+    );
+
+    expect(exitCode).toBe(0);
+    const [url, init] = mockFetch.mock.calls[0] as [
+      URL,
+      { method: string; headers: Headers },
+    ];
+    expect(url.pathname).toBe("/workspaces/ws-1/support/tickets");
+    expect(init.method).toBe("GET");
+    expect(init.headers.get("Authorization")).toBe("Bearer test-api-key");
+    spy.mockRestore();
+  });
+
+  it("creates a support ticket through the CLI", async () => {
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ id: "st-1" }), {
+        status: 201,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+    const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    const exitCode = await runCli(
+      [
+        "support",
+        "tickets",
+        "create",
+        "--workspace",
+        "ws-1",
+        "--customer-id",
+        "c-1",
+        "--title",
+        "I need help",
+        "--message",
+        "Something is broken",
+      ],
+      { fetch: mockFetch }
+    );
+
+    expect(exitCode).toBe(0);
+    const [url, init] = mockFetch.mock.calls[0] as [
+      URL,
+      { method: string; body: string },
+    ];
+    expect(url.pathname).toBe("/workspaces/ws-1/support/tickets");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body)).toEqual({
+      customerId: "c-1",
+      title: "I need help",
+      message: "Something is broken",
+    });
+    spy.mockRestore();
+  });
+
+  it("returns a non-zero exit code for HTTP errors", async () => {
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ error: "boom" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+
+    const exitCode = await runCli(["issues", "list", "--workspace", "ws-1"], {
+      fetch: mockFetch,
+    });
+
+    expect(exitCode).toBe(1);
+  });
+
+  it("rejects an unknown command", async () => {
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ issues: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+
+    const exitCode = await runCli(["nope", "--workspace", "ws-1"], {
+      fetch: mockFetch,
+    });
+
+    expect(exitCode).toBe(1);
+  });
 });
