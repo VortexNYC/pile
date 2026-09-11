@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, ne } from "drizzle-orm";
 
 import { VortexError } from "../platform/errors.js";
 import type { D1Client } from "./db.js";
@@ -18,6 +18,12 @@ export type SupportSnippetInput = {
   organizationId: string;
   name: string;
   textContent: string;
+  markdownContent?: string | null;
+};
+
+export type SupportSnippetPatch = {
+  name?: string;
+  textContent?: string;
   markdownContent?: string | null;
 };
 
@@ -68,6 +74,80 @@ export async function createSupportSnippet(
   };
 }
 
+export async function getSupportSnippet(
+  db: D1Client,
+  organizationId: string,
+  id: string
+): Promise<SupportSnippet> {
+  const row = await db
+    .select()
+    .from(supportSnippets)
+    .where(
+      and(
+        eq(supportSnippets.organizationId, organizationId),
+        eq(supportSnippets.id, id)
+      )
+    )
+    .get();
+
+  if (!row) {
+    throw VortexError.fromCode("NOT_FOUND", "Snippet not found");
+  }
+
+  return row;
+}
+
+export async function patchSupportSnippet(
+  db: D1Client,
+  organizationId: string,
+  id: string,
+  patch: SupportSnippetPatch
+): Promise<SupportSnippet> {
+  if (patch.name !== undefined) {
+    const existing = await db
+      .select({ id: supportSnippets.id })
+      .from(supportSnippets)
+      .where(
+        and(
+          eq(supportSnippets.organizationId, organizationId),
+          eq(supportSnippets.name, patch.name),
+          ne(supportSnippets.id, id)
+        )
+      )
+      .get();
+
+    if (existing) {
+      throw VortexError.fromCode(
+        "BAD_REQUEST",
+        "A snippet with this name already exists in this workspace"
+      );
+    }
+  }
+
+  const now = new Date().toISOString();
+
+  await db
+    .update(supportSnippets)
+    .set({
+      ...(patch.name !== undefined && { name: patch.name }),
+      ...(patch.textContent !== undefined && {
+        textContent: patch.textContent,
+      }),
+      ...(patch.markdownContent !== undefined && {
+        markdownContent: patch.markdownContent ?? null,
+      }),
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(supportSnippets.organizationId, organizationId),
+        eq(supportSnippets.id, id)
+      )
+    );
+
+  return getSupportSnippet(db, organizationId, id);
+}
+
 export async function listSupportSnippets(
   db: D1Client,
   organizationId: string
@@ -99,6 +179,15 @@ export type SupportAutoresponderInput = {
   enabled?: boolean;
   trigger: "ticket_created" | "customer_replied" | "out_of_hours";
   order: number;
+  snippetId?: string | null;
+  conditions?: Record<string, string>;
+};
+
+export type SupportAutoresponderPatch = {
+  name?: string;
+  enabled?: boolean;
+  trigger?: "ticket_created" | "customer_replied" | "out_of_hours";
+  order?: number;
   snippetId?: string | null;
   conditions?: Record<string, string>;
 };
@@ -160,6 +249,80 @@ export async function createSupportAutoresponder(
   };
 }
 
+export async function getSupportAutoresponder(
+  db: D1Client,
+  organizationId: string,
+  id: string
+): Promise<SupportAutoresponder> {
+  const row = await db
+    .select()
+    .from(supportAutoresponders)
+    .where(
+      and(
+        eq(supportAutoresponders.organizationId, organizationId),
+        eq(supportAutoresponders.id, id)
+      )
+    )
+    .get();
+
+  if (!row) {
+    throw VortexError.fromCode("NOT_FOUND", "Autoresponder not found");
+  }
+
+  return parseAutoresponder(row);
+}
+
+export async function patchSupportAutoresponder(
+  db: D1Client,
+  organizationId: string,
+  id: string,
+  patch: SupportAutoresponderPatch
+): Promise<SupportAutoresponder> {
+  if (patch.snippetId) {
+    const snippet = await db
+      .select({ id: supportSnippets.id })
+      .from(supportSnippets)
+      .where(
+        and(
+          eq(supportSnippets.organizationId, organizationId),
+          eq(supportSnippets.id, patch.snippetId)
+        )
+      )
+      .get();
+
+    if (!snippet) {
+      throw VortexError.fromCode(
+        "BAD_REQUEST",
+        "Snippet not found in this workspace"
+      );
+    }
+  }
+
+  const now = new Date().toISOString();
+
+  await db
+    .update(supportAutoresponders)
+    .set({
+      ...(patch.name !== undefined && { name: patch.name }),
+      ...(patch.enabled !== undefined && { enabled: patch.enabled }),
+      ...(patch.trigger !== undefined && { trigger: patch.trigger }),
+      ...(patch.order !== undefined && { order: patch.order }),
+      ...(patch.snippetId !== undefined && { snippetId: patch.snippetId }),
+      ...(patch.conditions !== undefined && {
+        conditions: JSON.stringify(patch.conditions),
+      }),
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(supportAutoresponders.organizationId, organizationId),
+        eq(supportAutoresponders.id, id)
+      )
+    );
+
+  return getSupportAutoresponder(db, organizationId, id);
+}
+
 export async function listSupportAutoresponders(
   db: D1Client,
   organizationId: string
@@ -171,27 +334,31 @@ export async function listSupportAutoresponders(
     .orderBy(asc(supportAutoresponders.order), asc(supportAutoresponders.name))
     .all();
 
-  return rows.map((row) => {
-    let conditions: Record<string, string> = {};
-    try {
-      const parsed = JSON.parse(row.conditions);
-      if (typeof parsed === "object" && parsed !== null) {
-        conditions = parsed as Record<string, string>;
-      }
-    } catch {
-      conditions = {};
+  return rows.map((row) => parseAutoresponder(row));
+}
+
+function parseAutoresponder(
+  row: typeof supportAutoresponders.$inferSelect
+): SupportAutoresponder {
+  let conditions: Record<string, string> = {};
+  try {
+    const parsed = JSON.parse(row.conditions);
+    if (typeof parsed === "object" && parsed !== null) {
+      conditions = parsed as Record<string, string>;
     }
-    return {
-      id: row.id,
-      organizationId: row.organizationId,
-      name: row.name,
-      enabled: row.enabled,
-      trigger: row.trigger,
-      order: row.order,
-      snippetId: row.snippetId,
-      conditions,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-    };
-  });
+  } catch {
+    conditions = {};
+  }
+  return {
+    id: row.id,
+    organizationId: row.organizationId,
+    name: row.name,
+    enabled: row.enabled,
+    trigger: row.trigger,
+    order: row.order,
+    snippetId: row.snippetId,
+    conditions,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
 }

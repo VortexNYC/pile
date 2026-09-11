@@ -4954,6 +4954,51 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "support snippets get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/snippets/{snippetId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "snippetId",
+        flag: "snippet-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support snippets update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/support/snippets/{snippetId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "snippetId",
+        flag: "snippet-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "textContent",
+        flag: "text-content",
+      },
+      {
+        name: "markdownContent",
+        flag: "markdown-content",
+      },
+    ],
+  },
   "support autoresponders list": {
     method: "GET",
     path: "/workspaces/{organizationId}/support/autoresponders",
@@ -4973,6 +5018,47 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "organizationId",
         flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "enabled",
+        flag: "enabled",
+      },
+      {
+        name: "trigger",
+        flag: "trigger",
+      },
+      {
+        name: "order",
+        flag: "order",
+      },
+      {
+        name: "snippetId",
+        flag: "snippet-id",
+      },
+      {
+        name: "conditions",
+        flag: "conditions",
+      },
+    ],
+  },
+  "support autoresponders update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/support/autoresponders/{autoresponderId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "autoresponderId",
+        flag: "autoresponder-id",
       },
     ],
     query: [],

@@ -11711,6 +11711,100 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/support/snippets/{snippetId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get support snippet */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    snippetId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Snippet details */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            snippet: {
+                                id: string;
+                                organizationId: string;
+                                name: string;
+                                textContent: string;
+                                markdownContent: string | null;
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update support snippet */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    snippetId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        name?: string;
+                        textContent?: string;
+                        markdownContent?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Snippet updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            snippet: {
+                                id: string;
+                                organizationId: string;
+                                name: string;
+                                textContent: string;
+                                markdownContent: string | null;
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
     "/workspaces/{organizationId}/support/autoresponders": {
         parameters: {
             query?: never;
@@ -11819,6 +11913,77 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/support/autoresponders/{autoresponderId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update support autoresponder */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    autoresponderId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        name?: string;
+                        enabled?: boolean;
+                        /** @enum {string} */
+                        trigger?: "ticket_created" | "customer_replied" | "out_of_hours";
+                        order?: number;
+                        snippetId?: string | null;
+                        conditions?: {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Autoresponder updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            autoresponder: {
+                                id: string;
+                                organizationId: string;
+                                name: string;
+                                enabled: boolean;
+                                /** @enum {string} */
+                                trigger: "ticket_created" | "customer_replied" | "out_of_hours";
+                                order: number;
+                                snippetId: string | null;
+                                conditions: {
+                                    [key: string]: string;
+                                };
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                            };
+                        };
+                    };
+                };
+            };
+        };
         trace?: never;
     };
     "/workspaces/{organizationId}/support/labels": {

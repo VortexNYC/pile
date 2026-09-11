@@ -3705,6 +3705,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdSupportSnippetsSnippetId",
+    "description": "Get support snippet (GET /workspaces/{organizationId}/support/snippets/{snippetId})",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/snippets/{snippetId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "snippetId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "snippetId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdSupportTickets",
     "description": "List support tickets (GET /workspaces/{organizationId}/support/tickets)",
     "method": "GET",
@@ -5605,6 +5626,59 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "patchWorkspacesOrganizationIdSupportAutorespondersAutoresponderId",
+    "description": "Update support autoresponder (PATCH /workspaces/{organizationId}/support/autoresponders/{autoresponderId})",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/support/autoresponders/{autoresponderId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "autoresponderId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "trigger": {
+              "type": "string",
+              "enum": [
+                "ticket_created",
+                "customer_replied",
+                "out_of_hours"
+              ]
+            },
+            "order": {
+              "type": "integer"
+            },
+            "snippetId": {
+              "type": "string",
+              "nullable": true
+            },
+            "conditions": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "autoresponderId",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "patchWorkspacesOrganizationIdSupportCustomersCustomerId",
     "description": "Update support customer (PATCH /workspaces/{organizationId}/support/customers/{customerId})",
     "method": "PATCH",
@@ -5863,6 +5937,42 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "organizationId",
         "slaId"
+      ]
+    }
+  },
+  {
+    "name": "patchWorkspacesOrganizationIdSupportSnippetsSnippetId",
+    "description": "Update support snippet (PATCH /workspaces/{organizationId}/support/snippets/{snippetId})",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/support/snippets/{snippetId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "snippetId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "textContent": {
+              "type": "string"
+            },
+            "markdownContent": {
+              "type": "string",
+              "nullable": true
+            }
+          }
+        }
+      },
+      "required": [
+        "organizationId",
+        "snippetId"
       ]
     }
   },

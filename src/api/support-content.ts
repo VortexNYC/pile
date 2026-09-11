@@ -10,8 +10,11 @@ import {
 import {
   createSupportAutoresponder,
   createSupportSnippet,
+  getSupportSnippet,
   listSupportAutoresponders,
   listSupportSnippets,
+  patchSupportAutoresponder,
+  patchSupportSnippet,
   type SupportAutoresponder,
   type SupportSnippet,
 } from "../global/support-content.js";
@@ -19,6 +22,16 @@ import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 
 const orgParam = z.object({ organizationId: z.string() });
+
+const snippetParams = z.object({
+  organizationId: z.string(),
+  snippetId: z.string(),
+});
+
+const autoresponderParams = z.object({
+  organizationId: z.string(),
+  autoresponderId: z.string(),
+});
 
 const supportSnippetSchema = z.object({
   id: z.string(),
@@ -34,6 +47,12 @@ const createSnippetBodySchema = z.object({
   name: z.string(),
   textContent: z.string(),
   markdownContent: z.string().optional(),
+});
+
+const patchSnippetBodySchema = z.object({
+  name: z.string().optional(),
+  textContent: z.string().optional(),
+  markdownContent: z.string().nullish(),
 });
 
 const supportAutoresponderSchema = z.object({
@@ -55,6 +74,17 @@ const createAutoresponderBodySchema = z.object({
   trigger: z.enum(["ticket_created", "customer_replied", "out_of_hours"]),
   order: z.number().int(),
   snippetId: z.string().optional(),
+  conditions: z.record(z.string(), z.string()).optional(),
+});
+
+const patchAutoresponderBodySchema = z.object({
+  name: z.string().optional(),
+  enabled: z.boolean().optional(),
+  trigger: z
+    .enum(["ticket_created", "customer_replied", "out_of_hours"])
+    .optional(),
+  order: z.number().int().optional(),
+  snippetId: z.string().nullish(),
   conditions: z.record(z.string(), z.string()).optional(),
 });
 
@@ -118,6 +148,51 @@ const listSnippetsRoute = createRoute({
   },
 });
 
+const getSnippetRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/support/snippets/{snippetId}",
+  tags: ["support-content"],
+  middleware: [rls("read")],
+  request: {
+    params: snippetParams,
+  },
+  responses: {
+    200: {
+      description: "Snippet details",
+      content: {
+        "application/json": {
+          schema: z.object({ snippet: supportSnippetSchema }),
+        },
+      },
+    },
+  },
+});
+
+const patchSnippetRoute = createRoute({
+  method: "patch",
+  path: "/workspaces/{organizationId}/support/snippets/{snippetId}",
+  tags: ["support-content"],
+  middleware: [rls("write")],
+  request: {
+    params: snippetParams,
+    body: {
+      content: {
+        "application/json": { schema: patchSnippetBodySchema },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Snippet updated",
+      content: {
+        "application/json": {
+          schema: z.object({ snippet: supportSnippetSchema }),
+        },
+      },
+    },
+  },
+});
+
 const createAutoresponderRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/autoresponders",
@@ -159,6 +234,31 @@ const listAutorespondersRoute = createRoute({
           schema: z.object({
             autoresponders: z.array(supportAutoresponderSchema),
           }),
+        },
+      },
+    },
+  },
+});
+
+const patchAutoresponderRoute = createRoute({
+  method: "patch",
+  path: "/workspaces/{organizationId}/support/autoresponders/{autoresponderId}",
+  tags: ["support-content"],
+  middleware: [rls("write")],
+  request: {
+    params: autoresponderParams,
+    body: {
+      content: {
+        "application/json": { schema: patchAutoresponderBodySchema },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Autoresponder updated",
+      content: {
+        "application/json": {
+          schema: z.object({ autoresponder: supportAutoresponderSchema }),
         },
       },
     },
@@ -233,6 +333,27 @@ export function registerSupportContentRoutes(app: OpenAPIHono<AppContext>) {
     return c.json({ snippets } as { snippets: SupportSnippet[] });
   });
 
+  app.openapi(getSnippetRoute, async (c) => {
+    const { organizationId, snippetId } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const snippet = await getSupportSnippet(db, organizationId, snippetId);
+    return c.json({ snippet } as { snippet: SupportSnippet });
+  });
+
+  app.openapi(patchSnippetRoute, async (c) => {
+    const { organizationId, snippetId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const db = createD1(c.env.D1);
+
+    const snippet = await patchSupportSnippet(db, organizationId, snippetId, {
+      name: body.name,
+      textContent: body.textContent,
+      markdownContent: body.markdownContent,
+    });
+
+    return c.json({ snippet } as { snippet: SupportSnippet });
+  });
+
   app.openapi(createAutoresponderRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
     const body = c.req.valid("json");
@@ -261,6 +382,28 @@ export function registerSupportContentRoutes(app: OpenAPIHono<AppContext>) {
     return c.json({ autoresponders } as {
       autoresponders: SupportAutoresponder[];
     });
+  });
+
+  app.openapi(patchAutoresponderRoute, async (c) => {
+    const { organizationId, autoresponderId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const db = createD1(c.env.D1);
+
+    const autoresponder = await patchSupportAutoresponder(
+      db,
+      organizationId,
+      autoresponderId,
+      {
+        name: body.name,
+        enabled: body.enabled,
+        trigger: body.trigger,
+        order: body.order,
+        snippetId: body.snippetId,
+        conditions: body.conditions,
+      }
+    );
+
+    return c.json({ autoresponder } as { autoresponder: SupportAutoresponder });
   });
 
   app.openapi(createLabelRoute, async (c) => {

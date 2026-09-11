@@ -25066,6 +25066,187 @@
         "summary": "List support snippets"
       }
     },
+    "/workspaces/{organizationId}/support/snippets/{snippetId}": {
+      "get": {
+        "tags": [
+          "support-content"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "snippetId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Snippet details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "snippet": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "textContent": {
+                          "type": "string"
+                        },
+                        "markdownContent": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "name",
+                        "textContent",
+                        "markdownContent",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "snippet"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get support snippet"
+      },
+      "patch": {
+        "tags": [
+          "support-content"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "snippetId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "textContent": {
+                    "type": "string"
+                  },
+                  "markdownContent": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Snippet updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "snippet": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "textContent": {
+                          "type": "string"
+                        },
+                        "markdownContent": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "name",
+                        "textContent",
+                        "markdownContent",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "snippet"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Update support snippet"
+      }
+    },
     "/workspaces/{organizationId}/support/autoresponders": {
       "post": {
         "tags": [
@@ -25293,6 +25474,145 @@
           }
         },
         "summary": "List support autoresponders"
+      }
+    },
+    "/workspaces/{organizationId}/support/autoresponders/{autoresponderId}": {
+      "patch": {
+        "tags": [
+          "support-content"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "autoresponderId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "trigger": {
+                    "type": "string",
+                    "enum": [
+                      "ticket_created",
+                      "customer_replied",
+                      "out_of_hours"
+                    ]
+                  },
+                  "order": {
+                    "type": "integer"
+                  },
+                  "snippetId": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "conditions": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Autoresponder updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "autoresponder": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "enabled": {
+                          "type": "boolean"
+                        },
+                        "trigger": {
+                          "type": "string",
+                          "enum": [
+                            "ticket_created",
+                            "customer_replied",
+                            "out_of_hours"
+                          ]
+                        },
+                        "order": {
+                          "type": "integer"
+                        },
+                        "snippetId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "conditions": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "name",
+                        "enabled",
+                        "trigger",
+                        "order",
+                        "snippetId",
+                        "conditions",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "autoresponder"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Update support autoresponder"
       }
     },
     "/workspaces/{organizationId}/support/labels": {

@@ -102,6 +102,49 @@ describe("support-content API", () => {
     expect(listBody.snippets[0].name).toBe("greeting");
   });
 
+  it("gets and patches a support snippet", async () => {
+    const createRes = await fetch(
+      `/workspaces/${organizationId}/support/snippets`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "faq",
+          textContent: "Question",
+        }),
+      }
+    );
+    expect(createRes.status).toBe(201);
+    const { snippet } = (await createRes.json()) as {
+      snippet: { id: string };
+    };
+
+    const getRes = await fetch(
+      `/workspaces/${organizationId}/support/snippets/${snippet.id}`
+    );
+    expect(getRes.status).toBe(200);
+    const getBody = (await getRes.json()) as {
+      snippet: { name: string; textContent: string };
+    };
+    expect(getBody.snippet.name).toBe("faq");
+
+    const patchRes = await fetch(
+      `/workspaces/${organizationId}/support/snippets/${snippet.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          name: "faq-updated",
+          markdownContent: "# Answer",
+        }),
+      }
+    );
+    expect(patchRes.status).toBe(200);
+    const patchBody = (await patchRes.json()) as {
+      snippet: { name: string; markdownContent: string | null };
+    };
+    expect(patchBody.snippet.name).toBe("faq-updated");
+    expect(patchBody.snippet.markdownContent).toBe("# Answer");
+  });
+
   it("creates and lists support autoresponders", async () => {
     const snippetRes = await fetch(
       `/workspaces/${organizationId}/support/snippets`,
@@ -156,6 +199,63 @@ describe("support-content API", () => {
     };
     expect(listBody.autoresponders).toHaveLength(1);
     expect(listBody.autoresponders[0].name).toBe("new ticket reply");
+  });
+
+  it("patches a support autoresponder", async () => {
+    const snippetRes = await fetch(
+      `/workspaces/${organizationId}/support/snippets`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "welcome",
+          textContent: "Welcome.",
+        }),
+      }
+    );
+    expect(snippetRes.status).toBe(201);
+    const { snippet } = (await snippetRes.json()) as {
+      snippet: { id: string };
+    };
+
+    const createRes = await fetch(
+      `/workspaces/${organizationId}/support/autoresponders`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "follow-up",
+          trigger: "customer_replied",
+          order: 1,
+          snippetId: snippet.id,
+        }),
+      }
+    );
+    expect(createRes.status).toBe(201);
+    const { autoresponder } = (await createRes.json()) as {
+      autoresponder: { id: string };
+    };
+
+    const patchRes = await fetch(
+      `/workspaces/${organizationId}/support/autoresponders/${autoresponder.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          enabled: false,
+          order: 2,
+          conditions: { priority: "high" },
+        }),
+      }
+    );
+    expect(patchRes.status).toBe(200);
+    const patchBody = (await patchRes.json()) as {
+      autoresponder: {
+        enabled: boolean;
+        order: number;
+        conditions: Record<string, string>;
+      };
+    };
+    expect(patchBody.autoresponder.enabled).toBe(false);
+    expect(patchBody.autoresponder.order).toBe(2);
+    expect(patchBody.autoresponder.conditions).toEqual({ priority: "high" });
   });
 
   it("creates and lists support labels", async () => {
