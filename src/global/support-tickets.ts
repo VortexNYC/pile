@@ -14,6 +14,8 @@ import { z } from "zod";
 
 import type { AppEnv } from "../platform/env.js";
 import { VortexError } from "../platform/errors.js";
+import type { WorkerEnv } from "../platform/middleware.js";
+import type { RealtimeEvent } from "../types/workspace.js";
 import type { D1Client } from "./db.js";
 import {
   labels,
@@ -30,11 +32,17 @@ import {
   supportTickets,
   team,
   user,
+  member,
 } from "./schema.js";
 import {
   getCustomerById,
   type SupportCustomerIdentity,
 } from "./support-contacts.js";
+import {
+  getSupportSnippet,
+  listSupportAutoresponders,
+  type SupportAutoresponder,
+} from "./support-content.js";
 import { createTeam } from "./teams.js";
 
 export type SupportTicketStatus = "todo" | "done" | "snoozed";
@@ -49,7 +57,10 @@ export type SupportTicketSource =
   | "discord"
   | "chat"
   | "api"
-  | "manual";
+  | "manual"
+  | "capture"
+  | "jam"
+  | "linear";
 export type SupportTicketChannel =
   | "email"
   | "slack"
@@ -60,7 +71,8 @@ export type SupportTicketChannel =
   | "api"
   | "intercom"
   | "zendesk"
-  | "plain";
+  | "plain"
+  | "linear";
 export type SupportTicketMessageDirection = "inbound" | "outbound";
 export type SupportTicketMessageChannel =
   | "email"
@@ -72,7 +84,8 @@ export type SupportTicketMessageChannel =
   | "api"
   | "intercom"
   | "zendesk"
-  | "plain";
+  | "plain"
+  | "linear";
 export type SupportTicketEventType =
   | "message"
   | "note"
@@ -83,9 +96,6 @@ export type SupportTicketEventType =
   | "label_removed"
   | "customer_event"
   | "thread_event"
-  | "survey_requested"
-  | "survey_received"
-  | "sla_change"
   | "link_added"
   | "link_changed"
   | "link_removed"
@@ -112,11 +122,13 @@ export type SupportTicketInput = {
   sourceChannel: SupportTicketChannel;
   priority?: SupportTicketPriority;
   status?: SupportTicketStatus;
+  snoozedUntil?: string | null;
   externalId?: string | null;
   externalSource?: SupportTicketSource;
   issueId?: string | null;
   createdAt?: string;
   updatedAt?: string;
+  ifExists?: "throw" | "return";
 };
 
 export type SupportTicket = {
@@ -131,6 +143,7 @@ export type SupportTicket = {
   priority: SupportTicketPriority;
   sourceChannel: SupportTicketChannel;
   issueId: string | null;
+  snoozedUntil: string | null;
   lastCustomerMessageAt: string | null;
   lastAgentMessageAt: string | null;
   createdAt: string;
@@ -165,6 +178,7 @@ export type SupportTicketEvent = {
   actorType: SupportTicketActorType;
   actorId: string | null;
   metadata: string | null;
+  externalId: string | null;
   createdAt: string;
 };
 
@@ -190,6 +204,26 @@ export type SupportTicketEventWithDetails = SupportTicketEvent & {
   note?: SupportTicketNote;
 };
 
+export type AddTicketMessageResult = SupportTicketEventWithDetails & {
+  isNew: boolean;
+};
+
+function getWorkspaceStub(env: WorkerEnv, organizationId: string) {
+  return env.WORKSPACE_DURABLE_OBJECT.get(
+    env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+  );
+}
+
+async function dispatchSupportTicketEvent(
+  env: WorkerEnv,
+  organizationId: string,
+  event: RealtimeEvent
+): Promise<void> {
+  const stub = getWorkspaceStub(env, organizationId);
+  await stub.broadcast(event);
+  await stub.deliverWebhooks(event);
+}
+
 export async function nextTicketNumber(
   db: D1Client,
   organizationId: string
@@ -207,9 +241,19 @@ export async function nextTicketNumber(
   return rows[0].next_number;
 }
 
+function sanitizeTimestamp(ts: string | undefined): string | undefined {
+  if (!ts) return undefined;
+  const parsed = Date.parse(ts);
+  if (Number.isNaN(parsed)) return undefined;
+  const now = Date.now();
+  if (parsed > now + 60_000) return new Date(now).toISOString();
+  return new Date(parsed).toISOString();
+}
+
 export async function createTicket(
   db: D1Client,
-  input: SupportTicketInput
+  input: SupportTicketInput,
+  env?: WorkerEnv
 ): Promise<SupportTicket> {
   const customer = await getCustomerById(
     db,
@@ -229,11 +273,25 @@ export async function createTicket(
   const status: SupportTicketStatus = input.status ?? "todo";
   const priority: SupportTicketPriority = input.priority ?? "medium";
   const externalSource: SupportTicketSource = input.externalSource ?? "manual";
+
+  if (input.issueId && env) {
+    const stub = getWorkspaceStub(env, input.organizationId);
+    await stub.setOrganizationId(input.organizationId);
+    const issue = await stub.getIssue(input.issueId);
+    if (!issue) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: "Issue not found in workspace",
+      });
+    }
+  }
+
   const now = new Date().toISOString();
-  const createdAt = input.createdAt ?? now;
-  const updatedAt = input.updatedAt ?? now;
+  const createdAt = sanitizeTimestamp(input.createdAt) ?? now;
+  const updatedAt = sanitizeTimestamp(input.updatedAt) ?? createdAt;
 
-  await db.insert(supportTickets).values({
+  const values = {
     id,
     organizationId: input.organizationId,
     customerId: input.customerId,
@@ -245,29 +303,80 @@ export async function createTicket(
     priority,
     sourceChannel: input.sourceChannel,
     issueId: input.issueId ?? null,
-    lastCustomerMessageAt: null,
-    lastAgentMessageAt: null,
-    createdAt,
-    updatedAt,
-  });
-
-  return {
-    id,
-    organizationId: input.organizationId,
-    customerId: input.customerId,
-    number,
-    externalId: input.externalId ?? null,
-    externalSource,
-    title: input.title,
-    status,
-    priority,
-    sourceChannel: input.sourceChannel,
-    issueId: input.issueId ?? null,
+    snoozedUntil: input.snoozedUntil ?? null,
     lastCustomerMessageAt: null,
     lastAgentMessageAt: null,
     createdAt,
     updatedAt,
   };
+
+  let inserted: SupportTicket | undefined;
+  if (input.externalId) {
+    const row = await db
+      .insert(supportTickets)
+      .values(values)
+      .onConflictDoNothing({
+        target: [
+          supportTickets.organizationId,
+          supportTickets.externalId,
+          supportTickets.externalSource,
+        ],
+      })
+      .returning()
+      .get();
+    if (!row) {
+      const existing = await findSupportTicketByExternalId(
+        db,
+        input.organizationId,
+        input.externalId,
+        externalSource
+      );
+      if (existing) {
+        if (input.ifExists === "return") {
+          return existing;
+        }
+        throw new VortexError({
+          code: "CONFLICT",
+          status: 409,
+          message: "A ticket with this external ID already exists",
+        });
+      }
+      throw new VortexError({
+        code: "CONFLICT",
+        status: 409,
+        message: "A ticket with this external ID already exists",
+      });
+    }
+    inserted = row;
+  } else {
+    inserted = await db.insert(supportTickets).values(values).returning().get();
+  }
+
+  if (!inserted) {
+    throw new VortexError({
+      code: "INTERNAL_ERROR",
+      status: 500,
+      message: "Failed to create support ticket",
+    });
+  }
+
+  await runAutoresponders(
+    db,
+    env,
+    input.organizationId,
+    inserted.id,
+    "ticket_created"
+  );
+
+  if (env) {
+    await dispatchSupportTicketEvent(env, input.organizationId, {
+      type: "support_ticket.created",
+      organizationId: input.organizationId,
+      ticketId: inserted.id,
+    });
+  }
+
+  return inserted;
 }
 
 export async function getTicketById(
@@ -290,98 +399,192 @@ export async function getTicketById(
     return null;
   }
 
-  const [customerRows, companies, identities, labelsList, assignees, events] =
-    await Promise.all([
-      db
-        .select({
-          id: supportCustomers.id,
-          email: supportCustomers.email,
-          fullName: supportCustomers.fullName,
-          phone: supportCustomers.phone,
-        })
-        .from(supportCustomers)
-        .where(eq(supportCustomers.id, ticket.customerId))
-        .limit(1),
-      db
-        .select({
-          id: supportCustomerCompanies.id,
-          name: supportCompanies.name,
-          isPrimary: supportCustomerCompanies.isPrimary,
-        })
-        .from(supportCustomerCompanies)
-        .innerJoin(
-          supportCompanies,
-          eq(supportCustomerCompanies.companyId, supportCompanies.id)
-        )
-        .where(eq(supportCustomerCompanies.customerId, ticket.customerId)),
-      db
-        .select()
-        .from(supportCustomerIdentities)
-        .where(eq(supportCustomerIdentities.customerId, ticket.customerId)),
-      db
-        .select({
-          id: supportTicketLabels.id,
-          labelId: supportTicketLabels.labelId,
-          name: labels.name,
-          color: labels.color,
-        })
-        .from(supportTicketLabels)
-        .innerJoin(labels, eq(supportTicketLabels.labelId, labels.id))
-        .where(eq(supportTicketLabels.ticketId, ticketId)),
-      db
-        .select({
-          id: supportTicketAssignments.id,
-          userId: supportTicketAssignments.userId,
-          teamId: supportTicketAssignments.teamId,
-          userName: user.name,
-          teamName: team.name,
-          isPrimary: supportTicketAssignments.isPrimary,
-        })
-        .from(supportTicketAssignments)
-        .leftJoin(user, eq(supportTicketAssignments.userId, user.id))
-        .leftJoin(team, eq(supportTicketAssignments.teamId, team.id))
-        .where(eq(supportTicketAssignments.ticketId, ticketId)),
-      listTicketEvents(db, organizationId, ticketId, { limit: 20 }),
-    ]);
+  const [hydrated] = await hydrateTicketRelations(db, organizationId, [ticket]);
+  return hydrated ?? null;
+}
 
-  const customer = customerRows[0];
-  if (!customer) {
-    throw new VortexError({
-      code: "INTERNAL_ERROR",
-      status: 500,
-      message: "Customer for ticket not found",
-    });
+function groupBy<T>(
+  items: readonly T[],
+  keyFn: (item: T) => string
+): Map<string, T[]> {
+  const map = new Map<string, T[]>();
+  for (const item of items) {
+    const key = keyFn(item);
+    const list = map.get(key) ?? [];
+    list.push(item);
+    map.set(key, list);
   }
+  return map;
+}
 
-  return {
-    ...ticket,
-    customer,
-    companies: companies.map((c) => ({
-      id: c.id,
-      name: c.name,
-      isPrimary: c.isPrimary,
-    })),
-    identities,
-    labels: labelsList,
-    assignees: assignees.map((a) => {
-      const assigneeId = a.userId ?? a.teamId;
-      if (!assigneeId) {
-        throw new VortexError({
-          code: "INTERNAL_ERROR",
-          status: 500,
-          message: "Invalid support ticket assignment",
-        });
-      }
-      return {
-        id: a.id,
-        type: a.userId ? "user" : "team",
-        assigneeId,
-        name: a.userName ?? a.teamName ?? null,
-        isPrimary: a.isPrimary,
-      };
-    }),
+async function loadTicketEventsForTickets(
+  db: D1Client,
+  ticketIds: string[],
+  limitPerTicket: number
+): Promise<Map<string, SupportTicketEventWithDetails[]>> {
+  if (ticketIds.length === 0) return new Map();
+
+  const events = await db
+    .select()
+    .from(supportTicketEvents)
+    .where(inArray(supportTicketEvents.ticketId, ticketIds))
+    .orderBy(asc(supportTicketEvents.createdAt));
+
+  if (events.length === 0) return new Map();
+
+  const eventIds = events.map((e) => e.id);
+  const [messages, notes] = await Promise.all([
+    db
+      .select()
+      .from(supportTicketMessages)
+      .where(inArray(supportTicketMessages.eventId, eventIds)),
+    db
+      .select()
+      .from(supportTicketNotes)
+      .where(inArray(supportTicketNotes.eventId, eventIds)),
+  ]);
+
+  const messageMap = new Map(messages.map((m) => [m.eventId, m]));
+  const noteMap = new Map(notes.map((n) => [n.eventId, n]));
+  const detailed: SupportTicketEventWithDetails[] = events.map((event) =>
+    Object.assign({}, event, {
+      message: messageMap.get(event.id),
+      note: noteMap.get(event.id),
+    })
+  );
+
+  const grouped = groupBy(detailed, (e) => e.ticketId);
+  const result = new Map<string, SupportTicketEventWithDetails[]>();
+  for (const [ticketId, list] of grouped) {
+    result.set(ticketId, list.slice(-limitPerTicket));
+  }
+  return result;
+}
+
+export async function hydrateTicketRelations(
+  db: D1Client,
+  organizationId: string,
+  tickets: SupportTicket[],
+  options?: { eventsLimit?: number }
+): Promise<SupportTicketWithRelations[]> {
+  if (tickets.length === 0) return [];
+
+  const customerIds = [...new Set(tickets.map((t) => t.customerId))];
+  const ticketIds = tickets.map((t) => t.id);
+
+  const [
+    customerRows,
+    companyRows,
+    identityRows,
+    labelRows,
+    assigneeRows,
     events,
-  };
+  ] = await Promise.all([
+    db
+      .select({
+        id: supportCustomers.id,
+        email: supportCustomers.email,
+        fullName: supportCustomers.fullName,
+        phone: supportCustomers.phone,
+      })
+      .from(supportCustomers)
+      .where(inArray(supportCustomers.id, customerIds)),
+    db
+      .select({
+        id: supportCustomerCompanies.id,
+        name: supportCompanies.name,
+        isPrimary: supportCustomerCompanies.isPrimary,
+        customerId: supportCustomerCompanies.customerId,
+      })
+      .from(supportCustomerCompanies)
+      .innerJoin(
+        supportCompanies,
+        eq(supportCustomerCompanies.companyId, supportCompanies.id)
+      )
+      .where(inArray(supportCustomerCompanies.customerId, customerIds)),
+    db
+      .select()
+      .from(supportCustomerIdentities)
+      .where(inArray(supportCustomerIdentities.customerId, customerIds)),
+    db
+      .select({
+        id: supportTicketLabels.id,
+        labelId: supportTicketLabels.labelId,
+        name: labels.name,
+        color: labels.color,
+        ticketId: supportTicketLabels.ticketId,
+      })
+      .from(supportTicketLabels)
+      .innerJoin(labels, eq(supportTicketLabels.labelId, labels.id))
+      .where(inArray(supportTicketLabels.ticketId, ticketIds)),
+    db
+      .select({
+        id: supportTicketAssignments.id,
+        userId: supportTicketAssignments.userId,
+        teamId: supportTicketAssignments.teamId,
+        userName: user.name,
+        teamName: team.name,
+        isPrimary: supportTicketAssignments.isPrimary,
+        ticketId: supportTicketAssignments.ticketId,
+      })
+      .from(supportTicketAssignments)
+      .leftJoin(user, eq(supportTicketAssignments.userId, user.id))
+      .leftJoin(team, eq(supportTicketAssignments.teamId, team.id))
+      .where(inArray(supportTicketAssignments.ticketId, ticketIds)),
+    loadTicketEventsForTickets(db, ticketIds, options?.eventsLimit ?? 20),
+  ]);
+
+  const customerMap = new Map(customerRows.map((c) => [c.id, c]));
+  const companyMap = groupBy(companyRows, (c) => c.customerId);
+  const identityMap = groupBy(identityRows, (i) => i.customerId);
+  const labelMap = groupBy(labelRows, (l) => l.ticketId);
+  const assigneeMap = groupBy(assigneeRows, (a) => a.ticketId);
+
+  return tickets.map((ticket) => {
+    const customer = customerMap.get(ticket.customerId);
+    if (!customer) {
+      throw new VortexError({
+        code: "INTERNAL_ERROR",
+        status: 500,
+        message: "Customer for ticket not found",
+      });
+    }
+
+    return {
+      ...ticket,
+      customer,
+      companies: (companyMap.get(ticket.customerId) ?? []).map((c) => ({
+        id: c.id,
+        name: c.name,
+        isPrimary: c.isPrimary,
+      })),
+      identities: identityMap.get(ticket.customerId) ?? [],
+      labels: (labelMap.get(ticket.id) ?? []).map((l) => ({
+        id: l.id,
+        labelId: l.labelId,
+        name: l.name,
+        color: l.color,
+      })),
+      assignees: (assigneeMap.get(ticket.id) ?? []).map((a) => {
+        const assigneeId = a.userId ?? a.teamId;
+        if (!assigneeId) {
+          throw new VortexError({
+            code: "INTERNAL_ERROR",
+            status: 500,
+            message: "Invalid support ticket assignment",
+          });
+        }
+        return {
+          id: a.id,
+          type: a.userId ? "user" : "team",
+          assigneeId,
+          name: a.userName ?? a.teamName ?? null,
+          isPrimary: a.isPrimary,
+        };
+      }),
+      events: events.get(ticket.id) ?? [],
+    };
+  });
 }
 
 export type ListTicketsOptions = {
@@ -390,7 +593,10 @@ export type ListTicketsOptions = {
   customerId?: string;
   status?: SupportTicketStatus;
   priority?: SupportTicketPriority;
+  sourceChannel?: SupportTicketChannel;
+  externalSource?: SupportTicketSource;
   assignedTo?: string;
+  label?: string;
   q?: string;
 };
 
@@ -411,6 +617,12 @@ export async function listTickets(
   }
   if (options.priority) {
     conditions.push(eq(supportTickets.priority, options.priority));
+  }
+  if (options.sourceChannel) {
+    conditions.push(eq(supportTickets.sourceChannel, options.sourceChannel));
+  }
+  if (options.externalSource) {
+    conditions.push(eq(supportTickets.externalSource, options.externalSource));
   }
   if (options.assignedTo) {
     const ticketIds = await db
@@ -434,12 +646,49 @@ export async function listTickets(
       )
     );
   }
+  if (options.label) {
+    const labelTicketIds = await db
+      .select({ ticketId: supportTicketLabels.ticketId })
+      .from(supportTicketLabels)
+      .where(eq(supportTicketLabels.labelId, options.label));
+    if (labelTicketIds.length === 0) {
+      return { tickets: [], nextCursor: null };
+    }
+    conditions.push(
+      inArray(
+        supportTickets.id,
+        labelTicketIds.map((t) => t.ticketId)
+      )
+    );
+  }
   if (options.q) {
     const query = `%${options.q}%`;
+    const customerIds = await db
+      .select({ id: supportCustomers.id })
+      .from(supportCustomers)
+      .where(
+        and(
+          eq(supportCustomers.organizationId, organizationId),
+          or(
+            like(supportCustomers.email, query),
+            like(supportCustomers.fullName, query)
+          )
+        )
+      );
+    const customerSearch =
+      customerIds.length > 0
+        ? [
+            inArray(
+              supportTickets.customerId,
+              customerIds.map((c) => c.id)
+            ),
+          ]
+        : [];
     conditions.push(
       or(
         like(supportTickets.title, query),
-        like(supportTickets.externalId, query)
+        like(supportTickets.externalId, query),
+        ...customerSearch
       )
     );
   }
@@ -472,10 +721,12 @@ export async function updateTicket(
     title?: string;
     status?: SupportTicketStatus;
     priority?: SupportTicketPriority;
+    snoozedUntil?: string | null;
     issueId?: string | null;
     actorType?: SupportTicketActorType;
     actorId?: string | null;
-  }
+  },
+  env?: WorkerEnv
 ): Promise<SupportTicket | null> {
   const [existing] = await db
     .select()
@@ -492,15 +743,71 @@ export async function updateTicket(
     return null;
   }
 
+  if (input.issueId && env) {
+    const stub = getWorkspaceStub(env, organizationId);
+    await stub.setOrganizationId(organizationId);
+    const issue = await stub.getIssue(input.issueId);
+    if (!issue) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: "Issue not found in workspace",
+      });
+    }
+  }
+
   const now = new Date().toISOString();
   const updates: Partial<typeof supportTickets.$inferSelect> = {
     updatedAt: now,
   };
 
   if (input.title !== undefined) updates.title = input.title;
-  if (input.issueId !== undefined) updates.issueId = input.issueId;
 
   const eventsToCreate: (typeof supportTicketEvents.$inferInsert)[] = [];
+
+  if (input.issueId !== undefined && input.issueId !== existing.issueId) {
+    updates.issueId = input.issueId;
+    const actorType = input.actorType ?? "user";
+    const actorId = input.actorId ?? null;
+    if (!existing.issueId && input.issueId) {
+      eventsToCreate.push({
+        id: crypto.randomUUID(),
+        ticketId,
+        type: "link_added",
+        actorType,
+        actorId,
+        metadata: JSON.stringify({ issueId: input.issueId }),
+        createdAt: now,
+      });
+    } else if (existing.issueId && !input.issueId) {
+      eventsToCreate.push({
+        id: crypto.randomUUID(),
+        ticketId,
+        type: "link_removed",
+        actorType,
+        actorId,
+        metadata: JSON.stringify({ issueId: existing.issueId }),
+        createdAt: now,
+      });
+    } else if (
+      existing.issueId &&
+      input.issueId &&
+      existing.issueId !== input.issueId
+    ) {
+      eventsToCreate.push({
+        id: crypto.randomUUID(),
+        ticketId,
+        type: "link_changed",
+        actorType,
+        actorId,
+        metadata: JSON.stringify({
+          fromIssueId: existing.issueId,
+          toIssueId: input.issueId,
+        }),
+        createdAt: now,
+      });
+    }
+  }
 
   if (input.status !== undefined && input.status !== existing.status) {
     updates.status = input.status;
@@ -526,6 +833,21 @@ export async function updateTicket(
     });
   }
 
+  if (
+    input.snoozedUntil !== undefined &&
+    input.snoozedUntil !== existing.snoozedUntil
+  ) {
+    updates.snoozedUntil = input.snoozedUntil;
+  }
+
+  if (
+    input.status !== undefined &&
+    input.status !== "snoozed" &&
+    existing.snoozedUntil !== null
+  ) {
+    updates.snoozedUntil = null;
+  }
+
   await db
     .update(supportTickets)
     .set(updates)
@@ -538,6 +860,16 @@ export async function updateTicket(
 
   if (eventsToCreate.length > 0) {
     await db.insert(supportTicketEvents).values(eventsToCreate);
+  }
+
+  const hasMeaningfulUpdate =
+    Object.keys(updates).length > 1 || eventsToCreate.length > 0;
+  if (env && hasMeaningfulUpdate) {
+    await dispatchSupportTicketEvent(env, organizationId, {
+      type: "support_ticket.updated",
+      organizationId,
+      ticketId,
+    });
   }
 
   const [updated] = await db
@@ -607,39 +939,96 @@ export async function setTicketAssignees(
 ): Promise<void> {
   await ensureTicket(db, organizationId, ticketId);
 
-  await db
+  const userIds = new Map<string, boolean>();
+  const teamIds = new Map<string, boolean>();
+  for (const assignee of assignees) {
+    if ("userId" in assignee) {
+      if (!userIds.has(assignee.userId)) {
+        userIds.set(assignee.userId, assignee.isPrimary ?? false);
+      }
+    } else if ("teamId" in assignee) {
+      if (!teamIds.has(assignee.teamId)) {
+        teamIds.set(assignee.teamId, assignee.isPrimary ?? false);
+      }
+    }
+  }
+
+  const userIdList = [...userIds.keys()];
+  const teamIdList = [...teamIds.keys()];
+
+  if (userIdList.length > 0) {
+    const members = await db
+      .select({ userId: member.userId })
+      .from(member)
+      .where(
+        and(
+          eq(member.organizationId, organizationId),
+          inArray(member.userId, userIdList)
+        )
+      );
+    const valid = new Set(members.map((m) => m.userId));
+    const invalid = userIdList.filter((id) => !valid.has(id));
+    if (invalid.length > 0) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: `Invalid assignees: ${invalid.join(", ")}`,
+      });
+    }
+  }
+
+  if (teamIdList.length > 0) {
+    const teams = await db
+      .select({ id: team.id })
+      .from(team)
+      .where(
+        and(
+          eq(team.organizationId, organizationId),
+          inArray(team.id, teamIdList)
+        )
+      );
+    const valid = new Set(teams.map((t) => t.id));
+    const invalid = teamIdList.filter((id) => !valid.has(id));
+    if (invalid.length > 0) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: `Invalid assignees: ${invalid.join(", ")}`,
+      });
+    }
+  }
+
+  const deleteAssignments = db
     .delete(supportTicketAssignments)
     .where(eq(supportTicketAssignments.ticketId, ticketId));
 
-  if (assignees.length === 0) return;
+  if (userIds.size === 0 && teamIds.size === 0) {
+    await deleteAssignments;
+    return;
+  }
 
-  const rows = assignees.map((assignee) => {
-    if ("userId" in assignee) {
-      return {
-        id: crypto.randomUUID(),
-        ticketId,
-        userId: assignee.userId,
-        teamId: null,
-        isPrimary: assignee.isPrimary ?? false,
-      };
-    }
-    if ("teamId" in assignee) {
-      return {
-        id: crypto.randomUUID(),
-        ticketId,
-        userId: null,
-        teamId: assignee.teamId,
-        isPrimary: assignee.isPrimary ?? false,
-      };
-    }
-    throw new VortexError({
-      code: "UNPROCESSABLE_CONTENT",
-      status: 422,
-      message: "Invalid support ticket assignee",
-    });
-  });
+  const rows = [
+    ...[...userIds.entries()].map(([userId, isPrimary]) => ({
+      id: crypto.randomUUID(),
+      ticketId,
+      userId,
+      teamId: null,
+      isPrimary,
+    })),
+    ...[...teamIds.entries()].map(([teamId, isPrimary]) => ({
+      id: crypto.randomUUID(),
+      ticketId,
+      userId: null,
+      teamId,
+      isPrimary,
+    })),
+  ];
 
-  await db.insert(supportTicketAssignments).values(rows);
+  const insertAssignments = db
+    .insert(supportTicketAssignments)
+    .values(rows as unknown as typeof supportTicketAssignments.$inferInsert);
+
+  await db.batch([deleteAssignments, insertAssignments]);
 }
 
 export async function setTicketLabels(
@@ -650,39 +1039,88 @@ export async function setTicketLabels(
 ): Promise<void> {
   await ensureTicket(db, organizationId, ticketId);
 
-  await db
+  const uniqueLabelIds = [...new Set(labelIds)];
+
+  if (uniqueLabelIds.length > 0) {
+    const validLabels = await db
+      .select({ id: labels.id })
+      .from(labels)
+      .where(
+        and(
+          eq(labels.organizationId, organizationId),
+          inArray(labels.id, uniqueLabelIds)
+        )
+      );
+
+    const validIds = new Set(validLabels.map((label) => label.id));
+    const invalid = uniqueLabelIds.filter((id) => !validIds.has(id));
+    if (invalid.length > 0) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: `Invalid labels: ${invalid.join(", ")}`,
+      });
+    }
+  }
+
+  const deleteLabels = db
     .delete(supportTicketLabels)
     .where(eq(supportTicketLabels.ticketId, ticketId));
 
-  if (labelIds.length === 0) return;
-
-  const validLabels = await db
-    .select({ id: labels.id })
-    .from(labels)
-    .where(
-      and(
-        eq(labels.organizationId, organizationId),
-        inArray(labels.id, labelIds)
-      )
-    );
-
-  const validIds = validLabels.map((label) => label.id);
-  const invalid = labelIds.filter((id) => !validIds.includes(id));
-  if (invalid.length > 0) {
-    throw new VortexError({
-      code: "BAD_REQUEST",
-      status: 400,
-      message: `Invalid labels: ${invalid.join(", ")}`,
-    });
+  if (uniqueLabelIds.length === 0) {
+    await deleteLabels;
+    return;
   }
 
-  await db.insert(supportTicketLabels).values(
-    validIds.map((labelId) => ({
+  const insertLabels = db.insert(supportTicketLabels).values(
+    uniqueLabelIds.map((labelId) => ({
       id: crypto.randomUUID(),
       ticketId,
       labelId,
     }))
   );
+
+  await db.batch([deleteLabels, insertLabels]);
+}
+
+async function findTicketEventByExternalId(
+  db: D1Client,
+  ticketId: string,
+  externalId: string,
+  type: SupportTicketEventType
+): Promise<SupportTicketEventWithDetails | null> {
+  const event = await db
+    .select()
+    .from(supportTicketEvents)
+    .where(
+      and(
+        eq(supportTicketEvents.ticketId, ticketId),
+        eq(supportTicketEvents.externalId, externalId),
+        eq(supportTicketEvents.type, type)
+      )
+    )
+    .get();
+  if (!event) return null;
+
+  if (event.type === "message") {
+    const message = await db
+      .select()
+      .from(supportTicketMessages)
+      .where(eq(supportTicketMessages.eventId, event.id))
+      .get();
+    return { ...event, message: message ?? undefined };
+  }
+
+  if (event.type === "note") {
+    const note = await db
+      .select()
+      .from(supportTicketNotes)
+      .where(eq(supportTicketNotes.eventId, event.id))
+      .get();
+    return { ...event, note: note ?? undefined };
+  }
+
+  return { ...event };
 }
 
 export async function addTicketMessage(
@@ -699,14 +1137,47 @@ export async function addTicketMessage(
     actorType?: SupportTicketActorType;
     actorId?: string | null;
     subType?: string | null;
+    externalId?: string | null;
     metadata?: Record<string, unknown>;
     createdAt?: string;
-  }
-): Promise<SupportTicketEventWithDetails> {
+    runAutoresponders?: boolean;
+    reopenOnCustomerReply?: boolean;
+  },
+  env?: WorkerEnv
+): Promise<AddTicketMessageResult> {
   await ensureTicket(db, organizationId, ticketId);
 
+  if (!input.textContent || input.textContent.trim().length === 0) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Message text cannot be empty",
+    });
+  }
+  if (input.customerId && input.userId) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "A message cannot have both a customer and a user actor",
+    });
+  }
+  if (input.actorType === "customer" && !input.customerId && !input.actorId) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Customer actor requires customerId or actorId",
+    });
+  }
+  if (input.actorType === "user" && !input.userId && !input.actorId) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "User actor requires userId or actorId",
+    });
+  }
+
   const now = new Date().toISOString();
-  const messageCreatedAt = input.createdAt ?? now;
+  const messageCreatedAt = sanitizeTimestamp(input.createdAt) ?? now;
   const eventId = crypto.randomUUID();
   const messageId = crypto.randomUUID();
   const actorType: SupportTicketActorType =
@@ -714,28 +1185,107 @@ export async function addTicketMessage(
     (input.customerId ? "customer" : input.userId ? "user" : "automation");
   const actorId = input.actorId ?? input.customerId ?? input.userId ?? null;
   const metadata = input.metadata ? JSON.stringify(input.metadata) : null;
+  const externalId = input.externalId ?? null;
 
-  await db.insert(supportTicketEvents).values({
-    id: eventId,
-    ticketId,
-    type: "message",
-    subType: input.subType ?? null,
-    actorType,
-    actorId,
-    metadata,
-    createdAt: messageCreatedAt,
-  });
+  let event: SupportTicketEvent;
+  let isNew = true;
 
-  await db.insert(supportTicketMessages).values({
-    id: messageId,
-    eventId,
-    direction: input.direction,
-    textContent: input.textContent,
-    markdownContent: input.markdownContent ?? null,
-    channel: input.channel,
-    customerId: input.customerId ?? null,
-    userId: input.userId ?? null,
-  });
+  if (externalId) {
+    const inserted = await db
+      .insert(supportTicketEvents)
+      .values({
+        id: eventId,
+        ticketId,
+        type: "message",
+        subType: input.subType ?? null,
+        actorType,
+        actorId,
+        metadata,
+        externalId,
+        createdAt: messageCreatedAt,
+      })
+      .onConflictDoNothing({
+        target: [
+          supportTicketEvents.ticketId,
+          supportTicketEvents.externalId,
+          supportTicketEvents.type,
+        ],
+      })
+      .returning()
+      .get();
+    if (!inserted) {
+      const existing = await findTicketEventByExternalId(
+        db,
+        ticketId,
+        externalId,
+        "message"
+      );
+      if (existing) return { ...existing, isNew: false };
+      throw new VortexError({
+        code: "INTERNAL_ERROR",
+        status: 500,
+        message: "Failed to create support ticket message event",
+      });
+    }
+    event = inserted;
+  } else {
+    await db.insert(supportTicketEvents).values({
+      id: eventId,
+      ticketId,
+      type: "message",
+      subType: input.subType ?? null,
+      actorType,
+      actorId,
+      metadata,
+      externalId,
+      createdAt: messageCreatedAt,
+    });
+    event = {
+      id: eventId,
+      ticketId,
+      type: "message",
+      subType: input.subType ?? null,
+      actorType,
+      actorId,
+      metadata,
+      externalId,
+      createdAt: messageCreatedAt,
+    };
+  }
+
+  const messageRow = await db
+    .insert(supportTicketMessages)
+    .values({
+      id: messageId,
+      eventId: event.id,
+      direction: input.direction,
+      textContent: input.textContent,
+      markdownContent: input.markdownContent ?? null,
+      channel: input.channel,
+      customerId: input.customerId ?? null,
+      userId: input.userId ?? null,
+    })
+    .onConflictDoNothing({
+      target: supportTicketMessages.eventId,
+    })
+    .returning()
+    .get();
+
+  const message =
+    messageRow ??
+    (await db
+      .select()
+      .from(supportTicketMessages)
+      .where(eq(supportTicketMessages.eventId, event.id))
+      .get());
+
+  if (!message) {
+    throw new VortexError({
+      code: "INTERNAL_ERROR",
+      status: 500,
+      message: "Failed to create support ticket message",
+    });
+  }
 
   await db
     .update(supportTickets)
@@ -752,18 +1302,75 @@ export async function addTicketMessage(
       )
     );
 
+  if (input.direction === "inbound" && actorType === "customer") {
+    if (input.reopenOnCustomerReply !== false) {
+      const [ticket] = await db
+        .select({ status: supportTickets.status })
+        .from(supportTickets)
+        .where(
+          and(
+            eq(supportTickets.id, ticketId),
+            eq(supportTickets.organizationId, organizationId)
+          )
+        )
+        .limit(1);
+
+      if (ticket && (ticket.status === "done" || ticket.status === "snoozed")) {
+        await updateTicket(
+          db,
+          organizationId,
+          ticketId,
+          {
+            status: "todo",
+            actorType: "customer",
+            actorId: input.customerId ?? null,
+          },
+          env
+        );
+      }
+    }
+
+    if (input.runAutoresponders !== false) {
+      await runAutoresponders(
+        db,
+        env,
+        organizationId,
+        ticketId,
+        "customer_replied"
+      );
+      await runAutoresponders(
+        db,
+        env,
+        organizationId,
+        ticketId,
+        "out_of_hours"
+      );
+    }
+  }
+
+  if (env) {
+    await dispatchSupportTicketEvent(env, organizationId, {
+      type: "support_ticket.message_created",
+      organizationId,
+      ticketId,
+      messageId: message.id,
+    });
+  }
+
   return {
-    id: eventId,
+    id: event.id,
     ticketId,
     type: "message",
     subType: input.subType ?? null,
     actorType,
     actorId,
     metadata,
+    externalId,
     createdAt: messageCreatedAt,
+    isNew,
     message: {
-      id: messageId,
-      eventId,
+      id: message.id,
+      eventId: event.id,
       direction: input.direction,
       textContent: input.textContent,
       markdownContent: input.markdownContent ?? null,
@@ -772,6 +1379,87 @@ export async function addTicketMessage(
       userId: input.userId ?? null,
     },
   };
+}
+
+export async function runAutoresponders(
+  db: D1Client,
+  env: WorkerEnv | undefined,
+  organizationId: string,
+  ticketId: string,
+  trigger: SupportAutoresponder["trigger"]
+): Promise<void> {
+  const [ticket] = await db
+    .select({
+      sourceChannel: supportTickets.sourceChannel,
+      priority: supportTickets.priority,
+    })
+    .from(supportTickets)
+    .where(
+      and(
+        eq(supportTickets.id, ticketId),
+        eq(supportTickets.organizationId, organizationId)
+      )
+    );
+
+  if (!ticket) return;
+
+  if (
+    trigger === "out_of_hours" &&
+    !(await isOutOfHours(env, organizationId))
+  ) {
+    return;
+  }
+
+  const autoresponders = await listSupportAutoresponders(db, organizationId);
+
+  const tasks = autoresponders
+    .filter((autoresponder) => {
+      if (!autoresponder.enabled || autoresponder.trigger !== trigger) {
+        return false;
+      }
+      const { conditions } = autoresponder;
+      if (
+        conditions.sourceChannel &&
+        conditions.sourceChannel !== ticket.sourceChannel
+      ) {
+        return false;
+      }
+      if (conditions.priority && conditions.priority !== ticket.priority) {
+        return false;
+      }
+      return !!autoresponder.snippetId;
+    })
+    .map(async (autoresponder) => {
+      if (!autoresponder.snippetId) return;
+
+      try {
+        const snippet = await getSupportSnippet(
+          db,
+          organizationId,
+          autoresponder.snippetId
+        );
+
+        await addTicketMessage(
+          db,
+          organizationId,
+          ticketId,
+          {
+            direction: "outbound",
+            textContent: snippet.textContent,
+            markdownContent: snippet.markdownContent,
+            channel: asMessageChannel(ticket.sourceChannel),
+            actorType: "automation",
+            actorId: autoresponder.id,
+            metadata: { autoresponderId: autoresponder.id },
+          },
+          env
+        );
+      } catch {
+        // Skip autoresponders that fail to resolve or send.
+      }
+    });
+
+  await Promise.all(tasks);
 }
 
 export async function addTicketNote(
@@ -784,36 +1472,97 @@ export async function addTicketNote(
     actorType?: SupportTicketActorType;
     actorId?: string | null;
     subType?: string | null;
+    externalId?: string | null;
     metadata?: Record<string, unknown>;
     createdAt?: string;
-  }
+  },
+  env?: WorkerEnv
 ): Promise<SupportTicketEventWithDetails> {
   await ensureTicket(db, organizationId, ticketId);
 
+  if (!input.body || input.body.trim().length === 0) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Note body cannot be empty",
+    });
+  }
+  if (input.actorType === "user" && !input.userId && !input.actorId) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "User actor requires userId or actorId",
+    });
+  }
+
   const now = new Date().toISOString();
-  const noteCreatedAt = input.createdAt ?? now;
+  const noteCreatedAt = sanitizeTimestamp(input.createdAt) ?? now;
   const eventId = crypto.randomUUID();
   const noteId = crypto.randomUUID();
   const actorType: SupportTicketActorType = input.actorType ?? "user";
   const actorId = input.actorId ?? input.userId ?? null;
   const metadata = input.metadata ? JSON.stringify(input.metadata) : null;
+  const externalId = input.externalId ?? null;
 
-  await db.insert(supportTicketEvents).values({
-    id: eventId,
-    ticketId,
-    type: "note",
-    subType: input.subType ?? null,
-    actorType,
-    actorId,
-    metadata,
-    createdAt: noteCreatedAt,
-  });
+  const insertedEvent = await db
+    .insert(supportTicketEvents)
+    .values({
+      id: eventId,
+      ticketId,
+      type: "note",
+      subType: input.subType ?? null,
+      actorType,
+      actorId,
+      metadata,
+      externalId,
+      createdAt: noteCreatedAt,
+    })
+    .onConflictDoNothing({
+      target: externalId
+        ? [
+            supportTicketEvents.ticketId,
+            supportTicketEvents.externalId,
+            supportTicketEvents.type,
+          ]
+        : undefined,
+    })
+    .returning()
+    .get();
 
-  await db.insert(supportTicketNotes).values({
-    id: noteId,
-    eventId,
-    body: input.body,
-  });
+  const event = insertedEvent
+    ? {
+        ...insertedEvent,
+        subType: insertedEvent.subType as string | null,
+        metadata: insertedEvent.metadata as string | null,
+      }
+    : await findTicketEventByExternalId(db, ticketId, externalId ?? "", "note");
+
+  if (!event) {
+    throw new VortexError({
+      code: "INTERNAL_ERROR",
+      status: 500,
+      message: "Failed to create support ticket note event",
+    });
+  }
+
+  await db
+    .insert(supportTicketNotes)
+    .values({
+      id: noteId,
+      eventId: event.id,
+      body: input.body,
+    })
+    .onConflictDoNothing({ target: supportTicketNotes.eventId })
+    .returning()
+    .get();
+
+  const note =
+    (event as SupportTicketEventWithDetails).note ??
+    (await db
+      .select()
+      .from(supportTicketNotes)
+      .where(eq(supportTicketNotes.eventId, event.id))
+      .get());
 
   await db
     .update(supportTickets)
@@ -825,20 +1574,26 @@ export async function addTicketNote(
       )
     );
 
+  if (env && insertedEvent) {
+    await dispatchSupportTicketEvent(env, organizationId, {
+      type: "support_ticket.note_created",
+      organizationId,
+      ticketId,
+      noteId,
+    });
+  }
+
   return {
-    id: eventId,
-    ticketId,
+    id: event.id,
+    ticketId: event.ticketId,
     type: "note",
-    subType: input.subType ?? null,
-    actorType,
-    actorId,
-    metadata,
-    createdAt: noteCreatedAt,
-    note: {
-      id: noteId,
-      eventId,
-      body: input.body,
-    },
+    subType: event.subType,
+    actorType: event.actorType as SupportTicketActorType,
+    actorId: event.actorId,
+    metadata: event.metadata,
+    externalId: event.externalId,
+    createdAt: event.createdAt,
+    note: note ?? { id: noteId, eventId: event.id, body: input.body },
   };
 }
 
@@ -851,6 +1606,7 @@ export async function addTicketEvent(
     subType?: string | null;
     actorType?: SupportTicketActorType;
     actorId?: string | null;
+    externalId?: string | null;
     metadata?: Record<string, unknown>;
     createdAt?: string;
   }
@@ -858,22 +1614,52 @@ export async function addTicketEvent(
   await ensureTicket(db, organizationId, ticketId);
 
   const now = new Date().toISOString();
-  const eventCreatedAt = input.createdAt ?? now;
+  const eventCreatedAt = sanitizeTimestamp(input.createdAt) ?? now;
   const eventId = crypto.randomUUID();
   const actorType: SupportTicketActorType = input.actorType ?? "automation";
   const actorId = input.actorId ?? null;
   const metadata = input.metadata ? JSON.stringify(input.metadata) : null;
+  const externalId = input.externalId ?? null;
 
-  await db.insert(supportTicketEvents).values({
-    id: eventId,
-    ticketId,
-    type: input.type,
-    subType: input.subType ?? null,
-    actorType,
-    actorId,
-    metadata,
-    createdAt: eventCreatedAt,
-  });
+  const insertedEvent = await db
+    .insert(supportTicketEvents)
+    .values({
+      id: eventId,
+      ticketId,
+      type: input.type,
+      subType: input.subType ?? null,
+      actorType,
+      actorId,
+      metadata,
+      externalId,
+      createdAt: eventCreatedAt,
+    })
+    .onConflictDoNothing({
+      target: externalId
+        ? [
+            supportTicketEvents.ticketId,
+            supportTicketEvents.externalId,
+            supportTicketEvents.type,
+          ]
+        : undefined,
+    })
+    .returning()
+    .get();
+
+  if (!insertedEvent) {
+    const existing = await findTicketEventByExternalId(
+      db,
+      ticketId,
+      externalId ?? "",
+      input.type
+    );
+    if (existing) return existing;
+    throw new VortexError({
+      code: "INTERNAL_ERROR",
+      status: 500,
+      message: "Failed to create support ticket event",
+    });
+  }
 
   await db
     .update(supportTickets)
@@ -886,14 +1672,15 @@ export async function addTicketEvent(
     );
 
   return {
-    id: eventId,
-    ticketId,
-    type: input.type,
-    subType: input.subType ?? null,
-    actorType,
-    actorId,
-    metadata,
-    createdAt: eventCreatedAt,
+    id: insertedEvent.id,
+    ticketId: insertedEvent.ticketId,
+    type: insertedEvent.type as SupportTicketEventType,
+    subType: insertedEvent.subType as string | null,
+    actorType: insertedEvent.actorType as SupportTicketActorType,
+    actorId: insertedEvent.actorId,
+    metadata: insertedEvent.metadata as string | null,
+    externalId: insertedEvent.externalId,
+    createdAt: insertedEvent.createdAt,
   };
 }
 
@@ -1010,6 +1797,7 @@ export async function listTicketEvents(
     actorType: event.actorType,
     actorId: event.actorId,
     metadata: event.metadata,
+    externalId: event.externalId,
     createdAt: event.createdAt,
     message: messageMap.get(event.id),
     note: noteMap.get(event.id),
@@ -1117,7 +1905,8 @@ function asMessageChannel(
     sourceType === "msteams" ||
     sourceType === "discord" ||
     sourceType === "chat" ||
-    sourceType === "api"
+    sourceType === "api" ||
+    sourceType === "linear"
   ) {
     return sourceType;
   }
@@ -1137,7 +1926,8 @@ function asTicketChannel(
     sourceType === "api" ||
     sourceType === "intercom" ||
     sourceType === "zendesk" ||
-    sourceType === "plain"
+    sourceType === "plain" ||
+    sourceType === "linear"
   ) {
     return sourceType;
   }
@@ -1187,12 +1977,16 @@ async function ingestSupportTimeline(
     ticketUpdatedAt: string;
   }
 ): Promise<void> {
+  const now = new Date().toISOString();
+
   await addTicketMessage(db, organizationId, ticketId, {
     direction: "inbound",
     textContent: input.firstMessage,
     channel: input.messageChannel,
     customerId,
     createdAt: input.firstMessageCreatedAt,
+    runAutoresponders: false,
+    reopenOnCustomerReply: false,
   });
 
   const sortedReplies = input.replies.toSorted(
@@ -1244,6 +2038,8 @@ async function ingestSupportTimeline(
           subType: reply.subType,
           metadata: reply.metadata,
           createdAt: reply.createdAt,
+          runAutoresponders: false,
+          reopenOnCustomerReply: false,
         });
       }
       await Promise.all(
@@ -1274,9 +2070,12 @@ async function ingestSupportTimeline(
   );
 
   const latest = Math.max(...createdAts);
-  const finalUpdatedAt = Number.isFinite(latest)
-    ? new Date(latest).toISOString()
-    : input.ticketUpdatedAt;
+  const finalUpdatedAt =
+    sanitizeTimestamp(
+      Number.isFinite(latest)
+        ? new Date(latest).toISOString()
+        : input.ticketUpdatedAt
+    ) ?? now;
   await db
     .update(supportTickets)
     .set({ updatedAt: finalUpdatedAt })
@@ -1582,4 +2381,63 @@ export async function createTicketFromZendesk(
     });
   }
   return full;
+}
+
+type TimeScheduleData = {
+  weekdays?: number[];
+  start?: string;
+  end?: string;
+};
+
+async function isOutOfHours(
+  env: WorkerEnv | undefined,
+  organizationId: string
+): Promise<boolean> {
+  if (!env) return false;
+
+  const stub = getWorkspaceStub(env, organizationId);
+  const schedules = await stub.listTimeSchedules();
+  if (schedules.length === 0) return true;
+
+  const now = new Date();
+  for (const schedule of schedules as unknown as {
+    timeData: string | null;
+  }[]) {
+    if (isWithinBusinessHours(schedule.timeData, now)) return false;
+  }
+  return true;
+}
+
+function parseMinutes(s: string): number | null {
+  const [h, m] = s.split(":").map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
+  return h * 60 + m;
+}
+
+function isWithinBusinessHours(timeData: string | null, now: Date): boolean {
+  if (!timeData) return true;
+
+  try {
+    const data = JSON.parse(timeData) as unknown;
+    if (!data || typeof data !== "object" || Array.isArray(data)) return true;
+    const { weekdays, start, end } = data as TimeScheduleData;
+
+    const day = now.getUTCDay();
+    if (Array.isArray(weekdays) && !weekdays.includes(day)) return false;
+
+    const minutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+
+    if (start) {
+      const startMinutes = parseMinutes(start);
+      if (startMinutes !== null && minutes < startMinutes) return false;
+    }
+    if (end) {
+      const endMinutes = parseMinutes(end);
+      if (endMinutes !== null && minutes >= endMinutes) return false;
+    }
+
+    return true;
+  } catch {
+    return true;
+  }
 }

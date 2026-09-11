@@ -40,4 +40,6 @@ export interface AppEnv {
   // Cloudflare Email Service send binding.
   EMAIL?: SendEmail;
   EMAIL_FROM?: string;
+  // Cloudflare Queue for async webhook processing.
+  WEBHOOK_QUEUE?: Queue;
 }

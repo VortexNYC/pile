@@ -3,7 +3,7 @@ import { and, eq, lt, ne } from "drizzle-orm";
 import { hmacSha256Hex } from "../global/crypto.js";
 import type { AppEnv } from "../types/env.js";
 import type { RealtimeEvent } from "../types/workspace.js";
-import type { WorkspaceDb } from "./data.js";
+import type { WorkspaceDb } from "./data/index.js";
 import {
   workspaceOutboundWebhookDeliveries,
   workspaceWebhookSubscriptions,

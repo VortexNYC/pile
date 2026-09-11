@@ -64,7 +64,7 @@ import {
   type ListIssuesArgs,
   type RealtimeEvent,
 } from "../types/workspace.js";
-import * as data from "./data.js";
+import * as data from "./data/index.js";
 import { filterToSql } from "./filter.js";
 import { workspaceMigrations } from "./migrations.js";
 import { workspaceSchema } from "./schema-map.js";
@@ -469,7 +469,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return index;
   }
 
-  private async emit(event: RealtimeEvent) {
+  private emitWebSockets(event: RealtimeEvent): void {
     for (const ws of this.ctx.getWebSockets()) {
       try {
         ws.send(JSON.stringify(event));
@@ -477,7 +477,15 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         // socket may be closing
       }
     }
+  }
+
+  private async emit(event: RealtimeEvent) {
+    this.emitWebSockets(event);
     this.ctx.waitUntil(this.sendWebhookEvent(event));
+  }
+
+  async broadcast(event: RealtimeEvent): Promise<void> {
+    this.emitWebSockets(event);
   }
 
   private async sendWebhookEvent(event: RealtimeEvent) {
@@ -2365,6 +2373,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     await this.ready;
     const now = new Date().toISOString();
     const id = input.id ?? crypto.randomUUID();
+
+    const existing = await this.getIssue(id);
+    if (existing) return existing;
+
     const status = input.status ?? "backlog";
     const resolution = validateIssueResolution(
       status,
@@ -2453,10 +2465,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         createdAt: input.createdAt ?? now,
         updatedAt: input.updatedAt ?? now,
       })
+      .onConflictDoNothing({ target: workspaceIssues.id })
       .returning()
       .get();
 
     if (!issue) {
+      const recovered = await this.getIssue(id);
+      if (recovered) return recovered;
       throw new Error("Failed to create issue");
     }
 

@@ -31,7 +31,7 @@ pnpm run check
 - `WorkspaceDO` is branded as `Rpc.DurableObjectBranded` so `DurableObjectStub<WorkspaceDO>` exposes its methods directly. Do not add `as unknown as` casts to DO stubs.
 - Durable Object SQLite requires `new_sqlite_classes` in the `[[migrations]]` section of `wrangler.toml`. `new_classes` is not enough and will fail at runtime.
 - Keep `compatibility_date` pinned to a date the installed `workerd` binary supports. It is currently aligned to `2026-07-30` for `workerd 1.20260730.1`; do not use a later date.
-- The `wrangler.toml` file is git-ignored; canonical config lives in `wrangler.toml.example`. Copy and customize it for local deploys.
+- The `wrangler.toml` file is the canonical, committed config. The `.gitignore` entry only protects against new local copies; the tracked file is the source of truth. Do not move it to `wrangler.toml.example`.
 
 ## Git workflow
 

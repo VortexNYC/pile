@@ -28,9 +28,20 @@ const tokenWithSecretSchema = z.object({
   createdAt: z.string(),
 });
 
+function normalizeTokenPermissions(
+  value: string | string[] | undefined
+): string {
+  if (value === undefined) return "read";
+  if (typeof value === "string") return value;
+  return value.join(",");
+}
+
 const tokenBodySchema = z.object({
   name: z.string().min(1),
-  permissions: z.string().optional(),
+  permissions: z
+    .union([z.string(), z.array(z.string())])
+    .optional()
+    .transform(normalizeTokenPermissions),
   actorType: z.enum(["user", "agent"]).optional(),
   provider: z.string().optional(),
 });

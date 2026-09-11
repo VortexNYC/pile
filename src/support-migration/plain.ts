@@ -24,13 +24,13 @@ import {
   setTicketAssignees,
   type SupportTicketAssigneeInput,
 } from "../global/support-tickets.js";
-import { VortexError } from "../platform/errors.js";
 import type {
   ImportBatchResult,
   ImportContext,
   ImportSource,
   ImportValidationResult,
-} from "./types.js";
+} from "../import/types.js";
+import { VortexError } from "../platform/errors.js";
 
 const PLAIN_API_BASE = "https://core-api.uk.plain.com/graphql/v1";
 
@@ -702,19 +702,15 @@ function entryEventType(
   if (typename === "ThreadLabelsChangedEntry") {
     return "label_added";
   }
-  if (
-    typename === "CustomerEventEntry" ||
-    typename === "CustomerSurveyRequestedEntry"
-  ) {
-    return typename === "CustomerSurveyRequestedEntry"
-      ? "survey_requested"
-      : "customer_event";
+  if (typename === "CustomerEventEntry") {
+    return "customer_event";
   }
   if (
+    typename === "CustomerSurveyRequestedEntry" ||
     typename === "ThreadServiceLevelAgreementPolicyChangedEntry" ||
     typename === "ServiceLevelAgreementStatusTransitionedEntry"
   ) {
-    return "sla_change";
+    return "custom_entry";
   }
   if (
     typename === "ThreadLinkCreatedEntry" ||

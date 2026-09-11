@@ -49,7 +49,7 @@ export const repoIssues = sqliteTable(
       .default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
-    index("repo_issues_source_repo_number_idx" as string).on(
+    uniqueIndex("repo_issues_source_repo_number_idx" as string).on(
       table.source,
       table.repo,
       table.issueNumber
@@ -80,6 +80,72 @@ export const intercomConversations = sqliteTable(
   ]
 );
 
+export const zendeskTickets = sqliteTable(
+  "zendesk_tickets" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    externalId: text("external_id" as string).notNull(),
+    ticketId: text("ticket_id" as string).notNull(),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("zendesk_tickets_external_idx" as string).on(
+      table.organizationId,
+      table.externalId
+    ),
+    index("zendesk_tickets_ticket_idx" as string).on(table.ticketId),
+  ]
+);
+
+export const plainThreads = sqliteTable(
+  "plain_threads" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    externalId: text("external_id" as string).notNull(),
+    ticketId: text("ticket_id" as string).notNull(),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("plain_threads_external_idx" as string).on(
+      table.organizationId,
+      table.externalId
+    ),
+    index("plain_threads_ticket_idx" as string).on(table.ticketId),
+  ]
+);
+
+export const plainCustomers = sqliteTable(
+  "plain_customers" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    externalId: text("external_id" as string).notNull(),
+    customerId: text("customer_id" as string).notNull(),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("plain_customers_external_idx" as string).on(
+      table.organizationId,
+      table.externalId
+    ),
+    index("plain_customers_customer_idx" as string).on(table.customerId),
+  ]
+);
+
 export const importJobs = sqliteTable(
   "import_jobs" as string,
   {
@@ -96,6 +162,7 @@ export const importJobs = sqliteTable(
         "completed",
         "failed",
         "paused",
+        "canceled",
       ],
     })
       .notNull()
@@ -421,7 +488,13 @@ export const labels = sqliteTable(
       .references(() => organization.id),
     name: text("name" as string).notNull(),
     color: text("color" as string),
+    kind: text("kind" as string, { enum: ["issue", "support"] as const })
+      .notNull()
+      .default("issue"),
     createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
   },
@@ -828,11 +901,23 @@ export const webhookDeliveries = sqliteTable(
     processedAt: text("processed_at" as string)
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
+    status: text("status" as string)
+      .notNull()
+      .default("pending"),
+    attemptCount: integer("attempt_count" as string)
+      .notNull()
+      .default(0),
+    payload: text("payload" as string),
+    lastError: text("last_error" as string),
+    nextRetryAt: text("next_retry_at" as string),
+    lockedAt: text("locked_at" as string),
+    result: text("result" as string),
   },
   (table) => [
     index("webhook_deliveries_organization_idx" as string).on(
       table.organizationId
     ),
+    index("webhook_deliveries_status_idx" as string).on(table.status),
   ]
 );
 
@@ -1955,6 +2040,9 @@ export const supportTickets = sqliteTable(
         "discord",
         "chat",
         "api",
+        "capture",
+        "jam",
+        "linear",
         "manual",
       ] as const,
     })
@@ -1983,9 +2071,11 @@ export const supportTickets = sqliteTable(
         "intercom",
         "zendesk",
         "plain",
+        "linear",
       ] as const,
     }).notNull(),
     issueId: text("issue_id" as string),
+    snoozedUntil: text("snoozed_until" as string),
     lastCustomerMessageAt: text("last_customer_message_at" as string),
     lastAgentMessageAt: text("last_agent_message_at" as string),
     createdAt: text("created_at" as string)
@@ -2016,6 +2106,42 @@ export const supportTickets = sqliteTable(
       table.organizationId,
       table.externalId,
       table.externalSource
+    ),
+    index("support_tickets_org_issue_idx" as string).on(
+      table.organizationId,
+      table.issueId
+    ),
+  ]
+);
+
+export const supportEscalationRules = sqliteTable(
+  "support_escalation_rules" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    name: text("name" as string).notNull(),
+    isActive: integer("is_active" as string, { mode: "boolean" })
+      .notNull()
+      .default(true),
+    sortOrder: integer("sort_order" as string)
+      .notNull()
+      .default(0),
+    conditions: text("conditions" as string).notNull(),
+    action: text("action" as string).notNull(),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("support_escalation_rules_org_active_order_idx" as string).on(
+      table.organizationId,
+      table.isActive,
+      table.sortOrder
     ),
   ]
 );
@@ -2051,9 +2177,6 @@ export const supportTicketEvents = sqliteTable(
         "label_removed",
         "customer_event",
         "thread_event",
-        "survey_requested",
-        "survey_received",
-        "sla_change",
         "link_added",
         "link_changed",
         "link_removed",
@@ -2074,6 +2197,7 @@ export const supportTicketEvents = sqliteTable(
     }).notNull(),
     actorId: text("actor_id" as string),
     metadata: text("metadata" as string),
+    externalId: text("external_id" as string),
     createdAt: text("created_at" as string)
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
@@ -2082,6 +2206,11 @@ export const supportTicketEvents = sqliteTable(
     index("support_ticket_events_ticket_created_idx" as string).on(
       table.ticketId,
       table.createdAt
+    ),
+    uniqueIndex("support_ticket_events_ticket_external_type_idx" as string).on(
+      table.ticketId,
+      table.externalId,
+      table.type
     ),
   ]
 );
@@ -2099,6 +2228,11 @@ export const supportTicketAttachments = sqliteTable(
     eventId: text("event_id" as string)
       .notNull()
       .references(() => supportTicketEvents.id, { onDelete: "cascade" }),
+    type: text("type" as string, {
+      enum: ["screenshot", "video", "debugger_json", "log", "network"] as const,
+    })
+      .notNull()
+      .default("screenshot"),
     externalId: text("external_id" as string),
     url: text("url" as string),
     fileName: text("file_name" as string),
@@ -2139,6 +2273,7 @@ export const supportTicketMessages = sqliteTable(
         "intercom",
         "zendesk",
         "plain",
+        "linear",
       ] as const,
     }).notNull(),
     customerId: text("customer_id" as string).references(
@@ -2148,7 +2283,12 @@ export const supportTicketMessages = sqliteTable(
     userId: text("user_id" as string).references(() => user.id, {
       onDelete: "set null",
     }),
-  }
+  },
+  (table) => [
+    uniqueIndex("support_ticket_messages_event_unique_idx" as string).on(
+      table.eventId
+    ),
+  ]
 );
 
 export const supportTicketNotes = sqliteTable(
@@ -2159,7 +2299,12 @@ export const supportTicketNotes = sqliteTable(
       .notNull()
       .references(() => supportTicketEvents.id, { onDelete: "cascade" }),
     body: text("body" as string).notNull(),
-  }
+  },
+  (table) => [
+    uniqueIndex("support_ticket_notes_event_unique_idx" as string).on(
+      table.eventId
+    ),
+  ]
 );
 
 export const supportTicketAssignments = sqliteTable(
@@ -2238,6 +2383,7 @@ export const supportChannels = sqliteTable(
         "intercom",
         "zendesk",
         "plain",
+        "linear",
       ] as const,
     }).notNull(),
     name: text("name").notNull(),
@@ -2255,6 +2401,248 @@ export const supportChannels = sqliteTable(
       table.organizationId,
       table.type,
       table.name
+    ),
+  ]
+);
+
+export const supportUserStatus = sqliteTable(
+  "support_user_status" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    userId: text("user_id" as string)
+      .notNull()
+      .references(() => user.id),
+    status: text("status" as string, {
+      enum: ["active", "away", "snoozed", "offline"] as const,
+    }).notNull(),
+    until: text("until" as string),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("support_user_status_org_user_idx" as string).on(
+      table.organizationId,
+      table.userId
+    ),
+  ]
+);
+
+export const supportTiers = sqliteTable(
+  "support_tiers" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    name: text("name" as string).notNull(),
+    level: integer("level" as string).notNull(),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("support_tiers_org_name_idx" as string).on(
+      table.organizationId,
+      table.name
+    ),
+  ]
+);
+
+export const supportTierMembers = sqliteTable(
+  "support_tier_members" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    tierId: text("tier_id" as string)
+      .notNull()
+      .references(() => supportTiers.id, { onDelete: "cascade" }),
+    userId: text("user_id" as string)
+      .notNull()
+      .references(() => user.id),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("support_tier_members_tier_user_idx" as string).on(
+      table.tierId,
+      table.userId
+    ),
+  ]
+);
+
+export const supportSavedViews = sqliteTable(
+  "support_saved_views" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    userId: text("user_id" as string).references(() => user.id, {
+      onDelete: "cascade",
+    }),
+    name: text("name" as string).notNull(),
+    filter: text("filter" as string)
+      .notNull()
+      .default("{}"),
+    sort: text("sort" as string)
+      .notNull()
+      .default('{"by":"updated_at","direction":"desc"}'),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("support_saved_views_org_user_idx" as string).on(
+      table.organizationId,
+      table.userId
+    ),
+  ]
+);
+
+export const supportSnippets = sqliteTable(
+  "support_snippets" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    name: text("name" as string).notNull(),
+    textContent: text("text_content" as string).notNull(),
+    markdownContent: text("markdown_content" as string),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("support_snippets_organization_name_idx" as string).on(
+      table.organizationId,
+      table.name
+    ),
+    index("support_snippets_organization_idx" as string).on(
+      table.organizationId
+    ),
+  ]
+);
+
+export const supportAutoresponders = sqliteTable(
+  "support_autoresponders" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    name: text("name" as string).notNull(),
+    enabled: integer("enabled" as string, { mode: "boolean" })
+      .notNull()
+      .default(true),
+    trigger: text("trigger" as string, {
+      enum: ["ticket_created", "customer_replied", "out_of_hours"] as const,
+    }).notNull(),
+    order: integer("order" as string).notNull(),
+    snippetId: text("snippet_id" as string).references(
+      () => supportSnippets.id,
+      {
+        onDelete: "set null",
+      }
+    ),
+    conditions: text("conditions" as string)
+      .notNull()
+      .default("{}"),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("support_autoresponders_org_enabled_order_idx" as string).on(
+      table.organizationId,
+      table.enabled,
+      table.order
+    ),
+  ]
+);
+
+export const supportCapturePublicKeys = sqliteTable(
+  "support_capture_public_keys" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    name: text("name" as string).notNull(),
+    key: text("key" as string).notNull(),
+    webhookSecret: text("webhook_secret" as string),
+    allowedOrigins: text("allowed_origins" as string)
+      .notNull()
+      .default("[]"),
+    isActive: integer("is_active" as string, { mode: "boolean" })
+      .notNull()
+      .default(true),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("support_capture_public_keys_org_key_idx" as string).on(
+      table.organizationId,
+      table.key
+    ),
+  ]
+);
+
+export const supportCaptureSessions = sqliteTable(
+  "support_capture_sessions" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    publicKeyId: text("public_key_id" as string)
+      .notNull()
+      .references(() => supportCapturePublicKeys.id),
+    customerId: text("customer_id" as string).references(
+      () => supportCustomers.id
+    ),
+    ticketId: text("ticket_id" as string).references(() => supportTickets.id),
+    status: text("status" as string, {
+      enum: ["pending", "uploading", "finalized", "expired"] as const,
+    })
+      .notNull()
+      .default("pending"),
+    metadata: text("metadata" as string)
+      .notNull()
+      .default("{}"),
+    expiresAt: text("expires_at" as string).notNull(),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("support_capture_sessions_org_status_expires_idx" as string).on(
+      table.organizationId,
+      table.status,
+      table.expiresAt
     ),
   ]
 );

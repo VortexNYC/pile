@@ -240,4 +240,26 @@ export type RealtimeEvent =
       organizationId: string;
       session: AgentSession;
       issue: Issue;
+    }
+  | {
+      type: "support_ticket.created";
+      organizationId: string;
+      ticketId: Id;
+    }
+  | {
+      type: "support_ticket.updated";
+      organizationId: string;
+      ticketId: Id;
+    }
+  | {
+      type: "support_ticket.message_created";
+      organizationId: string;
+      ticketId: Id;
+      messageId: Id;
+    }
+  | {
+      type: "support_ticket.note_created";
+      organizationId: string;
+      ticketId: Id;
+      noteId: Id;
     };

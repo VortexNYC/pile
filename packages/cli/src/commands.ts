@@ -2330,6 +2330,484 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "support capture public keys list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/capture/public-keys",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support capture public keys create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/capture/public-keys",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "allowedOrigins",
+        flag: "allowed-origins",
+      },
+    ],
+  },
+  "support capture public keys delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/support/capture/public-keys/{keyId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "keyId",
+        flag: "key-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support capture token create": {
+    method: "POST",
+    path: "/support/capture/token",
+    params: [],
+    query: [],
+    body: [],
+  },
+  "support capture upload session create": {
+    method: "POST",
+    path: "/support/capture/upload-session",
+    params: [],
+    query: [],
+    body: [
+      {
+        name: "title",
+        flag: "title",
+      },
+      {
+        name: "description",
+        flag: "description",
+      },
+      {
+        name: "priority",
+        flag: "priority",
+      },
+      {
+        name: "tags",
+        flag: "tags",
+      },
+      {
+        name: "url",
+        flag: "url",
+      },
+      {
+        name: "attachmentType",
+        flag: "attachment-type",
+      },
+      {
+        name: "contentType",
+        flag: "content-type",
+      },
+      {
+        name: "fileName",
+        flag: "file-name",
+      },
+      {
+        name: "visibility",
+        flag: "visibility",
+      },
+      {
+        name: "metadata",
+        flag: "metadata",
+      },
+      {
+        name: "deviceInfo",
+        flag: "device-info",
+      },
+    ],
+  },
+  "support capture upload create": {
+    method: "POST",
+    path: "/support/capture/upload/{sessionId}/{attachmentType}/{fileName}",
+    params: [
+      {
+        name: "sessionId",
+        flag: "session",
+      },
+      {
+        name: "attachmentType",
+        flag: "attachment-type",
+      },
+      {
+        name: "fileName",
+        flag: "file-name",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support capture finalize create": {
+    method: "POST",
+    path: "/support/capture/finalize",
+    params: [],
+    query: [],
+    body: [],
+  },
+  "support capture metadata create": {
+    method: "POST",
+    path: "/support/capture/metadata",
+    params: [],
+    query: [],
+    body: [
+      {
+        name: "metadata",
+        flag: "metadata",
+      },
+    ],
+  },
+  "support capture artifacts get": {
+    method: "GET",
+    path: "/support/capture/artifacts/{attachmentId}",
+    params: [
+      {
+        name: "attachmentId",
+        flag: "attachment",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support capture sessions get": {
+    method: "GET",
+    path: "/support/capture/sessions/{sessionId}",
+    params: [
+      {
+        name: "sessionId",
+        flag: "session",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support capture public get": {
+    method: "GET",
+    path: "/support/capture/public/{ticketId}",
+    params: [
+      {
+        name: "ticketId",
+        flag: "ticket-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support webhooks jam create": {
+    method: "POST",
+    path: "/support/webhooks/jam/{publicKeyId}",
+    params: [
+      {
+        name: "publicKeyId",
+        flag: "public-key-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "jamId",
+        flag: "jam-id",
+      },
+      {
+        name: "jamUrl",
+        flag: "jam-url",
+      },
+      {
+        name: "teamId",
+        flag: "team",
+      },
+      {
+        name: "type",
+        flag: "type",
+      },
+      {
+        name: "createdAt",
+        flag: "created-at",
+      },
+      {
+        name: "title",
+        flag: "title",
+      },
+      {
+        name: "description",
+        flag: "description",
+      },
+      {
+        name: "originalUrl",
+        flag: "original-url",
+      },
+      {
+        name: "origin",
+        flag: "origin",
+      },
+      {
+        name: "isIncognito",
+        flag: "is-incognito",
+      },
+      {
+        name: "author",
+        flag: "author",
+      },
+      {
+        name: "media",
+        flag: "media",
+      },
+      {
+        name: "systemInfo",
+        flag: "system-info",
+      },
+      {
+        name: "consoleLogs",
+        flag: "console-logs",
+      },
+      {
+        name: "networkRequests",
+        flag: "network-requests",
+      },
+      {
+        name: "userEvents",
+        flag: "user-events",
+      },
+      {
+        name: "recordingLink",
+        flag: "recording-link",
+      },
+      {
+        name: "intercom",
+        flag: "intercom",
+      },
+      {
+        name: "linear",
+        flag: "linear",
+      },
+    ],
+  },
+  "support webhooks jam intercom recorded create": {
+    method: "POST",
+    path: "/support/webhooks/jam/{publicKeyId}/intercom/recorded",
+    params: [
+      {
+        name: "publicKeyId",
+        flag: "public-key-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "conversationId",
+        flag: "conversation-id",
+      },
+      {
+        name: "jamId",
+        flag: "jam-id",
+      },
+      {
+        name: "jamUrl",
+        flag: "jam-url",
+      },
+    ],
+  },
+  "support webhooks jam intercom opted out create": {
+    method: "POST",
+    path: "/support/webhooks/jam/{publicKeyId}/intercom/opted-out",
+    params: [
+      {
+        name: "publicKeyId",
+        flag: "public-key-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "conversationId",
+        flag: "conversation-id",
+      },
+    ],
+  },
+  "support webhooks jam recording links create": {
+    method: "POST",
+    path: "/support/webhooks/jam/{publicKeyId}/recording-links",
+    params: [
+      {
+        name: "publicKeyId",
+        flag: "public-key-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "recordingLinkId",
+        flag: "recording-link-id",
+      },
+      {
+        name: "publicId",
+        flag: "public-id",
+      },
+      {
+        name: "url",
+        flag: "url",
+      },
+      {
+        name: "teamId",
+        flag: "team",
+      },
+      {
+        name: "type",
+        flag: "type",
+      },
+      {
+        name: "createdAt",
+        flag: "created-at",
+      },
+      {
+        name: "origin",
+        flag: "origin",
+      },
+      {
+        name: "description",
+        flag: "description",
+      },
+      {
+        name: "reference",
+        flag: "reference",
+      },
+      {
+        name: "recordingUrl",
+        flag: "recording-url",
+      },
+      {
+        name: "createdBy",
+        flag: "created-by",
+      },
+    ],
+  },
+  "support captures console list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/captures/{ticketId}/console",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "ticketId",
+        flag: "ticket-id",
+      },
+    ],
+    query: [
+      {
+        name: "level",
+        flag: "level",
+      },
+      {
+        name: "isError",
+        flag: "is-error",
+      },
+    ],
+    body: [],
+  },
+  "support captures network list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/captures/{ticketId}/network",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "ticketId",
+        flag: "ticket-id",
+      },
+    ],
+    query: [
+      {
+        name: "isError",
+        flag: "is-error",
+      },
+      {
+        name: "url",
+        flag: "url",
+      },
+    ],
+    body: [],
+  },
+  "support captures events list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/captures/{ticketId}/events",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "ticketId",
+        flag: "ticket-id",
+      },
+    ],
+    query: [
+      {
+        name: "type",
+        flag: "type",
+      },
+      {
+        name: "action",
+        flag: "action",
+      },
+    ],
+    body: [],
+  },
+  "support captures frames list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/captures/{ticketId}/frames",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "ticketId",
+        flag: "ticket-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support captures metadata list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/captures/{ticketId}/metadata",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "ticketId",
+        flag: "ticket-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "support channels list": {
     method: "GET",
     path: "/workspaces/{organizationId}/support-channels",
@@ -2402,6 +2880,120 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "organizationId",
         flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support webhooks slack create": {
+    method: "POST",
+    path: "/support/webhooks/slack/{organizationId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support incoming create": {
+    method: "POST",
+    path: "/support/incoming/{channelId}",
+    params: [
+      {
+        name: "channelId",
+        flag: "channel-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "fromEmail",
+        flag: "from-email",
+      },
+      {
+        name: "fromName",
+        flag: "from-name",
+      },
+      {
+        name: "subject",
+        flag: "subject",
+      },
+      {
+        name: "text",
+        flag: "text",
+      },
+      {
+        name: "html",
+        flag: "html",
+      },
+      {
+        name: "externalTicketId",
+        flag: "external-ticket-id",
+      },
+      {
+        name: "externalMessageId",
+        flag: "external-message-id",
+      },
+      {
+        name: "subType",
+        flag: "sub-type",
+      },
+      {
+        name: "createdAt",
+        flag: "created-at",
+      },
+    ],
+  },
+  "support channels send create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/channels/{channelId}/send",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "channelId",
+        flag: "channel-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "ticketId",
+        flag: "ticket-id",
+      },
+      {
+        name: "textContent",
+        flag: "text-content",
+      },
+      {
+        name: "markdownContent",
+        flag: "markdown-content",
+      },
+      {
+        name: "subject",
+        flag: "subject",
+      },
+      {
+        name: "idempotencyKey",
+        flag: "idempotency-key",
+      },
+    ],
+  },
+  "support channels validate create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/channels/{channelId}/validate",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "channelId",
+        flag: "channel-id",
       },
     ],
     query: [],
@@ -4567,6 +5159,14 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "priority",
       },
       {
+        name: "sourceChannel",
+        flag: "source-channel",
+      },
+      {
+        name: "externalSource",
+        flag: "external-source",
+      },
+      {
         name: "assignedTo",
         flag: "assigned-to",
       },
@@ -4670,8 +5270,20 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "priority",
       },
       {
+        name: "snoozedUntil",
+        flag: "snoozed-until",
+      },
+      {
         name: "issueId",
         flag: "issue",
+      },
+      {
+        name: "actorType",
+        flag: "actor-type",
+      },
+      {
+        name: "actorId",
+        flag: "actor",
       },
     ],
   },
@@ -4849,6 +5461,14 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "until",
         flag: "until",
       },
+      {
+        name: "actorType",
+        flag: "actor-type",
+      },
+      {
+        name: "actorId",
+        flag: "actor",
+      },
     ],
   },
   "support tickets assignees update": {
@@ -4892,6 +5512,723 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "labels",
       },
     ],
+  },
+  "support snippets list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/snippets",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support snippets create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/snippets",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "textContent",
+        flag: "text-content",
+      },
+      {
+        name: "markdownContent",
+        flag: "markdown-content",
+      },
+    ],
+  },
+  "support snippets get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/snippets/{snippetId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "snippetId",
+        flag: "snippet-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support snippets update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/support/snippets/{snippetId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "snippetId",
+        flag: "snippet-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "textContent",
+        flag: "text-content",
+      },
+      {
+        name: "markdownContent",
+        flag: "markdown-content",
+      },
+    ],
+  },
+  "support snippets insert create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/snippets/{snippetId}/insert",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "snippetId",
+        flag: "snippet-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support autoresponders list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/autoresponders",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support autoresponders create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/autoresponders",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "enabled",
+        flag: "enabled",
+      },
+      {
+        name: "trigger",
+        flag: "trigger",
+      },
+      {
+        name: "order",
+        flag: "order",
+      },
+      {
+        name: "snippetId",
+        flag: "snippet-id",
+      },
+      {
+        name: "conditions",
+        flag: "conditions",
+      },
+    ],
+  },
+  "support autoresponders update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/support/autoresponders/{autoresponderId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "autoresponderId",
+        flag: "autoresponder-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "enabled",
+        flag: "enabled",
+      },
+      {
+        name: "trigger",
+        flag: "trigger",
+      },
+      {
+        name: "order",
+        flag: "order",
+      },
+      {
+        name: "snippetId",
+        flag: "snippet-id",
+      },
+      {
+        name: "conditions",
+        flag: "conditions",
+      },
+    ],
+  },
+  "support labels list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/labels",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support labels create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/labels",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "color",
+        flag: "color",
+      },
+    ],
+  },
+  "support escalation rules list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/escalation-rules",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support escalation rules create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/escalation-rules",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "isActive",
+        flag: "is-active",
+      },
+      {
+        name: "sortOrder",
+        flag: "sort-order",
+      },
+      {
+        name: "conditions",
+        flag: "conditions",
+      },
+      {
+        name: "action",
+        flag: "action",
+      },
+    ],
+  },
+  "support escalation rules get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/escalation-rules/{ruleId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "ruleId",
+        flag: "rule-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support escalation rules update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/support/escalation-rules/{ruleId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "ruleId",
+        flag: "rule-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "isActive",
+        flag: "is-active",
+      },
+      {
+        name: "sortOrder",
+        flag: "sort-order",
+      },
+      {
+        name: "conditions",
+        flag: "conditions",
+      },
+      {
+        name: "action",
+        flag: "action",
+      },
+    ],
+  },
+  "support escalation rules delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/support/escalation-rules/{ruleId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "ruleId",
+        flag: "rule-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support inbox list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/inbox",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "status",
+        flag: "status",
+      },
+      {
+        name: "priority",
+        flag: "priority",
+      },
+      {
+        name: "assignedTo",
+        flag: "assigned-to",
+      },
+      {
+        name: "customerId",
+        flag: "customer-id",
+      },
+      {
+        name: "channel",
+        flag: "channel",
+      },
+      {
+        name: "label",
+        flag: "label",
+      },
+      {
+        name: "q",
+        flag: "q",
+      },
+      {
+        name: "limit",
+        flag: "limit",
+      },
+      {
+        name: "cursor",
+        flag: "cursor",
+      },
+    ],
+    body: [],
+  },
+  "support inbox counts list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/inbox/counts",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support inbox next list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/inbox/next",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support inbox views list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/inbox/views",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support inbox views create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/inbox/views",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "filter",
+        flag: "filter",
+      },
+      {
+        name: "sort",
+        flag: "sort",
+      },
+    ],
+  },
+  "support inbox views get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/inbox/views/{viewId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "viewId",
+        flag: "view-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support inbox views run list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/inbox/views/{viewId}/run",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "viewId",
+        flag: "view-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support imports create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/imports",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support imports get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/imports/{importId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "importId",
+        flag: "import-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support imports resume create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/imports/{importId}/resume",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "importId",
+        flag: "import-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support imports cancel create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/imports/{importId}/cancel",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "importId",
+        flag: "import-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support imports validate create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/imports/validate",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support users status create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/users/{userId}/status",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "userId",
+        flag: "user",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "status",
+        flag: "status",
+      },
+      {
+        name: "until",
+        flag: "until",
+      },
+    ],
+  },
+  "support agents list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/agents",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support tiers list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/tiers",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support tiers create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/tiers",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "level",
+        flag: "level",
+      },
+    ],
+  },
+  "support tiers get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/tiers/{tierId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "tierId",
+        flag: "tier-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support tiers update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/support/tiers/{tierId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "tierId",
+        flag: "tier-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "level",
+        flag: "level",
+      },
+    ],
+  },
+  "support tiers delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/support/tiers/{tierId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "tierId",
+        flag: "tier-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support tiers members": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/tiers/{tierId}/members",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "tierId",
+        flag: "tier-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "userId",
+        flag: "user",
+      },
+    ],
+  },
+  "support tiers members delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/support/tiers/{tierId}/members/{userId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "tierId",
+        flag: "tier-id",
+      },
+      {
+        name: "userId",
+        flag: "user",
+      },
+    ],
+    query: [],
+    body: [],
   },
   "csv exports create": {
     method: "POST",

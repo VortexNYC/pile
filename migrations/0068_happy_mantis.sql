@@ -1,0 +1,1 @@
+CREATE INDEX `support_tickets_org_issue_idx` ON `support_tickets` (`organization_id`,`issue_id`);

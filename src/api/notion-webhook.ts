@@ -1,7 +1,7 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
-import { createD1 } from "../global/db.js";
+import { createD1, type D1Client } from "../global/db.js";
 import { getNotionPage } from "../global/notion-client.js";
 import type { NotionSearchPage } from "../global/notion-client.js";
 import {
@@ -9,10 +9,16 @@ import {
   updateNotionInstallationVerificationToken,
 } from "../global/notion-installations.js";
 import { findNotionPageMapping } from "../global/notion-page-mappings.js";
+import {
+  enqueueWebhook,
+  scopedDeliveryId,
+  type WebhookProcessor,
+  type WebhookSource,
+} from "../global/webhook-queue.js";
 import { getWorkspaceById } from "../global/workspaces.js";
 import { syncNotionPage } from "../import/notion.js";
 import type { ImportContext } from "../import/types.js";
-import type { AppContext } from "../platform/middleware.js";
+import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import { getWorkspaceStub } from "./stub.js";
 
 const notionWebhookParamsSchema = z.object({
@@ -71,6 +77,104 @@ async function verifyNotionSignature(
 ): Promise<boolean> {
   const expected = `sha256=${await hmacSha256Hex(verificationToken, rawBody)}`;
   return constantTimeCompare(signature, expected);
+}
+
+const notionQueuePayloadSchema = z.object({
+  organizationId: z.string(),
+  workspaceId: z.string(),
+  event: notionWebhookEventSchema,
+});
+
+export async function processNotionWebhookPayload(
+  db: D1Client,
+  env: WorkerEnv,
+  payload: unknown
+): Promise<{ ok: true }> {
+  const data = notionQueuePayloadSchema.parse(payload);
+  const { organizationId, workspaceId, event } = data;
+
+  const installation = await findNotionInstallation(
+    db,
+    organizationId,
+    workspaceId
+  );
+  if (!installation) {
+    return { ok: true };
+  }
+
+  const workspace = await getWorkspaceById(db, organizationId);
+  if (!workspace) {
+    return { ok: true };
+  }
+
+  const stub = getWorkspaceStub(env, organizationId);
+  await stub.setOrganizationId(organizationId);
+
+  const ctx: ImportContext = {
+    env,
+    requestHeaders: new Headers(),
+    organizationId,
+    importerId: workspace.ownerId,
+    jobId: "notion-webhook",
+    db,
+    stub,
+  };
+
+  if (event.entity.type === "page") {
+    if (event.type === "page.deleted") {
+      const mapping = await findNotionPageMapping(
+        db,
+        organizationId,
+        event.entity.id
+      );
+      if (mapping) {
+        await stub.updateDocument(
+          mapping.documentId,
+          { trashedAt: new Date().toISOString() },
+          workspace.ownerId
+        );
+      }
+      return { ok: true };
+    }
+
+    if (
+      [
+        "page.created",
+        "page.content_updated",
+        "page.properties_updated",
+        "page.moved",
+      ].includes(event.type)
+    ) {
+      const page = await getNotionPage(installation.token, event.entity.id);
+      let parentDocumentId: string | null = null;
+      if (page.parentPageId) {
+        const parentMapping = await findNotionPageMapping(
+          db,
+          organizationId,
+          page.parentPageId
+        );
+        parentDocumentId = parentMapping?.documentId ?? null;
+      }
+      const searchPage: NotionSearchPage = {
+        id: page.id,
+        url: page.url,
+        icon: page.icon,
+        title: page.title,
+        parentType: page.parentType,
+        parentPageId: page.parentPageId,
+      };
+      await syncNotionPage(
+        ctx,
+        installation.token,
+        searchPage,
+        null,
+        parentDocumentId
+      );
+      return { ok: true };
+    }
+  }
+
+  return { ok: true };
 }
 
 const notionWebhookRoute = createRoute({
@@ -149,72 +253,23 @@ export function registerNotionWebhookRoute(app: OpenAPIHono<AppContext>) {
       return c.json({ error: "Workspace not found" }, 404);
     }
 
-    const stub = getWorkspaceStub(c.env, organizationId);
-    await stub.setOrganizationId(organizationId);
+    const deliveryId = scopedDeliveryId("notion", organizationId, event.id);
+    const processors = new Map<WebhookSource, WebhookProcessor>([
+      ["notion", processNotionWebhookPayload],
+    ]);
 
-    const ctx: ImportContext = {
-      env: c.env,
-      requestHeaders: c.req.raw.headers,
-      organizationId,
-      importerId: workspace.ownerId,
-      jobId: "notion-webhook",
+    await enqueueWebhook(
       db,
-      stub,
-    };
-
-    if (event.entity.type === "page") {
-      if (event.type === "page.deleted") {
-        const mapping = await findNotionPageMapping(
-          db,
-          organizationId,
-          event.entity.id
-        );
-        if (mapping) {
-          await stub.updateDocument(
-            mapping.documentId,
-            { trashedAt: new Date().toISOString() },
-            workspace.ownerId
-          );
-        }
-        return c.json({ ok: true });
-      }
-
-      if (
-        [
-          "page.created",
-          "page.content_updated",
-          "page.properties_updated",
-          "page.moved",
-        ].includes(event.type)
-      ) {
-        const page = await getNotionPage(installation.token, event.entity.id);
-        let parentDocumentId: string | null = null;
-        if (page.parentPageId) {
-          const parentMapping = await findNotionPageMapping(
-            db,
-            organizationId,
-            page.parentPageId
-          );
-          parentDocumentId = parentMapping?.documentId ?? null;
-        }
-        const searchPage: NotionSearchPage = {
-          id: page.id,
-          url: page.url,
-          icon: page.icon,
-          title: page.title,
-          parentType: page.parentType,
-          parentPageId: page.parentPageId,
-        };
-        await syncNotionPage(
-          ctx,
-          installation.token,
-          searchPage,
-          null,
-          parentDocumentId
-        );
-        return c.json({ ok: true });
-      }
-    }
+      c.env,
+      {
+        deliveryId,
+        source: "notion",
+        event: event.type,
+        organizationId,
+        payload: { organizationId, workspaceId, event },
+      },
+      processors
+    );
 
     return c.json({ ok: true });
   });

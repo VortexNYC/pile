@@ -6,6 +6,7 @@ import {
   createCompany,
   createCustomer,
   getCompanyById,
+  getCustomerByEmail,
   getCustomerById,
   listCompanies,
   listCustomers,
@@ -396,6 +397,14 @@ export function registerSupportContactRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId } = c.req.valid("param");
     const body = c.req.valid("json");
     const db = createD1(c.env.D1);
+
+    const existing = await getCustomerByEmail(db, organizationId, body.email);
+    if (existing) {
+      const full =
+        (await getCustomerById(db, organizationId, existing.id)) ??
+        customerNotFound();
+      return c.json({ customer: full }, 201);
+    }
 
     const customer = await createCustomer(db, {
       ...body,

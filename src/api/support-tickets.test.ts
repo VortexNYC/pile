@@ -6,6 +6,7 @@ import { z } from "zod";
 import { createD1 } from "../global/db.js";
 import {
   apikey as apikeyTable,
+  labels,
   supportTicketAttachments,
   supportTicketEvents,
   supportTicketNotes,
@@ -19,20 +20,22 @@ import {
   setCustomerIdentities,
 } from "../global/support-contacts.js";
 import {
+  createTicket,
   createTicketFromIntercom,
   createTicketFromPlain,
   createTicketFromZendesk,
   findOrCreateTeam,
+  findSupportTicketByExternalId,
   findUserByEmail,
   getTicketById,
   setTicketAssignees,
 } from "../global/support-tickets.js";
 import { createWorkspace } from "../global/workspaces.js";
-import { intercomSupportOptionsSchema } from "../import/intercom-support.js";
-import { plainSupportOptionsSchema } from "../import/plain-support.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
 import { createAdminHeaders } from "../platform/test-auth.js";
+import { intercomSupportOptionsSchema } from "../support-migration/intercom.js";
+import { plainSupportOptionsSchema } from "../support-migration/plain.js";
 
 const ORIGIN = "https://your-domain.com";
 
@@ -373,14 +376,6 @@ describe("support-tickets API", () => {
             createdAt: "2023-11-14T11:21:00.000Z",
             metadata: { previousStatus: "open", newStatus: "closed" },
           },
-          {
-            type: "survey_received",
-            subType: "conversation_rating",
-            actorType: "customer",
-            actorId: "contact-1",
-            createdAt: "2023-11-14T11:22:00.000Z",
-            metadata: { rating: "5" },
-          },
         ],
       }
     );
@@ -431,11 +426,6 @@ describe("support-tickets API", () => {
     expect(statusEvent).toBeDefined();
     expect(statusEvent?.subType).toBe("close");
     expect(statusEvent?.metadata).toContain("previousStatus");
-
-    const surveyEvent = events.find((e) => e.type === "survey_received");
-    expect(surveyEvent).toBeDefined();
-    expect(surveyEvent?.subType).toBe("conversation_rating");
-    expect(surveyEvent?.actorType).toBe("customer");
   });
 
   it("imports a Plain thread as a support ticket", async () => {
@@ -490,25 +480,6 @@ describe("support-tickets API", () => {
             metadata: { previousPriority: "medium", newPriority: "low" },
           },
           {
-            type: "sla_change",
-            subType: "ServiceLevelAgreementStatusTransitionedEntry",
-            actorType: "automation",
-            actorId: null,
-            createdAt: "2023-11-14T12:04:30.000Z",
-            metadata: {
-              previousStatus: "IMMINENT_BREACH",
-              nextStatus: "BREACHED",
-            },
-          },
-          {
-            type: "survey_requested",
-            subType: "CustomerSurveyRequestedEntry",
-            actorType: "automation",
-            actorId: null,
-            createdAt: "2023-11-14T12:04:45.000Z",
-            metadata: { customerSurveyId: "survey-1" },
-          },
-          {
             type: "link_added",
             subType: "ThreadLinkCreatedEntry",
             actorType: "user",
@@ -553,16 +524,6 @@ describe("support-tickets API", () => {
     expect(priorityEvent).toBeDefined();
     expect(priorityEvent?.subType).toBe("ThreadPriorityChangedEntry");
     expect(priorityEvent?.metadata).toContain("previousPriority");
-
-    const slaEvent = events.find((e) => e.type === "sla_change");
-    expect(slaEvent).toBeDefined();
-    expect(slaEvent?.subType).toBe(
-      "ServiceLevelAgreementStatusTransitionedEntry"
-    );
-
-    const surveyEvent = events.find((e) => e.type === "survey_requested");
-    expect(surveyEvent).toBeDefined();
-    expect(surveyEvent?.subType).toBe("CustomerSurveyRequestedEntry");
 
     const linkEvent = events.find((e) => e.type === "link_added");
     expect(linkEvent).toBeDefined();
@@ -642,14 +603,6 @@ describe("support-tickets API", () => {
             createdAt: "2023-11-14T13:04:30.000Z",
             metadata: { tag: "billing" },
           },
-          {
-            type: "survey_received",
-            subType: "SatisfactionRating",
-            actorType: "customer",
-            actorId: "requester-1",
-            createdAt: "2023-11-14T13:05:00.000Z",
-            metadata: { score: "good" },
-          },
         ],
       }
     );
@@ -692,11 +645,6 @@ describe("support-tickets API", () => {
     const labelEvent = events.find((e) => e.type === "label_added");
     expect(labelEvent).toBeDefined();
     expect(labelEvent?.subType).toBe("Change:tags");
-
-    const surveyEvent = events.find((e) => e.type === "survey_received");
-    expect(surveyEvent).toBeDefined();
-    expect(surveyEvent?.subType).toBe("SatisfactionRating");
-    expect(surveyEvent?.actorType).toBe("customer");
   });
 
   it("preserves customer companies and identities", async () => {
@@ -913,6 +861,145 @@ describe("support-tickets API", () => {
     expect(byName.success).toBe(true);
   });
 
+  it("rejects duplicate external ticket ids", async () => {
+    const db = createD1(env.D1);
+    const customer = await createSupportCustomer(db, {
+      organizationId,
+      email: "dup-external@example.com",
+      fullName: "Duplicate External Customer",
+      externalId: null,
+    });
+
+    const first = await fetch(`/workspaces/${organizationId}/support/tickets`, {
+      method: "POST",
+      body: JSON.stringify({
+        customerId: customer.id,
+        title: "First",
+        sourceChannel: "email",
+        externalId: "ext-dup-1",
+        externalSource: "intercom",
+      }),
+    });
+    expect(first.status).toBe(201);
+
+    const second = await fetch(
+      `/workspaces/${organizationId}/support/tickets`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          customerId: customer.id,
+          title: "Second",
+          sourceChannel: "email",
+          externalId: "ext-dup-1",
+          externalSource: "intercom",
+        }),
+      }
+    );
+    expect(second.status).toBe(409);
+  });
+
+  it("clamps future provider timestamps to now", async () => {
+    const channelRes = await fetch(
+      `/workspaces/${organizationId}/support-channels`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "api",
+          name: "api-future",
+        }),
+      }
+    );
+    expect(channelRes.status).toBe(201);
+    const { id: channelId } = (await channelRes.json()) as { id: string };
+
+    const future = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const incomingRes = await app.fetch(
+      new Request(`https://example.com/support/incoming/${channelId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fromEmail: "future@example.com",
+          text: "Future message",
+          externalTicketId: "future-thread",
+          externalMessageId: "future-msg",
+          createdAt: future,
+        }),
+      }),
+      env
+    );
+    expect(incomingRes.status).toBe(201);
+
+    const db = createD1(env.D1);
+    const ticket = await findSupportTicketByExternalId(
+      db,
+      organizationId,
+      "future-thread",
+      "api"
+    );
+    expect(ticket).toBeDefined();
+    const createdAt = new Date(ticket!.createdAt).getTime();
+    expect(createdAt).toBeLessThanOrEqual(Date.now() + 60_000);
+  });
+
+  it("does not delete labels when an invalid replacement is requested", async () => {
+    const db = createD1(env.D1);
+    const customer = await createSupportCustomer(db, {
+      organizationId,
+      email: "label-delete@example.com",
+      fullName: "Label Delete Customer",
+      externalId: null,
+    });
+
+    const label = await db
+      .insert(labels)
+      .values({
+        id: "label-keep-1",
+        organizationId,
+        name: "keep",
+        color: "#000000",
+      })
+      .returning()
+      .get();
+
+    const ticket = await createTicketFromPlain(
+      db,
+      organizationId,
+      customer.id,
+      {
+        id: "thread-label-delete",
+        status: "todo",
+        priority: "medium",
+        source: { type: "chat", body: "Help" },
+        createdAt: "2023-11-14T14:00:00.000Z",
+        updatedAt: "2023-11-14T14:00:00.000Z",
+        replies: [],
+        events: [],
+      }
+    );
+
+    const setRes = await fetch(
+      `/workspaces/${organizationId}/support/tickets/${ticket.id}/labels`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ labels: [label.id] }),
+      }
+    );
+    expect(setRes.status).toBe(200);
+
+    const badRes = await fetch(
+      `/workspaces/${organizationId}/support/tickets/${ticket.id}/labels`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ labels: ["label-does-not-exist"] }),
+      }
+    );
+    expect(badRes.status).toBe(400);
+
+    const fetched = await getTicketById(db, organizationId, ticket.id);
+    expect(fetched?.labels.length).toBe(1);
+    expect(fetched?.labels[0]?.labelId).toBe(label.id);
+  });
+
   it("accepts teamId or teamName for Intercom support imports", () => {
     const byId = intercomSupportOptionsSchema.safeParse({
       teamId: "team-id",
@@ -923,5 +1010,71 @@ describe("support-tickets API", () => {
       teamName: "Support",
     });
     expect(byName.success).toBe(true);
+  });
+
+  it("rejects empty messages and invalid actor configurations", async () => {
+    const db = createD1(env.D1);
+    const customer = await createSupportCustomer(db, {
+      organizationId,
+      email: "empty-msg@example.com",
+      fullName: "Empty",
+    });
+    const ticket = await createTicket(db, {
+      organizationId,
+      customerId: customer.id,
+      title: "Actor validation",
+      sourceChannel: "email",
+    });
+
+    const emptyRes = await fetch(
+      `/workspaces/${organizationId}/support/tickets/${ticket.id}/messages`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          direction: "inbound",
+          textContent: "   ",
+          channel: "email",
+        }),
+      }
+    );
+    expect(emptyRes.status).toBe(400);
+
+    const bothRes = await fetch(
+      `/workspaces/${organizationId}/support/tickets/${ticket.id}/messages`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          direction: "inbound",
+          textContent: "Hello",
+          channel: "email",
+          customerId: customer.id,
+          userId: "user-id",
+        }),
+      }
+    );
+    expect(bothRes.status).toBe(400);
+
+    const badActorRes = await fetch(
+      `/workspaces/${organizationId}/support/tickets/${ticket.id}/messages`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          direction: "inbound",
+          textContent: "Hello",
+          channel: "email",
+          actorType: "customer",
+        }),
+      }
+    );
+    expect(badActorRes.status).toBe(400);
+
+    const emptyNoteRes = await fetch(
+      `/workspaces/${organizationId}/support/tickets/${ticket.id}/notes`,
+      {
+        method: "POST",
+        body: JSON.stringify({ body: "   " }),
+      }
+    );
+    expect(emptyNoteRes.status).toBe(400);
   });
 });

@@ -1,6 +1,7 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 
+import { getWorkspaceStub } from "../api/stub.js";
 import { findOrCreateCycleByName } from "../global/cycles.js";
 import { createD1, type D1Client } from "../global/db.js";
 import { findGitlabInstallationByProjectPath } from "../global/gitlab-installations.js";
@@ -11,12 +12,9 @@ import {
   deleteRepoIssue,
   findRepoIssue,
 } from "../global/repo-issues.js";
-import {
-  findWebhookDelivery,
-  recordWebhookDelivery,
-} from "../global/webhook-deliveries.js";
+import { enqueueWebhook, scopedDeliveryId } from "../global/webhook-queue.js";
 import { VortexError } from "../platform/errors.js";
-import type { AppContext } from "../platform/middleware.js";
+import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import type { IssueInput } from "../types/workspace.js";
 
 const gitlabProjectSchema = z.object({
@@ -184,15 +182,6 @@ function gitlabPrStateFromAttributes(
   return "open";
 }
 
-function gitlabDeliveryId(
-  eventType: string,
-  projectId: string | number,
-  objectId: string | number,
-  updatedAt: string
-): string {
-  return `gitlab:${eventType}:${projectId}:${objectId}:${updatedAt}`;
-}
-
 async function resolveGitlabInstallation(
   db: D1Client,
   envToken: string | undefined,
@@ -212,6 +201,46 @@ async function resolveGitlabInstallation(
     });
   }
   return installation;
+}
+
+const gitlabQueuePayloadSchema = z.object({
+  organizationId: z.string(),
+  rawBody: z.string(),
+});
+
+function extractGitlabDeliveryId(
+  headers: Headers,
+  rawBody: string,
+  organizationId: string
+): string {
+  const headerId =
+    headers.get("webhook-id") ??
+    headers.get("Idempotency-Key") ??
+    headers.get("X-Gitlab-Event-UUID");
+  if (headerId) {
+    return scopedDeliveryId("gitlab", organizationId, headerId);
+  }
+
+  try {
+    const parsed = JSON.parse(rawBody) as unknown;
+    const data = gitlabWebhookPayloadSchema.safeParse(parsed);
+    if (data.success) {
+      const attrs = data.data.object_attributes;
+      const kind =
+        data.data.object_kind === "note" &&
+        data.data.object_attributes.noteable_type === "MergeRequest"
+          ? "mr_note"
+          : data.data.object_kind;
+      return scopedDeliveryId(
+        "gitlab",
+        organizationId,
+        `${kind}:${data.data.project.id}:${attrs.id}:${attrs.action}:${attrs.updated_at}`
+      );
+    }
+  } catch {
+    // ignore parse errors; fall through to random id
+  }
+  return scopedDeliveryId("gitlab", organizationId, crypto.randomUUID());
 }
 
 export async function processGitlabWebhook(c: Context<AppContext>) {
@@ -241,7 +270,6 @@ export async function processGitlabWebhook(c: Context<AppContext>) {
 
   const data = payload.data;
   const projectPath = data.project.path_with_namespace;
-  const projectId = data.project.id;
   const db = createD1(c.env.D1);
 
   const installation = await resolveGitlabInstallation(
@@ -256,79 +284,128 @@ export async function processGitlabWebhook(c: Context<AppContext>) {
     return c.json({ ok: true }, 200);
   }
 
-  if (data.object_kind === "issue") {
-    return processGitlabIssue(
-      c,
-      db,
-      organizationId,
-      projectPath,
-      projectId,
-      data
-    );
-  }
+  const deliveryId = extractGitlabDeliveryId(
+    c.req.raw.headers,
+    rawBody,
+    organizationId
+  );
 
-  if (data.object_kind === "merge_request") {
-    return processGitlabMergeRequest(
-      c,
-      db,
+  await enqueueWebhook(
+    db,
+    c.env,
+    {
+      deliveryId,
+      source: "gitlab",
+      event: data.object_kind,
       organizationId,
-      projectPath,
-      projectId,
-      data
-    );
-  }
-
-  if (data.object_kind === "note") {
-    if (
-      data.object_attributes.noteable_type === "MergeRequest" &&
-      data.merge_request
-    ) {
-      return processGitlabMergeRequestNote(
-        c,
-        db,
-        organizationId,
-        projectPath,
-        projectId,
-        data
-      );
-    }
-    if (data.issue) {
-      return processGitlabIssueNote(
-        c,
-        db,
-        organizationId,
-        projectPath,
-        projectId,
-        data
-      );
-    }
-  }
+      payload: { rawBody, organizationId },
+    },
+    new Map([["gitlab", processGitlabWebhookPayload]])
+  );
 
   return c.json({ ok: true }, 200);
 }
 
-async function processGitlabIssue(
-  c: Context<AppContext>,
+export async function processGitlabWebhookPayload(
   db: D1Client,
+  env: WorkerEnv,
+  payload: unknown
+): Promise<void> {
+  const parsed = gitlabQueuePayloadSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Invalid GitLab queue payload",
+      hint: parsed.error.message,
+    });
+  }
+
+  const { rawBody, organizationId } = parsed.data;
+
+  let parsedBody: unknown;
+  try {
+    parsedBody = JSON.parse(rawBody);
+  } catch {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Invalid JSON",
+    });
+  }
+
+  const data = gitlabWebhookPayloadSchema.safeParse(parsedBody);
+  if (!data.success) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Invalid GitLab payload",
+      hint: data.error.message,
+    });
+  }
+
+  const projectPath = data.data.project.path_with_namespace;
+  const projectId = data.data.project.id;
+
+  if (data.data.object_kind === "issue") {
+    return processGitlabIssue(
+      db,
+      env,
+      organizationId,
+      projectPath,
+      projectId,
+      data.data
+    );
+  }
+
+  if (data.data.object_kind === "merge_request") {
+    return processGitlabMergeRequest(
+      db,
+      env,
+      organizationId,
+      projectPath,
+      projectId,
+      data.data
+    );
+  }
+
+  if (data.data.object_kind === "note") {
+    if (
+      data.data.object_attributes.noteable_type === "MergeRequest" &&
+      data.data.merge_request
+    ) {
+      return processGitlabMergeRequestNote(
+        db,
+        env,
+        organizationId,
+        projectPath,
+        projectId,
+        data.data
+      );
+    }
+    if (data.data.issue) {
+      return processGitlabIssueNote(
+        db,
+        env,
+        organizationId,
+        projectPath,
+        projectId,
+        data.data
+      );
+    }
+  }
+}
+
+async function processGitlabIssue(
+  db: D1Client,
+  env: WorkerEnv,
   organizationId: string,
   projectPath: string,
   projectId: string | number,
   payload: z.infer<typeof gitlabIssuePayloadSchema>
 ) {
   const attrs = payload.object_attributes;
-  const deliveryId = gitlabDeliveryId(
-    "issue",
-    projectId,
-    attrs.id,
-    attrs.updated_at
-  );
-  const existing = await findWebhookDelivery(db, deliveryId);
-  if (existing) {
-    return c.json({ ok: true }, 200);
-  }
-
-  const doId = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId);
-  const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(doId);
+  const stub = getWorkspaceStub(env, organizationId);
   await stub.setOrganizationId(organizationId);
 
   const mapping = await findRepoIssue(db, projectPath, attrs.iid, "gitlab");
@@ -373,6 +450,7 @@ async function processGitlabIssue(
     } else {
       const created = await stub.createIssue(
         {
+          id: `repo:gitlab:${projectPath.replace(/\//g, ":")}:${attrs.iid}`,
           title: attrs.title,
           description: attrs.description ?? undefined,
           status: status ?? "backlog",
@@ -406,39 +484,19 @@ async function processGitlabIssue(
       await deleteRepoIssue(db, projectPath, attrs.iid, "gitlab");
     }
   }
-
-  await recordWebhookDelivery(
-    db,
-    deliveryId,
-    "gitlab",
-    "issue",
-    organizationId
-  );
-  return c.json({ ok: true }, 200);
 }
 
 async function processGitlabIssueNote(
-  c: Context<AppContext>,
   db: D1Client,
+  env: WorkerEnv,
   organizationId: string,
   projectPath: string,
   projectId: string | number,
   payload: z.infer<typeof gitlabNotePayloadSchema>
 ) {
   const attrs = payload.object_attributes;
-  const deliveryId = gitlabDeliveryId(
-    "note",
-    projectId,
-    attrs.id,
-    attrs.updated_at
-  );
-  const existing = await findWebhookDelivery(db, deliveryId);
-  if (existing) {
-    return c.json({ ok: true }, 200);
-  }
-
   if (!payload.issue) {
-    return c.json({ ok: true }, 200);
+    return;
   }
 
   const mapping = await findRepoIssue(
@@ -448,18 +506,10 @@ async function processGitlabIssueNote(
     "gitlab"
   );
   if (!mapping) {
-    await recordWebhookDelivery(
-      db,
-      deliveryId,
-      "gitlab",
-      "note",
-      organizationId
-    );
-    return c.json({ ok: true }, 200);
+    return;
   }
 
-  const doId = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId);
-  const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(doId);
+  const stub = getWorkspaceStub(env, organizationId);
   await stub.setOrganizationId(organizationId);
 
   const externalId = String(attrs.id);
@@ -504,38 +554,23 @@ async function processGitlabIssueNote(
   } else if (attrs.action === "deleted" && existingComment) {
     await stub.deleteComment(existingComment.id);
   }
-
-  await recordWebhookDelivery(db, deliveryId, "gitlab", "note", organizationId);
-  return c.json({ ok: true }, 200);
 }
 
 async function processGitlabMergeRequest(
-  c: Context<AppContext>,
   db: D1Client,
+  env: WorkerEnv,
   organizationId: string,
   projectPath: string,
   projectId: string | number,
   payload: z.infer<typeof gitlabMergeRequestPayloadSchema>
 ) {
   const attrs = payload.object_attributes;
-  const deliveryId = gitlabDeliveryId(
-    "merge_request",
-    projectId,
-    attrs.id,
-    attrs.updated_at
-  );
-  const existing = await findWebhookDelivery(db, deliveryId);
-  if (existing) {
-    return c.json({ ok: true }, 200);
-  }
-
   const repo = attrs.source?.path_with_namespace ?? projectPath;
   const branch = attrs.source_branch;
   const prUrl = attrs.url;
   const prState = gitlabPrStateFromAttributes(attrs);
 
-  const doId = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId);
-  const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(doId);
+  const stub = getWorkspaceStub(env, organizationId);
   await stub.setOrganizationId(organizationId);
 
   await stub.updatePrState(repo, branch, prUrl, prState, "gitlab");
@@ -554,59 +589,31 @@ async function processGitlabMergeRequest(
       )
     )
   );
-
-  await recordWebhookDelivery(
-    db,
-    deliveryId,
-    "gitlab",
-    "merge_request",
-    organizationId
-  );
-  return c.json({ ok: true }, 200);
 }
 
 async function processGitlabMergeRequestNote(
-  c: Context<AppContext>,
   db: D1Client,
+  env: WorkerEnv,
   organizationId: string,
   projectPath: string,
   projectId: string | number,
   payload: z.infer<typeof gitlabNotePayloadSchema>
 ) {
   const attrs = payload.object_attributes;
-  const deliveryId = gitlabDeliveryId(
-    "mr_note",
-    projectId,
-    attrs.id,
-    attrs.updated_at
-  );
-  const existing = await findWebhookDelivery(db, deliveryId);
-  if (existing) {
-    return c.json({ ok: true }, 200);
-  }
-
   const mr = payload.merge_request;
   if (!mr) {
-    return c.json({ ok: true }, 200);
+    return;
   }
 
   const repo = mr.source?.path_with_namespace ?? projectPath;
   const branch = mr.source_branch;
 
-  const doId = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId);
-  const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(doId);
+  const stub = getWorkspaceStub(env, organizationId);
   await stub.setOrganizationId(organizationId);
 
   const issue = await stub.getIssueByBranch(repo, branch);
   if (!issue) {
-    await recordWebhookDelivery(
-      db,
-      deliveryId,
-      "gitlab",
-      "mr_note",
-      organizationId
-    );
-    return c.json({ ok: true }, 200);
+    return;
   }
 
   const externalId = String(attrs.id);
@@ -654,13 +661,4 @@ async function processGitlabMergeRequestNote(
   } else if (attrs.action === "deleted" && existingComment) {
     await stub.deleteComment(existingComment.id);
   }
-
-  await recordWebhookDelivery(
-    db,
-    deliveryId,
-    "gitlab",
-    "mr_note",
-    organizationId
-  );
-  return c.json({ ok: true }, 200);
 }

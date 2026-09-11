@@ -157,6 +157,25 @@ export async function findOrCreateCustomerByEmail(
   });
 }
 
+export async function getCustomerByEmail(
+  db: D1Client,
+  organizationId: string,
+  email: string
+): Promise<SupportCustomer | null> {
+  const normalizedEmail = email.toLowerCase().trim();
+  const [customer] = await db
+    .select()
+    .from(supportCustomers)
+    .where(
+      and(
+        eq(supportCustomers.organizationId, organizationId),
+        eq(supportCustomers.email, normalizedEmail)
+      )
+    )
+    .limit(1);
+  return customer ?? null;
+}
+
 export async function findCustomerByExternalId(
   db: D1Client,
   organizationId: string,

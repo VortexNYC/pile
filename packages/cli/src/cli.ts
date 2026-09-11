@@ -1,4 +1,11 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { spawn } from "node:child_process";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 
 import { COMMANDS } from "./commands.js";
@@ -28,6 +35,18 @@ const mutatingMethods = new Set<HttpMethod>(["DELETE", "PATCH", "POST", "PUT"]);
 
 export type CliDeps = {
   readonly fetch?: typeof fetch;
+  readonly spawn?: (
+    command: string,
+    args: readonly string[],
+    options: {
+      shell?: boolean;
+      stdio?: ["ignore", "pipe", "pipe"];
+    }
+  ) => {
+    stdout: { on: (event: "data", cb: (data: Buffer) => void) => void };
+    stderr: { on: (event: "data", cb: (data: Buffer) => void) => void };
+    on: (event: "close", cb: (code: number | null) => void) => void;
+  };
 };
 
 function isJsonValue(value: unknown): value is Json {
@@ -114,6 +133,7 @@ function parseJsonObjectFlag(
 type CliConfig = {
   readonly baseUrl?: string;
   readonly apiKey?: string;
+  readonly capturePublicKey?: string;
 };
 
 function configPath(): string {
@@ -132,6 +152,10 @@ function readStoredConfig(): CliConfig {
   return {
     baseUrl: typeof parsed.baseUrl === "string" ? parsed.baseUrl : undefined,
     apiKey: typeof parsed.apiKey === "string" ? parsed.apiKey : undefined,
+    capturePublicKey:
+      typeof parsed.capturePublicKey === "string"
+        ? parsed.capturePublicKey
+        : undefined,
   };
 }
 
@@ -142,6 +166,8 @@ function resolveConfig(): Required<Pick<CliConfig, "baseUrl">> & CliConfig {
     baseUrl:
       process.env.ISSUETRACKER_BASE_URL ?? stored.baseUrl ?? defaultBaseUrl,
     apiKey: process.env.ISSUETRACKER_API_KEY ?? stored.apiKey,
+    capturePublicKey:
+      process.env.ISSUETRACKER_CAPTURE_PUBLIC_KEY ?? stored.capturePublicKey,
   };
 }
 
@@ -327,12 +353,225 @@ async function configSetCommand(
 ): Promise<number> {
   const baseUrl = flagString(flags, "base-url");
   const apiKey = flagString(flags, "api-key");
+  const capturePublicKey = flagString(flags, "capture-public-key");
   const stored = readStoredConfig();
   writeStoredConfig({
     baseUrl: baseUrl ?? stored.baseUrl,
     apiKey: apiKey ?? stored.apiKey,
+    capturePublicKey: capturePublicKey ?? stored.capturePublicKey,
   });
   return 0;
+}
+
+type ConsoleLogEntry = {
+  console_level: string;
+  console_value: string;
+  is_error: boolean;
+};
+
+function findVideoArtifact(dir: string): string | undefined {
+  if (!existsSync(dir)) return undefined;
+  const names = readdirSync(dir);
+  for (const name of names) {
+    if (name.endsWith(".webm") || name.endsWith(".mp4")) {
+      return join(dir, name);
+    }
+  }
+  return undefined;
+}
+
+async function captureRunCommand(
+  flags: Readonly<Record<string, string | boolean>>,
+  deps: CliDeps = {}
+): Promise<number> {
+  const config = resolveConfig();
+  const publicKey =
+    flagString(flags, "public-key") ??
+    flagString(flags, "capture-public-key") ??
+    config.capturePublicKey;
+  if (publicKey === undefined || publicKey.length === 0) {
+    throw new Error(
+      "Missing capture public key. Set ISSUETRACKER_CAPTURE_PUBLIC_KEY, use --public-key, or run `issuetracker config set --capture-public-key <key>`."
+    );
+  }
+
+  const command = flagString(flags, "command");
+  if (command === undefined || command.length === 0) {
+    throw new Error(
+      "Missing command. Use --command 'pnpm test' or pass the command after a -- separator."
+    );
+  }
+
+  const title =
+    flagString(flags, "title") ??
+    (command.length > 60 ? `${command.slice(0, 60)}...` : command);
+  const description = flagString(flags, "description") ?? "";
+  const visibility = flagString(flags, "visibility") ?? "private";
+  const artifactsDir = flagString(flags, "artifacts-dir") ?? "test-results";
+
+  const doFetch = deps.fetch ?? fetch;
+  const base = config.baseUrl.replace(/\/$/u, "");
+
+  const tokenRes = await doFetch(`${base}/support/capture/token`, {
+    method: "POST",
+    headers: {
+      "x-vortex-capture-public-key": publicKey,
+      origin: "vortex-cli",
+    },
+  });
+  if (!tokenRes.ok) {
+    const text = await tokenRes.text();
+    throw new Error(
+      `Failed to create capture session: ${tokenRes.status} ${text}`
+    );
+  }
+  const tokenBody = (await tokenRes.json()) as { token: string };
+  const token = tokenBody.token;
+
+  const consoleLogs: ConsoleLogEntry[] = [];
+  const child = (deps.spawn ?? spawn)(command, [], {
+    shell: true,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  child.stdout.on("data", (data: Buffer) => {
+    const text = data.toString("utf8");
+    for (const line of text.split("\n")) {
+      if (line.length === 0) continue;
+      consoleLogs.push({
+        console_level: "log",
+        console_value: line,
+        is_error: false,
+      });
+    }
+    process.stdout.write(data);
+  });
+
+  child.stderr.on("data", (data: Buffer) => {
+    const text = data.toString("utf8");
+    for (const line of text.split("\n")) {
+      if (line.length === 0) continue;
+      consoleLogs.push({
+        console_level: "error",
+        console_value: line,
+        is_error: true,
+      });
+    }
+    process.stderr.write(data);
+  });
+
+  const exitCode = await new Promise<number>((resolve) => {
+    child.on("close", (code: number | null) => resolve(code ?? 1));
+  });
+
+  const metadataRes = await doFetch(`${base}/support/capture/metadata`, {
+    method: "POST",
+    headers: {
+      "x-vortex-capture-token": token,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      metadata: {
+        title,
+        description,
+        source: "cli",
+        consoleCount: consoleLogs.length,
+        email: "ci@vortex.local",
+      },
+    }),
+  });
+  if (!metadataRes.ok) {
+    const text = await metadataRes.text();
+    throw new Error(
+      `Failed to set capture metadata: ${metadataRes.status} ${text}`
+    );
+  }
+
+  async function uploadArtifact(
+    attachmentType: string,
+    contentType: string,
+    fileName: string | null,
+    buffer: Buffer
+  ): Promise<void> {
+    const reserveRes = await doFetch(`${base}/support/capture/upload-session`, {
+      method: "POST",
+      headers: {
+        "x-vortex-capture-token": token,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        attachmentType,
+        contentType,
+        fileName,
+        title,
+        visibility,
+        metadata: { email: "ci@vortex.local" },
+      }),
+    });
+    if (!reserveRes.ok) {
+      const text = await reserveRes.text();
+      throw new Error(
+        `Failed to reserve upload for ${attachmentType}: ${reserveRes.status} ${text}`
+      );
+    }
+    const reserveBody = (await reserveRes.json()) as {
+      uploadUrl: string;
+    };
+    const uploadRes = await doFetch(`${base}${reserveBody.uploadUrl}`, {
+      method: "POST",
+      headers: {
+        "x-vortex-capture-token": token,
+        "content-type": contentType,
+      },
+      body: new Blob([buffer], { type: contentType }),
+    });
+    if (!uploadRes.ok) {
+      const text = await uploadRes.text();
+      throw new Error(
+        `Failed to upload ${attachmentType}: ${uploadRes.status} ${text}`
+      );
+    }
+  }
+
+  const consoleBuffer = Buffer.from(JSON.stringify(consoleLogs, null, 2));
+  await uploadArtifact(
+    "log",
+    "application/json",
+    "console-logs.json",
+    consoleBuffer
+  );
+
+  const videoPath = findVideoArtifact(artifactsDir);
+  if (videoPath !== undefined) {
+    const videoBuffer = readFileSync(videoPath);
+    const contentType = videoPath.endsWith(".mp4") ? "video/mp4" : "video/webm";
+    await uploadArtifact(
+      "video",
+      contentType,
+      videoPath.split("/").pop() ?? null,
+      videoBuffer
+    );
+  }
+
+  const finalizeRes = await doFetch(`${base}/support/capture/finalize`, {
+    method: "POST",
+    headers: {
+      "x-vortex-capture-token": token,
+    },
+  });
+  if (!finalizeRes.ok) {
+    const text = await finalizeRes.text();
+    throw new Error(
+      `Failed to finalize capture: ${finalizeRes.status} ${text}`
+    );
+  }
+  const finalizeBody = (await finalizeRes.json()) as {
+    ticketId: string;
+    shareUrl: string;
+  };
+
+  console.log(JSON.stringify(finalizeBody, null, 2));
+  return exitCode;
 }
 
 export async function runCli(
@@ -349,6 +588,10 @@ export async function runCli(
 
     if (scope === "config" && positionals[1] === "set") {
       return await configSetCommand(flags);
+    }
+
+    if (scope === "capture" && positionals[1] === "run") {
+      return await captureRunCommand(flags, deps);
     }
 
     return await commandCommand(positionals, flags, deps);

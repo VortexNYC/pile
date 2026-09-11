@@ -883,6 +883,94 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdSupportCapturePublickeysKeyId",
+    "description": "Delete support capture public key (DELETE /workspaces/{organizationId}/support/capture/public-keys/{keyId})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/support/capture/public-keys/{keyId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "keyId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "keyId",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "deleteWorkspacesOrganizationIdSupportEscalationrulesRuleId",
+    "description": "Delete support escalation rule (DELETE /workspaces/{organizationId}/support/escalation-rules/{ruleId})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/support/escalation-rules/{ruleId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "ruleId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "ruleId"
+      ]
+    }
+  },
+  {
+    "name": "deleteWorkspacesOrganizationIdSupportTiersTierId",
+    "description": "Delete support tier (DELETE /workspaces/{organizationId}/support/tiers/{tierId})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/support/tiers/{tierId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "tierId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "tierId"
+      ]
+    }
+  },
+  {
+    "name": "deleteWorkspacesOrganizationIdSupportTiersTierIdMembersUserId",
+    "description": "Delete support tier member (DELETE /workspaces/{organizationId}/support/tiers/{tierId}/members/{userId})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/support/tiers/{tierId}/members/{userId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "tierId": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "tierId",
+        "userId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdTeamsId",
     "description": "Delete team (DELETE /workspaces/{organizationId}/teams/{id})",
     "method": "DELETE",
@@ -1062,6 +1150,57 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "organizationId",
         "token"
+      ]
+    }
+  },
+  {
+    "name": "getSupportCaptureArtifactsAttachmentId",
+    "description": "Get support capture artifact (GET /support/capture/artifacts/{attachmentId})",
+    "method": "GET",
+    "path": "/support/capture/artifacts/{attachmentId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "attachmentId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "attachmentId"
+      ]
+    }
+  },
+  {
+    "name": "getSupportCapturePublicTicketId",
+    "description": "Get support capture public (GET /support/capture/public/{ticketId})",
+    "method": "GET",
+    "path": "/support/capture/public/{ticketId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "ticketId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "ticketId"
+      ]
+    }
+  },
+  {
+    "name": "getSupportCaptureSessionsSessionId",
+    "description": "Get support capture session (GET /support/capture/sessions/{sessionId})",
+    "method": "GET",
+    "path": "/support/capture/sessions/{sessionId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId"
       ]
     }
   },
@@ -3186,6 +3325,188 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdSupportAgents",
+    "description": "List support agents (GET /workspaces/{organizationId}/support/agents)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/agents",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportAutoresponders",
+    "description": "List support autoresponders (GET /workspaces/{organizationId}/support/autoresponders)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/autoresponders",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportCapturePublickeys",
+    "description": "List support capture public keys (GET /workspaces/{organizationId}/support/capture/public-keys)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/capture/public-keys",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportCapturesTicketIdConsole",
+    "description": "List support capture console (GET /workspaces/{organizationId}/support/captures/{ticketId}/console)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/captures/{ticketId}/console",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "ticketId": {
+          "type": "string"
+        },
+        "level": {
+          "type": "string"
+        },
+        "isError": {
+          "type": "string",
+          "enum": [
+            "true",
+            "false"
+          ]
+        }
+      },
+      "required": [
+        "organizationId",
+        "ticketId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportCapturesTicketIdEvents",
+    "description": "List support capture events (GET /workspaces/{organizationId}/support/captures/{ticketId}/events)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/captures/{ticketId}/events",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "ticketId": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "action": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "ticketId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportCapturesTicketIdFrames",
+    "description": "List support capture frames (GET /workspaces/{organizationId}/support/captures/{ticketId}/frames)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/captures/{ticketId}/frames",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "ticketId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "ticketId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportCapturesTicketIdMetadata",
+    "description": "List support capture metadata (GET /workspaces/{organizationId}/support/captures/{ticketId}/metadata)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/captures/{ticketId}/metadata",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "ticketId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "ticketId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportCapturesTicketIdNetwork",
+    "description": "List support capture network (GET /workspaces/{organizationId}/support/captures/{ticketId}/network)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/captures/{ticketId}/network",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "ticketId": {
+          "type": "string"
+        },
+        "isError": {
+          "type": "string",
+          "enum": [
+            "true",
+            "false"
+          ]
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "ticketId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdSupportchannels",
     "description": "List support channels (GET /workspaces/{organizationId}/support-channels)",
     "method": "GET",
@@ -3306,6 +3627,283 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdSupportEscalationrules",
+    "description": "List support escalation rules (GET /workspaces/{organizationId}/support/escalation-rules)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/escalation-rules",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportEscalationrulesRuleId",
+    "description": "Get support escalation rule (GET /workspaces/{organizationId}/support/escalation-rules/{ruleId})",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/escalation-rules/{ruleId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "ruleId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "ruleId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportImportsImportId",
+    "description": "Get support import (GET /workspaces/{organizationId}/support/imports/{importId})",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/imports/{importId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "importId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "importId",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportInbox",
+    "description": "List support inbox (GET /workspaces/{organizationId}/support/inbox)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/inbox",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "todo",
+            "done",
+            "snoozed"
+          ]
+        },
+        "priority": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "urgent"
+          ]
+        },
+        "assignedTo": {
+          "type": "string"
+        },
+        "customerId": {
+          "type": "string"
+        },
+        "channel": {
+          "type": "string",
+          "enum": [
+            "email",
+            "slack",
+            "msteams",
+            "discord",
+            "chat",
+            "capture",
+            "api",
+            "intercom",
+            "zendesk",
+            "plain"
+          ]
+        },
+        "label": {
+          "type": "string"
+        },
+        "q": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 25
+        },
+        "cursor": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportInboxCounts",
+    "description": "List support inbox counts (GET /workspaces/{organizationId}/support/inbox/counts)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/inbox/counts",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportInboxNext",
+    "description": "List support inbox next (GET /workspaces/{organizationId}/support/inbox/next)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/inbox/next",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportInboxViews",
+    "description": "List support inbox views (GET /workspaces/{organizationId}/support/inbox/views)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/inbox/views",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportInboxViewsViewId",
+    "description": "Get support inbox view (GET /workspaces/{organizationId}/support/inbox/views/{viewId})",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/inbox/views/{viewId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "viewId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "viewId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportInboxViewsViewIdRun",
+    "description": "List support inbox view run (GET /workspaces/{organizationId}/support/inbox/views/{viewId}/run)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/inbox/views/{viewId}/run",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "viewId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "viewId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportLabels",
+    "description": "List support labels (GET /workspaces/{organizationId}/support/labels)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/labels",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportSnippets",
+    "description": "List support snippets (GET /workspaces/{organizationId}/support/snippets)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/snippets",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportSnippetsSnippetId",
+    "description": "Get support snippet (GET /workspaces/{organizationId}/support/snippets/{snippetId})",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/snippets/{snippetId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "snippetId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "snippetId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdSupportTickets",
     "description": "List support tickets (GET /workspaces/{organizationId}/support/tickets)",
     "method": "GET",
@@ -3343,6 +3941,37 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "medium",
             "high",
             "urgent"
+          ]
+        },
+        "sourceChannel": {
+          "type": "string",
+          "enum": [
+            "email",
+            "slack",
+            "msteams",
+            "discord",
+            "chat",
+            "capture",
+            "api",
+            "intercom",
+            "zendesk",
+            "plain",
+            "linear"
+          ]
+        },
+        "externalSource": {
+          "type": "string",
+          "enum": [
+            "intercom",
+            "zendesk",
+            "plain",
+            "email",
+            "slack",
+            "msteams",
+            "discord",
+            "chat",
+            "api",
+            "manual"
           ]
         },
         "assignedTo": {
@@ -3405,6 +4034,65 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "organizationId",
         "ticketId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportTiers",
+    "description": "List support tiers (GET /workspaces/{organizationId}/support/tiers)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/tiers",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportTiersTierId",
+    "description": "Get support tier (GET /workspaces/{organizationId}/support/tiers/{tierId})",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/tiers/{tierId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "tierId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "tierId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportTiersTierIdMembers",
+    "description": "List support tier members (GET /workspaces/{organizationId}/support/tiers/{tierId}/members)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/tiers/{tierId}/members",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "tierId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "tierId"
       ]
     }
   },
@@ -4477,7 +5165,10 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string"
             },
             "labelIds": {
-              "type": "string"
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             },
             "repo": {
               "type": "string"
@@ -5114,6 +5805,59 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "patchWorkspacesOrganizationIdSupportAutorespondersAutoresponderId",
+    "description": "Update support autoresponder (PATCH /workspaces/{organizationId}/support/autoresponders/{autoresponderId})",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/support/autoresponders/{autoresponderId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "autoresponderId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "trigger": {
+              "type": "string",
+              "enum": [
+                "ticket_created",
+                "customer_replied",
+                "out_of_hours"
+              ]
+            },
+            "order": {
+              "type": "integer"
+            },
+            "snippetId": {
+              "type": "string",
+              "nullable": true
+            },
+            "conditions": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "autoresponderId",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "patchWorkspacesOrganizationIdSupportCustomersCustomerId",
     "description": "Update support customer (PATCH /workspaces/{organizationId}/support/customers/{customerId})",
     "method": "PATCH",
@@ -5159,6 +5903,198 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "patchWorkspacesOrganizationIdSupportEscalationrulesRuleId",
+    "description": "Update support escalation rule (PATCH /workspaces/{organizationId}/support/escalation-rules/{ruleId})",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/support/escalation-rules/{ruleId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "ruleId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "isActive": {
+              "type": "boolean"
+            },
+            "sortOrder": {
+              "type": "integer"
+            },
+            "conditions": {
+              "type": "object",
+              "properties": {
+                "keywords": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "channels": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "email",
+                      "slack",
+                      "msteams",
+                      "discord",
+                      "chat",
+                      "capture",
+                      "api",
+                      "intercom",
+                      "zendesk",
+                      "plain"
+                    ]
+                  }
+                },
+                "priorities": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "low",
+                      "medium",
+                      "high",
+                      "urgent"
+                    ]
+                  }
+                },
+                "statuses": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "todo",
+                      "done",
+                      "snoozed"
+                    ]
+                  }
+                },
+                "sources": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "intercom",
+                      "zendesk",
+                      "plain",
+                      "email",
+                      "slack",
+                      "msteams",
+                      "discord",
+                      "chat",
+                      "api",
+                      "manual"
+                    ]
+                  }
+                },
+                "customerDomains": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "action": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "create_issue"
+                  ]
+                },
+                "teamId": {
+                  "type": "string"
+                },
+                "priority": {
+                  "type": "string",
+                  "enum": [
+                    "low",
+                    "medium",
+                    "high",
+                    "urgent"
+                  ]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "triage",
+                    "backlog",
+                    "todo",
+                    "in_progress",
+                    "done",
+                    "canceled"
+                  ]
+                },
+                "labelIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "type"
+              ]
+            }
+          }
+        }
+      },
+      "required": [
+        "organizationId",
+        "ruleId"
+      ]
+    }
+  },
+  {
+    "name": "patchWorkspacesOrganizationIdSupportSnippetsSnippetId",
+    "description": "Update support snippet (PATCH /workspaces/{organizationId}/support/snippets/{snippetId})",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/support/snippets/{snippetId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "snippetId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "textContent": {
+              "type": "string"
+            },
+            "markdownContent": {
+              "type": "string",
+              "nullable": true
+            }
+          }
+        }
+      },
+      "required": [
+        "organizationId",
+        "snippetId"
+      ]
+    }
+  },
+  {
     "name": "patchWorkspacesOrganizationIdSupportTicketsTicketId",
     "description": "Update support ticket (PATCH /workspaces/{organizationId}/support/tickets/{ticketId})",
     "method": "PATCH",
@@ -5196,7 +6132,25 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "urgent"
               ]
             },
+            "snoozedUntil": {
+              "type": "string",
+              "nullable": true,
+              "format": "date-time"
+            },
             "issueId": {
+              "type": "string",
+              "nullable": true
+            },
+            "actorType": {
+              "type": "string",
+              "enum": [
+                "customer",
+                "user",
+                "agent",
+                "automation"
+              ]
+            },
+            "actorId": {
               "type": "string",
               "nullable": true
             }
@@ -5206,6 +6160,39 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "organizationId",
         "ticketId"
+      ]
+    }
+  },
+  {
+    "name": "patchWorkspacesOrganizationIdSupportTiersTierId",
+    "description": "Update support tier (PATCH /workspaces/{organizationId}/support/tiers/{tierId})",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/support/tiers/{tierId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "tierId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "level": {
+              "type": "integer"
+            }
+          }
+        }
+      },
+      "required": [
+        "organizationId",
+        "tierId"
       ]
     }
   },
@@ -5430,6 +6417,220 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postSupportCaptureFinalize",
+    "description": "Create support capture finalize (POST /support/capture/finalize)",
+    "method": "POST",
+    "path": "/support/capture/finalize",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "postSupportCaptureMetadata",
+    "description": "Create support capture metadata (POST /support/capture/metadata)",
+    "method": "POST",
+    "path": "/support/capture/metadata",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "type": "object",
+          "properties": {
+            "metadata": {
+              "type": "object",
+              "additionalProperties": {
+                "nullable": true
+              }
+            }
+          },
+          "required": [
+            "metadata"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "postSupportCaptureToken",
+    "description": "Create support capture token (POST /support/capture/token)",
+    "method": "POST",
+    "path": "/support/capture/token",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "postSupportCaptureUploadsession",
+    "description": "Create support capture upload session (POST /support/capture/upload-session)",
+    "method": "POST",
+    "path": "/support/capture/upload-session",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": {
+              "type": "string"
+            },
+            "priority": {
+              "type": "string",
+              "enum": [
+                "low",
+                "medium",
+                "high",
+                "urgent"
+              ]
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "url": {
+              "type": "string"
+            },
+            "attachmentType": {
+              "type": "string",
+              "enum": [
+                "screenshot",
+                "video",
+                "debugger_json",
+                "log",
+                "network"
+              ],
+              "default": "screenshot"
+            },
+            "contentType": {
+              "type": "string"
+            },
+            "fileName": {
+              "type": "string"
+            },
+            "visibility": {
+              "type": "string",
+              "enum": [
+                "public",
+                "private"
+              ]
+            },
+            "metadata": {
+              "type": "object",
+              "additionalProperties": {
+                "nullable": true
+              },
+              "default": {}
+            },
+            "deviceInfo": {
+              "type": "object",
+              "additionalProperties": {
+                "nullable": true
+              }
+            }
+          },
+          "required": [
+            "title"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "postSupportCaptureUploadSessionIdAttachmentTypeFileName",
+    "description": "POST /support/capture/upload/{sessionId}/{attachmentType}/{fileName} (POST /support/capture/upload/{sessionId}/{attachmentType}/{fileName})",
+    "method": "POST",
+    "path": "/support/capture/upload/{sessionId}/{attachmentType}/{fileName}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string"
+        },
+        "attachmentType": {
+          "type": "string",
+          "enum": [
+            "screenshot",
+            "video",
+            "debugger_json",
+            "log",
+            "network"
+          ]
+        },
+        "fileName": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "attachmentType",
+        "fileName",
+        "sessionId"
+      ]
+    }
+  },
+  {
+    "name": "postSupportIncomingChannelId",
+    "description": "Receive a generic incoming support message (POST /support/incoming/{channelId})",
+    "method": "POST",
+    "path": "/support/incoming/{channelId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "channelId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "fromEmail": {
+              "type": "string",
+              "format": "email"
+            },
+            "fromName": {
+              "type": "string"
+            },
+            "subject": {
+              "type": "string",
+              "default": ""
+            },
+            "text": {
+              "type": "string"
+            },
+            "html": {
+              "type": "string"
+            },
+            "externalTicketId": {
+              "type": "string"
+            },
+            "externalMessageId": {
+              "type": "string"
+            },
+            "subType": {
+              "type": "string"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": [
+            "fromEmail",
+            "text"
+          ]
+        }
+      },
+      "required": [
+        "channelId"
+      ]
+    }
+  },
+  {
     "name": "postSupportWebhooksIntercomOrganizationId",
     "description": "Receive Intercom support webhook notifications (POST /support/webhooks/intercom/{organizationId})",
     "method": "POST",
@@ -5451,10 +6652,502 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postSupportWebhooksJamPublicKeyId",
+    "description": "Create support webhook jam (POST /support/webhooks/jam/{publicKeyId})",
+    "method": "POST",
+    "path": "/support/webhooks/jam/{publicKeyId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "publicKeyId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "jamId": {
+              "type": "string"
+            },
+            "jamUrl": {
+              "type": "string"
+            },
+            "teamId": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "video",
+                "screenshot",
+                "sessionReplay"
+              ]
+            },
+            "createdAt": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "originalUrl": {
+              "type": "string"
+            },
+            "origin": {
+              "type": "string"
+            },
+            "isIncognito": {
+              "type": "boolean"
+            },
+            "author": {
+              "type": "object",
+              "properties": {
+                "email": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "default": {},
+              "additionalProperties": {
+                "nullable": true
+              }
+            },
+            "media": {
+              "type": "object",
+              "properties": {
+                "videoUrl": {
+                  "type": "string"
+                },
+                "screenshotUrl": {
+                  "type": "string"
+                },
+                "thumbnailUrl": {
+                  "type": "string"
+                }
+              },
+              "default": {},
+              "additionalProperties": {
+                "nullable": true
+              }
+            },
+            "systemInfo": {
+              "type": "object",
+              "properties": {
+                "browser": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": {
+                    "nullable": true
+                  }
+                },
+                "os": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": {
+                    "nullable": true
+                  }
+                },
+                "screen": {
+                  "type": "object",
+                  "properties": {
+                    "width": {
+                      "type": "number"
+                    },
+                    "height": {
+                      "type": "number"
+                    }
+                  },
+                  "additionalProperties": {
+                    "nullable": true
+                  }
+                },
+                "battery": {
+                  "type": "object",
+                  "properties": {
+                    "charging": {
+                      "type": "boolean"
+                    },
+                    "level": {
+                      "type": "number"
+                    }
+                  },
+                  "additionalProperties": {
+                    "nullable": true
+                  }
+                },
+                "connection": {
+                  "type": "object",
+                  "properties": {
+                    "effectiveType": {
+                      "type": "string"
+                    },
+                    "downlinkMbps": {
+                      "type": "number"
+                    },
+                    "rttMs": {
+                      "type": "number"
+                    }
+                  },
+                  "additionalProperties": {
+                    "nullable": true
+                  }
+                }
+              },
+              "additionalProperties": {
+                "nullable": true
+              }
+            },
+            "consoleLogs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "level": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "timestamp": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": {
+                  "nullable": true
+                }
+              }
+            },
+            "networkRequests": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string"
+                  },
+                  "method": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "number"
+                  },
+                  "duration": {
+                    "type": "number"
+                  },
+                  "requestHeaders": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  },
+                  "responseHeaders": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": {
+                  "nullable": true
+                }
+              }
+            },
+            "userEvents": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string"
+                  },
+                  "timestamp": {
+                    "type": "string"
+                  },
+                  "selector": {
+                    "type": "string"
+                  },
+                  "target": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": {
+                  "nullable": true
+                }
+              }
+            },
+            "recordingLink": {
+              "type": "object",
+              "properties": {
+                "publicId": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "one_time",
+                    "reusable"
+                  ]
+                },
+                "recordingUrl": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "reference": {
+                  "type": "string"
+                },
+                "submitterComment": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": {
+                "nullable": true
+              }
+            },
+            "intercom": {
+              "type": "object",
+              "properties": {
+                "conversationId": {
+                  "type": "string"
+                },
+                "issueId": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": {
+                "nullable": true
+              }
+            },
+            "linear": {
+              "type": "object",
+              "properties": {
+                "conversationId": {
+                  "type": "string"
+                },
+                "issueId": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": {
+                "nullable": true
+              }
+            }
+          },
+          "required": [
+            "jamId",
+            "jamUrl",
+            "teamId",
+            "type",
+            "createdAt"
+          ],
+          "additionalProperties": {
+            "nullable": true
+          }
+        }
+      },
+      "required": [
+        "publicKeyId"
+      ]
+    }
+  },
+  {
+    "name": "postSupportWebhooksJamPublicKeyIdIntercomOptedout",
+    "description": "Create support webhook jam intercom opted out (POST /support/webhooks/jam/{publicKeyId}/intercom/opted-out)",
+    "method": "POST",
+    "path": "/support/webhooks/jam/{publicKeyId}/intercom/opted-out",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "publicKeyId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "conversationId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "conversationId"
+          ],
+          "additionalProperties": {
+            "nullable": true
+          }
+        }
+      },
+      "required": [
+        "publicKeyId"
+      ]
+    }
+  },
+  {
+    "name": "postSupportWebhooksJamPublicKeyIdIntercomRecorded",
+    "description": "Create support webhook jam intercom recorded (POST /support/webhooks/jam/{publicKeyId}/intercom/recorded)",
+    "method": "POST",
+    "path": "/support/webhooks/jam/{publicKeyId}/intercom/recorded",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "publicKeyId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "conversationId": {
+              "type": "string"
+            },
+            "jamId": {
+              "type": "string"
+            },
+            "jamUrl": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "conversationId",
+            "jamId",
+            "jamUrl"
+          ],
+          "additionalProperties": {
+            "nullable": true
+          }
+        }
+      },
+      "required": [
+        "publicKeyId"
+      ]
+    }
+  },
+  {
+    "name": "postSupportWebhooksJamPublicKeyIdRecordinglinks",
+    "description": "Create support webhook jam recording link (POST /support/webhooks/jam/{publicKeyId}/recording-links)",
+    "method": "POST",
+    "path": "/support/webhooks/jam/{publicKeyId}/recording-links",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "publicKeyId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "recordingLinkId": {
+              "type": "string"
+            },
+            "publicId": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            },
+            "teamId": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "one_time",
+                "reusable"
+              ]
+            },
+            "createdAt": {
+              "type": "string"
+            },
+            "origin": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "reference": {
+              "type": "string"
+            },
+            "recordingUrl": {
+              "type": "string"
+            },
+            "createdBy": {
+              "type": "object",
+              "properties": {
+                "email": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": {
+                "nullable": true
+              }
+            }
+          },
+          "required": [
+            "recordingLinkId",
+            "publicId",
+            "url",
+            "teamId",
+            "type",
+            "createdAt"
+          ],
+          "additionalProperties": {
+            "nullable": true
+          }
+        }
+      },
+      "required": [
+        "publicKeyId"
+      ]
+    }
+  },
+  {
     "name": "postSupportWebhooksPlainOrganizationId",
     "description": "Receive Plain support webhook notifications (POST /support/webhooks/plain/{organizationId})",
     "method": "POST",
     "path": "/support/webhooks/plain/{organizationId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "nullable": true
+        }
+      },
+      "required": [
+        "body",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postSupportWebhooksSlackOrganizationId",
+    "description": "Receive Slack support events (POST /support/webhooks/slack/{organizationId})",
+    "method": "POST",
+    "path": "/support/webhooks/slack/{organizationId}",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -6765,10 +8458,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "linear",
                 "notion",
                 "github-issues",
-                "intercom",
-                "intercom-support",
-                "plain-support",
-                "zendesk-support"
+                "intercom"
               ]
             },
             "credentials": {
@@ -7019,7 +8709,10 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string"
             },
             "labelIds": {
-              "type": "string"
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             },
             "repo": {
               "type": "string"
@@ -7141,7 +8834,10 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                   "type": "string"
                 },
                 "labelIds": {
-                  "type": "string"
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
                 },
                 "repo": {
                   "type": "string"
@@ -8398,6 +10094,95 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdSupportAutoresponders",
+    "description": "Create support autoresponder (POST /workspaces/{organizationId}/support/autoresponders)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/autoresponders",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "trigger": {
+              "type": "string",
+              "enum": [
+                "ticket_created",
+                "customer_replied",
+                "out_of_hours"
+              ]
+            },
+            "order": {
+              "type": "integer"
+            },
+            "snippetId": {
+              "type": "string"
+            },
+            "conditions": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "name",
+            "trigger",
+            "order"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSupportCapturePublickeys",
+    "description": "Create support capture public key (POST /workspaces/{organizationId}/support/capture/public-keys)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/capture/public-keys",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "allowedOrigins": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": []
+            }
+          },
+          "required": [
+            "name"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdSupportchannels",
     "description": "Create support channel (POST /workspaces/{organizationId}/support-channels)",
     "method": "POST",
@@ -8434,7 +10219,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "config": {
               "type": "object",
               "additionalProperties": {
-                "nullable": true
+                "type": "string"
               }
             },
             "isActive": {
@@ -8449,6 +10234,72 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSupportChannelsChannelIdSend",
+    "description": "Send an outbound support message (POST /workspaces/{organizationId}/support/channels/{channelId}/send)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/channels/{channelId}/send",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "channelId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "ticketId": {
+              "type": "string"
+            },
+            "textContent": {
+              "type": "string"
+            },
+            "markdownContent": {
+              "type": "string"
+            },
+            "subject": {
+              "type": "string"
+            },
+            "idempotencyKey": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "ticketId",
+            "textContent"
+          ]
+        }
+      },
+      "required": [
+        "channelId",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSupportChannelsChannelIdValidate",
+    "description": "Validate a support channel (POST /workspaces/{organizationId}/support/channels/{channelId}/validate)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/channels/{channelId}/validate",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "channelId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "channelId",
         "organizationId"
       ]
     }
@@ -8591,6 +10442,1100 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdSupportEscalationrules",
+    "description": "Create support escalation rule (POST /workspaces/{organizationId}/support/escalation-rules)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/escalation-rules",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "isActive": {
+              "type": "boolean"
+            },
+            "sortOrder": {
+              "type": "integer"
+            },
+            "conditions": {
+              "type": "object",
+              "properties": {
+                "keywords": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "channels": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "email",
+                      "slack",
+                      "msteams",
+                      "discord",
+                      "chat",
+                      "capture",
+                      "api",
+                      "intercom",
+                      "zendesk",
+                      "plain"
+                    ]
+                  }
+                },
+                "priorities": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "low",
+                      "medium",
+                      "high",
+                      "urgent"
+                    ]
+                  }
+                },
+                "statuses": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "todo",
+                      "done",
+                      "snoozed"
+                    ]
+                  }
+                },
+                "sources": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "intercom",
+                      "zendesk",
+                      "plain",
+                      "email",
+                      "slack",
+                      "msteams",
+                      "discord",
+                      "chat",
+                      "api",
+                      "manual"
+                    ]
+                  }
+                },
+                "customerDomains": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "action": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "create_issue"
+                  ]
+                },
+                "teamId": {
+                  "type": "string"
+                },
+                "priority": {
+                  "type": "string",
+                  "enum": [
+                    "low",
+                    "medium",
+                    "high",
+                    "urgent"
+                  ]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "triage",
+                    "backlog",
+                    "todo",
+                    "in_progress",
+                    "done",
+                    "canceled"
+                  ]
+                },
+                "labelIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "type"
+              ]
+            }
+          },
+          "required": [
+            "name",
+            "conditions",
+            "action"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSupportImports",
+    "description": "Create support import (POST /workspaces/{organizationId}/support/imports)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/imports",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "intercom"
+                  ]
+                },
+                "credentials": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "token"
+                  ]
+                },
+                "options": {
+                  "type": "object",
+                  "properties": {
+                    "teamId": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "open",
+                        "closed",
+                        "snoozed",
+                        "all"
+                      ],
+                      "default": "all"
+                    },
+                    "limit": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 1000
+                    },
+                    "cursor": {
+                      "type": "string"
+                    },
+                    "teamName": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "required": [
+                "source",
+                "credentials"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "jam"
+                  ]
+                },
+                "credentials": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "nullable": true
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                },
+                "options": {
+                  "type": "object",
+                  "properties": {
+                    "limit": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 1000,
+                      "default": 50
+                    },
+                    "cursor": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "required": [
+                "source",
+                "credentials"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "jam-mcp"
+                  ]
+                },
+                "credentials": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "token"
+                  ]
+                },
+                "options": {
+                  "type": "object",
+                  "properties": {
+                    "limit": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 100,
+                      "default": 25
+                    },
+                    "after": {
+                      "type": "string"
+                    },
+                    "text": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "video",
+                        "screenshot",
+                        "sessionReplay",
+                        "recording"
+                      ]
+                    },
+                    "folder": {
+                      "type": "string"
+                    },
+                    "author": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "required": [
+                "source",
+                "credentials"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "plain"
+                  ]
+                },
+                "credentials": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "token"
+                  ]
+                },
+                "options": {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "todo",
+                        "done",
+                        "snoozed",
+                        "all"
+                      ],
+                      "default": "all"
+                    },
+                    "limit": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 1000
+                    },
+                    "cursor": {
+                      "type": "string"
+                    },
+                    "teamId": {
+                      "type": "string"
+                    },
+                    "teamName": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "required": [
+                "source",
+                "credentials"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "zendesk"
+                  ]
+                },
+                "credentials": {
+                  "type": "object",
+                  "properties": {
+                    "subdomain": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "email": {
+                      "type": "string",
+                      "format": "email"
+                    },
+                    "token": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "subdomain",
+                    "email",
+                    "token"
+                  ]
+                },
+                "options": {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "open",
+                        "pending",
+                        "hold",
+                        "solved",
+                        "closed",
+                        "all"
+                      ],
+                      "default": "all"
+                    },
+                    "limit": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 1000
+                    },
+                    "cursor": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "required": [
+                "source",
+                "credentials"
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSupportImportsImportIdCancel",
+    "description": "Create support import cancel (POST /workspaces/{organizationId}/support/imports/{importId}/cancel)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/imports/{importId}/cancel",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "importId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "importId",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSupportImportsImportIdResume",
+    "description": "Create support import resume (POST /workspaces/{organizationId}/support/imports/{importId}/resume)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/imports/{importId}/resume",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "importId": {
+          "type": "string"
+        },
+        "body": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "intercom"
+                  ]
+                },
+                "credentials": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "token"
+                  ]
+                },
+                "options": {
+                  "type": "object",
+                  "properties": {
+                    "teamId": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "open",
+                        "closed",
+                        "snoozed",
+                        "all"
+                      ],
+                      "default": "all"
+                    },
+                    "limit": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 1000
+                    },
+                    "cursor": {
+                      "type": "string"
+                    },
+                    "teamName": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "required": [
+                "source",
+                "credentials"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "jam"
+                  ]
+                },
+                "credentials": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "nullable": true
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                },
+                "options": {
+                  "type": "object",
+                  "properties": {
+                    "limit": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 1000,
+                      "default": 50
+                    },
+                    "cursor": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "required": [
+                "source",
+                "credentials"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "jam-mcp"
+                  ]
+                },
+                "credentials": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "token"
+                  ]
+                },
+                "options": {
+                  "type": "object",
+                  "properties": {
+                    "limit": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 100,
+                      "default": 25
+                    },
+                    "after": {
+                      "type": "string"
+                    },
+                    "text": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "video",
+                        "screenshot",
+                        "sessionReplay",
+                        "recording"
+                      ]
+                    },
+                    "folder": {
+                      "type": "string"
+                    },
+                    "author": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "required": [
+                "source",
+                "credentials"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "plain"
+                  ]
+                },
+                "credentials": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "token"
+                  ]
+                },
+                "options": {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "todo",
+                        "done",
+                        "snoozed",
+                        "all"
+                      ],
+                      "default": "all"
+                    },
+                    "limit": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 1000
+                    },
+                    "cursor": {
+                      "type": "string"
+                    },
+                    "teamId": {
+                      "type": "string"
+                    },
+                    "teamName": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "required": [
+                "source",
+                "credentials"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "zendesk"
+                  ]
+                },
+                "credentials": {
+                  "type": "object",
+                  "properties": {
+                    "subdomain": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "email": {
+                      "type": "string",
+                      "format": "email"
+                    },
+                    "token": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "subdomain",
+                    "email",
+                    "token"
+                  ]
+                },
+                "options": {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "open",
+                        "pending",
+                        "hold",
+                        "solved",
+                        "closed",
+                        "all"
+                      ],
+                      "default": "all"
+                    },
+                    "limit": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 1000
+                    },
+                    "cursor": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "required": [
+                "source",
+                "credentials"
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "importId",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSupportImportsValidate",
+    "description": "Create support import validate (POST /workspaces/{organizationId}/support/imports/validate)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/imports/validate",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "intercom"
+                  ]
+                },
+                "credentials": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "token"
+                  ]
+                }
+              },
+              "required": [
+                "source",
+                "credentials"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "jam"
+                  ]
+                },
+                "credentials": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "nullable": true
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              },
+              "required": [
+                "source",
+                "credentials"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "jam-mcp"
+                  ]
+                },
+                "credentials": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "token"
+                  ]
+                }
+              },
+              "required": [
+                "source",
+                "credentials"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "plain"
+                  ]
+                },
+                "credentials": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "token"
+                  ]
+                }
+              },
+              "required": [
+                "source",
+                "credentials"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "zendesk"
+                  ]
+                },
+                "credentials": {
+                  "type": "object",
+                  "properties": {
+                    "subdomain": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "email": {
+                      "type": "string",
+                      "format": "email"
+                    },
+                    "token": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "subdomain",
+                    "email",
+                    "token"
+                  ]
+                }
+              },
+              "required": [
+                "source",
+                "credentials"
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSupportInboxViews",
+    "description": "Create support inbox view (POST /workspaces/{organizationId}/support/inbox/views)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/inbox/views",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "filter": {
+              "type": "object",
+              "additionalProperties": {
+                "nullable": true
+              }
+            },
+            "sort": {
+              "type": "object",
+              "additionalProperties": {
+                "nullable": true
+              }
+            }
+          },
+          "required": [
+            "name",
+            "filter"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSupportLabels",
+    "description": "Create support label (POST /workspaces/{organizationId}/support/labels)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/labels",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "color": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSupportSnippets",
+    "description": "Create support snippet (POST /workspaces/{organizationId}/support/snippets)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/snippets",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "textContent": {
+              "type": "string"
+            },
+            "markdownContent": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "textContent"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSupportSnippetsSnippetIdInsert",
+    "description": "Create support snippet insert (POST /workspaces/{organizationId}/support/snippets/{snippetId}/insert)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/snippets/{snippetId}/insert",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "snippetId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "snippetId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdSupportTickets",
     "description": "Create support ticket (POST /workspaces/{organizationId}/support/tickets)",
     "method": "POST",
@@ -8623,7 +11568,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "api",
                 "intercom",
                 "zendesk",
-                "plain"
+                "plain",
+                "linear"
               ]
             },
             "priority": {
@@ -8688,7 +11634,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                     "api",
                     "intercom",
                     "zendesk",
-                    "plain"
+                    "plain",
+                    "linear"
                   ],
                   "default": "chat"
                 }
@@ -8773,7 +11720,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "api",
                 "intercom",
                 "zendesk",
-                "plain"
+                "plain",
+                "linear"
               ]
             },
             "customerId": {
@@ -8895,7 +11843,21 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "type": "object",
           "properties": {
             "until": {
-              "type": "string"
+              "type": "string",
+              "format": "date-time"
+            },
+            "actorType": {
+              "type": "string",
+              "enum": [
+                "customer",
+                "user",
+                "agent",
+                "automation"
+              ]
+            },
+            "actorId": {
+              "type": "string",
+              "nullable": true
             }
           },
           "required": [
@@ -8927,6 +11889,113 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "organizationId",
         "ticketId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSupportTiers",
+    "description": "Create support tier (POST /workspaces/{organizationId}/support/tiers)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/tiers",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "level": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "name",
+            "level"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSupportTiersTierIdMembers",
+    "description": "Create support tier member (POST /workspaces/{organizationId}/support/tiers/{tierId}/members)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/tiers/{tierId}/members",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "tierId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "userId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "userId"
+          ]
+        }
+      },
+      "required": [
+        "organizationId",
+        "tierId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSupportUsersUserIdStatus",
+    "description": "Create support user statu (POST /workspaces/{organizationId}/support/users/{userId}/status)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/users/{userId}/status",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "active",
+                "away",
+                "snoozed",
+                "offline"
+              ]
+            },
+            "until": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": [
+            "status"
+          ]
+        }
+      },
+      "required": [
+        "organizationId",
+        "userId"
       ]
     }
   },
@@ -9116,7 +12185,17 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "minLength": 1
             },
             "permissions": {
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
             },
             "actorType": {
               "type": "string",

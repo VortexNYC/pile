@@ -12,6 +12,8 @@ import { createWorkspace } from "../global/workspaces.js";
 import { createAdminHeaders } from "../platform/test-auth.js";
 import { handleIncomingEmail, type IncomingEmailMessage } from "./email.js";
 
+env.WEBHOOK_QUEUE = null as unknown as typeof env.WEBHOOK_QUEUE;
+
 let organizationId: string;
 
 async function seedWorkspace() {
@@ -160,5 +162,15 @@ describe("incoming email handler", () => {
     const message = makeEmailMessage("support@example.com", "", "body");
     await handleIncomingEmail(message, env);
     expect(message.rejectedReason).toBe("Missing sender");
+  });
+
+  it("rejects email with no Message-ID header", async () => {
+    const message = makeEmailMessage(
+      "support@example.com",
+      "user@example.com",
+      "body"
+    );
+    await handleIncomingEmail(message, env);
+    expect(message.rejectedReason).toBe("Missing Message-ID header");
   });
 });

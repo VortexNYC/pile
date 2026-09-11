@@ -2,11 +2,14 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
 import { createD1 } from "../global/db.js";
+import { getCustomerById } from "../global/support-contacts.js";
+import { maybeEscalate } from "../global/support-escalation.js";
 import {
   addTicketMessage,
   addTicketNote,
   createTicket,
   getTicketById,
+  hydrateTicketRelations,
   listTicketEvents,
   listTickets,
   setTicketAssignees,
@@ -14,6 +17,7 @@ import {
   updateTicket,
 } from "../global/support-tickets.js";
 import { VortexError } from "../platform/errors.js";
+import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 
@@ -42,6 +46,7 @@ const supportTicketChannelEnum = z.enum([
   "intercom",
   "zendesk",
   "plain",
+  "linear",
 ]);
 const supportTicketMessageChannelEnum = z.enum([
   "email",
@@ -54,6 +59,7 @@ const supportTicketMessageChannelEnum = z.enum([
   "intercom",
   "zendesk",
   "plain",
+  "linear",
 ]);
 const supportTicketActorTypeEnum = z.enum([
   "customer",
@@ -134,6 +140,7 @@ export const supportTicketEventSchema = z.object({
   actorType: z.string(),
   actorId: z.string().nullable(),
   metadata: z.string().nullable(),
+  externalId: z.string().nullable(),
   createdAt: z.string(),
   message: supportTicketMessageSchema.optional(),
   note: supportTicketNoteSchema.optional(),
@@ -151,6 +158,7 @@ export const supportTicketSchema = z.object({
   priority: supportTicketPriorityEnum,
   sourceChannel: supportTicketChannelEnum,
   issueId: z.string().nullable(),
+  snoozedUntil: z.string().nullable(),
   lastCustomerMessageAt: z.string().nullable(),
   lastAgentMessageAt: z.string().nullable(),
   createdAt: z.string(),
@@ -185,7 +193,10 @@ const updateTicketBodySchema = z.object({
   title: z.string().min(1).optional(),
   status: supportTicketStatusEnum.optional(),
   priority: supportTicketPriorityEnum.optional(),
+  snoozedUntil: z.string().datetime().nullable().optional(),
   issueId: z.string().nullable().optional(),
+  actorType: supportTicketActorTypeEnum.optional(),
+  actorId: z.string().nullable().optional(),
 });
 
 const addMessageBodySchema = z.object({
@@ -216,6 +227,8 @@ const listTicketsQuerySchema = z.object({
   customerId: z.string().optional(),
   status: supportTicketStatusEnum.optional(),
   priority: supportTicketPriorityEnum.optional(),
+  sourceChannel: supportTicketChannelEnum.optional(),
+  externalSource: supportTicketSourceEnum.optional(),
   assignedTo: z.string().optional(),
   q: z.string().optional(),
 });
@@ -226,7 +239,9 @@ const listEventsQuerySchema = z.object({
 });
 
 const snoozeBodySchema = z.object({
-  until: z.string(),
+  until: z.string().datetime(),
+  actorType: supportTicketActorTypeEnum.optional(),
+  actorId: z.string().nullable().optional(),
 });
 
 const supportTicketAssigneeSchema = z.union([
@@ -255,6 +270,24 @@ const ticketIdParam = z.object({
   organizationId: z.string(),
   ticketId: z.string(),
 });
+
+function resolveActor(
+  identity: WorkspaceIdentity,
+  input?: {
+    actorType?: z.infer<typeof supportTicketActorTypeEnum>;
+    actorId?: string | null;
+  }
+): {
+  actorType: z.infer<typeof supportTicketActorTypeEnum>;
+  actorId: string | null;
+} {
+  const actorType =
+    input?.actorType ?? (identity.type === "agent" ? "agent" : "user");
+  const identityActor =
+    actorType === "customer" ? null : (input?.actorId ?? identity.id);
+  const actorId = input?.actorId ?? identityActor;
+  return { actorType, actorId };
+}
 
 function ticketNotFound(): never {
   throw new VortexError({
@@ -553,26 +586,49 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
     const body = c.req.valid("json");
     const db = createD1(c.env.D1);
 
-    const ticket = await createTicket(db, {
+    const ticket = await createTicket(
+      db,
+      {
+        organizationId,
+        customerId: body.customerId,
+        title: body.title,
+        sourceChannel: body.sourceChannel,
+        priority: body.priority,
+        status: body.status,
+        externalId: body.externalId,
+        externalSource: body.externalSource,
+        issueId: body.issueId,
+      },
+      c.env
+    );
+
+    const customer = await getCustomerById(
+      db,
       organizationId,
-      customerId: body.customerId,
-      title: body.title,
-      sourceChannel: body.sourceChannel,
-      priority: body.priority,
-      status: body.status,
-      externalId: body.externalId,
-      externalSource: body.externalSource,
-      issueId: body.issueId,
+      ticket.customerId
+    );
+    await maybeEscalate(c.env, db, organizationId, ticket, {
+      text: body.message?.textContent ?? body.title,
+      subject: body.title,
+      customer,
+      source: ticket.externalSource,
+      channel: ticket.sourceChannel,
     });
 
     if (body.message) {
-      await addTicketMessage(db, organizationId, ticket.id, {
-        direction: "inbound",
-        textContent: body.message.textContent,
-        markdownContent: body.message.markdownContent,
-        channel: body.message.channel,
-        customerId: ticket.customerId,
-      });
+      await addTicketMessage(
+        db,
+        organizationId,
+        ticket.id,
+        {
+          direction: "inbound",
+          textContent: body.message.textContent,
+          markdownContent: body.message.markdownContent,
+          channel: body.message.channel,
+          customerId: ticket.customerId,
+        },
+        c.env
+      );
     }
 
     const full =
@@ -590,20 +646,19 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
       customerId: query.customerId,
       status: query.status,
       priority: query.priority,
+      sourceChannel: query.sourceChannel,
+      externalSource: query.externalSource,
       assignedTo: query.assignedTo,
       q: query.q,
     });
 
-    const withRelations = await Promise.all(
-      tickets.map((ticket) => getTicketById(db, organizationId, ticket.id))
+    const withRelations = await hydrateTicketRelations(
+      db,
+      organizationId,
+      tickets
     );
 
-    return c.json({
-      tickets: withRelations.filter(
-        (t): t is NonNullable<typeof t> => t !== null
-      ),
-      nextCursor,
-    });
+    return c.json({ tickets: withRelations, nextCursor });
   });
 
   app.openapi(getTicketRoute, async (c) => {
@@ -619,11 +674,21 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(updateTicketRoute, async (c) => {
     const { organizationId, ticketId } = c.req.valid("param");
     const body = c.req.valid("json");
+    const identity = c.get("workspaceIdentity");
+    const { actorType, actorId } = resolveActor(identity, body);
     const db = createD1(c.env.D1);
-    const ticket = await updateTicket(db, organizationId, ticketId, {
-      ...body,
-      actorType: "user",
-    });
+    const { actorType: _actorType, actorId: _actorId, ...updates } = body;
+    const ticket = await updateTicket(
+      db,
+      organizationId,
+      ticketId,
+      {
+        ...updates,
+        actorType,
+        actorId,
+      },
+      c.env
+    );
     if (!ticket) {
       ticketNotFound();
     }
@@ -635,16 +700,40 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(addMessageRoute, async (c) => {
     const { organizationId, ticketId } = c.req.valid("param");
     const body = c.req.valid("json");
+    const identity = c.get("workspaceIdentity");
+    const { actorType, actorId } = resolveActor(identity, body);
     const db = createD1(c.env.D1);
-    const event = await addTicketMessage(db, organizationId, ticketId, body);
+    const event = await addTicketMessage(
+      db,
+      organizationId,
+      ticketId,
+      {
+        ...body,
+        actorType,
+        actorId,
+      },
+      c.env
+    );
     return c.json({ event }, 201);
   });
 
   app.openapi(addNoteRoute, async (c) => {
     const { organizationId, ticketId } = c.req.valid("param");
     const body = c.req.valid("json");
+    const identity = c.get("workspaceIdentity");
+    const { actorType, actorId } = resolveActor(identity, body);
     const db = createD1(c.env.D1);
-    const event = await addTicketNote(db, organizationId, ticketId, body);
+    const event = await addTicketNote(
+      db,
+      organizationId,
+      ticketId,
+      {
+        ...body,
+        actorType,
+        actorId,
+      },
+      c.env
+    );
     return c.json({ event }, 201);
   });
 
@@ -667,11 +756,20 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(markDoneRoute, async (c) => {
     const { organizationId, ticketId } = c.req.valid("param");
+    const identity = c.get("workspaceIdentity");
+    const { actorType, actorId } = resolveActor(identity);
     const db = createD1(c.env.D1);
-    await updateTicket(db, organizationId, ticketId, {
-      status: "done",
-      actorType: "user",
-    });
+    await updateTicket(
+      db,
+      organizationId,
+      ticketId,
+      {
+        status: "done",
+        actorType,
+        actorId,
+      },
+      c.env
+    );
     const full =
       (await getTicketById(db, organizationId, ticketId)) ?? ticketNotFound();
     return c.json({ ticket: full });
@@ -679,11 +777,20 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(markTodoRoute, async (c) => {
     const { organizationId, ticketId } = c.req.valid("param");
+    const identity = c.get("workspaceIdentity");
+    const { actorType, actorId } = resolveActor(identity);
     const db = createD1(c.env.D1);
-    await updateTicket(db, organizationId, ticketId, {
-      status: "todo",
-      actorType: "user",
-    });
+    await updateTicket(
+      db,
+      organizationId,
+      ticketId,
+      {
+        status: "todo",
+        actorType,
+        actorId,
+      },
+      c.env
+    );
     const full =
       (await getTicketById(db, organizationId, ticketId)) ?? ticketNotFound();
     return c.json({ ticket: full });
@@ -691,12 +798,30 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(snoozeRoute, async (c) => {
     const { organizationId, ticketId } = c.req.valid("param");
-    c.req.valid("json");
+    const body = c.req.valid("json");
+    const until = new Date(body.until);
+    if (Number.isNaN(until.getTime()) || until.getTime() <= Date.now()) {
+      throw new VortexError({
+        status: 400,
+        code: "BAD_REQUEST",
+        message: "Snooze until must be a future date",
+      });
+    }
+    const identity = c.get("workspaceIdentity");
+    const { actorType, actorId } = resolveActor(identity, body);
     const db = createD1(c.env.D1);
-    await updateTicket(db, organizationId, ticketId, {
-      status: "snoozed",
-      actorType: "user",
-    });
+    await updateTicket(
+      db,
+      organizationId,
+      ticketId,
+      {
+        status: "snoozed",
+        snoozedUntil: body.until,
+        actorType,
+        actorId,
+      },
+      c.env
+    );
     const full =
       (await getTicketById(db, organizationId, ticketId)) ?? ticketNotFound();
     return c.json({ ticket: full });

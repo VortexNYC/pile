@@ -17,7 +17,7 @@ Make the Intercom, Plain, and Zendesk support import adapters capture the full p
 
 ### Schema
 
-- `support_ticket_events.type` is a typed, native Vortex event category (e.g. `status_change`, `label_added`, `sla_change`, `link_added`).
+- `support_ticket_events.type` is a typed, native Vortex event category (e.g. `status_change`, `label_added`, `link_added`).
 - `support_ticket_events.sub_type` stores the exact provider entry name (e.g. `ThreadLinkCreatedEntry`, `conversation_rating`, `Change:tags`) so every provider concept has a home.
 - `support_ticket_events.metadata` stores the full provider payload / delta as JSON text.
 - `support_ticket_attachments` links attachments to `ticketId` and `eventId` with `externalId`, `url`, `fileName`, `contentType`, `size`, `r2Key`, `createdAt`.
@@ -65,7 +65,7 @@ Make the Intercom, Plain, and Zendesk support import adapters capture the full p
   - `note` (with `body`) → `note`
   - `open`/`close`/`snoozed`/`waiting` → `status_change`
   - `assigned`/`unassigned`/`assignment` → `assignment_change`
-  - `conversation_rating`/`rating`/`survey`/`csat`/`nps` → `survey_received`
+  - `conversation_rating`/`rating`/`survey`/`csat`/`nps` → `custom_entry`
   - `feedback` → `customer_event`
   - `custom_bot`/`custom_card` → `custom_entry`
   - `follow_up`/`push_notification`/`whatsapp`/`linked_message` (no `body`) → `notification`
@@ -85,8 +85,8 @@ Make the Intercom, Plain, and Zendesk support import adapters capture the full p
 - `ThreadAssignmentTransitionedEntry`/`ThreadAdditionalAssigneesTransitionedEntry` → `assignment_change`
 - `ThreadLabelsChangedEntry` → `label_added`/`label_removed` (diff of `previousLabels`/`nextLabels`)
 - `CustomerEventEntry` → `customer_event`
-- `CustomerSurveyRequestedEntry` → `survey_requested`
-- `ThreadServiceLevelAgreementPolicyChangedEntry`/`ServiceLevelAgreementStatusTransitionedEntry` → `sla_change`
+- `CustomerSurveyRequestedEntry` → `custom_entry`
+- `ThreadServiceLevelAgreementPolicyChangedEntry`/`ServiceLevelAgreementStatusTransitionedEntry` → `custom_entry`
 - `ThreadLinkCreatedEntry`/`ThreadLinkTargetCreatedEntry` → `link_added`
 - `ThreadLinkUpdatedEntry` → `link_changed`
 - `ThreadLinkDeletedEntry`/`ThreadLinkTargetDeletedEntry` → `link_removed`
@@ -108,7 +108,7 @@ Make the Intercom, Plain, and Zendesk support import adapters capture the full p
 - `audits` are fetched and each audit `event` is mapped:
   - `Change` on `status`/`priority`/`assignee_id`/`group_id`/`tags` → `status_change`/`priority_change`/`assignment_change`/`label_added`/`label_removed` (`subType = Change:{field_name}`)
   - `Change` on other fields → `field_change`
-  - `SatisfactionRating` → `survey_received`
+  - `SatisfactionRating` → `custom_entry`
   - `Notification`/`NotificationWithCcs`/`ForwardingEvent` → `notification`
   - `Cc`/`FollowersCc`/`FollowerChangeAction` → `watchers_changed`
   - `ProblemSolvedEvent`/`ProblemsSolvedEvent` → `status_change`

@@ -22,6 +22,8 @@ declare module "cloudflare:test" {
   interface ProvidedEnv extends WorkerEnv {}
 }
 
+env.WEBHOOK_QUEUE = null as unknown as typeof env.WEBHOOK_QUEUE;
+
 const ORIGIN = "https://your-domain.com";
 
 async function seedWorkspace() {

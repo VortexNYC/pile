@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { VortexError } from "./errors.js";
 import { parsePermissionSet } from "./permissions.js";
 
 export const workspaceIdentitySchema = z.object({
@@ -15,7 +16,7 @@ export type WorkspaceIdentity = z.infer<typeof workspaceIdentitySchema>;
 
 const apiKeyMetadataSchema = z.object({
   organizationId: z.string(),
-  permissions: z.string(),
+  permissions: z.string().default("read"),
   actorType: z.enum(["user", "agent"]).optional(),
 });
 
@@ -26,14 +27,27 @@ const apiKeyResultSchema = z.object({
 });
 
 function parseApiKeyMetadata(metadata: unknown) {
-  if (typeof metadata === "string") {
-    return apiKeyMetadataSchema.parse(JSON.parse(metadata));
+  try {
+    if (typeof metadata === "string") {
+      return apiKeyMetadataSchema.parse(JSON.parse(metadata));
+    }
+    return apiKeyMetadataSchema.parse(metadata);
+  } catch {
+    throw new VortexError({
+      code: "UNAUTHORIZED",
+      status: 401,
+      message: "API key is missing workspace metadata",
+      hint: "Create the key with metadata.organizationId and metadata.permissions set.",
+    });
   }
-  return apiKeyMetadataSchema.parse(metadata);
 }
 
 export function toApiKeyWorkspaceIdentity(input: unknown): WorkspaceIdentity {
-  const key = apiKeyResultSchema.parse(input);
+  const keyResult = apiKeyResultSchema.safeParse(input);
+  if (!keyResult.success) {
+    throw VortexError.fromCode("UNAUTHORIZED");
+  }
+  const key = keyResult.data;
   const parsed = parseApiKeyMetadata(key.metadata);
   return workspaceIdentitySchema.parse({
     id: key.referenceId,

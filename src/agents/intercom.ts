@@ -3,16 +3,14 @@ import type { Context } from "hono";
 
 import { hmacSha1Hex, timingSafeEqualHex } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
+import type { D1Client } from "../global/db.js";
 import {
   createIntercomConversation,
   findIntercomConversation,
 } from "../global/intercom-conversations.js";
-import {
-  findWebhookDelivery,
-  recordWebhookDelivery,
-} from "../global/webhook-deliveries.js";
+import { enqueueWebhook, scopedDeliveryId } from "../global/webhook-queue.js";
 import { VortexError } from "../platform/errors.js";
-import type { AppContext } from "../platform/middleware.js";
+import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import type { IssueInput } from "../types/workspace.js";
 
 const intercomWebhookAuthorSchema = z.object({
@@ -139,6 +137,11 @@ export const intercomWebhookRoute = createRoute({
   },
 });
 
+const intercomAgentQueuePayloadSchema = z.object({
+  notification: intercomNotificationSchema,
+  organizationId: z.string(),
+});
+
 export async function processIntercomWebhook(
   c: Context<AppContext>
 ): Promise<{ ok: boolean }> {
@@ -182,13 +185,13 @@ export async function processIntercomWebhook(
     });
   }
 
-  const payload = intercomNotificationSchema.safeParse(parsedBody);
-  if (!payload.success) {
+  const notification = intercomNotificationSchema.safeParse(parsedBody);
+  if (!notification.success) {
     throw new VortexError({
       code: "BAD_REQUEST",
       status: 400,
       message: "Invalid Intercom notification",
-      hint: payload.error.message,
+      hint: notification.error.message,
     });
   }
 
@@ -200,18 +203,51 @@ export async function processIntercomWebhook(
       message: "Missing organizationId",
     });
   }
-  const { id: deliveryId, topic } = payload.data;
+  const { id: deliveryId, topic } = notification.data;
 
-  if (topic === "ping") {
+  if (topic === "ping" || !topic.startsWith("conversation.")) {
     return { ok: true };
   }
 
-  if (!topic.startsWith("conversation.")) {
-    return { ok: true };
+  const db = createD1(c.env.D1);
+  await enqueueWebhook(
+    db,
+    c.env,
+    {
+      deliveryId: scopedDeliveryId(
+        "intercom-agent",
+        organizationId,
+        deliveryId
+      ),
+      source: "intercom-agent",
+      event: topic,
+      organizationId,
+      payload: { notification: notification.data, organizationId },
+    },
+    new Map([["intercom-agent", processIntercomAgentWebhookPayload]])
+  );
+
+  return { ok: true };
+}
+
+export async function processIntercomAgentWebhookPayload(
+  db: D1Client,
+  env: WorkerEnv,
+  payload: unknown
+): Promise<void> {
+  const parsed = intercomAgentQueuePayloadSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Invalid Intercom agent queue payload",
+      hint: parsed.error.message,
+    });
   }
 
+  const { notification, organizationId } = parsed.data;
   const conversation = intercomWebhookConversationSchema.safeParse(
-    payload.data.data.item
+    notification.data.item
   );
   if (!conversation.success) {
     throw new VortexError({
@@ -222,13 +258,7 @@ export async function processIntercomWebhook(
     });
   }
 
-  const db = createD1(c.env.D1);
-  const existingDelivery = await findWebhookDelivery(db, deliveryId);
-  if (existingDelivery) {
-    return { ok: true };
-  }
-
-  const stub = getIntercomWorkspaceStub(c, organizationId);
+  const stub = getIntercomWorkspaceStub(env, organizationId);
   await stub.setOrganizationId(organizationId);
 
   const updatedAt = new Date(conversation.data.updated_at * 1000).toISOString();
@@ -256,6 +286,7 @@ export async function processIntercomWebhook(
     ).toISOString();
     const issue = await stub.createIssue(
       {
+        id: `intercom:${organizationId}:${conversation.data.id}`,
         title: conversationTitle(conversation.data),
         description: conversationBody(conversation.data) || undefined,
         status: intercomStateToVortexStatus(conversation.data.state),
@@ -272,22 +303,9 @@ export async function processIntercomWebhook(
       issue.id
     );
   }
-
-  await recordWebhookDelivery(
-    db,
-    deliveryId,
-    "intercom",
-    topic,
-    organizationId
-  );
-
-  return { ok: true };
 }
 
-function getIntercomWorkspaceStub(
-  c: Context<AppContext>,
-  organizationId: string
-) {
-  const doId = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId);
-  return c.env.WORKSPACE_DURABLE_OBJECT.get(doId);
+function getIntercomWorkspaceStub(env: WorkerEnv, organizationId: string) {
+  const doId = env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId);
+  return env.WORKSPACE_DURABLE_OBJECT.get(doId);
 }

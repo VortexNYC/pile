@@ -1,9 +1,16 @@
 import { and, eq } from "drizzle-orm";
 import PostalMime from "postal-mime";
+import { z } from "zod";
 
 import { createD1, type D1Client } from "../global/db.js";
 import { supportChannels } from "../global/schema.js";
 import { processIncomingMessage } from "../global/support-channels.js";
+import {
+  enqueueWebhook,
+  scopedDeliveryId,
+  type WebhookProcessor,
+  type WebhookSource,
+} from "../global/webhook-queue.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 
 export interface IncomingEmailMessage {
@@ -87,6 +94,43 @@ async function findChannelByEmailAddress(
   return match ? { organizationId: match.organizationId } : null;
 }
 
+const emailQueuePayloadSchema = z.object({
+  organizationId: z.string(),
+  to: z.string(),
+  from: z.string(),
+  fromName: z.string().nullable(),
+  subject: z.string(),
+  text: z.string(),
+  html: z.string().nullable(),
+  messageId: z.string().nullable(),
+  inReplyTo: z.string().nullable(),
+});
+
+export async function processEmailWebhookPayload(
+  db: D1Client,
+  env: WorkerEnv,
+  payload: unknown
+) {
+  const data = emailQueuePayloadSchema.parse(payload);
+  return processIncomingMessage(
+    db,
+    data.organizationId,
+    {
+      channel: "email",
+      externalSource: "email",
+      fromEmail: data.from,
+      fromName: data.fromName,
+      subject: data.subject,
+      text: data.text,
+      html: data.html,
+      externalTicketId: data.inReplyTo ?? data.messageId,
+      externalMessageId: data.messageId,
+      subType: "email",
+    },
+    env
+  );
+}
+
 export async function handleIncomingEmail(
   message: IncomingEmailMessage,
   env: WorkerEnv
@@ -127,17 +171,42 @@ export async function handleIncomingEmail(
     typeof parsed.inReplyTo === "string" ? parsed.inReplyTo : null;
   const messageIdValue = extractReferenceMessageId(messageId);
   const inReplyToValue = extractReferenceMessageId(inReplyTo);
-  const externalTicketId = inReplyToValue ?? messageIdValue;
 
-  await processIncomingMessage(db, channel.organizationId, {
-    channel: "email",
-    externalSource: "email",
-    fromEmail: from.address,
-    fromName: from.name,
-    subject,
-    text,
-    html,
-    externalTicketId,
-    externalMessageId: messageIdValue,
-  });
+  if (!messageIdValue) {
+    message.setReject("Missing Message-ID header");
+    return;
+  }
+
+  const deliveryId = scopedDeliveryId(
+    "email",
+    channel.organizationId,
+    messageIdValue
+  );
+
+  const processors = new Map<WebhookSource, WebhookProcessor>([
+    ["email", processEmailWebhookPayload],
+  ]);
+
+  await enqueueWebhook(
+    db,
+    env,
+    {
+      deliveryId,
+      source: "email",
+      event: "received",
+      organizationId: channel.organizationId,
+      payload: {
+        organizationId: channel.organizationId,
+        to: to.address,
+        from: from.address,
+        fromName: from.name,
+        subject,
+        text,
+        html,
+        messageId: messageIdValue,
+        inReplyTo: inReplyToValue,
+      },
+    },
+    processors
+  );
 }

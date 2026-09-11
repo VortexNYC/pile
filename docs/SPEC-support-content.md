@@ -82,7 +82,7 @@ Index: `(organization_id, enabled, order)`.
 
 This module does **not** create a new table. It extends the existing `labels` table by treating labels with `kind = "support"` as support labels. `support_tickets` already links to `labels` via `support_ticket_labels`.
 
-A support label is just a `labels` row where `scope` is `support` or `kind` is `support`.
+A support label is just a `labels` row where `kind` is `"support"`.
 
 ## Code Style
 

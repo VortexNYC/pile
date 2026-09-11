@@ -24,11 +24,6 @@ import {
   githubIssuesOptionsSchema,
 } from "../import/github-issues.js";
 import {
-  intercomSupportCredentialsSchema,
-  intercomSupportImportSource,
-  intercomSupportOptionsSchema,
-} from "../import/intercom-support.js";
-import {
   intercomCredentialsSchema,
   intercomImportSource,
   intercomOptionsSchema,
@@ -48,18 +43,8 @@ import {
   notionImportSource,
   notionOptionsSchema,
 } from "../import/notion.js";
-import {
-  plainSupportCredentialsSchema,
-  plainSupportImportSource,
-  plainSupportOptionsSchema,
-} from "../import/plain-support.js";
 import { resumeImport, runImport } from "../import/runner.js";
 import type { ImportCounts, ImportRunState } from "../import/types.js";
-import {
-  zendeskSupportCredentialsSchema,
-  zendeskSupportImportSource,
-  zendeskSupportOptionsSchema,
-} from "../import/zendesk-support.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 
@@ -71,9 +56,6 @@ const importBodySchema = z.object({
     "notion",
     "github-issues",
     "intercom",
-    "intercom-support",
-    "plain-support",
-    "zendesk-support",
   ]),
   credentials: z.unknown(),
   options: z.unknown().optional(),
@@ -423,60 +405,7 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
         output = importRunOutput(body.source, job, batch);
         break;
       }
-      case "intercom-support": {
-        const credentials = intercomSupportCredentialsSchema.parse(
-          body.credentials
-        );
-        const options = intercomSupportOptionsSchema.parse(body.options ?? {});
-        const { batch, job } = await runImport(
-          intercomSupportImportSource,
-          c.env,
-          c.req.raw.headers,
-          organizationId,
-          importerId,
-          credentials,
-          options,
-          state
-        );
-        output = importRunOutput(body.source, job, batch);
-        break;
-      }
-      case "plain-support": {
-        const credentials = plainSupportCredentialsSchema.parse(
-          body.credentials
-        );
-        const options = plainSupportOptionsSchema.parse(body.options ?? {});
-        const { batch, job } = await runImport(
-          plainSupportImportSource,
-          c.env,
-          c.req.raw.headers,
-          organizationId,
-          importerId,
-          credentials,
-          options,
-          state
-        );
-        output = importRunOutput(body.source, job, batch);
-        break;
-      }
-      case "zendesk-support": {
-        const credentials = zendeskSupportCredentialsSchema.parse(
-          body.credentials
-        );
-        const options = zendeskSupportOptionsSchema.parse(body.options ?? {});
-        const { batch, job } = await runImport(
-          zendeskSupportImportSource,
-          c.env,
-          c.req.raw.headers,
-          organizationId,
-          importerId,
-          credentials,
-          options,
-          state
-        );
-        output = importRunOutput(body.source, job, batch);
-        break;
-      }
+
       default: {
         const exhaustive: never = body.source;
         throw new Error(`Unsupported import source: ${String(exhaustive)}`);
@@ -645,63 +574,7 @@ export function registerImportRoutes(app: OpenAPIHono<AppContext>) {
         output = importRunOutput(job.source, updatedJob, batch);
         break;
       }
-      case "intercom-support": {
-        const credentials = intercomSupportCredentialsSchema.parse(
-          resumeBody.credentials
-        );
-        const parsedOptions = intercomSupportOptionsSchema.parse(options ?? {});
-        const { batch, job: updatedJob } = await resumeImport(
-          intercomSupportImportSource,
-          c.env,
-          c.req.raw.headers,
-          organizationId,
-          importerId,
-          job,
-          credentials,
-          parsedOptions,
-          state
-        );
-        output = importRunOutput(job.source, updatedJob, batch);
-        break;
-      }
-      case "plain-support": {
-        const credentials = plainSupportCredentialsSchema.parse(
-          resumeBody.credentials
-        );
-        const parsedOptions = plainSupportOptionsSchema.parse(options ?? {});
-        const { batch, job: updatedJob } = await resumeImport(
-          plainSupportImportSource,
-          c.env,
-          c.req.raw.headers,
-          organizationId,
-          importerId,
-          job,
-          credentials,
-          parsedOptions,
-          state
-        );
-        output = importRunOutput(job.source, updatedJob, batch);
-        break;
-      }
-      case "zendesk-support": {
-        const credentials = zendeskSupportCredentialsSchema.parse(
-          resumeBody.credentials
-        );
-        const parsedOptions = zendeskSupportOptionsSchema.parse(options ?? {});
-        const { batch, job: updatedJob } = await resumeImport(
-          zendeskSupportImportSource,
-          c.env,
-          c.req.raw.headers,
-          organizationId,
-          importerId,
-          job,
-          credentials,
-          parsedOptions,
-          state
-        );
-        output = importRunOutput(job.source, updatedJob, batch);
-        break;
-      }
+
       default: {
         throw new Error(`Unsupported import source: ${job.source}`);
       }

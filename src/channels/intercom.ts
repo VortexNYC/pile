@@ -4,6 +4,7 @@ import type { Context } from "hono";
 import { hmacSha1Hex, timingSafeEqualHex } from "../global/crypto.js";
 import { createD1, type D1Client } from "../global/db.js";
 import { findOrCreateCustomerByEmail } from "../global/support-contacts.js";
+import { maybeEscalate } from "../global/support-escalation.js";
 import {
   addTicketMessage,
   createTicket,
@@ -13,12 +14,9 @@ import {
   updateTicket,
   type SupportTicketStatus,
 } from "../global/support-tickets.js";
-import {
-  findWebhookDelivery,
-  recordWebhookDelivery,
-} from "../global/webhook-deliveries.js";
+import { enqueueWebhook, scopedDeliveryId } from "../global/webhook-queue.js";
 import { VortexError } from "../platform/errors.js";
-import type { AppContext } from "../platform/middleware.js";
+import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 
 const intercomWebhookAuthorSchema = z.object({
   type: z.enum(["admin", "user", "lead", "bot", "contact"]),
@@ -84,6 +82,11 @@ export const intercomSupportWebhookRoute = createRoute({
   },
 });
 
+const intercomQueuePayloadSchema = z.object({
+  notification: intercomNotificationSchema,
+  organizationId: z.string(),
+});
+
 export async function processIntercomSupportWebhook(
   c: Context<AppContext>
 ): Promise<{ ok: boolean }> {
@@ -142,13 +145,46 @@ export async function processIntercomSupportWebhook(
   }
 
   const db = createD1(c.env.D1);
-  const existingDelivery = await findWebhookDelivery(db, notification.data.id);
-  if (existingDelivery) {
-    return { ok: true };
+  await enqueueWebhook(
+    db,
+    c.env,
+    {
+      deliveryId: scopedDeliveryId(
+        "intercom",
+        organizationId,
+        notification.data.id
+      ),
+      source: "intercom",
+      event: topic,
+      organizationId,
+      payload: { notification: notification.data, organizationId },
+    },
+    new Map([["intercom", processIntercomSupportWebhookPayload]])
+  );
+
+  return { ok: true };
+}
+
+export async function processIntercomSupportWebhookPayload(
+  db: D1Client,
+  env: WorkerEnv,
+  payload: unknown
+): Promise<void> {
+  const parsed = intercomQueuePayloadSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Invalid Intercom queue payload",
+      hint: parsed.error.message,
+    });
   }
 
+  const { notification, organizationId } = parsed.data;
+  const { topic } = notification;
+
   const conversation = intercomWebhookConversationSchema.safeParse(
-    notification.data.data.item
+    notification.data.item
   );
   if (!conversation.success) {
     throw new VortexError({
@@ -172,48 +208,30 @@ export async function processIntercomSupportWebhook(
       db,
       organizationId,
       conversation.data.id,
-      "done"
+      "done",
+      env
     );
-    await recordWebhookDelivery(
-      db,
-      notification.data.id,
-      "intercom",
-      topic,
-      organizationId
-    );
-    return { ok: true };
+    return;
   }
   if (topic.endsWith(".opened")) {
     await updateStatusIfExists(
       db,
       organizationId,
       conversation.data.id,
-      "todo"
+      "todo",
+      env
     );
-    await recordWebhookDelivery(
-      db,
-      notification.data.id,
-      "intercom",
-      topic,
-      organizationId
-    );
-    return { ok: true };
+    return;
   }
   if (topic.endsWith(".snoozed")) {
     await updateStatusIfExists(
       db,
       organizationId,
       conversation.data.id,
-      "snoozed"
+      "snoozed",
+      env
     );
-    await recordWebhookDelivery(
-      db,
-      notification.data.id,
-      "intercom",
-      topic,
-      organizationId
-    );
-    return { ok: true };
+    return;
   }
 
   const isAdminReply = topic.startsWith("conversation.admin.replied");
@@ -221,14 +239,7 @@ export async function processIntercomSupportWebhook(
   const isCreated = topic.startsWith("conversation.user.created");
 
   if (!isCreated && !isUserReply && !isAdminReply) {
-    await recordWebhookDelivery(
-      db,
-      notification.data.id,
-      "intercom",
-      topic,
-      organizationId
-    );
-    return { ok: true };
+    return;
   }
 
   const existing = await findSupportTicketByExternalId(
@@ -245,15 +256,22 @@ export async function processIntercomSupportWebhook(
 
   if (existing) {
     if (isAdminReply) {
-      await addTicketMessage(db, organizationId, existing.id, {
-        direction: "outbound",
-        textContent: text,
-        channel: "intercom",
-        actorType: "user",
-        actorId: sourceAuthor?.id ?? null,
-        subType: conversation.data.id,
-        createdAt,
-      });
+      await addTicketMessage(
+        db,
+        organizationId,
+        existing.id,
+        {
+          direction: "outbound",
+          textContent: text,
+          channel: "intercom",
+          actorType: "user",
+          actorId: sourceAuthor?.id ?? null,
+          subType: topic,
+          externalId: notification.id,
+          createdAt,
+        },
+        env
+      );
     } else if (sourceAuthor?.email) {
       const customer = await findOrCreateCustomerByEmail(
         db,
@@ -262,24 +280,36 @@ export async function processIntercomSupportWebhook(
         sourceAuthor.name,
         "intercom"
       );
-      await addTicketMessage(db, organizationId, existing.id, {
-        direction: "inbound",
-        textContent: text,
-        channel: "intercom",
-        customerId: customer.id,
-        subType: conversation.data.id,
-        createdAt,
-      });
+      await addTicketMessage(
+        db,
+        organizationId,
+        existing.id,
+        {
+          direction: "inbound",
+          textContent: text,
+          channel: "intercom",
+          customerId: customer.id,
+          subType: topic,
+          externalId: notification.id,
+          createdAt,
+        },
+        env
+      );
     }
-    await updateTicket(db, organizationId, existing.id, { status, priority });
-    await recordWebhookDelivery(
+    await updateTicket(
       db,
-      notification.data.id,
-      "intercom",
-      topic,
-      organizationId
+      organizationId,
+      existing.id,
+      {
+        status,
+        priority,
+        actorType: "automation",
+        actorId: null,
+      },
+      env
     );
-    return { ok: true };
+
+    return;
   }
 
   if (!sourceAuthor?.email) {
@@ -304,43 +334,55 @@ export async function processIntercomSupportWebhook(
       sourceBody.slice(0, 120) ||
       `Intercom conversation ${conversation.data.id}`);
 
-  const ticket = await createTicket(db, {
-    organizationId,
-    customerId: customer.id,
-    title,
-    sourceChannel: "intercom",
-    status,
-    priority,
-    externalId: conversation.data.id,
-    externalSource: "intercom",
-    createdAt,
-    updatedAt: createdAt,
-  });
-
-  await addTicketMessage(db, organizationId, ticket.id, {
-    direction: isAdminReply ? "outbound" : "inbound",
-    textContent: text,
-    channel: "intercom",
-    customerId: customer.id,
-    subType: conversation.data.id,
-    createdAt,
-  });
-
-  await recordWebhookDelivery(
+  const ticket = await createTicket(
     db,
-    notification.data.id,
-    "intercom",
-    topic,
-    organizationId
+    {
+      organizationId,
+      customerId: customer.id,
+      title,
+      sourceChannel: "intercom",
+      status,
+      priority,
+      externalId: conversation.data.id,
+      externalSource: "intercom",
+      createdAt,
+      updatedAt: createdAt,
+      ifExists: "return",
+    },
+    env
   );
-  return { ok: true };
+
+  await maybeEscalate(env, db, organizationId, ticket, {
+    text,
+    subject: sourceSubject,
+    customer,
+    source: "intercom",
+    channel: "intercom",
+  });
+
+  await addTicketMessage(
+    db,
+    organizationId,
+    ticket.id,
+    {
+      direction: isAdminReply ? "outbound" : "inbound",
+      textContent: text,
+      channel: "intercom",
+      customerId: customer.id,
+      subType: topic,
+      externalId: isCreated ? conversation.data.id : notification.id,
+      createdAt,
+    },
+    env
+  );
 }
 
 async function updateStatusIfExists(
   db: D1Client,
   organizationId: string,
   externalId: string,
-  status: SupportTicketStatus
+  status: SupportTicketStatus,
+  env: WorkerEnv
 ): Promise<void> {
   const ticket = await findSupportTicketByExternalId(
     db,
@@ -349,7 +391,55 @@ async function updateStatusIfExists(
     "intercom"
   );
   if (ticket) {
-    await updateTicket(db, organizationId, ticket.id, { status });
+    await updateTicket(
+      db,
+      organizationId,
+      ticket.id,
+      {
+        status,
+        actorType: "automation",
+        actorId: null,
+      },
+      env
+    );
+  }
+}
+
+const intercomReplyResponseSchema = z.object({
+  id: z.string(),
+});
+
+export async function sendIntercomMessage(input: {
+  accessToken: string;
+  adminId: string;
+  conversationId: string;
+  text: string;
+}): Promise<boolean> {
+  try {
+    const res = await fetch(
+      `https://api.intercom.io/conversations/${input.conversationId}/reply`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${input.accessToken}`,
+          "Content-Type": "application/json; charset=utf-8",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          message_type: "comment",
+          from: { type: "admin", id: input.adminId },
+          body: input.text,
+        }),
+      }
+    );
+    if (!res.ok) {
+      return false;
+    }
+    const data = (await res.json()) as unknown;
+    const parsed = intercomReplyResponseSchema.safeParse(data);
+    return parsed.success;
+  } catch {
+    return false;
   }
 }
 

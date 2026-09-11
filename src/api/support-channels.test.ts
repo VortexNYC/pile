@@ -1,6 +1,9 @@
 import { env } from "cloudflare:test";
 import { eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
+import { z } from "zod";
+
+env.WEBHOOK_QUEUE = null as unknown as typeof env.WEBHOOK_QUEUE;
 
 import {
   hmacSha1Hex,
@@ -8,10 +11,17 @@ import {
   hmacSha256Hex,
 } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
-import { supportTickets, user as userTable } from "../global/schema.js";
-import { getTicketById } from "../global/support-tickets.js";
+import {
+  supportChannels,
+  supportTicketEvents,
+  user as userTable,
+} from "../global/schema.js";
+import { getCustomerByEmail } from "../global/support-contacts.js";
+import { createCustomer } from "../global/support-contacts.js";
+import { createTicket } from "../global/support-tickets.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
+import { createAuth } from "../platform/auth.js";
 import { createAdminHeaders } from "../platform/test-auth.js";
 
 async function seedWorkspace() {
@@ -20,9 +30,9 @@ async function seedWorkspace() {
   await db
     .insert(userTable)
     .values({
-      id: "user-1",
-      name: "Test User",
-      email: "user-1@example.com",
+      id: "user-channels",
+      name: "Channels User",
+      email: "channels-user@example.com",
       emailVerified: false,
       image: null,
       createdAt: now,
@@ -30,289 +40,829 @@ async function seedWorkspace() {
     })
     .onConflictDoNothing({ target: [userTable.email] });
 
-  const headers = await createAdminHeaders(env, "user-1");
-  const workspace = await createWorkspace(db, env, headers, {
-    name: "Webhook test workspace",
-    slug: `webhook-test-${crypto.randomUUID()}`,
-    key: `W${crypto.randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase()}`,
-    ownerId: "user-1",
+  const setupHeaders = await createAdminHeaders(env, "user-channels");
+  const workspace = await createWorkspace(db, env, setupHeaders, {
+    name: "Support channels test",
+    slug: `support-channels-${crypto.randomUUID()}`,
+    key: `T${crypto.randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase()}`,
+    ownerId: "user-channels",
   });
-  return workspace!.id;
-}
 
-async function post(
-  path: string,
-  body: unknown,
-  headers: Record<string, string>
-) {
-  const raw = JSON.stringify(body);
-  const request = new Request(`https://example.com${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...headers },
-    body: raw,
-  });
-  return app.fetch(request, env);
-}
-
-function intercomNotification(overrides: { topic?: string; id?: string } = {}) {
-  const id = overrides.id ?? crypto.randomUUID();
-  return {
-    type: "notification_event" as const,
-    id,
-    topic: overrides.topic ?? "conversation.user.created",
-    app_id: "test",
-    created_at: Math.floor(Date.now() / 1000),
-    data: {
-      item: {
-        id: `conv-${id}`,
-        title: "Intercom support question",
-        state: "open" as const,
-        priority: "not_priority" as const,
-        source: {
-          type: "conversation",
-          subject: "Need help",
-          body: "<p>I cannot log in.</p>",
-          author: {
-            type: "user" as const,
-            id: "user-1",
-            name: "Customer One",
-            email: "customer1@example.com",
-          },
-        },
-        created_at: Math.floor(Date.now() / 1000),
-        updated_at: Math.floor(Date.now() / 1000),
-      },
+  const auth = createAuth(env);
+  const result = await auth.api.createApiKey({
+    body: {
+      userId: "user-channels",
+      name: "test-admin",
+      rateLimitEnabled: false,
+      metadata: { organizationId: workspace!.id, permissions: "admin" },
     },
-  };
+  });
+  const parsed = z.object({ key: z.string() }).parse(result);
+  return { organizationId: workspace!.id, token: parsed.key };
 }
 
-describe("support channel webhooks", () => {
+describe("support-channels API", () => {
   let organizationId: string;
+  let token: string;
 
   beforeAll(async () => {
-    env.INTERCOM_CLIENT_SECRET = "intercom-secret";
-    env.ZENDESK_WEBHOOK_SECRET = "zendesk-secret";
-    env.PLAIN_WEBHOOK_SECRET = "plain-secret";
-    organizationId = await seedWorkspace();
+    const seeded = await seedWorkspace();
+    organizationId = seeded.organizationId;
+    token = seeded.token;
   });
 
-  it("accepts a valid Intercom webhook and creates a support ticket", async () => {
-    const body = intercomNotification();
-    const raw = JSON.stringify(body);
-    const signature = `sha1=${await hmacSha1Hex(env.INTERCOM_CLIENT_SECRET ?? "", raw)}`;
+  function fetch(path: string, init: RequestInit = {}) {
+    const request = new Request(`https://example.com${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        ...init.headers,
+      },
+    });
+    return app.fetch(request, env);
+  }
 
-    const res = await post(
-      `/support/webhooks/intercom/${organizationId}`,
-      body,
-      { "X-Hub-Signature": signature }
+  it("receives a generic incoming message on an active channel", async () => {
+    const channelRes = await fetch(
+      `/workspaces/${organizationId}/support-channels`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "api",
+          name: "api-inbound",
+        }),
+      }
     );
+    expect(channelRes.status).toBe(201);
+    const { id } = (await channelRes.json()) as { id: string };
 
-    const text = await res.text();
+    const incomingRes = await app.fetch(
+      new Request(`https://example.com/support/incoming/${id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fromEmail: "sender@example.com",
+          fromName: "Sender",
+          subject: "Help",
+          text: "I need help",
+        }),
+      }),
+      env
+    );
+    expect(incomingRes.status).toBe(201);
+    const body = (await incomingRes.json()) as {
+      ok: boolean;
+      ticketId: string;
+      ticketNumber: number;
+    };
+    expect(body.ok).toBe(true);
+    expect(body.ticketNumber).toBeGreaterThan(0);
+
+    const db = createD1(env.D1);
+    const customer = await getCustomerByEmail(
+      db,
+      organizationId,
+      "sender@example.com"
+    );
+    expect(customer).toBeDefined();
+  });
+
+  it("receives a Slack message event and creates a ticket", async () => {
+    Object.assign(env as unknown as Record<string, unknown>, {
+      SLACK_SIGNING_SECRET: "slack-secret",
+    });
+
+    const channelRes = await fetch(
+      `/workspaces/${organizationId}/support-channels`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "slack",
+          name: "C12345",
+        }),
+      }
+    );
+    expect(channelRes.status).toBe(201);
+
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const payload = JSON.stringify({
+      type: "event_callback",
+      event: {
+        type: "message",
+        channel: "C12345",
+        user: "U123",
+        text: "Slack help",
+        ts: "1234567890.123456",
+        user_profile: {
+          email: "slack-user@example.com",
+          name: "Slack User",
+        },
+      },
+    });
+    const signature = `v0=${await hmacSha256Hex(
+      "slack-secret",
+      `v0:${timestamp}:${payload}`
+    )}`;
+
+    const res = await app.fetch(
+      new Request(
+        `https://example.com/support/webhooks/slack/${organizationId}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Slack-Signature": signature,
+            "X-Slack-Request-Timestamp": timestamp,
+          },
+          body: payload,
+        }
+      ),
+      env
+    );
     expect(res.status).toBe(200);
-    const json = JSON.parse(text) as { ok: boolean };
-    expect(json.ok).toBe(true);
+    const body = (await res.json()) as { ok: boolean };
+    expect(body.ok).toBe(true);
 
     const db = createD1(env.D1);
-    const ticket = await db
-      .select()
-      .from(supportTickets)
-      .where(eq(supportTickets.externalId, `conv-${body.id}`))
-      .get();
-    expect(ticket).toBeDefined();
-    expect(ticket?.title).toBe("Intercom support question");
+    const customer = await getCustomerByEmail(
+      db,
+      organizationId,
+      "slack-user@example.com"
+    );
+    expect(customer).toBeDefined();
   });
 
-  it("rejects an Intercom webhook with a missing signature", async () => {
-    const body = intercomNotification();
-    const res = await post(
-      `/support/webhooks/intercom/${organizationId}`,
-      body,
-      {}
-    );
-    expect(res.status).toBe(401);
-  });
+  it("deduplicates a repeated Slack message event", async () => {
+    Object.assign(env as unknown as Record<string, unknown>, {
+      SLACK_SIGNING_SECRET: "slack-secret",
+    });
 
-  it("rejects an Intercom webhook with an invalid signature", async () => {
-    const body = intercomNotification();
-    const res = await post(
-      `/support/webhooks/intercom/${organizationId}`,
-      body,
-      { "X-Hub-Signature": "sha1=0000000000000000000000000000000000000000" }
+    const channelRes = await fetch(
+      `/workspaces/${organizationId}/support-channels`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "slack",
+          name: "C-dupe",
+        }),
+      }
     );
-    expect(res.status).toBe(401);
-  });
+    expect(channelRes.status).toBe(201);
 
-  it("does not duplicate Intercom ticket messages on replay", async () => {
-    const body = intercomNotification();
-    const raw = JSON.stringify(body);
-    const signature = `sha1=${await hmacSha1Hex(env.INTERCOM_CLIENT_SECRET ?? "", raw)}`;
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const payload = JSON.stringify({
+      type: "event_callback",
+      event: {
+        type: "message",
+        channel: "C-dupe",
+        user: "U-dupe",
+        text: "Duplicate me",
+        ts: "1234567890.999999",
+        user_profile: {
+          email: "dupe-slack@example.com",
+          name: "Dupe Slack User",
+        },
+      },
+    });
+    const signature = `v0=${await hmacSha256Hex(
+      "slack-secret",
+      `v0:${timestamp}:${payload}`
+    )}`;
 
-    const first = await post(
-      `/support/webhooks/intercom/${organizationId}`,
-      body,
-      { "X-Hub-Signature": signature }
-    );
-    expect(first.status).toBe(200);
+    const send = () =>
+      app.fetch(
+        new Request(
+          `https://example.com/support/webhooks/slack/${organizationId}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Slack-Signature": signature,
+              "X-Slack-Request-Timestamp": timestamp,
+            },
+            body: payload,
+          }
+        ),
+        env
+      );
 
-    const second = await post(
-      `/support/webhooks/intercom/${organizationId}`,
-      body,
-      { "X-Hub-Signature": signature }
-    );
-    expect(second.status).toBe(200);
+    const res1 = await send();
+    expect(res1.status).toBe(200);
+    const res2 = await send();
+    expect(res2.status).toBe(200);
 
     const db = createD1(env.D1);
-    const ticket = await db
+    const events = await db
       .select()
-      .from(supportTickets)
-      .where(eq(supportTickets.externalId, `conv-${body.id}`))
-      .get();
-    expect(ticket).toBeDefined();
-    const full = await getTicketById(db, organizationId, ticket!.id);
-    const messageEvents =
-      full?.events.filter((event) => event.type === "message") ?? [];
+      .from(supportTicketEvents)
+      .where(eq(supportTicketEvents.type, "message"));
+    const messageEvents = events.filter((e) =>
+      e.metadata?.includes("1234567890.999999")
+    );
     expect(messageEvents.length).toBe(1);
   });
 
-  it("accepts a valid Zendesk webhook and creates a support ticket", async () => {
-    const body = {
-      ticket: {
-        id: 123,
-        subject: "Zendesk help request",
-        description: "<p>My account is broken.</p>",
-        status: "open",
-        priority: "high",
-        requester: {
-          email: "zendesk-customer@example.com",
-          name: "Zendesk Customer",
-        },
-        created_at: "2023-10-27T10:00:00.000Z",
-        updated_at: "2023-10-27T10:00:00.000Z",
-      },
-    };
-    const raw = JSON.stringify(body);
-    const timestamp = "2023-10-27T10:00:00Z";
-    const signature = await hmacSha256Base64(
-      env.ZENDESK_WEBHOOK_SECRET ?? "",
-      timestamp + raw
-    );
-
-    const res = await post(
-      `/support/webhooks/zendesk/${organizationId}`,
-      body,
-      {
-        "X-Zendesk-Webhook-Signature": signature,
-        "X-Zendesk-Webhook-Signature-Timestamp": timestamp,
-      }
-    );
-
-    expect(res.status).toBe(200);
-    const json = (await res.json()) as { ok: boolean };
-    expect(json.ok).toBe(true);
-
-    const db = createD1(env.D1);
-    const ticket = await db
-      .select()
-      .from(supportTickets)
-      .where(eq(supportTickets.externalId, "123"))
-      .get();
-    expect(ticket).toBeDefined();
-    expect(ticket?.title).toBe("Zendesk help request");
-  });
-
-  it("rejects a Zendesk webhook with an invalid signature", async () => {
-    const body = {
-      ticket: {
-        id: 999,
-        subject: "Bad",
-        requester: { email: "a@b.com" },
-      },
-    };
-    const res = await post(
-      `/support/webhooks/zendesk/${organizationId}`,
-      body,
-      {
-        "X-Zendesk-Webhook-Signature": "bad",
-        "X-Zendesk-Webhook-Signature-Timestamp": "2023-10-27T10:00:00Z",
-      }
-    );
-    expect(res.status).toBe(401);
-  });
-
-  it("accepts a valid Plain webhook and creates a support ticket", async () => {
-    const body = {
-      id: crypto.randomUUID(),
-      type: "thread.thread_created",
-      timestamp: "2023-10-27T10:00:00.000Z",
-      workspaceId: "workspace_123",
-      payload: {
-        eventType: "thread.thread_created",
-        thread: {
-          id: "thread_123",
-          title: "Plain help request",
-          previewText: "I need help with my account.",
-          status: "TODO",
-          priority: "MEDIUM",
-          customer: {
-            id: "customer_123",
-            email: { email: "plain-customer@example.com", isVerified: true },
-            fullName: "Plain Customer",
-          },
-          createdAt: "2023-10-27T10:00:00.000Z",
-          updatedAt: "2023-10-27T10:00:00.000Z",
-        },
-      },
-      webhookMetadata: {},
-    };
-    const raw = JSON.stringify(body);
-    const signature = await hmacSha256Hex(env.PLAIN_WEBHOOK_SECRET ?? "", raw);
-
-    const res = await post(`/support/webhooks/plain/${organizationId}`, body, {
-      "Plain-Request-Signature": signature,
+  it("deduplicates a repeated Intercom conversation webhook", async () => {
+    const secret = "test-intercom-client-secret";
+    Object.assign(env as unknown as Record<string, unknown>, {
+      INTERCOM_CLIENT_SECRET: secret,
     });
 
-    expect(res.status).toBe(200);
-    const json = (await res.json()) as { ok: boolean };
-    expect(json.ok).toBe(true);
+    const conversationId = `conv-${crypto.randomUUID()}`;
+    const deliveryId1 = `intercom-delivery-${crypto.randomUUID()}`;
+    const deliveryId2 = `intercom-delivery-${crypto.randomUUID()}`;
+    const createdAtSeconds = Math.floor(Date.now() / 1000);
+
+    const makePayload = (deliveryId: string) =>
+      JSON.stringify({
+        type: "notification_event",
+        id: deliveryId,
+        topic: "conversation.user.created",
+        app_id: "test-app",
+        created_at: createdAtSeconds,
+        data: {
+          item: {
+            id: conversationId,
+            title: "Intercom dedup",
+            state: "open",
+            priority: "not_priority",
+            source: {
+              body: "<p>Hello from Intercom</p>",
+              author: {
+                type: "user",
+                id: "intercom-user-1",
+                name: "Intercom User",
+                email: "intercom-dedup@example.com",
+              },
+            },
+            created_at: createdAtSeconds,
+            updated_at: createdAtSeconds,
+          },
+        },
+      });
+
+    const send = async (deliveryId: string) => {
+      const payload = makePayload(deliveryId);
+      const signature = `sha1=${await hmacSha1Hex(secret, payload)}`;
+      return app.fetch(
+        new Request(
+          `https://example.com/support/webhooks/intercom/${organizationId}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Hub-Signature": signature,
+            },
+            body: payload,
+          }
+        ),
+        env
+      );
+    };
+
+    const res1 = await send(deliveryId1);
+    expect(res1.status).toBe(200);
+    const res2 = await send(deliveryId2);
+    expect(res2.status).toBe(200);
 
     const db = createD1(env.D1);
-    const ticket = await db
+    const events = await db
       .select()
-      .from(supportTickets)
-      .where(eq(supportTickets.externalId, "thread_123"))
-      .get();
-    expect(ticket).toBeDefined();
-    expect(ticket?.title).toBe("Plain help request");
+      .from(supportTicketEvents)
+      .where(eq(supportTicketEvents.externalId, conversationId));
+    expect(events.length).toBe(1);
   });
 
-  it("rejects a Plain webhook with an invalid signature", async () => {
-    const body = {
-      id: crypto.randomUUID(),
-      type: "thread.thread_created",
-      timestamp: "2023-10-27T10:00:00.000Z",
-      workspaceId: "workspace_123",
-      payload: {
-        eventType: "thread.thread_created",
-        thread: {
-          id: "thread_999",
-          title: "Bad",
-          status: "TODO",
-          priority: "MEDIUM",
-          customer: {
-            id: "c",
-            email: { email: "a@b.com", isVerified: true },
-            fullName: "X",
-          },
-          createdAt: "2023-10-27T10:00:00.000Z",
-          updatedAt: "2023-10-27T10:00:00.000Z",
+  it("sends an outbound message through an email channel", async () => {
+    const channelRes = await fetch(
+      `/workspaces/${organizationId}/support-channels`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "email",
+          name: "support@example.com",
+          config: { emailAddress: "support@example.com" },
+        }),
+      }
+    );
+    expect(channelRes.status).toBe(201);
+    const { id: channelId } = (await channelRes.json()) as { id: string };
+
+    const db = createD1(env.D1);
+    const customer = await createCustomer(db, {
+      organizationId,
+      email: "help-me@example.com",
+    });
+    const ticket = await createTicket(
+      db,
+      {
+        organizationId,
+        customerId: customer.id,
+        title: "Need help",
+        sourceChannel: "email",
+      },
+      env
+    );
+
+    Object.assign(env as unknown as Record<string, unknown>, {
+      EMAIL: {
+        send: async () => undefined,
+      },
+    });
+
+    const sendRes = await fetch(
+      `/workspaces/${organizationId}/support/channels/${channelId}/send`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          ticketId: ticket.id,
+          textContent: "Here is the answer.",
+          subject: "Re: Need help",
+        }),
+      }
+    );
+    expect(sendRes.status).toBe(200);
+    const sendBody = (await sendRes.json()) as {
+      ok: boolean;
+      messageId: string;
+      sent: boolean;
+    };
+    expect(sendBody.ok).toBe(true);
+    expect(sendBody.sent).toBe(true);
+    expect(sendBody.messageId).toBeDefined();
+  });
+
+  it("deduplicates an outbound send by idempotencyKey", async () => {
+    const db = createD1(env.D1);
+    const customer = await createCustomer(db, {
+      organizationId,
+      email: "idempotent@example.com",
+    });
+    const ticket = await createTicket(db, {
+      organizationId,
+      customerId: customer.id,
+      title: "Idempotent send",
+      sourceChannel: "email",
+    });
+
+    const channelId = crypto.randomUUID();
+    const channelNow = new Date();
+    await db.insert(supportChannels).values({
+      id: channelId,
+      organizationId,
+      type: "email",
+      name: "idempotent-support@example.com",
+      isActive: true,
+      config: "{}",
+      createdAt: channelNow.toISOString(),
+      updatedAt: channelNow.toISOString(),
+    });
+
+    let sends = 0;
+    Object.assign(env as unknown as Record<string, unknown>, {
+      EMAIL: {
+        send: async () => {
+          sends++;
+          return undefined;
         },
       },
-      webhookMetadata: {},
-    };
-    const res = await post(`/support/webhooks/plain/${organizationId}`, body, {
-      "Plain-Request-Signature":
-        "0000000000000000000000000000000000000000000000000000000000000000",
     });
-    expect(res.status).toBe(401);
+
+    const key = `idempotency-${crypto.randomUUID()}`;
+    const sendOnce = await fetch(
+      `/workspaces/${organizationId}/support/channels/${channelId}/send`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          ticketId: ticket.id,
+          textContent: "Here is the answer.",
+          subject: "Re: Need help",
+          idempotencyKey: key,
+        }),
+      }
+    );
+    expect(sendOnce.status).toBe(200);
+    const bodyOnce = (await sendOnce.json()) as {
+      ok: boolean;
+      messageId: string;
+      sent: boolean;
+    };
+    expect(bodyOnce.sent).toBe(true);
+
+    const sendAgain = await fetch(
+      `/workspaces/${organizationId}/support/channels/${channelId}/send`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          ticketId: ticket.id,
+          textContent: "Here is the answer.",
+          subject: "Re: Need help",
+          idempotencyKey: key,
+        }),
+      }
+    );
+    expect(sendAgain.status).toBe(200);
+    const bodyAgain = (await sendAgain.json()) as {
+      ok: boolean;
+      messageId: string;
+      sent: boolean;
+    };
+    expect(bodyAgain.messageId).toBe(bodyOnce.messageId);
+    expect(bodyAgain.sent).toBe(true);
+    expect(sends).toBe(1);
+  });
+
+  it("attempts to send an outbound message through a Slack channel", async () => {
+    const channelRes = await fetch(
+      `/workspaces/${organizationId}/support-channels`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "slack",
+          name: "C123",
+          config: { botToken: "xoxb-fake", channelId: "C123" },
+        }),
+      }
+    );
+    expect(channelRes.status).toBe(201);
+    const { id: channelId } = (await channelRes.json()) as { id: string };
+
+    const db = createD1(env.D1);
+    const customer = await createCustomer(db, {
+      organizationId,
+      email: "slack-outbound@example.com",
+    });
+    const ticket = await createTicket(
+      db,
+      {
+        organizationId,
+        customerId: customer.id,
+        title: "Slack help",
+        sourceChannel: "slack",
+      },
+      env
+    );
+
+    const sendRes = await fetch(
+      `/workspaces/${organizationId}/support/channels/${channelId}/send`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          ticketId: ticket.id,
+          textContent: "Answer on Slack.",
+        }),
+      }
+    );
+    expect(sendRes.status).toBe(200);
+    const sendBody = (await sendRes.json()) as {
+      ok: boolean;
+      messageId: string;
+      sent: boolean;
+    };
+    expect(sendBody.ok).toBe(true);
+    expect(sendBody.messageId).toBeDefined();
+  });
+
+  it("attempts to send an outbound message through an Intercom channel", async () => {
+    const channelRes = await fetch(
+      `/workspaces/${organizationId}/support-channels`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "intercom",
+          name: "intercom",
+          config: { accessToken: "fake-token", adminId: "admin-123" },
+        }),
+      }
+    );
+    expect(channelRes.status).toBe(201);
+    const { id: channelId } = (await channelRes.json()) as { id: string };
+
+    const db = createD1(env.D1);
+    const customer = await createCustomer(db, {
+      organizationId,
+      email: "intercom-outbound@example.com",
+    });
+    const ticket = await createTicket(
+      db,
+      {
+        organizationId,
+        customerId: customer.id,
+        title: "Intercom help",
+        sourceChannel: "intercom",
+        externalId: "conv-123",
+        externalSource: "intercom",
+      },
+      env
+    );
+
+    const sendRes = await fetch(
+      `/workspaces/${organizationId}/support/channels/${channelId}/send`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          ticketId: ticket.id,
+          textContent: "Answer on Intercom.",
+        }),
+      }
+    );
+    expect(sendRes.status).toBe(200);
+    const sendBody = (await sendRes.json()) as {
+      ok: boolean;
+      messageId: string;
+      sent: boolean;
+    };
+    expect(sendBody.ok).toBe(true);
+    expect(sendBody.messageId).toBeDefined();
+  });
+
+  it("attempts to send an outbound message through a Zendesk channel", async () => {
+    const channelRes = await fetch(
+      `/workspaces/${organizationId}/support-channels`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "zendesk",
+          name: "zendesk",
+          config: {
+            subdomain: "vortex-test",
+            accessToken: "fake-token",
+            email: "agent@example.com",
+          },
+        }),
+      }
+    );
+    expect(channelRes.status).toBe(201);
+    const { id: channelId } = (await channelRes.json()) as { id: string };
+
+    const db = createD1(env.D1);
+    const customer = await createCustomer(db, {
+      organizationId,
+      email: "zendesk-outbound@example.com",
+    });
+    const ticket = await createTicket(
+      db,
+      {
+        organizationId,
+        customerId: customer.id,
+        title: "Zendesk help",
+        sourceChannel: "zendesk",
+        externalId: "987654321",
+        externalSource: "zendesk",
+      },
+      env
+    );
+
+    const sendRes = await fetch(
+      `/workspaces/${organizationId}/support/channels/${channelId}/send`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          ticketId: ticket.id,
+          textContent: "Answer on Zendesk.",
+        }),
+      }
+    );
+    expect(sendRes.status).toBe(200);
+    const sendBody = (await sendRes.json()) as {
+      ok: boolean;
+      messageId: string;
+      sent: boolean;
+    };
+    expect(sendBody.ok).toBe(true);
+    expect(sendBody.messageId).toBeDefined();
+  });
+
+  it("attempts to send an outbound message through a Plain channel", async () => {
+    const channelRes = await fetch(
+      `/workspaces/${organizationId}/support-channels`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "plain",
+          name: "plain",
+          config: { accessToken: "fake-token" },
+        }),
+      }
+    );
+    expect(channelRes.status).toBe(201);
+    const { id: channelId } = (await channelRes.json()) as { id: string };
+
+    const db = createD1(env.D1);
+    const customer = await createCustomer(db, {
+      organizationId,
+      email: "plain-outbound@example.com",
+    });
+    const ticket = await createTicket(
+      db,
+      {
+        organizationId,
+        customerId: customer.id,
+        title: "Plain help",
+        sourceChannel: "plain",
+        externalId: "thread-123",
+        externalSource: "plain",
+      },
+      env
+    );
+
+    const sendRes = await fetch(
+      `/workspaces/${organizationId}/support/channels/${channelId}/send`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          ticketId: ticket.id,
+          textContent: "Answer on Plain.",
+          markdownContent: "**Answer** on Plain.",
+        }),
+      }
+    );
+    expect(sendRes.status).toBe(200);
+    const sendBody = (await sendRes.json()) as {
+      ok: boolean;
+      messageId: string;
+      sent: boolean;
+    };
+    expect(sendBody.ok).toBe(true);
+    expect(sendBody.messageId).toBeDefined();
+  });
+
+  it("validates an API channel without remote checks", async () => {
+    const channelRes = await fetch(
+      `/workspaces/${organizationId}/support-channels`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "api",
+          name: "api-channel",
+          config: {},
+        }),
+      }
+    );
+    expect(channelRes.status).toBe(201);
+    const { id: channelId } = (await channelRes.json()) as { id: string };
+
+    const res = await fetch(
+      `/workspaces/${organizationId}/support/channels/${channelId}/validate`,
+      {
+        method: "POST",
+      }
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; message?: string };
+    expect(body.ok).toBe(true);
+  });
+
+  it("fails validation for an email channel when binding is missing", async () => {
+    const channelRes = await fetch(
+      `/workspaces/${organizationId}/support-channels`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "email",
+          name: "validate@example.com",
+          config: { emailAddress: "validate@example.com" },
+        }),
+      }
+    );
+    expect(channelRes.status).toBe(201);
+    const { id: channelId } = (await channelRes.json()) as { id: string };
+
+    Object.assign(env as unknown as Record<string, unknown>, {
+      EMAIL: undefined,
+    });
+
+    const res = await fetch(
+      `/workspaces/${organizationId}/support/channels/${channelId}/validate`,
+      {
+        method: "POST",
+      }
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; message?: string };
+    expect(body.ok).toBe(false);
+  });
+
+  it("deduplicates a Plain thread_created replay with a fresh webhook id", async () => {
+    const secret = "test-plain-secret";
+    Object.assign(env as unknown as Record<string, unknown>, {
+      PLAIN_WEBHOOK_SECRET: secret,
+    });
+
+    const threadId = `plain-thread-${crypto.randomUUID()}`;
+    const customerEmail = `plain-dedup-${crypto.randomUUID()}@example.com`;
+    const makePayload = (webhookId: string) =>
+      JSON.stringify({
+        id: webhookId,
+        type: "webhook_event",
+        timestamp: new Date().toISOString(),
+        workspaceId: "plain-workspace",
+        webhookMetadata: {},
+        payload: {
+          eventType: "thread.thread_created",
+          thread: {
+            id: threadId,
+            title: "Plain dedup",
+            previewText: "Initial Plain message",
+            status: "TODO",
+            customer: {
+              id: `customer-${crypto.randomUUID()}`,
+              email: { email: customerEmail, isVerified: true },
+              fullName: "Plain User",
+            },
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        },
+      });
+
+    const send = async (webhookId: string) => {
+      const payload = makePayload(webhookId);
+      const signature = await hmacSha256Hex(secret, payload);
+      return app.fetch(
+        new Request(
+          `https://example.com/support/webhooks/plain/${organizationId}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Plain-Request-Signature": signature,
+            },
+            body: payload,
+          }
+        ),
+        env
+      );
+    };
+
+    const res1 = await send(`plain-wh-${crypto.randomUUID()}`);
+    expect(res1.status).toBe(200);
+    const res2 = await send(`plain-wh-${crypto.randomUUID()}`);
+    expect(res2.status).toBe(200);
+
+    const db = createD1(env.D1);
+    const events = await db
+      .select()
+      .from(supportTicketEvents)
+      .where(eq(supportTicketEvents.externalId, threadId));
+    expect(events.length).toBe(1);
+  });
+
+  it("deduplicates a Zendesk ticket create replay with a fresh delivery hash", async () => {
+    const secret = "test-zendesk-secret";
+    Object.assign(env as unknown as Record<string, unknown>, {
+      ZENDESK_WEBHOOK_SECRET: secret,
+    });
+
+    const ticketId = `zendesk-ticket-${crypto.randomUUID()}`;
+    const customerEmail = `zendesk-dedup-${crypto.randomUUID()}@example.com`;
+    const makePayload = () =>
+      JSON.stringify({
+        ticket: {
+          id: ticketId,
+          subject: "Zendesk dedup",
+          description: "Initial Zendesk message",
+          status: "new",
+          requester: { email: customerEmail, name: "Zendesk User" },
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      });
+
+    const send = async (timestamp: string) => {
+      const payload = makePayload();
+      const signature = await hmacSha256Base64(
+        secret,
+        `${timestamp}${payload}`
+      );
+      return app.fetch(
+        new Request(
+          `https://example.com/support/webhooks/zendesk/${organizationId}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Zendesk-Webhook-Signature": signature,
+              "X-Zendesk-Webhook-Signature-Timestamp": timestamp,
+            },
+            body: payload,
+          }
+        ),
+        env
+      );
+    };
+
+    const res1 = await send(Date.now().toString());
+    expect(res1.status).toBe(200);
+    const res2 = await send((Date.now() + 1).toString());
+    expect(res2.status).toBe(200);
+
+    const db = createD1(env.D1);
+    const events = await db
+      .select()
+      .from(supportTicketEvents)
+      .where(eq(supportTicketEvents.externalId, ticketId));
+    expect(events.length).toBe(1);
   });
 });

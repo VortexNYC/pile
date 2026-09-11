@@ -1,3 +1,5 @@
+import { ZodError } from "zod";
+
 export const ERROR_CATALOG = {
   BAD_REQUEST: { status: 400, message: "Invalid request" },
   UNAUTHORIZED: { status: 401, message: "Unauthorized" },
@@ -56,15 +58,24 @@ export class VortexError extends Error {
 }
 
 export function toErrorResponse(error: unknown): Response {
-  const vortex =
-    error instanceof VortexError
-      ? error
-      : new VortexError({
-          code: "INTERNAL_ERROR",
-          status: 500,
-          message: "Internal error",
-          hint: error instanceof Error ? error.message : undefined,
-        });
+  let vortex: VortexError;
+  if (error instanceof VortexError) {
+    vortex = error;
+  } else if (error instanceof ZodError) {
+    vortex = new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Invalid request",
+      hint: error.message,
+    });
+  } else {
+    vortex = new VortexError({
+      code: "INTERNAL_ERROR",
+      status: 500,
+      message: "Internal error",
+      hint: error instanceof Error ? error.message : undefined,
+    });
+  }
 
   return new Response(vortex.toBody(), {
     status: vortex.status,

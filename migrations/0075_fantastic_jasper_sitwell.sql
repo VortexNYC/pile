@@ -1,0 +1,1 @@
+ALTER TABLE `support_capture_public_keys` ADD `webhook_secret` text;

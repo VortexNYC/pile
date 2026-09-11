@@ -10,21 +10,3 @@ export function findWebhookDelivery(db: D1Client, deliveryId: string) {
     .where(eq(webhookDeliveries.deliveryId, deliveryId))
     .get();
 }
-
-export async function recordWebhookDelivery(
-  db: D1Client,
-  deliveryId: string,
-  source: string,
-  event: string,
-  organizationId?: string
-): Promise<void> {
-  await db
-    .insert(webhookDeliveries)
-    .values({
-      deliveryId,
-      source,
-      event,
-      organizationId: organizationId ?? null,
-    })
-    .onConflictDoNothing();
-}
