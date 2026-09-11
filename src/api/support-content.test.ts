@@ -2,6 +2,7 @@ import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { getWorkspaceStub } from "../api/stub.js";
 import { createD1 } from "../global/db.js";
 import { user as userTable } from "../global/schema.js";
 import { createCustomer } from "../global/support-contacts.js";
@@ -262,6 +263,77 @@ describe("support-content API", () => {
         e.message?.textContent === "Thanks for reaching out."
     );
     expect(autoReplied).toHaveLength(2);
+  });
+
+  it("triggers out_of_hours autoresponder outside business hours", async () => {
+    const db = createD1(env.D1);
+    const stub = getWorkspaceStub(env, organizationId);
+    await stub.createTimeSchedule(
+      { name: "closed", timeData: '{"weekdays":[]}' },
+      "user-content"
+    );
+
+    const customer = await createCustomer(db, {
+      organizationId,
+      email: "oohs@example.com",
+      fullName: "Out of hours",
+    });
+
+    const snippetRes = await fetch(
+      `/workspaces/${organizationId}/support/snippets`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "after-hours",
+          textContent: "We are closed right now.",
+        }),
+      }
+    );
+    expect(snippetRes.status).toBe(201);
+    const { snippet } = (await snippetRes.json()) as {
+      snippet: { id: string };
+    };
+
+    await fetch(`/workspaces/${organizationId}/support/autoresponders`, {
+      method: "POST",
+      body: JSON.stringify({
+        name: "out of hours reply",
+        trigger: "out_of_hours",
+        order: 1,
+        snippetId: snippet.id,
+      }),
+    });
+
+    const ticket = await createTicket(
+      db,
+      {
+        organizationId,
+        customerId: customer.id,
+        title: "Help after hours",
+        sourceChannel: "email",
+      },
+      env
+    );
+    await addTicketMessage(
+      db,
+      organizationId,
+      ticket.id,
+      {
+        direction: "inbound",
+        textContent: "Hello?",
+        channel: "email",
+        customerId: customer.id,
+      },
+      env
+    );
+
+    const full = await getTicketById(db, organizationId, ticket.id);
+    const auto = full?.events.filter(
+      (e) =>
+        e.actorType === "automation" &&
+        e.message?.textContent === "We are closed right now."
+    );
+    expect(auto).toHaveLength(1);
   });
 
   it("creates and lists support autoresponders", async () => {

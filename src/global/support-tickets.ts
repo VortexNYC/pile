@@ -986,6 +986,7 @@ export async function addTicketMessage(
       ticketId,
       "customer_replied"
     );
+    await runAutoresponders(db, env, organizationId, ticketId, "out_of_hours");
   }
 
   if (env) {
@@ -1040,6 +1041,13 @@ export async function runAutoresponders(
     );
 
   if (!ticket) return;
+
+  if (
+    trigger === "out_of_hours" &&
+    !(await isOutOfHours(env, organizationId))
+  ) {
+    return;
+  }
 
   const autoresponders = await listSupportAutoresponders(db, organizationId);
 
@@ -1911,4 +1919,63 @@ export async function createTicketFromZendesk(
     });
   }
   return full;
+}
+
+type TimeScheduleData = {
+  weekdays?: number[];
+  start?: string;
+  end?: string;
+};
+
+async function isOutOfHours(
+  env: WorkerEnv | undefined,
+  organizationId: string
+): Promise<boolean> {
+  if (!env) return false;
+
+  const stub = getWorkspaceStub(env, organizationId);
+  const schedules = await stub.listTimeSchedules();
+  if (schedules.length === 0) return true;
+
+  const now = new Date();
+  for (const schedule of schedules as unknown as {
+    timeData: string | null;
+  }[]) {
+    if (isWithinBusinessHours(schedule.timeData, now)) return false;
+  }
+  return true;
+}
+
+function parseMinutes(s: string): number | null {
+  const [h, m] = s.split(":").map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
+  return h * 60 + m;
+}
+
+function isWithinBusinessHours(timeData: string | null, now: Date): boolean {
+  if (!timeData) return true;
+
+  try {
+    const data = JSON.parse(timeData) as unknown;
+    if (!data || typeof data !== "object" || Array.isArray(data)) return true;
+    const { weekdays, start, end } = data as TimeScheduleData;
+
+    const day = now.getUTCDay();
+    if (Array.isArray(weekdays) && !weekdays.includes(day)) return false;
+
+    const minutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+
+    if (start) {
+      const startMinutes = parseMinutes(start);
+      if (startMinutes !== null && minutes < startMinutes) return false;
+    }
+    if (end) {
+      const endMinutes = parseMinutes(end);
+      if (endMinutes !== null && minutes >= endMinutes) return false;
+    }
+
+    return true;
+  } catch {
+    return true;
+  }
 }
