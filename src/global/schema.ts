@@ -2063,6 +2063,7 @@ export const supportTickets = sqliteTable(
       ] as const,
     }).notNull(),
     issueId: text("issue_id" as string),
+    snoozedUntil: text("snoozed_until" as string),
     lastCustomerMessageAt: text("last_customer_message_at" as string),
     lastAgentMessageAt: text("last_agent_message_at" as string),
     createdAt: text("created_at" as string)

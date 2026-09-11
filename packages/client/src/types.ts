@@ -11770,6 +11770,7 @@ export interface paths {
                                 /** @enum {string} */
                                 sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain" | "linear";
                                 issueId: string | null;
+                                snoozedUntil: string | null;
                                 lastCustomerMessageAt: string | null;
                                 lastAgentMessageAt: string | null;
                                 createdAt: string;
@@ -11911,6 +11912,7 @@ export interface paths {
                                 /** @enum {string} */
                                 sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain" | "linear";
                                 issueId: string | null;
+                                snoozedUntil: string | null;
                                 lastCustomerMessageAt: string | null;
                                 lastAgentMessageAt: string | null;
                                 createdAt: string;
@@ -12029,6 +12031,7 @@ export interface paths {
                                 /** @enum {string} */
                                 sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain" | "linear";
                                 issueId: string | null;
+                                snoozedUntil: string | null;
                                 lastCustomerMessageAt: string | null;
                                 lastAgentMessageAt: string | null;
                                 createdAt: string;
@@ -12123,6 +12126,8 @@ export interface paths {
                         status?: "todo" | "done" | "snoozed";
                         /** @enum {string} */
                         priority?: "low" | "medium" | "high" | "urgent";
+                        /** Format: date-time */
+                        snoozedUntil?: string | null;
                         issueId?: string | null;
                         /** @enum {string} */
                         actorType?: "customer" | "user" | "agent" | "automation";
@@ -12153,6 +12158,7 @@ export interface paths {
                                 /** @enum {string} */
                                 sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain" | "linear";
                                 issueId: string | null;
+                                snoozedUntil: string | null;
                                 lastCustomerMessageAt: string | null;
                                 lastAgentMessageAt: string | null;
                                 createdAt: string;
@@ -12508,6 +12514,7 @@ export interface paths {
                                 /** @enum {string} */
                                 sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain" | "linear";
                                 issueId: string | null;
+                                snoozedUntil: string | null;
                                 lastCustomerMessageAt: string | null;
                                 lastAgentMessageAt: string | null;
                                 createdAt: string;
@@ -12628,6 +12635,7 @@ export interface paths {
                                 /** @enum {string} */
                                 sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain" | "linear";
                                 issueId: string | null;
+                                snoozedUntil: string | null;
                                 lastCustomerMessageAt: string | null;
                                 lastAgentMessageAt: string | null;
                                 createdAt: string;
@@ -12727,6 +12735,7 @@ export interface paths {
             requestBody?: {
                 content: {
                     "application/json": {
+                        /** Format: date-time */
                         until: string;
                         /** @enum {string} */
                         actorType?: "customer" | "user" | "agent" | "automation";
@@ -12757,6 +12766,7 @@ export interface paths {
                                 /** @enum {string} */
                                 sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain" | "linear";
                                 issueId: string | null;
+                                snoozedUntil: string | null;
                                 lastCustomerMessageAt: string | null;
                                 lastAgentMessageAt: string | null;
                                 createdAt: string;
@@ -12892,6 +12902,7 @@ export interface paths {
                                 /** @enum {string} */
                                 sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain" | "linear";
                                 issueId: string | null;
+                                snoozedUntil: string | null;
                                 lastCustomerMessageAt: string | null;
                                 lastAgentMessageAt: string | null;
                                 createdAt: string;
@@ -13018,6 +13029,7 @@ export interface paths {
                                 /** @enum {string} */
                                 sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain" | "linear";
                                 issueId: string | null;
+                                snoozedUntil: string | null;
                                 lastCustomerMessageAt: string | null;
                                 lastAgentMessageAt: string | null;
                                 createdAt: string;

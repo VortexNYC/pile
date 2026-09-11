@@ -157,6 +157,7 @@ export const supportTicketSchema = z.object({
   priority: supportTicketPriorityEnum,
   sourceChannel: supportTicketChannelEnum,
   issueId: z.string().nullable(),
+  snoozedUntil: z.string().nullable(),
   lastCustomerMessageAt: z.string().nullable(),
   lastAgentMessageAt: z.string().nullable(),
   createdAt: z.string(),
@@ -191,6 +192,7 @@ const updateTicketBodySchema = z.object({
   title: z.string().min(1).optional(),
   status: supportTicketStatusEnum.optional(),
   priority: supportTicketPriorityEnum.optional(),
+  snoozedUntil: z.string().datetime().nullable().optional(),
   issueId: z.string().nullable().optional(),
   actorType: supportTicketActorTypeEnum.optional(),
   actorId: z.string().nullable().optional(),
@@ -236,7 +238,7 @@ const listEventsQuerySchema = z.object({
 });
 
 const snoozeBodySchema = z.object({
-  until: z.string(),
+  until: z.string().datetime(),
   actorType: supportTicketActorTypeEnum.optional(),
   actorId: z.string().nullable().optional(),
 });
@@ -794,6 +796,14 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(snoozeRoute, async (c) => {
     const { organizationId, ticketId } = c.req.valid("param");
     const body = c.req.valid("json");
+    const until = new Date(body.until);
+    if (Number.isNaN(until.getTime()) || until.getTime() <= Date.now()) {
+      throw new VortexError({
+        status: 400,
+        code: "BAD_REQUEST",
+        message: "Snooze until must be a future date",
+      });
+    }
     const identity = c.get("workspaceIdentity");
     const { actorType, actorId } = resolveActor(identity, body);
     const db = createD1(c.env.D1);
@@ -803,6 +813,7 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
       ticketId,
       {
         status: "snoozed",
+        snoozedUntil: body.until,
         actorType,
         actorId,
       },

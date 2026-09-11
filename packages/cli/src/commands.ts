@@ -5262,6 +5262,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "priority",
       },
       {
+        name: "snoozedUntil",
+        flag: "snoozed-until",
+      },
+      {
         name: "issueId",
         flag: "issue",
       },

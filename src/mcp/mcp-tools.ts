@@ -6132,6 +6132,11 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "urgent"
               ]
             },
+            "snoozedUntil": {
+              "type": "string",
+              "nullable": true,
+              "format": "date-time"
+            },
             "issueId": {
               "type": "string",
               "nullable": true
@@ -11832,7 +11837,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "type": "object",
           "properties": {
             "until": {
-              "type": "string"
+              "type": "string",
+              "format": "date-time"
             },
             "actorType": {
               "type": "string",

@@ -22541,6 +22541,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "snoozedUntil": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "lastCustomerMessageAt": {
                           "type": "string",
                           "nullable": true
@@ -22843,6 +22847,7 @@
                         "priority",
                         "sourceChannel",
                         "issueId",
+                        "snoozedUntil",
                         "lastCustomerMessageAt",
                         "lastAgentMessageAt",
                         "createdAt",
@@ -23060,6 +23065,10 @@
                             ]
                           },
                           "issueId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "snoozedUntil": {
                             "type": "string",
                             "nullable": true
                           },
@@ -23365,6 +23374,7 @@
                           "priority",
                           "sourceChannel",
                           "issueId",
+                          "snoozedUntil",
                           "lastCustomerMessageAt",
                           "lastAgentMessageAt",
                           "createdAt",
@@ -23488,6 +23498,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "snoozedUntil": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "lastCustomerMessageAt": {
                           "type": "string",
                           "nullable": true
@@ -23790,6 +23804,7 @@
                         "priority",
                         "sourceChannel",
                         "issueId",
+                        "snoozedUntil",
                         "lastCustomerMessageAt",
                         "lastAgentMessageAt",
                         "createdAt",
@@ -23861,6 +23876,11 @@
                       "high",
                       "urgent"
                     ]
+                  },
+                  "snoozedUntil": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "date-time"
                   },
                   "issueId": {
                     "type": "string",
@@ -23954,6 +23974,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "snoozedUntil": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "lastCustomerMessageAt": {
                           "type": "string",
                           "nullable": true
@@ -24256,6 +24280,7 @@
                         "priority",
                         "sourceChannel",
                         "issueId",
+                        "snoozedUntil",
                         "lastCustomerMessageAt",
                         "lastAgentMessageAt",
                         "createdAt",
@@ -25006,6 +25031,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "snoozedUntil": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "lastCustomerMessageAt": {
                           "type": "string",
                           "nullable": true
@@ -25308,6 +25337,7 @@
                         "priority",
                         "sourceChannel",
                         "issueId",
+                        "snoozedUntil",
                         "lastCustomerMessageAt",
                         "lastAgentMessageAt",
                         "createdAt",
@@ -25425,6 +25455,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "snoozedUntil": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "lastCustomerMessageAt": {
                           "type": "string",
                           "nullable": true
@@ -25727,6 +25761,7 @@
                         "priority",
                         "sourceChannel",
                         "issueId",
+                        "snoozedUntil",
                         "lastCustomerMessageAt",
                         "lastAgentMessageAt",
                         "createdAt",
@@ -25781,7 +25816,8 @@
                 "type": "object",
                 "properties": {
                   "until": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "date-time"
                   },
                   "actorType": {
                     "type": "string",
@@ -25874,6 +25910,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "snoozedUntil": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "lastCustomerMessageAt": {
                           "type": "string",
                           "nullable": true
@@ -26176,6 +26216,7 @@
                         "priority",
                         "sourceChannel",
                         "issueId",
+                        "snoozedUntil",
                         "lastCustomerMessageAt",
                         "lastAgentMessageAt",
                         "createdAt",
@@ -26350,6 +26391,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "snoozedUntil": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "lastCustomerMessageAt": {
                           "type": "string",
                           "nullable": true
@@ -26652,6 +26697,7 @@
                         "priority",
                         "sourceChannel",
                         "issueId",
+                        "snoozedUntil",
                         "lastCustomerMessageAt",
                         "lastAgentMessageAt",
                         "createdAt",
@@ -26789,6 +26835,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "snoozedUntil": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "lastCustomerMessageAt": {
                           "type": "string",
                           "nullable": true
@@ -27091,6 +27141,7 @@
                         "priority",
                         "sourceChannel",
                         "issueId",
+                        "snoozedUntil",
                         "lastCustomerMessageAt",
                         "lastAgentMessageAt",
                         "createdAt",

@@ -32,6 +32,7 @@ import {
   supportTickets,
   team,
   user,
+  member,
 } from "./schema.js";
 import {
   getCustomerById,
@@ -121,6 +122,7 @@ export type SupportTicketInput = {
   sourceChannel: SupportTicketChannel;
   priority?: SupportTicketPriority;
   status?: SupportTicketStatus;
+  snoozedUntil?: string | null;
   externalId?: string | null;
   externalSource?: SupportTicketSource;
   issueId?: string | null;
@@ -140,6 +142,7 @@ export type SupportTicket = {
   priority: SupportTicketPriority;
   sourceChannel: SupportTicketChannel;
   issueId: string | null;
+  snoozedUntil: string | null;
   lastCustomerMessageAt: string | null;
   lastAgentMessageAt: string | null;
   createdAt: string;
@@ -301,6 +304,7 @@ export async function createTicket(
     priority,
     sourceChannel: input.sourceChannel,
     issueId: input.issueId ?? null,
+    snoozedUntil: input.snoozedUntil ?? null,
     lastCustomerMessageAt: null,
     lastAgentMessageAt: null,
     createdAt,
@@ -329,6 +333,7 @@ export async function createTicket(
     priority,
     sourceChannel: input.sourceChannel,
     issueId: input.issueId ?? null,
+    snoozedUntil: input.snoozedUntil ?? null,
     lastCustomerMessageAt: null,
     lastAgentMessageAt: null,
     createdAt,
@@ -678,6 +683,7 @@ export async function updateTicket(
     title?: string;
     status?: SupportTicketStatus;
     priority?: SupportTicketPriority;
+    snoozedUntil?: string | null;
     issueId?: string | null;
     actorType?: SupportTicketActorType;
     actorId?: string | null;
@@ -789,6 +795,21 @@ export async function updateTicket(
     });
   }
 
+  if (
+    input.snoozedUntil !== undefined &&
+    input.snoozedUntil !== existing.snoozedUntil
+  ) {
+    updates.snoozedUntil = input.snoozedUntil;
+  }
+
+  if (
+    input.status !== undefined &&
+    input.status !== "snoozed" &&
+    existing.snoozedUntil !== null
+  ) {
+    updates.snoozedUntil = null;
+  }
+
   await db
     .update(supportTickets)
     .set(updates)
@@ -880,37 +901,87 @@ export async function setTicketAssignees(
 ): Promise<void> {
   await ensureTicket(db, organizationId, ticketId);
 
+  const userIds = new Map<string, boolean>();
+  const teamIds = new Map<string, boolean>();
+  for (const assignee of assignees) {
+    if ("userId" in assignee) {
+      if (!userIds.has(assignee.userId)) {
+        userIds.set(assignee.userId, assignee.isPrimary ?? false);
+      }
+    } else if ("teamId" in assignee) {
+      if (!teamIds.has(assignee.teamId)) {
+        teamIds.set(assignee.teamId, assignee.isPrimary ?? false);
+      }
+    }
+  }
+
+  const userIdList = [...userIds.keys()];
+  const teamIdList = [...teamIds.keys()];
+
+  if (userIdList.length > 0) {
+    const members = await db
+      .select({ userId: member.userId })
+      .from(member)
+      .where(
+        and(
+          eq(member.organizationId, organizationId),
+          inArray(member.userId, userIdList)
+        )
+      );
+    const valid = new Set(members.map((m) => m.userId));
+    const invalid = userIdList.filter((id) => !valid.has(id));
+    if (invalid.length > 0) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: `Invalid assignees: ${invalid.join(", ")}`,
+      });
+    }
+  }
+
+  if (teamIdList.length > 0) {
+    const teams = await db
+      .select({ id: team.id })
+      .from(team)
+      .where(
+        and(
+          eq(team.organizationId, organizationId),
+          inArray(team.id, teamIdList)
+        )
+      );
+    const valid = new Set(teams.map((t) => t.id));
+    const invalid = teamIdList.filter((id) => !valid.has(id));
+    if (invalid.length > 0) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: `Invalid assignees: ${invalid.join(", ")}`,
+      });
+    }
+  }
+
   await db
     .delete(supportTicketAssignments)
     .where(eq(supportTicketAssignments.ticketId, ticketId));
 
-  if (assignees.length === 0) return;
+  if (userIds.size === 0 && teamIds.size === 0) return;
 
-  const rows = assignees.map((assignee) => {
-    if ("userId" in assignee) {
-      return {
-        id: crypto.randomUUID(),
-        ticketId,
-        userId: assignee.userId,
-        teamId: null,
-        isPrimary: assignee.isPrimary ?? false,
-      };
-    }
-    if ("teamId" in assignee) {
-      return {
-        id: crypto.randomUUID(),
-        ticketId,
-        userId: null,
-        teamId: assignee.teamId,
-        isPrimary: assignee.isPrimary ?? false,
-      };
-    }
-    throw new VortexError({
-      code: "UNPROCESSABLE_CONTENT",
-      status: 422,
-      message: "Invalid support ticket assignee",
-    });
-  });
+  const rows = [
+    ...[...userIds.entries()].map(([userId, isPrimary]) => ({
+      id: crypto.randomUUID(),
+      ticketId,
+      userId,
+      teamId: null,
+      isPrimary,
+    })),
+    ...[...teamIds.entries()].map(([teamId, isPrimary]) => ({
+      id: crypto.randomUUID(),
+      ticketId,
+      userId: null,
+      teamId,
+      isPrimary,
+    })),
+  ];
 
   await db.insert(supportTicketAssignments).values(rows);
 }
@@ -923,11 +994,13 @@ export async function setTicketLabels(
 ): Promise<void> {
   await ensureTicket(db, organizationId, ticketId);
 
+  const uniqueLabelIds = [...new Set(labelIds)];
+
   await db
     .delete(supportTicketLabels)
     .where(eq(supportTicketLabels.ticketId, ticketId));
 
-  if (labelIds.length === 0) return;
+  if (uniqueLabelIds.length === 0) return;
 
   const validLabels = await db
     .select({ id: labels.id })
@@ -935,12 +1008,12 @@ export async function setTicketLabels(
     .where(
       and(
         eq(labels.organizationId, organizationId),
-        inArray(labels.id, labelIds)
+        inArray(labels.id, uniqueLabelIds)
       )
     );
 
   const validIds = validLabels.map((label) => label.id);
-  const invalid = labelIds.filter((id) => !validIds.includes(id));
+  const invalid = uniqueLabelIds.filter((id) => !validIds.includes(id));
   if (invalid.length > 0) {
     throw new VortexError({
       code: "BAD_REQUEST",
