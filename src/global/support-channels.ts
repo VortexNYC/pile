@@ -277,3 +277,134 @@ export async function processOutgoingMessage(
 
   return { ok: true, messageId: event.id, sent };
 }
+
+type ValidateChannelResult = {
+  ok: boolean;
+  message?: string;
+};
+
+export async function validateSupportChannel(
+  db: D1Client,
+  env: WorkerEnv,
+  channel: SupportChannel
+): Promise<ValidateChannelResult> {
+  void db;
+
+  const channelConfig: Record<string, unknown> = JSON.parse(channel.config);
+
+  if (channel.type === "email") {
+    if (!env.EMAIL) {
+      return { ok: false, message: "Email binding not configured" };
+    }
+    if (!channel.name.includes("@")) {
+      return {
+        ok: false,
+        message: "Channel name is not a valid email address",
+      };
+    }
+    return { ok: true };
+  }
+
+  if (channel.type === "slack" && typeof channelConfig.botToken === "string") {
+    try {
+      const res = await fetch("https://slack.com/api/auth.test", {
+        headers: {
+          Authorization: `Bearer ${channelConfig.botToken}`,
+        },
+      });
+      const data = (await res.json()) as {
+        ok?: boolean;
+        error?: string;
+      };
+      if (!res.ok || !data.ok) {
+        return {
+          ok: false,
+          message: data.error ?? "Slack auth.test failed",
+        };
+      }
+      return { ok: true };
+    } catch {
+      return { ok: false, message: "Network error" };
+    }
+  }
+
+  if (
+    channel.type === "intercom" &&
+    typeof channelConfig.accessToken === "string"
+  ) {
+    try {
+      const res = await fetch("https://api.intercom.io/me", {
+        headers: {
+          Authorization: `Bearer ${channelConfig.accessToken}`,
+          Accept: "application/json",
+        },
+      });
+      const data = (await res.json()) as { type?: string } | undefined;
+      if (!res.ok || data?.type !== "admin") {
+        return { ok: false, message: "Intercom token invalid" };
+      }
+      return { ok: true };
+    } catch {
+      return { ok: false, message: "Network error" };
+    }
+  }
+
+  if (
+    channel.type === "zendesk" &&
+    typeof channelConfig.subdomain === "string" &&
+    typeof channelConfig.accessToken === "string" &&
+    typeof channelConfig.email === "string"
+  ) {
+    try {
+      const auth = btoa(
+        `${channelConfig.email}/token:${channelConfig.accessToken}`
+      );
+      const res = await fetch(
+        `https://${channelConfig.subdomain}.zendesk.com/api/v2/users/me.json`,
+        {
+          headers: {
+            Authorization: `Basic ${auth}`,
+          },
+        }
+      );
+      if (!res.ok) {
+        return { ok: false, message: "Zendesk credentials invalid" };
+      }
+      return { ok: true };
+    } catch {
+      return { ok: false, message: "Network error" };
+    }
+  }
+
+  if (
+    channel.type === "plain" &&
+    typeof channelConfig.accessToken === "string"
+  ) {
+    try {
+      const res = await fetch("https://api.plain.com/v1/graphql", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${channelConfig.accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          query: "query { workspace { id } }",
+        }),
+      });
+      const data = (await res.json()) as {
+        data?: { workspace?: { id: string } };
+      };
+      if (!res.ok || !data.data?.workspace?.id) {
+        return { ok: false, message: "Plain workspace not reachable" };
+      }
+      return { ok: true };
+    } catch {
+      return { ok: false, message: "Network error" };
+    }
+  }
+
+  return {
+    ok: true,
+    message: "No remote validation configured for this channel type",
+  };
+}

@@ -22,6 +22,7 @@ import { supportChannels } from "../global/schema.js";
 import {
   processIncomingMessage,
   processOutgoingMessage,
+  validateSupportChannel,
 } from "../global/support-channels.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
@@ -480,6 +481,62 @@ export function registerSupportChannelRoutes(app: OpenAPIHono<AppContext>) {
         c.var.workspaceIdentity.id
       );
 
+      return c.json(result, 200);
+    }
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/workspaces/{organizationId}/support/channels/{channelId}/validate",
+      tags: ["support-channels"],
+      summary: "Validate a support channel",
+      middleware: [rls("read")],
+      request: {
+        params: z.object({
+          organizationId: z.string(),
+          channelId: z.string(),
+        }),
+      },
+      responses: {
+        200: {
+          description: "Validation result",
+          content: {
+            "application/json": {
+              schema: z.object({
+                ok: z.boolean(),
+                message: z.string().optional(),
+              }),
+            },
+          },
+        },
+        404: { description: "Channel not found or inactive" },
+      },
+    }),
+    async (c) => {
+      const { organizationId, channelId } = c.req.valid("param");
+      const db = createD1(c.env.D1);
+      const [channel] = await db
+        .select()
+        .from(supportChannels)
+        .where(
+          and(
+            eq(supportChannels.id, channelId),
+            eq(supportChannels.organizationId, organizationId),
+            eq(supportChannels.isActive, true)
+          )
+        )
+        .limit(1);
+
+      if (!channel) {
+        throw new VortexError({
+          code: "NOT_FOUND",
+          status: 404,
+          message: "Channel not found or inactive",
+        });
+      }
+
+      const result = await validateSupportChannel(db, c.env, channel);
       return c.json(result, 200);
     }
   );

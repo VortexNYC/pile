@@ -2628,6 +2628,22 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "support channels validate create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/channels/{channelId}/validate",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "channelId",
+        flag: "channel-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "available users list": {
     method: "GET",
     path: "/workspaces/{organizationId}/available-users",

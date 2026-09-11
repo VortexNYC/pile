@@ -11646,6 +11646,58 @@
         }
       }
     },
+    "/workspaces/{organizationId}/support/channels/{channelId}/validate": {
+      "post": {
+        "tags": [
+          "support-channels"
+        ],
+        "summary": "Validate a support channel",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "channelId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Channel not found or inactive"
+          }
+        }
+      }
+    },
     "/workspaces/{organizationId}/available-users": {
       "get": {
         "tags": [

@@ -455,4 +455,60 @@ describe("support-channels API", () => {
     expect(sendBody.ok).toBe(true);
     expect(sendBody.messageId).toBeDefined();
   });
+
+  it("validates an API channel without remote checks", async () => {
+    const channelRes = await fetch(
+      `/workspaces/${organizationId}/support-channels`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "api",
+          name: "api-channel",
+          config: {},
+        }),
+      }
+    );
+    expect(channelRes.status).toBe(201);
+    const { id: channelId } = (await channelRes.json()) as { id: string };
+
+    const res = await fetch(
+      `/workspaces/${organizationId}/support/channels/${channelId}/validate`,
+      {
+        method: "POST",
+      }
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; message?: string };
+    expect(body.ok).toBe(true);
+  });
+
+  it("fails validation for an email channel when binding is missing", async () => {
+    const channelRes = await fetch(
+      `/workspaces/${organizationId}/support-channels`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "email",
+          name: "validate@example.com",
+          config: { emailAddress: "validate@example.com" },
+        }),
+      }
+    );
+    expect(channelRes.status).toBe(201);
+    const { id: channelId } = (await channelRes.json()) as { id: string };
+
+    Object.assign(env as unknown as Record<string, unknown>, {
+      EMAIL: undefined,
+    });
+
+    const res = await fetch(
+      `/workspaces/${organizationId}/support/channels/${channelId}/validate`,
+      {
+        method: "POST",
+      }
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; message?: string };
+    expect(body.ok).toBe(false);
+  });
 });

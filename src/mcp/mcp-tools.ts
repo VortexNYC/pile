@@ -9599,6 +9599,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdSupportChannelsChannelIdValidate",
+    "description": "Validate a support channel (POST /workspaces/{organizationId}/support/channels/{channelId}/validate)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/channels/{channelId}/validate",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "channelId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "channelId",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdSupportCompanies",
     "description": "Create support company (POST /workspaces/{organizationId}/support/companies)",
     "method": "POST",
