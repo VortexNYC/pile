@@ -2,7 +2,7 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 import { and, eq } from "drizzle-orm";
 
-import { createD1 } from "../global/db.js";
+import { createD1, type D1Client } from "../global/db.js";
 import { supportTicketAttachments, supportTickets } from "../global/schema.js";
 import {
   createCapturePublicKey,
@@ -830,6 +830,57 @@ async function verifySvixSignature({
     if (constantTimeEqual(expected, provided)) return true;
   }
   return false;
+}
+
+async function fetchArtifactJson(
+  bucket: R2Bucket,
+  r2Key: string
+): Promise<unknown> {
+  const object = await bucket.get(r2Key);
+  if (!object || !object.body) {
+    throw new VortexError({
+      status: 404,
+      code: "NOT_FOUND",
+      message: "Artifact not found",
+    });
+  }
+  const text = await object.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+async function findAttachmentFileName(
+  db: D1Client,
+  organizationId: string,
+  ticketId: string,
+  fileName: string
+): Promise<string> {
+  const row = await db
+    .select()
+    .from(supportTicketAttachments)
+    .where(
+      and(
+        eq(supportTicketAttachments.organizationId, organizationId),
+        eq(supportTicketAttachments.ticketId, ticketId),
+        eq(supportTicketAttachments.fileName, fileName)
+      )
+    )
+    .get();
+  if (!row?.r2Key) {
+    throw new VortexError({
+      status: 404,
+      code: "NOT_FOUND",
+      message: `${fileName} not found`,
+    });
+  }
+  return row.r2Key;
 }
 
 export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
@@ -1837,5 +1888,333 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
     });
 
     return c.json({ ticketId: ticket.id });
+  });
+
+  const captureConsoleQuerySchema = z.object({
+    level: z.string().optional(),
+    isError: z.enum(["true", "false"]).optional(),
+  });
+
+  const captureConsoleRoute = createRoute({
+    method: "get",
+    path: "/workspaces/{organizationId}/support/captures/{ticketId}/console",
+    tags: ["support-capture"],
+    middleware: [rls("read")],
+    request: {
+      params: z.object({
+        organizationId: z.string(),
+        ticketId: z.string(),
+      }),
+      query: captureConsoleQuerySchema,
+    },
+    responses: {
+      200: {
+        description: "Console logs",
+        content: {
+          "application/json": {
+            schema: z.object({ events: z.array(z.unknown()) }),
+          },
+        },
+      },
+      404: { description: "Console logs not found" },
+    },
+  });
+
+  const captureNetworkQuerySchema = z.object({
+    isError: z.enum(["true", "false"]).optional(),
+    url: z.string().optional(),
+  });
+
+  const captureNetworkRoute = createRoute({
+    method: "get",
+    path: "/workspaces/{organizationId}/support/captures/{ticketId}/network",
+    tags: ["support-capture"],
+    middleware: [rls("read")],
+    request: {
+      params: z.object({
+        organizationId: z.string(),
+        ticketId: z.string(),
+      }),
+      query: captureNetworkQuerySchema,
+    },
+    responses: {
+      200: {
+        description: "Network requests",
+        content: {
+          "application/json": {
+            schema: z.object({ events: z.array(z.unknown()) }),
+          },
+        },
+      },
+      404: { description: "Network requests not found" },
+    },
+  });
+
+  const captureEventsQuerySchema = z.object({
+    type: z.string().optional(),
+    action: z.string().optional(),
+  });
+
+  const captureEventsRoute = createRoute({
+    method: "get",
+    path: "/workspaces/{organizationId}/support/captures/{ticketId}/events",
+    tags: ["support-capture"],
+    middleware: [rls("read")],
+    request: {
+      params: z.object({
+        organizationId: z.string(),
+        ticketId: z.string(),
+      }),
+      query: captureEventsQuerySchema,
+    },
+    responses: {
+      200: {
+        description: "User events",
+        content: {
+          "application/json": {
+            schema: z.object({ events: z.array(z.unknown()) }),
+          },
+        },
+      },
+      404: { description: "User events not found" },
+    },
+  });
+
+  const captureFramesRoute = createRoute({
+    method: "get",
+    path: "/workspaces/{organizationId}/support/captures/{ticketId}/frames",
+    tags: ["support-capture"],
+    middleware: [rls("read")],
+    request: {
+      params: z.object({
+        organizationId: z.string(),
+        ticketId: z.string(),
+      }),
+    },
+    responses: {
+      200: {
+        description: "Visual frames",
+        content: {
+          "application/json": {
+            schema: z.object({
+              frames: z.array(
+                z.object({
+                  url: z.string().nullable(),
+                  type: z.string(),
+                  fileName: z.string().nullable(),
+                })
+              ),
+            }),
+          },
+        },
+      },
+      404: { description: "Frames not found" },
+    },
+  });
+
+  const captureMetadataRoute = createRoute({
+    method: "get",
+    path: "/workspaces/{organizationId}/support/captures/{ticketId}/metadata",
+    tags: ["support-capture"],
+    middleware: [rls("read")],
+    request: {
+      params: z.object({
+        organizationId: z.string(),
+        ticketId: z.string(),
+      }),
+    },
+    responses: {
+      200: {
+        description: "Capture metadata",
+        content: {
+          "application/json": {
+            schema: z.object({
+              deviceInfo: z.record(z.string(), z.unknown()).nullable(),
+              metadata: z.record(z.string(), z.unknown()).nullable(),
+              eventsSummary: z.record(z.string(), z.unknown()).nullable(),
+              postprocessing: z.record(z.string(), z.unknown()).nullable(),
+            }),
+          },
+        },
+      },
+      404: { description: "Capture not found" },
+    },
+  });
+
+  app.openapi(captureConsoleRoute, async (c) => {
+    const { organizationId, ticketId } = c.req.valid("param");
+    const { level, isError } = c.req.valid("query");
+    const bucket = c.env.ATTACHMENTS_BUCKET;
+    if (!bucket)
+      throw new VortexError({
+        status: 500,
+        code: "CONFIG_ERROR",
+        message: "Attachments bucket not configured",
+      });
+    const db = createD1(c.env.D1);
+    const r2Key = await findAttachmentFileName(
+      db,
+      organizationId,
+      ticketId,
+      "console-logs.json"
+    );
+    const raw = await fetchArtifactJson(bucket, r2Key);
+    let events = Array.isArray(raw) ? raw : [];
+    if (level) {
+      events = events.filter((e) => isRecord(e) && e.console_level === level);
+    }
+    if (isError === "true") {
+      events = events.filter((e) => isRecord(e) && e.is_error === true);
+    }
+    return c.json({ events });
+  });
+
+  app.openapi(captureNetworkRoute, async (c) => {
+    const { organizationId, ticketId } = c.req.valid("param");
+    const { isError, url } = c.req.valid("query");
+    const bucket = c.env.ATTACHMENTS_BUCKET;
+    if (!bucket)
+      throw new VortexError({
+        status: 500,
+        code: "CONFIG_ERROR",
+        message: "Attachments bucket not configured",
+      });
+    const db = createD1(c.env.D1);
+    const r2Key = await findAttachmentFileName(
+      db,
+      organizationId,
+      ticketId,
+      "network-requests.json"
+    );
+    const raw = await fetchArtifactJson(bucket, r2Key);
+    let events = Array.isArray(raw) ? raw : [];
+    if (isError === "true") {
+      events = events.filter((e) => isRecord(e) && e.is_error === true);
+    }
+    if (url) {
+      events = events.filter(
+        (e) =>
+          isRecord(e) &&
+          typeof e.network_url === "string" &&
+          e.network_url.includes(url)
+      );
+    }
+    return c.json({ events });
+  });
+
+  app.openapi(captureEventsRoute, async (c) => {
+    const { organizationId, ticketId } = c.req.valid("param");
+    const { type, action } = c.req.valid("query");
+    const bucket = c.env.ATTACHMENTS_BUCKET;
+    if (!bucket)
+      throw new VortexError({
+        status: 500,
+        code: "CONFIG_ERROR",
+        message: "Attachments bucket not configured",
+      });
+    const db = createD1(c.env.D1);
+    const r2Key = await findAttachmentFileName(
+      db,
+      organizationId,
+      ticketId,
+      "user-events.json"
+    );
+    const raw = await fetchArtifactJson(bucket, r2Key);
+    let events = Array.isArray(raw) ? raw : [];
+    if (type) {
+      events = events.filter((e) => isRecord(e) && e.event_type === type);
+    }
+    if (action) {
+      events = events.filter(
+        (e) => isRecord(e) && e.interactivity_action === action
+      );
+    }
+    return c.json({ events });
+  });
+
+  app.openapi(captureFramesRoute, async (c) => {
+    const { organizationId, ticketId } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const frames = await db
+      .select()
+      .from(supportTicketAttachments)
+      .where(
+        and(
+          eq(supportTicketAttachments.organizationId, organizationId),
+          eq(supportTicketAttachments.ticketId, ticketId),
+          eq(supportTicketAttachments.type, "screenshot")
+        )
+      )
+      .all();
+    const videos = await db
+      .select()
+      .from(supportTicketAttachments)
+      .where(
+        and(
+          eq(supportTicketAttachments.organizationId, organizationId),
+          eq(supportTicketAttachments.ticketId, ticketId),
+          eq(supportTicketAttachments.type, "video")
+        )
+      )
+      .all();
+    return c.json({
+      frames: [...frames, ...videos].map((row) => ({
+        url: row.url,
+        type: row.type,
+        fileName: row.fileName,
+      })),
+    });
+  });
+
+  app.openapi(captureMetadataRoute, async (c) => {
+    const { organizationId, ticketId } = c.req.valid("param");
+    const bucket = c.env.ATTACHMENTS_BUCKET;
+    if (!bucket)
+      throw new VortexError({
+        status: 500,
+        code: "CONFIG_ERROR",
+        message: "Attachments bucket not configured",
+      });
+    const db = createD1(c.env.D1);
+    const rows = await db
+      .select()
+      .from(supportTicketAttachments)
+      .where(
+        and(
+          eq(supportTicketAttachments.organizationId, organizationId),
+          eq(supportTicketAttachments.ticketId, ticketId),
+          eq(supportTicketAttachments.type, "debugger_json")
+        )
+      )
+      .all();
+    const output: {
+      deviceInfo: Record<string, unknown> | null;
+      metadata: Record<string, unknown> | null;
+      eventsSummary: Record<string, unknown> | null;
+      postprocessing: Record<string, unknown> | null;
+    } = {
+      deviceInfo: null,
+      metadata: null,
+      eventsSummary: null,
+      postprocessing: null,
+    };
+    const records = await Promise.all(
+      rows.map(async (row) => {
+        if (!row.r2Key) return null;
+        const data = await fetchArtifactJson(bucket, row.r2Key);
+        return { fileName: row.fileName, data: isRecord(data) ? data : null };
+      })
+    );
+    for (const record of records) {
+      if (!record || !record.data) continue;
+      if (record.fileName === "device-info.json")
+        output.deviceInfo = record.data;
+      if (record.fileName === "metadata.json") output.metadata = record.data;
+      if (record.fileName === "events-summary.json")
+        output.eventsSummary = record.data;
+      if (record.fileName === "postprocessing.json")
+        output.postprocessing = record.data;
+    }
+    return c.json(output);
   });
 }

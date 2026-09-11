@@ -11027,6 +11027,365 @@
         "summary": "Create support webhook jam recording link"
       }
     },
+    "/workspaces/{organizationId}/support/captures/{ticketId}/console": {
+      "get": {
+        "tags": [
+          "support-capture"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "ticketId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "level",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "required": false,
+            "name": "isError",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Console logs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "events"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Console logs not found"
+          }
+        },
+        "summary": "List support capture console"
+      }
+    },
+    "/workspaces/{organizationId}/support/captures/{ticketId}/network": {
+      "get": {
+        "tags": [
+          "support-capture"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "ticketId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "required": false,
+            "name": "isError",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "url",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Network requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "events"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Network requests not found"
+          }
+        },
+        "summary": "List support capture network"
+      }
+    },
+    "/workspaces/{organizationId}/support/captures/{ticketId}/events": {
+      "get": {
+        "tags": [
+          "support-capture"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "ticketId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "type",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "action",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "events"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "User events not found"
+          }
+        },
+        "summary": "List support capture events"
+      }
+    },
+    "/workspaces/{organizationId}/support/captures/{ticketId}/frames": {
+      "get": {
+        "tags": [
+          "support-capture"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "ticketId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Visual frames",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "frames": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "url": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "fileName": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "url",
+                          "type",
+                          "fileName"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "frames"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Frames not found"
+          }
+        },
+        "summary": "List support capture frames"
+      }
+    },
+    "/workspaces/{organizationId}/support/captures/{ticketId}/metadata": {
+      "get": {
+        "tags": [
+          "support-capture"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "ticketId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Capture metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deviceInfo": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "metadata": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "eventsSummary": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "postprocessing": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "deviceInfo",
+                    "metadata",
+                    "eventsSummary",
+                    "postprocessing"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Capture not found"
+          }
+        },
+        "summary": "List support capture metadata"
+      }
+    },
     "/workspaces/{organizationId}/support-channels": {
       "get": {
         "tags": [

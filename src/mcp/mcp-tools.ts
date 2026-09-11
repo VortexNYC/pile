@@ -3376,6 +3376,137 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdSupportCapturesTicketIdConsole",
+    "description": "List support capture console (GET /workspaces/{organizationId}/support/captures/{ticketId}/console)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/captures/{ticketId}/console",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "ticketId": {
+          "type": "string"
+        },
+        "level": {
+          "type": "string"
+        },
+        "isError": {
+          "type": "string",
+          "enum": [
+            "true",
+            "false"
+          ]
+        }
+      },
+      "required": [
+        "organizationId",
+        "ticketId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportCapturesTicketIdEvents",
+    "description": "List support capture events (GET /workspaces/{organizationId}/support/captures/{ticketId}/events)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/captures/{ticketId}/events",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "ticketId": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "action": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "ticketId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportCapturesTicketIdFrames",
+    "description": "List support capture frames (GET /workspaces/{organizationId}/support/captures/{ticketId}/frames)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/captures/{ticketId}/frames",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "ticketId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "ticketId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportCapturesTicketIdMetadata",
+    "description": "List support capture metadata (GET /workspaces/{organizationId}/support/captures/{ticketId}/metadata)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/captures/{ticketId}/metadata",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "ticketId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "ticketId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportCapturesTicketIdNetwork",
+    "description": "List support capture network (GET /workspaces/{organizationId}/support/captures/{ticketId}/network)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/captures/{ticketId}/network",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "ticketId": {
+          "type": "string"
+        },
+        "isError": {
+          "type": "string",
+          "enum": [
+            "true",
+            "false"
+          ]
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "ticketId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdSupportchannels",
     "description": "List support channels (GET /workspaces/{organizationId}/support-channels)",
     "method": "GET",

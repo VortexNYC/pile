@@ -2697,6 +2697,113 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "support captures console list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/captures/{ticketId}/console",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "ticketId",
+        flag: "ticket-id",
+      },
+    ],
+    query: [
+      {
+        name: "level",
+        flag: "level",
+      },
+      {
+        name: "isError",
+        flag: "is-error",
+      },
+    ],
+    body: [],
+  },
+  "support captures network list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/captures/{ticketId}/network",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "ticketId",
+        flag: "ticket-id",
+      },
+    ],
+    query: [
+      {
+        name: "isError",
+        flag: "is-error",
+      },
+      {
+        name: "url",
+        flag: "url",
+      },
+    ],
+    body: [],
+  },
+  "support captures events list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/captures/{ticketId}/events",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "ticketId",
+        flag: "ticket-id",
+      },
+    ],
+    query: [
+      {
+        name: "type",
+        flag: "type",
+      },
+      {
+        name: "action",
+        flag: "action",
+      },
+    ],
+    body: [],
+  },
+  "support captures frames list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/captures/{ticketId}/frames",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "ticketId",
+        flag: "ticket-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support captures metadata list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/captures/{ticketId}/metadata",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "ticketId",
+        flag: "ticket-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "support channels list": {
     method: "GET",
     path: "/workspaces/{organizationId}/support-channels",
