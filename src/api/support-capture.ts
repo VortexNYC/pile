@@ -203,7 +203,7 @@ const uploadSessionRoute = createRoute({
 
 const uploadRoute = createRoute({
   method: "post",
-  path: "/support/capture/upload/{sessionId}/{attachmentType}",
+  path: "/support/capture/upload/{sessionId}/{attachmentType}/{fileName}",
   tags: ["support-capture"],
   request: {
     params: z.object({
@@ -215,6 +215,7 @@ const uploadRoute = createRoute({
         "log",
         "network",
       ]),
+      fileName: z.string(),
     }),
     headers: z.object({
       "x-vortex-capture-token": z.string(),
@@ -734,8 +735,11 @@ function defaultContentTypeForAttachment(attachmentType: string): string {
 function buildCaptureArtifactKey(
   organizationId: string,
   sessionId: string,
-  { attachmentType }: { attachmentType: string }
+  { attachmentType, fileName }: { attachmentType: string; fileName?: string }
 ) {
+  if (fileName && fileName.length > 0) {
+    return `${organizationId}/capture/${sessionId}/${attachmentType}/${fileName}`;
+  }
   return `${organizationId}/capture/${sessionId}/${attachmentType}`;
 }
 
@@ -972,18 +976,23 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
     const attachmentType = body.attachmentType;
     const contentType =
       body.contentType ?? defaultContentTypeForAttachment(attachmentType);
+    const fileName =
+      typeof body.fileName === "string" && body.fileName.length > 0
+        ? body.fileName
+        : attachmentType;
     const r2Key = buildCaptureArtifactKey(session.organizationId, session.id, {
       attachmentType,
+      fileName,
     });
-    const uploadUrl = `/support/capture/upload/${session.id}/${attachmentType}`;
+    const uploadUrl = `/support/capture/upload/${session.id}/${attachmentType}/${encodeURIComponent(fileName)}`;
 
     const existingUploads = uploadsFromSession(session);
     const nextUploads = [
-      ...existingUploads.filter((u) => u.attachmentType !== attachmentType),
+      ...existingUploads.filter((u) => u.r2Key !== r2Key),
       {
         attachmentType,
         contentType,
-        fileName: body.fileName ?? null,
+        fileName,
         r2Key,
         uploaded: false,
         size: null,
@@ -1005,7 +1014,7 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(uploadRoute, async (c) => {
-    const { sessionId, attachmentType } = c.req.valid("param");
+    const { sessionId, attachmentType, fileName } = c.req.valid("param");
     const token = c.req.header("x-vortex-capture-token");
     if (token !== sessionId) {
       throw new VortexError({
@@ -1040,12 +1049,13 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
     const arrayBuffer = await c.req.arrayBuffer();
     const r2Key = buildCaptureArtifactKey(session.organizationId, session.id, {
       attachmentType,
+      fileName,
     });
     await bucket.put(r2Key, new Blob([arrayBuffer], { type: contentType }));
 
     const existingUploads = uploadsFromSession(session);
     const nextUploads = existingUploads.map((u) =>
-      u.attachmentType === attachmentType
+      u.r2Key === r2Key
         ? (Object.assign({}, u, {
             uploaded: true,
             contentType,

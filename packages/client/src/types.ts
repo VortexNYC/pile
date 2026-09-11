@@ -5037,7 +5037,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/support/capture/upload/{sessionId}/{attachmentType}": {
+    "/support/capture/upload/{sessionId}/{attachmentType}/{fileName}": {
         parameters: {
             query?: never;
             header?: never;
@@ -5046,7 +5046,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** POST /support/capture/upload/{sessionId}/{attachmentType} */
+        /** POST /support/capture/upload/{sessionId}/{attachmentType}/{fileName} */
         post: {
             parameters: {
                 query?: never;
@@ -5056,6 +5056,7 @@ export interface paths {
                 path: {
                     sessionId: string;
                     attachmentType: "screenshot" | "video" | "debugger_json" | "log" | "network";
+                    fileName: string;
                 };
                 cookie?: never;
             };

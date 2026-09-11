@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -13,6 +13,34 @@ import {
 } from "vitest";
 
 import { runCli } from "./cli.js";
+
+function createMockSpawn() {
+  let stdoutEmit: ((data: Buffer) => void) | undefined;
+  let closeEmit: ((code: number | null) => void) | undefined;
+
+  const child = {
+    stdout: {
+      on(_event: "data", cb: (data: Buffer) => void) {
+        stdoutEmit = cb;
+      },
+    },
+    stderr: {
+      on() {
+        return undefined;
+      },
+    },
+    on(event: "close", cb: (code: number | null) => void) {
+      if (event === "close") closeEmit = cb;
+    },
+  };
+
+  Promise.resolve().then(() => {
+    stdoutEmit?.(Buffer.from("hello\n"));
+    closeEmit?.(0);
+  });
+
+  return child;
+}
 
 describe("CLI integration", () => {
   let home: string;
@@ -145,6 +173,131 @@ describe("CLI integration", () => {
       JSON.stringify({ workspaces: [] }, null, 2)
     );
 
+    spy.mockRestore();
+  });
+
+  it("runs capture run, uploads console logs and video, and finalizes", async () => {
+    const artifactsDir = mkdtempSync(join(tmpdir(), "issuetracker-capture-"));
+    writeFileSync(
+      join(artifactsDir, "video.webm"),
+      new Uint8Array([0, 0, 0, 24])
+    );
+
+    const mockFetch = vi.fn().mockImplementation((url, init) => {
+      const requestUrl = new URL(
+        typeof url === "string" ? url : (url as URL).href
+      );
+      const pathname = requestUrl.pathname;
+      const method =
+        init && typeof init === "object" && "method" in init
+          ? String(init.method)
+          : "GET";
+
+      if (pathname === "/support/capture/token" && method === "POST") {
+        return Promise.resolve(
+          new Response(JSON.stringify({ token: "session-1" }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          })
+        );
+      }
+      if (pathname === "/support/capture/metadata" && method === "POST") {
+        return Promise.resolve(
+          new Response(JSON.stringify({ ok: true }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          })
+        );
+      }
+      if (pathname === "/support/capture/upload-session" && method === "POST") {
+        const body =
+          init && typeof init === "object" && typeof init.body === "string"
+            ? JSON.parse(init.body as string)
+            : {};
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              uploadUrl: `/support/capture/upload/session-1/${body.attachmentType}/${encodeURIComponent(body.fileName ?? body.attachmentType)}`,
+              r2Key: `session-1/${body.attachmentType}`,
+              sessionId: "session-1",
+            }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            }
+          )
+        );
+      }
+      if (
+        pathname.startsWith("/support/capture/upload/session-1/") &&
+        method === "POST"
+      ) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ r2Key: "r2" }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          })
+        );
+      }
+      if (pathname === "/support/capture/finalize" && method === "POST") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              ticketId: "ticket-1",
+              shareUrl: "https://example.com/share/ticket-1",
+            }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            }
+          )
+        );
+      }
+      return Promise.resolve(new Response("not found", { status: 404 }));
+    });
+
+    const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    const exitCode = await runCli(
+      [
+        "capture",
+        "run",
+        "--public-key",
+        "pk-test",
+        "--command",
+        "echo hello",
+        "--artifacts-dir",
+        artifactsDir,
+        "--title",
+        "CLI capture run test",
+      ],
+      { fetch: mockFetch, spawn: createMockSpawn }
+    );
+
+    expect(exitCode).toBe(0);
+    expect(mockFetch).toHaveBeenCalledTimes(7);
+    const finalizeCall = mockFetch.mock.calls.find(
+      ([url, init]) =>
+        new URL(typeof url === "string" ? url : (url as URL).href).pathname ===
+          "/support/capture/finalize" &&
+        init &&
+        typeof init === "object" &&
+        "method" in init &&
+        init.method === "POST"
+    );
+    expect(finalizeCall).toBeDefined();
+    expect(spy).toHaveBeenLastCalledWith(
+      JSON.stringify(
+        {
+          ticketId: "ticket-1",
+          shareUrl: "https://example.com/share/ticket-1",
+        },
+        null,
+        2
+      )
+    );
+
+    rmSync(artifactsDir, { recursive: true, force: true });
     spy.mockRestore();
   });
 });

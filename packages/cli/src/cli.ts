@@ -35,6 +35,18 @@ const mutatingMethods = new Set<HttpMethod>(["DELETE", "PATCH", "POST", "PUT"]);
 
 export type CliDeps = {
   readonly fetch?: typeof fetch;
+  readonly spawn?: (
+    command: string,
+    args: readonly string[],
+    options: {
+      shell?: boolean;
+      stdio?: ["ignore", "pipe", "pipe"];
+    }
+  ) => {
+    stdout: { on: (event: "data", cb: (data: Buffer) => void) => void };
+    stderr: { on: (event: "data", cb: (data: Buffer) => void) => void };
+    on: (event: "close", cb: (code: number | null) => void) => void;
+  };
 };
 
 function isJsonValue(value: unknown): value is Json {
@@ -416,7 +428,7 @@ async function captureRunCommand(
   const token = tokenBody.token;
 
   const consoleLogs: ConsoleLogEntry[] = [];
-  const child = spawn(command, [], {
+  const child = (deps.spawn ?? spawn)(command, [], {
     shell: true,
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -448,7 +460,7 @@ async function captureRunCommand(
   });
 
   const exitCode = await new Promise<number>((resolve) => {
-    child.on("close", (code) => resolve(code ?? 1));
+    child.on("close", (code: number | null) => resolve(code ?? 1));
   });
 
   const metadataRes = await doFetch(`${base}/support/capture/metadata`, {
@@ -463,6 +475,7 @@ async function captureRunCommand(
         description,
         source: "cli",
         consoleCount: consoleLogs.length,
+        email: "ci@vortex.local",
       },
     }),
   });
@@ -489,6 +502,8 @@ async function captureRunCommand(
         attachmentType,
         contentType,
         fileName,
+        title,
+        metadata: { email: "ci@vortex.local" },
       }),
     });
     if (!reserveRes.ok) {

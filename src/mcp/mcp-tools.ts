@@ -6539,10 +6539,10 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
-    "name": "postSupportCaptureUploadSessionIdAttachmentType",
-    "description": "POST /support/capture/upload/{sessionId}/{attachmentType} (POST /support/capture/upload/{sessionId}/{attachmentType})",
+    "name": "postSupportCaptureUploadSessionIdAttachmentTypeFileName",
+    "description": "POST /support/capture/upload/{sessionId}/{attachmentType}/{fileName} (POST /support/capture/upload/{sessionId}/{attachmentType}/{fileName})",
     "method": "POST",
-    "path": "/support/capture/upload/{sessionId}/{attachmentType}",
+    "path": "/support/capture/upload/{sessionId}/{attachmentType}/{fileName}",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -6558,10 +6558,14 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "log",
             "network"
           ]
+        },
+        "fileName": {
+          "type": "string"
         }
       },
       "required": [
         "attachmentType",
+        "fileName",
         "sessionId"
       ]
     }

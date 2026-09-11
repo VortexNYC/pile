@@ -229,7 +229,7 @@ describe("support-capture API", () => {
   it("rejects upload for an unknown session", async () => {
     const image = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
     const res = await captureFetch(
-      "/support/capture/upload/00000000-0000-0000-0000-000000000000/screenshot",
+      "/support/capture/upload/00000000-0000-0000-0000-000000000000/screenshot/screenshot.png",
       {
         method: "POST",
         headers: {
@@ -733,17 +733,14 @@ describe("support-capture API", () => {
     expect(uploadUrl).toBeTruthy();
 
     const image = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
-    const uploadRes = await captureFetch(
-      `/support/capture/upload/${sessionToken}/screenshot`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "image/png",
-          "x-vortex-capture-token": sessionToken,
-        },
-        body: image,
-      }
-    );
+    const uploadRes = await captureFetch(uploadUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "image/png",
+        "x-vortex-capture-token": sessionToken,
+      },
+      body: image,
+    });
     expect(uploadRes.status).toBe(200);
 
     const finalizeRes = await captureFetch("/support/capture/finalize", {
@@ -821,18 +818,17 @@ describe("support-capture API", () => {
     });
     expect(sessionRes.status).toBe(200);
 
+    const issueUploadUrl = (await sessionRes.json()) as { uploadUrl: string };
+
     const image = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
-    const uploadRes = await captureFetch(
-      `/support/capture/upload/${sessionToken}/screenshot`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "image/png",
-          "x-vortex-capture-token": sessionToken,
-        },
-        body: image,
-      }
-    );
+    const uploadRes = await captureFetch(issueUploadUrl.uploadUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "image/png",
+        "x-vortex-capture-token": sessionToken,
+      },
+      body: image,
+    });
     expect(uploadRes.status).toBe(200);
 
     const finalizeRes = await captureFetch("/support/capture/finalize", {
@@ -1019,5 +1015,210 @@ describe("support-capture API", () => {
         e.message?.textContent?.includes("https://jam.dev/c/rl-123")
       )
     ).toBe(true);
+  });
+
+  async function captureWithArtifacts(): Promise<{
+    ticketId: string;
+    sessionToken: string;
+  }> {
+    const publicKey = await createPublicKey();
+    const { token: sessionToken } = await issueCaptureToken(publicKey);
+
+    async function uploadArtifact(
+      attachmentType: string,
+      contentType: string,
+      fileName: string,
+      buffer: Uint8Array | string,
+      extra?: Record<string, unknown>
+    ): Promise<void> {
+      const sessionRes = await captureFetch("/support/capture/upload-session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-vortex-capture-token": sessionToken,
+        },
+        body: JSON.stringify({
+          attachmentType,
+          contentType,
+          fileName,
+          title: "Artifact reader test",
+          description: "Testing capture read routes",
+          priority: "medium",
+          metadata: { email: "reader@example.com" },
+          ...extra,
+        }),
+      });
+      expect(sessionRes.status).toBe(200);
+      const session = (await sessionRes.json()) as {
+        uploadUrl: string;
+      };
+
+      const body =
+        typeof buffer === "string" ? new TextEncoder().encode(buffer) : buffer;
+      const uploadRes = await captureFetch(session.uploadUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": contentType,
+          "x-vortex-capture-token": sessionToken,
+        },
+        body,
+      });
+      expect(uploadRes.status).toBe(200);
+    }
+
+    await uploadArtifact(
+      "log",
+      "application/json",
+      "console-logs.json",
+      JSON.stringify([
+        {
+          console_level: "error",
+          console_value: "Network timeout",
+          is_error: true,
+        },
+        {
+          console_level: "log",
+          console_value: "render complete",
+          is_error: false,
+        },
+      ]),
+      {
+        title: "Artifact reader test",
+        description: "Testing capture read routes",
+        priority: "medium",
+        metadata: { email: "reader@example.com" },
+      }
+    );
+
+    await uploadArtifact(
+      "network",
+      "application/json",
+      "network-requests.json",
+      JSON.stringify([
+        {
+          network_url: "https://api.example.com/checkout",
+          network_method: "POST",
+          is_error: true,
+        },
+      ])
+    );
+
+    await uploadArtifact(
+      "log",
+      "application/json",
+      "user-events.json",
+      JSON.stringify([
+        {
+          event_type: "interactivity",
+          interactivity_action: "click",
+        },
+      ])
+    );
+
+    await uploadArtifact(
+      "debugger_json",
+      "application/json",
+      "device-info.json",
+      JSON.stringify({ browser: "Chrome", os: "macOS" })
+    );
+
+    await uploadArtifact(
+      "debugger_json",
+      "application/json",
+      "metadata.json",
+      JSON.stringify({ customKey: "customValue" })
+    );
+
+    await uploadArtifact(
+      "screenshot",
+      "image/png",
+      "screenshot.png",
+      new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])
+    );
+
+    await uploadArtifact(
+      "video",
+      "video/webm",
+      "video.webm",
+      new Uint8Array([26, 69, 223, 163])
+    );
+
+    const finalizeRes = await captureFetch("/support/capture/finalize", {
+      method: "POST",
+      headers: { "x-vortex-capture-token": sessionToken },
+    });
+    expect(finalizeRes.status).toBe(200);
+    const body = (await finalizeRes.json()) as { ticketId: string };
+    return { ticketId: body.ticketId, sessionToken };
+  }
+
+  it("reads console logs from a capture", async () => {
+    const { ticketId } = await captureWithArtifacts();
+    const res = await captureFetch(
+      `/workspaces/${organizationId}/support/captures/${ticketId}/console?isError=true`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { events: unknown[] };
+    expect(body.events).toHaveLength(1);
+    expect((body.events[0] as { console_value: string }).console_value).toBe(
+      "Network timeout"
+    );
+  });
+
+  it("reads network requests from a capture", async () => {
+    const { ticketId } = await captureWithArtifacts();
+    const res = await captureFetch(
+      `/workspaces/${organizationId}/support/captures/${ticketId}/network?url=checkout`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { events: unknown[] };
+    expect(body.events).toHaveLength(1);
+    expect((body.events[0] as { network_url: string }).network_url).toContain(
+      "checkout"
+    );
+  });
+
+  it("reads user events from a capture", async () => {
+    const { ticketId } = await captureWithArtifacts();
+    const res = await captureFetch(
+      `/workspaces/${organizationId}/support/captures/${ticketId}/events?action=click`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { events: unknown[] };
+    expect(body.events).toHaveLength(1);
+  });
+
+  it("reads frames from a capture", async () => {
+    const { ticketId } = await captureWithArtifacts();
+    const res = await captureFetch(
+      `/workspaces/${organizationId}/support/captures/${ticketId}/frames`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      frames: { type: string; fileName: string | null }[];
+    };
+    expect(body.frames).toHaveLength(2);
+    const frameTypes = body.frames.map((f) => f.type);
+    expect(frameTypes).toContain("screenshot");
+    expect(frameTypes).toContain("video");
+  });
+
+  it("reads metadata from a capture", async () => {
+    const { ticketId } = await captureWithArtifacts();
+    const res = await captureFetch(
+      `/workspaces/${organizationId}/support/captures/${ticketId}/metadata`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      deviceInfo: { browser: string } | null;
+      metadata: { customKey: string } | null;
+    };
+    expect(body.deviceInfo?.browser).toBe("Chrome");
+    expect(body.metadata?.customKey).toBe("customValue");
   });
 });

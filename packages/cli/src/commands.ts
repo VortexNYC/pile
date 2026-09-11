@@ -2440,7 +2440,7 @@ export const COMMANDS: Record<string, CommandDef> = {
   },
   "support capture upload create": {
     method: "POST",
-    path: "/support/capture/upload/{sessionId}/{attachmentType}",
+    path: "/support/capture/upload/{sessionId}/{attachmentType}/{fileName}",
     params: [
       {
         name: "sessionId",
@@ -2449,6 +2449,10 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "attachmentType",
         flag: "attachment-type",
+      },
+      {
+        name: "fileName",
+        flag: "file-name",
       },
     ],
     query: [],

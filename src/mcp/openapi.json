@@ -9985,7 +9985,7 @@
         "summary": "Create support capture upload session"
       }
     },
-    "/support/capture/upload/{sessionId}/{attachmentType}": {
+    "/support/capture/upload/{sessionId}/{attachmentType}/{fileName}": {
       "post": {
         "tags": [
           "support-capture"
@@ -10012,6 +10012,14 @@
             },
             "required": true,
             "name": "attachmentType",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "fileName",
             "in": "path"
           },
           {
@@ -10046,7 +10054,7 @@
             "description": "Invalid or expired session"
           }
         },
-        "summary": "POST /support/capture/upload/{sessionId}/{attachmentType}"
+        "summary": "POST /support/capture/upload/{sessionId}/{attachmentType}/{fileName}"
       }
     },
     "/support/capture/finalize": {
