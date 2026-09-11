@@ -4408,6 +4408,37 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdWebhookdeliveries",
+    "description": "List webhook deliveries (GET /workspaces/{organizationId}/webhook-deliveries)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/webhook-deliveries",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "processing",
+            "completed",
+            "failed"
+          ]
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdWebhooksubscriptions",
     "description": "List webhook subscriptions (GET /workspaces/{organizationId}/webhook-subscriptions)",
     "method": "GET",

@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { createD1 } from "../global/db.js";
-import { user as userTable } from "../global/schema.js";
+import { user as userTable, webhookDeliveries } from "../global/schema.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
@@ -140,6 +140,76 @@ describe("webhooks API", () => {
     const res = await fetch(
       `/workspaces/${organizationId}/webhook-subscriptions/00000000-0000-0000-0000-000000000000/deliveries`
     );
+    expect(res.status).toBe(401);
+  });
+
+  it("lists inbound webhook deliveries", async () => {
+    const db = createD1(env.D1);
+    const deliveryId = `delivery-${crypto.randomUUID()}`;
+    await db.insert(webhookDeliveries).values({
+      deliveryId,
+      source: "github",
+      event: "issues",
+      organizationId,
+      status: "completed",
+      payload: "{}",
+    });
+
+    const res = await fetch(`/workspaces/${organizationId}/webhook-deliveries`, {}, token);
+    expect(res.status).toBe(200);
+    const body = await res.json<{ deliveries: unknown[] }>();
+    expect(body.deliveries.length).toBeGreaterThanOrEqual(1);
+    expect(
+      body.deliveries.some(
+        (d) => (d as { deliveryId: string }).deliveryId === deliveryId
+      )
+    ).toBe(true);
+  });
+
+  it("filters inbound webhook deliveries by status", async () => {
+    const db = createD1(env.D1);
+    const completedId = `delivery-${crypto.randomUUID()}`;
+    const pendingId = `delivery-${crypto.randomUUID()}`;
+    await db.insert(webhookDeliveries).values([
+      {
+        deliveryId: completedId,
+        source: "github",
+        event: "issues",
+        organizationId,
+        status: "completed",
+        payload: "{}",
+      },
+      {
+        deliveryId: pendingId,
+        source: "github",
+        event: "issues",
+        organizationId,
+        status: "pending",
+        payload: "{}",
+      },
+    ]);
+
+    const res = await fetch(
+      `/workspaces/${organizationId}/webhook-deliveries?status=completed`,
+      {},
+      token
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json<{ deliveries: unknown[] }>();
+    expect(
+      body.deliveries.some(
+        (d) => (d as { deliveryId: string }).deliveryId === completedId
+      )
+    ).toBe(true);
+    expect(
+      body.deliveries.some(
+        (d) => (d as { deliveryId: string }).deliveryId === pendingId
+      )
+    ).toBe(false);
+  });
+
+  it("rejects inbound webhook delivery log without auth", async () => {
+    const res = await fetch(`/workspaces/${organizationId}/webhook-deliveries`);
     expect(res.status).toBe(401);
   });
 });

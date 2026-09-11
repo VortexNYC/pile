@@ -16942,6 +16942,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/webhook-deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List webhook deliveries */
+        get: {
+            parameters: {
+                query?: {
+                    status?: "pending" | "processing" | "completed" | "failed";
+                    limit?: number;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Inbound webhook delivery log */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            deliveries: {
+                                deliveryId: string;
+                                source: string;
+                                event: string;
+                                organizationId: string;
+                                processedAt: string;
+                                status: string;
+                                attemptCount: number;
+                                payload: string | null;
+                                lastError: string | null;
+                                nextRetryAt: string | null;
+                                lockedAt: string | null;
+                                result: string | null;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/linear-users": {
         parameters: {
             query?: never;

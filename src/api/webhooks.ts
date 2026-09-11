@@ -1,6 +1,9 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
+import { and, desc, eq } from "drizzle-orm";
 
+import { createD1 } from "../global/db.js";
+import { webhookDeliveries } from "../global/schema.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
@@ -164,6 +167,47 @@ const listWebhookDeliveriesRoute = createRoute({
   },
 });
 
+const webhookDeliverySchema = z.object({
+  deliveryId: z.string(),
+  source: z.string(),
+  event: z.string(),
+  organizationId: z.string(),
+  processedAt: z.string(),
+  status: z.string(),
+  attemptCount: z.number(),
+  payload: z.string().nullable(),
+  lastError: z.string().nullable(),
+  nextRetryAt: z.string().nullable(),
+  lockedAt: z.string().nullable(),
+  result: z.string().nullable(),
+});
+
+const listInboundWebhookDeliveriesRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/webhook-deliveries",
+  tags: ["webhooks"],
+  middleware: [rls("admin")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+    query: z.object({
+      status: z.enum(["pending", "processing", "completed", "failed"]).optional(),
+      limit: z.coerce.number().int().min(1).max(100).optional(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Inbound webhook delivery log",
+      content: {
+        "application/json": {
+          schema: z.object({
+            deliveries: z.array(webhookDeliverySchema),
+          }),
+        },
+      },
+    },
+  },
+});
+
 export function registerWebhookRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(createWebhookSubscriptionRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
@@ -227,6 +271,24 @@ export function registerWebhookRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId, id } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
     const items = await stub.listWebhookDeliveries(id);
+    return c.json({ deliveries: items });
+  });
+
+  app.openapi(listInboundWebhookDeliveriesRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const { status, limit = 20 } = c.req.valid("query");
+    const db = createD1(c.env.D1);
+    const conditions = [eq(webhookDeliveries.organizationId, organizationId)];
+    if (status) {
+      conditions.push(eq(webhookDeliveries.status, status));
+    }
+    const items = await db
+      .select()
+      .from(webhookDeliveries)
+      .where(and(...conditions))
+      .orderBy(desc(webhookDeliveries.processedAt))
+      .limit(limit)
+      .all();
     return c.json({ deliveries: items });
   });
 }
