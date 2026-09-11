@@ -60,6 +60,7 @@ import {
   registerSlackRoutes,
 } from "./slack.js";
 import { registerStateRoutes } from "./states.js";
+import { registerSupportCaptureRoutes } from "./support-capture.js";
 import { registerSupportChannelRoutes } from "./support-channels.js";
 import { registerSupportContactRoutes } from "./support-contacts.js";
 import { registerSupportContentRoutes } from "./support-content.js";
@@ -113,6 +114,7 @@ registerExternalLinkRoutes(app);
 registerProjectDetailRoutes(app);
 registerProjectMemberRoutes(app);
 registerEmailInboxRoutes(app);
+registerSupportCaptureRoutes(app);
 registerSupportChannelRoutes(app);
 registerWorkspaceUserRoutes(app);
 registerUsageRoutes(app);

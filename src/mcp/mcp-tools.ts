@@ -883,6 +883,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdSupportCapturePublickeysKeyId",
+    "description": "Delete support capture public key (DELETE /workspaces/{organizationId}/support/capture/public-keys/{keyId})",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/support/capture/public-keys/{keyId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "keyId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "keyId",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdSupportEscalationrulesRuleId",
     "description": "Delete support escalation rule (DELETE /workspaces/{organizationId}/support/escalation-rules/{ruleId})",
     "method": "DELETE",
@@ -3295,6 +3316,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "description": "List support autoresponders (GET /workspaces/{organizationId}/support/autoresponders)",
     "method": "GET",
     "path": "/workspaces/{organizationId}/support/autoresponders",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportCapturePublickeys",
+    "description": "List support capture public keys (GET /workspaces/{organizationId}/support/capture/public-keys)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/capture/public-keys",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -6315,6 +6353,144 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postSupportCaptureFinalize",
+    "description": "Create support capture finalize (POST /support/capture/finalize)",
+    "method": "POST",
+    "path": "/support/capture/finalize",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "postSupportCaptureMetadata",
+    "description": "Create support capture metadata (POST /support/capture/metadata)",
+    "method": "POST",
+    "path": "/support/capture/metadata",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "type": "object",
+          "properties": {
+            "metadata": {
+              "type": "object",
+              "additionalProperties": {
+                "nullable": true
+              }
+            }
+          },
+          "required": [
+            "metadata"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "postSupportCaptureToken",
+    "description": "Create support capture token (POST /support/capture/token)",
+    "method": "POST",
+    "path": "/support/capture/token",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "postSupportCaptureUploadsession",
+    "description": "Create support capture upload session (POST /support/capture/upload-session)",
+    "method": "POST",
+    "path": "/support/capture/upload-session",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": {
+              "type": "string"
+            },
+            "priority": {
+              "type": "string",
+              "enum": [
+                "low",
+                "medium",
+                "high",
+                "urgent"
+              ]
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "url": {
+              "type": "string"
+            },
+            "attachmentType": {
+              "type": "string",
+              "enum": [
+                "screenshot",
+                "video",
+                "debugger_json",
+                "log",
+                "network"
+              ],
+              "default": "screenshot"
+            },
+            "visibility": {
+              "type": "string",
+              "enum": [
+                "public",
+                "private"
+              ],
+              "default": "private"
+            },
+            "metadata": {
+              "type": "object",
+              "additionalProperties": {
+                "nullable": true
+              },
+              "default": {}
+            },
+            "deviceInfo": {
+              "type": "object",
+              "additionalProperties": {
+                "nullable": true
+              }
+            }
+          },
+          "required": [
+            "title"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "postSupportCaptureUploadSessionId",
+    "description": "Create support capture upload (POST /support/capture/upload/{sessionId})",
+    "method": "POST",
+    "path": "/support/capture/upload/{sessionId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId"
+      ]
+    }
+  },
+  {
     "name": "postSupportWebhooksIntercomOrganizationId",
     "description": "Receive Intercom support webhook notifications (POST /support/webhooks/intercom/{organizationId})",
     "method": "POST",
@@ -9330,6 +9506,42 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "name",
             "trigger",
             "order"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSupportCapturePublickeys",
+    "description": "Create support capture public key (POST /workspaces/{organizationId}/support/capture/public-keys)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/capture/public-keys",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "allowedOrigins": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": []
+            }
+          },
+          "required": [
+            "name"
           ]
         }
       },

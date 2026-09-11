@@ -2028,6 +2028,7 @@ export const supportTickets = sqliteTable(
         "discord",
         "chat",
         "api",
+        "capture",
         "manual",
       ] as const,
     })
@@ -2604,6 +2605,75 @@ export const supportAutoresponders = sqliteTable(
       table.organizationId,
       table.enabled,
       table.order
+    ),
+  ]
+);
+
+export const supportCapturePublicKeys = sqliteTable(
+  "support_capture_public_keys" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    name: text("name" as string).notNull(),
+    key: text("key" as string).notNull(),
+    allowedOrigins: text("allowed_origins" as string)
+      .notNull()
+      .default("[]"),
+    isActive: integer("is_active" as string, { mode: "boolean" })
+      .notNull()
+      .default(true),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("support_capture_public_keys_org_key_idx" as string).on(
+      table.organizationId,
+      table.key
+    ),
+  ]
+);
+
+export const supportCaptureSessions = sqliteTable(
+  "support_capture_sessions" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    publicKeyId: text("public_key_id" as string)
+      .notNull()
+      .references(() => supportCapturePublicKeys.id),
+    customerId: text("customer_id" as string).references(
+      () => supportCustomers.id
+    ),
+    ticketId: text("ticket_id" as string).references(() => supportTickets.id),
+    status: text("status" as string, {
+      enum: ["pending", "uploading", "finalized", "expired"] as const,
+    })
+      .notNull()
+      .default("pending"),
+    metadata: text("metadata" as string)
+      .notNull()
+      .default("{}"),
+    expiresAt: text("expires_at" as string).notNull(),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("support_capture_sessions_org_status_expires_idx" as string).on(
+      table.organizationId,
+      table.status,
+      table.expiresAt
     ),
   ]
 );

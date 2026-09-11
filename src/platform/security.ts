@@ -44,7 +44,8 @@ function isPublicPath(pathname: string): boolean {
     pathname.includes("/migrate/") ||
     pathname.startsWith("/mcp") ||
     pathname.startsWith("/notion/") ||
-    pathname.startsWith("/support/webhooks/")
+    pathname.startsWith("/support/webhooks/") ||
+    pathname.startsWith("/support/capture/")
   );
 }
 

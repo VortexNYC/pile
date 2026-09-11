@@ -2330,6 +2330,137 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "support capture public keys list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/capture/public-keys",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support capture public keys create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/capture/public-keys",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "allowedOrigins",
+        flag: "allowed-origins",
+      },
+    ],
+  },
+  "support capture public keys delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/support/capture/public-keys/{keyId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "keyId",
+        flag: "key-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support capture token create": {
+    method: "POST",
+    path: "/support/capture/token",
+    params: [],
+    query: [],
+    body: [],
+  },
+  "support capture upload session create": {
+    method: "POST",
+    path: "/support/capture/upload-session",
+    params: [],
+    query: [],
+    body: [
+      {
+        name: "title",
+        flag: "title",
+      },
+      {
+        name: "description",
+        flag: "description",
+      },
+      {
+        name: "priority",
+        flag: "priority",
+      },
+      {
+        name: "tags",
+        flag: "tags",
+      },
+      {
+        name: "url",
+        flag: "url",
+      },
+      {
+        name: "attachmentType",
+        flag: "attachment-type",
+      },
+      {
+        name: "visibility",
+        flag: "visibility",
+      },
+      {
+        name: "metadata",
+        flag: "metadata",
+      },
+      {
+        name: "deviceInfo",
+        flag: "device-info",
+      },
+    ],
+  },
+  "support capture upload create": {
+    method: "POST",
+    path: "/support/capture/upload/{sessionId}",
+    params: [
+      {
+        name: "sessionId",
+        flag: "session",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support capture finalize create": {
+    method: "POST",
+    path: "/support/capture/finalize",
+    params: [],
+    query: [],
+    body: [],
+  },
+  "support capture metadata create": {
+    method: "POST",
+    path: "/support/capture/metadata",
+    params: [],
+    query: [],
+    body: [
+      {
+        name: "metadata",
+        flag: "metadata",
+      },
+    ],
+  },
   "support channels list": {
     method: "GET",
     path: "/workspaces/{organizationId}/support-channels",

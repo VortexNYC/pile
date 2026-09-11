@@ -57,7 +57,8 @@ export type SupportTicketSource =
   | "discord"
   | "chat"
   | "api"
-  | "manual";
+  | "manual"
+  | "capture";
 export type SupportTicketChannel =
   | "email"
   | "slack"
