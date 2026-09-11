@@ -50,7 +50,7 @@ const listTokensRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/tokens",
   tags: ["tokens"],
-  middleware: [rls("read")],
+  middleware: [rls("admin")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
