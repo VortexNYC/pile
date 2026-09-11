@@ -901,11 +901,22 @@ export const webhookDeliveries = sqliteTable(
     processedAt: text("processed_at" as string)
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
+    status: text("status" as string)
+      .notNull()
+      .default("pending"),
+    attemptCount: integer("attempt_count" as string)
+      .notNull()
+      .default(0),
+    payload: text("payload" as string),
+    lastError: text("last_error" as string),
+    nextRetryAt: text("next_retry_at" as string),
+    lockedAt: text("locked_at" as string),
   },
   (table) => [
     index("webhook_deliveries_organization_idx" as string).on(
       table.organizationId
     ),
+    index("webhook_deliveries_status_idx" as string).on(table.status),
   ]
 );
 

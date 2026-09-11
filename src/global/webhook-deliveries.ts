@@ -25,6 +25,8 @@ export async function claimWebhookDelivery(
       source,
       event,
       organizationId: organizationId ?? null,
+      status: "completed",
+      attemptCount: 1,
     })
     .onConflictDoNothing()
     .returning()
@@ -46,6 +48,8 @@ export async function recordWebhookDelivery(
       source,
       event,
       organizationId: organizationId ?? null,
+      status: "completed",
+      attemptCount: 1,
     })
     .onConflictDoUpdate({
       target: webhookDeliveries.deliveryId,

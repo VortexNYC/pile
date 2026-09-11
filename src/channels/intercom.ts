@@ -14,7 +14,7 @@ import {
   updateTicket,
   type SupportTicketStatus,
 } from "../global/support-tickets.js";
-import { claimWebhookDelivery } from "../global/webhook-deliveries.js";
+import { enqueueWebhook } from "../global/webhook-queue.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 
@@ -82,6 +82,11 @@ export const intercomSupportWebhookRoute = createRoute({
   },
 });
 
+const intercomQueuePayloadSchema = z.object({
+  notification: intercomNotificationSchema,
+  organizationId: z.string(),
+});
+
 export async function processIntercomSupportWebhook(
   c: Context<AppContext>
 ): Promise<{ ok: boolean }> {
@@ -140,19 +145,42 @@ export async function processIntercomSupportWebhook(
   }
 
   const db = createD1(c.env.D1);
-  const claimed = await claimWebhookDelivery(
+  await enqueueWebhook(
     db,
-    notification.data.id,
-    "intercom",
-    topic,
-    organizationId
+    c.env,
+    {
+      deliveryId: notification.data.id,
+      source: "intercom",
+      event: topic,
+      organizationId,
+      payload: { notification: notification.data, organizationId },
+    },
+    new Map([["intercom", processIntercomSupportWebhookPayload]])
   );
-  if (!claimed) {
-    return { ok: true };
+
+  return { ok: true };
+}
+
+export async function processIntercomSupportWebhookPayload(
+  db: D1Client,
+  env: WorkerEnv,
+  payload: unknown
+): Promise<void> {
+  const parsed = intercomQueuePayloadSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Invalid Intercom queue payload",
+      hint: parsed.error.message,
+    });
   }
 
+  const { notification, organizationId } = parsed.data;
+  const { topic } = notification;
+
   const conversation = intercomWebhookConversationSchema.safeParse(
-    notification.data.data.item
+    notification.data.item
   );
   if (!conversation.success) {
     throw new VortexError({
@@ -177,10 +205,9 @@ export async function processIntercomSupportWebhook(
       organizationId,
       conversation.data.id,
       "done",
-      c.env
+      env
     );
-
-    return { ok: true };
+    return;
   }
   if (topic.endsWith(".opened")) {
     await updateStatusIfExists(
@@ -188,10 +215,9 @@ export async function processIntercomSupportWebhook(
       organizationId,
       conversation.data.id,
       "todo",
-      c.env
+      env
     );
-
-    return { ok: true };
+    return;
   }
   if (topic.endsWith(".snoozed")) {
     await updateStatusIfExists(
@@ -199,10 +225,9 @@ export async function processIntercomSupportWebhook(
       organizationId,
       conversation.data.id,
       "snoozed",
-      c.env
+      env
     );
-
-    return { ok: true };
+    return;
   }
 
   const isAdminReply = topic.startsWith("conversation.admin.replied");
@@ -210,7 +235,7 @@ export async function processIntercomSupportWebhook(
   const isCreated = topic.startsWith("conversation.user.created");
 
   if (!isCreated && !isUserReply && !isAdminReply) {
-    return { ok: true };
+    return;
   }
 
   const existing = await findSupportTicketByExternalId(
@@ -240,7 +265,7 @@ export async function processIntercomSupportWebhook(
           subType: conversation.data.id,
           createdAt,
         },
-        c.env
+        env
       );
     } else if (sourceAuthor?.email) {
       const customer = await findOrCreateCustomerByEmail(
@@ -262,7 +287,7 @@ export async function processIntercomSupportWebhook(
           subType: conversation.data.id,
           createdAt,
         },
-        c.env
+        env
       );
     }
     await updateTicket(
@@ -275,10 +300,10 @@ export async function processIntercomSupportWebhook(
         actorType: "automation",
         actorId: null,
       },
-      c.env
+      env
     );
 
-    return { ok: true };
+    return;
   }
 
   if (!sourceAuthor?.email) {
@@ -318,10 +343,10 @@ export async function processIntercomSupportWebhook(
       updatedAt: createdAt,
       ifExists: "return",
     },
-    c.env
+    env
   );
 
-  await maybeEscalate(c.env, db, organizationId, ticket, {
+  await maybeEscalate(env, db, organizationId, ticket, {
     text,
     subject: sourceSubject,
     customer,
@@ -342,10 +367,8 @@ export async function processIntercomSupportWebhook(
       externalId: conversation.data.id,
       createdAt,
     },
-    c.env
+    env
   );
-
-  return { ok: true };
 }
 
 async function updateStatusIfExists(

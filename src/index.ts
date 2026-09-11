@@ -1,4 +1,7 @@
-import type { ForwardableEmailMessage } from "@cloudflare/workers-types";
+import type {
+  ForwardableEmailMessage,
+  MessageBatch,
+} from "@cloudflare/workers-types";
 import { ne } from "drizzle-orm";
 
 import { drainOutpostQueue, sweepOutpostWorkers } from "./agents/outpost.js";
@@ -7,6 +10,11 @@ import { handleIncomingEmail } from "./channels/email.js";
 import { createD1 } from "./global/db.js";
 import { cycles } from "./global/schema.js";
 import { expireStaleCaptureSessions } from "./global/support-capture.js";
+import { webhookProcessors } from "./global/webhook-processors.js";
+import {
+  processWebhookQueueBatch,
+  reprocessStuckDeliveries,
+} from "./global/webhook-queue.js";
 import type { WorkerEnv } from "./platform/middleware.js";
 
 export { WorkspaceDO } from "./workspace/durable-object.js";
@@ -25,6 +33,7 @@ async function scheduled(
     (async () => {
       const d1 = createD1(env.D1);
       await expireStaleCaptureSessions(d1);
+      await reprocessStuckDeliveries(d1, env);
     })().catch((err) => console.error("capture session sweep failed", err))
   );
   const d1 = createD1(env.D1);
@@ -77,8 +86,24 @@ async function email(
   }
 }
 
+async function queue(
+  batch: MessageBatch,
+  env: WorkerEnv,
+  _ctx: ExecutionContext
+) {
+  try {
+    await processWebhookQueueBatch(batch, env, webhookProcessors);
+  } catch (err) {
+    console.error("webhook queue batch failed", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    throw err;
+  }
+}
+
 export default {
   fetch: app.fetch.bind(app),
   scheduled,
   email,
+  queue,
 } satisfies ExportedHandler<WorkerEnv>;

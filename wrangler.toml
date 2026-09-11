@@ -34,6 +34,16 @@ bucket_name = "issuetracker-attachments"
 name = "WORKSPACE_DURABLE_OBJECT"
 class_name = "WorkspaceDO"
 
+[[queues.producers]]
+binding = "WEBHOOK_QUEUE"
+queue = "webhook-queue"
+
+[[queues.consumers]]
+queue = "webhook-queue"
+max_batch_size = 10
+max_batch_timeout = 5
+max_retries = 3
+
 [triggers]
 crons = ["*/5 * * * *"]
 
@@ -71,6 +81,16 @@ bucket_name = "issuetracker-attachments"
 [[env.production.durable_objects.bindings]]
 name = "WORKSPACE_DURABLE_OBJECT"
 class_name = "WorkspaceDO"
+
+[[env.production.queues.producers]]
+binding = "WEBHOOK_QUEUE"
+queue = "webhook-queue"
+
+[[env.production.queues.consumers]]
+queue = "webhook-queue"
+max_batch_size = 10
+max_batch_timeout = 5
+max_retries = 3
 
 [[env.production.send_email]]
 name = "EMAIL"
