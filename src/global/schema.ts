@@ -2029,6 +2029,7 @@ export const supportTickets = sqliteTable(
         "chat",
         "api",
         "capture",
+        "jam",
         "manual",
       ] as const,
     })
@@ -2552,6 +2553,7 @@ export const supportCapturePublicKeys = sqliteTable(
       .references(() => organization.id),
     name: text("name" as string).notNull(),
     key: text("key" as string).notNull(),
+    webhookSecret: text("webhook_secret" as string),
     allowedOrigins: text("allowed_origins" as string)
       .notNull()
       .default("[]"),

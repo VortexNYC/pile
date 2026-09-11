@@ -6492,6 +6492,121 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postSupportWebhooksJamPublicKeyId",
+    "description": "Create support webhook jam (POST /support/webhooks/jam/{publicKeyId})",
+    "method": "POST",
+    "path": "/support/webhooks/jam/{publicKeyId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "publicKeyId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "jamId": {
+              "type": "string"
+            },
+            "jamUrl": {
+              "type": "string"
+            },
+            "teamId": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "video",
+                "screenshot",
+                "sessionReplay"
+              ]
+            },
+            "createdAt": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "originalUrl": {
+              "type": "string"
+            },
+            "origin": {
+              "type": "string"
+            },
+            "author": {
+              "type": "object",
+              "properties": {
+                "email": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "default": {}
+            },
+            "media": {
+              "type": "object",
+              "properties": {
+                "videoUrl": {
+                  "type": "string"
+                },
+                "screenshotUrl": {
+                  "type": "string"
+                },
+                "thumbnailUrl": {
+                  "type": "string"
+                }
+              },
+              "default": {}
+            },
+            "recordingLink": {
+              "type": "object",
+              "properties": {
+                "publicId": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "one_time",
+                    "reusable"
+                  ]
+                },
+                "recordingUrl": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "reference": {
+                  "type": "string"
+                },
+                "submitterComment": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "required": [
+            "jamId",
+            "jamUrl",
+            "teamId",
+            "type",
+            "createdAt"
+          ]
+        }
+      },
+      "required": [
+        "publicKeyId"
+      ]
+    }
+  },
+  {
     "name": "postSupportWebhooksPlainOrganizationId",
     "description": "Receive Plain support webhook notifications (POST /support/webhooks/plain/{organizationId})",
     "method": "POST",

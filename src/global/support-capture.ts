@@ -15,6 +15,24 @@ export type CaptureSessionStatus =
   | "finalized"
   | "expired";
 
+function generateWebhookSecret(): string {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  const binary = Array.from(bytes)
+    .map((b) => String.fromCharCode(b))
+    .join("");
+  return `whsec_${btoa(binary)}`;
+}
+
+export async function getCapturePublicKeyById(db: D1Client, id: string) {
+  const row = await db
+    .select()
+    .from(supportCapturePublicKeys)
+    .where(eq(supportCapturePublicKeys.id, id))
+    .get();
+  return row ? parseCapturePublicKey(row) : null;
+}
+
 export async function createCapturePublicKey(
   db: D1Client,
   organizationId: string,
@@ -22,12 +40,14 @@ export async function createCapturePublicKey(
 ) {
   const id = crypto.randomUUID();
   const key = `vtx_${crypto.randomUUID().replace(/-/g, "")}`;
+  const webhookSecret = generateWebhookSecret();
   const now = new Date().toISOString();
   await db.insert(supportCapturePublicKeys).values({
     id,
     organizationId,
     name: input.name,
     key,
+    webhookSecret,
     allowedOrigins: JSON.stringify(input.allowedOrigins),
     isActive: true,
     createdAt: now,
@@ -238,6 +258,7 @@ function parseCapturePublicKey(row: {
   organizationId: string;
   name: string;
   key: string;
+  webhookSecret: string | null;
   allowedOrigins: string;
   isActive: number | boolean;
   createdAt: string;
@@ -248,6 +269,7 @@ function parseCapturePublicKey(row: {
     organizationId: row.organizationId,
     name: row.name,
     key: row.key,
+    webhookSecret: row.webhookSecret,
     allowedOrigins: JSON.parse(row.allowedOrigins) as string[],
     isActive: Boolean(row.isActive),
     createdAt: row.createdAt,

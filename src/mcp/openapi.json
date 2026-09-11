@@ -9591,6 +9591,10 @@
                     "key": {
                       "type": "string"
                     },
+                    "webhookSecret": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "allowedOrigins": {
                       "type": "array",
                       "items": {
@@ -9612,6 +9616,7 @@
                     "organizationId",
                     "name",
                     "key",
+                    "webhookSecret",
                     "allowedOrigins",
                     "isActive",
                     "createdAt",
@@ -9663,6 +9668,10 @@
                           "key": {
                             "type": "string"
                           },
+                          "webhookSecret": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "allowedOrigins": {
                             "type": "array",
                             "items": {
@@ -9684,6 +9693,7 @@
                           "organizationId",
                           "name",
                           "key",
+                          "webhookSecret",
                           "allowedOrigins",
                           "isActive",
                           "createdAt",
@@ -9746,6 +9756,10 @@
                     "key": {
                       "type": "string"
                     },
+                    "webhookSecret": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "allowedOrigins": {
                       "type": "array",
                       "items": {
@@ -9767,6 +9781,7 @@
                     "organizationId",
                     "name",
                     "key",
+                    "webhookSecret",
                     "allowedOrigins",
                     "isActive",
                     "createdAt",
@@ -10212,6 +10227,178 @@
           }
         },
         "summary": "Get support capture public"
+      }
+    },
+    "/support/webhooks/jam/{publicKeyId}": {
+      "post": {
+        "tags": [
+          "support-capture"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "publicKeyId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "svix-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "svix-timestamp",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "svix-signature",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "jamId": {
+                    "type": "string"
+                  },
+                  "jamUrl": {
+                    "type": "string"
+                  },
+                  "teamId": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "video",
+                      "screenshot",
+                      "sessionReplay"
+                    ]
+                  },
+                  "createdAt": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "originalUrl": {
+                    "type": "string"
+                  },
+                  "origin": {
+                    "type": "string"
+                  },
+                  "author": {
+                    "type": "object",
+                    "properties": {
+                      "email": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "default": {}
+                  },
+                  "media": {
+                    "type": "object",
+                    "properties": {
+                      "videoUrl": {
+                        "type": "string"
+                      },
+                      "screenshotUrl": {
+                        "type": "string"
+                      },
+                      "thumbnailUrl": {
+                        "type": "string"
+                      }
+                    },
+                    "default": {}
+                  },
+                  "recordingLink": {
+                    "type": "object",
+                    "properties": {
+                      "publicId": {
+                        "type": "string"
+                      },
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "one_time",
+                          "reusable"
+                        ]
+                      },
+                      "recordingUrl": {
+                        "type": "string"
+                      },
+                      "description": {
+                        "type": "string"
+                      },
+                      "reference": {
+                        "type": "string"
+                      },
+                      "submitterComment": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "required": [
+                  "jamId",
+                  "jamUrl",
+                  "teamId",
+                  "type",
+                  "createdAt"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Jam captured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ticketId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ticketId"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid webhook"
+          },
+          "404": {
+            "description": "Public key or ticket not found"
+          }
+        },
+        "summary": "Create support webhook jam"
       }
     },
     "/workspaces/{organizationId}/support-channels": {

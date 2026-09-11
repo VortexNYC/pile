@@ -8,6 +8,7 @@ import {
   createCapturePublicKey,
   createCaptureSession,
   finalizeCaptureSession,
+  getCapturePublicKeyById,
   findCapturePublicKeyByKey,
   getCaptureSession,
   listCapturePublicKeys,
@@ -16,7 +17,11 @@ import {
   updateCaptureSessionStatus,
 } from "../global/support-capture.js";
 import { findOrCreateCustomerByEmail } from "../global/support-contacts.js";
-import { addTicketMessage, createTicket } from "../global/support-tickets.js";
+import {
+  addTicketMessage,
+  createTicket,
+  getTicketById,
+} from "../global/support-tickets.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
@@ -26,6 +31,7 @@ const capturePublicKeySchema = z.object({
   organizationId: z.string(),
   name: z.string(),
   key: z.string(),
+  webhookSecret: z.string().nullable(),
   allowedOrigins: z.array(z.string()),
   isActive: z.boolean(),
   createdAt: z.string(),
@@ -328,6 +334,76 @@ const shareTicketRoute = createRoute({
   },
 });
 
+const jamAuthorSchema = z.object({
+  email: z.string().optional(),
+  name: z.string().optional(),
+});
+
+const jamMediaSchema = z.object({
+  videoUrl: z.string().optional(),
+  screenshotUrl: z.string().optional(),
+  thumbnailUrl: z.string().optional(),
+});
+
+const jamRecordingLinkSchema = z.object({
+  publicId: z.string().optional(),
+  type: z.enum(["one_time", "reusable"]).optional(),
+  recordingUrl: z.string().optional(),
+  description: z.string().optional(),
+  reference: z.string().optional(),
+  submitterComment: z.string().optional(),
+});
+
+const jamWebhookBodySchema = z.object({
+  jamId: z.string(),
+  jamUrl: z.string(),
+  teamId: z.string(),
+  type: z.enum(["video", "screenshot", "sessionReplay"]),
+  createdAt: z.string(),
+  title: z.string().optional(),
+  description: z.string().optional(),
+  originalUrl: z.string().optional(),
+  origin: z.string().optional(),
+  author: jamAuthorSchema.default({}),
+  media: jamMediaSchema.default({}),
+  recordingLink: jamRecordingLinkSchema.optional(),
+});
+
+const jamWebhookRoute = createRoute({
+  method: "post",
+  path: "/support/webhooks/jam/{publicKeyId}",
+  tags: ["support-capture"],
+  request: {
+    params: z.object({ publicKeyId: z.string() }),
+    headers: z.object({
+      "svix-id": z.string(),
+      "svix-timestamp": z.string(),
+      "svix-signature": z.string(),
+    }),
+    body: {
+      content: {
+        "application/json": { schema: jamWebhookBodySchema },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Jam captured",
+      content: {
+        "application/json": {
+          schema: z.object({ ticketId: z.string() }),
+        },
+      },
+    },
+    401: {
+      description: "Invalid webhook",
+    },
+    404: {
+      description: "Public key or ticket not found",
+    },
+  },
+});
+
 function assertSessionActive(session: { status: string; expiresAt: string }) {
   if (
     session.status === "expired" ||
@@ -406,6 +482,77 @@ function uploadsFromSession(session: {
       u !== null &&
       typeof u.attachmentType === "string"
   ) as CaptureUploadRecord[];
+}
+
+function base64ToBytes(value: string): Uint8Array {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+function constantTimeEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  let c = 0;
+  for (let i = 0; i < a.length; i++) {
+    c |= a[i] ^ b[i];
+  }
+  return c === 0;
+}
+
+async function verifySvixSignature({
+  payload,
+  svixId,
+  svixTimestamp,
+  svixSignature,
+  secret,
+}: {
+  payload: string;
+  svixId: string;
+  svixTimestamp: string;
+  svixSignature: string;
+  secret: string;
+}): Promise<boolean> {
+  const rawSecret = secret.startsWith("whsec_")
+    ? secret.slice("whsec_".length)
+    : secret;
+  let keyBytes: Uint8Array;
+  try {
+    keyBytes = base64ToBytes(rawSecret);
+  } catch {
+    return false;
+  }
+
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw",
+    keyBytes,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const signed = `${svixId}.${svixTimestamp}.${payload}`;
+  const signedBytes = new TextEncoder().encode(signed);
+  const expected = new Uint8Array(
+    await crypto.subtle.sign("HMAC", cryptoKey, signedBytes)
+  );
+
+  const versions = svixSignature
+    .split(" ")
+    .filter((s) => s.startsWith("v1,"))
+    .map((s) => s.slice("v1,".length));
+
+  for (const version of versions) {
+    let provided: Uint8Array;
+    try {
+      provided = base64ToBytes(version);
+    } catch {
+      continue;
+    }
+    if (constantTimeEqual(expected, provided)) return true;
+  }
+  return false;
 }
 
 export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
@@ -805,5 +952,152 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
         size: a.size,
       })),
     });
+  });
+
+  app.openapi(jamWebhookRoute, async (c) => {
+    const { publicKeyId } = c.req.valid("param");
+    const svixId = c.req.header("svix-id") ?? "";
+    const svixTimestamp = c.req.header("svix-timestamp") ?? "";
+    const svixSignature = c.req.header("svix-signature") ?? "";
+
+    const db = createD1(c.env.D1);
+    const publicKey = await getCapturePublicKeyById(db, publicKeyId);
+    if (!publicKey || !publicKey.isActive || !publicKey.webhookSecret) {
+      throw new VortexError({
+        status: 401,
+        code: "UNAUTHORIZED",
+        message: "Invalid Jam webhook key",
+      });
+    }
+
+    const payload = await c.req.text();
+    const verified = await verifySvixSignature({
+      payload,
+      svixId,
+      svixTimestamp,
+      svixSignature,
+      secret: publicKey.webhookSecret,
+    });
+    if (!verified) {
+      throw new VortexError({
+        status: 401,
+        code: "UNAUTHORIZED",
+        message: "Invalid Jam webhook signature",
+      });
+    }
+
+    const parsed = jamWebhookBodySchema.parse(JSON.parse(payload));
+
+    const reference = parsed.recordingLink?.reference;
+    const email = parsed.author?.email;
+    const fullName = parsed.author?.name ?? null;
+    const customer = email
+      ? await findOrCreateCustomerByEmail(
+          db,
+          publicKey.organizationId,
+          email,
+          fullName,
+          "capture"
+        )
+      : null;
+
+    let ticket = null;
+    if (reference) {
+      const existing = await getTicketById(
+        db,
+        publicKey.organizationId,
+        reference
+      );
+      if (existing) ticket = existing;
+    }
+
+    if (!ticket) {
+      if (!customer) {
+        throw new VortexError({
+          status: 400,
+          code: "BAD_REQUEST",
+          message:
+            "Jam webhook must include an author email when creating a new ticket",
+        });
+      }
+      ticket = await createTicket(db, {
+        organizationId: publicKey.organizationId,
+        customerId: customer.id,
+        title: parsed.title ?? `Jam ${parsed.type} from ${parsed.jamUrl}`,
+        priority: "medium",
+        sourceChannel: "capture",
+        externalSource: "jam",
+        externalId: parsed.jamId,
+      });
+    }
+
+    const text = [parsed.description, parsed.recordingLink?.submitterComment]
+      .filter((s): s is string => typeof s === "string" && s.length > 0)
+      .join("\n\n");
+    const customerId = customer?.id ?? ticket.customerId;
+
+    const event = await addTicketMessage(
+      db,
+      publicKey.organizationId,
+      ticket.id,
+      {
+        direction: "inbound",
+        textContent: text || `Jam capture: ${parsed.jamUrl}`,
+        markdownContent: text,
+        channel: "capture",
+        customerId,
+        actorType: "customer",
+        actorId: customerId,
+      },
+      c.env
+    );
+
+    const attachmentInputs: {
+      type: "screenshot" | "video" | "debugger_json" | "log" | "network";
+      url: string;
+      contentType: string;
+    }[] = [];
+
+    if (parsed.type === "video" || parsed.type === "sessionReplay") {
+      if (parsed.media.videoUrl) {
+        attachmentInputs.push({
+          type: "video",
+          url: parsed.media.videoUrl,
+          contentType: "video/mp4",
+        });
+      }
+      if (parsed.media.thumbnailUrl) {
+        attachmentInputs.push({
+          type: "screenshot",
+          url: parsed.media.thumbnailUrl,
+          contentType: "image/jpeg",
+        });
+      }
+    }
+    if (parsed.type === "screenshot" && parsed.media.screenshotUrl) {
+      attachmentInputs.push({
+        type: "screenshot",
+        url: parsed.media.screenshotUrl,
+        contentType: "image/png",
+      });
+    }
+
+    await Promise.all(
+      attachmentInputs.map((input) =>
+        db.insert(supportTicketAttachments).values({
+          id: crypto.randomUUID(),
+          organizationId: publicKey.organizationId,
+          ticketId: ticket.id,
+          eventId: event.id,
+          type: input.type,
+          contentType: input.contentType,
+          url: input.url,
+          r2Key: null,
+          createdAt: new Date().toISOString(),
+        })
+      )
+    );
+
+    return c.json({ ticketId: ticket.id });
   });
 }

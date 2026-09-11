@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { createD1 } from "../global/db.js";
 import { supportCustomers, user as userTable } from "../global/schema.js";
+import { supportTicketAttachments } from "../global/schema.js";
 import { getTicketById } from "../global/support-tickets.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
@@ -51,6 +52,41 @@ async function seedWorkspace() {
 function captureFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const request = new Request(`https://example.com${path}`, init);
   return app.fetch(request, env) as Promise<Response>;
+}
+
+async function signJamWebhook({
+  payload,
+  svixId,
+  svixTimestamp,
+  secret,
+}: {
+  payload: string;
+  svixId: string;
+  svixTimestamp: string;
+  secret: string;
+}): Promise<string> {
+  const rawSecret = secret.startsWith("whsec_") ? secret.slice(6) : secret;
+  const keyBytes = new Uint8Array(
+    atob(rawSecret)
+      .split("")
+      .map((c) => c.charCodeAt(0))
+  );
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw",
+    keyBytes,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const signed = `${svixId}.${svixTimestamp}.${payload}`;
+  const signedBytes = new TextEncoder().encode(signed);
+  const expected = new Uint8Array(
+    await crypto.subtle.sign("HMAC", cryptoKey, signedBytes)
+  );
+  const binary = Array.from(expected)
+    .map((b) => String.fromCharCode(b))
+    .join("");
+  return `v1,${btoa(binary)}`;
 }
 
 describe("support-capture API", () => {
@@ -277,5 +313,64 @@ describe("support-capture API", () => {
       .get();
     expect(customer).not.toBeNull();
     expect(customer!.organizationId).toBe(organizationId);
+  });
+
+  it("receives a verified Jam webhook and creates a support ticket", async () => {
+    const publicKey = await createPublicKey();
+    const db = createD1(env.D1);
+
+    const payload = JSON.stringify({
+      jamId: "jam-123",
+      jamUrl: "https://jam.dev/c/jam-123",
+      teamId: "team-123",
+      type: "screenshot",
+      createdAt: new Date().toISOString(),
+      title: "Button is broken",
+      description: "Clicking the submit button does nothing",
+      author: {
+        email: "reporter@example.com",
+        name: "Reporter",
+      },
+      media: {
+        screenshotUrl: "https://media.jam.dev/screenshot.png",
+      },
+      recordingLink: {
+        reference: undefined,
+      },
+    });
+
+    const svixId = crypto.randomUUID();
+    const svixTimestamp = Math.floor(Date.now() / 1000).toString();
+    const signature = await signJamWebhook({
+      payload,
+      svixId,
+      svixTimestamp,
+      secret: publicKey.webhookSecret,
+    });
+
+    const res = await captureFetch(`/support/webhooks/jam/${publicKey.id}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "svix-id": svixId,
+        "svix-timestamp": svixTimestamp,
+        "svix-signature": signature,
+      },
+      body: payload,
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ticketId: string };
+    expect(body.ticketId).toBeTruthy();
+
+    const ticket = await getTicketById(db, organizationId, body.ticketId);
+    expect(ticket).not.toBeNull();
+    expect(ticket!.externalSource).toBe("jam");
+
+    const attachments = await db
+      .select()
+      .from(supportTicketAttachments)
+      .where(eq(supportTicketAttachments.ticketId, body.ticketId));
+    expect(attachments.length).toBe(1);
+    expect(attachments[0]!.type).toBe("screenshot");
   });
 });

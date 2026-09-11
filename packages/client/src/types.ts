@@ -4793,6 +4793,7 @@ export interface paths {
                                 organizationId: string;
                                 name: string;
                                 key: string;
+                                webhookSecret: string | null;
                                 allowedOrigins: string[];
                                 isActive: boolean;
                                 createdAt: string;
@@ -4835,6 +4836,7 @@ export interface paths {
                             organizationId: string;
                             name: string;
                             key: string;
+                            webhookSecret: string | null;
                             allowedOrigins: string[];
                             isActive: boolean;
                             createdAt: string;
@@ -4884,6 +4886,7 @@ export interface paths {
                             organizationId: string;
                             name: string;
                             key: string;
+                            webhookSecret: string | null;
                             allowedOrigins: string[];
                             isActive: boolean;
                             createdAt: string;
@@ -5273,6 +5276,99 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/support/webhooks/jam/{publicKeyId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create support webhook jam */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "svix-id": string;
+                    "svix-timestamp": string;
+                    "svix-signature": string;
+                };
+                path: {
+                    publicKeyId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        jamId: string;
+                        jamUrl: string;
+                        teamId: string;
+                        /** @enum {string} */
+                        type: "video" | "screenshot" | "sessionReplay";
+                        createdAt: string;
+                        title?: string;
+                        description?: string;
+                        originalUrl?: string;
+                        origin?: string;
+                        /** @default {} */
+                        author?: {
+                            email?: string;
+                            name?: string;
+                        };
+                        /** @default {} */
+                        media?: {
+                            videoUrl?: string;
+                            screenshotUrl?: string;
+                            thumbnailUrl?: string;
+                        };
+                        recordingLink?: {
+                            publicId?: string;
+                            /** @enum {string} */
+                            type?: "one_time" | "reusable";
+                            recordingUrl?: string;
+                            description?: string;
+                            reference?: string;
+                            submitterComment?: string;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Jam captured */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ticketId: string;
+                        };
+                    };
+                };
+                /** @description Invalid webhook */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Public key or ticket not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
