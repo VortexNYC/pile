@@ -407,4 +407,48 @@ describe("support-content API", () => {
     expect(listBody.labels).toHaveLength(1);
     expect(listBody.labels[0].name).toBe("premium");
   });
+
+  it("rejects creating a label without auth", async () => {
+    const res = await app.fetch(
+      new Request(
+        `https://example.com/workspaces/${organizationId}/support/labels`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: "no auth" }),
+        }
+      ),
+      env
+    );
+    expect(res.status).toBe(403);
+  });
+
+  it("rejects listing labels without auth", async () => {
+    const res = await app.fetch(
+      new Request(
+        `https://example.com/workspaces/${organizationId}/support/labels`
+      ),
+      env
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it("rejects creating a label without a name", async () => {
+    const res = await fetch(`/workspaces/${organizationId}/support/labels`, {
+      method: "POST",
+      body: JSON.stringify({ color: "#ff0000" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects creating a label with a non-string color", async () => {
+    const res = await fetch(`/workspaces/${organizationId}/support/labels`, {
+      method: "POST",
+      body: JSON.stringify({
+        name: "bad color",
+        color: 123,
+      }),
+    });
+    expect(res.status).toBe(400);
+  });
 });
