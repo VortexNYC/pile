@@ -3807,7 +3807,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "api",
             "intercom",
             "zendesk",
-            "plain"
+            "plain",
+            "linear"
           ]
         },
         "externalSource": {
@@ -10790,7 +10791,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "api",
                 "intercom",
                 "zendesk",
-                "plain"
+                "plain",
+                "linear"
               ]
             },
             "priority": {
@@ -10855,7 +10857,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                     "api",
                     "intercom",
                     "zendesk",
-                    "plain"
+                    "plain",
+                    "linear"
                   ],
                   "default": "chat"
                 }
@@ -10940,7 +10943,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "api",
                 "intercom",
                 "zendesk",
-                "plain"
+                "plain",
+                "linear"
               ]
             },
             "customerId": {

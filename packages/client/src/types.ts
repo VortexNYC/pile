@@ -11121,7 +11121,7 @@ export interface paths {
                     customerId?: string;
                     status?: "todo" | "done" | "snoozed";
                     priority?: "low" | "medium" | "high" | "urgent";
-                    sourceChannel?: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                    sourceChannel?: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain" | "linear";
                     externalSource?: "intercom" | "zendesk" | "plain" | "email" | "slack" | "msteams" | "discord" | "chat" | "api" | "manual";
                     assignedTo?: string;
                     q?: string;
@@ -11154,7 +11154,7 @@ export interface paths {
                                 /** @enum {string} */
                                 priority: "low" | "medium" | "high" | "urgent";
                                 /** @enum {string} */
-                                sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                                sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain" | "linear";
                                 issueId: string | null;
                                 lastCustomerMessageAt: string | null;
                                 lastAgentMessageAt: string | null;
@@ -11210,7 +11210,7 @@ export interface paths {
                                         textContent: string;
                                         markdownContent: string | null;
                                         /** @enum {string} */
-                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain" | "linear";
                                         customerId: string | null;
                                         userId: string | null;
                                     };
@@ -11244,7 +11244,7 @@ export interface paths {
                         customerId: string;
                         title: string;
                         /** @enum {string} */
-                        sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                        sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain" | "linear";
                         /**
                          * @default medium
                          * @enum {string}
@@ -11269,7 +11269,7 @@ export interface paths {
                              * @default chat
                              * @enum {string}
                              */
-                            channel?: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                            channel?: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain" | "linear";
                         };
                     };
                 };
@@ -11295,7 +11295,7 @@ export interface paths {
                                 /** @enum {string} */
                                 priority: "low" | "medium" | "high" | "urgent";
                                 /** @enum {string} */
-                                sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                                sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain" | "linear";
                                 issueId: string | null;
                                 lastCustomerMessageAt: string | null;
                                 lastAgentMessageAt: string | null;
@@ -11351,7 +11351,7 @@ export interface paths {
                                         textContent: string;
                                         markdownContent: string | null;
                                         /** @enum {string} */
-                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain" | "linear";
                                         customerId: string | null;
                                         userId: string | null;
                                     };
@@ -11413,7 +11413,7 @@ export interface paths {
                                 /** @enum {string} */
                                 priority: "low" | "medium" | "high" | "urgent";
                                 /** @enum {string} */
-                                sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                                sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain" | "linear";
                                 issueId: string | null;
                                 lastCustomerMessageAt: string | null;
                                 lastAgentMessageAt: string | null;
@@ -11469,7 +11469,7 @@ export interface paths {
                                         textContent: string;
                                         markdownContent: string | null;
                                         /** @enum {string} */
-                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain" | "linear";
                                         customerId: string | null;
                                         userId: string | null;
                                     };
@@ -11537,7 +11537,7 @@ export interface paths {
                                 /** @enum {string} */
                                 priority: "low" | "medium" | "high" | "urgent";
                                 /** @enum {string} */
-                                sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                                sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain" | "linear";
                                 issueId: string | null;
                                 lastCustomerMessageAt: string | null;
                                 lastAgentMessageAt: string | null;
@@ -11593,7 +11593,7 @@ export interface paths {
                                         textContent: string;
                                         markdownContent: string | null;
                                         /** @enum {string} */
-                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain" | "linear";
                                         customerId: string | null;
                                         userId: string | null;
                                     };
@@ -11639,7 +11639,7 @@ export interface paths {
                         textContent: string;
                         markdownContent?: string;
                         /** @enum {string} */
-                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain" | "linear";
                         customerId?: string;
                         userId?: string;
                         /** @enum {string} */
@@ -11677,7 +11677,7 @@ export interface paths {
                                     textContent: string;
                                     markdownContent: string | null;
                                     /** @enum {string} */
-                                    channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                                    channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain" | "linear";
                                     customerId: string | null;
                                     userId: string | null;
                                 };
@@ -11758,7 +11758,7 @@ export interface paths {
                                     textContent: string;
                                     markdownContent: string | null;
                                     /** @enum {string} */
-                                    channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                                    channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain" | "linear";
                                     customerId: string | null;
                                     userId: string | null;
                                 };
@@ -11826,7 +11826,7 @@ export interface paths {
                                     textContent: string;
                                     markdownContent: string | null;
                                     /** @enum {string} */
-                                    channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                                    channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain" | "linear";
                                     customerId: string | null;
                                     userId: string | null;
                                 };
@@ -11892,7 +11892,7 @@ export interface paths {
                                 /** @enum {string} */
                                 priority: "low" | "medium" | "high" | "urgent";
                                 /** @enum {string} */
-                                sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                                sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain" | "linear";
                                 issueId: string | null;
                                 lastCustomerMessageAt: string | null;
                                 lastAgentMessageAt: string | null;
@@ -11948,7 +11948,7 @@ export interface paths {
                                         textContent: string;
                                         markdownContent: string | null;
                                         /** @enum {string} */
-                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain" | "linear";
                                         customerId: string | null;
                                         userId: string | null;
                                     };
@@ -12012,7 +12012,7 @@ export interface paths {
                                 /** @enum {string} */
                                 priority: "low" | "medium" | "high" | "urgent";
                                 /** @enum {string} */
-                                sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                                sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain" | "linear";
                                 issueId: string | null;
                                 lastCustomerMessageAt: string | null;
                                 lastAgentMessageAt: string | null;
@@ -12068,7 +12068,7 @@ export interface paths {
                                         textContent: string;
                                         markdownContent: string | null;
                                         /** @enum {string} */
-                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain" | "linear";
                                         customerId: string | null;
                                         userId: string | null;
                                     };
@@ -12141,7 +12141,7 @@ export interface paths {
                                 /** @enum {string} */
                                 priority: "low" | "medium" | "high" | "urgent";
                                 /** @enum {string} */
-                                sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                                sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain" | "linear";
                                 issueId: string | null;
                                 lastCustomerMessageAt: string | null;
                                 lastAgentMessageAt: string | null;
@@ -12197,7 +12197,7 @@ export interface paths {
                                         textContent: string;
                                         markdownContent: string | null;
                                         /** @enum {string} */
-                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain" | "linear";
                                         customerId: string | null;
                                         userId: string | null;
                                     };
@@ -12276,7 +12276,7 @@ export interface paths {
                                 /** @enum {string} */
                                 priority: "low" | "medium" | "high" | "urgent";
                                 /** @enum {string} */
-                                sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                                sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain" | "linear";
                                 issueId: string | null;
                                 lastCustomerMessageAt: string | null;
                                 lastAgentMessageAt: string | null;
@@ -12332,7 +12332,7 @@ export interface paths {
                                         textContent: string;
                                         markdownContent: string | null;
                                         /** @enum {string} */
-                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain" | "linear";
                                         customerId: string | null;
                                         userId: string | null;
                                     };
@@ -12402,7 +12402,7 @@ export interface paths {
                                 /** @enum {string} */
                                 priority: "low" | "medium" | "high" | "urgent";
                                 /** @enum {string} */
-                                sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                                sourceChannel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain" | "linear";
                                 issueId: string | null;
                                 lastCustomerMessageAt: string | null;
                                 lastAgentMessageAt: string | null;
@@ -12458,7 +12458,7 @@ export interface paths {
                                         textContent: string;
                                         markdownContent: string | null;
                                         /** @enum {string} */
-                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
+                                        channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain" | "linear";
                                         customerId: string | null;
                                         userId: string | null;
                                     };

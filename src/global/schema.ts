@@ -2059,6 +2059,7 @@ export const supportTickets = sqliteTable(
         "intercom",
         "zendesk",
         "plain",
+        "linear",
       ] as const,
     }).notNull(),
     issueId: text("issue_id" as string),
@@ -2253,6 +2254,7 @@ export const supportTicketMessages = sqliteTable(
         "intercom",
         "zendesk",
         "plain",
+        "linear",
       ] as const,
     }).notNull(),
     customerId: text("customer_id" as string).references(
@@ -2352,6 +2354,7 @@ export const supportChannels = sqliteTable(
         "intercom",
         "zendesk",
         "plain",
+        "linear",
       ] as const,
     }).notNull(),
     name: text("name").notNull(),

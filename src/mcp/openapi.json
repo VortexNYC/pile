@@ -21423,7 +21423,8 @@
                       "api",
                       "intercom",
                       "zendesk",
-                      "plain"
+                      "plain",
+                      "linear"
                     ]
                   },
                   "priority": {
@@ -21488,7 +21489,8 @@
                           "api",
                           "intercom",
                           "zendesk",
-                          "plain"
+                          "plain",
+                          "linear"
                         ],
                         "default": "chat"
                       }
@@ -21569,7 +21571,8 @@
                             "api",
                             "intercom",
                             "zendesk",
-                            "plain"
+                            "plain",
+                            "linear"
                           ]
                         },
                         "issueId": {
@@ -21809,7 +21812,8 @@
                                       "api",
                                       "intercom",
                                       "zendesk",
-                                      "plain"
+                                      "plain",
+                                      "linear"
                                     ]
                                   },
                                   "customerId": {
@@ -21980,7 +21984,8 @@
                 "api",
                 "intercom",
                 "zendesk",
-                "plain"
+                "plain",
+                "linear"
               ]
             },
             "required": false,
@@ -22088,7 +22093,8 @@
                               "api",
                               "intercom",
                               "zendesk",
-                              "plain"
+                              "plain",
+                              "linear"
                             ]
                           },
                           "issueId": {
@@ -22328,7 +22334,8 @@
                                         "api",
                                         "intercom",
                                         "zendesk",
-                                        "plain"
+                                        "plain",
+                                        "linear"
                                       ]
                                     },
                                     "customerId": {
@@ -22511,7 +22518,8 @@
                             "api",
                             "intercom",
                             "zendesk",
-                            "plain"
+                            "plain",
+                            "linear"
                           ]
                         },
                         "issueId": {
@@ -22751,7 +22759,8 @@
                                       "api",
                                       "intercom",
                                       "zendesk",
-                                      "plain"
+                                      "plain",
+                                      "linear"
                                     ]
                                   },
                                   "customerId": {
@@ -22975,7 +22984,8 @@
                             "api",
                             "intercom",
                             "zendesk",
-                            "plain"
+                            "plain",
+                            "linear"
                           ]
                         },
                         "issueId": {
@@ -23215,7 +23225,8 @@
                                       "api",
                                       "intercom",
                                       "zendesk",
-                                      "plain"
+                                      "plain",
+                                      "linear"
                                     ]
                                   },
                                   "customerId": {
@@ -23361,7 +23372,8 @@
                       "api",
                       "intercom",
                       "zendesk",
-                      "plain"
+                      "plain",
+                      "linear"
                     ]
                   },
                   "customerId": {
@@ -23476,7 +23488,8 @@
                                 "api",
                                 "intercom",
                                 "zendesk",
-                                "plain"
+                                "plain",
+                                "linear"
                               ]
                             },
                             "customerId": {
@@ -23681,7 +23694,8 @@
                                 "api",
                                 "intercom",
                                 "zendesk",
-                                "plain"
+                                "plain",
+                                "linear"
                               ]
                             },
                             "customerId": {
@@ -23864,7 +23878,8 @@
                                   "api",
                                   "intercom",
                                   "zendesk",
-                                  "plain"
+                                  "plain",
+                                  "linear"
                                 ]
                               },
                               "customerId": {
@@ -24021,7 +24036,8 @@
                             "api",
                             "intercom",
                             "zendesk",
-                            "plain"
+                            "plain",
+                            "linear"
                           ]
                         },
                         "issueId": {
@@ -24261,7 +24277,8 @@
                                       "api",
                                       "intercom",
                                       "zendesk",
-                                      "plain"
+                                      "plain",
+                                      "linear"
                                     ]
                                   },
                                   "customerId": {
@@ -24438,7 +24455,8 @@
                             "api",
                             "intercom",
                             "zendesk",
-                            "plain"
+                            "plain",
+                            "linear"
                           ]
                         },
                         "issueId": {
@@ -24678,7 +24696,8 @@
                                       "api",
                                       "intercom",
                                       "zendesk",
-                                      "plain"
+                                      "plain",
+                                      "linear"
                                     ]
                                   },
                                   "customerId": {
@@ -24885,7 +24904,8 @@
                             "api",
                             "intercom",
                             "zendesk",
-                            "plain"
+                            "plain",
+                            "linear"
                           ]
                         },
                         "issueId": {
@@ -25125,7 +25145,8 @@
                                       "api",
                                       "intercom",
                                       "zendesk",
-                                      "plain"
+                                      "plain",
+                                      "linear"
                                     ]
                                   },
                                   "customerId": {
@@ -25359,7 +25380,8 @@
                             "api",
                             "intercom",
                             "zendesk",
-                            "plain"
+                            "plain",
+                            "linear"
                           ]
                         },
                         "issueId": {
@@ -25599,7 +25621,8 @@
                                       "api",
                                       "intercom",
                                       "zendesk",
-                                      "plain"
+                                      "plain",
+                                      "linear"
                                     ]
                                   },
                                   "customerId": {
@@ -25796,7 +25819,8 @@
                             "api",
                             "intercom",
                             "zendesk",
-                            "plain"
+                            "plain",
+                            "linear"
                           ]
                         },
                         "issueId": {
@@ -26036,7 +26060,8 @@
                                       "api",
                                       "intercom",
                                       "zendesk",
-                                      "plain"
+                                      "plain",
+                                      "linear"
                                     ]
                                   },
                                   "customerId": {

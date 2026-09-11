@@ -6,7 +6,10 @@ import { z } from "zod";
 import { getWorkspaceStub } from "../api/stub.js";
 import { createD1 } from "../global/db.js";
 import { supportCustomers, user as userTable } from "../global/schema.js";
-import { supportTicketAttachments } from "../global/schema.js";
+import {
+  supportTicketAttachments,
+  supportTicketEvents,
+} from "../global/schema.js";
 import { findOrCreateCustomerByEmail } from "../global/support-contacts.js";
 import { createTicket, getTicketById } from "../global/support-tickets.js";
 import { createWorkspace } from "../global/workspaces.js";
@@ -525,6 +528,68 @@ describe("support-capture API", () => {
       .where(eq(supportTicketAttachments.ticketId, body.ticketId));
     expect(attachments.length).toBe(1);
     expect(attachments[0]!.type).toBe("screenshot");
+  });
+
+  it("deduplicates a repeated Jam webhook by jamId", async () => {
+    const publicKey = await createPublicKey();
+    const db = createD1(env.D1);
+
+    const payload = JSON.stringify({
+      jamId: "jam-dedup-1",
+      jamUrl: "https://jam.dev/c/jam-dedup-1",
+      teamId: "team-123",
+      type: "screenshot",
+      createdAt: new Date().toISOString(),
+      title: "Button is broken",
+      description: "Clicking the submit button does nothing",
+      author: {
+        email: "dedup@example.com",
+        name: "Dedup Reporter",
+      },
+      media: {
+        screenshotUrl: "https://media.jam.dev/screenshot.png",
+      },
+    });
+    const svixId = "msg-dedup";
+    const svixTimestamp = Math.floor(Date.now() / 1000).toString();
+    const signature = await signJamWebhook({
+      payload,
+      svixId,
+      svixTimestamp,
+      secret: publicKey.webhookSecret,
+    });
+    const res1 = await captureFetch(`/support/webhooks/jam/${publicKey.id}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "svix-id": svixId,
+        "svix-timestamp": svixTimestamp,
+        "svix-signature": signature,
+      },
+      body: payload,
+    });
+    expect(res1.status).toBe(200);
+    const body1 = (await res1.json()) as { ticketId: string };
+
+    const res2 = await captureFetch(`/support/webhooks/jam/${publicKey.id}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "svix-id": svixId,
+        "svix-timestamp": svixTimestamp,
+        "svix-signature": signature,
+      },
+      body: payload,
+    });
+    expect(res2.status).toBe(200);
+    const body2 = (await res2.json()) as { ticketId: string };
+    expect(body2.ticketId).toBe(body1.ticketId);
+
+    const events = await db
+      .select()
+      .from(supportTicketEvents)
+      .where(eq(supportTicketEvents.ticketId, body1.ticketId));
+    expect(events.length).toBe(1);
   });
 
   it("attaches a capture to an existing support ticket by reference", async () => {

@@ -70,7 +70,8 @@ export type SupportTicketChannel =
   | "api"
   | "intercom"
   | "zendesk"
-  | "plain";
+  | "plain"
+  | "linear";
 export type SupportTicketMessageDirection = "inbound" | "outbound";
 export type SupportTicketMessageChannel =
   | "email"
@@ -82,7 +83,8 @@ export type SupportTicketMessageChannel =
   | "api"
   | "intercom"
   | "zendesk"
-  | "plain";
+  | "plain"
+  | "linear";
 export type SupportTicketEventType =
   | "message"
   | "note"
@@ -1494,7 +1496,8 @@ function asMessageChannel(
     sourceType === "msteams" ||
     sourceType === "discord" ||
     sourceType === "chat" ||
-    sourceType === "api"
+    sourceType === "api" ||
+    sourceType === "linear"
   ) {
     return sourceType;
   }
@@ -1514,7 +1517,8 @@ function asTicketChannel(
     sourceType === "api" ||
     sourceType === "intercom" ||
     sourceType === "zendesk" ||
-    sourceType === "plain"
+    sourceType === "plain" ||
+    sourceType === "linear"
   ) {
     return sourceType;
   }

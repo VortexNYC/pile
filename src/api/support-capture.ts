@@ -1025,6 +1025,16 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
 
+    const timestamp = Number(svixTimestamp);
+    const now = Math.floor(Date.now() / 1000);
+    if (Number.isNaN(timestamp) || Math.abs(now - timestamp) > 300) {
+      throw new VortexError({
+        status: 401,
+        code: "UNAUTHORIZED",
+        message: "Jam webhook timestamp out of tolerance",
+      });
+    }
+
     const parsed = jamWebhookBodySchema.parse(JSON.parse(payload));
 
     const reference = parsed.recordingLink?.reference;
@@ -1046,6 +1056,21 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
     const text = [parsed.description, parsed.recordingLink?.submitterComment]
       .filter((s): s is string => typeof s === "string" && s.length > 0)
       .join("\n\n");
+
+    if (!reference && !intercomConversationId && !linearIssueId) {
+      const existing = await db
+        .select()
+        .from(supportTickets)
+        .where(
+          and(
+            eq(supportTickets.organizationId, publicKey.organizationId),
+            eq(supportTickets.externalSource, "jam"),
+            eq(supportTickets.externalId, parsed.jamId)
+          )
+        )
+        .get();
+      if (existing) return c.json({ ticketId: existing.id });
+    }
 
     let ticket = null;
     if (reference) {
@@ -1173,20 +1198,43 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
 
+    const bucket = c.env.ATTACHMENTS_BUCKET;
+    const origin = new URL(c.req.url).origin;
+
     await Promise.all(
-      attachmentInputs.map((input) =>
-        db.insert(supportTicketAttachments).values({
+      attachmentInputs.map(async (input) => {
+        const r2Key = `${publicKey.organizationId}/jam/${parsed.jamId}/${input.type}`;
+        let url = input.url;
+        let r2Stored: string | null = null;
+        if (bucket) {
+          try {
+            const resp = await fetch(input.url);
+            if (resp.ok) {
+              const buffer = await resp.arrayBuffer();
+              const contentType =
+                resp.headers.get("content-type") ?? input.contentType;
+              await bucket.put(r2Key, buffer, {
+                httpMetadata: { contentType },
+              });
+              r2Stored = r2Key;
+              url = `${origin}/support/capture/artifacts?r2Key=${encodeURIComponent(r2Key)}`;
+            }
+          } catch {
+            // Remote media is not available locally; keep the original URL.
+          }
+        }
+        return db.insert(supportTicketAttachments).values({
           id: crypto.randomUUID(),
           organizationId: publicKey.organizationId,
           ticketId: ticket.id,
           eventId: event.id,
           type: input.type,
           contentType: input.contentType,
-          url: input.url,
-          r2Key: null,
+          url,
+          r2Key: r2Stored,
           createdAt: new Date().toISOString(),
-        })
-      )
+        });
+      })
     );
 
     return c.json({ ticketId: ticket.id });

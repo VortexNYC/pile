@@ -46,6 +46,7 @@ const supportTicketChannelEnum = z.enum([
   "intercom",
   "zendesk",
   "plain",
+  "linear",
 ]);
 const supportTicketMessageChannelEnum = z.enum([
   "email",
@@ -58,6 +59,7 @@ const supportTicketMessageChannelEnum = z.enum([
   "intercom",
   "zendesk",
   "plain",
+  "linear",
 ]);
 const supportTicketActorTypeEnum = z.enum([
   "customer",
