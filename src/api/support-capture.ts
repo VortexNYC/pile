@@ -153,6 +153,7 @@ const tokenRoute = createRoute({
   request: {
     headers: z.object({
       "x-vortex-capture-public-key": z.string(),
+      "x-vortex-capture-reference": z.string().optional(),
       origin: z.string().optional(),
     }),
   },
@@ -604,10 +605,13 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
 
     assertOriginAllowed(publicKey, origin);
 
+    const reference = c.req.header("x-vortex-capture-reference");
     const session = await createCaptureSession(
       db,
       publicKey.id,
-      publicKey.organizationId
+      publicKey.organizationId,
+      30,
+      reference ? { reference } : {}
     );
     return c.json({ token: session.id });
   });
@@ -779,13 +783,27 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
       "capture"
     );
 
-    const ticket = await createTicket(db, {
-      organizationId: session.organizationId,
-      customerId: customer.id,
-      title,
-      priority,
-      sourceChannel: "capture",
-    });
+    const reference =
+      typeof session.metadata.reference === "string"
+        ? session.metadata.reference
+        : null;
+
+    let ticket:
+      | Awaited<ReturnType<typeof getTicketById>>
+      | Awaited<ReturnType<typeof createTicket>>
+      | null = reference
+      ? await getTicketById(db, session.organizationId, reference)
+      : null;
+
+    if (!ticket) {
+      ticket = await createTicket(db, {
+        organizationId: session.organizationId,
+        customerId: customer.id,
+        title,
+        priority,
+        sourceChannel: "capture",
+      });
+    }
 
     const text = description || `Bug report from capture (${title})`;
     const markdown = description;

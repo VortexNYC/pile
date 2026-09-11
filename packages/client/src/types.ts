@@ -4923,6 +4923,7 @@ export interface paths {
                 query?: never;
                 header: {
                     "x-vortex-capture-public-key": string;
+                    "x-vortex-capture-reference"?: string;
                     origin?: string;
                 };
                 path?: never;

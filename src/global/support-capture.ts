@@ -125,7 +125,8 @@ export async function createCaptureSession(
   db: D1Client,
   publicKeyId: string,
   organizationId: string,
-  expiresMinutes = 30
+  expiresMinutes = 30,
+  metadata: Record<string, unknown> = {}
 ) {
   const id = crypto.randomUUID();
   const now = new Date();
@@ -139,7 +140,7 @@ export async function createCaptureSession(
     customerId: null,
     ticketId: null,
     status: "pending",
-    metadata: JSON.stringify({}),
+    metadata: JSON.stringify(metadata),
     expiresAt,
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),

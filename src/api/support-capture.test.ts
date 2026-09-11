@@ -6,7 +6,8 @@ import { z } from "zod";
 import { createD1 } from "../global/db.js";
 import { supportCustomers, user as userTable } from "../global/schema.js";
 import { supportTicketAttachments } from "../global/schema.js";
-import { getTicketById } from "../global/support-tickets.js";
+import { findOrCreateCustomerByEmail } from "../global/support-contacts.js";
+import { createTicket, getTicketById } from "../global/support-tickets.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
@@ -99,7 +100,11 @@ describe("support-capture API", () => {
     token = seeded.token;
   });
 
-  async function createPublicKey(): Promise<{ id: string; key: string }> {
+  async function createPublicKey(): Promise<{
+    id: string;
+    key: string;
+    webhookSecret: string;
+  }> {
     const res = await captureFetch(
       `/workspaces/${organizationId}/support/capture/public-keys`,
       {
@@ -115,17 +120,23 @@ describe("support-capture API", () => {
       }
     );
     expect(res.status).toBe(201);
-    return (await res.json()) as { id: string; key: string };
+    return (await res.json()) as {
+      id: string;
+      key: string;
+      webhookSecret: string;
+    };
   }
 
   async function issueCaptureToken(
     publicKey: { key: string },
-    origin = "https://example.com"
+    origin = "https://example.com",
+    reference?: string
   ): Promise<string> {
     const res = await captureFetch("/support/capture/token", {
       method: "POST",
       headers: {
         "x-vortex-capture-public-key": publicKey.key,
+        ...(reference ? { "x-vortex-capture-reference": reference } : {}),
         origin,
       },
     });
@@ -372,5 +383,78 @@ describe("support-capture API", () => {
       .where(eq(supportTicketAttachments.ticketId, body.ticketId));
     expect(attachments.length).toBe(1);
     expect(attachments[0]!.type).toBe("screenshot");
+  });
+
+  it("attaches a capture to an existing support ticket by reference", async () => {
+    const db = createD1(env.D1);
+    const customer = await findOrCreateCustomerByEmail(
+      db,
+      organizationId,
+      "existing@example.com",
+      "Existing Customer",
+      "intercom"
+    );
+    const existing = await createTicket(db, {
+      organizationId,
+      customerId: customer.id,
+      title: "Intercom conversation",
+      sourceChannel: "intercom",
+      externalSource: "intercom",
+    });
+
+    const publicKey = await createPublicKey();
+    const sessionToken = await issueCaptureToken(
+      publicKey,
+      "https://example.com",
+      existing.id
+    );
+
+    const sessionRes = await captureFetch("/support/capture/upload-session", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-vortex-capture-token": sessionToken,
+      },
+      body: JSON.stringify({
+        title: "Screen recording",
+        attachmentType: "screenshot",
+        metadata: {
+          email: "reporter@example.com",
+          description: "The button still does nothing",
+        },
+      }),
+    });
+    expect(sessionRes.status).toBe(200);
+    const { uploadUrl } = (await sessionRes.json()) as { uploadUrl: string };
+    expect(uploadUrl).toBeTruthy();
+
+    const image = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+    const uploadRes = await captureFetch(
+      `/support/capture/upload/${sessionToken}/screenshot`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "image/png",
+          "x-vortex-capture-token": sessionToken,
+        },
+        body: image,
+      }
+    );
+    expect(uploadRes.status).toBe(200);
+
+    const finalizeRes = await captureFetch("/support/capture/finalize", {
+      method: "POST",
+      headers: { "x-vortex-capture-token": sessionToken },
+    });
+    expect(finalizeRes.status).toBe(200);
+    const final = (await finalizeRes.json()) as { ticketId: string };
+    expect(final.ticketId).toBe(existing.id);
+
+    const ticket = await getTicketById(db, organizationId, existing.id);
+    expect(ticket).not.toBeNull();
+    const events = ticket!.events;
+    expect(
+      events.some((e) => e.message?.textContent?.includes("still does nothing"))
+    ).toBe(true);
   });
 });

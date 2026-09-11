@@ -9817,6 +9817,14 @@
               "type": "string"
             },
             "required": false,
+            "name": "x-vortex-capture-reference",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
             "name": "origin",
             "in": "header"
           }
