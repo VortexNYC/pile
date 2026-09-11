@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { getWorkspaceStub } from "../api/stub.js";
 import { createD1 } from "../global/db.js";
 import { supportCustomers, user as userTable } from "../global/schema.js";
 import { supportTicketAttachments } from "../global/schema.js";
@@ -456,5 +457,66 @@ describe("support-capture API", () => {
     expect(
       events.some((e) => e.message?.textContent?.includes("still does nothing"))
     ).toBe(true);
+  });
+
+  it("attaches a capture to an existing workspace issue by reference", async () => {
+    const db = createD1(env.D1);
+    const stub = getWorkspaceStub(env, organizationId);
+    await stub.setOrganizationId(organizationId);
+    const issue = await stub.createIssue({
+      title: "Linear-imported bug",
+      status: "backlog",
+      priority: "high",
+    });
+
+    const publicKey = await createPublicKey();
+    const sessionToken = await issueCaptureToken(
+      publicKey,
+      "https://example.com",
+      issue.id
+    );
+
+    const sessionRes = await captureFetch("/support/capture/upload-session", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-vortex-capture-token": sessionToken,
+      },
+      body: JSON.stringify({
+        title: "Screen recording",
+        attachmentType: "screenshot",
+        metadata: {
+          email: "reporter@example.com",
+          description: "The button still does nothing",
+        },
+      }),
+    });
+    expect(sessionRes.status).toBe(200);
+
+    const image = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+    const uploadRes = await captureFetch(
+      `/support/capture/upload/${sessionToken}/screenshot`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "image/png",
+          "x-vortex-capture-token": sessionToken,
+        },
+        body: image,
+      }
+    );
+    expect(uploadRes.status).toBe(200);
+
+    const finalizeRes = await captureFetch("/support/capture/finalize", {
+      method: "POST",
+      headers: { "x-vortex-capture-token": sessionToken },
+    });
+    expect(finalizeRes.status).toBe(200);
+    const final = (await finalizeRes.json()) as { ticketId: string };
+
+    const ticket = await getTicketById(db, organizationId, final.ticketId);
+    expect(ticket).not.toBeNull();
+    expect(ticket!.issueId).toBe(issue.id);
+    expect(ticket!.sourceChannel).toBe("capture");
   });
 });

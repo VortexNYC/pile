@@ -25,6 +25,7 @@ import {
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
+import { getWorkspaceStub } from "./stub.js";
 
 const capturePublicKeySchema = z.object({
   id: z.string(),
@@ -788,12 +789,23 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
         ? session.metadata.reference
         : null;
 
+    let issueId: string | null = null;
+
     let ticket:
       | Awaited<ReturnType<typeof getTicketById>>
       | Awaited<ReturnType<typeof createTicket>>
       | null = reference
       ? await getTicketById(db, session.organizationId, reference)
       : null;
+
+    if (!ticket && reference) {
+      const stub = getWorkspaceStub(c.env, session.organizationId);
+      await stub.setOrganizationId(session.organizationId);
+      const issue = await stub.getIssue(reference);
+      if (issue) {
+        issueId = issue.id;
+      }
+    }
 
     if (!ticket) {
       ticket = await createTicket(db, {
@@ -802,6 +814,7 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
         title,
         priority,
         sourceChannel: "capture",
+        issueId: issueId ?? undefined,
       });
     }
 
