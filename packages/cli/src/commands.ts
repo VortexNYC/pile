@@ -6985,6 +6985,27 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "webhook deliveries list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/webhook-deliveries",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "status",
+        flag: "status",
+      },
+      {
+        name: "limit",
+        flag: "limit",
+      },
+    ],
+    body: [],
+  },
   "linear users list": {
     method: "GET",
     path: "/workspaces/{organizationId}/linear-users",

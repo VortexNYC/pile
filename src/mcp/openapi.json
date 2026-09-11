@@ -34826,6 +34826,128 @@
         "summary": "List webhook subscription deliveries"
       }
     },
+    "/workspaces/{organizationId}/webhook-deliveries": {
+      "get": {
+        "tags": [
+          "webhooks"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "processing",
+                "completed",
+                "failed"
+              ]
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Inbound webhook delivery log",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deliveries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "deliveryId": {
+                            "type": "string"
+                          },
+                          "source": {
+                            "type": "string"
+                          },
+                          "event": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "processedAt": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "attemptCount": {
+                            "type": "number"
+                          },
+                          "payload": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "lastError": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "nextRetryAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "lockedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "result": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "deliveryId",
+                          "source",
+                          "event",
+                          "organizationId",
+                          "processedAt",
+                          "status",
+                          "attemptCount",
+                          "payload",
+                          "lastError",
+                          "nextRetryAt",
+                          "lockedAt",
+                          "result"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "deliveries"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List webhook deliveries"
+      }
+    },
     "/workspaces/{organizationId}/linear-users": {
       "post": {
         "tags": [
