@@ -157,4 +157,36 @@ describe("support-content API", () => {
     expect(listBody.autoresponders).toHaveLength(1);
     expect(listBody.autoresponders[0].name).toBe("new ticket reply");
   });
+
+  it("creates and lists support labels", async () => {
+    const createRes = await fetch(
+      `/workspaces/${organizationId}/support/labels`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "premium",
+          color: "#ff0000",
+        }),
+      }
+    );
+    expect(createRes.status).toBe(201);
+    const createBody = (await createRes.json()) as {
+      label: {
+        name: string;
+        color: string | null;
+        kind: string;
+      };
+    };
+    expect(createBody.label.name).toBe("premium");
+    expect(createBody.label.color).toBe("#ff0000");
+    expect(createBody.label.kind).toBe("support");
+
+    const listRes = await fetch(`/workspaces/${organizationId}/support/labels`);
+    expect(listRes.status).toBe(200);
+    const listBody = (await listRes.json()) as {
+      labels: { name: string }[];
+    };
+    expect(listBody.labels).toHaveLength(1);
+    expect(listBody.labels[0].name).toBe("premium");
+  });
 });

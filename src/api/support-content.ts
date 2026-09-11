@@ -3,6 +3,11 @@ import { createRoute, z } from "@hono/zod-openapi";
 
 import { createD1 } from "../global/db.js";
 import {
+  createSupportLabel,
+  listSupportLabels,
+  type SupportLabel,
+} from "../global/labels.js";
+import {
   createSupportAutoresponder,
   createSupportSnippet,
   listSupportAutoresponders,
@@ -51,6 +56,21 @@ const createAutoresponderBodySchema = z.object({
   order: z.number().int(),
   snippetId: z.string().optional(),
   conditions: z.record(z.string(), z.string()).optional(),
+});
+
+const supportLabelSchema = z.object({
+  id: z.string(),
+  organizationId: z.string(),
+  name: z.string(),
+  color: z.string().nullable(),
+  kind: z.enum(["issue", "support"]),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+
+const createLabelBodySchema = z.object({
+  name: z.string(),
+  color: z.string().optional(),
 });
 
 const createSnippetRoute = createRoute({
@@ -145,6 +165,51 @@ const listAutorespondersRoute = createRoute({
   },
 });
 
+const createLabelRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/support/labels",
+  tags: ["support-content"],
+  middleware: [rls("write")],
+  request: {
+    params: orgParam,
+    body: {
+      content: {
+        "application/json": { schema: createLabelBodySchema },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "Support label created",
+      content: {
+        "application/json": {
+          schema: z.object({ label: supportLabelSchema }),
+        },
+      },
+    },
+  },
+});
+
+const listLabelsRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/support/labels",
+  tags: ["support-content"],
+  middleware: [rls("read")],
+  request: {
+    params: orgParam,
+  },
+  responses: {
+    200: {
+      description: "Support labels list",
+      content: {
+        "application/json": {
+          schema: z.object({ labels: z.array(supportLabelSchema) }),
+        },
+      },
+    },
+  },
+});
+
 export function registerSupportContentRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(createSnippetRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
@@ -196,5 +261,26 @@ export function registerSupportContentRoutes(app: OpenAPIHono<AppContext>) {
     return c.json({ autoresponders } as {
       autoresponders: SupportAutoresponder[];
     });
+  });
+
+  app.openapi(createLabelRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const db = createD1(c.env.D1);
+
+    const label = await createSupportLabel(db, {
+      organizationId,
+      name: body.name,
+      color: body.color,
+    });
+
+    return c.json({ label } as { label: SupportLabel }, 201);
+  });
+
+  app.openapi(listLabelsRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const labels = await listSupportLabels(db, organizationId);
+    return c.json({ labels } as { labels: SupportLabel[] });
   });
 }

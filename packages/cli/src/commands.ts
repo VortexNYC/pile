@@ -5003,6 +5003,39 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "support labels list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/labels",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support labels create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/labels",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "color",
+        flag: "color",
+      },
+    ],
+  },
   "support escalation rules list": {
     method: "GET",
     path: "/workspaces/{organizationId}/support/escalation-rules",

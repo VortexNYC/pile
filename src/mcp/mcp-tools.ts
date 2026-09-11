@@ -3633,6 +3633,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdSupportLabels",
+    "description": "List support labels (GET /workspaces/{organizationId}/support/labels)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/labels",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdSupportSlas",
     "description": "List support slas (GET /workspaces/{organizationId}/support/slas)",
     "method": "GET",
@@ -9577,6 +9594,37 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "required": [
             "name",
             "filter"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSupportLabels",
+    "description": "Create support label (POST /workspaces/{organizationId}/support/labels)",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/labels",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "color": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
           ]
         }
       },
