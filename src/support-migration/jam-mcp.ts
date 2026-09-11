@@ -47,6 +47,27 @@ const jsonRpcResponseSchema = z
   })
   .passthrough();
 
+function parseSseBody(text: string): unknown {
+  const lines = text.split("\n");
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("data:")) {
+      const data = trimmed.slice(5).trim();
+      if (!data) continue;
+      try {
+        return JSON.parse(data);
+      } catch {
+        // Continue to next data line.
+      }
+    }
+  }
+  throw new VortexError({
+    code: "BAD_REQUEST",
+    status: 500,
+    message: "Invalid Jam MCP SSE response",
+  });
+}
+
 function extractMcpArray(result: unknown): unknown[] {
   if (Array.isArray(result)) return result;
   if (!result || typeof result !== "object") return [];
@@ -186,7 +207,7 @@ async function jamMcpRequest(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Accept: "application/json",
+      Accept: "application/json, text/event-stream",
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(body),
@@ -199,7 +220,8 @@ async function jamMcpRequest(
       message: `Jam MCP request failed: ${response.statusText}${text ? ` — ${text}` : ""}`,
     });
   }
-  const raw = jsonRpcResponseSchema.safeParse(await response.json());
+  const parsed = parseSseBody(await response.text());
+  const raw = jsonRpcResponseSchema.safeParse(parsed);
   if (!raw.success) {
     throw new VortexError({
       code: "BAD_REQUEST",
@@ -213,6 +235,23 @@ async function jamMcpRequest(
       code: "BAD_REQUEST",
       status: 500,
       message: `Jam MCP error: ${raw.data.error.message}`,
+    });
+  }
+  if (
+    raw.data.result &&
+    typeof raw.data.result === "object" &&
+    !Array.isArray(raw.data.result) &&
+    (raw.data.result as { isError?: boolean }).isError
+  ) {
+    const result = raw.data.result as {
+      content?: { type: string; text: string }[];
+    };
+    const text =
+      result.content?.map((c) => c.text).join("\n") ?? "Jam MCP tool error";
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 500,
+      message: text,
     });
   }
   return raw.data.result;
