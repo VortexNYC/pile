@@ -46,15 +46,6 @@ const supportInboxTicketSchema = z.object({
   labels: z.array(z.string()),
   lastCustomerMessageAt: z.string().datetime().optional(),
   lastAgentMessageAt: z.string().datetime().optional(),
-  sla: z
-    .object({
-      firstResponseTargetAt: z.string().datetime().optional(),
-      firstResponseBreached: z.boolean(),
-      resolutionTargetAt: z.string().datetime().optional(),
-      resolutionBreached: z.boolean(),
-    })
-    .optional()
-    .nullable(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -72,7 +63,6 @@ const listInboxOptionsSchema = z.object({
   customerId: z.string().optional(),
   channel: channelEnum.optional(),
   label: z.string().optional(),
-  slaBreach: z.coerce.boolean().optional(),
   q: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(25),
   cursor: z.string().optional(),

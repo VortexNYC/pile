@@ -5475,10 +5475,6 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "label",
       },
       {
-        name: "slaBreach",
-        flag: "sla-breach",
-      },
-      {
         name: "q",
         flag: "q",
       },

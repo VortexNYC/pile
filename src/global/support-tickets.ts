@@ -926,6 +926,8 @@ export async function addTicketMessage(
     subType?: string | null;
     metadata?: Record<string, unknown>;
     createdAt?: string;
+    runAutoresponders?: boolean;
+    reopenOnCustomerReply?: boolean;
   },
   env?: WorkerEnv
 ): Promise<SupportTicketEventWithDetails> {
@@ -979,14 +981,49 @@ export async function addTicketMessage(
     );
 
   if (input.direction === "inbound" && actorType === "customer") {
-    await runAutoresponders(
-      db,
-      env,
-      organizationId,
-      ticketId,
-      "customer_replied"
-    );
-    await runAutoresponders(db, env, organizationId, ticketId, "out_of_hours");
+    if (input.reopenOnCustomerReply !== false) {
+      const [ticket] = await db
+        .select({ status: supportTickets.status })
+        .from(supportTickets)
+        .where(
+          and(
+            eq(supportTickets.id, ticketId),
+            eq(supportTickets.organizationId, organizationId)
+          )
+        )
+        .limit(1);
+
+      if (ticket && (ticket.status === "done" || ticket.status === "snoozed")) {
+        await updateTicket(
+          db,
+          organizationId,
+          ticketId,
+          {
+            status: "todo",
+            actorType: "customer",
+            actorId: input.customerId ?? null,
+          },
+          env
+        );
+      }
+    }
+
+    if (input.runAutoresponders !== false) {
+      await runAutoresponders(
+        db,
+        env,
+        organizationId,
+        ticketId,
+        "customer_replied"
+      );
+      await runAutoresponders(
+        db,
+        env,
+        organizationId,
+        ticketId,
+        "out_of_hours"
+      );
+    }
   }
 
   if (env) {
@@ -1530,6 +1567,8 @@ async function ingestSupportTimeline(
     channel: input.messageChannel,
     customerId,
     createdAt: input.firstMessageCreatedAt,
+    runAutoresponders: false,
+    reopenOnCustomerReply: false,
   });
 
   const sortedReplies = input.replies.toSorted(
@@ -1581,6 +1620,8 @@ async function ingestSupportTimeline(
           subType: reply.subType,
           metadata: reply.metadata,
           createdAt: reply.createdAt,
+          runAutoresponders: false,
+          reopenOnCustomerReply: false,
         });
       }
       await Promise.all(

@@ -3555,10 +3555,6 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         "label": {
           "type": "string"
         },
-        "slaBreach": {
-          "type": "boolean",
-          "nullable": true
-        },
         "q": {
           "type": "string"
         },

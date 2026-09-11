@@ -27742,15 +27742,6 @@
           },
           {
             "schema": {
-              "type": "boolean",
-              "nullable": true
-            },
-            "required": false,
-            "name": "slaBreach",
-            "in": "query"
-          },
-          {
-            "schema": {
               "type": "string"
             },
             "required": false,
@@ -27851,30 +27842,6 @@
                           "lastAgentMessageAt": {
                             "type": "string",
                             "format": "date-time"
-                          },
-                          "sla": {
-                            "type": "object",
-                            "nullable": true,
-                            "properties": {
-                              "firstResponseTargetAt": {
-                                "type": "string",
-                                "format": "date-time"
-                              },
-                              "firstResponseBreached": {
-                                "type": "boolean"
-                              },
-                              "resolutionTargetAt": {
-                                "type": "string",
-                                "format": "date-time"
-                              },
-                              "resolutionBreached": {
-                                "type": "boolean"
-                              }
-                            },
-                            "required": [
-                              "firstResponseBreached",
-                              "resolutionBreached"
-                            ]
                           },
                           "createdAt": {
                             "type": "string",
@@ -28410,30 +28377,6 @@
                           "lastAgentMessageAt": {
                             "type": "string",
                             "format": "date-time"
-                          },
-                          "sla": {
-                            "type": "object",
-                            "nullable": true,
-                            "properties": {
-                              "firstResponseTargetAt": {
-                                "type": "string",
-                                "format": "date-time"
-                              },
-                              "firstResponseBreached": {
-                                "type": "boolean"
-                              },
-                              "resolutionTargetAt": {
-                                "type": "string",
-                                "format": "date-time"
-                              },
-                              "resolutionBreached": {
-                                "type": "boolean"
-                              }
-                            },
-                            "required": [
-                              "firstResponseBreached",
-                              "resolutionBreached"
-                            ]
                           },
                           "createdAt": {
                             "type": "string",

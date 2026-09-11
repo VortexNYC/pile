@@ -12992,7 +12992,6 @@ export interface paths {
                     customerId?: string;
                     channel?: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain";
                     label?: string;
-                    slaBreach?: boolean | null;
                     q?: string;
                     limit?: number;
                     cursor?: string;
@@ -13031,14 +13030,6 @@ export interface paths {
                                 lastCustomerMessageAt?: string;
                                 /** Format: date-time */
                                 lastAgentMessageAt?: string;
-                                sla?: {
-                                    /** Format: date-time */
-                                    firstResponseTargetAt?: string;
-                                    firstResponseBreached: boolean;
-                                    /** Format: date-time */
-                                    resolutionTargetAt?: string;
-                                    resolutionBreached: boolean;
-                                } | null;
                                 /** Format: date-time */
                                 createdAt: string;
                                 /** Format: date-time */
@@ -13367,14 +13358,6 @@ export interface paths {
                                 lastCustomerMessageAt?: string;
                                 /** Format: date-time */
                                 lastAgentMessageAt?: string;
-                                sla?: {
-                                    /** Format: date-time */
-                                    firstResponseTargetAt?: string;
-                                    firstResponseBreached: boolean;
-                                    /** Format: date-time */
-                                    resolutionTargetAt?: string;
-                                    resolutionBreached: boolean;
-                                } | null;
                                 /** Format: date-time */
                                 createdAt: string;
                                 /** Format: date-time */

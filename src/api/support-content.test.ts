@@ -10,6 +10,7 @@ import {
   addTicketMessage,
   createTicket,
   getTicketById,
+  updateTicket,
 } from "../global/support-tickets.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
@@ -334,6 +335,50 @@ describe("support-content API", () => {
         e.message?.textContent === "We are closed right now."
     );
     expect(auto).toHaveLength(1);
+  });
+
+  it("reopens a done ticket when a customer replies", async () => {
+    const db = createD1(env.D1);
+    const customer = await createCustomer(db, {
+      organizationId,
+      email: "reopen@example.com",
+      fullName: "Reopen Customer",
+    });
+
+    const ticket = await createTicket(
+      db,
+      {
+        organizationId,
+        customerId: customer.id,
+        title: "Reopen me",
+        sourceChannel: "email",
+      },
+      env
+    );
+    await updateTicket(db, organizationId, ticket.id, {
+      status: "done",
+      actorType: "user",
+      actorId: null,
+    });
+
+    await addTicketMessage(
+      db,
+      organizationId,
+      ticket.id,
+      {
+        direction: "inbound",
+        textContent: "Still broken",
+        channel: "email",
+        customerId: customer.id,
+      },
+      env
+    );
+
+    const full = await getTicketById(db, organizationId, ticket.id);
+    expect(full?.status).toBe("todo");
+    const statusEvents = full?.events.filter((e) => e.type === "status_change");
+    expect(statusEvents?.length).toBe(2);
+    expect(statusEvents?.some((e) => e.actorType === "customer")).toBe(true);
   });
 
   it("creates and lists support autoresponders", async () => {
