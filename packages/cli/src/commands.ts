@@ -2640,6 +2640,63 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "support webhooks jam recording links create": {
+    method: "POST",
+    path: "/support/webhooks/jam/{publicKeyId}/recording-links",
+    params: [
+      {
+        name: "publicKeyId",
+        flag: "public-key-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "recordingLinkId",
+        flag: "recording-link-id",
+      },
+      {
+        name: "publicId",
+        flag: "public-id",
+      },
+      {
+        name: "url",
+        flag: "url",
+      },
+      {
+        name: "teamId",
+        flag: "team",
+      },
+      {
+        name: "type",
+        flag: "type",
+      },
+      {
+        name: "createdAt",
+        flag: "created-at",
+      },
+      {
+        name: "origin",
+        flag: "origin",
+      },
+      {
+        name: "description",
+        flag: "description",
+      },
+      {
+        name: "reference",
+        flag: "reference",
+      },
+      {
+        name: "recordingUrl",
+        flag: "recording-url",
+      },
+      {
+        name: "createdBy",
+        flag: "created-by",
+      },
+    ],
+  },
   "support channels list": {
     method: "GET",
     path: "/workspaces/{organizationId}/support-channels",

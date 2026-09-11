@@ -10888,6 +10888,145 @@
         "summary": "Create support webhook jam intercom opted out"
       }
     },
+    "/support/webhooks/jam/{publicKeyId}/recording-links": {
+      "post": {
+        "tags": [
+          "support-capture"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "publicKeyId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "svix-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "svix-timestamp",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "svix-signature",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "recordingLinkId": {
+                    "type": "string"
+                  },
+                  "publicId": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string"
+                  },
+                  "teamId": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "one_time",
+                      "reusable"
+                    ]
+                  },
+                  "createdAt": {
+                    "type": "string"
+                  },
+                  "origin": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "reference": {
+                    "type": "string"
+                  },
+                  "recordingUrl": {
+                    "type": "string"
+                  },
+                  "createdBy": {
+                    "type": "object",
+                    "properties": {
+                      "email": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": {
+                      "nullable": true
+                    }
+                  }
+                },
+                "required": [
+                  "recordingLinkId",
+                  "publicId",
+                  "url",
+                  "teamId",
+                  "type",
+                  "createdAt"
+                ],
+                "additionalProperties": {
+                  "nullable": true
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Recording link created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ticketId": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "ticketId"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid webhook"
+          },
+          "404": {
+            "description": "Public key or ticket not found"
+          }
+        },
+        "summary": "Create support webhook jam recording link"
+      }
+    },
     "/workspaces/{organizationId}/support-channels": {
       "get": {
         "tags": [

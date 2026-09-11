@@ -957,4 +957,67 @@ describe("support-capture API", () => {
       )
     ).toBe(true);
   });
+
+  it("receives a recording_link.created webhook with a ticket reference", async () => {
+    const publicKey = await createPublicKey();
+    const db = createD1(env.D1);
+    const customer = await findOrCreateCustomerByEmail(
+      db,
+      organizationId,
+      "recording-link-customer@example.com",
+      null,
+      "capture"
+    );
+    const existing = await createTicket(db, {
+      organizationId,
+      customerId: customer.id,
+      title: "Recording link ticket",
+      sourceChannel: "capture",
+    });
+
+    const payload = JSON.stringify({
+      recordingLinkId: "rl-123",
+      publicId: "aB3kZ4p",
+      url: "https://jam.dev/c/rl-123",
+      teamId: "team-123",
+      type: "one_time",
+      createdAt: new Date().toISOString(),
+      reference: existing.id,
+      description: "Checkout repro",
+      createdBy: {
+        email: "agent@example.com",
+        name: "Agent",
+      },
+    });
+    const svixId = crypto.randomUUID();
+    const svixTimestamp = Math.floor(Date.now() / 1000).toString();
+    const signature = await signJamWebhook({
+      payload,
+      svixId,
+      svixTimestamp,
+      secret: publicKey.webhookSecret,
+    });
+
+    const res = await captureFetch(
+      `/support/webhooks/jam/${publicKey.id}/recording-links`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "svix-id": svixId,
+          "svix-timestamp": svixTimestamp,
+          "svix-signature": signature,
+        },
+        body: payload,
+      }
+    );
+    expect(res.status).toBe(200);
+
+    const ticket = await getTicketById(db, organizationId, existing.id);
+    expect(
+      ticket!.events.some((e) =>
+        e.message?.textContent?.includes("https://jam.dev/c/rl-123")
+      )
+    ).toBe(true);
+  });
 });

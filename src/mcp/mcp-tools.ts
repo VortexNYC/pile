@@ -6900,6 +6900,87 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postSupportWebhooksJamPublicKeyIdRecordinglinks",
+    "description": "Create support webhook jam recording link (POST /support/webhooks/jam/{publicKeyId}/recording-links)",
+    "method": "POST",
+    "path": "/support/webhooks/jam/{publicKeyId}/recording-links",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "publicKeyId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "recordingLinkId": {
+              "type": "string"
+            },
+            "publicId": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            },
+            "teamId": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "one_time",
+                "reusable"
+              ]
+            },
+            "createdAt": {
+              "type": "string"
+            },
+            "origin": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "reference": {
+              "type": "string"
+            },
+            "recordingUrl": {
+              "type": "string"
+            },
+            "createdBy": {
+              "type": "object",
+              "properties": {
+                "email": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": {
+                "nullable": true
+              }
+            }
+          },
+          "required": [
+            "recordingLinkId",
+            "publicId",
+            "url",
+            "teamId",
+            "type",
+            "createdAt"
+          ],
+          "additionalProperties": {
+            "nullable": true
+          }
+        }
+      },
+      "required": [
+        "publicKeyId"
+      ]
+    }
+  },
+  {
     "name": "postSupportWebhooksPlainOrganizationId",
     "description": "Receive Plain support webhook notifications (POST /support/webhooks/plain/{organizationId})",
     "method": "POST",

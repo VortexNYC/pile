@@ -517,6 +517,28 @@ const jamIntercomRecordedSchema = z
   })
   .passthrough();
 
+const jamRecordingLinkCreatedSchema = z
+  .object({
+    recordingLinkId: z.string(),
+    publicId: z.string(),
+    url: z.string(),
+    teamId: z.string(),
+    type: z.enum(["one_time", "reusable"]),
+    createdAt: z.string(),
+    origin: z.string().optional(),
+    description: z.string().optional(),
+    reference: z.string().optional(),
+    recordingUrl: z.string().optional(),
+    createdBy: z
+      .object({
+        email: z.string().optional(),
+        name: z.string().optional(),
+      })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
+
 const jamIntercomOptedOutSchema = z
   .object({
     conversationId: z.string(),
@@ -578,6 +600,41 @@ const jamIntercomOptedOutRoute = createRoute({
       description: "Intercom recorder opted out",
       content: {
         "application/json": { schema: z.object({ ticketId: z.string() }) },
+      },
+    },
+    401: {
+      description: "Invalid webhook",
+    },
+    404: {
+      description: "Public key or ticket not found",
+    },
+  },
+});
+
+const jamRecordingLinkCreatedRoute = createRoute({
+  method: "post",
+  path: "/support/webhooks/jam/{publicKeyId}/recording-links",
+  tags: ["support-capture"],
+  request: {
+    params: z.object({ publicKeyId: z.string() }),
+    headers: z.object({
+      "svix-id": z.string(),
+      "svix-timestamp": z.string(),
+      "svix-signature": z.string(),
+    }),
+    body: {
+      content: {
+        "application/json": { schema: jamRecordingLinkCreatedSchema },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Recording link created",
+      content: {
+        "application/json": {
+          schema: z.object({ ticketId: z.string().nullable() }),
+        },
       },
     },
     401: {
@@ -1703,6 +1760,78 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
       channel: "intercom",
       actorType: "automation",
       subType: "intercom_recorder_opted_out",
+      runAutoresponders: false,
+      reopenOnCustomerReply: false,
+    });
+
+    return c.json({ ticketId: ticket.id });
+  });
+
+  app.openapi(jamRecordingLinkCreatedRoute, async (c) => {
+    const { publicKeyId } = c.req.valid("param");
+    const svixId = c.req.header("svix-id") ?? "";
+    const svixTimestamp = c.req.header("svix-timestamp") ?? "";
+    const svixSignature = c.req.header("svix-signature") ?? "";
+
+    const db = createD1(c.env.D1);
+    const publicKey = await getCapturePublicKeyById(db, publicKeyId);
+    if (!publicKey || !publicKey.isActive || !publicKey.webhookSecret) {
+      throw new VortexError({
+        status: 401,
+        code: "UNAUTHORIZED",
+        message: "Invalid Jam webhook key",
+      });
+    }
+
+    const payload = await c.req.text();
+    const verified = await verifySvixSignature({
+      payload,
+      svixId,
+      svixTimestamp,
+      svixSignature,
+      secret: publicKey.webhookSecret,
+    });
+    if (!verified) {
+      throw new VortexError({
+        status: 401,
+        code: "UNAUTHORIZED",
+        message: "Invalid Jam webhook signature",
+      });
+    }
+
+    const timestamp = Number(svixTimestamp);
+    const now = Math.floor(Date.now() / 1000);
+    if (Number.isNaN(timestamp) || Math.abs(now - timestamp) > 300) {
+      throw new VortexError({
+        status: 401,
+        code: "UNAUTHORIZED",
+        message: "Jam webhook timestamp out of tolerance",
+      });
+    }
+
+    const parsed = jamRecordingLinkCreatedSchema.parse(JSON.parse(payload));
+    const reference = parsed.reference;
+    if (!reference) {
+      return c.json({ ticketId: null });
+    }
+
+    const ticket = await getTicketById(db, publicKey.organizationId, reference);
+    if (!ticket) {
+      throw new VortexError({
+        status: 404,
+        code: "NOT_FOUND",
+        message: "Referenced ticket not found",
+      });
+    }
+
+    const text = `Recording link shared: ${parsed.url}`;
+    await addTicketMessage(db, publicKey.organizationId, ticket.id, {
+      direction: "outbound",
+      textContent: text,
+      markdownContent: text,
+      channel: "capture",
+      actorType: "automation",
+      subType: "recording_link_created",
       runAutoresponders: false,
       reopenOnCustomerReply: false,
     });

@@ -5654,6 +5654,88 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/support/webhooks/jam/{publicKeyId}/recording-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create support webhook jam recording link */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "svix-id": string;
+                    "svix-timestamp": string;
+                    "svix-signature": string;
+                };
+                path: {
+                    publicKeyId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        recordingLinkId: string;
+                        publicId: string;
+                        url: string;
+                        teamId: string;
+                        /** @enum {string} */
+                        type: "one_time" | "reusable";
+                        createdAt: string;
+                        origin?: string;
+                        description?: string;
+                        reference?: string;
+                        recordingUrl?: string;
+                        createdBy?: {
+                            email?: string;
+                            name?: string;
+                        } & {
+                            [key: string]: unknown;
+                        };
+                    } & {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            responses: {
+                /** @description Recording link created */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ticketId: string | null;
+                        };
+                    };
+                };
+                /** @description Invalid webhook */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Public key or ticket not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/support-channels": {
         parameters: {
             query?: never;
