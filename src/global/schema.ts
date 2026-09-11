@@ -2030,6 +2030,7 @@ export const supportTickets = sqliteTable(
         "api",
         "capture",
         "jam",
+        "linear",
         "manual",
       ] as const,
     })

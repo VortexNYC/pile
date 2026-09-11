@@ -10367,6 +10367,28 @@
                         "type": "string"
                       }
                     }
+                  },
+                  "intercom": {
+                    "type": "object",
+                    "properties": {
+                      "conversationId": {
+                        "type": "string"
+                      },
+                      "issueId": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "linear": {
+                    "type": "object",
+                    "properties": {
+                      "conversationId": {
+                        "type": "string"
+                      },
+                      "issueId": {
+                        "type": "string"
+                      }
+                    }
                   }
                 },
                 "required": [

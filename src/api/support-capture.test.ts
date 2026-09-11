@@ -327,6 +327,72 @@ describe("support-capture API", () => {
     expect(customer!.organizationId).toBe(organizationId);
   });
 
+  it("receives a Jam webhook for an Intercom conversation and attaches to the existing ticket", async () => {
+    const publicKey = await createPublicKey();
+    const db = createD1(env.D1);
+    const customer = await findOrCreateCustomerByEmail(
+      db,
+      organizationId,
+      "intercom-reporter@example.com",
+      "Intercom Reporter",
+      "intercom"
+    );
+    const existing = await createTicket(db, {
+      organizationId,
+      customerId: customer.id,
+      title: "Intercom conversation",
+      sourceChannel: "intercom",
+      externalSource: "intercom",
+      externalId: "conv-123",
+    });
+
+    const payload = JSON.stringify({
+      jamId: "jam-456",
+      jamUrl: "https://jam.dev/c/jam-456",
+      teamId: "team-123",
+      type: "screenshot",
+      createdAt: new Date().toISOString(),
+      title: "Button is broken",
+      description: "Clicking the submit button does nothing",
+      author: {
+        email: "intercom-reporter@example.com",
+        name: "Intercom Reporter",
+      },
+      media: { screenshotUrl: "https://jam.dev/media/screen.png" },
+      intercom: { conversationId: "conv-123" },
+    });
+    const svixId = "msg-2";
+    const svixTimestamp = Math.floor(Date.now() / 1000).toString();
+    const signature = await signJamWebhook({
+      payload,
+      svixId,
+      svixTimestamp,
+      secret: publicKey.webhookSecret,
+    });
+
+    const res = await captureFetch(`/support/webhooks/jam/${publicKey.id}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "svix-id": svixId,
+        "svix-timestamp": svixTimestamp,
+        "svix-signature": signature,
+      },
+      body: payload,
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ticketId: string };
+    expect(body.ticketId).toBe(existing.id);
+
+    const ticket = await getTicketById(db, organizationId, existing.id);
+    expect(ticket).not.toBeNull();
+    expect(
+      ticket!.events.some((e) =>
+        e.message?.textContent?.includes("Clicking the submit button")
+      )
+    ).toBe(true);
+  });
+
   it("receives a verified Jam webhook and creates a support ticket", async () => {
     const publicKey = await createPublicKey();
     const db = createD1(env.D1);

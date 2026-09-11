@@ -58,7 +58,8 @@ export type SupportTicketSource =
   | "api"
   | "manual"
   | "capture"
-  | "jam";
+  | "jam"
+  | "linear";
 export type SupportTicketChannel =
   | "email"
   | "slack"

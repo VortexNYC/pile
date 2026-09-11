@@ -2556,6 +2556,14 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "recordingLink",
         flag: "recording-link",
       },
+      {
+        name: "intercom",
+        flag: "intercom",
+      },
+      {
+        name: "linear",
+        flag: "linear",
+      },
     ],
   },
   "support channels list": {

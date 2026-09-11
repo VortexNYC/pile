@@ -1,6 +1,6 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { createD1 } from "../global/db.js";
 import { supportTicketAttachments, supportTickets } from "../global/schema.js";
@@ -21,6 +21,7 @@ import {
   addTicketMessage,
   createTicket,
   getTicketById,
+  type SupportTicketSource,
 } from "../global/support-tickets.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
@@ -356,6 +357,11 @@ const jamRecordingLinkSchema = z.object({
   submitterComment: z.string().optional(),
 });
 
+const jamProviderSchema = z.object({
+  conversationId: z.string().optional(),
+  issueId: z.string().optional(),
+});
+
 const jamWebhookBodySchema = z.object({
   jamId: z.string(),
   jamUrl: z.string(),
@@ -369,6 +375,8 @@ const jamWebhookBodySchema = z.object({
   author: jamAuthorSchema.default({}),
   media: jamMediaSchema.default({}),
   recordingLink: jamRecordingLinkSchema.optional(),
+  intercom: jamProviderSchema.optional(),
+  linear: jamProviderSchema.optional(),
 });
 
 const jamWebhookRoute = createRoute({
@@ -1032,6 +1040,9 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
         )
       : null;
 
+    const intercomConversationId = parsed.intercom?.conversationId;
+    const linearIssueId = parsed.linear?.issueId;
+
     let ticket = null;
     if (reference) {
       const existing = await getTicketById(
@@ -1039,6 +1050,21 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
         publicKey.organizationId,
         reference
       );
+      if (existing) ticket = existing;
+    }
+
+    if (!ticket && intercomConversationId) {
+      const existing = await db
+        .select()
+        .from(supportTickets)
+        .where(
+          and(
+            eq(supportTickets.organizationId, publicKey.organizationId),
+            eq(supportTickets.externalSource, "intercom"),
+            eq(supportTickets.externalId, intercomConversationId)
+          )
+        )
+        .get();
       if (existing) ticket = existing;
     }
 
@@ -1051,14 +1077,19 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
             "Jam webhook must include an author email when creating a new ticket",
         });
       }
+      const externalSource: SupportTicketSource = intercomConversationId
+        ? "intercom"
+        : linearIssueId
+          ? "linear"
+          : "jam";
       ticket = await createTicket(db, {
         organizationId: publicKey.organizationId,
         customerId: customer.id,
         title: parsed.title ?? `Jam ${parsed.type} from ${parsed.jamUrl}`,
         priority: "medium",
         sourceChannel: "capture",
-        externalSource: "jam",
-        externalId: parsed.jamId,
+        externalSource,
+        externalId: intercomConversationId ?? linearIssueId ?? parsed.jamId,
       });
     }
 

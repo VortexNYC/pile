@@ -6590,6 +6590,28 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                   "type": "string"
                 }
               }
+            },
+            "intercom": {
+              "type": "object",
+              "properties": {
+                "conversationId": {
+                  "type": "string"
+                },
+                "issueId": {
+                  "type": "string"
+                }
+              }
+            },
+            "linear": {
+              "type": "object",
+              "properties": {
+                "conversationId": {
+                  "type": "string"
+                },
+                "issueId": {
+                  "type": "string"
+                }
+              }
             }
           },
           "required": [

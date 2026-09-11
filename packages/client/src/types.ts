@@ -5339,6 +5339,14 @@ export interface paths {
                             reference?: string;
                             submitterComment?: string;
                         };
+                        intercom?: {
+                            conversationId?: string;
+                            issueId?: string;
+                        };
+                        linear?: {
+                            conversationId?: string;
+                            issueId?: string;
+                        };
                     };
                 };
             };
