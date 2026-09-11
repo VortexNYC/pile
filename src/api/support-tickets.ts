@@ -140,6 +140,7 @@ export const supportTicketEventSchema = z.object({
   actorType: z.string(),
   actorId: z.string().nullable(),
   metadata: z.string().nullable(),
+  externalId: z.string().nullable(),
   createdAt: z.string(),
   message: supportTicketMessageSchema.optional(),
   note: supportTicketNoteSchema.optional(),

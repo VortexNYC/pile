@@ -99,11 +99,11 @@ export async function processSlackSupportWebhook(
 
   const now = Math.floor(Date.now() / 1000);
   const ts = Number(timestamp);
-  if (Number.isNaN(ts) || now - ts > 300) {
+  if (Number.isNaN(ts) || now - ts > 300 || ts > now + 60) {
     throw new VortexError({
       code: "UNAUTHORIZED",
       status: 401,
-      message: "Stale Slack request",
+      message: "Invalid or stale Slack request timestamp",
     });
   }
 

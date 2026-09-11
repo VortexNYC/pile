@@ -104,6 +104,7 @@ export async function processIncomingMessage(
         priority: "medium",
         createdAt: input.createdAt,
         updatedAt: input.createdAt,
+        ifExists: "return",
       },
       env
     );
@@ -130,6 +131,7 @@ export async function processIncomingMessage(
       channel: input.channel,
       customerId: customer.id,
       subType: input.externalMessageId ?? null,
+      externalId: input.externalMessageId ?? null,
       metadata: input.externalMessageId
         ? { externalMessageId: input.externalMessageId }
         : undefined,

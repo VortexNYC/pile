@@ -1,10 +1,11 @@
 import { env } from "cloudflare:test";
+import { eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { hmacSha256Hex } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
-import { user as userTable } from "../global/schema.js";
+import { supportTicketEvents, user as userTable } from "../global/schema.js";
 import { getCustomerByEmail } from "../global/support-contacts.js";
 import { createCustomer } from "../global/support-contacts.js";
 import { createTicket } from "../global/support-tickets.js";
@@ -180,6 +181,76 @@ describe("support-channels API", () => {
       "slack-user@example.com"
     );
     expect(customer).toBeDefined();
+  });
+
+  it("deduplicates a repeated Slack message event", async () => {
+    Object.assign(env as unknown as Record<string, unknown>, {
+      SLACK_SIGNING_SECRET: "slack-secret",
+    });
+
+    const channelRes = await fetch(
+      `/workspaces/${organizationId}/support-channels`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "slack",
+          name: "C-dupe",
+        }),
+      }
+    );
+    expect(channelRes.status).toBe(201);
+
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const payload = JSON.stringify({
+      type: "event_callback",
+      event: {
+        type: "message",
+        channel: "C-dupe",
+        user: "U-dupe",
+        text: "Duplicate me",
+        ts: "1234567890.999999",
+        user_profile: {
+          email: "dupe-slack@example.com",
+          name: "Dupe Slack User",
+        },
+      },
+    });
+    const signature = `v0=${await hmacSha256Hex(
+      "slack-secret",
+      `v0:${timestamp}:${payload}`
+    )}`;
+
+    const send = () =>
+      app.fetch(
+        new Request(
+          `https://example.com/support/webhooks/slack/${organizationId}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Slack-Signature": signature,
+              "X-Slack-Request-Timestamp": timestamp,
+            },
+            body: payload,
+          }
+        ),
+        env
+      );
+
+    const res1 = await send();
+    expect(res1.status).toBe(200);
+    const res2 = await send();
+    expect(res2.status).toBe(200);
+
+    const db = createD1(env.D1);
+    const events = await db
+      .select()
+      .from(supportTicketEvents)
+      .where(eq(supportTicketEvents.type, "message"));
+    const messageEvents = events.filter((e) =>
+      e.metadata?.includes("1234567890.999999")
+    );
+    expect(messageEvents.length).toBe(1);
   });
 
   it("sends an outbound message through an email channel", async () => {

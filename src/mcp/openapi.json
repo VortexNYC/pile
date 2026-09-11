@@ -22740,6 +22740,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "externalId": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "createdAt": {
                                 "type": "string"
                               },
@@ -22830,6 +22834,7 @@
                               "actorType",
                               "actorId",
                               "metadata",
+                              "externalId",
                               "createdAt"
                             ]
                           }
@@ -23267,6 +23272,10 @@
                                   "type": "string",
                                   "nullable": true
                                 },
+                                "externalId": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
                                 "createdAt": {
                                   "type": "string"
                                 },
@@ -23357,6 +23366,7 @@
                                 "actorType",
                                 "actorId",
                                 "metadata",
+                                "externalId",
                                 "createdAt"
                               ]
                             }
@@ -23697,6 +23707,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "externalId": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "createdAt": {
                                 "type": "string"
                               },
@@ -23787,6 +23801,7 @@
                               "actorType",
                               "actorId",
                               "metadata",
+                              "externalId",
                               "createdAt"
                             ]
                           }
@@ -24173,6 +24188,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "externalId": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "createdAt": {
                                 "type": "string"
                               },
@@ -24263,6 +24282,7 @@
                               "actorType",
                               "actorId",
                               "metadata",
+                              "externalId",
                               "createdAt"
                             ]
                           }
@@ -24437,6 +24457,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "externalId": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -24527,6 +24551,7 @@
                         "actorType",
                         "actorId",
                         "metadata",
+                        "externalId",
                         "createdAt"
                       ]
                     }
@@ -24643,6 +24668,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "externalId": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -24733,6 +24762,7 @@
                         "actorType",
                         "actorId",
                         "metadata",
+                        "externalId",
                         "createdAt"
                       ]
                     }
@@ -24827,6 +24857,10 @@
                             "type": "string",
                             "nullable": true
                           },
+                          "externalId": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "createdAt": {
                             "type": "string"
                           },
@@ -24917,6 +24951,7 @@
                           "actorType",
                           "actorId",
                           "metadata",
+                          "externalId",
                           "createdAt"
                         ]
                       }
@@ -25230,6 +25265,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "externalId": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "createdAt": {
                                 "type": "string"
                               },
@@ -25320,6 +25359,7 @@
                               "actorType",
                               "actorId",
                               "metadata",
+                              "externalId",
                               "createdAt"
                             ]
                           }
@@ -25654,6 +25694,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "externalId": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "createdAt": {
                                 "type": "string"
                               },
@@ -25744,6 +25788,7 @@
                               "actorType",
                               "actorId",
                               "metadata",
+                              "externalId",
                               "createdAt"
                             ]
                           }
@@ -26109,6 +26154,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "externalId": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "createdAt": {
                                 "type": "string"
                               },
@@ -26199,6 +26248,7 @@
                               "actorType",
                               "actorId",
                               "metadata",
+                              "externalId",
                               "createdAt"
                             ]
                           }
@@ -26590,6 +26640,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "externalId": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "createdAt": {
                                 "type": "string"
                               },
@@ -26680,6 +26734,7 @@
                               "actorType",
                               "actorId",
                               "metadata",
+                              "externalId",
                               "createdAt"
                             ]
                           }
@@ -27034,6 +27089,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "externalId": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "createdAt": {
                                 "type": "string"
                               },
@@ -27124,6 +27183,7 @@
                               "actorType",
                               "actorId",
                               "metadata",
+                              "externalId",
                               "createdAt"
                             ]
                           }

@@ -128,6 +128,7 @@ export type SupportTicketInput = {
   issueId?: string | null;
   createdAt?: string;
   updatedAt?: string;
+  ifExists?: "throw" | "return";
 };
 
 export type SupportTicket = {
@@ -177,6 +178,7 @@ export type SupportTicketEvent = {
   actorType: SupportTicketActorType;
   actorId: string | null;
   metadata: string | null;
+  externalId: string | null;
   createdAt: string;
 };
 
@@ -235,6 +237,15 @@ export async function nextTicketNumber(
   return rows[0].next_number;
 }
 
+function sanitizeTimestamp(ts: string | undefined): string | undefined {
+  if (!ts) return undefined;
+  const parsed = Date.parse(ts);
+  if (Number.isNaN(parsed)) return undefined;
+  const now = Date.now();
+  if (parsed > now + 60_000) return new Date(now).toISOString();
+  return new Date(parsed).toISOString();
+}
+
 export async function createTicket(
   db: D1Client,
   input: SupportTicketInput,
@@ -259,22 +270,6 @@ export async function createTicket(
   const priority: SupportTicketPriority = input.priority ?? "medium";
   const externalSource: SupportTicketSource = input.externalSource ?? "manual";
 
-  if (input.externalId) {
-    const existing = await findSupportTicketByExternalId(
-      db,
-      input.organizationId,
-      input.externalId,
-      externalSource
-    );
-    if (existing) {
-      throw new VortexError({
-        code: "CONFLICT",
-        status: 409,
-        message: "A ticket with this external ID already exists",
-      });
-    }
-  }
-
   if (input.issueId && env) {
     const stub = getWorkspaceStub(env, input.organizationId);
     await stub.setOrganizationId(input.organizationId);
@@ -289,39 +284,10 @@ export async function createTicket(
   }
 
   const now = new Date().toISOString();
-  const createdAt = input.createdAt ?? now;
-  const updatedAt = input.updatedAt ?? now;
+  const createdAt = sanitizeTimestamp(input.createdAt) ?? now;
+  const updatedAt = sanitizeTimestamp(input.updatedAt) ?? createdAt;
 
-  await db.insert(supportTickets).values({
-    id,
-    organizationId: input.organizationId,
-    customerId: input.customerId,
-    number,
-    externalId: input.externalId ?? null,
-    externalSource,
-    title: input.title,
-    status,
-    priority,
-    sourceChannel: input.sourceChannel,
-    issueId: input.issueId ?? null,
-    snoozedUntil: input.snoozedUntil ?? null,
-    lastCustomerMessageAt: null,
-    lastAgentMessageAt: null,
-    createdAt,
-    updatedAt,
-  });
-
-  await runAutoresponders(db, env, input.organizationId, id, "ticket_created");
-
-  if (env) {
-    await dispatchSupportTicketEvent(env, input.organizationId, {
-      type: "support_ticket.created",
-      organizationId: input.organizationId,
-      ticketId: id,
-    });
-  }
-
-  return {
+  const values = {
     id,
     organizationId: input.organizationId,
     customerId: input.customerId,
@@ -339,6 +305,74 @@ export async function createTicket(
     createdAt,
     updatedAt,
   };
+
+  let inserted: SupportTicket | undefined;
+  if (input.externalId) {
+    const row = await db
+      .insert(supportTickets)
+      .values(values)
+      .onConflictDoNothing({
+        target: [
+          supportTickets.organizationId,
+          supportTickets.externalId,
+          supportTickets.externalSource,
+        ],
+      })
+      .returning()
+      .get();
+    if (!row) {
+      const existing = await findSupportTicketByExternalId(
+        db,
+        input.organizationId,
+        input.externalId,
+        externalSource
+      );
+      if (existing) {
+        if (input.ifExists === "return") {
+          return existing;
+        }
+        throw new VortexError({
+          code: "CONFLICT",
+          status: 409,
+          message: "A ticket with this external ID already exists",
+        });
+      }
+      throw new VortexError({
+        code: "CONFLICT",
+        status: 409,
+        message: "A ticket with this external ID already exists",
+      });
+    }
+    inserted = row;
+  } else {
+    inserted = await db.insert(supportTickets).values(values).returning().get();
+  }
+
+  if (!inserted) {
+    throw new VortexError({
+      code: "INTERNAL_ERROR",
+      status: 500,
+      message: "Failed to create support ticket",
+    });
+  }
+
+  await runAutoresponders(
+    db,
+    env,
+    input.organizationId,
+    inserted.id,
+    "ticket_created"
+  );
+
+  if (env) {
+    await dispatchSupportTicketEvent(env, input.organizationId, {
+      type: "support_ticket.created",
+      organizationId: input.organizationId,
+      ticketId: inserted.id,
+    });
+  }
+
+  return inserted;
 }
 
 export async function getTicketById(
@@ -960,11 +994,14 @@ export async function setTicketAssignees(
     }
   }
 
-  await db
+  const deleteAssignments = db
     .delete(supportTicketAssignments)
     .where(eq(supportTicketAssignments.ticketId, ticketId));
 
-  if (userIds.size === 0 && teamIds.size === 0) return;
+  if (userIds.size === 0 && teamIds.size === 0) {
+    await deleteAssignments;
+    return;
+  }
 
   const rows = [
     ...[...userIds.entries()].map(([userId, isPrimary]) => ({
@@ -983,7 +1020,11 @@ export async function setTicketAssignees(
     })),
   ];
 
-  await db.insert(supportTicketAssignments).values(rows);
+  const insertAssignments = db
+    .insert(supportTicketAssignments)
+    .values(rows as unknown as typeof supportTicketAssignments.$inferInsert);
+
+  await db.batch([deleteAssignments, insertAssignments]);
 }
 
 export async function setTicketLabels(
@@ -996,39 +1037,86 @@ export async function setTicketLabels(
 
   const uniqueLabelIds = [...new Set(labelIds)];
 
-  await db
+  if (uniqueLabelIds.length > 0) {
+    const validLabels = await db
+      .select({ id: labels.id })
+      .from(labels)
+      .where(
+        and(
+          eq(labels.organizationId, organizationId),
+          inArray(labels.id, uniqueLabelIds)
+        )
+      );
+
+    const validIds = new Set(validLabels.map((label) => label.id));
+    const invalid = uniqueLabelIds.filter((id) => !validIds.has(id));
+    if (invalid.length > 0) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: `Invalid labels: ${invalid.join(", ")}`,
+      });
+    }
+  }
+
+  const deleteLabels = db
     .delete(supportTicketLabels)
     .where(eq(supportTicketLabels.ticketId, ticketId));
 
-  if (uniqueLabelIds.length === 0) return;
-
-  const validLabels = await db
-    .select({ id: labels.id })
-    .from(labels)
-    .where(
-      and(
-        eq(labels.organizationId, organizationId),
-        inArray(labels.id, uniqueLabelIds)
-      )
-    );
-
-  const validIds = validLabels.map((label) => label.id);
-  const invalid = uniqueLabelIds.filter((id) => !validIds.includes(id));
-  if (invalid.length > 0) {
-    throw new VortexError({
-      code: "BAD_REQUEST",
-      status: 400,
-      message: `Invalid labels: ${invalid.join(", ")}`,
-    });
+  if (uniqueLabelIds.length === 0) {
+    await deleteLabels;
+    return;
   }
 
-  await db.insert(supportTicketLabels).values(
-    validIds.map((labelId) => ({
+  const insertLabels = db.insert(supportTicketLabels).values(
+    uniqueLabelIds.map((labelId) => ({
       id: crypto.randomUUID(),
       ticketId,
       labelId,
     }))
   );
+
+  await db.batch([deleteLabels, insertLabels]);
+}
+
+async function findTicketEventByExternalId(
+  db: D1Client,
+  ticketId: string,
+  externalId: string,
+  type: SupportTicketEventType
+): Promise<SupportTicketEventWithDetails | null> {
+  const event = await db
+    .select()
+    .from(supportTicketEvents)
+    .where(
+      and(
+        eq(supportTicketEvents.ticketId, ticketId),
+        eq(supportTicketEvents.externalId, externalId),
+        eq(supportTicketEvents.type, type)
+      )
+    )
+    .get();
+  if (!event) return null;
+
+  if (event.type === "message") {
+    const message = await db
+      .select()
+      .from(supportTicketMessages)
+      .where(eq(supportTicketMessages.eventId, event.id))
+      .get();
+    return { ...event, message: message ?? undefined };
+  }
+
+  if (event.type === "note") {
+    const note = await db
+      .select()
+      .from(supportTicketNotes)
+      .where(eq(supportTicketNotes.eventId, event.id))
+      .get();
+    return { ...event, note: note ?? undefined };
+  }
+
+  return { ...event };
 }
 
 export async function addTicketMessage(
@@ -1045,6 +1133,7 @@ export async function addTicketMessage(
     actorType?: SupportTicketActorType;
     actorId?: string | null;
     subType?: string | null;
+    externalId?: string | null;
     metadata?: Record<string, unknown>;
     createdAt?: string;
     runAutoresponders?: boolean;
@@ -1055,7 +1144,7 @@ export async function addTicketMessage(
   await ensureTicket(db, organizationId, ticketId);
 
   const now = new Date().toISOString();
-  const messageCreatedAt = input.createdAt ?? now;
+  const messageCreatedAt = sanitizeTimestamp(input.createdAt) ?? now;
   const eventId = crypto.randomUUID();
   const messageId = crypto.randomUUID();
   const actorType: SupportTicketActorType =
@@ -1063,6 +1152,17 @@ export async function addTicketMessage(
     (input.customerId ? "customer" : input.userId ? "user" : "automation");
   const actorId = input.actorId ?? input.customerId ?? input.userId ?? null;
   const metadata = input.metadata ? JSON.stringify(input.metadata) : null;
+  const externalId = input.externalId ?? null;
+
+  if (externalId) {
+    const existing = await findTicketEventByExternalId(
+      db,
+      ticketId,
+      externalId,
+      "message"
+    );
+    if (existing) return existing;
+  }
 
   await db.insert(supportTicketEvents).values({
     id: eventId,
@@ -1072,6 +1172,7 @@ export async function addTicketMessage(
     actorType,
     actorId,
     metadata,
+    externalId,
     createdAt: messageCreatedAt,
   });
 
@@ -1164,6 +1265,7 @@ export async function addTicketMessage(
     actorType,
     actorId,
     metadata,
+    externalId,
     createdAt: messageCreatedAt,
     message: {
       id: messageId,
@@ -1269,6 +1371,7 @@ export async function addTicketNote(
     actorType?: SupportTicketActorType;
     actorId?: string | null;
     subType?: string | null;
+    externalId?: string | null;
     metadata?: Record<string, unknown>;
     createdAt?: string;
   },
@@ -1277,12 +1380,23 @@ export async function addTicketNote(
   await ensureTicket(db, organizationId, ticketId);
 
   const now = new Date().toISOString();
-  const noteCreatedAt = input.createdAt ?? now;
+  const noteCreatedAt = sanitizeTimestamp(input.createdAt) ?? now;
   const eventId = crypto.randomUUID();
   const noteId = crypto.randomUUID();
   const actorType: SupportTicketActorType = input.actorType ?? "user";
   const actorId = input.actorId ?? input.userId ?? null;
   const metadata = input.metadata ? JSON.stringify(input.metadata) : null;
+  const externalId = input.externalId ?? null;
+
+  if (externalId) {
+    const existing = await findTicketEventByExternalId(
+      db,
+      ticketId,
+      externalId,
+      "note"
+    );
+    if (existing) return existing;
+  }
 
   await db.insert(supportTicketEvents).values({
     id: eventId,
@@ -1292,6 +1406,7 @@ export async function addTicketNote(
     actorType,
     actorId,
     metadata,
+    externalId,
     createdAt: noteCreatedAt,
   });
 
@@ -1328,6 +1443,7 @@ export async function addTicketNote(
     actorType,
     actorId,
     metadata,
+    externalId,
     createdAt: noteCreatedAt,
     note: {
       id: noteId,
@@ -1346,6 +1462,7 @@ export async function addTicketEvent(
     subType?: string | null;
     actorType?: SupportTicketActorType;
     actorId?: string | null;
+    externalId?: string | null;
     metadata?: Record<string, unknown>;
     createdAt?: string;
   }
@@ -1353,11 +1470,22 @@ export async function addTicketEvent(
   await ensureTicket(db, organizationId, ticketId);
 
   const now = new Date().toISOString();
-  const eventCreatedAt = input.createdAt ?? now;
+  const eventCreatedAt = sanitizeTimestamp(input.createdAt) ?? now;
   const eventId = crypto.randomUUID();
   const actorType: SupportTicketActorType = input.actorType ?? "automation";
   const actorId = input.actorId ?? null;
   const metadata = input.metadata ? JSON.stringify(input.metadata) : null;
+  const externalId = input.externalId ?? null;
+
+  if (externalId) {
+    const existing = await findTicketEventByExternalId(
+      db,
+      ticketId,
+      externalId,
+      input.type
+    );
+    if (existing) return existing;
+  }
 
   await db.insert(supportTicketEvents).values({
     id: eventId,
@@ -1367,6 +1495,7 @@ export async function addTicketEvent(
     actorType,
     actorId,
     metadata,
+    externalId,
     createdAt: eventCreatedAt,
   });
 
@@ -1388,6 +1517,7 @@ export async function addTicketEvent(
     actorType,
     actorId,
     metadata,
+    externalId,
     createdAt: eventCreatedAt,
   };
 }
@@ -1505,6 +1635,7 @@ export async function listTicketEvents(
     actorType: event.actorType,
     actorId: event.actorId,
     metadata: event.metadata,
+    externalId: event.externalId,
     createdAt: event.createdAt,
     message: messageMap.get(event.id),
     note: noteMap.get(event.id),
@@ -1684,6 +1815,8 @@ async function ingestSupportTimeline(
     ticketUpdatedAt: string;
   }
 ): Promise<void> {
+  const now = new Date().toISOString();
+
   await addTicketMessage(db, organizationId, ticketId, {
     direction: "inbound",
     textContent: input.firstMessage,
@@ -1775,9 +1908,12 @@ async function ingestSupportTimeline(
   );
 
   const latest = Math.max(...createdAts);
-  const finalUpdatedAt = Number.isFinite(latest)
-    ? new Date(latest).toISOString()
-    : input.ticketUpdatedAt;
+  const finalUpdatedAt =
+    sanitizeTimestamp(
+      Number.isFinite(latest)
+        ? new Date(latest).toISOString()
+        : input.ticketUpdatedAt
+    ) ?? now;
   await db
     .update(supportTickets)
     .set({ updatedAt: finalUpdatedAt })

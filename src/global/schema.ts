@@ -2185,6 +2185,7 @@ export const supportTicketEvents = sqliteTable(
     }).notNull(),
     actorId: text("actor_id" as string),
     metadata: text("metadata" as string),
+    externalId: text("external_id" as string),
     createdAt: text("created_at" as string)
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
@@ -2193,6 +2194,11 @@ export const supportTicketEvents = sqliteTable(
     index("support_ticket_events_ticket_created_idx" as string).on(
       table.ticketId,
       table.createdAt
+    ),
+    uniqueIndex("support_ticket_events_ticket_external_type_idx" as string).on(
+      table.ticketId,
+      table.externalId,
+      table.type
     ),
   ]
 );

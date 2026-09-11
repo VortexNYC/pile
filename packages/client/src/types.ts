@@ -11816,6 +11816,7 @@ export interface paths {
                                     actorType: string;
                                     actorId: string | null;
                                     metadata: string | null;
+                                    externalId: string | null;
                                     createdAt: string;
                                     message?: {
                                         id: string;
@@ -11958,6 +11959,7 @@ export interface paths {
                                     actorType: string;
                                     actorId: string | null;
                                     metadata: string | null;
+                                    externalId: string | null;
                                     createdAt: string;
                                     message?: {
                                         id: string;
@@ -12077,6 +12079,7 @@ export interface paths {
                                     actorType: string;
                                     actorId: string | null;
                                     metadata: string | null;
+                                    externalId: string | null;
                                     createdAt: string;
                                     message?: {
                                         id: string;
@@ -12204,6 +12207,7 @@ export interface paths {
                                     actorType: string;
                                     actorId: string | null;
                                     metadata: string | null;
+                                    externalId: string | null;
                                     createdAt: string;
                                     message?: {
                                         id: string;
@@ -12288,6 +12292,7 @@ export interface paths {
                                 actorType: string;
                                 actorId: string | null;
                                 metadata: string | null;
+                                externalId: string | null;
                                 createdAt: string;
                                 message?: {
                                     id: string;
@@ -12369,6 +12374,7 @@ export interface paths {
                                 actorType: string;
                                 actorId: string | null;
                                 metadata: string | null;
+                                externalId: string | null;
                                 createdAt: string;
                                 message?: {
                                     id: string;
@@ -12437,6 +12443,7 @@ export interface paths {
                                 actorType: string;
                                 actorId: string | null;
                                 metadata: string | null;
+                                externalId: string | null;
                                 createdAt: string;
                                 message?: {
                                     id: string;
@@ -12560,6 +12567,7 @@ export interface paths {
                                     actorType: string;
                                     actorId: string | null;
                                     metadata: string | null;
+                                    externalId: string | null;
                                     createdAt: string;
                                     message?: {
                                         id: string;
@@ -12681,6 +12689,7 @@ export interface paths {
                                     actorType: string;
                                     actorId: string | null;
                                     metadata: string | null;
+                                    externalId: string | null;
                                     createdAt: string;
                                     message?: {
                                         id: string;
@@ -12812,6 +12821,7 @@ export interface paths {
                                     actorType: string;
                                     actorId: string | null;
                                     metadata: string | null;
+                                    externalId: string | null;
                                     createdAt: string;
                                     message?: {
                                         id: string;
@@ -12948,6 +12958,7 @@ export interface paths {
                                     actorType: string;
                                     actorId: string | null;
                                     metadata: string | null;
+                                    externalId: string | null;
                                     createdAt: string;
                                     message?: {
                                         id: string;
@@ -13075,6 +13086,7 @@ export interface paths {
                                     actorType: string;
                                     actorId: string | null;
                                     metadata: string | null;
+                                    externalId: string | null;
                                     createdAt: string;
                                     message?: {
                                         id: string;

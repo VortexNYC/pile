@@ -6,6 +6,7 @@ import { z } from "zod";
 import { createD1 } from "../global/db.js";
 import {
   apikey as apikeyTable,
+  labels,
   supportTicketAttachments,
   supportTicketEvents,
   supportTicketNotes,
@@ -23,6 +24,7 @@ import {
   createTicketFromPlain,
   createTicketFromZendesk,
   findOrCreateTeam,
+  findSupportTicketByExternalId,
   findUserByEmail,
   getTicketById,
   setTicketAssignees,
@@ -856,6 +858,145 @@ describe("support-tickets API", () => {
       teamName: "Support",
     });
     expect(byName.success).toBe(true);
+  });
+
+  it("rejects duplicate external ticket ids", async () => {
+    const db = createD1(env.D1);
+    const customer = await createSupportCustomer(db, {
+      organizationId,
+      email: "dup-external@example.com",
+      fullName: "Duplicate External Customer",
+      externalId: null,
+    });
+
+    const first = await fetch(`/workspaces/${organizationId}/support/tickets`, {
+      method: "POST",
+      body: JSON.stringify({
+        customerId: customer.id,
+        title: "First",
+        sourceChannel: "email",
+        externalId: "ext-dup-1",
+        externalSource: "intercom",
+      }),
+    });
+    expect(first.status).toBe(201);
+
+    const second = await fetch(
+      `/workspaces/${organizationId}/support/tickets`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          customerId: customer.id,
+          title: "Second",
+          sourceChannel: "email",
+          externalId: "ext-dup-1",
+          externalSource: "intercom",
+        }),
+      }
+    );
+    expect(second.status).toBe(409);
+  });
+
+  it("clamps future provider timestamps to now", async () => {
+    const channelRes = await fetch(
+      `/workspaces/${organizationId}/support-channels`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "api",
+          name: "api-future",
+        }),
+      }
+    );
+    expect(channelRes.status).toBe(201);
+    const { id: channelId } = (await channelRes.json()) as { id: string };
+
+    const future = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const incomingRes = await app.fetch(
+      new Request(`https://example.com/support/incoming/${channelId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fromEmail: "future@example.com",
+          text: "Future message",
+          externalTicketId: "future-thread",
+          externalMessageId: "future-msg",
+          createdAt: future,
+        }),
+      }),
+      env
+    );
+    expect(incomingRes.status).toBe(201);
+
+    const db = createD1(env.D1);
+    const ticket = await findSupportTicketByExternalId(
+      db,
+      organizationId,
+      "future-thread",
+      "api"
+    );
+    expect(ticket).toBeDefined();
+    const createdAt = new Date(ticket!.createdAt).getTime();
+    expect(createdAt).toBeLessThanOrEqual(Date.now() + 60_000);
+  });
+
+  it("does not delete labels when an invalid replacement is requested", async () => {
+    const db = createD1(env.D1);
+    const customer = await createSupportCustomer(db, {
+      organizationId,
+      email: "label-delete@example.com",
+      fullName: "Label Delete Customer",
+      externalId: null,
+    });
+
+    const label = await db
+      .insert(labels)
+      .values({
+        id: "label-keep-1",
+        organizationId,
+        name: "keep",
+        color: "#000000",
+      })
+      .returning()
+      .get();
+
+    const ticket = await createTicketFromPlain(
+      db,
+      organizationId,
+      customer.id,
+      {
+        id: "thread-label-delete",
+        status: "todo",
+        priority: "medium",
+        source: { type: "chat", body: "Help" },
+        createdAt: "2023-11-14T14:00:00.000Z",
+        updatedAt: "2023-11-14T14:00:00.000Z",
+        replies: [],
+        events: [],
+      }
+    );
+
+    const setRes = await fetch(
+      `/workspaces/${organizationId}/support/tickets/${ticket.id}/labels`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ labels: [label.id] }),
+      }
+    );
+    expect(setRes.status).toBe(200);
+
+    const badRes = await fetch(
+      `/workspaces/${organizationId}/support/tickets/${ticket.id}/labels`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ labels: ["label-does-not-exist"] }),
+      }
+    );
+    expect(badRes.status).toBe(400);
+
+    const fetched = await getTicketById(db, organizationId, ticket.id);
+    expect(fetched?.labels.length).toBe(1);
+    expect(fetched?.labels[0]?.labelId).toBe(label.id);
   });
 
   it("accepts teamId or teamName for Intercom support imports", () => {

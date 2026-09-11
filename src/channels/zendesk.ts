@@ -169,6 +169,7 @@ export async function processZendeskSupportWebhook(
             actorType: comment ? "automation" : undefined,
             actorId: comment ? null : undefined,
             subType: comment ? String(comment.id ?? "") : externalId,
+            externalId: comment ? String(comment.id ?? "") : externalId,
             createdAt,
           },
           c.env
@@ -184,6 +185,7 @@ export async function processZendeskSupportWebhook(
           textContent: text,
           channel: "zendesk",
           subType: externalId,
+          externalId,
           createdAt,
         },
         c.env
@@ -258,6 +260,7 @@ export async function processZendeskSupportWebhook(
         channel: "zendesk",
         customerId: customer.id,
         subType: externalId,
+        externalId,
         createdAt,
       },
       c.env

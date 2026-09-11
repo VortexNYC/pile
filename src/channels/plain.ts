@@ -339,6 +339,7 @@ async function createTicketFromPlainPayload(
         channel: "plain",
         customerId: supportCustomer.id,
         subType: thread.id,
+        externalId: thread.id,
         createdAt,
       },
       env
@@ -431,6 +432,7 @@ async function addMessageFromPlainPayload(
         channel: "plain",
         actorType: direction === "outbound" ? "user" : undefined,
         subType: externalMessageId,
+        externalId: externalMessageId,
         createdAt,
       },
       env
@@ -455,6 +457,7 @@ async function addMessageFromPlainPayload(
       channel: "plain",
       customerId: customer.id,
       subType: externalMessageId,
+      externalId: externalMessageId,
       createdAt,
     },
     env
