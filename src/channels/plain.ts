@@ -14,6 +14,7 @@ import {
   type SupportTicketPriority,
   type SupportTicketStatus,
 } from "../global/support-tickets.js";
+import { enqueueWebhook } from "../global/webhook-queue.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 
@@ -132,6 +133,11 @@ export const plainSupportWebhookRoute = createRoute({
   },
 });
 
+const plainQueuePayloadSchema = z.object({
+  webhook: plainWebhookSchema,
+  organizationId: z.string(),
+});
+
 export async function processPlainSupportWebhook(
   c: Context<AppContext>
 ): Promise<{ ok: boolean }> {
@@ -184,81 +190,116 @@ export async function processPlainSupportWebhook(
   }
 
   const db = createD1(c.env.D1);
-  const { payload } = webhook.data;
+  await enqueueWebhook(
+    db,
+    c.env,
+    {
+      deliveryId: webhook.data.id,
+      source: "plain",
+      event: webhook.data.payload.eventType,
+      organizationId,
+      payload: { webhook: webhook.data, organizationId },
+    },
+    new Map([["plain", processPlainSupportWebhookPayload]])
+  );
 
-  switch (payload.eventType) {
+  return { ok: true };
+}
+
+export async function processPlainSupportWebhookPayload(
+  db: D1Client,
+  env: WorkerEnv,
+  payload: unknown
+): Promise<void> {
+  const parsed = plainQueuePayloadSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Invalid Plain queue payload",
+      hint: parsed.error.message,
+    });
+  }
+
+  const { webhook, organizationId } = parsed.data;
+  const { payload: eventPayload } = webhook;
+
+  switch (eventPayload.eventType) {
     case "thread.thread_created":
       await createTicketFromPlainPayload(
         db,
-        c.env,
+        env,
         organizationId,
-        payload.thread,
+        eventPayload.thread,
         {
-          text: payload.thread.previewText ?? null,
+          text: eventPayload.thread.previewText ?? null,
         }
       );
       break;
     case "thread.thread_status_transitioned":
     case "thread.thread_priority_changed":
-      await updatePlainTicket(db, c.env, organizationId, payload.thread);
+      await updatePlainTicket(db, env, organizationId, eventPayload.thread);
       break;
     case "thread.email_received":
       await addMessageFromPlainPayload(
         db,
-        c.env,
+        env,
         organizationId,
-        payload.thread,
-        payload.email.textContent ?? payload.email.markdownContent ?? null,
-        payload.email.from?.email ?? payload.thread.customer?.email.email,
-        payload.email.from?.name ?? null,
-        payload.email.id,
+        eventPayload.thread,
+        eventPayload.email.textContent ??
+          eventPayload.email.markdownContent ??
+          null,
+        eventPayload.email.from?.email ??
+          eventPayload.thread.customer?.email.email,
+        eventPayload.email.from?.name ?? null,
+        eventPayload.email.id,
         "inbound"
       );
       break;
     case "thread.email_sent":
       await addMessageFromPlainPayload(
         db,
-        c.env,
+        env,
         organizationId,
-        payload.thread,
-        payload.email.textContent ?? payload.email.markdownContent ?? null,
-        payload.email.from?.email ?? null,
-        payload.email.from?.name ?? null,
-        payload.email.id,
+        eventPayload.thread,
+        eventPayload.email.textContent ??
+          eventPayload.email.markdownContent ??
+          null,
+        eventPayload.email.from?.email ?? null,
+        eventPayload.email.from?.name ?? null,
+        eventPayload.email.id,
         "outbound"
       );
       break;
     case "thread.chat_received":
       await addMessageFromPlainPayload(
         db,
-        c.env,
+        env,
         organizationId,
-        payload.thread,
-        payload.chat.text,
-        payload.thread.customer?.email.email ?? null,
-        payload.thread.customer?.fullName ?? null,
-        payload.chat.chatId,
+        eventPayload.thread,
+        eventPayload.chat.text,
+        eventPayload.thread.customer?.email.email ?? null,
+        eventPayload.thread.customer?.fullName ?? null,
+        eventPayload.chat.chatId,
         "inbound"
       );
       break;
     case "thread.chat_sent":
       await addMessageFromPlainPayload(
         db,
-        c.env,
+        env,
         organizationId,
-        payload.thread,
-        payload.chat.text,
+        eventPayload.thread,
+        eventPayload.chat.text,
         null,
         null,
-        payload.chat.chatId,
+        eventPayload.chat.chatId,
         "outbound"
       );
       break;
     default:
-      return { ok: true };
+      return;
   }
-
-  return { ok: true };
 }
 
 async function createTicketFromPlainPayload(

@@ -2,13 +2,14 @@ import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 
 import { hmacSha256Hex, timingSafeEqualHex } from "../global/crypto.js";
-import { createD1 } from "../global/db.js";
+import { createD1, type D1Client } from "../global/db.js";
 import {
   getActiveSupportChannel,
   processIncomingMessage,
 } from "../global/support-channels.js";
+import { enqueueWebhook } from "../global/webhook-queue.js";
 import { VortexError } from "../platform/errors.js";
-import type { AppContext } from "../platform/middleware.js";
+import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 
 const slackEventSchema = z.object({
   type: z.string(),
@@ -63,6 +64,11 @@ export const slackSupportWebhookRoute = createRoute({
       },
     },
   },
+});
+
+const slackQueuePayloadSchema = z.object({
+  notification: slackEventSchema,
+  organizationId: z.string(),
 });
 
 export async function processSlackSupportWebhook(
@@ -136,20 +142,62 @@ export async function processSlackSupportWebhook(
   }
 
   const db = createD1(c.env.D1);
+  await enqueueWebhook(
+    db,
+    c.env,
+    {
+      deliveryId: ev.ts,
+      source: "slack",
+      event: ev.type,
+      organizationId,
+      payload: { notification: body, organizationId },
+    },
+    new Map([["slack", processSlackSupportWebhookPayload]])
+  );
+
+  return { ok: true };
+}
+
+export async function processSlackSupportWebhookPayload(
+  db: D1Client,
+  env: WorkerEnv,
+  payload: unknown
+): Promise<void> {
+  const parsed = slackQueuePayloadSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Invalid Slack queue payload",
+      hint: parsed.error.message,
+    });
+  }
+
+  const { notification, organizationId } = parsed.data;
+  if (
+    notification.type !== "event_callback" ||
+    !notification.event ||
+    notification.event.type !== "message" ||
+    notification.event.bot_id ||
+    notification.event.subtype
+  ) {
+    return;
+  }
+
+  const ev = notification.event;
   const channel = await getActiveSupportChannel(
     db,
     organizationId,
     "slack",
     ev.channel
   );
-
   if (!channel) {
-    return { ok: true };
+    return;
   }
 
   const email = ev.user_profile?.email;
   if (!email) {
-    return { ok: true };
+    return;
   }
 
   const createdAt = new Date(Number(ev.ts) * 1000).toISOString();
@@ -167,10 +215,8 @@ export async function processSlackSupportWebhook(
       externalMessageId: ev.ts,
       createdAt,
     },
-    c.env
+    env
   );
-
-  return { ok: true };
 }
 
 const slackPostMessageResponseSchema = z.object({

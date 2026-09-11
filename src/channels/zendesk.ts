@@ -2,7 +2,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 
 import { hmacSha256Base64, timingSafeEqualHex } from "../global/crypto.js";
-import { createD1 } from "../global/db.js";
+import { createD1, type D1Client } from "../global/db.js";
 import { findOrCreateCustomerByEmail } from "../global/support-contacts.js";
 import { maybeEscalate } from "../global/support-escalation.js";
 import {
@@ -14,8 +14,9 @@ import {
   type SupportTicketPriority,
   type SupportTicketStatus,
 } from "../global/support-tickets.js";
+import { enqueueWebhook } from "../global/webhook-queue.js";
 import { VortexError } from "../platform/errors.js";
-import type { AppContext } from "../platform/middleware.js";
+import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 
 const zendeskRequesterSchema = z.object({
   email: z.string().email(),
@@ -72,6 +73,11 @@ export const zendeskSupportWebhookRoute = createRoute({
   },
 });
 
+const zendeskQueuePayloadSchema = z.object({
+  payload: zendeskWebhookPayloadSchema,
+  organizationId: z.string(),
+});
+
 export async function processZendeskSupportWebhook(
   c: Context<AppContext>
 ): Promise<{ ok: boolean }> {
@@ -114,23 +120,60 @@ export async function processZendeskSupportWebhook(
   }
 
   const parsed = safeJsonParse(rawBody);
-  const payload = zendeskWebhookPayloadSchema.safeParse(parsed);
-  if (!payload.success) {
+  const webhook = zendeskWebhookPayloadSchema.safeParse(parsed);
+  if (!webhook.success) {
     throw new VortexError({
       code: "BAD_REQUEST",
       status: 400,
       message: "Invalid Zendesk webhook payload",
-      hint: payload.error.message,
+      hint: webhook.error.message,
     });
   }
 
-  const ticketData = payload.data.ticket;
-  const comment = payload.data.comment;
+  const ticketData = webhook.data.ticket;
   if (!ticketData) {
     return { ok: true };
   }
 
   const db = createD1(c.env.D1);
+  await enqueueWebhook(
+    db,
+    c.env,
+    {
+      deliveryId: String(ticketData.id),
+      source: "zendesk",
+      event: "ticket",
+      organizationId,
+      payload: { payload: webhook.data, organizationId },
+    },
+    new Map([["zendesk", processZendeskSupportWebhookPayload]])
+  );
+
+  return { ok: true };
+}
+
+export async function processZendeskSupportWebhookPayload(
+  db: D1Client,
+  env: WorkerEnv,
+  payload: unknown
+): Promise<void> {
+  const parsed = zendeskQueuePayloadSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Invalid Zendesk queue payload",
+      hint: parsed.error.message,
+    });
+  }
+
+  const { payload: webhookPayload, organizationId } = parsed.data;
+  const ticketData = webhookPayload.ticket;
+  const comment = webhookPayload.comment;
+  if (!ticketData) {
+    return;
+  }
+
   const externalId = String(ticketData.id);
   const status = zendeskStatusToTicketStatus(ticketData.status);
   const priority = zendeskPriorityToTicketPriority(ticketData.priority);
@@ -172,7 +215,7 @@ export async function processZendeskSupportWebhook(
             externalId: comment ? String(comment.id ?? "") : externalId,
             createdAt,
           },
-          c.env
+          env
         );
       }
     } else if (text) {
@@ -188,7 +231,7 @@ export async function processZendeskSupportWebhook(
           externalId,
           createdAt,
         },
-        c.env
+        env
       );
     }
     await updateTicket(
@@ -201,9 +244,9 @@ export async function processZendeskSupportWebhook(
         actorType: "automation",
         actorId: null,
       },
-      c.env
+      env
     );
-    return { ok: true };
+    return;
   }
 
   if (!requester?.email) {
@@ -239,10 +282,10 @@ export async function processZendeskSupportWebhook(
       updatedAt: ticketData.updated_at ?? createdAt,
       ifExists: "return",
     },
-    c.env
+    env
   );
 
-  await maybeEscalate(c.env, db, organizationId, ticket, {
+  await maybeEscalate(env, db, organizationId, ticket, {
     text,
     subject: subject ?? undefined,
     customer,
@@ -264,11 +307,9 @@ export async function processZendeskSupportWebhook(
         externalId,
         createdAt,
       },
-      c.env
+      env
     );
   }
-
-  return { ok: true };
 }
 
 function zendeskStatusToTicketStatus(status: string): SupportTicketStatus {
