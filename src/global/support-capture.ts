@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, lt, ne } from "drizzle-orm";
 
 import { VortexError } from "../platform/errors.js";
 import type { D1Client } from "./db.js";
@@ -218,6 +218,20 @@ export async function updateCaptureSessionStatus(
     });
   }
   return parseCaptureSession(row);
+}
+
+export async function expireStaleCaptureSessions(
+  db: D1Client,
+  before = new Date().toISOString()
+) {
+  await db
+    .delete(supportCaptureSessions)
+    .where(
+      and(
+        ne(supportCaptureSessions.status, "finalized"),
+        lt(supportCaptureSessions.expiresAt, before)
+      )
+    );
 }
 
 export async function finalizeCaptureSession(

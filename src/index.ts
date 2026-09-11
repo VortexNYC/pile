@@ -6,6 +6,7 @@ import app from "./api/index.js";
 import { handleIncomingEmail } from "./channels/email.js";
 import { createD1 } from "./global/db.js";
 import { cycles } from "./global/schema.js";
+import { expireStaleCaptureSessions } from "./global/support-capture.js";
 import type { WorkerEnv } from "./platform/middleware.js";
 
 export { WorkspaceDO } from "./workspace/durable-object.js";
@@ -19,6 +20,12 @@ async function scheduled(
     drainOutpostQueue(env)
       .then(() => sweepOutpostWorkers(env))
       .catch((err) => console.error("outpost sweep failed", err))
+  );
+  ctx.waitUntil(
+    (async () => {
+      const d1 = createD1(env.D1);
+      await expireStaleCaptureSessions(d1);
+    })().catch((err) => console.error("capture session sweep failed", err))
   );
   const d1 = createD1(env.D1);
   // Only wake DOs for orgs that have a non-completed cycle; orgs without

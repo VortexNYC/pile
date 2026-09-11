@@ -7,9 +7,15 @@ import { getWorkspaceStub } from "../api/stub.js";
 import { createD1 } from "../global/db.js";
 import { supportCustomers, user as userTable } from "../global/schema.js";
 import {
+  supportCaptureSessions,
   supportTicketAttachments,
   supportTicketEvents,
 } from "../global/schema.js";
+import {
+  createCapturePublicKey,
+  createCaptureSession,
+  expireStaleCaptureSessions,
+} from "../global/support-capture.js";
 import { findOrCreateCustomerByEmail } from "../global/support-contacts.js";
 import { createTicket, getTicketById } from "../global/support-tickets.js";
 import { createWorkspace } from "../global/workspaces.js";
@@ -738,6 +744,31 @@ describe("support-capture API", () => {
     expect(
       events.some((e) => e.message?.textContent?.includes("still does nothing"))
     ).toBe(true);
+  });
+
+  it("deletes stale non-finalized capture sessions", async () => {
+    const db = createD1(env.D1);
+    const { organizationId: orgId } = await seedWorkspace();
+    const publicKey = await createCapturePublicKey(db, orgId, {
+      name: "test",
+      allowedOrigins: ["https://example.com"],
+    });
+    const session = await createCaptureSession(db, publicKey.id, orgId, -1);
+    const before = await db
+      .select()
+      .from(supportCaptureSessions)
+      .where(eq(supportCaptureSessions.id, session.id))
+      .get();
+    expect(before).not.toBeNull();
+
+    await expireStaleCaptureSessions(db);
+
+    const after = await db
+      .select()
+      .from(supportCaptureSessions)
+      .where(eq(supportCaptureSessions.id, session.id))
+      .get();
+    expect(after).toBeUndefined();
   });
 
   it("attaches a capture to an existing workspace issue by reference", async () => {
