@@ -5,7 +5,11 @@ import { z } from "zod";
 
 env.WEBHOOK_QUEUE = null as unknown as typeof env.WEBHOOK_QUEUE;
 
-import { hmacSha1Hex, hmacSha256Hex } from "../global/crypto.js";
+import {
+  hmacSha1Hex,
+  hmacSha256Base64,
+  hmacSha256Hex,
+} from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
 import { supportTicketEvents, user as userTable } from "../global/schema.js";
 import { getCustomerByEmail } from "../global/support-contacts.js";
@@ -654,5 +658,127 @@ describe("support-channels API", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { ok: boolean; message?: string };
     expect(body.ok).toBe(false);
+  });
+
+  it("deduplicates a Plain thread_created replay with a fresh webhook id", async () => {
+    const secret = "test-plain-secret";
+    Object.assign(env as unknown as Record<string, unknown>, {
+      PLAIN_WEBHOOK_SECRET: secret,
+    });
+
+    const threadId = `plain-thread-${crypto.randomUUID()}`;
+    const customerEmail = `plain-dedup-${crypto.randomUUID()}@example.com`;
+    const makePayload = (webhookId: string) =>
+      JSON.stringify({
+        id: webhookId,
+        type: "webhook_event",
+        timestamp: new Date().toISOString(),
+        workspaceId: "plain-workspace",
+        webhookMetadata: {},
+        payload: {
+          eventType: "thread.thread_created",
+          thread: {
+            id: threadId,
+            title: "Plain dedup",
+            previewText: "Initial Plain message",
+            status: "TODO",
+            customer: {
+              id: `customer-${crypto.randomUUID()}`,
+              email: { email: customerEmail, isVerified: true },
+              fullName: "Plain User",
+            },
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        },
+      });
+
+    const send = async (webhookId: string) => {
+      const payload = makePayload(webhookId);
+      const signature = await hmacSha256Hex(secret, payload);
+      return app.fetch(
+        new Request(
+          `https://example.com/support/webhooks/plain/${organizationId}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Plain-Request-Signature": signature,
+            },
+            body: payload,
+          }
+        ),
+        env
+      );
+    };
+
+    const res1 = await send(`plain-wh-${crypto.randomUUID()}`);
+    expect(res1.status).toBe(200);
+    const res2 = await send(`plain-wh-${crypto.randomUUID()}`);
+    expect(res2.status).toBe(200);
+
+    const db = createD1(env.D1);
+    const events = await db
+      .select()
+      .from(supportTicketEvents)
+      .where(eq(supportTicketEvents.externalId, threadId));
+    expect(events.length).toBe(1);
+  });
+
+  it("deduplicates a Zendesk ticket create replay with a fresh delivery hash", async () => {
+    const secret = "test-zendesk-secret";
+    Object.assign(env as unknown as Record<string, unknown>, {
+      ZENDESK_WEBHOOK_SECRET: secret,
+    });
+
+    const ticketId = `zendesk-ticket-${crypto.randomUUID()}`;
+    const customerEmail = `zendesk-dedup-${crypto.randomUUID()}@example.com`;
+    const makePayload = () =>
+      JSON.stringify({
+        ticket: {
+          id: ticketId,
+          subject: "Zendesk dedup",
+          description: "Initial Zendesk message",
+          status: "new",
+          requester: { email: customerEmail, name: "Zendesk User" },
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      });
+
+    const send = async (timestamp: string) => {
+      const payload = makePayload();
+      const signature = await hmacSha256Base64(
+        secret,
+        `${timestamp}${payload}`
+      );
+      return app.fetch(
+        new Request(
+          `https://example.com/support/webhooks/zendesk/${organizationId}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Zendesk-Webhook-Signature": signature,
+              "X-Zendesk-Webhook-Signature-Timestamp": timestamp,
+            },
+            body: payload,
+          }
+        ),
+        env
+      );
+    };
+
+    const res1 = await send(Date.now().toString());
+    expect(res1.status).toBe(200);
+    const res2 = await send((Date.now() + 1).toString());
+    expect(res2.status).toBe(200);
+
+    const db = createD1(env.D1);
+    const events = await db
+      .select()
+      .from(supportTicketEvents)
+      .where(eq(supportTicketEvents.externalId, ticketId));
+    expect(events.length).toBe(1);
   });
 });
