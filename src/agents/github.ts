@@ -18,12 +18,10 @@ import {
   findRepoIssue,
   findRepoWorkspace,
 } from "../global/repo-issues.js";
-import {
-  claimWebhookDelivery,
-  recordWebhookDelivery,
-} from "../global/webhook-deliveries.js";
+import { recordWebhookDelivery } from "../global/webhook-deliveries.js";
+import { enqueueWebhook } from "../global/webhook-queue.js";
 import { VortexError } from "../platform/errors.js";
-import type { AppContext } from "../platform/middleware.js";
+import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 
 const pullRequestPayloadSchema = z.object({
   action: z.string(),
@@ -236,6 +234,12 @@ function extractWorkspaceIdFromLabels(
   return label?.name.split(":")[1]?.trim();
 }
 
+const githubQueuePayloadSchema = z.object({
+  event: z.string(),
+  rawBody: z.string(),
+  deliveryId: z.string().optional(),
+});
+
 export async function processGithubWebhook(c: Context<AppContext>) {
   const signature = c.req.header("x-hub-signature-256") ?? "";
   const rawBody = await c.req.text();
@@ -254,48 +258,67 @@ export async function processGithubWebhook(c: Context<AppContext>) {
     }
   }
 
-  const event = c.req.header("x-github-event");
-  const deliveryId = c.req.header("x-github-delivery");
+  const event = c.req.header("x-github-event") ?? "unknown";
+  const deliveryId = c.req.header("x-github-delivery") ?? crypto.randomUUID();
   const db = createD1(c.env.D1);
 
-  if (deliveryId) {
-    const claimed = await claimWebhookDelivery(
-      db,
+  await enqueueWebhook(
+    db,
+    c.env,
+    {
       deliveryId,
-      "github",
-      event ?? "unknown"
-    );
-    if (!claimed) {
-      return c.json({ ok: true }, 200);
-    }
-  }
+      source: "github",
+      event,
+      payload: { event, rawBody, deliveryId },
+    },
+    new Map([["github", processGithubWebhookPayload]])
+  );
 
-  if (event === "pull_request") {
-    return processPullRequest(c, db, deliveryId, event, rawBody);
-  }
-  if (event === "issues") {
-    return processGitHubIssue(c, db, deliveryId, event, rawBody);
-  }
-  if (event === "installation") {
-    return processInstallation(c, db, deliveryId, event, rawBody);
-  }
-  if (event === "installation_repositories") {
-    return processInstallationRepositories(c, db, deliveryId, event, rawBody);
-  }
-  if (event === "issue_comment") {
-    return processIssueComment(c, db, deliveryId, event, rawBody);
-  }
-  if (event === "pull_request_review_comment") {
-    return processPullRequestReviewComment(c, db, deliveryId, event, rawBody);
-  }
-  if (event === "check_run" || event === "check_suite") {
-    return processCheckRun(c, db, deliveryId, event, rawBody);
-  }
   return c.json({ ok: true }, 200);
 }
 
+export async function processGithubWebhookPayload(
+  db: D1Client,
+  env: WorkerEnv,
+  payload: unknown
+): Promise<void> {
+  const parsed = githubQueuePayloadSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Invalid GitHub queue payload",
+      hint: parsed.error.message,
+    });
+  }
+
+  const { event, rawBody, deliveryId } = parsed.data;
+
+  if (event === "pull_request") {
+    return processPullRequest(env, db, deliveryId, event, rawBody);
+  }
+  if (event === "issues") {
+    return processGitHubIssue(env, db, deliveryId, event, rawBody);
+  }
+  if (event === "installation") {
+    return processInstallation(env, db, deliveryId, event, rawBody);
+  }
+  if (event === "installation_repositories") {
+    return processInstallationRepositories(env, db, deliveryId, event, rawBody);
+  }
+  if (event === "issue_comment") {
+    return processIssueComment(env, db, deliveryId, event, rawBody);
+  }
+  if (event === "pull_request_review_comment") {
+    return processPullRequestReviewComment(env, db, deliveryId, event, rawBody);
+  }
+  if (event === "check_run" || event === "check_suite") {
+    return processCheckRun(env, db, deliveryId, event, rawBody);
+  }
+}
+
 async function processInstallation(
-  c: Context<AppContext>,
+  env: WorkerEnv,
   db: D1Client,
   deliveryId: string | undefined,
   event: string,
@@ -330,7 +353,7 @@ async function processInstallation(
     if (deliveryId) {
       await recordWebhookDelivery(db, deliveryId, "github", event, "deleted");
     }
-    return c.json({ ok: true }, 200);
+    return;
   }
 
   if (action === "created" || action === "new_permissions_accepted") {
@@ -356,7 +379,7 @@ async function processInstallation(
         installationId
       );
     }
-    return c.json({ ok: true }, 200);
+    return;
   }
 
   if (deliveryId) {
@@ -368,11 +391,11 @@ async function processInstallation(
       installationId
     );
   }
-  return c.json({ ok: true }, 200);
+  return;
 }
 
 async function processInstallationRepositories(
-  c: Context<AppContext>,
+  env: WorkerEnv,
   db: D1Client,
   deliveryId: string | undefined,
   event: string,
@@ -418,7 +441,7 @@ async function processInstallationRepositories(
         installationId
       );
     }
-    return c.json({ ok: true }, 200);
+    return;
   }
 
   await Promise.all(
@@ -443,11 +466,11 @@ async function processInstallationRepositories(
       installationId
     );
   }
-  return c.json({ ok: true }, 200);
+  return;
 }
 
 async function processIssueComment(
-  c: Context<AppContext>,
+  env: WorkerEnv,
   db: D1Client,
   deliveryId: string | undefined,
   event: string,
@@ -482,7 +505,7 @@ async function processIssueComment(
     if (deliveryId) {
       await recordWebhookDelivery(db, deliveryId, "github", event);
     }
-    return c.json({ ok: true }, 200);
+    return;
   }
 
   const mapping = await findRepoIssue(db, repo, issue.number);
@@ -490,13 +513,13 @@ async function processIssueComment(
     if (deliveryId) {
       await recordWebhookDelivery(db, deliveryId, "github", event);
     }
-    return c.json({ ok: true }, 200);
+    return;
   }
 
   const organizationId = mapping.organizationId;
   const issueId = mapping.issueId;
-  const doId = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId);
-  const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(doId);
+  const doId = env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId);
+  const stub = env.WORKSPACE_DURABLE_OBJECT.get(doId);
   await stub.setOrganizationId(organizationId);
   const externalId = comment.id.toString();
   const externalSource = "github";
@@ -546,11 +569,11 @@ async function processIssueComment(
       organizationId
     );
   }
-  return c.json({ ok: true }, 200);
+  return;
 }
 
 async function processPullRequestReviewComment(
-  c: Context<AppContext>,
+  env: WorkerEnv,
   db: D1Client,
   deliveryId: string | undefined,
   event: string,
@@ -586,20 +609,20 @@ async function processPullRequestReviewComment(
     if (deliveryId) {
       await recordWebhookDelivery(db, deliveryId, "github", event);
     }
-    return c.json({ ok: true }, 200);
+    return;
   }
 
-  const doId = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(
+  const doId = env.WORKSPACE_DURABLE_OBJECT.idFromName(
     workspaceRecord.organizationId
   );
-  const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(doId);
+  const stub = env.WORKSPACE_DURABLE_OBJECT.get(doId);
   await stub.setOrganizationId(workspaceRecord.organizationId);
   const issue = await stub.getIssueByBranch(repo, branch);
   if (!issue) {
     if (deliveryId) {
       await recordWebhookDelivery(db, deliveryId, "github", event);
     }
-    return c.json({ ok: true }, 200);
+    return;
   }
 
   const organizationId = workspaceRecord.organizationId;
@@ -652,11 +675,11 @@ async function processPullRequestReviewComment(
       organizationId
     );
   }
-  return c.json({ ok: true }, 200);
+  return;
 }
 
 async function processPullRequest(
-  c: Context<AppContext>,
+  env: WorkerEnv,
   db: D1Client,
   deliveryId: string | undefined,
   event: string,
@@ -695,13 +718,13 @@ async function processPullRequest(
 
   const workspaceRecord = await findWorkspaceByRepo(db, repo);
   if (!workspaceRecord) {
-    return c.json({ ok: true }, 200);
+    return;
   }
 
-  const doId = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(
+  const doId = env.WORKSPACE_DURABLE_OBJECT.idFromName(
     workspaceRecord.organizationId
   );
-  const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(doId);
+  const stub = env.WORKSPACE_DURABLE_OBJECT.get(doId);
   await stub.updatePrState(repo, branch, prUrl, prState, "github");
 
   const text = [pull_request.title, pull_request.body ?? "", branch].join(" ");
@@ -729,11 +752,11 @@ async function processPullRequest(
     );
   }
 
-  return c.json({ ok: true }, 200);
+  return;
 }
 
 async function processGitHubIssue(
-  c: Context<AppContext>,
+  env: WorkerEnv,
   db: D1Client,
   deliveryId: string | undefined,
   event: string,
@@ -770,11 +793,11 @@ async function processGitHubIssue(
   }
 
   if (!organizationId) {
-    return c.json({ ok: true }, 200);
+    return;
   }
 
-  const doId = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId);
-  const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(doId);
+  const doId = env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId);
+  const stub = env.WORKSPACE_DURABLE_OBJECT.get(doId);
   const mapping = await findRepoIssue(db, repo, issue.number);
 
   if (action === "opened" || action === "reopened") {
@@ -828,7 +851,7 @@ async function processGitHubIssue(
         organizationId
       );
     }
-    return c.json({ ok: true }, 200);
+    return;
   }
 
   if (action === "edited") {
@@ -868,7 +891,7 @@ async function processGitHubIssue(
         organizationId
       );
     }
-    return c.json({ ok: true }, 200);
+    return;
   }
 
   if (action === "closed") {
@@ -895,7 +918,7 @@ async function processGitHubIssue(
         organizationId
       );
     }
-    return c.json({ ok: true }, 200);
+    return;
   }
 
   if (action === "deleted") {
@@ -912,7 +935,7 @@ async function processGitHubIssue(
         organizationId
       );
     }
-    return c.json({ ok: true }, 200);
+    return;
   }
 
   if (action === "labeled" || action === "unlabeled") {
@@ -947,7 +970,7 @@ async function processGitHubIssue(
         organizationId
       );
     }
-    return c.json({ ok: true }, 200);
+    return;
   }
 
   if (action === "assigned" || action === "unassigned") {
@@ -984,7 +1007,7 @@ async function processGitHubIssue(
         organizationId
       );
     }
-    return c.json({ ok: true }, 200);
+    return;
   }
 
   if (action === "milestoned" || action === "demilestoned") {
@@ -1019,7 +1042,7 @@ async function processGitHubIssue(
         organizationId
       );
     }
-    return c.json({ ok: true }, 200);
+    return;
   }
 
   if (deliveryId) {
@@ -1031,11 +1054,11 @@ async function processGitHubIssue(
       organizationId
     );
   }
-  return c.json({ ok: true }, 200);
+  return;
 }
 
 async function processCheckRun(
-  c: Context<AppContext>,
+  env: WorkerEnv,
   db: D1Client,
   deliveryId: string | undefined,
   event: string,
@@ -1072,13 +1095,13 @@ async function processCheckRun(
 
   const workspaceRecord = await findWorkspaceByRepo(db, repo);
   if (!workspaceRecord) {
-    return c.json({ ok: true }, 200);
+    return;
   }
 
-  const doId = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(
+  const doId = env.WORKSPACE_DURABLE_OBJECT.idFromName(
     workspaceRecord.organizationId
   );
-  const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(doId);
+  const stub = env.WORKSPACE_DURABLE_OBJECT.get(doId);
   await stub.updatePrCheckState(repo, branch, prCheckState, "github");
 
   if (deliveryId) {
@@ -1091,5 +1114,5 @@ async function processCheckRun(
     );
   }
 
-  return c.json({ ok: true }, 200);
+  return;
 }
