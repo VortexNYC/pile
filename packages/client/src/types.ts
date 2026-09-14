@@ -6123,6 +6123,8 @@ export interface paths {
                                     webhookUrl?: string;
                                     color?: string;
                                     botToken?: string;
+                                    /** @enum {string} */
+                                    ingestionMode?: "manual" | "one_to_one" | "time_based" | "ai";
                                 };
                                 createdAt: string;
                                 updatedAt: string;
@@ -6296,6 +6298,8 @@ export interface paths {
                                 webhookUrl?: string;
                                 color?: string;
                                 botToken?: string;
+                                /** @enum {string} */
+                                ingestionMode?: "manual" | "one_to_one" | "time_based" | "ai";
                             };
                             createdAt: string;
                             updatedAt: string;
