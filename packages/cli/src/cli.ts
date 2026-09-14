@@ -163,8 +163,7 @@ function resolveConfig(): Required<Pick<CliConfig, "baseUrl">> & CliConfig {
   const stored = readStoredConfig();
   return {
     ...stored,
-    baseUrl:
-      process.env.PILE_BASE_URL ?? stored.baseUrl ?? defaultBaseUrl,
+    baseUrl: process.env.PILE_BASE_URL ?? stored.baseUrl ?? defaultBaseUrl,
     apiKey: process.env.PILE_API_KEY ?? stored.apiKey,
     capturePublicKey:
       process.env.PILE_CAPTURE_PUBLIC_KEY ?? stored.capturePublicKey,
@@ -184,16 +183,12 @@ async function requestCommand(
 ): Promise<number> {
   const methodRaw = (positionals[1] ?? "").toUpperCase();
   if (!isHttpMethod(methodRaw)) {
-    throw new Error(
-      "Usage: pile request METHOD PATH [--body-json ...]"
-    );
+    throw new Error("Usage: pile request METHOD PATH [--body-json ...]");
   }
   const method = methodRaw;
   const path = positionals[2];
   if (path === undefined) {
-    throw new Error(
-      "Usage: pile request METHOD PATH [--body-json ...]"
-    );
+    throw new Error("Usage: pile request METHOD PATH [--body-json ...]");
   }
 
   const config = resolveConfig();
