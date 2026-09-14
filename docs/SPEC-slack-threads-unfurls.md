@@ -63,37 +63,71 @@ B2B support happens in shared Slack Connect channels, so the design must not ass
 
 - A Pile workspace can be linked to multiple Slack `team_id`s: one for the company workspace and one per customer workspace that has invited the bot into a shared channel.
 - `slack_installations` must support `(organization_id, slack_team_id)` uniqueness, not just `team_id` globally.
+- **Internal vs external classification** — the Slack `team_id` of the company workspace is **internal**; every other `team_id` in a shared channel or DM is **external**. A message is classified by the sender's `team_id`.
 - Ingestion treats messages from **external** users as customer support requests and messages from **internal** users as agent replies.
 - Replies in a Slack Connect thread are mirrored to the Pile support ticket; outbound Pile replies are posted to the customer-visible Slack thread only when the sender is an agent.
-- Internal-only notes must not leak to the customer Slack thread. A separate `internal` flag or channel routing is required for private triage.
-- Identity resolution: a Slack `user_id` in a customer workspace is not the same as a Pile `user_id`. Link them lazily through `external_id` on `support_contacts` or the email address from Slack.
-- Channel scope: the integration should ask for `commands`, `chat:write`, `chat:write.public`, `channels:history`, `groups:history`, `im:history`, `mpim:history`, `reactions:read`, `reactions:write`, `files:read`, and `links:read` + `links:write` so it works in public, private, DM, and Slack Connect contexts.
+- **Internal-only notes** — add an `internal` boolean to `comments` and `support_messages`. Internal comments sync only to internal Slack threads or the Pile web surface; they never post to a customer-visible Slack thread.
+- **Identity resolution** — a Slack `user_id` in a customer workspace is not the same as a Pile `user_id`. Link them lazily through `support_contacts.external_id` using a composite key `<slack_team_id>:<slack_user_id>`. Email from `users:read.email` is a best-effort enrichment, not a primary key, because external emails are often hidden in Slack Connect.
+- Required OAuth scopes:
+  - `commands` — for the existing `/vortex` slash command.
+  - `app_mentions:read` — for existing @mention issue creation.
+  - `chat:write`, `chat:write.public` — to post replies in public and private channels.
+  - `channels:history`, `groups:history`, `im:history`, `mpim:history` — to read messages in public, private, DM, and group DM contexts.
+  - `reactions:read`, `reactions:write` — for emoji status sync.
+  - `files:read` — to capture Slack file/attachment metadata.
+  - `links:read`, `links:write` — for Pile issue link unfurls.
+  - `users:read`, `users:read.email` — to resolve Slack `user_id` to email for contact matching.
+  - `team:read` — to distinguish the company Slack team from customer teams in Slack Connect.
+
+## Data model
+
+A single Slack conversation can map to a Pile issue and a Pile support ticket. Store the mapping once and reference it from both.
+
+```
+support_conversations
+  - id (uuid)
+  - organization_id
+  - slack_team_id          # the workspace that owns the channel
+  - slack_channel_id
+  - slack_thread_ts        # top-level message timestamp; null for a DM or non-threaded channel message
+  - issue_id               # the public-facing issue
+  - support_ticket_id      # the internal support ticket
+  - is_external            # true if the conversation started from a customer
+  - created_at
+  - updated_at
+```
+
+`slack_installations` must support `(organization_id, slack_team_id)` uniqueness so one Pile workspace can be installed into many customer Slack teams.
 
 ## Project structure
 
 ```
-src/slack/bot.ts         # Chat bot handlers (existing)
-src/slack/threads.ts     # Thread ↔ issue comment sync
-src/slack/unfurl.ts      # link_shared preview generation
-src/slack/actions.ts     # message_shortcut and block_actions handlers
-src/slack/emoji.ts       # reaction_added / reaction_removed status sync
-src/slack/messages.ts    # helpers for posting cards with buttons
-src/slack/ingest.ts      # ingestion-mode decision logic
-src/api/slack.ts         # HTTP routes (existing)
+src/slack/bot.ts           # Chat bot handlers (existing)
+src/slack/threads.ts       # Thread ↔ issue comment sync
+src/slack/unfurl.ts        # link_shared preview generation
+src/slack/actions.ts       # message_shortcut and block_actions handlers
+src/slack/emoji.ts         # reaction_added / reaction_removed status sync
+src/slack/attachments.ts   # Slack file / attachment capture
+src/slack/messages.ts      # helpers for posting cards with buttons
+src/slack/ingestion.ts     # v2: ingestion-mode decision logic
+src/api/slack.ts           # HTTP routes (existing)
 ```
 
 ## Module map
 
-| Module          | Responsibility                                                 | Depends on                                         |
-| --------------- | -------------------------------------------------------------- | -------------------------------------------------- |
-| `slack-dm`      | DM to issue creation                                           | `chat` SDK, `WorkspaceDO`                          |
-| `slack-actions` | Create issue from any Slack message and in-Slack quick actions | `chat` SDK, `WorkspaceDO`                          |
-| `slack-threads` | Subscribe to issue threads and sync comments bidirectionally   | `chat` SDK, `WorkspaceDO`, `support-tickets`       |
-| `slack-emoji`   | Map emoji reactions to Pile status transitions                 | `chat` SDK, `WorkspaceDO`                          |
-| `slack-unfurl`  | Generate link previews for Pile issue URLs                     | `chat` SDK, `global/support-tickets` or issues API |
-| `slack-ingest`  | Per-channel ingestion-mode selection for channel messages      | `chat` SDK, `global/support-channels`              |
+| Module              | Responsibility                                                 | Depends on                                         |
+| ------------------- | -------------------------------------------------------------- | -------------------------------------------------- |
+| `slack-dm`          | DM to issue creation                                           | `chat` SDK, `WorkspaceDO`                          |
+| `slack-actions`     | Create issue from any Slack message and in-Slack quick actions | `chat` SDK, `WorkspaceDO`                          |
+| `slack-threads`     | Subscribe to issue threads and sync comments bidirectionally   | `chat` SDK, `WorkspaceDO`, `support-tickets`       |
+| `slack-emoji`       | Map emoji reactions to Pile status transitions                 | `chat` SDK, `WorkspaceDO`                          |
+| `slack-attachments` | Capture Slack file metadata and shareable URLs                 | `chat` SDK, `files:read`                           |
+| `slack-unfurl`      | Generate link previews for Pile issue URLs                     | `chat` SDK, `global/support-tickets` or issues API |
+| `slack-ingestion`   | v2: per-channel ingestion-mode selection for channel messages  | `chat` SDK, `global/support-channels`              |
 
-Build order: `slack-dm` → `slack-actions` → `slack-threads` → `slack-emoji` → `slack-unfurl` → `slack-ingest`
+MVP build order: `slack-dm` → `slack-actions` → `slack-attachments` → `slack-threads` → `slack-emoji` → `slack-unfurl`
+
+v2 build order: `slack-ingestion` after the MVP is stable.
 
 ## Commands
 
@@ -131,10 +165,27 @@ Build order: `slack-dm` → `slack-actions` → `slack-threads` → `slack-emoji
 6. Every Slack action is reachable through the API, CLI, SDK, or MCP.
 7. `pnpm run check` and `pnpm run scan:secrets` are green.
 
+## Event handling
+
+Slack retries failed events quickly. All Slack HTTP handlers in `src/api/slack.ts` must respond with `200 OK` within 3 seconds and perform actual work asynchronously. Every non-trivial handler records an event idempotency key in `slack_events` to prevent duplicate processing.
+
+- `message` and `message_changed` / `message_deleted` in linked threads update the mapped Pile issue / support ticket.
+- `reaction_added` and `reaction_removed` on the top-level message drive `slack-emoji` status transitions.
+- `link_shared` falls back to a raw Slack handler in `src/api/slack.ts` if the `chat` SDK does not expose `onLinkShared`.
+- `block_actions` and `message_shortcut` route through `slack-actions`.
+
+## Default emoji status map
+
+Map emoji reactions on the top-level Slack message to Pile status transitions. Workspaces can override this map through `settings.slack_emoji_status_map`.
+
+| Emoji | Pile status   | Meaning                             |
+| ----- | ------------- | ----------------------------------- |
+| `✅`  | `done`        | Resolve the issue / support ticket. |
+| `👀`  | `in_progress` | Mark as being worked on.            |
+| `🛑`  | `canceled`    | Close as canceled / not doing.      |
+| `🔥`  | `urgent`      | Set priority to urgent.             |
+| `😴`  | `snoozed`     | Snooze until tomorrow.              |
+
 ## Open questions
 
-1. Do we store the Slack thread id on the Pile issue or a separate `support_conversations` table?
-2. Should link unfurls be public (no auth) or require the user to be in the linked workspace?
-3. Does the `chat` SDK support `onLinkShared`, or do we need a raw Slack `link_shared` handler in `src/api/slack.ts`?
-4. Which emoji-to-status map is the default, and is it per-workspace configurable?
-5. What is the first default ingestion mode for channel messages: one-to-one, time-based, or manual?
+1. Should link unfurls be public (no auth) or require the user to be in the linked workspace?
