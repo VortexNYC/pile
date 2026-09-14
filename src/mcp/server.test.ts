@@ -7,6 +7,8 @@ import { user as userTable } from "../global/schema.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
 import { createAdminHeaders } from "../platform/test-auth.js";
+import { MCP_TOOL_ALIASES } from "./mcp-aliases.js";
+import { MCP_TOOLS } from "./mcp-tools.js";
 
 function mcpRequest(body: unknown, authHeaders?: Headers) {
   const headers = new Headers({
@@ -107,9 +109,24 @@ describe("MCP integration", () => {
 
     expect(listRes.status).toBe(200);
     const listBody = (await listRes.json()) as {
-      result?: { tools?: unknown[] };
+      result?: { tools?: { name: string; description?: string }[] };
     };
-    expect(listBody.result?.tools?.length).toBe(415);
+    const tools = listBody.result?.tools ?? [];
+    expect(tools.length).toBe(
+      MCP_TOOLS.length + Object.keys(MCP_TOOL_ALIASES).length
+    );
+    expect(new Set(tools.map((tool) => tool.name)).size).toBe(tools.length);
+
+    const createIssue = tools.find((tool) => tool.name === "create_issue");
+    expect(createIssue?.description).toContain(
+      "Same as postWorkspacesOrganizationIdIssues"
+    );
+    expect(createIssue?.description).toContain('"body" object');
+    expect(createIssue?.description).toContain("title*");
+    const generated = tools.find(
+      (tool) => tool.name === "postWorkspacesOrganizationIdIssues"
+    );
+    expect(generated?.description).toContain("Alias: create_issue");
   });
 
   it("creates and manages an issue through MCP", async () => {
@@ -156,7 +173,7 @@ describe("MCP integration", () => {
     expect(team.id).toBeDefined();
 
     const issueRes = await callTool(
-      "postWorkspacesOrganizationIdIssues",
+      "create_issue",
       {
         organizationId: workspace.id,
         body: {
@@ -176,7 +193,7 @@ describe("MCP integration", () => {
     expect(issue.number).toBeGreaterThan(0);
 
     const listRes = await callTool(
-      "getWorkspacesOrganizationIdIssues",
+      "list_issues",
       { organizationId: workspace.id },
       adminHeaders
     );
@@ -186,6 +203,13 @@ describe("MCP integration", () => {
     expect(list.issues.some((i) => i.identifier === issue.identifier)).toBe(
       true
     );
+
+    const generatedListRes = await callTool(
+      "getWorkspacesOrganizationIdIssues",
+      { organizationId: workspace.id },
+      adminHeaders
+    );
+    expect(generatedListRes.content[0].text).toBe(listRes.content[0].text);
   });
 
   it("propagates auth failures back to the caller", async () => {
