@@ -343,6 +343,94 @@ async function commandCommand(
   return response.ok ? 0 : 1;
 }
 
+function getSetCookie(headers: Headers): readonly string[] {
+  const h = headers as unknown as { getSetCookie?(): string[] };
+  if (typeof h.getSetCookie === "function") {
+    return h.getSetCookie();
+  }
+  const raw = headers.get("set-cookie");
+  if (raw === null) return [];
+  return [raw];
+}
+
+async function authLoginCommand(
+  flags: Readonly<Record<string, string | boolean>>,
+  deps: CliDeps = {}
+): Promise<number> {
+  const email = process.env.PILE_EMAIL ?? flagString(flags, "email");
+  const password = process.env.PILE_PASSWORD ?? flagString(flags, "password");
+  const workspace =
+    flagString(flags, "workspace") ?? flagString(flags, "workspace-id");
+  if (email === undefined || email.length === 0) {
+    throw new Error("Missing email. Set PILE_EMAIL or use --email <email>.");
+  }
+  if (password === undefined || password.length === 0) {
+    throw new Error(
+      "Missing password. Set PILE_PASSWORD or use --password <password>."
+    );
+  }
+  if (workspace === undefined || workspace.length === 0) {
+    throw new Error("Missing --workspace. Use --workspace <org>.");
+  }
+
+  const stored = readStoredConfig();
+  const baseUrl = (
+    process.env.PILE_BASE_URL ??
+    stored.baseUrl ??
+    defaultBaseUrl
+  ).replace(/\/$/u, "");
+  const doFetch = deps.fetch ?? fetch;
+
+  const signInRes = await doFetch(`${baseUrl}/api/auth/sign-in/email`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password, rememberMe: true }),
+  });
+  const signInText = await signInRes.text();
+  if (!signInRes.ok) {
+    throw new Error(`Sign in failed: ${signInRes.status} ${signInText}`);
+  }
+  const cookies = getSetCookie(signInRes.headers);
+  const sessionCookie = cookies.find(
+    (c) => c.startsWith("session_token=") || c.includes("session_token=")
+  );
+  if (sessionCookie === undefined) {
+    throw new Error("Sign in succeeded but no session cookie returned");
+  }
+  const cookie = sessionCookie.split(";")[0]?.trim();
+  if (cookie === undefined || cookie.length === 0) {
+    throw new Error("Sign in succeeded but no session cookie returned");
+  }
+
+  const tokenRes = await doFetch(`${baseUrl}/workspaces/${workspace}/tokens`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Cookie: cookie,
+    },
+    body: JSON.stringify({ name: "cli", permissions: ["admin"] }),
+  });
+  const tokenText = await tokenRes.text();
+  if (!tokenRes.ok) {
+    throw new Error(`Token creation failed: ${tokenRes.status} ${tokenText}`);
+  }
+  const tokenBody = parseJson(tokenText);
+  if (
+    !isJsonObject(tokenBody) ||
+    typeof tokenBody.token !== "string" ||
+    tokenBody.token.length === 0
+  ) {
+    throw new Error("Token creation returned an unexpected response");
+  }
+  writeStoredConfig({
+    ...stored,
+    baseUrl,
+    apiKey: tokenBody.token,
+  });
+  console.log(JSON.stringify({ ok: true, workspace }, null, 2));
+  return 0;
+}
+
 async function configSetCommand(
   flags: Readonly<Record<string, string | boolean>>
 ): Promise<number> {
@@ -588,6 +676,10 @@ export async function runCli(
 
     if (scope === "request") {
       return await requestCommand(positionals, flags, deps);
+    }
+
+    if (scope === "auth" && positionals[1] === "login") {
+      return await authLoginCommand(flags, deps);
     }
 
     if (scope === "config" && positionals[1] === "set") {
