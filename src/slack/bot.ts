@@ -144,6 +144,26 @@ export function createSlackBot(
     );
   });
 
+  bot.onDirectMessage(async (thread, message) => {
+    const text = message.text ?? "";
+    const link = await resolveOrg(message.raw);
+    if (!link) {
+      await thread.post(
+        "This Slack workspace isn't linked to a Pile workspace yet. Install the app first."
+      );
+      return;
+    }
+    const title = text.trim() || "New issue";
+    const issue = await createIssueFromText(env, link.organizationId, title);
+    if (!issue) {
+      await thread.post("Couldn't create an issue from that message.");
+      return;
+    }
+    await thread.post(
+      `Created issue ${issue.identifier ?? issue.id}: ${title}`
+    );
+  });
+
   return { bot, slack };
 }
 
