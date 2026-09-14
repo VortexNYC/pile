@@ -1,4 +1,10 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -551,6 +557,59 @@ describe("CLI integration", () => {
     };
     expect(written.apiKey).toBe("api-token-1");
     expect(written.baseUrl).toBe("http://127.0.0.1:8787");
+  });
+
+  it("returns the current session", async () => {
+    process.env.PILE_SESSION = "session_token=abc123";
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ user: { id: "u-1" } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+
+    const exitCode = await runCli(["auth", "status"], { fetch: mockFetch });
+
+    delete process.env.PILE_SESSION;
+    expect(exitCode).toBe(0);
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://127.0.0.1:8787/api/auth/get-session",
+      expect.objectContaining({
+        headers: { Cookie: "session_token=abc123" },
+      })
+    );
+  });
+
+  it("logs out and clears the session", async () => {
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+
+    const tmpDir = mkdtempSync(join(tmpdir(), "pile-auth-"));
+    process.env.HOME = tmpDir;
+    mkdirSync(join(tmpDir, ".pile"), { recursive: true });
+    writeFileSync(
+      join(tmpDir, ".pile", "config.json"),
+      JSON.stringify({ session: "session_token=abc123" })
+    );
+
+    const exitCode = await runCli(["auth", "logout"], { fetch: mockFetch });
+
+    expect(exitCode).toBe(0);
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://127.0.0.1:8787/api/auth/sign-out",
+      expect.objectContaining({
+        method: "POST",
+        headers: { Cookie: "session_token=abc123" },
+      })
+    );
+    const written = JSON.parse(
+      readFileSync(join(tmpDir, ".pile", "config.json"), "utf8")
+    ) as { session?: string };
+    expect(written.session).toBeUndefined();
   });
 
   it("rejects login when sign-in fails", async () => {
