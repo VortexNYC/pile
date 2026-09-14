@@ -12,7 +12,7 @@ export function createPileClient(options: {
   apiKey: string;
   fetch?: ClientOptions["fetch"];
   Request?: ClientOptions["Request"];
-}): IssueTrackerClient {
+}): PileClient {
   return createClient<paths>({
     baseUrl: options.baseUrl.replace(/\/$/u, ""),
     headers: {

@@ -16,7 +16,8 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json"
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "prepack": "pnpm run build"
   },
   "dependencies": {
     "openapi-fetch": "0.17.0"
