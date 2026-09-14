@@ -37828,6 +37828,10 @@
                             "type": "string",
                             "nullable": true
                           },
+                          "defaultRepo": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "subIssueAutoClose": {
                             "type": "boolean"
                           },
@@ -37849,6 +37853,7 @@
                           "parentAutoClose",
                           "triageAssigneeId",
                           "defaultTemplateId",
+                          "defaultRepo",
                           "subIssueAutoClose",
                           "createdAt",
                           "updatedAt"
@@ -37908,6 +37913,10 @@
                     "type": "string",
                     "nullable": true
                   },
+                  "defaultRepo": {
+                    "type": "string",
+                    "nullable": true
+                  },
                   "subIssueAutoClose": {
                     "type": "boolean"
                   }
@@ -37960,6 +37969,10 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "defaultRepo": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "subIssueAutoClose": {
                       "type": "boolean"
                     },
@@ -37981,6 +37994,7 @@
                     "parentAutoClose",
                     "triageAssigneeId",
                     "defaultTemplateId",
+                    "defaultRepo",
                     "subIssueAutoClose",
                     "createdAt",
                     "updatedAt"
@@ -38056,6 +38070,10 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "defaultRepo": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "subIssueAutoClose": {
                       "type": "boolean"
                     },
@@ -38077,6 +38095,7 @@
                     "parentAutoClose",
                     "triageAssigneeId",
                     "defaultTemplateId",
+                    "defaultRepo",
                     "subIssueAutoClose",
                     "createdAt",
                     "updatedAt"
@@ -38141,6 +38160,10 @@
                     "type": "string",
                     "nullable": true
                   },
+                  "defaultRepo": {
+                    "type": "string",
+                    "nullable": true
+                  },
                   "subIssueAutoClose": {
                     "type": "boolean"
                   }
@@ -38189,6 +38212,10 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "defaultRepo": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "subIssueAutoClose": {
                       "type": "boolean"
                     },
@@ -38210,6 +38237,7 @@
                     "parentAutoClose",
                     "triageAssigneeId",
                     "defaultTemplateId",
+                    "defaultRepo",
                     "subIssueAutoClose",
                     "createdAt",
                     "updatedAt"
@@ -38574,6 +38602,10 @@
                             "type": "string",
                             "nullable": true
                           },
+                          "defaultRepo": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "subIssueAutoClose": {
                             "type": "boolean"
                           },
@@ -38595,6 +38627,7 @@
                           "parentAutoClose",
                           "triageAssigneeId",
                           "defaultTemplateId",
+                          "defaultRepo",
                           "subIssueAutoClose",
                           "createdAt",
                           "updatedAt"

@@ -777,6 +777,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       teamId,
       identity
     );
+    const teamRecord = await getTeamById(db, resolvedTeamId, organizationId);
     const templateDefaults = await resolveTemplateDefaults(
       db,
       organizationId,
@@ -806,6 +807,8 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         cycleId: input.cycleId ?? templateDefaults.cycleId,
         labelIds: input.labelIds ?? templateDefaults.labelIds,
         teamId: resolvedTeamId,
+        repo: input.repo ?? teamRecord?.defaultRepo ?? null,
+        branch: input.branch ?? null,
       },
       identity.id
     );
@@ -1035,6 +1038,14 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
     await assertIssueAccess(db, issue, identity);
+
+    if (!issue.repo) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: "Issue must have a repository to dispatch an agent",
+      });
+    }
 
     const resolvedAgentId = agentId ?? "devin";
     const providerConfig = await stub.getAgentProviderConfig(resolvedAgentId);
