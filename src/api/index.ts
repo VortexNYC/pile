@@ -218,6 +218,15 @@ app.openapi(githubWebhookRoute, async (c) =>
   c.json(await processGithubWebhook(c))
 );
 
+function htmlEscape(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;");
+}
+
 app.get("/api/auth/organization/accept-invitation", (c) => {
   const { id, invitationId } = z
     .object({
@@ -244,14 +253,16 @@ app.get("/api/auth/organization/accept-invitation", (c) => {
 <body>
   <h1>Accept Invitation</h1>
   <p>Click below to accept the invitation and join the workspace.</p>
+  <input id="invitationId" type="hidden" value="${htmlEscape(inviteId)}" />
   <button id="accept">Accept Invitation</button>
   <p id="status"></p>
   <script>
     document.getElementById("accept").addEventListener("click", async () => {
+      const inviteId = document.getElementById("invitationId").value;
       const res = await fetch("/api/auth/organization/accept-invitation", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ invitationId: ${JSON.stringify(inviteId)} }),
+        body: JSON.stringify({ invitationId: inviteId }),
       });
       const text = await res.text();
       document.getElementById("status").textContent = res.ok
