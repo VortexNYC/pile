@@ -1,0 +1,77 @@
+# Copy this file to `wrangler.toml` and fill in your own values before running
+# `wrangler dev` or `wrangler deploy`.
+#
+# The top-level config is for local/self-hosted deployments. The
+# `[env.production]` block is only needed for the hosted Pile deployment
+# (`pnpm deploy` = `wrangler deploy -e production`); omit it for self-host.
+
+name = "pile"
+main = "src/index.ts"
+compatibility_date = "2026-07-30"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+BETTER_AUTH_URL = "http://127.0.0.1:8787"
+ALLOWED_ORIGINS = "http://127.0.0.1:8787"
+SLACK_REDIRECT_URI = "http://127.0.0.1:8787/slack/oauth"
+EMAIL_FROM = "notifications@example.com"
+# INTERCOM_CLIENT_SECRET = "<your-intercom-client-secret>"
+# DEVIN_OUTPOST = "<your-devin-outpost>"
+# DAYTONA_SNAPSHOT = "<your-daytona-snapshot>"
+# DAYTONA_VOLUME_ID = "<your-daytona-volume-id>"
+# DEVIN_MODEL = "swe-1-7-medium"
+
+# Put actual secrets with `wrangler secret put` instead of committing them here.
+# BETTER_AUTH_SECRET
+# DEVIN_TOKEN
+# GITHUB_WEBHOOK_SECRET
+# SLACK_BOT_TOKEN
+# SLACK_SIGNING_SECRET
+
+[[d1_databases]]
+binding = "D1"
+database_name = "<your-d1-database-name>"
+migrations_dir = "migrations"
+
+[[send_email]]
+name = "EMAIL"
+
+[[r2_buckets]]
+binding = "ATTACHMENTS_BUCKET"
+bucket_name = "<your-r2-bucket-name>"
+
+[[durable_objects.bindings]]
+name = "WORKSPACE_DURABLE_OBJECT"
+class_name = "WorkspaceDO"
+
+[[queues.producers]]
+binding = "WEBHOOK_QUEUE"
+queue = "<your-queue-name>"
+
+[[queues.consumers]]
+queue = "<your-queue-name>"
+max_batch_size = 1
+max_batch_timeout = 30
+max_retries = 5
+
+[triggers]
+crons = ["*/5 * * * *"]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["WorkspaceDO"]
+
+# Optional hosted production environment. Omit for self-host.
+[env.production]
+name = "<your-production-worker-name>"
+
+[env.production.vars]
+BETTER_AUTH_URL = "https://<your-production-domain>"
+ALLOWED_ORIGINS = "https://<your-production-domain>"
+SLACK_REDIRECT_URI = "https://<your-production-domain>/slack/oauth"
+EMAIL_FROM = "notifications@<your-domain>"
+# INTERCOM_CLIENT_SECRET = "<your-intercom-client-secret>"
+# DEVIN_OUTPOST = "<your-devin-outpost>"
+# DAYTONA_SNAPSHOT = "<your-daytona-snapshot>"
+# DAYTONA_VOLUME_ID = "<your-daytona-volume-id>"
+# DEVIN_MODEL = "swe-1-7-medium"
