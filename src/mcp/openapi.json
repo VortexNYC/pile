@@ -39703,6 +39703,559 @@
         "summary": "Get health"
       }
     },
+    "/api/auth/sign-up/email": {
+      "post": {
+        "operationId": "signUpEmail",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                },
+                "description": "Better Auth request body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "description": "Better Auth raw response (JSON or HTML)"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create api auth sign up email"
+      }
+    },
+    "/api/auth/sign-in/email": {
+      "post": {
+        "operationId": "signInEmail",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                },
+                "description": "Better Auth request body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "description": "Better Auth raw response (JSON or HTML)"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create api auth sign in email"
+      }
+    },
+    "/api/auth/sign-out": {
+      "post": {
+        "operationId": "signOut",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                },
+                "description": "Better Auth request body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "description": "Better Auth raw response (JSON or HTML)"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create api auth sign out"
+      }
+    },
+    "/api/auth/get-session": {
+      "get": {
+        "operationId": "getSession",
+        "tags": [
+          "Auth"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "description": "Better Auth raw response (JSON or HTML)"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List api auth get session"
+      }
+    },
+    "/api/auth/list-sessions": {
+      "get": {
+        "operationId": "listSessions",
+        "tags": [
+          "Auth"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "description": "Better Auth raw response (JSON or HTML)"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List api auth list sessions"
+      }
+    },
+    "/api/auth/revoke-session": {
+      "post": {
+        "operationId": "revokeSession",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                },
+                "description": "Better Auth request body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "description": "Better Auth raw response (JSON or HTML)"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create api auth revoke session"
+      }
+    },
+    "/api/auth/revoke-sessions": {
+      "post": {
+        "operationId": "revokeSessions",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                },
+                "description": "Better Auth request body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "description": "Better Auth raw response (JSON or HTML)"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create api auth revoke session"
+      }
+    },
+    "/api/auth/request-password-reset": {
+      "post": {
+        "operationId": "requestPasswordReset",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                },
+                "description": "Better Auth request body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "description": "Better Auth raw response (JSON or HTML)"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create api auth request password reset"
+      }
+    },
+    "/api/auth/reset-password": {
+      "post": {
+        "operationId": "resetPassword",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                },
+                "description": "Better Auth request body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "description": "Better Auth raw response (JSON or HTML)"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create api auth reset password"
+      }
+    },
+    "/api/auth/reset-password/{token}": {
+      "get": {
+        "operationId": "requestPasswordResetCallback",
+        "tags": [
+          "Auth"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "token",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "description": "Better Auth raw response (JSON or HTML)"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get api auth reset password"
+      }
+    },
+    "/api/auth/send-verification-email": {
+      "post": {
+        "operationId": "sendVerificationEmail",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                },
+                "description": "Better Auth request body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "description": "Better Auth raw response (JSON or HTML)"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create api auth send verification email"
+      }
+    },
+    "/api/auth/verify-email": {
+      "get": {
+        "operationId": "verifyEmail",
+        "tags": [
+          "Auth"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "description": "Better Auth raw response (JSON or HTML)"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List api auth verify email"
+      }
+    },
+    "/api/auth/change-password": {
+      "post": {
+        "operationId": "changePassword",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                },
+                "description": "Better Auth request body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "description": "Better Auth raw response (JSON or HTML)"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create api auth change password"
+      }
+    },
+    "/api/auth/change-email": {
+      "post": {
+        "operationId": "changeEmail",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                },
+                "description": "Better Auth request body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "description": "Better Auth raw response (JSON or HTML)"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create api auth change email"
+      }
+    },
+    "/api/auth/update-user": {
+      "post": {
+        "operationId": "updateUser",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                },
+                "description": "Better Auth request body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "description": "Better Auth raw response (JSON or HTML)"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create api auth update user"
+      }
+    },
+    "/api/auth/delete-user": {
+      "post": {
+        "operationId": "deleteUser",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                },
+                "description": "Better Auth request body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "description": "Better Auth raw response (JSON or HTML)"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create api auth delete user"
+      }
+    },
+    "/api/auth/verify-password": {
+      "post": {
+        "operationId": "verifyPassword",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                },
+                "description": "Better Auth request body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "description": "Better Auth raw response (JSON or HTML)"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create api auth verify password"
+      }
+    },
     "/github": {
       "post": {
         "tags": [
