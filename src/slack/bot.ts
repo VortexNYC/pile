@@ -12,6 +12,7 @@ import type { AppEnv } from "../types/env.js";
 import type { RealtimeEvent } from "../types/workspace.js";
 import { handleViewInPile } from "./actions.js";
 import { captureSlackAttachments } from "./attachments.js";
+import { handleSlackReaction } from "./emoji.js";
 import { workerdFetchAdapter } from "./fetch-adapter.js";
 import {
   handleSlackThreadMessage,
@@ -229,6 +230,11 @@ export function createSlackBot(
 
   bot.onSubscribedMessage(async (thread, message) => {
     await handleSlackThreadMessage(env, thread, message);
+  });
+
+  bot.onReaction(async (event) => {
+    if (!teamId) return;
+    await handleSlackReaction(env, db, teamId, event);
   });
 
   return { bot, slack };
