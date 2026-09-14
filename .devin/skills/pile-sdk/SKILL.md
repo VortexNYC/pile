@@ -36,7 +36,10 @@ const client = createPileClient({
 // Workspace API key (default)
 createPileClient({ baseUrl, apiKey });
 // Explicit session cookie (server-side, on behalf of a signed-in user)
-createPileClient({ baseUrl, auth: { type: "session", cookie: "better-auth.session_token=..." } });
+createPileClient({
+  baseUrl,
+  auth: { type: "session", cookie: "better-auth.session_token=..." },
+});
 // Browser: send the ambient session cookie via credentials: "include"
 createPileClient({ baseUrl, auth: { type: "browser" } });
 ```
@@ -50,12 +53,22 @@ Idempotent requests (`GET`, `HEAD`, `OPTIONS`, `PUT`, `DELETE`) are retried on n
 ### Typed errors
 
 ```typescript
-import { unwrap, PileRequestError, isPileErrorCodeOf, toPileError } from "pile-client";
+import {
+  unwrap,
+  PileRequestError,
+  isPileErrorCodeOf,
+  toPileError,
+} from "pile-client";
 
 try {
   const data = await unwrap(client.GET("/workspaces", {}));
 } catch (err) {
-  if (err instanceof PileRequestError && isPileErrorCodeOf(err.error, "UNAUTHORIZED")) { /* ... */ }
+  if (
+    err instanceof PileRequestError &&
+    isPileErrorCodeOf(err.error, "UNAUTHORIZED")
+  ) {
+    /* ... */
+  }
 }
 
 // or without throwing:
