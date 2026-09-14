@@ -1128,6 +1128,12 @@ export const user = sqliteTable("user" as string, {
     .default(false),
   image: text("image" as string),
   metadata: text("metadata" as string),
+  role: text("role" as string)
+    .notNull()
+    .default("admin"),
+  banned: integer("banned" as string, { mode: "boolean" }).default(false),
+  banReason: text("ban_reason" as string),
+  banExpires: integer("ban_expires" as string, { mode: "timestamp_ms" }),
   createdAt: integer("created_at" as string, { mode: "timestamp_ms" })
     .notNull()
     .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`),
@@ -1158,6 +1164,7 @@ export const session = sqliteTable(
     userAgent: text("user_agent" as string),
     activeOrganizationId: text("active_organization_id" as string),
     activeTeamId: text("active_team_id" as string),
+    impersonatedBy: text("impersonated_by" as string),
     userId: text("user_id" as string)
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),

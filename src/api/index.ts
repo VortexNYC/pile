@@ -22,6 +22,7 @@ import { registerAgentSessionRoutes } from "./agent-sessions.js";
 import { registerApprovalRoutes } from "./approvals.js";
 import { registerAttachmentRoutes } from "./attachments.js";
 import { registerAuditRoutes } from "./audit.js";
+import { registerAuthRoutes } from "./auth-routes.js";
 import { registerCommentRoutes } from "./comments.js";
 import { registerCsvExportRoutes } from "./csv-export.js";
 import { registerCustomerRoutes } from "./customers.js";
@@ -169,6 +170,7 @@ registerNotionWebhookRoute(app);
 registerHardeningRoutes(app);
 registerSlackRoutes(app);
 registerHealthRoutes(app);
+registerAuthRoutes(app);
 
 app.openapi(githubWebhookRoute, processGithubWebhook);
 app.openapi(gitlabWebhookRoute, processGitlabWebhook);
