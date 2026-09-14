@@ -8,9 +8,11 @@ import {
   unwrap,
 } from "./index.js";
 
+type FetchFn = (request: Request) => Promise<Response>;
+
 describe("Issue Tracker client", () => {
   it("lists workspaces", async () => {
-    const mockFetch = vi.fn().mockResolvedValue(
+    const mockFetch = vi.fn<FetchFn>().mockResolvedValue(
       new Response(JSON.stringify({ workspaces: [] }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -19,19 +21,19 @@ describe("Issue Tracker client", () => {
     const client = createPileClient({
       baseUrl: "https://example.com",
       apiKey: "test-key",
-      fetch: (url, init) => mockFetch(url, init),
+      fetch: (request) => mockFetch(request),
     });
 
     const { data } = await client.GET("/workspaces", {});
     expect(data).toEqual({ workspaces: [] });
     expect(mockFetch).toHaveBeenCalledOnce();
-    const [url] = mockFetch.mock.calls[0] as [Request, unknown];
+    const [url] = mockFetch.mock.calls[0] as [Request];
     expect(url.url).toBe("https://example.com/workspaces");
     expect(url.headers.get("Authorization")).toBe("Bearer test-key");
   });
 
   it("creates an issue", async () => {
-    const mockFetch = vi.fn().mockResolvedValue(
+    const mockFetch = vi.fn<FetchFn>().mockResolvedValue(
       new Response(JSON.stringify({ id: "i-1", identifier: "ISS-1" }), {
         status: 201,
         headers: { "Content-Type": "application/json" },
@@ -40,7 +42,7 @@ describe("Issue Tracker client", () => {
     const client = createPileClient({
       baseUrl: "https://example.com",
       apiKey: "test-key",
-      fetch: (url, init) => mockFetch(url, init),
+      fetch: (request) => mockFetch(request),
     });
 
     const { data } = await client.POST("/workspaces/{organizationId}/issues", {
@@ -48,12 +50,12 @@ describe("Issue Tracker client", () => {
       body: { title: "Bug", teamId: "team-1", priority: "medium" },
     });
     expect(data).toEqual({ id: "i-1", identifier: "ISS-1" });
-    const [url] = mockFetch.mock.calls[0] as [Request, unknown];
+    const [url] = mockFetch.mock.calls[0] as [Request];
     expect(url.url).toBe("https://example.com/workspaces/org-1/issues");
   });
 
   it("returns an error for non-OK responses", async () => {
-    const mockFetch = vi.fn().mockResolvedValue(
+    const mockFetch = vi.fn<FetchFn>().mockResolvedValue(
       new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { "Content-Type": "application/json" },
@@ -62,7 +64,7 @@ describe("Issue Tracker client", () => {
     const client = createPileClient({
       baseUrl: "https://example.com",
       apiKey: "test-key",
-      fetch: (url, init) => mockFetch(url, init),
+      fetch: (request) => mockFetch(request),
     });
 
     const { data, error } = await client.GET("/workspaces", {});
@@ -74,26 +76,26 @@ describe("Issue Tracker client", () => {
 describe("auth options", () => {
   it("sends a session cookie", async () => {
     const mockFetch = vi
-      .fn()
+      .fn<FetchFn>()
       .mockResolvedValue(Response.json({ workspaces: [] }));
     const client = createPileClient({
       baseUrl: "https://example.com",
       auth: { type: "session", cookie: "better-auth.session_token=abc" },
-      fetch: (url, init) => mockFetch(url, init),
+      fetch: (request) => mockFetch(request),
     });
     await client.GET("/workspaces", {});
-    const [request] = mockFetch.mock.calls[0] as [Request, unknown];
+    const [request] = mockFetch.mock.calls[0] as [Request];
     expect(request.headers.get("Cookie")).toBe("better-auth.session_token=abc");
     expect(request.headers.get("Authorization")).toBeNull();
   });
 
   it("uses credentials: include for browser sessions", async () => {
     const mockFetch = vi
-      .fn()
+      .fn<FetchFn>()
       .mockResolvedValue(Response.json({ workspaces: [] }));
     const inits: unknown[] = [];
     class CapturingRequest extends Request {
-      constructor(input: RequestInfo | URL, init?: RequestInit) {
+      constructor(input: string | URL | Request, init?: RequestInit) {
         super(input, init);
         if (init) inits.push(init);
       }
@@ -102,7 +104,7 @@ describe("auth options", () => {
       baseUrl: "https://example.com",
       auth: { type: "browser" },
       Request: CapturingRequest as typeof Request,
-      fetch: (url, init) => mockFetch(url, init),
+      fetch: (request) => mockFetch(request),
     });
     await client.GET("/workspaces", {});
     expect(inits[0]).toMatchObject({ credentials: "include" });
@@ -120,7 +122,7 @@ const noSleep = () => Promise.resolve();
 describe("retry", () => {
   it("retries idempotent requests on 503 and honours maxRetries", async () => {
     const mockFetch = vi
-      .fn()
+      .fn<FetchFn>()
       .mockResolvedValueOnce(new Response("busy", { status: 503 }))
       .mockResolvedValueOnce(new Response("busy", { status: 503 }))
       .mockResolvedValueOnce(Response.json({ workspaces: [] }));
@@ -128,7 +130,7 @@ describe("retry", () => {
       baseUrl: "https://example.com",
       apiKey: "k",
       retry: { maxRetries: 2, sleep: noSleep },
-      fetch: (url, init) => mockFetch(url, init),
+      fetch: (request) => mockFetch(request),
     });
     const { data } = await client.GET("/workspaces", {});
     expect(data).toEqual({ workspaces: [] });
@@ -137,13 +139,13 @@ describe("retry", () => {
 
   it("gives up after maxRetries", async () => {
     const mockFetch = vi
-      .fn()
+      .fn<FetchFn>()
       .mockResolvedValue(new Response("busy", { status: 503 }));
     const client = createPileClient({
       baseUrl: "https://example.com",
       apiKey: "k",
       retry: { maxRetries: 1, sleep: noSleep },
-      fetch: (url, init) => mockFetch(url, init),
+      fetch: (request) => mockFetch(request),
     });
     const { response } = await client.GET("/workspaces", {});
     expect(response.status).toBe(503);
@@ -152,13 +154,13 @@ describe("retry", () => {
 
   it("does not retry POST by default", async () => {
     const mockFetch = vi
-      .fn()
+      .fn<FetchFn>()
       .mockResolvedValue(new Response("busy", { status: 503 }));
     const client = createPileClient({
       baseUrl: "https://example.com",
       apiKey: "k",
       retry: { sleep: noSleep },
-      fetch: (url, init) => mockFetch(url, init),
+      fetch: (request) => mockFetch(request),
     });
     await client.POST("/workspaces/{organizationId}/issues", {
       params: { path: { organizationId: "org-1" } },
@@ -168,9 +170,11 @@ describe("retry", () => {
   });
 
   it("retries network failures and respects Retry-After", async () => {
-    const sleep = vi.fn().mockResolvedValue(undefined);
+    const sleep = vi
+      .fn<(ms: number) => Promise<void>>()
+      .mockResolvedValue(undefined);
     const mockFetch = vi
-      .fn()
+      .fn<FetchFn>()
       .mockRejectedValueOnce(new TypeError("fetch failed"))
       .mockResolvedValueOnce(
         new Response("slow", { status: 429, headers: { "Retry-After": "1" } })
@@ -180,7 +184,7 @@ describe("retry", () => {
       baseUrl: "https://example.com",
       apiKey: "k",
       retry: { maxRetries: 3, sleep },
-      fetch: (url, init) => mockFetch(url, init),
+      fetch: (request) => mockFetch(request),
     });
     const { data } = await client.GET("/workspaces", {});
     expect(data).toEqual({ workspaces: [] });
@@ -190,13 +194,13 @@ describe("retry", () => {
 
   it("can be disabled", async () => {
     const mockFetch = vi
-      .fn()
+      .fn<FetchFn>()
       .mockResolvedValue(new Response("busy", { status: 503 }));
     const client = createPileClient({
       baseUrl: "https://example.com",
       apiKey: "k",
       retry: false,
-      fetch: (url, init) => mockFetch(url, init),
+      fetch: (request) => mockFetch(request),
     });
     await client.GET("/workspaces", {});
     expect(mockFetch).toHaveBeenCalledOnce();
@@ -238,7 +242,7 @@ describe("typed errors", () => {
   });
 
   it("unwrap throws PileRequestError on failure", async () => {
-    const mockFetch = vi.fn().mockResolvedValue(
+    const mockFetch = vi.fn<FetchFn>().mockResolvedValue(
       new Response(
         JSON.stringify({ code: "UNAUTHORIZED", message: "Unauthorized" }),
         {
@@ -254,7 +258,7 @@ describe("typed errors", () => {
       baseUrl: "https://example.com",
       apiKey: "bad",
       retry: false,
-      fetch: (url, init) => mockFetch(url, init),
+      fetch: (request) => mockFetch(request),
     });
     const promise = unwrap(client.GET("/workspaces", {}));
     await expect(promise).rejects.toBeInstanceOf(PileRequestError);
@@ -270,12 +274,12 @@ describe("typed errors", () => {
 
   it("unwrap returns data on success", async () => {
     const mockFetch = vi
-      .fn()
+      .fn<FetchFn>()
       .mockResolvedValue(Response.json({ workspaces: [] }));
     const client = createPileClient({
       baseUrl: "https://example.com",
       apiKey: "k",
-      fetch: (url, init) => mockFetch(url, init),
+      fetch: (request) => mockFetch(request),
     });
     await expect(unwrap(client.GET("/workspaces", {}))).resolves.toEqual({
       workspaces: [],
