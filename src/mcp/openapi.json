@@ -13567,6 +13567,83 @@
         "summary": "Create usage"
       }
     },
+    "/workspaces/{organizationId}/billing": {
+      "get": {
+        "tags": [
+          "billing"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "period",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Billing usage for the workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "period": {
+                      "type": "string"
+                    },
+                    "usage": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "resource": {
+                            "type": "string"
+                          },
+                          "action": {
+                            "type": "string"
+                          },
+                          "count": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "resource",
+                          "action",
+                          "count"
+                        ]
+                      }
+                    },
+                    "total": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "organizationId",
+                    "period",
+                    "usage",
+                    "total"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List billing"
+      }
+    },
     "/workspaces/{organizationId}/view-preferences": {
       "get": {
         "tags": [

@@ -1494,6 +1494,26 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdBilling",
+    "description": "List billing (GET /workspaces/{organizationId}/billing)",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/billing",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "period": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdCommentsCommentIdReactions",
     "description": "List comment reactions (GET /workspaces/{organizationId}/comments/{commentId}/reactions)",
     "method": "GET",
