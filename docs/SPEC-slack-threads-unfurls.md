@@ -57,6 +57,18 @@ Design principle: **Plain is open infrastructure and Pylon is a full-stack app.*
 - Pile issue links are `https://pile.nyc/<workspace>/issues/<identifier>` (custom domain mapping is a separate concern).
 - Auth to Pile issues uses the existing workspace-scoped API token; the Slack bot acts as a system agent with a workspace token stored on the `slackInstallations` row (or generated for the bot).
 
+## Slack Connect
+
+B2B support happens in shared Slack Connect channels, so the design must not assume a single workspace.
+
+- A Pile workspace can be linked to multiple Slack `team_id`s: one for the company workspace and one per customer workspace that has invited the bot into a shared channel.
+- `slack_installations` must support `(organization_id, slack_team_id)` uniqueness, not just `team_id` globally.
+- Ingestion treats messages from **external** users as customer support requests and messages from **internal** users as agent replies.
+- Replies in a Slack Connect thread are mirrored to the Pile support ticket; outbound Pile replies are posted to the customer-visible Slack thread only when the sender is an agent.
+- Internal-only notes must not leak to the customer Slack thread. A separate `internal` flag or channel routing is required for private triage.
+- Identity resolution: a Slack `user_id` in a customer workspace is not the same as a Pile `user_id`. Link them lazily through `external_id` on `support_contacts` or the email address from Slack.
+- Channel scope: the integration should ask for `commands`, `chat:write`, `chat:write.public`, `channels:history`, `groups:history`, `im:history`, `mpim:history`, `reactions:read`, `reactions:write`, `files:read`, and `links:read` + `links:write` so it works in public, private, DM, and Slack Connect contexts.
+
 ## Project structure
 
 ```
