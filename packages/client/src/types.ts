@@ -4992,8 +4992,8 @@ export interface paths {
             parameters: {
                 query?: never;
                 header: {
-                    "x-vortex-capture-public-key": string;
-                    "x-vortex-capture-reference"?: string;
+                    "x-pile-capture-public-key": string;
+                    "x-pile-capture-reference"?: string;
                     origin?: string;
                 };
                 path?: never;
@@ -5042,7 +5042,7 @@ export interface paths {
             parameters: {
                 query?: never;
                 header: {
-                    "x-vortex-capture-token": string;
+                    "x-pile-capture-token": string;
                 };
                 path?: never;
                 cookie?: never;
@@ -5118,7 +5118,7 @@ export interface paths {
             parameters: {
                 query?: never;
                 header: {
-                    "x-vortex-capture-token": string;
+                    "x-pile-capture-token": string;
                 };
                 path: {
                     sessionId: string;
@@ -5169,7 +5169,7 @@ export interface paths {
             parameters: {
                 query?: never;
                 header: {
-                    "x-vortex-capture-token": string;
+                    "x-pile-capture-token": string;
                 };
                 path?: never;
                 cookie?: never;
@@ -5217,7 +5217,7 @@ export interface paths {
             parameters: {
                 query?: never;
                 header: {
-                    "x-vortex-capture-token": string;
+                    "x-pile-capture-token": string;
                 };
                 path?: never;
                 cookie?: never;

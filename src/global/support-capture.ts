@@ -39,7 +39,7 @@ export async function createCapturePublicKey(
   input: CapturePublicKeyInput
 ) {
   const id = crypto.randomUUID();
-  const key = `vtx_${crypto.randomUUID().replace(/-/g, "")}`;
+  const key = `pil_${crypto.randomUUID().replace(/-/g, "")}`;
   const webhookSecret = generateWebhookSecret();
   const now = new Date().toISOString();
   await db.insert(supportCapturePublicKeys).values({

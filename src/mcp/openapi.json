@@ -9962,7 +9962,7 @@
               "type": "string"
             },
             "required": true,
-            "name": "x-vortex-capture-public-key",
+            "name": "x-pile-capture-public-key",
             "in": "header"
           },
           {
@@ -9970,7 +9970,7 @@
               "type": "string"
             },
             "required": false,
-            "name": "x-vortex-capture-reference",
+            "name": "x-pile-capture-reference",
             "in": "header"
           },
           {
@@ -10023,7 +10023,7 @@
               "type": "string"
             },
             "required": true,
-            "name": "x-vortex-capture-token",
+            "name": "x-pile-capture-token",
             "in": "header"
           }
         ],
@@ -10179,7 +10179,7 @@
               "type": "string"
             },
             "required": true,
-            "name": "x-vortex-capture-token",
+            "name": "x-pile-capture-token",
             "in": "header"
           }
         ],
@@ -10220,7 +10220,7 @@
               "type": "string"
             },
             "required": true,
-            "name": "x-vortex-capture-token",
+            "name": "x-pile-capture-token",
             "in": "header"
           }
         ],
@@ -10264,7 +10264,7 @@
               "type": "string"
             },
             "required": true,
-            "name": "x-vortex-capture-token",
+            "name": "x-pile-capture-token",
             "in": "header"
           }
         ],

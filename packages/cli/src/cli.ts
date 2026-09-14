@@ -410,8 +410,8 @@ async function captureRunCommand(
   const tokenRes = await doFetch(`${base}/support/capture/token`, {
     method: "POST",
     headers: {
-      "x-vortex-capture-public-key": publicKey,
-      origin: "vortex-cli",
+      "x-pile-capture-public-key": publicKey,
+      origin: "pile-cli",
     },
   });
   if (!tokenRes.ok) {
@@ -462,7 +462,7 @@ async function captureRunCommand(
   const metadataRes = await doFetch(`${base}/support/capture/metadata`, {
     method: "POST",
     headers: {
-      "x-vortex-capture-token": token,
+      "x-pile-capture-token": token,
       "content-type": "application/json",
     },
     body: JSON.stringify({
@@ -471,7 +471,7 @@ async function captureRunCommand(
         description,
         source: "cli",
         consoleCount: consoleLogs.length,
-        email: "ci@vortex.local",
+        email: "ci@pile.local",
       },
     }),
   });
@@ -491,7 +491,7 @@ async function captureRunCommand(
     const reserveRes = await doFetch(`${base}/support/capture/upload-session`, {
       method: "POST",
       headers: {
-        "x-vortex-capture-token": token,
+        "x-pile-capture-token": token,
         "content-type": "application/json",
       },
       body: JSON.stringify({
@@ -500,7 +500,7 @@ async function captureRunCommand(
         fileName,
         title,
         visibility,
-        metadata: { email: "ci@vortex.local" },
+        metadata: { email: "ci@pile.local" },
       }),
     });
     if (!reserveRes.ok) {
@@ -515,7 +515,7 @@ async function captureRunCommand(
     const uploadRes = await doFetch(`${base}${reserveBody.uploadUrl}`, {
       method: "POST",
       headers: {
-        "x-vortex-capture-token": token,
+        "x-pile-capture-token": token,
         "content-type": contentType,
       },
       body: new Blob(
@@ -560,7 +560,7 @@ async function captureRunCommand(
   const finalizeRes = await doFetch(`${base}/support/capture/finalize`, {
     method: "POST",
     headers: {
-      "x-vortex-capture-token": token,
+      "x-pile-capture-token": token,
     },
   });
   if (!finalizeRes.ok) {

@@ -134,7 +134,7 @@ Revoke a key.
 
 ### `POST /support/capture/token`
 
-Client-side endpoint. Returns a short-lived capture token. Headers: `x-vortex-capture-public-key`, `origin`.
+Client-side endpoint. Returns a short-lived capture token. Headers: `x-pile-capture-public-key`, `origin`.
 
 ### `POST /support/capture/upload-session`
 
@@ -146,7 +146,7 @@ Direct R2 upload or presigned URL. For v1, the client uploads the screenshot/vid
 
 ### `POST /support/capture/finalize`
 
-Client-side. Completes the upload, creates/updates the `support_ticket`, creates the `support_ticket_events` row, and returns the `ticketId` and `shareUrl`. Headers: `x-vortex-capture-token`, `x-vortex-capture-finalize-token`. Body: `sessionId`, `captureSizeBytes`, `debuggerSizeBytes`.
+Client-side. Completes the upload, creates/updates the `support_ticket`, creates the `support_ticket_events` row, and returns the `ticketId` and `shareUrl`. Headers: `x-pile-capture-token`, `x-pile-capture-finalize-token`. Body: `sessionId`, `captureSizeBytes`, `debuggerSizeBytes`.
 
 ### `POST /support/capture/metadata`
 
