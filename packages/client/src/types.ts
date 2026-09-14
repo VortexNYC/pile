@@ -4863,7 +4863,6 @@ export interface paths {
                                 organizationId: string;
                                 name: string;
                                 key: string;
-                                webhookSecret: string | null;
                                 allowedOrigins: string[];
                                 isActive: boolean;
                                 createdAt: string;
@@ -4906,7 +4905,6 @@ export interface paths {
                             organizationId: string;
                             name: string;
                             key: string;
-                            webhookSecret: string | null;
                             allowedOrigins: string[];
                             isActive: boolean;
                             createdAt: string;
@@ -4956,7 +4954,6 @@ export interface paths {
                             organizationId: string;
                             name: string;
                             key: string;
-                            webhookSecret: string | null;
                             allowedOrigins: string[];
                             isActive: boolean;
                             createdAt: string;

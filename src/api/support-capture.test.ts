@@ -17,6 +17,7 @@ import {
   createCapturePublicKey,
   createCaptureSession,
   expireStaleCaptureSessions,
+  getCapturePublicKeyById,
 } from "../global/support-capture.js";
 import { findOrCreateCustomerByEmail } from "../global/support-contacts.js";
 import { createTicket, getTicketById } from "../global/support-tickets.js";
@@ -133,11 +134,11 @@ describe("support-capture API", () => {
       }
     );
     expect(res.status).toBe(201);
-    return (await res.json()) as {
-      id: string;
-      key: string;
-      webhookSecret: string;
-    };
+    const { id, key } = (await res.json()) as { id: string; key: string };
+    const db = createD1(env.D1);
+    const full = await getCapturePublicKeyById(db, id);
+    const webhookSecret = z.string().parse(full?.webhookSecret);
+    return { id, key, webhookSecret };
   }
 
   async function issueCaptureToken(

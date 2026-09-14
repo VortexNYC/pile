@@ -17,9 +17,11 @@ import {
   zendeskSupportWebhookRoute,
   processZendeskSupportWebhook,
 } from "../channels/zendesk.js";
+import { timingSafeEqualHex } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
 import { supportChannels } from "../global/schema.js";
 import {
+  parseSupportChannelConfig,
   processIncomingMessage,
   processOutgoingMessage,
   validateSupportChannel,
@@ -183,6 +185,18 @@ const createSupportChannelSchema = z.object({
   isActive: z.boolean().default(true),
 });
 
+function redactChannelConfig(
+  config: Record<string, unknown>
+): Record<string, unknown> {
+  const redacted = { ...config };
+  delete redacted.accessToken;
+  delete redacted.botToken;
+  delete redacted.token;
+  delete redacted.webhookUrl;
+  delete redacted.secret;
+  return redacted;
+}
+
 const supportChannelParamsSchema = z.object({
   organizationId: z.string(),
 });
@@ -234,7 +248,7 @@ export function registerSupportChannelRoutes(app: OpenAPIHono<AppContext>) {
         channels: rows.map((row) =>
           supportChannelSchema.parse({
             ...row,
-            config: JSON.parse(row.config),
+            config: redactChannelConfig(JSON.parse(row.config)),
           })
         ),
       });
@@ -305,7 +319,7 @@ export function registerSupportChannelRoutes(app: OpenAPIHono<AppContext>) {
         organizationId,
         name: input.name,
         isActive: input.isActive,
-        config: input.config ?? {},
+        config: redactChannelConfig(input.config ?? {}),
         createdAt: ts,
         updatedAt: ts,
       });
@@ -384,6 +398,19 @@ export function registerSupportChannelRoutes(app: OpenAPIHono<AppContext>) {
       }
 
       const channelType = supportChannelTypeEnum.parse(channel.type);
+      const parsedConfig = parseSupportChannelConfig(channel.config);
+      const providedSecret = c.req.header("x-pile-channel-secret") ?? "";
+      const expectedSecret = parsedConfig.secret;
+      if (
+        !expectedSecret ||
+        !timingSafeEqualHex(providedSecret, expectedSecret)
+      ) {
+        throw new VortexError({
+          code: "UNAUTHORIZED",
+          status: 401,
+          message: "Invalid or missing channel secret",
+        });
+      }
 
       const ticket = await processIncomingMessage(
         db,

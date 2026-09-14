@@ -9744,10 +9744,6 @@
                     "key": {
                       "type": "string"
                     },
-                    "webhookSecret": {
-                      "type": "string",
-                      "nullable": true
-                    },
                     "allowedOrigins": {
                       "type": "array",
                       "items": {
@@ -9769,7 +9765,6 @@
                     "organizationId",
                     "name",
                     "key",
-                    "webhookSecret",
                     "allowedOrigins",
                     "isActive",
                     "createdAt",
@@ -9821,10 +9816,6 @@
                           "key": {
                             "type": "string"
                           },
-                          "webhookSecret": {
-                            "type": "string",
-                            "nullable": true
-                          },
                           "allowedOrigins": {
                             "type": "array",
                             "items": {
@@ -9846,7 +9837,6 @@
                           "organizationId",
                           "name",
                           "key",
-                          "webhookSecret",
                           "allowedOrigins",
                           "isActive",
                           "createdAt",
@@ -9909,10 +9899,6 @@
                     "key": {
                       "type": "string"
                     },
-                    "webhookSecret": {
-                      "type": "string",
-                      "nullable": true
-                    },
                     "allowedOrigins": {
                       "type": "array",
                       "items": {
@@ -9934,7 +9920,6 @@
                     "organizationId",
                     "name",
                     "key",
-                    "webhookSecret",
                     "allowedOrigins",
                     "isActive",
                     "createdAt",
