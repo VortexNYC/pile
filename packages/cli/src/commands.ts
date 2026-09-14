@@ -6688,6 +6688,88 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "skills list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/skills",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "scope",
+        flag: "scope",
+      },
+    ],
+    body: [],
+  },
+  "skills create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/skills",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "content",
+        flag: "content",
+      },
+      {
+        name: "scope",
+        flag: "scope",
+      },
+      {
+        name: "repo",
+        flag: "repo",
+      },
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+    ],
+  },
+  "skills get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/skills/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "skills delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/skills/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "issues subscribers": {
     method: "POST",
     path: "/workspaces/{organizationId}/issues/{issueId}/subscribers",

@@ -820,6 +820,27 @@ export const workspaceMcpServers = sqliteTable(
   ]
 );
 
+export const workspaceSkills = sqliteTable(
+  "skills" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    name: text("name" as string).notNull(),
+    content: text("content" as string).notNull(),
+    scope: text("scope" as string, {
+      enum: ["workspace", "repo", "issue"],
+    }).notNull(),
+    repo: text("repo" as string),
+    issueId: text("issue_id" as string),
+    createdAt: text("created_at" as string).notNull(),
+    updatedAt: text("updated_at" as string).notNull(),
+  },
+  (table) => [
+    index("skills_organization_idx" as string).on(table.organizationId),
+    index("skills_scope_idx" as string).on(table.organizationId, table.scope),
+  ]
+);
+
 export const workspaceWebhookSubscriptions = sqliteTable(
   "webhook_subscriptions" as string,
   {

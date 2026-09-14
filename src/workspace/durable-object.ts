@@ -85,6 +85,7 @@ import {
   workspaceReactions,
   workspaceSavedViews,
   workspaceMcpServers,
+  workspaceSkills,
   workspaceUserPreferences,
   workspaceViewFavorites,
   workspaceWebhookSubscriptions,
@@ -2319,6 +2320,79 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         and(
           eq(workspaceMcpServers.id, id),
           eq(workspaceMcpServers.organizationId, this.organizationId)
+        )
+      )
+      .returning()
+      .get();
+    return row;
+  }
+
+  // ---- workspace skills ----
+  async createSkill(input: {
+    id?: string;
+    name: string;
+    content: string;
+    scope: "workspace" | "repo" | "issue";
+    repo?: string | null;
+    issueId?: string | null;
+  }) {
+    await this.ready;
+    const now = new Date().toISOString();
+    const id = input.id ?? crypto.randomUUID();
+    const row = await this.db
+      .insert(workspaceSkills)
+      .values({
+        id,
+        organizationId: this.organizationId,
+        name: input.name,
+        content: input.content,
+        scope: input.scope,
+        repo: input.repo ?? null,
+        issueId: input.issueId ?? null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning()
+      .get();
+    return row;
+  }
+
+  async getSkill(id: string) {
+    await this.ready;
+    return this.db
+      .select()
+      .from(workspaceSkills)
+      .where(
+        and(
+          eq(workspaceSkills.id, id),
+          eq(workspaceSkills.organizationId, this.organizationId)
+        )
+      )
+      .get();
+  }
+
+  async listSkills(scope?: "workspace" | "repo" | "issue") {
+    await this.ready;
+    return this.db
+      .select()
+      .from(workspaceSkills)
+      .where(
+        and(
+          eq(workspaceSkills.organizationId, this.organizationId),
+          scope ? eq(workspaceSkills.scope, scope) : undefined
+        )
+      )
+      .all();
+  }
+
+  async deleteSkill(id: string) {
+    await this.ready;
+    const row = await this.db
+      .delete(workspaceSkills)
+      .where(
+        and(
+          eq(workspaceSkills.id, id),
+          eq(workspaceSkills.organizationId, this.organizationId)
         )
       )
       .returning()

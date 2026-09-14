@@ -58,6 +58,7 @@ import { registerRealtimeRoutes } from "./realtime.js";
 import { registerReleaseRoutes } from "./releases.js";
 import { registerSavedViewRoutes } from "./saved-views.js";
 import { registerSearchRoutes } from "./search.js";
+import { registerSkillRoutes } from "./skills.js";
 import {
   handleSlackEvents,
   handleSlackOAuth,
@@ -152,6 +153,7 @@ registerReleaseRoutes(app);
 registerIssueRelationRoutes(app);
 registerIssueExternalLinkRoutes(app);
 registerMcpServerRoutes(app);
+registerSkillRoutes(app);
 registerIssueSubscriberRoutes(app);
 registerAttachmentRoutes(app);
 registerGithubRoutes(app);

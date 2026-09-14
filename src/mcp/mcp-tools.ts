@@ -974,6 +974,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdSkillsId",
+    "description": "Delete skill (DELETE /workspaces/{organizationId}/skills/{id}) Path params (top-level, required): organizationId, id.",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/skills/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdSlack",
     "description": "Delete slack (DELETE /workspaces/{organizationId}/slack) Path params (top-level, required): organizationId.",
     "method": "DELETE",
@@ -3485,6 +3506,52 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "description": "Get saved view (GET /workspaces/{organizationId}/saved-views/{id}) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/saved-views/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSkills",
+    "description": "List skills (GET /workspaces/{organizationId}/skills) Path params (top-level, required): organizationId. Query params (top-level, optional): scope.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/skills",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string",
+          "enum": [
+            "workspace",
+            "repo",
+            "issue"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSkillsId",
+    "description": "Get skill (GET /workspaces/{organizationId}/skills/{id}) Path params (top-level, required): organizationId, id.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/skills/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -10397,6 +10464,55 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           },
           "required": [
             "query"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSkills",
+    "description": "Create skill (POST /workspaces/{organizationId}/skills) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, content*, scope*, repo, issueId (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/skills",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "content": {
+              "type": "string",
+              "minLength": 1
+            },
+            "scope": {
+              "type": "string",
+              "enum": [
+                "workspace",
+                "repo",
+                "issue"
+              ]
+            },
+            "repo": {
+              "type": "string"
+            },
+            "issueId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "content",
+            "scope"
           ]
         }
       },
