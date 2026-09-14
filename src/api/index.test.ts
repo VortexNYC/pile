@@ -3,6 +3,8 @@ import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+env.GITLAB_WEBHOOK_SECRET = "webhook-secret";
+
 import { hmacSha256Hex } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
 import { createGitlabInstallation } from "../global/gitlab-installations.js";

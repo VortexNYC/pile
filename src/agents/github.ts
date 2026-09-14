@@ -248,18 +248,21 @@ export async function processGithubWebhook(c: Context<AppContext>) {
   const signature = c.req.header("x-hub-signature-256") ?? "";
   const rawBody = await c.req.text();
 
-  if (c.env.GITHUB_WEBHOOK_SECRET) {
-    const expected = `sha256=${await hmacSha256Hex(
-      c.env.GITHUB_WEBHOOK_SECRET,
-      rawBody
-    )}`;
-    if (!timingSafeEqualHex(signature, expected)) {
-      throw new VortexError({
-        code: "UNAUTHORIZED",
-        status: 401,
-        message: "Invalid GitHub signature",
-      });
-    }
+  const secret = c.env.GITHUB_WEBHOOK_SECRET;
+  if (!secret) {
+    throw new VortexError({
+      code: "UNAUTHORIZED",
+      status: 401,
+      message: "GitHub webhook secret not configured",
+    });
+  }
+  const expected = `sha256=${await hmacSha256Hex(secret, rawBody)}`;
+  if (!timingSafeEqualHex(signature, expected)) {
+    throw new VortexError({
+      code: "UNAUTHORIZED",
+      status: 401,
+      message: "Invalid GitHub signature",
+    });
   }
 
   const event = c.req.header("x-github-event") ?? "unknown";

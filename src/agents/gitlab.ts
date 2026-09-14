@@ -2,6 +2,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 
 import { getWorkspaceStub } from "../api/stub.js";
+import { timingSafeEqualHex } from "../global/crypto.js";
 import { findOrCreateCycleByName } from "../global/cycles.js";
 import { createD1, type D1Client } from "../global/db.js";
 import { findGitlabInstallationByProjectPath } from "../global/gitlab-installations.js";
@@ -192,8 +193,15 @@ async function resolveGitlabInstallation(
     db,
     projectPath
   );
-  const expected = installation?.webhookSecret ?? envToken;
-  if (expected && providedToken !== expected) {
+  const expected = installation?.webhookSecret ?? envToken ?? "";
+  if (!expected) {
+    throw new VortexError({
+      code: "UNAUTHORIZED",
+      status: 401,
+      message: "GitLab webhook secret not configured",
+    });
+  }
+  if (!timingSafeEqualHex(providedToken, expected)) {
     throw new VortexError({
       code: "UNAUTHORIZED",
       status: 401,

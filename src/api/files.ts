@@ -156,8 +156,15 @@ export function registerFileRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(getFileRoute, async (c) => {
-    c.req.valid("param");
+    const { organizationId } = c.req.valid("param");
     const { key } = c.req.valid("query");
+    if (!key.startsWith(`${organizationId}/`)) {
+      throw new VortexError({
+        code: "FORBIDDEN",
+        status: 403,
+        message: "File does not belong to this workspace",
+      });
+    }
     const bucket = c.env.ATTACHMENTS_BUCKET;
     if (!bucket) {
       throw new VortexError({
