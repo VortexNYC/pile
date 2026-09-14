@@ -180,9 +180,58 @@ for (const [path, methodsRaw] of Object.entries(specRaw.paths)) {
         ? `${summary}${summary.length > 0 ? " — " : ""}${operationRaw.description}`
         : summary;
 
+    const pathParams = parameters.flatMap((parameterRaw) =>
+      isRecord(parameterRaw) &&
+      parameterRaw.in === "path" &&
+      typeof parameterRaw.name === "string"
+        ? [parameterRaw.name]
+        : []
+    );
+    const queryParams = parameters.flatMap((parameterRaw) =>
+      isRecord(parameterRaw) &&
+      parameterRaw.in === "query" &&
+      typeof parameterRaw.name === "string"
+        ? [parameterRaw.name]
+        : []
+    );
+    const usage: string[] = [];
+    if (pathParams.length > 0) {
+      usage.push(
+        `Path params (top-level, required): ${pathParams.join(", ")}.`
+      );
+    }
+    if (queryParams.length > 0) {
+      usage.push(
+        `Query params (top-level, optional): ${queryParams.join(", ")}.`
+      );
+    }
+    if (bodySchema !== undefined) {
+      const bodyProps = isRecord(bodySchema.properties)
+        ? Object.keys(bodySchema.properties)
+        : [];
+      const bodyRequired = Array.isArray(bodySchema.required)
+        ? bodySchema.required.filter(
+            (name): name is string => typeof name === "string"
+          )
+        : [];
+      const fieldList = bodyProps
+        .map((name) => (bodyRequired.includes(name) ? `${name}*` : name))
+        .join(", ");
+      usage.push(
+        `Request body goes in the "body" object${
+          requestBody?.required === true ? " (required)" : ""
+        }${fieldList.length > 0 ? `; fields: ${fieldList}` : ""}${
+          bodyRequired.length > 0 ? " (* = required)" : ""
+        }.`
+      );
+    }
+
     tools.push({
       name: operationId,
-      description: `${description} (${method.toUpperCase()} ${path})`.trim(),
+      description: [
+        `${description} (${method.toUpperCase()} ${path})`.trim(),
+        ...usage,
+      ].join(" "),
       method: method.toUpperCase(),
       path,
       inputSchema: {
