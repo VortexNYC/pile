@@ -27,6 +27,7 @@ import {
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
+import { slackIngestionModeSchema } from "../slack/ingestion.js";
 
 const supportChannelTypeEnum = z.enum([
   "email",
@@ -49,6 +50,7 @@ const baseMessagingConfig = z.object({
 
 const slackMessagingConfig = baseMessagingConfig.extend({
   botToken: z.string().optional(),
+  ingestionMode: slackIngestionModeSchema.optional(),
 });
 
 const supportChannelSchema = z.discriminatedUnion("type", [

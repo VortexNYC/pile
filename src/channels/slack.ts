@@ -10,6 +10,7 @@ import {
 import { enqueueWebhook, scopedDeliveryId } from "../global/webhook-queue.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
+import { getSlackIngestionMode } from "../slack/ingestion.js";
 
 const slackEventSchema = z.object({
   type: z.string(),
@@ -192,6 +193,11 @@ export async function processSlackSupportWebhookPayload(
     ev.channel
   );
   if (!channel) {
+    return;
+  }
+
+  const ingestionMode = getSlackIngestionMode(channel.config);
+  if (ingestionMode !== "one_to_one") {
     return;
   }
 

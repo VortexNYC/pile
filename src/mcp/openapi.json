@@ -11673,6 +11673,15 @@
                                   },
                                   "botToken": {
                                     "type": "string"
+                                  },
+                                  "ingestionMode": {
+                                    "type": "string",
+                                    "enum": [
+                                      "manual",
+                                      "one_to_one",
+                                      "time_based",
+                                      "ai"
+                                    ]
                                   }
                                 }
                               },
@@ -12268,6 +12277,15 @@
                             },
                             "botToken": {
                               "type": "string"
+                            },
+                            "ingestionMode": {
+                              "type": "string",
+                              "enum": [
+                                "manual",
+                                "one_to_one",
+                                "time_based",
+                                "ai"
+                              ]
                             }
                           }
                         },
