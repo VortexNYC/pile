@@ -12,7 +12,7 @@ export interface McpToolDefinition {
 export const MCP_TOOLS: readonly McpToolDefinition[] = [
   {
     "name": "adminUpdateUser",
-    "description": "Create api auth admin update user (POST /api/auth/admin/update-user)",
+    "description": "Create api auth admin update user (POST /api/auth/admin/update-user) Request body goes in the \"body\" object.",
     "method": "POST",
     "path": "/api/auth/admin/update-user",
     "inputSchema": {
@@ -30,7 +30,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "banUser",
-    "description": "Create api auth admin ban user (POST /api/auth/admin/ban-user)",
+    "description": "Create api auth admin ban user (POST /api/auth/admin/ban-user) Request body goes in the \"body\" object.",
     "method": "POST",
     "path": "/api/auth/admin/ban-user",
     "inputSchema": {
@@ -48,7 +48,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "changeEmail",
-    "description": "Create api auth change email (POST /api/auth/change-email)",
+    "description": "Create api auth change email (POST /api/auth/change-email) Request body goes in the \"body\" object.",
     "method": "POST",
     "path": "/api/auth/change-email",
     "inputSchema": {
@@ -66,7 +66,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "changePassword",
-    "description": "Create api auth change password (POST /api/auth/change-password)",
+    "description": "Create api auth change password (POST /api/auth/change-password) Request body goes in the \"body\" object.",
     "method": "POST",
     "path": "/api/auth/change-password",
     "inputSchema": {
@@ -84,7 +84,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "createUser",
-    "description": "Create api auth admin create user (POST /api/auth/admin/create-user)",
+    "description": "Create api auth admin create user (POST /api/auth/admin/create-user) Request body goes in the \"body\" object.",
     "method": "POST",
     "path": "/api/auth/admin/create-user",
     "inputSchema": {
@@ -102,7 +102,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteUser",
-    "description": "Create api auth delete user (POST /api/auth/delete-user)",
+    "description": "Create api auth delete user (POST /api/auth/delete-user) Request body goes in the \"body\" object.",
     "method": "POST",
     "path": "/api/auth/delete-user",
     "inputSchema": {
@@ -120,7 +120,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdAgentProvidersAgentId",
-    "description": "Delete agent provider (DELETE /workspaces/{organizationId}/agent/providers/{agentId})",
+    "description": "Delete agent provider (DELETE /workspaces/{organizationId}/agent/providers/{agentId}) Path params (top-level, required): organizationId, agentId.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/agent/providers/{agentId}",
     "inputSchema": {
@@ -141,7 +141,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdCustomerneedsId",
-    "description": "Delete customer need (DELETE /workspaces/{organizationId}/customer-needs/{id})",
+    "description": "Delete customer need (DELETE /workspaces/{organizationId}/customer-needs/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/customer-needs/{id}",
     "inputSchema": {
@@ -162,7 +162,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdCustomersId",
-    "description": "Delete customer (DELETE /workspaces/{organizationId}/customers/{id})",
+    "description": "Delete customer (DELETE /workspaces/{organizationId}/customers/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/customers/{id}",
     "inputSchema": {
@@ -183,7 +183,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdCustomerstatusesId",
-    "description": "Delete customer statuse (DELETE /workspaces/{organizationId}/customer-statuses/{id})",
+    "description": "Delete customer statuse (DELETE /workspaces/{organizationId}/customer-statuses/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/customer-statuses/{id}",
     "inputSchema": {
@@ -204,7 +204,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdCustomertiersId",
-    "description": "Delete customer tier (DELETE /workspaces/{organizationId}/customer-tiers/{id})",
+    "description": "Delete customer tier (DELETE /workspaces/{organizationId}/customer-tiers/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/customer-tiers/{id}",
     "inputSchema": {
@@ -225,7 +225,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdCyclesId",
-    "description": "Delete cycle (DELETE /workspaces/{organizationId}/cycles/{id})",
+    "description": "Delete cycle (DELETE /workspaces/{organizationId}/cycles/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/cycles/{id}",
     "inputSchema": {
@@ -246,7 +246,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdDocumentsId",
-    "description": "Delete document (DELETE /workspaces/{organizationId}/documents/{id})",
+    "description": "Delete document (DELETE /workspaces/{organizationId}/documents/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/documents/{id}",
     "inputSchema": {
@@ -267,7 +267,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdDocumentsIdPermissionsActorId",
-    "description": "Delete document permission (DELETE /workspaces/{organizationId}/documents/{id}/permissions/{actorId})",
+    "description": "Delete document permission (DELETE /workspaces/{organizationId}/documents/{id}/permissions/{actorId}) Path params (top-level, required): organizationId, id, actorId.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/documents/{id}/permissions/{actorId}",
     "inputSchema": {
@@ -292,7 +292,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdDocumentsIdShareToken",
-    "description": "Delete document share (DELETE /workspaces/{organizationId}/documents/{id}/share/{token})",
+    "description": "Delete document share (DELETE /workspaces/{organizationId}/documents/{id}/share/{token}) Path params (top-level, required): organizationId, id, token.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/documents/{id}/share/{token}",
     "inputSchema": {
@@ -317,7 +317,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdDocumentsIdWatch",
-    "description": "Delete document watch (DELETE /workspaces/{organizationId}/documents/{id}/watch)",
+    "description": "Delete document watch (DELETE /workspaces/{organizationId}/documents/{id}/watch) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/documents/{id}/watch",
     "inputSchema": {
@@ -338,7 +338,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdDocumentspacesId",
-    "description": "Delete document space (DELETE /workspaces/{organizationId}/document-spaces/{id})",
+    "description": "Delete document space (DELETE /workspaces/{organizationId}/document-spaces/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/document-spaces/{id}",
     "inputSchema": {
@@ -359,7 +359,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdEmailinboxesId",
-    "description": "Delete email inboxe (DELETE /workspaces/{organizationId}/email-inboxes/{id})",
+    "description": "Delete email inboxe (DELETE /workspaces/{organizationId}/email-inboxes/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/email-inboxes/{id}",
     "inputSchema": {
@@ -380,7 +380,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdEmojisId",
-    "description": "Delete emoji (DELETE /workspaces/{organizationId}/emojis/{id})",
+    "description": "Delete emoji (DELETE /workspaces/{organizationId}/emojis/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/emojis/{id}",
     "inputSchema": {
@@ -401,7 +401,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdExternallinksId",
-    "description": "Delete external link (DELETE /workspaces/{organizationId}/external-links/{id})",
+    "description": "Delete external link (DELETE /workspaces/{organizationId}/external-links/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/external-links/{id}",
     "inputSchema": {
@@ -422,7 +422,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdGitautomationstatesId",
-    "description": "Delete git automation state (DELETE /workspaces/{organizationId}/git-automation-states/{id})",
+    "description": "Delete git automation state (DELETE /workspaces/{organizationId}/git-automation-states/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/git-automation-states/{id}",
     "inputSchema": {
@@ -443,7 +443,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdGitautomationtargetbranchesId",
-    "description": "Delete git automation target branche (DELETE /workspaces/{organizationId}/git-automation-target-branches/{id})",
+    "description": "Delete git automation target branche (DELETE /workspaces/{organizationId}/git-automation-target-branches/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/git-automation-target-branches/{id}",
     "inputSchema": {
@@ -464,7 +464,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdGithubInstallationsId",
-    "description": "Delete github installation (DELETE /workspaces/{organizationId}/github/installations/{id})",
+    "description": "Delete github installation (DELETE /workspaces/{organizationId}/github/installations/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/github/installations/{id}",
     "inputSchema": {
@@ -485,7 +485,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdGitlabInstallationsId",
-    "description": "Delete gitlab installation (DELETE /workspaces/{organizationId}/gitlab/installations/{id})",
+    "description": "Delete gitlab installation (DELETE /workspaces/{organizationId}/gitlab/installations/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/gitlab/installations/{id}",
     "inputSchema": {
@@ -506,7 +506,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdInitiativesId",
-    "description": "Delete initiative (DELETE /workspaces/{organizationId}/initiatives/{id})",
+    "description": "Delete initiative (DELETE /workspaces/{organizationId}/initiatives/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/initiatives/{id}",
     "inputSchema": {
@@ -527,7 +527,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdIssuesId",
-    "description": "Delete issue (DELETE /workspaces/{organizationId}/issues/{id})",
+    "description": "Delete issue (DELETE /workspaces/{organizationId}/issues/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/issues/{id}",
     "inputSchema": {
@@ -548,7 +548,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdIssuesIssueIdAttachmentsId",
-    "description": "Delete issue attachment (DELETE /workspaces/{organizationId}/issues/{issueId}/attachments/{id})",
+    "description": "Delete issue attachment (DELETE /workspaces/{organizationId}/issues/{issueId}/attachments/{id}) Path params (top-level, required): organizationId, issueId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/issues/{issueId}/attachments/{id}",
     "inputSchema": {
@@ -573,7 +573,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdIssuesIssueIdCommentsId",
-    "description": "Delete issue comment (DELETE /workspaces/{organizationId}/issues/{issueId}/comments/{id})",
+    "description": "Delete issue comment (DELETE /workspaces/{organizationId}/issues/{issueId}/comments/{id}) Path params (top-level, required): organizationId, issueId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/issues/{issueId}/comments/{id}",
     "inputSchema": {
@@ -598,7 +598,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdIssuesIssueIdExternallinksId",
-    "description": "Delete issue external link (DELETE /workspaces/{organizationId}/issues/{issueId}/external-links/{id})",
+    "description": "Delete issue external link (DELETE /workspaces/{organizationId}/issues/{issueId}/external-links/{id}) Path params (top-level, required): organizationId, issueId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/issues/{issueId}/external-links/{id}",
     "inputSchema": {
@@ -623,7 +623,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdIssuesIssueIdSubscribersId",
-    "description": "Delete issue subscriber (DELETE /workspaces/{organizationId}/issues/{issueId}/subscribers/{id})",
+    "description": "Delete issue subscriber (DELETE /workspaces/{organizationId}/issues/{issueId}/subscribers/{id}) Path params (top-level, required): organizationId, issueId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/issues/{issueId}/subscribers/{id}",
     "inputSchema": {
@@ -648,7 +648,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdLabelsId",
-    "description": "Delete label (DELETE /workspaces/{organizationId}/labels/{id})",
+    "description": "Delete label (DELETE /workspaces/{organizationId}/labels/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/labels/{id}",
     "inputSchema": {
@@ -669,7 +669,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdOauthclientsId",
-    "description": "Delete oauth client (DELETE /workspaces/{organizationId}/oauth-clients/{id})",
+    "description": "Delete oauth client (DELETE /workspaces/{organizationId}/oauth-clients/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/oauth-clients/{id}",
     "inputSchema": {
@@ -690,7 +690,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdProjectsId",
-    "description": "Delete project (DELETE /workspaces/{organizationId}/projects/{id})",
+    "description": "Delete project (DELETE /workspaces/{organizationId}/projects/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/projects/{id}",
     "inputSchema": {
@@ -711,7 +711,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdProjectsProjectIdMembersId",
-    "description": "Delete project member (DELETE /workspaces/{organizationId}/projects/{projectId}/members/{id})",
+    "description": "Delete project member (DELETE /workspaces/{organizationId}/projects/{projectId}/members/{id}) Path params (top-level, required): organizationId, projectId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/projects/{projectId}/members/{id}",
     "inputSchema": {
@@ -736,7 +736,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdProjectsProjectIdMilestonesId",
-    "description": "Delete project milestone (DELETE /workspaces/{organizationId}/projects/{projectId}/milestones/{id})",
+    "description": "Delete project milestone (DELETE /workspaces/{organizationId}/projects/{projectId}/milestones/{id}) Path params (top-level, required): organizationId, projectId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/projects/{projectId}/milestones/{id}",
     "inputSchema": {
@@ -761,7 +761,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdProjectsProjectIdReminder",
-    "description": "Delete project reminder (DELETE /workspaces/{organizationId}/projects/{projectId}/reminder)",
+    "description": "Delete project reminder (DELETE /workspaces/{organizationId}/projects/{projectId}/reminder) Path params (top-level, required): organizationId, projectId.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/projects/{projectId}/reminder",
     "inputSchema": {
@@ -782,7 +782,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdProjectsProjectIdUpdatesId",
-    "description": "Delete project update (DELETE /workspaces/{organizationId}/projects/{projectId}/updates/{id})",
+    "description": "Delete project update (DELETE /workspaces/{organizationId}/projects/{projectId}/updates/{id}) Path params (top-level, required): organizationId, projectId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/projects/{projectId}/updates/{id}",
     "inputSchema": {
@@ -807,7 +807,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdPushtokensId",
-    "description": "Delete push token (DELETE /workspaces/{organizationId}/push-tokens/{id})",
+    "description": "Delete push token (DELETE /workspaces/{organizationId}/push-tokens/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/push-tokens/{id}",
     "inputSchema": {
@@ -828,7 +828,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdReactionsReactionId",
-    "description": "Delete reaction (DELETE /workspaces/{organizationId}/reactions/{reactionId})",
+    "description": "Delete reaction (DELETE /workspaces/{organizationId}/reactions/{reactionId}) Path params (top-level, required): organizationId, reactionId.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/reactions/{reactionId}",
     "inputSchema": {
@@ -849,7 +849,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdRelationsId",
-    "description": "Delete relation (DELETE /workspaces/{organizationId}/relations/{id})",
+    "description": "Delete relation (DELETE /workspaces/{organizationId}/relations/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/relations/{id}",
     "inputSchema": {
@@ -870,7 +870,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdReleasesId",
-    "description": "Delete release (DELETE /workspaces/{organizationId}/releases/{id})",
+    "description": "Delete release (DELETE /workspaces/{organizationId}/releases/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/releases/{id}",
     "inputSchema": {
@@ -891,7 +891,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdRoadmapsId",
-    "description": "Delete roadmap (DELETE /workspaces/{organizationId}/roadmaps/{id})",
+    "description": "Delete roadmap (DELETE /workspaces/{organizationId}/roadmaps/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/roadmaps/{id}",
     "inputSchema": {
@@ -912,7 +912,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdSavedviewsId",
-    "description": "Delete saved view (DELETE /workspaces/{organizationId}/saved-views/{id})",
+    "description": "Delete saved view (DELETE /workspaces/{organizationId}/saved-views/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/saved-views/{id}",
     "inputSchema": {
@@ -933,7 +933,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdSavedviewsIdFavorite",
-    "description": "Delete saved view favorite (DELETE /workspaces/{organizationId}/saved-views/{id}/favorite)",
+    "description": "Delete saved view favorite (DELETE /workspaces/{organizationId}/saved-views/{id}/favorite) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/saved-views/{id}/favorite",
     "inputSchema": {
@@ -954,7 +954,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdSlack",
-    "description": "Delete slack (DELETE /workspaces/{organizationId}/slack)",
+    "description": "Delete slack (DELETE /workspaces/{organizationId}/slack) Path params (top-level, required): organizationId.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/slack",
     "inputSchema": {
@@ -971,7 +971,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdStatesId",
-    "description": "Delete state (DELETE /workspaces/{organizationId}/states/{id})",
+    "description": "Delete state (DELETE /workspaces/{organizationId}/states/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/states/{id}",
     "inputSchema": {
@@ -992,7 +992,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdSupportCapturePublickeysKeyId",
-    "description": "Delete support capture public key (DELETE /workspaces/{organizationId}/support/capture/public-keys/{keyId})",
+    "description": "Delete support capture public key (DELETE /workspaces/{organizationId}/support/capture/public-keys/{keyId}) Path params (top-level, required): organizationId, keyId.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/support/capture/public-keys/{keyId}",
     "inputSchema": {
@@ -1013,7 +1013,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdSupportEscalationrulesRuleId",
-    "description": "Delete support escalation rule (DELETE /workspaces/{organizationId}/support/escalation-rules/{ruleId})",
+    "description": "Delete support escalation rule (DELETE /workspaces/{organizationId}/support/escalation-rules/{ruleId}) Path params (top-level, required): organizationId, ruleId.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/support/escalation-rules/{ruleId}",
     "inputSchema": {
@@ -1034,7 +1034,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdSupportTiersTierId",
-    "description": "Delete support tier (DELETE /workspaces/{organizationId}/support/tiers/{tierId})",
+    "description": "Delete support tier (DELETE /workspaces/{organizationId}/support/tiers/{tierId}) Path params (top-level, required): organizationId, tierId.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/support/tiers/{tierId}",
     "inputSchema": {
@@ -1055,7 +1055,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdSupportTiersTierIdMembersUserId",
-    "description": "Delete support tier member (DELETE /workspaces/{organizationId}/support/tiers/{tierId}/members/{userId})",
+    "description": "Delete support tier member (DELETE /workspaces/{organizationId}/support/tiers/{tierId}/members/{userId}) Path params (top-level, required): organizationId, tierId, userId.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/support/tiers/{tierId}/members/{userId}",
     "inputSchema": {
@@ -1080,7 +1080,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdTeamsId",
-    "description": "Delete team (DELETE /workspaces/{organizationId}/teams/{id})",
+    "description": "Delete team (DELETE /workspaces/{organizationId}/teams/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/teams/{id}",
     "inputSchema": {
@@ -1101,7 +1101,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdTeamsIdMembersMemberId",
-    "description": "Delete team member (DELETE /workspaces/{organizationId}/teams/{id}/members/{memberId})",
+    "description": "Delete team member (DELETE /workspaces/{organizationId}/teams/{id}/members/{memberId}) Path params (top-level, required): organizationId, id, memberId. Query params (top-level, optional): memberType.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/teams/{id}/members/{memberId}",
     "inputSchema": {
@@ -1133,7 +1133,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdTimeschedulesId",
-    "description": "Delete time schedule (DELETE /workspaces/{organizationId}/time-schedules/{id})",
+    "description": "Delete time schedule (DELETE /workspaces/{organizationId}/time-schedules/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/time-schedules/{id}",
     "inputSchema": {
@@ -1154,7 +1154,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdTokensId",
-    "description": "Delete token (DELETE /workspaces/{organizationId}/tokens/{id})",
+    "description": "Delete token (DELETE /workspaces/{organizationId}/tokens/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/tokens/{id}",
     "inputSchema": {
@@ -1175,7 +1175,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "deleteWorkspacesOrganizationIdWebhooksubscriptionsId",
-    "description": "Delete webhook subscription (DELETE /workspaces/{organizationId}/webhook-subscriptions/{id})",
+    "description": "Delete webhook subscription (DELETE /workspaces/{organizationId}/webhook-subscriptions/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/webhook-subscriptions/{id}",
     "inputSchema": {
@@ -1196,7 +1196,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getDocsOrganizationIdSpaceIdLlmstxt",
-    "description": "List doc {organizationId} llms.txt (GET /docs/{organizationId}/{spaceId}/llms.txt)",
+    "description": "List doc {organizationId} llms.txt (GET /docs/{organizationId}/{spaceId}/llms.txt) Path params (top-level, required): organizationId, spaceId.",
     "method": "GET",
     "path": "/docs/{organizationId}/{spaceId}/llms.txt",
     "inputSchema": {
@@ -1217,7 +1217,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getDocsOrganizationIdSpaceIdSlug",
-    "description": "GET /docs/{organizationId}/{spaceId}/{slug} (GET /docs/{organizationId}/{spaceId}/{slug})",
+    "description": "GET /docs/{organizationId}/{spaceId}/{slug} (GET /docs/{organizationId}/{spaceId}/{slug}) Path params (top-level, required): organizationId, spaceId, slug.",
     "method": "GET",
     "path": "/docs/{organizationId}/{spaceId}/{slug}",
     "inputSchema": {
@@ -1252,7 +1252,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getShareddocumentsOrganizationIdToken",
-    "description": "GET /shared-documents/{organizationId}/{token} (GET /shared-documents/{organizationId}/{token})",
+    "description": "GET /shared-documents/{organizationId}/{token} (GET /shared-documents/{organizationId}/{token}) Path params (top-level, required): organizationId, token.",
     "method": "GET",
     "path": "/shared-documents/{organizationId}/{token}",
     "inputSchema": {
@@ -1273,7 +1273,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getSupportCaptureArtifactsAttachmentId",
-    "description": "Get support capture artifact (GET /support/capture/artifacts/{attachmentId})",
+    "description": "Get support capture artifact (GET /support/capture/artifacts/{attachmentId}) Path params (top-level, required): attachmentId.",
     "method": "GET",
     "path": "/support/capture/artifacts/{attachmentId}",
     "inputSchema": {
@@ -1290,7 +1290,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getSupportCapturePublicTicketId",
-    "description": "Get support capture public (GET /support/capture/public/{ticketId})",
+    "description": "Get support capture public (GET /support/capture/public/{ticketId}) Path params (top-level, required): ticketId.",
     "method": "GET",
     "path": "/support/capture/public/{ticketId}",
     "inputSchema": {
@@ -1307,7 +1307,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getSupportCaptureSessionsSessionId",
-    "description": "Get support capture session (GET /support/capture/sessions/{sessionId})",
+    "description": "Get support capture session (GET /support/capture/sessions/{sessionId}) Path params (top-level, required): sessionId.",
     "method": "GET",
     "path": "/support/capture/sessions/{sessionId}",
     "inputSchema": {
@@ -1344,7 +1344,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesId",
-    "description": "Get workspace (GET /workspaces/{id})",
+    "description": "Get workspace (GET /workspaces/{id}) Path params (top-level, required): id.",
     "method": "GET",
     "path": "/workspaces/{id}",
     "inputSchema": {
@@ -1361,7 +1361,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdAgentProviders",
-    "description": "List agent providers (GET /workspaces/{organizationId}/agent/providers)",
+    "description": "List agent providers (GET /workspaces/{organizationId}/agent/providers) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/agent/providers",
     "inputSchema": {
@@ -1378,7 +1378,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdAgentSessions",
-    "description": "List agent sessions (GET /workspaces/{organizationId}/agent/sessions)",
+    "description": "List agent sessions (GET /workspaces/{organizationId}/agent/sessions) Path params (top-level, required): organizationId. Query params (top-level, optional): issueId, limit.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/agent/sessions",
     "inputSchema": {
@@ -1401,7 +1401,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdAgentSessionsSessionId",
-    "description": "Get agent session (GET /workspaces/{organizationId}/agent/sessions/{sessionId})",
+    "description": "Get agent session (GET /workspaces/{organizationId}/agent/sessions/{sessionId}) Path params (top-level, required): organizationId, sessionId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/agent/sessions/{sessionId}",
     "inputSchema": {
@@ -1422,7 +1422,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdAuditlog",
-    "description": "List audit log (GET /workspaces/{organizationId}/audit-log)",
+    "description": "List audit log (GET /workspaces/{organizationId}/audit-log) Path params (top-level, required): organizationId. Query params (top-level, optional): entityType, entityId, action, actorId, limit.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/audit-log",
     "inputSchema": {
@@ -1454,7 +1454,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdAuditlogId",
-    "description": "Get audit log (GET /workspaces/{organizationId}/audit-log/{id})",
+    "description": "Get audit log (GET /workspaces/{organizationId}/audit-log/{id}) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/audit-log/{id}",
     "inputSchema": {
@@ -1475,7 +1475,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdAvailableusers",
-    "description": "List available users (GET /workspaces/{organizationId}/available-users)",
+    "description": "List available users (GET /workspaces/{organizationId}/available-users) Path params (top-level, required): organizationId. Query params (top-level, optional): q.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/available-users",
     "inputSchema": {
@@ -1495,7 +1495,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdBilling",
-    "description": "List billing (GET /workspaces/{organizationId}/billing)",
+    "description": "List billing (GET /workspaces/{organizationId}/billing) Path params (top-level, required): organizationId. Query params (top-level, optional): period.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/billing",
     "inputSchema": {
@@ -1515,7 +1515,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdCommentsCommentIdReactions",
-    "description": "List comment reactions (GET /workspaces/{organizationId}/comments/{commentId}/reactions)",
+    "description": "List comment reactions (GET /workspaces/{organizationId}/comments/{commentId}/reactions) Path params (top-level, required): organizationId, commentId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/comments/{commentId}/reactions",
     "inputSchema": {
@@ -1536,7 +1536,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdCustomerneeds",
-    "description": "List customer needs (GET /workspaces/{organizationId}/customer-needs)",
+    "description": "List customer needs (GET /workspaces/{organizationId}/customer-needs) Path params (top-level, required): organizationId. Query params (top-level, optional): customerId, issueId, projectId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/customer-needs",
     "inputSchema": {
@@ -1562,7 +1562,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdCustomerneedsId",
-    "description": "Get customer need (GET /workspaces/{organizationId}/customer-needs/{id})",
+    "description": "Get customer need (GET /workspaces/{organizationId}/customer-needs/{id}) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/customer-needs/{id}",
     "inputSchema": {
@@ -1583,7 +1583,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdCustomers",
-    "description": "List customers (GET /workspaces/{organizationId}/customers)",
+    "description": "List customers (GET /workspaces/{organizationId}/customers) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/customers",
     "inputSchema": {
@@ -1600,7 +1600,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdCustomersId",
-    "description": "Get customer (GET /workspaces/{organizationId}/customers/{id})",
+    "description": "Get customer (GET /workspaces/{organizationId}/customers/{id}) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/customers/{id}",
     "inputSchema": {
@@ -1621,7 +1621,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdCustomerstatuses",
-    "description": "List customer statuses (GET /workspaces/{organizationId}/customer-statuses)",
+    "description": "List customer statuses (GET /workspaces/{organizationId}/customer-statuses) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/customer-statuses",
     "inputSchema": {
@@ -1638,7 +1638,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdCustomerstatusesId",
-    "description": "Get customer statuse (GET /workspaces/{organizationId}/customer-statuses/{id})",
+    "description": "Get customer statuse (GET /workspaces/{organizationId}/customer-statuses/{id}) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/customer-statuses/{id}",
     "inputSchema": {
@@ -1659,7 +1659,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdCustomertiers",
-    "description": "List customer tiers (GET /workspaces/{organizationId}/customer-tiers)",
+    "description": "List customer tiers (GET /workspaces/{organizationId}/customer-tiers) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/customer-tiers",
     "inputSchema": {
@@ -1676,7 +1676,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdCustomertiersId",
-    "description": "Get customer tier (GET /workspaces/{organizationId}/customer-tiers/{id})",
+    "description": "Get customer tier (GET /workspaces/{organizationId}/customer-tiers/{id}) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/customer-tiers/{id}",
     "inputSchema": {
@@ -1697,7 +1697,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdCycles",
-    "description": "List cycles (GET /workspaces/{organizationId}/cycles)",
+    "description": "List cycles (GET /workspaces/{organizationId}/cycles) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/cycles",
     "inputSchema": {
@@ -1714,7 +1714,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdCyclesId",
-    "description": "Get cycle (GET /workspaces/{organizationId}/cycles/{id})",
+    "description": "Get cycle (GET /workspaces/{organizationId}/cycles/{id}) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/cycles/{id}",
     "inputSchema": {
@@ -1735,7 +1735,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdCyclesIdCapacity",
-    "description": "List cycle capacity (GET /workspaces/{organizationId}/cycles/{id}/capacity)",
+    "description": "List cycle capacity (GET /workspaces/{organizationId}/cycles/{id}/capacity) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/cycles/{id}/capacity",
     "inputSchema": {
@@ -1756,7 +1756,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdDocuments",
-    "description": "List documents (GET /workspaces/{organizationId}/documents)",
+    "description": "List documents (GET /workspaces/{organizationId}/documents) Path params (top-level, required): organizationId. Query params (top-level, optional): projectId, issueId, initiativeId, parentDocumentId, spaceId, isTemplate, includeTrashed.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/documents",
     "inputSchema": {
@@ -1794,7 +1794,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdDocumentsId",
-    "description": "Get document (GET /workspaces/{organizationId}/documents/{id})",
+    "description": "Get document (GET /workspaces/{organizationId}/documents/{id}) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/documents/{id}",
     "inputSchema": {
@@ -1815,7 +1815,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdDocumentsIdBacklinks",
-    "description": "List document backlinks (GET /workspaces/{organizationId}/documents/{id}/backlinks)",
+    "description": "List document backlinks (GET /workspaces/{organizationId}/documents/{id}/backlinks) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/documents/{id}/backlinks",
     "inputSchema": {
@@ -1836,7 +1836,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdDocumentsIdComments",
-    "description": "List document comments (GET /workspaces/{organizationId}/documents/{id}/comments)",
+    "description": "List document comments (GET /workspaces/{organizationId}/documents/{id}/comments) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/documents/{id}/comments",
     "inputSchema": {
@@ -1857,7 +1857,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdDocumentsIdHistory",
-    "description": "List document history (GET /workspaces/{organizationId}/documents/{id}/history)",
+    "description": "List document history (GET /workspaces/{organizationId}/documents/{id}/history) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/documents/{id}/history",
     "inputSchema": {
@@ -1878,7 +1878,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdDocumentsIdLinks",
-    "description": "List document links (GET /workspaces/{organizationId}/documents/{id}/links)",
+    "description": "List document links (GET /workspaces/{organizationId}/documents/{id}/links) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/documents/{id}/links",
     "inputSchema": {
@@ -1899,7 +1899,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdDocumentspaces",
-    "description": "List document spaces (GET /workspaces/{organizationId}/document-spaces)",
+    "description": "List document spaces (GET /workspaces/{organizationId}/document-spaces) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/document-spaces",
     "inputSchema": {
@@ -1916,7 +1916,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdDocumentsSearch",
-    "description": "List document search (GET /workspaces/{organizationId}/documents/search)",
+    "description": "List document search (GET /workspaces/{organizationId}/documents/search) Path params (top-level, required): organizationId. Query params (top-level, optional): q.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/documents/search",
     "inputSchema": {
@@ -1938,7 +1938,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdEmailinboxes",
-    "description": "List email inboxes (GET /workspaces/{organizationId}/email-inboxes)",
+    "description": "List email inboxes (GET /workspaces/{organizationId}/email-inboxes) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/email-inboxes",
     "inputSchema": {
@@ -1955,7 +1955,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdEmojis",
-    "description": "List emojis (GET /workspaces/{organizationId}/emojis)",
+    "description": "List emojis (GET /workspaces/{organizationId}/emojis) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/emojis",
     "inputSchema": {
@@ -1972,7 +1972,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdEmojisId",
-    "description": "Get emoji (GET /workspaces/{organizationId}/emojis/{id})",
+    "description": "Get emoji (GET /workspaces/{organizationId}/emojis/{id}) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/emojis/{id}",
     "inputSchema": {
@@ -1993,7 +1993,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdExport",
-    "description": "List export (GET /workspaces/{organizationId}/export)",
+    "description": "List export (GET /workspaces/{organizationId}/export) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/export",
     "inputSchema": {
@@ -2010,7 +2010,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdExternallinks",
-    "description": "List external links (GET /workspaces/{organizationId}/external-links)",
+    "description": "List external links (GET /workspaces/{organizationId}/external-links) Path params (top-level, required): organizationId. Query params (top-level, optional): entityType, entityId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/external-links",
     "inputSchema": {
@@ -2039,7 +2039,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdExternallinksId",
-    "description": "Get external link (GET /workspaces/{organizationId}/external-links/{id})",
+    "description": "Get external link (GET /workspaces/{organizationId}/external-links/{id}) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/external-links/{id}",
     "inputSchema": {
@@ -2060,7 +2060,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdFiles",
-    "description": "List files (GET /workspaces/{organizationId}/files)",
+    "description": "List files (GET /workspaces/{organizationId}/files) Path params (top-level, required): organizationId. Query params (top-level, optional): key.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/files",
     "inputSchema": {
@@ -2081,7 +2081,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdGitautomationstates",
-    "description": "List git automation states (GET /workspaces/{organizationId}/git-automation-states)",
+    "description": "List git automation states (GET /workspaces/{organizationId}/git-automation-states) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/git-automation-states",
     "inputSchema": {
@@ -2098,7 +2098,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdGitautomationstatesId",
-    "description": "Get git automation state (GET /workspaces/{organizationId}/git-automation-states/{id})",
+    "description": "Get git automation state (GET /workspaces/{organizationId}/git-automation-states/{id}) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/git-automation-states/{id}",
     "inputSchema": {
@@ -2119,7 +2119,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdGitautomationtargetbranches",
-    "description": "List git automation target branches (GET /workspaces/{organizationId}/git-automation-target-branches)",
+    "description": "List git automation target branches (GET /workspaces/{organizationId}/git-automation-target-branches) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/git-automation-target-branches",
     "inputSchema": {
@@ -2136,7 +2136,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdGitautomationtargetbranchesId",
-    "description": "Get git automation target branche (GET /workspaces/{organizationId}/git-automation-target-branches/{id})",
+    "description": "Get git automation target branche (GET /workspaces/{organizationId}/git-automation-target-branches/{id}) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/git-automation-target-branches/{id}",
     "inputSchema": {
@@ -2157,7 +2157,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdGithubInstallations",
-    "description": "List github installations (GET /workspaces/{organizationId}/github/installations)",
+    "description": "List github installations (GET /workspaces/{organizationId}/github/installations) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/github/installations",
     "inputSchema": {
@@ -2174,7 +2174,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdGithubUsers",
-    "description": "List github users (GET /workspaces/{organizationId}/github/users)",
+    "description": "List github users (GET /workspaces/{organizationId}/github/users) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/github/users",
     "inputSchema": {
@@ -2191,7 +2191,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdGitlabInstallations",
-    "description": "List gitlab installations (GET /workspaces/{organizationId}/gitlab/installations)",
+    "description": "List gitlab installations (GET /workspaces/{organizationId}/gitlab/installations) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/gitlab/installations",
     "inputSchema": {
@@ -2208,7 +2208,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdGitlabUsers",
-    "description": "List gitlab users (GET /workspaces/{organizationId}/gitlab/users)",
+    "description": "List gitlab users (GET /workspaces/{organizationId}/gitlab/users) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/gitlab/users",
     "inputSchema": {
@@ -2225,7 +2225,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdImportJobId",
-    "description": "Get import (GET /workspaces/{organizationId}/import/{jobId})",
+    "description": "Get import (GET /workspaces/{organizationId}/import/{jobId}) Path params (top-level, required): organizationId, jobId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/import/{jobId}",
     "inputSchema": {
@@ -2246,7 +2246,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdInitiatives",
-    "description": "List initiatives (GET /workspaces/{organizationId}/initiatives)",
+    "description": "List initiatives (GET /workspaces/{organizationId}/initiatives) Path params (top-level, required): organizationId. Query params (top-level, optional): roadmapId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/initiatives",
     "inputSchema": {
@@ -2266,7 +2266,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdInitiativesId",
-    "description": "Get initiative (GET /workspaces/{organizationId}/initiatives/{id})",
+    "description": "Get initiative (GET /workspaces/{organizationId}/initiatives/{id}) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/initiatives/{id}",
     "inputSchema": {
@@ -2287,7 +2287,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdIssueanalytics",
-    "description": "List issue analytics (GET /workspaces/{organizationId}/issue-analytics)",
+    "description": "List issue analytics (GET /workspaces/{organizationId}/issue-analytics) Path params (top-level, required): organizationId. Query params (top-level, optional): groupBy.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/issue-analytics",
     "inputSchema": {
@@ -2316,7 +2316,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdIssueanalyticsBurndown",
-    "description": "List issue analytic burndown (GET /workspaces/{organizationId}/issue-analytics/burndown)",
+    "description": "List issue analytic burndown (GET /workspaces/{organizationId}/issue-analytics/burndown) Path params (top-level, required): organizationId. Query params (top-level, optional): cycleId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/issue-analytics/burndown",
     "inputSchema": {
@@ -2337,7 +2337,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdIssues",
-    "description": "List issues (GET /workspaces/{organizationId}/issues)",
+    "description": "List issues (GET /workspaces/{organizationId}/issues) Path params (top-level, required): organizationId. Query params (top-level, optional): limit, cursor, teamId, status, priority, parentId, hasParent, isParent, isDraft, includeSnoozed, assigneeId, projectId, cycleId, labelId, search, identifier, view.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/issues",
     "inputSchema": {
@@ -2438,7 +2438,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdIssuesId",
-    "description": "Get issue (GET /workspaces/{organizationId}/issues/{id})",
+    "description": "Get issue (GET /workspaces/{organizationId}/issues/{id}) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/issues/{id}",
     "inputSchema": {
@@ -2459,7 +2459,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdIssuesIdBranchname",
-    "description": "List issue branch name (GET /workspaces/{organizationId}/issues/{id}/branch-name)",
+    "description": "List issue branch name (GET /workspaces/{organizationId}/issues/{id}/branch-name) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/issues/{id}/branch-name",
     "inputSchema": {
@@ -2480,7 +2480,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdIssuesIdChildren",
-    "description": "List issue children (GET /workspaces/{organizationId}/issues/{id}/children)",
+    "description": "List issue children (GET /workspaces/{organizationId}/issues/{id}/children) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/issues/{id}/children",
     "inputSchema": {
@@ -2501,7 +2501,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdIssuesIdReactions",
-    "description": "List issue reactions (GET /workspaces/{organizationId}/issues/{id}/reactions)",
+    "description": "List issue reactions (GET /workspaces/{organizationId}/issues/{id}/reactions) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/issues/{id}/reactions",
     "inputSchema": {
@@ -2522,7 +2522,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdIssuesIssueIdActivity",
-    "description": "List issue activity (GET /workspaces/{organizationId}/issues/{issueId}/activity)",
+    "description": "List issue activity (GET /workspaces/{organizationId}/issues/{issueId}/activity) Path params (top-level, required): organizationId, issueId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/issues/{issueId}/activity",
     "inputSchema": {
@@ -2543,7 +2543,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdIssuesIssueIdApprovals",
-    "description": "List issue approvals (GET /workspaces/{organizationId}/issues/{issueId}/approvals)",
+    "description": "List issue approvals (GET /workspaces/{organizationId}/issues/{issueId}/approvals) Path params (top-level, required): organizationId, issueId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/issues/{issueId}/approvals",
     "inputSchema": {
@@ -2564,7 +2564,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdIssuesIssueIdAttachments",
-    "description": "List issue attachments (GET /workspaces/{organizationId}/issues/{issueId}/attachments)",
+    "description": "List issue attachments (GET /workspaces/{organizationId}/issues/{issueId}/attachments) Path params (top-level, required): organizationId, issueId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/issues/{issueId}/attachments",
     "inputSchema": {
@@ -2585,7 +2585,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdIssuesIssueIdAttachmentsId",
-    "description": "Get issue attachment (GET /workspaces/{organizationId}/issues/{issueId}/attachments/{id})",
+    "description": "Get issue attachment (GET /workspaces/{organizationId}/issues/{issueId}/attachments/{id}) Path params (top-level, required): organizationId, issueId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/issues/{issueId}/attachments/{id}",
     "inputSchema": {
@@ -2610,7 +2610,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdIssuesIssueIdComments",
-    "description": "List issue comments (GET /workspaces/{organizationId}/issues/{issueId}/comments)",
+    "description": "List issue comments (GET /workspaces/{organizationId}/issues/{issueId}/comments) Path params (top-level, required): organizationId, issueId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/issues/{issueId}/comments",
     "inputSchema": {
@@ -2631,7 +2631,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdIssuesIssueIdCommentsId",
-    "description": "Get issue comment (GET /workspaces/{organizationId}/issues/{issueId}/comments/{id})",
+    "description": "Get issue comment (GET /workspaces/{organizationId}/issues/{issueId}/comments/{id}) Path params (top-level, required): organizationId, issueId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/issues/{issueId}/comments/{id}",
     "inputSchema": {
@@ -2656,7 +2656,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdIssuesIssueIdDocuments",
-    "description": "List issue documents (GET /workspaces/{organizationId}/issues/{issueId}/documents)",
+    "description": "List issue documents (GET /workspaces/{organizationId}/issues/{issueId}/documents) Path params (top-level, required): organizationId, issueId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/issues/{issueId}/documents",
     "inputSchema": {
@@ -2677,7 +2677,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdIssuesIssueIdExternallinks",
-    "description": "List issue external links (GET /workspaces/{organizationId}/issues/{issueId}/external-links)",
+    "description": "List issue external links (GET /workspaces/{organizationId}/issues/{issueId}/external-links) Path params (top-level, required): organizationId, issueId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/issues/{issueId}/external-links",
     "inputSchema": {
@@ -2698,7 +2698,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdIssuesIssueIdExternallinksId",
-    "description": "Get issue external link (GET /workspaces/{organizationId}/issues/{issueId}/external-links/{id})",
+    "description": "Get issue external link (GET /workspaces/{organizationId}/issues/{issueId}/external-links/{id}) Path params (top-level, required): organizationId, issueId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/issues/{issueId}/external-links/{id}",
     "inputSchema": {
@@ -2723,7 +2723,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdIssuesIssueIdHistory",
-    "description": "List issue history (GET /workspaces/{organizationId}/issues/{issueId}/history)",
+    "description": "List issue history (GET /workspaces/{organizationId}/issues/{issueId}/history) Path params (top-level, required): organizationId, issueId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/issues/{issueId}/history",
     "inputSchema": {
@@ -2744,7 +2744,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdIssuesIssueIdLive",
-    "description": "List issue live (GET /workspaces/{organizationId}/issues/{issueId}/live)",
+    "description": "List issue live (GET /workspaces/{organizationId}/issues/{issueId}/live) Path params (top-level, required): organizationId, issueId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/issues/{issueId}/live",
     "inputSchema": {
@@ -2765,7 +2765,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdIssuesIssueIdRelations",
-    "description": "List issue relations (GET /workspaces/{organizationId}/issues/{issueId}/relations)",
+    "description": "List issue relations (GET /workspaces/{organizationId}/issues/{issueId}/relations) Path params (top-level, required): organizationId, issueId. Query params (top-level, optional): direction.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/issues/{issueId}/relations",
     "inputSchema": {
@@ -2793,7 +2793,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdIssuesIssueIdSubscribers",
-    "description": "List issue subscribers (GET /workspaces/{organizationId}/issues/{issueId}/subscribers)",
+    "description": "List issue subscribers (GET /workspaces/{organizationId}/issues/{issueId}/subscribers) Path params (top-level, required): organizationId, issueId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/issues/{issueId}/subscribers",
     "inputSchema": {
@@ -2814,7 +2814,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdLabels",
-    "description": "List labels (GET /workspaces/{organizationId}/labels)",
+    "description": "List labels (GET /workspaces/{organizationId}/labels) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/labels",
     "inputSchema": {
@@ -2831,7 +2831,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdLabelsId",
-    "description": "Get label (GET /workspaces/{organizationId}/labels/{id})",
+    "description": "Get label (GET /workspaces/{organizationId}/labels/{id}) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/labels/{id}",
     "inputSchema": {
@@ -2852,7 +2852,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdLinearusers",
-    "description": "List linear users (GET /workspaces/{organizationId}/linear-users)",
+    "description": "List linear users (GET /workspaces/{organizationId}/linear-users) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/linear-users",
     "inputSchema": {
@@ -2869,7 +2869,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdLinearusersLinearId",
-    "description": "Get linear user (GET /workspaces/{organizationId}/linear-users/{linearId})",
+    "description": "Get linear user (GET /workspaces/{organizationId}/linear-users/{linearId}) Path params (top-level, required): organizationId, linearId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/linear-users/{linearId}",
     "inputSchema": {
@@ -2890,7 +2890,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdMemberships",
-    "description": "List memberships (GET /workspaces/{organizationId}/memberships)",
+    "description": "List memberships (GET /workspaces/{organizationId}/memberships) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/memberships",
     "inputSchema": {
@@ -2907,7 +2907,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdMeViewpreferences",
-    "description": "List me view preferences (GET /workspaces/{organizationId}/me/view-preferences)",
+    "description": "List me view preferences (GET /workspaces/{organizationId}/me/view-preferences) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/me/view-preferences",
     "inputSchema": {
@@ -2924,7 +2924,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdNotificationpreferences",
-    "description": "List notification preferences (GET /workspaces/{organizationId}/notification-preferences)",
+    "description": "List notification preferences (GET /workspaces/{organizationId}/notification-preferences) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/notification-preferences",
     "inputSchema": {
@@ -2941,7 +2941,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdNotifications",
-    "description": "List notifications (GET /workspaces/{organizationId}/notifications)",
+    "description": "List notifications (GET /workspaces/{organizationId}/notifications) Path params (top-level, required): organizationId. Query params (top-level, optional): unreadOnly, snoozedOnly, includeSnoozed, limit.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/notifications",
     "inputSchema": {
@@ -2974,7 +2974,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdNotificationsUnreadcount",
-    "description": "Get unread notification count (GET /workspaces/{organizationId}/notifications/unread-count)",
+    "description": "Get unread notification count (GET /workspaces/{organizationId}/notifications/unread-count) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/notifications/unread-count",
     "inputSchema": {
@@ -2991,7 +2991,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdNotionUsers",
-    "description": "List notion users (GET /workspaces/{organizationId}/notion/users)",
+    "description": "List notion users (GET /workspaces/{organizationId}/notion/users) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/notion/users",
     "inputSchema": {
@@ -3008,7 +3008,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdOauthclients",
-    "description": "List oauth clients (GET /workspaces/{organizationId}/oauth-clients)",
+    "description": "List oauth clients (GET /workspaces/{organizationId}/oauth-clients) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/oauth-clients",
     "inputSchema": {
@@ -3025,7 +3025,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdOauthclientsId",
-    "description": "Get oauth client (GET /workspaces/{organizationId}/oauth-clients/{id})",
+    "description": "Get oauth client (GET /workspaces/{organizationId}/oauth-clients/{id}) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/oauth-clients/{id}",
     "inputSchema": {
@@ -3046,7 +3046,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdObservabilityMetrics",
-    "description": "List observability metrics (GET /workspaces/{organizationId}/observability/metrics)",
+    "description": "List observability metrics (GET /workspaces/{organizationId}/observability/metrics) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/observability/metrics",
     "inputSchema": {
@@ -3063,7 +3063,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdProjects",
-    "description": "List projects (GET /workspaces/{organizationId}/projects)",
+    "description": "List projects (GET /workspaces/{organizationId}/projects) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/projects",
     "inputSchema": {
@@ -3080,7 +3080,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdProjectsId",
-    "description": "Get project (GET /workspaces/{organizationId}/projects/{id})",
+    "description": "Get project (GET /workspaces/{organizationId}/projects/{id}) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/projects/{id}",
     "inputSchema": {
@@ -3101,7 +3101,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdProjectsProjectIdMembers",
-    "description": "List project members (GET /workspaces/{organizationId}/projects/{projectId}/members)",
+    "description": "List project members (GET /workspaces/{organizationId}/projects/{projectId}/members) Path params (top-level, required): organizationId, projectId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/projects/{projectId}/members",
     "inputSchema": {
@@ -3122,7 +3122,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdProjectsProjectIdMilestones",
-    "description": "List project milestones (GET /workspaces/{organizationId}/projects/{projectId}/milestones)",
+    "description": "List project milestones (GET /workspaces/{organizationId}/projects/{projectId}/milestones) Path params (top-level, required): organizationId, projectId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/projects/{projectId}/milestones",
     "inputSchema": {
@@ -3143,7 +3143,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdProjectsProjectIdMilestonesId",
-    "description": "Get project milestone (GET /workspaces/{organizationId}/projects/{projectId}/milestones/{id})",
+    "description": "Get project milestone (GET /workspaces/{organizationId}/projects/{projectId}/milestones/{id}) Path params (top-level, required): organizationId, projectId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/projects/{projectId}/milestones/{id}",
     "inputSchema": {
@@ -3168,7 +3168,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdProjectsProjectIdReminder",
-    "description": "List project reminder (GET /workspaces/{organizationId}/projects/{projectId}/reminder)",
+    "description": "List project reminder (GET /workspaces/{organizationId}/projects/{projectId}/reminder) Path params (top-level, required): organizationId, projectId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/projects/{projectId}/reminder",
     "inputSchema": {
@@ -3189,7 +3189,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdProjectsProjectIdUpdates",
-    "description": "List project updates (GET /workspaces/{organizationId}/projects/{projectId}/updates)",
+    "description": "List project updates (GET /workspaces/{organizationId}/projects/{projectId}/updates) Path params (top-level, required): organizationId, projectId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/projects/{projectId}/updates",
     "inputSchema": {
@@ -3210,7 +3210,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdProjectsProjectIdUpdatesId",
-    "description": "Get project update (GET /workspaces/{organizationId}/projects/{projectId}/updates/{id})",
+    "description": "Get project update (GET /workspaces/{organizationId}/projects/{projectId}/updates/{id}) Path params (top-level, required): organizationId, projectId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/projects/{projectId}/updates/{id}",
     "inputSchema": {
@@ -3235,7 +3235,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdPushtokens",
-    "description": "List push tokens (GET /workspaces/{organizationId}/push-tokens)",
+    "description": "List push tokens (GET /workspaces/{organizationId}/push-tokens) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/push-tokens",
     "inputSchema": {
@@ -3252,7 +3252,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdReadiness",
-    "description": "List readiness (GET /workspaces/{organizationId}/readiness)",
+    "description": "List readiness (GET /workspaces/{organizationId}/readiness) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/readiness",
     "inputSchema": {
@@ -3269,7 +3269,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdRealtime",
-    "description": "List realtime (GET /workspaces/{organizationId}/realtime)",
+    "description": "List realtime (GET /workspaces/{organizationId}/realtime) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/realtime",
     "inputSchema": {
@@ -3286,7 +3286,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdReleases",
-    "description": "List releases (GET /workspaces/{organizationId}/releases)",
+    "description": "List releases (GET /workspaces/{organizationId}/releases) Path params (top-level, required): organizationId. Query params (top-level, optional): projectId, teamId, status.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/releases",
     "inputSchema": {
@@ -3318,7 +3318,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdReleasesId",
-    "description": "Get release (GET /workspaces/{organizationId}/releases/{id})",
+    "description": "Get release (GET /workspaces/{organizationId}/releases/{id}) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/releases/{id}",
     "inputSchema": {
@@ -3339,7 +3339,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdRoadmaps",
-    "description": "List roadmaps (GET /workspaces/{organizationId}/roadmaps)",
+    "description": "List roadmaps (GET /workspaces/{organizationId}/roadmaps) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/roadmaps",
     "inputSchema": {
@@ -3356,7 +3356,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdRoadmapsId",
-    "description": "Get roadmap (GET /workspaces/{organizationId}/roadmaps/{id})",
+    "description": "Get roadmap (GET /workspaces/{organizationId}/roadmaps/{id}) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/roadmaps/{id}",
     "inputSchema": {
@@ -3377,7 +3377,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdRoadmapsIdInitiatives",
-    "description": "List roadmap initiatives (GET /workspaces/{organizationId}/roadmaps/{id}/initiatives)",
+    "description": "List roadmap initiatives (GET /workspaces/{organizationId}/roadmaps/{id}/initiatives) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/roadmaps/{id}/initiatives",
     "inputSchema": {
@@ -3398,7 +3398,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdSavedviews",
-    "description": "List saved views (GET /workspaces/{organizationId}/saved-views)",
+    "description": "List saved views (GET /workspaces/{organizationId}/saved-views) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/saved-views",
     "inputSchema": {
@@ -3415,7 +3415,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdSavedviewsId",
-    "description": "Get saved view (GET /workspaces/{organizationId}/saved-views/{id})",
+    "description": "Get saved view (GET /workspaces/{organizationId}/saved-views/{id}) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/saved-views/{id}",
     "inputSchema": {
@@ -3436,7 +3436,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdSlack",
-    "description": "List slack (GET /workspaces/{organizationId}/slack)",
+    "description": "List slack (GET /workspaces/{organizationId}/slack) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/slack",
     "inputSchema": {
@@ -3453,7 +3453,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdStates",
-    "description": "List states (GET /workspaces/{organizationId}/states)",
+    "description": "List states (GET /workspaces/{organizationId}/states) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/states",
     "inputSchema": {
@@ -3470,7 +3470,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdStatesId",
-    "description": "Get state (GET /workspaces/{organizationId}/states/{id})",
+    "description": "Get state (GET /workspaces/{organizationId}/states/{id}) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/states/{id}",
     "inputSchema": {
@@ -3491,7 +3491,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdSupportAgents",
-    "description": "List support agents (GET /workspaces/{organizationId}/support/agents)",
+    "description": "List support agents (GET /workspaces/{organizationId}/support/agents) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/support/agents",
     "inputSchema": {
@@ -3508,7 +3508,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdSupportAutoresponders",
-    "description": "List support autoresponders (GET /workspaces/{organizationId}/support/autoresponders)",
+    "description": "List support autoresponders (GET /workspaces/{organizationId}/support/autoresponders) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/support/autoresponders",
     "inputSchema": {
@@ -3525,7 +3525,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdSupportCapturePublickeys",
-    "description": "List support capture public keys (GET /workspaces/{organizationId}/support/capture/public-keys)",
+    "description": "List support capture public keys (GET /workspaces/{organizationId}/support/capture/public-keys) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/support/capture/public-keys",
     "inputSchema": {
@@ -3542,7 +3542,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdSupportCapturesTicketIdConsole",
-    "description": "List support capture console (GET /workspaces/{organizationId}/support/captures/{ticketId}/console)",
+    "description": "List support capture console (GET /workspaces/{organizationId}/support/captures/{ticketId}/console) Path params (top-level, required): organizationId, ticketId. Query params (top-level, optional): level, isError.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/support/captures/{ticketId}/console",
     "inputSchema": {
@@ -3573,7 +3573,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdSupportCapturesTicketIdEvents",
-    "description": "List support capture events (GET /workspaces/{organizationId}/support/captures/{ticketId}/events)",
+    "description": "List support capture events (GET /workspaces/{organizationId}/support/captures/{ticketId}/events) Path params (top-level, required): organizationId, ticketId. Query params (top-level, optional): type, action.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/support/captures/{ticketId}/events",
     "inputSchema": {
@@ -3600,7 +3600,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdSupportCapturesTicketIdFrames",
-    "description": "List support capture frames (GET /workspaces/{organizationId}/support/captures/{ticketId}/frames)",
+    "description": "List support capture frames (GET /workspaces/{organizationId}/support/captures/{ticketId}/frames) Path params (top-level, required): organizationId, ticketId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/support/captures/{ticketId}/frames",
     "inputSchema": {
@@ -3621,7 +3621,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdSupportCapturesTicketIdMetadata",
-    "description": "List support capture metadata (GET /workspaces/{organizationId}/support/captures/{ticketId}/metadata)",
+    "description": "List support capture metadata (GET /workspaces/{organizationId}/support/captures/{ticketId}/metadata) Path params (top-level, required): organizationId, ticketId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/support/captures/{ticketId}/metadata",
     "inputSchema": {
@@ -3642,7 +3642,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdSupportCapturesTicketIdNetwork",
-    "description": "List support capture network (GET /workspaces/{organizationId}/support/captures/{ticketId}/network)",
+    "description": "List support capture network (GET /workspaces/{organizationId}/support/captures/{ticketId}/network) Path params (top-level, required): organizationId, ticketId. Query params (top-level, optional): isError, url.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/support/captures/{ticketId}/network",
     "inputSchema": {
@@ -3673,7 +3673,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdSupportchannels",
-    "description": "List support channels (GET /workspaces/{organizationId}/support-channels)",
+    "description": "List support channels (GET /workspaces/{organizationId}/support-channels) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/support-channels",
     "inputSchema": {
@@ -3690,7 +3690,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdSupportCompanies",
-    "description": "List support companies (GET /workspaces/{organizationId}/support/companies)",
+    "description": "List support companies (GET /workspaces/{organizationId}/support/companies) Path params (top-level, required): organizationId. Query params (top-level, optional): limit, cursor, q.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/support/companies",
     "inputSchema": {
@@ -3719,7 +3719,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdSupportCompaniesCompanyId",
-    "description": "Get support company (GET /workspaces/{organizationId}/support/companies/{companyId})",
+    "description": "Get support company (GET /workspaces/{organizationId}/support/companies/{companyId}) Path params (top-level, required): organizationId, companyId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/support/companies/{companyId}",
     "inputSchema": {
@@ -3740,7 +3740,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdSupportCustomers",
-    "description": "List support customers (GET /workspaces/{organizationId}/support/customers)",
+    "description": "List support customers (GET /workspaces/{organizationId}/support/customers) Path params (top-level, required): organizationId. Query params (top-level, optional): limit, cursor, companyId, q.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/support/customers",
     "inputSchema": {
@@ -3772,7 +3772,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdSupportCustomersCustomerId",
-    "description": "Get support customer (GET /workspaces/{organizationId}/support/customers/{customerId})",
+    "description": "Get support customer (GET /workspaces/{organizationId}/support/customers/{customerId}) Path params (top-level, required): organizationId, customerId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/support/customers/{customerId}",
     "inputSchema": {
@@ -3793,7 +3793,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdSupportEscalationrules",
-    "description": "List support escalation rules (GET /workspaces/{organizationId}/support/escalation-rules)",
+    "description": "List support escalation rules (GET /workspaces/{organizationId}/support/escalation-rules) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/support/escalation-rules",
     "inputSchema": {
@@ -3810,7 +3810,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdSupportEscalationrulesRuleId",
-    "description": "Get support escalation rule (GET /workspaces/{organizationId}/support/escalation-rules/{ruleId})",
+    "description": "Get support escalation rule (GET /workspaces/{organizationId}/support/escalation-rules/{ruleId}) Path params (top-level, required): organizationId, ruleId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/support/escalation-rules/{ruleId}",
     "inputSchema": {
@@ -3831,7 +3831,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdSupportImportsImportId",
-    "description": "Get support import (GET /workspaces/{organizationId}/support/imports/{importId})",
+    "description": "Get support import (GET /workspaces/{organizationId}/support/imports/{importId}) Path params (top-level, required): organizationId, importId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/support/imports/{importId}",
     "inputSchema": {
@@ -3852,7 +3852,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdSupportInbox",
-    "description": "List support inbox (GET /workspaces/{organizationId}/support/inbox)",
+    "description": "List support inbox (GET /workspaces/{organizationId}/support/inbox) Path params (top-level, required): organizationId. Query params (top-level, optional): status, priority, assignedTo, customerId, channel, label, q, limit, cursor.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/support/inbox",
     "inputSchema": {
@@ -3922,7 +3922,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdSupportInboxCounts",
-    "description": "List support inbox counts (GET /workspaces/{organizationId}/support/inbox/counts)",
+    "description": "List support inbox counts (GET /workspaces/{organizationId}/support/inbox/counts) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/support/inbox/counts",
     "inputSchema": {
@@ -3939,7 +3939,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdSupportInboxNext",
-    "description": "List support inbox next (GET /workspaces/{organizationId}/support/inbox/next)",
+    "description": "List support inbox next (GET /workspaces/{organizationId}/support/inbox/next) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/support/inbox/next",
     "inputSchema": {
@@ -3956,7 +3956,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdSupportInboxViews",
-    "description": "List support inbox views (GET /workspaces/{organizationId}/support/inbox/views)",
+    "description": "List support inbox views (GET /workspaces/{organizationId}/support/inbox/views) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/support/inbox/views",
     "inputSchema": {
@@ -3973,7 +3973,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdSupportInboxViewsViewId",
-    "description": "Get support inbox view (GET /workspaces/{organizationId}/support/inbox/views/{viewId})",
+    "description": "Get support inbox view (GET /workspaces/{organizationId}/support/inbox/views/{viewId}) Path params (top-level, required): organizationId, viewId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/support/inbox/views/{viewId}",
     "inputSchema": {
@@ -3994,7 +3994,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdSupportInboxViewsViewIdRun",
-    "description": "List support inbox view run (GET /workspaces/{organizationId}/support/inbox/views/{viewId}/run)",
+    "description": "List support inbox view run (GET /workspaces/{organizationId}/support/inbox/views/{viewId}/run) Path params (top-level, required): organizationId, viewId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/support/inbox/views/{viewId}/run",
     "inputSchema": {
@@ -4015,7 +4015,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdSupportLabels",
-    "description": "List support labels (GET /workspaces/{organizationId}/support/labels)",
+    "description": "List support labels (GET /workspaces/{organizationId}/support/labels) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/support/labels",
     "inputSchema": {
@@ -4032,7 +4032,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdSupportSnippets",
-    "description": "List support snippets (GET /workspaces/{organizationId}/support/snippets)",
+    "description": "List support snippets (GET /workspaces/{organizationId}/support/snippets) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/support/snippets",
     "inputSchema": {
@@ -4049,7 +4049,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdSupportSnippetsSnippetId",
-    "description": "Get support snippet (GET /workspaces/{organizationId}/support/snippets/{snippetId})",
+    "description": "Get support snippet (GET /workspaces/{organizationId}/support/snippets/{snippetId}) Path params (top-level, required): organizationId, snippetId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/support/snippets/{snippetId}",
     "inputSchema": {
@@ -4070,7 +4070,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdSupportTickets",
-    "description": "List support tickets (GET /workspaces/{organizationId}/support/tickets)",
+    "description": "List support tickets (GET /workspaces/{organizationId}/support/tickets) Path params (top-level, required): organizationId. Query params (top-level, optional): limit, cursor, customerId, status, priority, sourceChannel, externalSource, assignedTo, q.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/support/tickets",
     "inputSchema": {
@@ -4153,7 +4153,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdSupportTicketsTicketId",
-    "description": "Get support ticket (GET /workspaces/{organizationId}/support/tickets/{ticketId})",
+    "description": "Get support ticket (GET /workspaces/{organizationId}/support/tickets/{ticketId}) Path params (top-level, required): organizationId, ticketId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/support/tickets/{ticketId}",
     "inputSchema": {
@@ -4174,7 +4174,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdSupportTicketsTicketIdEvents",
-    "description": "List support ticket events (GET /workspaces/{organizationId}/support/tickets/{ticketId}/events)",
+    "description": "List support ticket events (GET /workspaces/{organizationId}/support/tickets/{ticketId}/events) Path params (top-level, required): organizationId, ticketId. Query params (top-level, optional): limit, cursor.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/support/tickets/{ticketId}/events",
     "inputSchema": {
@@ -4204,7 +4204,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdSupportTiers",
-    "description": "List support tiers (GET /workspaces/{organizationId}/support/tiers)",
+    "description": "List support tiers (GET /workspaces/{organizationId}/support/tiers) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/support/tiers",
     "inputSchema": {
@@ -4221,7 +4221,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdSupportTiersTierId",
-    "description": "Get support tier (GET /workspaces/{organizationId}/support/tiers/{tierId})",
+    "description": "Get support tier (GET /workspaces/{organizationId}/support/tiers/{tierId}) Path params (top-level, required): organizationId, tierId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/support/tiers/{tierId}",
     "inputSchema": {
@@ -4242,7 +4242,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdSupportTiersTierIdMembers",
-    "description": "List support tier members (GET /workspaces/{organizationId}/support/tiers/{tierId}/members)",
+    "description": "List support tier members (GET /workspaces/{organizationId}/support/tiers/{tierId}/members) Path params (top-level, required): organizationId, tierId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/support/tiers/{tierId}/members",
     "inputSchema": {
@@ -4263,7 +4263,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdTeams",
-    "description": "List teams (GET /workspaces/{organizationId}/teams)",
+    "description": "List teams (GET /workspaces/{organizationId}/teams) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/teams",
     "inputSchema": {
@@ -4280,7 +4280,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdTeamsId",
-    "description": "Get team (GET /workspaces/{organizationId}/teams/{id})",
+    "description": "Get team (GET /workspaces/{organizationId}/teams/{id}) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/teams/{id}",
     "inputSchema": {
@@ -4301,7 +4301,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdTeamsIdMembers",
-    "description": "List team members (GET /workspaces/{organizationId}/teams/{id}/members)",
+    "description": "List team members (GET /workspaces/{organizationId}/teams/{id}/members) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/teams/{id}/members",
     "inputSchema": {
@@ -4322,7 +4322,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdTemplates",
-    "description": "List templates (GET /workspaces/{organizationId}/templates)",
+    "description": "List templates (GET /workspaces/{organizationId}/templates) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/templates",
     "inputSchema": {
@@ -4339,7 +4339,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdTemplatesId",
-    "description": "Get template (GET /workspaces/{organizationId}/templates/{id})",
+    "description": "Get template (GET /workspaces/{organizationId}/templates/{id}) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/templates/{id}",
     "inputSchema": {
@@ -4360,7 +4360,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdTimeschedules",
-    "description": "List time schedules (GET /workspaces/{organizationId}/time-schedules)",
+    "description": "List time schedules (GET /workspaces/{organizationId}/time-schedules) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/time-schedules",
     "inputSchema": {
@@ -4377,7 +4377,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdTimeschedulesId",
-    "description": "Get time schedule (GET /workspaces/{organizationId}/time-schedules/{id})",
+    "description": "Get time schedule (GET /workspaces/{organizationId}/time-schedules/{id}) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/time-schedules/{id}",
     "inputSchema": {
@@ -4398,7 +4398,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdTokens",
-    "description": "List tokens (GET /workspaces/{organizationId}/tokens)",
+    "description": "List tokens (GET /workspaces/{organizationId}/tokens) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/tokens",
     "inputSchema": {
@@ -4415,7 +4415,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdTriage",
-    "description": "List triage (GET /workspaces/{organizationId}/triage)",
+    "description": "List triage (GET /workspaces/{organizationId}/triage) Path params (top-level, required): organizationId. Query params (top-level, optional): limit, cursor, teamId, status, priority, parentId, hasParent, isParent, isDraft, includeSnoozed, assigneeId, projectId, cycleId, labelId, search, identifier, view.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/triage",
     "inputSchema": {
@@ -4516,7 +4516,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdUsage",
-    "description": "List usage (GET /workspaces/{organizationId}/usage)",
+    "description": "List usage (GET /workspaces/{organizationId}/usage) Path params (top-level, required): organizationId. Query params (top-level, optional): period.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/usage",
     "inputSchema": {
@@ -4536,7 +4536,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdUsersUserIdTeams",
-    "description": "List user teams (GET /workspaces/{organizationId}/users/{userId}/teams)",
+    "description": "List user teams (GET /workspaces/{organizationId}/users/{userId}/teams) Path params (top-level, required): organizationId, userId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/users/{userId}/teams",
     "inputSchema": {
@@ -4557,7 +4557,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdViewpreferences",
-    "description": "List view preferences (GET /workspaces/{organizationId}/view-preferences)",
+    "description": "List view preferences (GET /workspaces/{organizationId}/view-preferences) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/view-preferences",
     "inputSchema": {
@@ -4574,7 +4574,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdWebhookdeliveries",
-    "description": "List webhook deliveries (GET /workspaces/{organizationId}/webhook-deliveries)",
+    "description": "List webhook deliveries (GET /workspaces/{organizationId}/webhook-deliveries) Path params (top-level, required): organizationId. Query params (top-level, optional): status, limit.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/webhook-deliveries",
     "inputSchema": {
@@ -4605,7 +4605,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdWebhooksubscriptions",
-    "description": "List webhook subscriptions (GET /workspaces/{organizationId}/webhook-subscriptions)",
+    "description": "List webhook subscriptions (GET /workspaces/{organizationId}/webhook-subscriptions) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/webhook-subscriptions",
     "inputSchema": {
@@ -4622,7 +4622,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdWebhooksubscriptionsId",
-    "description": "Get webhook subscription (GET /workspaces/{organizationId}/webhook-subscriptions/{id})",
+    "description": "Get webhook subscription (GET /workspaces/{organizationId}/webhook-subscriptions/{id}) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/webhook-subscriptions/{id}",
     "inputSchema": {
@@ -4643,7 +4643,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdWebhooksubscriptionsIdDeliveries",
-    "description": "List webhook subscription deliveries (GET /workspaces/{organizationId}/webhook-subscriptions/{id}/deliveries)",
+    "description": "List webhook subscription deliveries (GET /workspaces/{organizationId}/webhook-subscriptions/{id}/deliveries) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/webhook-subscriptions/{id}/deliveries",
     "inputSchema": {
@@ -4664,7 +4664,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesSlugSlug",
-    "description": "Get workspace by slug (GET /workspaces/slug/{slug})",
+    "description": "Get workspace by slug (GET /workspaces/slug/{slug}) Path params (top-level, required): slug.",
     "method": "GET",
     "path": "/workspaces/slug/{slug}",
     "inputSchema": {
@@ -4681,7 +4681,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "impersonateUser",
-    "description": "Create api auth admin impersonate user (POST /api/auth/admin/impersonate-user)",
+    "description": "Create api auth admin impersonate user (POST /api/auth/admin/impersonate-user) Request body goes in the \"body\" object.",
     "method": "POST",
     "path": "/api/auth/admin/impersonate-user",
     "inputSchema": {
@@ -4719,7 +4719,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "listUserSessions",
-    "description": "Create api auth admin list user session (POST /api/auth/admin/list-user-sessions)",
+    "description": "Create api auth admin list user session (POST /api/auth/admin/list-user-sessions) Request body goes in the \"body\" object.",
     "method": "POST",
     "path": "/api/auth/admin/list-user-sessions",
     "inputSchema": {
@@ -4737,7 +4737,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdAgentSessionsSessionId",
-    "description": "Update agent session (PATCH /workspaces/{organizationId}/agent/sessions/{sessionId})",
+    "description": "Update agent session (PATCH /workspaces/{organizationId}/agent/sessions/{sessionId}) Path params (top-level, required): organizationId, sessionId. Request body goes in the \"body\" object; fields: status, result, url, prUrl, prState, branch.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/agent/sessions/{sessionId}",
     "inputSchema": {
@@ -4789,7 +4789,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdCustomerneedsId",
-    "description": "Update customer need (PATCH /workspaces/{organizationId}/customer-needs/{id})",
+    "description": "Update customer need (PATCH /workspaces/{organizationId}/customer-needs/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: customerId, issueId, projectId, priority, note.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/customer-needs/{id}",
     "inputSchema": {
@@ -4831,7 +4831,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdCustomersId",
-    "description": "Update customer (PATCH /workspaces/{organizationId}/customers/{id})",
+    "description": "Update customer (PATCH /workspaces/{organizationId}/customers/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: name, url, logoUrl, externalId, tierId, statusId, ownerId.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/customers/{id}",
     "inputSchema": {
@@ -4879,7 +4879,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdCustomerstatusesId",
-    "description": "Update customer statuse (PATCH /workspaces/{organizationId}/customer-statuses/{id})",
+    "description": "Update customer statuse (PATCH /workspaces/{organizationId}/customer-statuses/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: name, color, position.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/customer-statuses/{id}",
     "inputSchema": {
@@ -4915,7 +4915,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdCustomertiersId",
-    "description": "Update customer tier (PATCH /workspaces/{organizationId}/customer-tiers/{id})",
+    "description": "Update customer tier (PATCH /workspaces/{organizationId}/customer-tiers/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: name, color, position.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/customer-tiers/{id}",
     "inputSchema": {
@@ -4951,7 +4951,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdCyclesId",
-    "description": "Update cycle (PATCH /workspaces/{organizationId}/cycles/{id})",
+    "description": "Update cycle (PATCH /workspaces/{organizationId}/cycles/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: projectId, name, number, status, autoRollover, archivedAt, startDate, endDate.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/cycles/{id}",
     "inputSchema": {
@@ -5007,7 +5007,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdDocumentsId",
-    "description": "Update document (PATCH /workspaces/{organizationId}/documents/{id})",
+    "description": "Update document (PATCH /workspaces/{organizationId}/documents/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: title, icon, content, contentFormat, slug, projectId, issueId, initiativeId, parentDocumentId, spaceId, isTemplate.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/documents/{id}",
     "inputSchema": {
@@ -5091,7 +5091,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdDocumentspacesId",
-    "description": "Update document space (PATCH /workspaces/{organizationId}/document-spaces/{id})",
+    "description": "Update document space (PATCH /workspaces/{organizationId}/document-spaces/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: name, description, icon, publicSharing.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/document-spaces/{id}",
     "inputSchema": {
@@ -5132,7 +5132,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdEmojisId",
-    "description": "Update emoji (PATCH /workspaces/{organizationId}/emojis/{id})",
+    "description": "Update emoji (PATCH /workspaces/{organizationId}/emojis/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: name, shortcut, url.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/emojis/{id}",
     "inputSchema": {
@@ -5170,7 +5170,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdExternallinksId",
-    "description": "Update external link (PATCH /workspaces/{organizationId}/external-links/{id})",
+    "description": "Update external link (PATCH /workspaces/{organizationId}/external-links/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: entityType, entityId, url, label.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/external-links/{id}",
     "inputSchema": {
@@ -5215,7 +5215,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdGitautomationstatesId",
-    "description": "Update git automation state (PATCH /workspaces/{organizationId}/git-automation-states/{id})",
+    "description": "Update git automation state (PATCH /workspaces/{organizationId}/git-automation-states/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: stateId, prState.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/git-automation-states/{id}",
     "inputSchema": {
@@ -5247,7 +5247,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdGitautomationtargetbranchesId",
-    "description": "Update git automation target branche (PATCH /workspaces/{organizationId}/git-automation-target-branches/{id})",
+    "description": "Update git automation target branche (PATCH /workspaces/{organizationId}/git-automation-target-branches/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: name, pattern.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/git-automation-target-branches/{id}",
     "inputSchema": {
@@ -5280,7 +5280,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdInitiativesId",
-    "description": "Update initiative (PATCH /workspaces/{organizationId}/initiatives/{id})",
+    "description": "Update initiative (PATCH /workspaces/{organizationId}/initiatives/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: roadmapId, name, description, status, startDate, targetDate.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/initiatives/{id}",
     "inputSchema": {
@@ -5325,7 +5325,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdIssuesId",
-    "description": "Update issue (PATCH /workspaces/{organizationId}/issues/{id})",
+    "description": "Update issue (PATCH /workspaces/{organizationId}/issues/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: title, teamId, description, status, priority, resolution, parentId, subIssueSortOrder, estimate, isDraft, templateId, snoozedUntil, assigneeId, projectId, cycleId, labelIds, repo, branch.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/issues/{id}",
     "inputSchema": {
@@ -5439,7 +5439,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdIssuesIssueIdCommentsId",
-    "description": "Update issue comment (PATCH /workspaces/{organizationId}/issues/{issueId}/comments/{id})",
+    "description": "Update issue comment (PATCH /workspaces/{organizationId}/issues/{issueId}/comments/{id}) Path params (top-level, required): organizationId, issueId, id. Request body goes in the \"body\" object; fields: body* (* = required).",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/issues/{issueId}/comments/{id}",
     "inputSchema": {
@@ -5476,7 +5476,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdIssuesIssueIdExternallinksId",
-    "description": "Update issue external link (PATCH /workspaces/{organizationId}/issues/{issueId}/external-links/{id})",
+    "description": "Update issue external link (PATCH /workspaces/{organizationId}/issues/{issueId}/external-links/{id}) Path params (top-level, required): organizationId, issueId, id. Request body goes in the \"body\" object; fields: url, label.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/issues/{issueId}/external-links/{id}",
     "inputSchema": {
@@ -5513,7 +5513,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdLabelsId",
-    "description": "Update label (PATCH /workspaces/{organizationId}/labels/{id})",
+    "description": "Update label (PATCH /workspaces/{organizationId}/labels/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: name, color.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/labels/{id}",
     "inputSchema": {
@@ -5546,7 +5546,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdNotificationsIdRead",
-    "description": "Mark notification as read (PATCH /workspaces/{organizationId}/notifications/{id}/read)",
+    "description": "Mark notification as read (PATCH /workspaces/{organizationId}/notifications/{id}/read) Path params (top-level, required): organizationId, id.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/notifications/{id}/read",
     "inputSchema": {
@@ -5567,7 +5567,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdNotificationsIdSnooze",
-    "description": "Update notification snooze (PATCH /workspaces/{organizationId}/notifications/{id}/snooze)",
+    "description": "Update notification snooze (PATCH /workspaces/{organizationId}/notifications/{id}/snooze) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: until* (* = required).",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/notifications/{id}/snooze",
     "inputSchema": {
@@ -5602,7 +5602,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdNotificationsIdUnread",
-    "description": "Update notification unread (PATCH /workspaces/{organizationId}/notifications/{id}/unread)",
+    "description": "Update notification unread (PATCH /workspaces/{organizationId}/notifications/{id}/unread) Path params (top-level, required): organizationId, id.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/notifications/{id}/unread",
     "inputSchema": {
@@ -5623,7 +5623,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdOauthclientsId",
-    "description": "Update oauth client (PATCH /workspaces/{organizationId}/oauth-clients/{id})",
+    "description": "Update oauth client (PATCH /workspaces/{organizationId}/oauth-clients/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: name, redirectUris, scopes, permissions.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/oauth-clients/{id}",
     "inputSchema": {
@@ -5669,7 +5669,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdProjectsId",
-    "description": "Update project (PATCH /workspaces/{organizationId}/projects/{id})",
+    "description": "Update project (PATCH /workspaces/{organizationId}/projects/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: name, description, status, health, leadId, archivedAt, startDate, endDate.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/projects/{id}",
     "inputSchema": {
@@ -5726,7 +5726,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdProjectsProjectIdMembersId",
-    "description": "Update project member (PATCH /workspaces/{organizationId}/projects/{projectId}/members/{id})",
+    "description": "Update project member (PATCH /workspaces/{organizationId}/projects/{projectId}/members/{id}) Path params (top-level, required): organizationId, projectId, id. Request body goes in the \"body\" object; fields: role* (* = required).",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/projects/{projectId}/members/{id}",
     "inputSchema": {
@@ -5766,7 +5766,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdProjectsProjectIdMilestonesId",
-    "description": "Update project milestone (PATCH /workspaces/{organizationId}/projects/{projectId}/milestones/{id})",
+    "description": "Update project milestone (PATCH /workspaces/{organizationId}/projects/{projectId}/milestones/{id}) Path params (top-level, required): organizationId, projectId, id. Request body goes in the \"body\" object; fields: name, description, targetDate, completedAt.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/projects/{projectId}/milestones/{id}",
     "inputSchema": {
@@ -5809,7 +5809,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdProjectsProjectIdUpdatesId",
-    "description": "Update project update (PATCH /workspaces/{organizationId}/projects/{projectId}/updates/{id})",
+    "description": "Update project update (PATCH /workspaces/{organizationId}/projects/{projectId}/updates/{id}) Path params (top-level, required): organizationId, projectId, id. Request body goes in the \"body\" object; fields: content, contentFormat, health.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/projects/{projectId}/updates/{id}",
     "inputSchema": {
@@ -5862,7 +5862,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdReleasesId",
-    "description": "Update release (PATCH /workspaces/{organizationId}/releases/{id})",
+    "description": "Update release (PATCH /workspaces/{organizationId}/releases/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: projectId, teamId, name, version, status, notes, plannedAt, releasedAt.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/releases/{id}",
     "inputSchema": {
@@ -5920,7 +5920,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdRoadmapsId",
-    "description": "Update roadmap (PATCH /workspaces/{organizationId}/roadmaps/{id})",
+    "description": "Update roadmap (PATCH /workspaces/{organizationId}/roadmaps/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: name, description.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/roadmaps/{id}",
     "inputSchema": {
@@ -5953,7 +5953,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdSavedviewsId",
-    "description": "Update saved view (PATCH /workspaces/{organizationId}/saved-views/{id})",
+    "description": "Update saved view (PATCH /workspaces/{organizationId}/saved-views/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: name, shared, filter, search, sort, columns.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/saved-views/{id}",
     "inputSchema": {
@@ -6019,7 +6019,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdStatesId",
-    "description": "Update state (PATCH /workspaces/{organizationId}/states/{id})",
+    "description": "Update state (PATCH /workspaces/{organizationId}/states/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: name, type, color, position.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/states/{id}",
     "inputSchema": {
@@ -6058,7 +6058,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdSupportAutorespondersAutoresponderId",
-    "description": "Update support autoresponder (PATCH /workspaces/{organizationId}/support/autoresponders/{autoresponderId})",
+    "description": "Update support autoresponder (PATCH /workspaces/{organizationId}/support/autoresponders/{autoresponderId}) Path params (top-level, required): organizationId, autoresponderId. Request body goes in the \"body\" object; fields: name, enabled, trigger, order, snippetId, conditions.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/support/autoresponders/{autoresponderId}",
     "inputSchema": {
@@ -6111,7 +6111,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdSupportCustomersCustomerId",
-    "description": "Update support customer (PATCH /workspaces/{organizationId}/support/customers/{customerId})",
+    "description": "Update support customer (PATCH /workspaces/{organizationId}/support/customers/{customerId}) Path params (top-level, required): organizationId, customerId. Request body goes in the \"body\" object; fields: email, fullName, phone, userId, externalId, externalSource.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/support/customers/{customerId}",
     "inputSchema": {
@@ -6156,7 +6156,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdSupportEscalationrulesRuleId",
-    "description": "Update support escalation rule (PATCH /workspaces/{organizationId}/support/escalation-rules/{ruleId})",
+    "description": "Update support escalation rule (PATCH /workspaces/{organizationId}/support/escalation-rules/{ruleId}) Path params (top-level, required): organizationId, ruleId. Request body goes in the \"body\" object; fields: name, isActive, sortOrder, conditions, action.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/support/escalation-rules/{ruleId}",
     "inputSchema": {
@@ -6312,7 +6312,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdSupportSnippetsSnippetId",
-    "description": "Update support snippet (PATCH /workspaces/{organizationId}/support/snippets/{snippetId})",
+    "description": "Update support snippet (PATCH /workspaces/{organizationId}/support/snippets/{snippetId}) Path params (top-level, required): organizationId, snippetId. Request body goes in the \"body\" object; fields: name, textContent, markdownContent.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/support/snippets/{snippetId}",
     "inputSchema": {
@@ -6348,7 +6348,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdSupportTicketsTicketId",
-    "description": "Update support ticket (PATCH /workspaces/{organizationId}/support/tickets/{ticketId})",
+    "description": "Update support ticket (PATCH /workspaces/{organizationId}/support/tickets/{ticketId}) Path params (top-level, required): organizationId, ticketId. Request body goes in the \"body\" object; fields: title, status, priority, snoozedUntil, issueId, actorType, actorId.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/support/tickets/{ticketId}",
     "inputSchema": {
@@ -6417,7 +6417,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdSupportTiersTierId",
-    "description": "Update support tier (PATCH /workspaces/{organizationId}/support/tiers/{tierId})",
+    "description": "Update support tier (PATCH /workspaces/{organizationId}/support/tiers/{tierId}) Path params (top-level, required): organizationId, tierId. Request body goes in the \"body\" object; fields: name, level.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/support/tiers/{tierId}",
     "inputSchema": {
@@ -6450,7 +6450,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdTeamsId",
-    "description": "Update team (PATCH /workspaces/{organizationId}/teams/{id})",
+    "description": "Update team (PATCH /workspaces/{organizationId}/teams/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: key, name, isPublic, parentAutoClose, triageAssigneeId, defaultTemplateId, defaultRepo, subIssueAutoClose.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/teams/{id}",
     "inputSchema": {
@@ -6505,7 +6505,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdTeamsIdMembersMemberId",
-    "description": "Update team member (PATCH /workspaces/{organizationId}/teams/{id}/members/{memberId})",
+    "description": "Update team member (PATCH /workspaces/{organizationId}/teams/{id}/members/{memberId}) Path params (top-level, required): organizationId, id, memberId. Query params (top-level, optional): memberType. Request body goes in the \"body\" object; fields: role* (* = required).",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/teams/{id}/members/{memberId}",
     "inputSchema": {
@@ -6553,7 +6553,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdTimeschedulesId",
-    "description": "Update time schedule (PATCH /workspaces/{organizationId}/time-schedules/{id})",
+    "description": "Update time schedule (PATCH /workspaces/{organizationId}/time-schedules/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: name, timeData.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/time-schedules/{id}",
     "inputSchema": {
@@ -6586,7 +6586,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdWebhooksubscriptionsId",
-    "description": "Update webhook subscription (PATCH /workspaces/{organizationId}/webhook-subscriptions/{id})",
+    "description": "Update webhook subscription (PATCH /workspaces/{organizationId}/webhook-subscriptions/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: url, events, secret.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/webhook-subscriptions/{id}",
     "inputSchema": {
@@ -6632,7 +6632,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postIntercomOrganizationId",
-    "description": "Receive Intercom webhook notifications (POST /intercom/{organizationId})",
+    "description": "Receive Intercom webhook notifications (POST /intercom/{organizationId}) Path params (top-level, required): organizationId. Request body goes in the \"body\" object (required).",
     "method": "POST",
     "path": "/intercom/{organizationId}",
     "inputSchema": {
@@ -6653,7 +6653,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postNotionOrganizationIdWorkspaceId",
-    "description": "POST /notion/{organizationId}/{workspaceId} (POST /notion/{organizationId}/{workspaceId})",
+    "description": "POST /notion/{organizationId}/{workspaceId} (POST /notion/{organizationId}/{workspaceId}) Path params (top-level, required): organizationId, workspaceId.",
     "method": "POST",
     "path": "/notion/{organizationId}/{workspaceId}",
     "inputSchema": {
@@ -6684,7 +6684,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postSupportCaptureMetadata",
-    "description": "Create support capture metadata (POST /support/capture/metadata)",
+    "description": "Create support capture metadata (POST /support/capture/metadata) Request body goes in the \"body\" object; fields: metadata* (* = required).",
     "method": "POST",
     "path": "/support/capture/metadata",
     "inputSchema": {
@@ -6719,7 +6719,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postSupportCaptureUploadsession",
-    "description": "Create support capture upload session (POST /support/capture/upload-session)",
+    "description": "Create support capture upload session (POST /support/capture/upload-session) Request body goes in the \"body\" object; fields: title*, description, priority, tags, url, attachmentType, contentType, fileName, visibility, metadata, deviceInfo (* = required).",
     "method": "POST",
     "path": "/support/capture/upload-session",
     "inputSchema": {
@@ -6800,7 +6800,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postSupportCaptureUploadSessionIdAttachmentTypeFileName",
-    "description": "POST /support/capture/upload/{sessionId}/{attachmentType}/{fileName} (POST /support/capture/upload/{sessionId}/{attachmentType}/{fileName})",
+    "description": "POST /support/capture/upload/{sessionId}/{attachmentType}/{fileName} (POST /support/capture/upload/{sessionId}/{attachmentType}/{fileName}) Path params (top-level, required): sessionId, attachmentType, fileName.",
     "method": "POST",
     "path": "/support/capture/upload/{sessionId}/{attachmentType}/{fileName}",
     "inputSchema": {
@@ -6832,7 +6832,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postSupportIncomingChannelId",
-    "description": "Receive a generic incoming support message (POST /support/incoming/{channelId})",
+    "description": "Receive a generic incoming support message (POST /support/incoming/{channelId}) Path params (top-level, required): channelId. Request body goes in the \"body\" object; fields: fromEmail*, fromName, subject, text*, html, externalTicketId, externalMessageId, subType, createdAt (* = required).",
     "method": "POST",
     "path": "/support/incoming/{channelId}",
     "inputSchema": {
@@ -6888,7 +6888,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postSupportWebhooksIntercomOrganizationId",
-    "description": "Receive Intercom support webhook notifications (POST /support/webhooks/intercom/{organizationId})",
+    "description": "Receive Intercom support webhook notifications (POST /support/webhooks/intercom/{organizationId}) Path params (top-level, required): organizationId. Request body goes in the \"body\" object (required).",
     "method": "POST",
     "path": "/support/webhooks/intercom/{organizationId}",
     "inputSchema": {
@@ -6909,7 +6909,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postSupportWebhooksJamPublicKeyId",
-    "description": "Create support webhook jam (POST /support/webhooks/jam/{publicKeyId})",
+    "description": "Create support webhook jam (POST /support/webhooks/jam/{publicKeyId}) Path params (top-level, required): publicKeyId. Request body goes in the \"body\" object; fields: jamId*, jamUrl*, teamId*, type*, createdAt*, title, description, originalUrl, origin, isIncognito, author, media, systemInfo, consoleLogs, networkRequests, userEvents, recordingLink, intercom, linear (* = required).",
     "method": "POST",
     "path": "/support/webhooks/jam/{publicKeyId}",
     "inputSchema": {
@@ -7229,7 +7229,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postSupportWebhooksJamPublicKeyIdIntercomOptedout",
-    "description": "Create support webhook jam intercom opted out (POST /support/webhooks/jam/{publicKeyId}/intercom/opted-out)",
+    "description": "Create support webhook jam intercom opted out (POST /support/webhooks/jam/{publicKeyId}/intercom/opted-out) Path params (top-level, required): publicKeyId. Request body goes in the \"body\" object; fields: conversationId* (* = required).",
     "method": "POST",
     "path": "/support/webhooks/jam/{publicKeyId}/intercom/opted-out",
     "inputSchema": {
@@ -7260,7 +7260,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postSupportWebhooksJamPublicKeyIdIntercomRecorded",
-    "description": "Create support webhook jam intercom recorded (POST /support/webhooks/jam/{publicKeyId}/intercom/recorded)",
+    "description": "Create support webhook jam intercom recorded (POST /support/webhooks/jam/{publicKeyId}/intercom/recorded) Path params (top-level, required): publicKeyId. Request body goes in the \"body\" object; fields: conversationId*, jamId*, jamUrl* (* = required).",
     "method": "POST",
     "path": "/support/webhooks/jam/{publicKeyId}/intercom/recorded",
     "inputSchema": {
@@ -7299,7 +7299,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postSupportWebhooksJamPublicKeyIdRecordinglinks",
-    "description": "Create support webhook jam recording link (POST /support/webhooks/jam/{publicKeyId}/recording-links)",
+    "description": "Create support webhook jam recording link (POST /support/webhooks/jam/{publicKeyId}/recording-links) Path params (top-level, required): publicKeyId. Request body goes in the \"body\" object; fields: recordingLinkId*, publicId*, url*, teamId*, type*, createdAt*, origin, description, reference, recordingUrl, createdBy (* = required).",
     "method": "POST",
     "path": "/support/webhooks/jam/{publicKeyId}/recording-links",
     "inputSchema": {
@@ -7380,7 +7380,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postSupportWebhooksPlainOrganizationId",
-    "description": "Receive Plain support webhook notifications (POST /support/webhooks/plain/{organizationId})",
+    "description": "Receive Plain support webhook notifications (POST /support/webhooks/plain/{organizationId}) Path params (top-level, required): organizationId. Request body goes in the \"body\" object (required).",
     "method": "POST",
     "path": "/support/webhooks/plain/{organizationId}",
     "inputSchema": {
@@ -7401,7 +7401,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postSupportWebhooksSlackOrganizationId",
-    "description": "Receive Slack support events (POST /support/webhooks/slack/{organizationId})",
+    "description": "Receive Slack support events (POST /support/webhooks/slack/{organizationId}) Path params (top-level, required): organizationId. Request body goes in the \"body\" object (required).",
     "method": "POST",
     "path": "/support/webhooks/slack/{organizationId}",
     "inputSchema": {
@@ -7422,7 +7422,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postSupportWebhooksZendeskOrganizationId",
-    "description": "Receive Zendesk support webhook notifications (POST /support/webhooks/zendesk/{organizationId})",
+    "description": "Receive Zendesk support webhook notifications (POST /support/webhooks/zendesk/{organizationId}) Path params (top-level, required): organizationId. Request body goes in the \"body\" object (required).",
     "method": "POST",
     "path": "/support/webhooks/zendesk/{organizationId}",
     "inputSchema": {
@@ -7443,7 +7443,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspaces",
-    "description": "Create workspace (POST /workspaces)",
+    "description": "Create workspace (POST /workspaces) Request body goes in the \"body\" object; fields: name*, slug*, key (* = required).",
     "method": "POST",
     "path": "/workspaces",
     "inputSchema": {
@@ -7474,7 +7474,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOnboard",
-    "description": "Create workspace onboard (POST /workspaces/onboard)",
+    "description": "Create workspace onboard (POST /workspaces/onboard) Request body goes in the \"body\" object; fields: name*, slug*, key (* = required).",
     "method": "POST",
     "path": "/workspaces/onboard",
     "inputSchema": {
@@ -7505,7 +7505,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdAgentSessionsSessionIdActivities",
-    "description": "Create agent session activity (POST /workspaces/{organizationId}/agent/sessions/{sessionId}/activities)",
+    "description": "Create agent session activity (POST /workspaces/{organizationId}/agent/sessions/{sessionId}/activities) Path params (top-level, required): organizationId, sessionId. Request body goes in the \"body\" object; fields: type*, message*, payload (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/agent/sessions/{sessionId}/activities",
     "inputSchema": {
@@ -7556,7 +7556,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdAgentSessionsSessionIdCancel",
-    "description": "Create agent session cancel (POST /workspaces/{organizationId}/agent/sessions/{sessionId}/cancel)",
+    "description": "Create agent session cancel (POST /workspaces/{organizationId}/agent/sessions/{sessionId}/cancel) Path params (top-level, required): organizationId, sessionId.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/agent/sessions/{sessionId}/cancel",
     "inputSchema": {
@@ -7577,7 +7577,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdAgentSessionsSessionIdPoll",
-    "description": "Poll agent session (POST /workspaces/{organizationId}/agent/sessions/{sessionId}/poll)",
+    "description": "Poll agent session (POST /workspaces/{organizationId}/agent/sessions/{sessionId}/poll) Path params (top-level, required): organizationId, sessionId.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/agent/sessions/{sessionId}/poll",
     "inputSchema": {
@@ -7598,7 +7598,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdApprovalsIdRespond",
-    "description": "Create approval respond (POST /workspaces/{organizationId}/approvals/{id}/respond)",
+    "description": "Create approval respond (POST /workspaces/{organizationId}/approvals/{id}/respond) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: status* (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/approvals/{id}/respond",
     "inputSchema": {
@@ -7634,7 +7634,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdCommentsCommentIdReactions",
-    "description": "Create comment reaction (POST /workspaces/{organizationId}/comments/{commentId}/reactions)",
+    "description": "Create comment reaction (POST /workspaces/{organizationId}/comments/{commentId}/reactions) Path params (top-level, required): organizationId, commentId. Request body goes in the \"body\" object; fields: emoji* (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/comments/{commentId}/reactions",
     "inputSchema": {
@@ -7666,7 +7666,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdCommentsCommentIdResolve",
-    "description": "Create comment resolve (POST /workspaces/{organizationId}/comments/{commentId}/resolve)",
+    "description": "Create comment resolve (POST /workspaces/{organizationId}/comments/{commentId}/resolve) Path params (top-level, required): organizationId, commentId.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/comments/{commentId}/resolve",
     "inputSchema": {
@@ -7687,7 +7687,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdCommentsCommentIdUnresolve",
-    "description": "Create comment unresolve (POST /workspaces/{organizationId}/comments/{commentId}/unresolve)",
+    "description": "Create comment unresolve (POST /workspaces/{organizationId}/comments/{commentId}/unresolve) Path params (top-level, required): organizationId, commentId.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/comments/{commentId}/unresolve",
     "inputSchema": {
@@ -7708,7 +7708,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdCsvexports",
-    "description": "Create csv export (POST /workspaces/{organizationId}/csv-exports)",
+    "description": "Create csv export (POST /workspaces/{organizationId}/csv-exports) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: entityType*, teamId, status, priority, assigneeId, projectId (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/csv-exports",
     "inputSchema": {
@@ -7769,7 +7769,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdCustomerneeds",
-    "description": "Create customer need (POST /workspaces/{organizationId}/customer-needs)",
+    "description": "Create customer need (POST /workspaces/{organizationId}/customer-needs) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: customerId*, issueId, projectId, priority, note (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/customer-needs",
     "inputSchema": {
@@ -7810,7 +7810,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdCustomers",
-    "description": "Create customer (POST /workspaces/{organizationId}/customers)",
+    "description": "Create customer (POST /workspaces/{organizationId}/customers) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, url, logoUrl, externalId, tierId, statusId, ownerId (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/customers",
     "inputSchema": {
@@ -7857,7 +7857,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdCustomerstatuses",
-    "description": "Create customer statuse (POST /workspaces/{organizationId}/customer-statuses)",
+    "description": "Create customer statuse (POST /workspaces/{organizationId}/customer-statuses) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, color, position (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/customer-statuses",
     "inputSchema": {
@@ -7892,7 +7892,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdCustomertiers",
-    "description": "Create customer tier (POST /workspaces/{organizationId}/customer-tiers)",
+    "description": "Create customer tier (POST /workspaces/{organizationId}/customer-tiers) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, color, position (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/customer-tiers",
     "inputSchema": {
@@ -7927,7 +7927,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdCycles",
-    "description": "Create cycle (POST /workspaces/{organizationId}/cycles)",
+    "description": "Create cycle (POST /workspaces/{organizationId}/cycles) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: projectId, name*, number, status, autoRollover, archivedAt, startDate, endDate (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/cycles",
     "inputSchema": {
@@ -7982,7 +7982,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdCyclesIdArchive",
-    "description": "Create cycle archive (POST /workspaces/{organizationId}/cycles/{id}/archive)",
+    "description": "Create cycle archive (POST /workspaces/{organizationId}/cycles/{id}/archive) Path params (top-level, required): organizationId, id.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/cycles/{id}/archive",
     "inputSchema": {
@@ -8003,7 +8003,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdCyclesIdShiftall",
-    "description": "Create cycle shift all (POST /workspaces/{organizationId}/cycles/{id}/shift-all)",
+    "description": "Create cycle shift all (POST /workspaces/{organizationId}/cycles/{id}/shift-all) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: targetCycleId.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/cycles/{id}/shift-all",
     "inputSchema": {
@@ -8032,7 +8032,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdCyclesIdStarttoday",
-    "description": "Create cycle start today (POST /workspaces/{organizationId}/cycles/{id}/start-today)",
+    "description": "Create cycle start today (POST /workspaces/{organizationId}/cycles/{id}/start-today) Path params (top-level, required): organizationId, id.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/cycles/{id}/start-today",
     "inputSchema": {
@@ -8053,7 +8053,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdCyclesIdUnarchive",
-    "description": "Create cycle unarchive (POST /workspaces/{organizationId}/cycles/{id}/unarchive)",
+    "description": "Create cycle unarchive (POST /workspaces/{organizationId}/cycles/{id}/unarchive) Path params (top-level, required): organizationId, id.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/cycles/{id}/unarchive",
     "inputSchema": {
@@ -8074,7 +8074,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdCyclesRollover",
-    "description": "Create cycle rollover (POST /workspaces/{organizationId}/cycles/rollover)",
+    "description": "Create cycle rollover (POST /workspaces/{organizationId}/cycles/rollover) Path params (top-level, required): organizationId.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/cycles/rollover",
     "inputSchema": {
@@ -8091,7 +8091,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdDocuments",
-    "description": "Create document (POST /workspaces/{organizationId}/documents)",
+    "description": "Create document (POST /workspaces/{organizationId}/documents) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: title*, icon, content, contentFormat, slug, projectId, issueId, initiativeId, parentDocumentId, spaceId, isTemplate (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/documents",
     "inputSchema": {
@@ -8167,7 +8167,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdDocumentsIdComments",
-    "description": "Create document comment (POST /workspaces/{organizationId}/documents/{id}/comments)",
+    "description": "Create document comment (POST /workspaces/{organizationId}/documents/{id}/comments) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: body* (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/documents/{id}/comments",
     "inputSchema": {
@@ -8200,7 +8200,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdDocumentsIdHistoryEntryIdRestore",
-    "description": "Create document history restore (POST /workspaces/{organizationId}/documents/{id}/history/{entryId}/restore)",
+    "description": "Create document history restore (POST /workspaces/{organizationId}/documents/{id}/history/{entryId}/restore) Path params (top-level, required): organizationId, id, entryId.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/documents/{id}/history/{entryId}/restore",
     "inputSchema": {
@@ -8225,7 +8225,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdDocumentsIdRestore",
-    "description": "Create document restore (POST /workspaces/{organizationId}/documents/{id}/restore)",
+    "description": "Create document restore (POST /workspaces/{organizationId}/documents/{id}/restore) Path params (top-level, required): organizationId, id.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/documents/{id}/restore",
     "inputSchema": {
@@ -8246,7 +8246,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdDocumentsIdShare",
-    "description": "Create document share (POST /workspaces/{organizationId}/documents/{id}/share)",
+    "description": "Create document share (POST /workspaces/{organizationId}/documents/{id}/share) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: includeChildren, expiresAt.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/documents/{id}/share",
     "inputSchema": {
@@ -8278,7 +8278,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdDocumentsIdWatch",
-    "description": "Create document watch (POST /workspaces/{organizationId}/documents/{id}/watch)",
+    "description": "Create document watch (POST /workspaces/{organizationId}/documents/{id}/watch) Path params (top-level, required): organizationId, id.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/documents/{id}/watch",
     "inputSchema": {
@@ -8299,7 +8299,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdDocumentspaces",
-    "description": "Create document space (POST /workspaces/{organizationId}/document-spaces)",
+    "description": "Create document space (POST /workspaces/{organizationId}/document-spaces) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, description, icon, publicSharing (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/document-spaces",
     "inputSchema": {
@@ -8337,7 +8337,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdEmailinboxes",
-    "description": "Create email inboxe (POST /workspaces/{organizationId}/email-inboxes)",
+    "description": "Create email inboxe (POST /workspaces/{organizationId}/email-inboxes) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: address*, teamId, projectId, enabled (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/email-inboxes",
     "inputSchema": {
@@ -8376,7 +8376,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdEmojis",
-    "description": "Create emoji (POST /workspaces/{organizationId}/emojis)",
+    "description": "Create emoji (POST /workspaces/{organizationId}/emojis) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, shortcut*, url* (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/emojis",
     "inputSchema": {
@@ -8415,7 +8415,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdExternallinks",
-    "description": "Create external link (POST /workspaces/{organizationId}/external-links)",
+    "description": "Create external link (POST /workspaces/{organizationId}/external-links) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: entityType*, entityId*, url*, label (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/external-links",
     "inputSchema": {
@@ -8461,7 +8461,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdFiles",
-    "description": "Create file (POST /workspaces/{organizationId}/files)",
+    "description": "Create file (POST /workspaces/{organizationId}/files) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: filename*, contentType, contentBase64* (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/files",
     "inputSchema": {
@@ -8498,7 +8498,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdGitautomationstates",
-    "description": "Create git automation state (POST /workspaces/{organizationId}/git-automation-states)",
+    "description": "Create git automation state (POST /workspaces/{organizationId}/git-automation-states) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: stateId*, prState* (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/git-automation-states",
     "inputSchema": {
@@ -8530,7 +8530,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdGitautomationtargetbranches",
-    "description": "Create git automation target branche (POST /workspaces/{organizationId}/git-automation-target-branches)",
+    "description": "Create git automation target branche (POST /workspaces/{organizationId}/git-automation-target-branches) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, pattern (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/git-automation-target-branches",
     "inputSchema": {
@@ -8562,7 +8562,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdGithubInstall",
-    "description": "Install GitHub app (POST /workspaces/{organizationId}/github/install)",
+    "description": "Install GitHub app (POST /workspaces/{organizationId}/github/install) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: installationId* (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/github/install",
     "inputSchema": {
@@ -8590,7 +8590,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdGithubUsers",
-    "description": "Sync GitHub users (POST /workspaces/{organizationId}/github/users)",
+    "description": "Sync GitHub users (POST /workspaces/{organizationId}/github/users) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: userId*, githubLogin* (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/github/users",
     "inputSchema": {
@@ -8622,7 +8622,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdGitlabInstall",
-    "description": "Create gitlab install (POST /workspaces/{organizationId}/gitlab/install)",
+    "description": "Create gitlab install (POST /workspaces/{organizationId}/gitlab/install) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: projectId*, projectPath*, token*, webhookSecret (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/gitlab/install",
     "inputSchema": {
@@ -8661,7 +8661,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdGitlabUsers",
-    "description": "Create gitlab user (POST /workspaces/{organizationId}/gitlab/users)",
+    "description": "Create gitlab user (POST /workspaces/{organizationId}/gitlab/users) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: userId*, gitlabUsername* (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/gitlab/users",
     "inputSchema": {
@@ -8693,7 +8693,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdImagesFromurl",
-    "description": "Create image from url (POST /workspaces/{organizationId}/images/from-url)",
+    "description": "Create image from url (POST /workspaces/{organizationId}/images/from-url) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: url*, filename (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/images/from-url",
     "inputSchema": {
@@ -8725,7 +8725,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdImport",
-    "description": "Create import (POST /workspaces/{organizationId}/import)",
+    "description": "Create import (POST /workspaces/{organizationId}/import) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: source*, credentials, options (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/import",
     "inputSchema": {
@@ -8767,7 +8767,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdImportJobIdApprove",
-    "description": "Create import approve (POST /workspaces/{organizationId}/import/{jobId}/approve)",
+    "description": "Create import approve (POST /workspaces/{organizationId}/import/{jobId}/approve) Path params (top-level, required): organizationId, jobId.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/import/{jobId}/approve",
     "inputSchema": {
@@ -8788,7 +8788,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdImportJobIdReject",
-    "description": "Create import reject (POST /workspaces/{organizationId}/import/{jobId}/reject)",
+    "description": "Create import reject (POST /workspaces/{organizationId}/import/{jobId}/reject) Path params (top-level, required): organizationId, jobId.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/import/{jobId}/reject",
     "inputSchema": {
@@ -8809,7 +8809,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdImportJobIdResume",
-    "description": "Create import resume (POST /workspaces/{organizationId}/import/{jobId}/resume)",
+    "description": "Create import resume (POST /workspaces/{organizationId}/import/{jobId}/resume) Path params (top-level, required): organizationId, jobId. Request body goes in the \"body\" object; fields: credentials, limit.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/import/{jobId}/resume",
     "inputSchema": {
@@ -8842,7 +8842,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdInitiatives",
-    "description": "Create initiative (POST /workspaces/{organizationId}/initiatives)",
+    "description": "Create initiative (POST /workspaces/{organizationId}/initiatives) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: roadmapId, name*, description, status, startDate, targetDate (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/initiatives",
     "inputSchema": {
@@ -8886,7 +8886,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdInvitationsIdResend",
-    "description": "Create invitation resend (POST /workspaces/{organizationId}/invitations/{id}/resend)",
+    "description": "Create invitation resend (POST /workspaces/{organizationId}/invitations/{id}/resend) Path params (top-level, required): organizationId, id.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/invitations/{id}/resend",
     "inputSchema": {
@@ -8907,7 +8907,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdIssues",
-    "description": "Create issue (POST /workspaces/{organizationId}/issues)",
+    "description": "Create issue (POST /workspaces/{organizationId}/issues) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: title*, teamId, description, status, priority, resolution, parentId, subIssueSortOrder, estimate, isDraft, templateId, snoozedUntil, assigneeId, projectId, cycleId, labelIds, repo, branch (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/issues",
     "inputSchema": {
@@ -9020,7 +9020,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdIssuesBatch",
-    "description": "Create issue batch (POST /workspaces/{organizationId}/issues/batch)",
+    "description": "Create issue batch (POST /workspaces/{organizationId}/issues/batch) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: ids*, patch* (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/issues/batch",
     "inputSchema": {
@@ -9148,7 +9148,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdIssuesIdDispatch",
-    "description": "Dispatch issue (POST /workspaces/{organizationId}/issues/{id}/dispatch)",
+    "description": "Dispatch issue (POST /workspaces/{organizationId}/issues/{id}/dispatch) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: agentId, model.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/issues/{id}/dispatch",
     "inputSchema": {
@@ -9180,7 +9180,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdIssuesIdReactions",
-    "description": "Create issue reaction (POST /workspaces/{organizationId}/issues/{id}/reactions)",
+    "description": "Create issue reaction (POST /workspaces/{organizationId}/issues/{id}/reactions) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: emoji* (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/issues/{id}/reactions",
     "inputSchema": {
@@ -9212,7 +9212,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdIssuesIssueIdApprovals",
-    "description": "Create issue approval (POST /workspaces/{organizationId}/issues/{issueId}/approvals)",
+    "description": "Create issue approval (POST /workspaces/{organizationId}/issues/{issueId}/approvals) Path params (top-level, required): organizationId, issueId. Request body goes in the \"body\" object; fields: approverId*, comment (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/issues/{issueId}/approvals",
     "inputSchema": {
@@ -9247,7 +9247,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdIssuesIssueIdAttachments",
-    "description": "Create issue attachment (POST /workspaces/{organizationId}/issues/{issueId}/attachments)",
+    "description": "Create issue attachment (POST /workspaces/{organizationId}/issues/{issueId}/attachments) Path params (top-level, required): organizationId, issueId. Request body goes in the \"body\" object; fields: url*, title, subtitle (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/issues/{issueId}/attachments",
     "inputSchema": {
@@ -9286,7 +9286,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdIssuesIssueIdComments",
-    "description": "Create issue comment (POST /workspaces/{organizationId}/issues/{issueId}/comments)",
+    "description": "Create issue comment (POST /workspaces/{organizationId}/issues/{issueId}/comments) Path params (top-level, required): organizationId, issueId. Request body goes in the \"body\" object; fields: body* (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/issues/{issueId}/comments",
     "inputSchema": {
@@ -9319,7 +9319,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdIssuesIssueIdCommentsIdResolve",
-    "description": "Create issue comment resolve (POST /workspaces/{organizationId}/issues/{issueId}/comments/{id}/resolve)",
+    "description": "Create issue comment resolve (POST /workspaces/{organizationId}/issues/{issueId}/comments/{id}/resolve) Path params (top-level, required): organizationId, issueId, id.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/issues/{issueId}/comments/{id}/resolve",
     "inputSchema": {
@@ -9344,7 +9344,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdIssuesIssueIdCommentsIdUnresolve",
-    "description": "Create issue comment unresolve (POST /workspaces/{organizationId}/issues/{issueId}/comments/{id}/unresolve)",
+    "description": "Create issue comment unresolve (POST /workspaces/{organizationId}/issues/{issueId}/comments/{id}/unresolve) Path params (top-level, required): organizationId, issueId, id.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/issues/{issueId}/comments/{id}/unresolve",
     "inputSchema": {
@@ -9369,7 +9369,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdIssuesIssueIdExternallinks",
-    "description": "Create issue external link (POST /workspaces/{organizationId}/issues/{issueId}/external-links)",
+    "description": "Create issue external link (POST /workspaces/{organizationId}/issues/{issueId}/external-links) Path params (top-level, required): organizationId, issueId. Request body goes in the \"body\" object; fields: url*, label (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/issues/{issueId}/external-links",
     "inputSchema": {
@@ -9405,7 +9405,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdIssuesIssueIdRelations",
-    "description": "Create issue relation (POST /workspaces/{organizationId}/issues/{issueId}/relations)",
+    "description": "Create issue relation (POST /workspaces/{organizationId}/issues/{issueId}/relations) Path params (top-level, required): organizationId, issueId. Request body goes in the \"body\" object; fields: toIssueId*, type* (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/issues/{issueId}/relations",
     "inputSchema": {
@@ -9448,7 +9448,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdIssuesIssueIdSubscribers",
-    "description": "Create issue subscriber (POST /workspaces/{organizationId}/issues/{issueId}/subscribers)",
+    "description": "Create issue subscriber (POST /workspaces/{organizationId}/issues/{issueId}/subscribers) Path params (top-level, required): organizationId, issueId. Request body goes in the \"body\" object; fields: linearUserId* (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/issues/{issueId}/subscribers",
     "inputSchema": {
@@ -9481,7 +9481,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdLabels",
-    "description": "Create label (POST /workspaces/{organizationId}/labels)",
+    "description": "Create label (POST /workspaces/{organizationId}/labels) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, color (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/labels",
     "inputSchema": {
@@ -9513,7 +9513,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdLeave",
-    "description": "Create leave (POST /workspaces/{organizationId}/leave)",
+    "description": "Create leave (POST /workspaces/{organizationId}/leave) Path params (top-level, required): organizationId.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/leave",
     "inputSchema": {
@@ -9530,7 +9530,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdLinearusers",
-    "description": "Create linear user (POST /workspaces/{organizationId}/linear-users)",
+    "description": "Create linear user (POST /workspaces/{organizationId}/linear-users) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: linearId*, name, email (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/linear-users",
     "inputSchema": {
@@ -9565,7 +9565,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdMemberships",
-    "description": "Create membership (POST /workspaces/{organizationId}/memberships)",
+    "description": "Create membership (POST /workspaces/{organizationId}/memberships) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: userId*, role (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/memberships",
     "inputSchema": {
@@ -9602,7 +9602,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdNotificationsMarkallread",
-    "description": "Mark all notifications as read (POST /workspaces/{organizationId}/notifications/mark-all-read)",
+    "description": "Mark all notifications as read (POST /workspaces/{organizationId}/notifications/mark-all-read) Path params (top-level, required): organizationId.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/notifications/mark-all-read",
     "inputSchema": {
@@ -9619,7 +9619,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdNotionUsers",
-    "description": "Create notion user (POST /workspaces/{organizationId}/notion/users)",
+    "description": "Create notion user (POST /workspaces/{organizationId}/notion/users) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: userId*, notionUserId* (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/notion/users",
     "inputSchema": {
@@ -9651,7 +9651,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdOauthclients",
-    "description": "Create oauth client (POST /workspaces/{organizationId}/oauth-clients)",
+    "description": "Create oauth client (POST /workspaces/{organizationId}/oauth-clients) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, redirectUris, scopes, permissions (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/oauth-clients",
     "inputSchema": {
@@ -9699,7 +9699,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdProjects",
-    "description": "Create project (POST /workspaces/{organizationId}/projects)",
+    "description": "Create project (POST /workspaces/{organizationId}/projects) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, description, status, health, leadId, archivedAt, startDate, endDate (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/projects",
     "inputSchema": {
@@ -9755,7 +9755,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdProjectsIdArchive",
-    "description": "Create project archive (POST /workspaces/{organizationId}/projects/{id}/archive)",
+    "description": "Create project archive (POST /workspaces/{organizationId}/projects/{id}/archive) Path params (top-level, required): organizationId, id.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/projects/{id}/archive",
     "inputSchema": {
@@ -9776,7 +9776,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdProjectsIdUnarchive",
-    "description": "Create project unarchive (POST /workspaces/{organizationId}/projects/{id}/unarchive)",
+    "description": "Create project unarchive (POST /workspaces/{organizationId}/projects/{id}/unarchive) Path params (top-level, required): organizationId, id.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/projects/{id}/unarchive",
     "inputSchema": {
@@ -9797,7 +9797,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdProjectsProjectIdMembers",
-    "description": "Create project member (POST /workspaces/{organizationId}/projects/{projectId}/members)",
+    "description": "Create project member (POST /workspaces/{organizationId}/projects/{projectId}/members) Path params (top-level, required): organizationId, projectId. Request body goes in the \"body\" object; fields: userId*, role (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/projects/{projectId}/members",
     "inputSchema": {
@@ -9837,7 +9837,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdProjectsProjectIdMilestones",
-    "description": "Create project milestone (POST /workspaces/{organizationId}/projects/{projectId}/milestones)",
+    "description": "Create project milestone (POST /workspaces/{organizationId}/projects/{projectId}/milestones) Path params (top-level, required): organizationId, projectId. Request body goes in the \"body\" object; fields: name*, description, targetDate, completedAt (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/projects/{projectId}/milestones",
     "inputSchema": {
@@ -9879,7 +9879,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdProjectsProjectIdUpdates",
-    "description": "Create project update (POST /workspaces/{organizationId}/projects/{projectId}/updates)",
+    "description": "Create project update (POST /workspaces/{organizationId}/projects/{projectId}/updates) Path params (top-level, required): organizationId, projectId. Request body goes in the \"body\" object; fields: content*, contentFormat, health (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/projects/{projectId}/updates",
     "inputSchema": {
@@ -9931,7 +9931,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdProjectupdatereminders",
-    "description": "Create project update reminder (POST /workspaces/{organizationId}/project-update-reminders)",
+    "description": "Create project update reminder (POST /workspaces/{organizationId}/project-update-reminders) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: cadence, nextDueAt, projectId* (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/project-update-reminders",
     "inputSchema": {
@@ -9971,7 +9971,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdProjectupdateremindersFiredue",
-    "description": "Create project update reminder fire due (POST /workspaces/{organizationId}/project-update-reminders/fire-due)",
+    "description": "Create project update reminder fire due (POST /workspaces/{organizationId}/project-update-reminders/fire-due) Path params (top-level, required): organizationId.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/project-update-reminders/fire-due",
     "inputSchema": {
@@ -9988,7 +9988,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdPushSend",
-    "description": "Create push send (POST /workspaces/{organizationId}/push/send)",
+    "description": "Create push send (POST /workspaces/{organizationId}/push/send) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: tokenId, userId, title*, body*, data (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/push/send",
     "inputSchema": {
@@ -10035,7 +10035,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdPushtokens",
-    "description": "Create push token (POST /workspaces/{organizationId}/push-tokens)",
+    "description": "Create push token (POST /workspaces/{organizationId}/push-tokens) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name, provider, token* (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/push-tokens",
     "inputSchema": {
@@ -10076,7 +10076,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdReleases",
-    "description": "Create release (POST /workspaces/{organizationId}/releases)",
+    "description": "Create release (POST /workspaces/{organizationId}/releases) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: projectId, teamId, name*, version, status, notes, plannedAt, releasedAt (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/releases",
     "inputSchema": {
@@ -10133,7 +10133,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdRoadmaps",
-    "description": "Create roadmap (POST /workspaces/{organizationId}/roadmaps)",
+    "description": "Create roadmap (POST /workspaces/{organizationId}/roadmaps) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, description (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/roadmaps",
     "inputSchema": {
@@ -10165,7 +10165,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdSavedviews",
-    "description": "Create saved view (POST /workspaces/{organizationId}/saved-views)",
+    "description": "Create saved view (POST /workspaces/{organizationId}/saved-views) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, shared, filter, search, sort, columns (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/saved-views",
     "inputSchema": {
@@ -10228,7 +10228,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdSavedviewsIdFavorite",
-    "description": "Create saved view favorite (POST /workspaces/{organizationId}/saved-views/{id}/favorite)",
+    "description": "Create saved view favorite (POST /workspaces/{organizationId}/saved-views/{id}/favorite) Path params (top-level, required): organizationId, id.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/saved-views/{id}/favorite",
     "inputSchema": {
@@ -10249,7 +10249,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdSearch",
-    "description": "Create search (POST /workspaces/{organizationId}/search)",
+    "description": "Create search (POST /workspaces/{organizationId}/search) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: query*, teamIds, limit (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/search",
     "inputSchema": {
@@ -10291,7 +10291,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdSlackChannel",
-    "description": "Create slack channel (POST /workspaces/{organizationId}/slack/channel)",
+    "description": "Create slack channel (POST /workspaces/{organizationId}/slack/channel) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: channelId* (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/slack/channel",
     "inputSchema": {
@@ -10320,7 +10320,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdSlackInstall",
-    "description": "Create slack install (POST /workspaces/{organizationId}/slack/install)",
+    "description": "Create slack install (POST /workspaces/{organizationId}/slack/install) Path params (top-level, required): organizationId.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/slack/install",
     "inputSchema": {
@@ -10337,7 +10337,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdStates",
-    "description": "Create state (POST /workspaces/{organizationId}/states)",
+    "description": "Create state (POST /workspaces/{organizationId}/states) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: linearId*, name*, type*, color, position (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/states",
     "inputSchema": {
@@ -10382,7 +10382,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdSupportAutoresponders",
-    "description": "Create support autoresponder (POST /workspaces/{organizationId}/support/autoresponders)",
+    "description": "Create support autoresponder (POST /workspaces/{organizationId}/support/autoresponders) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, enabled, trigger*, order*, snippetId, conditions (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/support/autoresponders",
     "inputSchema": {
@@ -10435,7 +10435,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdSupportCapturePublickeys",
-    "description": "Create support capture public key (POST /workspaces/{organizationId}/support/capture/public-keys)",
+    "description": "Create support capture public key (POST /workspaces/{organizationId}/support/capture/public-keys) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, allowedOrigins (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/support/capture/public-keys",
     "inputSchema": {
@@ -10471,7 +10471,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdSupportchannels",
-    "description": "Create support channel (POST /workspaces/{organizationId}/support-channels)",
+    "description": "Create support channel (POST /workspaces/{organizationId}/support-channels) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: type*, name*, config, isActive (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/support-channels",
     "inputSchema": {
@@ -10527,7 +10527,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdSupportChannelsChannelIdSend",
-    "description": "Send an outbound support message (POST /workspaces/{organizationId}/support/channels/{channelId}/send)",
+    "description": "Send an outbound support message (POST /workspaces/{organizationId}/support/channels/{channelId}/send) Path params (top-level, required): organizationId, channelId. Request body goes in the \"body\" object; fields: ticketId*, textContent*, markdownContent, subject, idempotencyKey (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/support/channels/{channelId}/send",
     "inputSchema": {
@@ -10572,7 +10572,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdSupportChannelsChannelIdValidate",
-    "description": "Validate a support channel (POST /workspaces/{organizationId}/support/channels/{channelId}/validate)",
+    "description": "Validate a support channel (POST /workspaces/{organizationId}/support/channels/{channelId}/validate) Path params (top-level, required): organizationId, channelId.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/support/channels/{channelId}/validate",
     "inputSchema": {
@@ -10593,7 +10593,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdSupportCompanies",
-    "description": "Create support company (POST /workspaces/{organizationId}/support/companies)",
+    "description": "Create support company (POST /workspaces/{organizationId}/support/companies) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, domain, externalId, externalSource (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/support/companies",
     "inputSchema": {
@@ -10631,7 +10631,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdSupportCustomers",
-    "description": "Create support customer (POST /workspaces/{organizationId}/support/customers)",
+    "description": "Create support customer (POST /workspaces/{organizationId}/support/customers) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: email*, fullName, phone, userId, externalId, externalSource, companies, identities (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/support/customers",
     "inputSchema": {
@@ -10730,7 +10730,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdSupportEscalationrules",
-    "description": "Create support escalation rule (POST /workspaces/{organizationId}/support/escalation-rules)",
+    "description": "Create support escalation rule (POST /workspaces/{organizationId}/support/escalation-rules) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, isActive, sortOrder, conditions*, action* (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/support/escalation-rules",
     "inputSchema": {
@@ -10887,7 +10887,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdSupportImports",
-    "description": "Create support import (POST /workspaces/{organizationId}/support/imports)",
+    "description": "Create support import (POST /workspaces/{organizationId}/support/imports) Path params (top-level, required): organizationId. Request body goes in the \"body\" object.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/support/imports",
     "inputSchema": {
@@ -11193,7 +11193,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdSupportImportsImportIdCancel",
-    "description": "Create support import cancel (POST /workspaces/{organizationId}/support/imports/{importId}/cancel)",
+    "description": "Create support import cancel (POST /workspaces/{organizationId}/support/imports/{importId}/cancel) Path params (top-level, required): organizationId, importId.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/support/imports/{importId}/cancel",
     "inputSchema": {
@@ -11214,7 +11214,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdSupportImportsImportIdResume",
-    "description": "Create support import resume (POST /workspaces/{organizationId}/support/imports/{importId}/resume)",
+    "description": "Create support import resume (POST /workspaces/{organizationId}/support/imports/{importId}/resume) Path params (top-level, required): organizationId, importId. Request body goes in the \"body\" object.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/support/imports/{importId}/resume",
     "inputSchema": {
@@ -11524,7 +11524,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdSupportImportsValidate",
-    "description": "Create support import validate (POST /workspaces/{organizationId}/support/imports/validate)",
+    "description": "Create support import validate (POST /workspaces/{organizationId}/support/imports/validate) Path params (top-level, required): organizationId. Request body goes in the \"body\" object.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/support/imports/validate",
     "inputSchema": {
@@ -11695,7 +11695,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdSupportInboxViews",
-    "description": "Create support inbox view (POST /workspaces/{organizationId}/support/inbox/views)",
+    "description": "Create support inbox view (POST /workspaces/{organizationId}/support/inbox/views) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, filter*, sort (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/support/inbox/views",
     "inputSchema": {
@@ -11737,7 +11737,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdSupportLabels",
-    "description": "Create support label (POST /workspaces/{organizationId}/support/labels)",
+    "description": "Create support label (POST /workspaces/{organizationId}/support/labels) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, color (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/support/labels",
     "inputSchema": {
@@ -11768,7 +11768,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdSupportSnippets",
-    "description": "Create support snippet (POST /workspaces/{organizationId}/support/snippets)",
+    "description": "Create support snippet (POST /workspaces/{organizationId}/support/snippets) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, textContent*, markdownContent (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/support/snippets",
     "inputSchema": {
@@ -11803,7 +11803,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdSupportSnippetsSnippetIdInsert",
-    "description": "Create support snippet insert (POST /workspaces/{organizationId}/support/snippets/{snippetId}/insert)",
+    "description": "Create support snippet insert (POST /workspaces/{organizationId}/support/snippets/{snippetId}/insert) Path params (top-level, required): organizationId, snippetId.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/support/snippets/{snippetId}/insert",
     "inputSchema": {
@@ -11824,7 +11824,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdSupportTickets",
-    "description": "Create support ticket (POST /workspaces/{organizationId}/support/tickets)",
+    "description": "Create support ticket (POST /workspaces/{organizationId}/support/tickets) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: customerId*, title*, sourceChannel*, priority, status, externalId, externalSource, issueId, message (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/support/tickets",
     "inputSchema": {
@@ -11946,7 +11946,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdSupportTicketsTicketIdDone",
-    "description": "Create support ticket done (POST /workspaces/{organizationId}/support/tickets/{ticketId}/done)",
+    "description": "Create support ticket done (POST /workspaces/{organizationId}/support/tickets/{ticketId}/done) Path params (top-level, required): organizationId, ticketId.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/support/tickets/{ticketId}/done",
     "inputSchema": {
@@ -11967,7 +11967,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdSupportTicketsTicketIdMessages",
-    "description": "Create support ticket message (POST /workspaces/{organizationId}/support/tickets/{ticketId}/messages)",
+    "description": "Create support ticket message (POST /workspaces/{organizationId}/support/tickets/{ticketId}/messages) Path params (top-level, required): organizationId, ticketId. Request body goes in the \"body\" object; fields: direction*, textContent*, markdownContent, channel*, customerId, userId, actorType, actorId, subType, metadata (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/support/tickets/{ticketId}/messages",
     "inputSchema": {
@@ -12056,7 +12056,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdSupportTicketsTicketIdNotes",
-    "description": "Create support ticket note (POST /workspaces/{organizationId}/support/tickets/{ticketId}/notes)",
+    "description": "Create support ticket note (POST /workspaces/{organizationId}/support/tickets/{ticketId}/notes) Path params (top-level, required): organizationId, ticketId. Request body goes in the \"body\" object; fields: body*, userId, actorType, actorId, subType, metadata (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/support/tickets/{ticketId}/notes",
     "inputSchema": {
@@ -12114,7 +12114,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdSupportTicketsTicketIdSnooze",
-    "description": "Create support ticket snooze (POST /workspaces/{organizationId}/support/tickets/{ticketId}/snooze)",
+    "description": "Create support ticket snooze (POST /workspaces/{organizationId}/support/tickets/{ticketId}/snooze) Path params (top-level, required): organizationId, ticketId. Request body goes in the \"body\" object; fields: until*, actorType, actorId (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/support/tickets/{ticketId}/snooze",
     "inputSchema": {
@@ -12160,7 +12160,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdSupportTicketsTicketIdTodo",
-    "description": "Create support ticket todo (POST /workspaces/{organizationId}/support/tickets/{ticketId}/todo)",
+    "description": "Create support ticket todo (POST /workspaces/{organizationId}/support/tickets/{ticketId}/todo) Path params (top-level, required): organizationId, ticketId.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/support/tickets/{ticketId}/todo",
     "inputSchema": {
@@ -12181,7 +12181,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdSupportTiers",
-    "description": "Create support tier (POST /workspaces/{organizationId}/support/tiers)",
+    "description": "Create support tier (POST /workspaces/{organizationId}/support/tiers) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, level* (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/support/tiers",
     "inputSchema": {
@@ -12214,7 +12214,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdSupportTiersTierIdMembers",
-    "description": "Create support tier member (POST /workspaces/{organizationId}/support/tiers/{tierId}/members)",
+    "description": "Create support tier member (POST /workspaces/{organizationId}/support/tiers/{tierId}/members) Path params (top-level, required): organizationId, tierId. Request body goes in the \"body\" object; fields: userId* (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/support/tiers/{tierId}/members",
     "inputSchema": {
@@ -12246,7 +12246,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdSupportUsersUserIdStatus",
-    "description": "Create support user statu (POST /workspaces/{organizationId}/support/users/{userId}/status)",
+    "description": "Create support user statu (POST /workspaces/{organizationId}/support/users/{userId}/status) Path params (top-level, required): organizationId, userId. Request body goes in the \"body\" object; fields: status*, until (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/support/users/{userId}/status",
     "inputSchema": {
@@ -12288,7 +12288,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdTeams",
-    "description": "Create team (POST /workspaces/{organizationId}/teams)",
+    "description": "Create team (POST /workspaces/{organizationId}/teams) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: key*, name*, isPublic, parentAutoClose, triageAssigneeId, defaultTemplateId, defaultRepo, subIssueAutoClose (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/teams",
     "inputSchema": {
@@ -12343,7 +12343,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdTeamsIdMembers",
-    "description": "Create team member (POST /workspaces/{organizationId}/teams/{id}/members)",
+    "description": "Create team member (POST /workspaces/{organizationId}/teams/{id}/members) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: memberId*, memberType*, role (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/teams/{id}/members",
     "inputSchema": {
@@ -12390,7 +12390,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdTemplates",
-    "description": "Create template (POST /workspaces/{organizationId}/templates)",
+    "description": "Create template (POST /workspaces/{organizationId}/templates) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: linearId*, name*, templateData (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/templates",
     "inputSchema": {
@@ -12427,7 +12427,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdTimeschedules",
-    "description": "Create time schedule (POST /workspaces/{organizationId}/time-schedules)",
+    "description": "Create time schedule (POST /workspaces/{organizationId}/time-schedules) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, timeData (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/time-schedules",
     "inputSchema": {
@@ -12459,7 +12459,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdTokens",
-    "description": "Create token (POST /workspaces/{organizationId}/tokens)",
+    "description": "Create token (POST /workspaces/{organizationId}/tokens) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, permissions, actorType, provider (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/tokens",
     "inputSchema": {
@@ -12511,7 +12511,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdUsage",
-    "description": "Create usage (POST /workspaces/{organizationId}/usage)",
+    "description": "Create usage (POST /workspaces/{organizationId}/usage) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: period*, resource*, action*, count (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/usage",
     "inputSchema": {
@@ -12555,7 +12555,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdWebhooksubscriptions",
-    "description": "Create webhook subscription (POST /workspaces/{organizationId}/webhook-subscriptions)",
+    "description": "Create webhook subscription (POST /workspaces/{organizationId}/webhook-subscriptions) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: url*, events, secret (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/webhook-subscriptions",
     "inputSchema": {
@@ -12590,7 +12590,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "putWorkspacesOrganizationIdAgentProvidersAgentId",
-    "description": "Update agent provider (PUT /workspaces/{organizationId}/agent/providers/{agentId})",
+    "description": "Update agent provider (PUT /workspaces/{organizationId}/agent/providers/{agentId}) Path params (top-level, required): organizationId, agentId. Request body goes in the \"body\" object; fields: token, providerOrgId, outpost, outpostId, outpostToken, computeApiKey, computeApiUrl, computeSnapshot, computeVolumeId, config.",
     "method": "PUT",
     "path": "/workspaces/{organizationId}/agent/providers/{agentId}",
     "inputSchema": {
@@ -12659,7 +12659,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "putWorkspacesOrganizationIdDocumentsIdPermissions",
-    "description": "Update document permissions (PUT /workspaces/{organizationId}/documents/{id}/permissions)",
+    "description": "Update document permissions (PUT /workspaces/{organizationId}/documents/{id}/permissions) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: actorId*, actorType, level* (* = required).",
     "method": "PUT",
     "path": "/workspaces/{organizationId}/documents/{id}/permissions",
     "inputSchema": {
@@ -12707,7 +12707,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "putWorkspacesOrganizationIdMeViewpreferences",
-    "description": "Update me view preferences (PUT /workspaces/{organizationId}/me/view-preferences)",
+    "description": "Update me view preferences (PUT /workspaces/{organizationId}/me/view-preferences) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: defaultViewId* (* = required).",
     "method": "PUT",
     "path": "/workspaces/{organizationId}/me/view-preferences",
     "inputSchema": {
@@ -12736,7 +12736,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "putWorkspacesOrganizationIdNotificationpreferences",
-    "description": "Update notification preferences (PUT /workspaces/{organizationId}/notification-preferences)",
+    "description": "Update notification preferences (PUT /workspaces/{organizationId}/notification-preferences) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: inApp, webhook, email, mutedTypes.",
     "method": "PUT",
     "path": "/workspaces/{organizationId}/notification-preferences",
     "inputSchema": {
@@ -12774,7 +12774,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "putWorkspacesOrganizationIdProjectsProjectIdReminder",
-    "description": "Update project reminder (PUT /workspaces/{organizationId}/projects/{projectId}/reminder)",
+    "description": "Update project reminder (PUT /workspaces/{organizationId}/projects/{projectId}/reminder) Path params (top-level, required): organizationId, projectId. Request body goes in the \"body\" object; fields: cadence, nextDueAt.",
     "method": "PUT",
     "path": "/workspaces/{organizationId}/projects/{projectId}/reminder",
     "inputSchema": {
@@ -12812,7 +12812,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "putWorkspacesOrganizationIdSupportCustomersCustomerIdCompanies",
-    "description": "Update support customer companies (PUT /workspaces/{organizationId}/support/customers/{customerId}/companies)",
+    "description": "Update support customer companies (PUT /workspaces/{organizationId}/support/customers/{customerId}/companies) Path params (top-level, required): organizationId, customerId. Request body goes in the \"body\" object; fields: companies* (* = required).",
     "method": "PUT",
     "path": "/workspaces/{organizationId}/support/customers/{customerId}/companies",
     "inputSchema": {
@@ -12859,7 +12859,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "putWorkspacesOrganizationIdSupportCustomersCustomerIdIdentities",
-    "description": "Update support customer identities (PUT /workspaces/{organizationId}/support/customers/{customerId}/identities)",
+    "description": "Update support customer identities (PUT /workspaces/{organizationId}/support/customers/{customerId}/identities) Path params (top-level, required): organizationId, customerId. Request body goes in the \"body\" object; fields: identities* (* = required).",
     "method": "PUT",
     "path": "/workspaces/{organizationId}/support/customers/{customerId}/identities",
     "inputSchema": {
@@ -12925,7 +12925,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "putWorkspacesOrganizationIdSupportTicketsTicketIdAssignees",
-    "description": "Update support ticket assignees (PUT /workspaces/{organizationId}/support/tickets/{ticketId}/assignees)",
+    "description": "Update support ticket assignees (PUT /workspaces/{organizationId}/support/tickets/{ticketId}/assignees) Path params (top-level, required): organizationId, ticketId. Request body goes in the \"body\" object; fields: assignees* (* = required).",
     "method": "PUT",
     "path": "/workspaces/{organizationId}/support/tickets/{ticketId}/assignees",
     "inputSchema": {
@@ -12997,7 +12997,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "putWorkspacesOrganizationIdSupportTicketsTicketIdLabels",
-    "description": "Update support ticket labels (PUT /workspaces/{organizationId}/support/tickets/{ticketId}/labels)",
+    "description": "Update support ticket labels (PUT /workspaces/{organizationId}/support/tickets/{ticketId}/labels) Path params (top-level, required): organizationId, ticketId. Request body goes in the \"body\" object; fields: labels* (* = required).",
     "method": "PUT",
     "path": "/workspaces/{organizationId}/support/tickets/{ticketId}/labels",
     "inputSchema": {
@@ -13032,7 +13032,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "putWorkspacesOrganizationIdViewpreferences",
-    "description": "Update view preferences (PUT /workspaces/{organizationId}/view-preferences)",
+    "description": "Update view preferences (PUT /workspaces/{organizationId}/view-preferences) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: defaultViewId.",
     "method": "PUT",
     "path": "/workspaces/{organizationId}/view-preferences",
     "inputSchema": {
@@ -13058,7 +13058,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "removeUser",
-    "description": "Create api auth admin remove user (POST /api/auth/admin/remove-user)",
+    "description": "Create api auth admin remove user (POST /api/auth/admin/remove-user) Request body goes in the \"body\" object.",
     "method": "POST",
     "path": "/api/auth/admin/remove-user",
     "inputSchema": {
@@ -13076,7 +13076,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "requestPasswordReset",
-    "description": "Create api auth request password reset (POST /api/auth/request-password-reset)",
+    "description": "Create api auth request password reset (POST /api/auth/request-password-reset) Request body goes in the \"body\" object.",
     "method": "POST",
     "path": "/api/auth/request-password-reset",
     "inputSchema": {
@@ -13094,7 +13094,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "requestPasswordResetCallback",
-    "description": "Get api auth reset password (GET /api/auth/reset-password/{token})",
+    "description": "Get api auth reset password (GET /api/auth/reset-password/{token}) Path params (top-level, required): token.",
     "method": "GET",
     "path": "/api/auth/reset-password/{token}",
     "inputSchema": {
@@ -13111,7 +13111,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "resetPassword",
-    "description": "Create api auth reset password (POST /api/auth/reset-password)",
+    "description": "Create api auth reset password (POST /api/auth/reset-password) Request body goes in the \"body\" object.",
     "method": "POST",
     "path": "/api/auth/reset-password",
     "inputSchema": {
@@ -13129,7 +13129,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "revokeSession",
-    "description": "Create api auth revoke session (POST /api/auth/revoke-session)",
+    "description": "Create api auth revoke session (POST /api/auth/revoke-session) Request body goes in the \"body\" object.",
     "method": "POST",
     "path": "/api/auth/revoke-session",
     "inputSchema": {
@@ -13147,7 +13147,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "revokeSessions",
-    "description": "Create api auth revoke session (POST /api/auth/revoke-sessions)",
+    "description": "Create api auth revoke session (POST /api/auth/revoke-sessions) Request body goes in the \"body\" object.",
     "method": "POST",
     "path": "/api/auth/revoke-sessions",
     "inputSchema": {
@@ -13165,7 +13165,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "revokeUserSession",
-    "description": "Create api auth admin revoke user session (POST /api/auth/admin/revoke-user-session)",
+    "description": "Create api auth admin revoke user session (POST /api/auth/admin/revoke-user-session) Request body goes in the \"body\" object.",
     "method": "POST",
     "path": "/api/auth/admin/revoke-user-session",
     "inputSchema": {
@@ -13183,7 +13183,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "revokeUserSessions",
-    "description": "Create api auth admin revoke user session (POST /api/auth/admin/revoke-user-sessions)",
+    "description": "Create api auth admin revoke user session (POST /api/auth/admin/revoke-user-sessions) Request body goes in the \"body\" object.",
     "method": "POST",
     "path": "/api/auth/admin/revoke-user-sessions",
     "inputSchema": {
@@ -13201,7 +13201,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "sendVerificationEmail",
-    "description": "Create api auth send verification email (POST /api/auth/send-verification-email)",
+    "description": "Create api auth send verification email (POST /api/auth/send-verification-email) Request body goes in the \"body\" object.",
     "method": "POST",
     "path": "/api/auth/send-verification-email",
     "inputSchema": {
@@ -13219,7 +13219,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "setRole",
-    "description": "Create api auth admin set role (POST /api/auth/admin/set-role)",
+    "description": "Create api auth admin set role (POST /api/auth/admin/set-role) Request body goes in the \"body\" object.",
     "method": "POST",
     "path": "/api/auth/admin/set-role",
     "inputSchema": {
@@ -13237,7 +13237,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "setUserPassword",
-    "description": "Create api auth admin set user password (POST /api/auth/admin/set-user-password)",
+    "description": "Create api auth admin set user password (POST /api/auth/admin/set-user-password) Request body goes in the \"body\" object.",
     "method": "POST",
     "path": "/api/auth/admin/set-user-password",
     "inputSchema": {
@@ -13255,7 +13255,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "signInEmail",
-    "description": "Create api auth sign in email (POST /api/auth/sign-in/email)",
+    "description": "Create api auth sign in email (POST /api/auth/sign-in/email) Request body goes in the \"body\" object.",
     "method": "POST",
     "path": "/api/auth/sign-in/email",
     "inputSchema": {
@@ -13273,7 +13273,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "signOut",
-    "description": "Create api auth sign out (POST /api/auth/sign-out)",
+    "description": "Create api auth sign out (POST /api/auth/sign-out) Request body goes in the \"body\" object.",
     "method": "POST",
     "path": "/api/auth/sign-out",
     "inputSchema": {
@@ -13291,7 +13291,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "signUpEmail",
-    "description": "Create api auth sign up email (POST /api/auth/sign-up/email)",
+    "description": "Create api auth sign up email (POST /api/auth/sign-up/email) Request body goes in the \"body\" object.",
     "method": "POST",
     "path": "/api/auth/sign-up/email",
     "inputSchema": {
@@ -13309,7 +13309,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "stopImpersonating",
-    "description": "Create api auth admin stop impersonating (POST /api/auth/admin/stop-impersonating)",
+    "description": "Create api auth admin stop impersonating (POST /api/auth/admin/stop-impersonating) Request body goes in the \"body\" object.",
     "method": "POST",
     "path": "/api/auth/admin/stop-impersonating",
     "inputSchema": {
@@ -13327,7 +13327,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "unbanUser",
-    "description": "Create api auth admin unban user (POST /api/auth/admin/unban-user)",
+    "description": "Create api auth admin unban user (POST /api/auth/admin/unban-user) Request body goes in the \"body\" object.",
     "method": "POST",
     "path": "/api/auth/admin/unban-user",
     "inputSchema": {
@@ -13345,7 +13345,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "updateUser",
-    "description": "Create api auth update user (POST /api/auth/update-user)",
+    "description": "Create api auth update user (POST /api/auth/update-user) Request body goes in the \"body\" object.",
     "method": "POST",
     "path": "/api/auth/update-user",
     "inputSchema": {
@@ -13363,7 +13363,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "userHasPermission",
-    "description": "Create api auth admin has permission (POST /api/auth/admin/has-permission)",
+    "description": "Create api auth admin has permission (POST /api/auth/admin/has-permission) Request body goes in the \"body\" object.",
     "method": "POST",
     "path": "/api/auth/admin/has-permission",
     "inputSchema": {
@@ -13391,7 +13391,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "verifyPassword",
-    "description": "Create api auth verify password (POST /api/auth/verify-password)",
+    "description": "Create api auth verify password (POST /api/auth/verify-password) Request body goes in the \"body\" object.",
     "method": "POST",
     "path": "/api/auth/verify-password",
     "inputSchema": {

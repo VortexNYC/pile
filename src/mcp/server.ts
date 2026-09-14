@@ -6,6 +6,7 @@ import {
 import { CfWorkerJsonSchemaValidator } from "@modelcontextprotocol/server/validators/cf-worker";
 
 import type { WorkerEnv } from "../platform/middleware.js";
+import { aliasesFor, MCP_TOOL_ALIASES } from "./mcp-aliases.js";
 import { MCP_TOOLS } from "./mcp-tools.js";
 
 type HonoApp = {
@@ -20,10 +21,36 @@ type JsonSchemaInput = Parameters<typeof fromJsonSchema>[0];
 
 const validator = new CfWorkerJsonSchemaValidator();
 
-const TOOLS = MCP_TOOLS.map((tool) => ({
-  ...tool,
-  schema: fromJsonSchema(tool.inputSchema as JsonSchemaInput, validator),
-}));
+const GENERATED_TOOLS = MCP_TOOLS.map((tool) => {
+  const aliases = aliasesFor(tool.name);
+  return {
+    ...tool,
+    description:
+      aliases.length > 0
+        ? `${tool.description} Alias: ${aliases.join(", ")}.`
+        : tool.description,
+    schema: fromJsonSchema(tool.inputSchema as JsonSchemaInput, validator),
+  };
+});
+
+const GENERATED_BY_NAME = new Map(
+  MCP_TOOLS.map((tool, index) => [tool.name, index] as const)
+);
+
+const ALIAS_TOOLS = Object.entries(MCP_TOOL_ALIASES).map(([alias, target]) => {
+  const index = GENERATED_BY_NAME.get(target);
+  if (index === undefined) {
+    throw new Error(`MCP alias ${alias} points at unknown tool ${target}`);
+  }
+  const generated = GENERATED_TOOLS[index];
+  return {
+    ...generated,
+    name: alias,
+    description: `${MCP_TOOLS[index].description} Same as ${target}.`,
+  };
+});
+
+const TOOLS = [...GENERATED_TOOLS, ...ALIAS_TOOLS];
 
 function fillPath(path: string, input: Record<string, unknown>): string {
   return path.replace(/\{([^}]+)\}/gu, (_match, name: string) => {
