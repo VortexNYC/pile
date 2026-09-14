@@ -33,6 +33,7 @@
     "format": "vp fmt",
     "format:check": "vp fmt --check",
     "check": "pnpm run contract:check && vp check && pnpm test",
+    "build:packages": "pnpm --filter pile-client build && pnpm --filter pile-cli build",
     "selfhost": "bash scripts/selfhost.sh",
     "scan:secrets": "secretlint . --no-gitignore --secretlintignore .secretlintignore",
     "entire:review": "entire review",
