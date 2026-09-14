@@ -94,8 +94,13 @@ export function createAuth(env: AppEnv) {
         },
       }),
       admin({
-        defaultRole: "admin",
+        defaultRole: "user",
         adminRoles: ["admin"],
+        adminUserIds: env.BETTER_AUTH_ADMIN_IDS
+          ? env.BETTER_AUTH_ADMIN_IDS.split(",")
+              .map((id) => id.trim())
+              .filter(Boolean)
+          : [],
       }),
       organization({
         ...organizationOptions,

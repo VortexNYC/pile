@@ -3,6 +3,7 @@ export interface AppEnv {
   ATTACHMENTS_BUCKET?: R2Bucket;
   BETTER_AUTH_SECRET: string;
   BETTER_AUTH_URL: string;
+  BETTER_AUTH_ADMIN_IDS?: string;
   ALLOWED_ORIGINS?: string;
   DEVIN_TOKEN: string;
   GITHUB_WEBHOOK_SECRET?: string;
