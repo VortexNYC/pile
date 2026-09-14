@@ -178,6 +178,11 @@ export async function indexCommentDocument(
   index: WorkspaceSearchIndex,
   comment: CommentForSearch
 ) {
+  try {
+    await remove(index, comment.id);
+  } catch {
+    // Document may not exist; ignore.
+  }
   await insert(index, commentToSearchDocument(comment));
 }
 
