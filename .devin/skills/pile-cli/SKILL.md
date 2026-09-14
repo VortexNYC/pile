@@ -18,8 +18,9 @@ The `pile` CLI is a generated, OpenAPI-backed command-line client for Pile. It s
 ## Setup
 
 1. Install the CLI from the `pile-cli` package or run it with `tsx packages/cli/src/index.ts`.
-2. Configure an API key: `pile config set --api-key <key>`.
-3. Optionally set `PILE_API_KEY` or `PILE_BASE_URL`.
+2. Point it at your deployment: `pile config set --base-url https://<your-worker>` (defaults to `http://127.0.0.1:8787` for local `wrangler dev`).
+3. Configure an API key: `pile config set --api-key <key>`.
+4. Alternatively set `PILE_BASE_URL` / `PILE_API_KEY`; environment variables override the stored config.
 
 ## Common workflows
 

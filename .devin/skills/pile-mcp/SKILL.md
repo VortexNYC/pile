@@ -18,7 +18,7 @@ The Pile MCP server exposes the entire OpenAPI contract as typed MCP tools. An a
 ## Setup
 
 1. Obtain a workspace-scoped API key from Pile (`/api/auth/api-keys` or the web auth flow).
-2. Configure your MCP client with the endpoint `https://<your-worker>/mcp`.
+2. Configure your MCP client with the endpoint `https://<your-worker>/mcp` (the `BETTER_AUTH_URL` of your deployment, or `http://127.0.0.1:8787/mcp` for local `wrangler dev`).
 3. Send the API key in the `Authorization: Bearer <token>` header.
 4. Call `tools/list` to discover the available tools.
 

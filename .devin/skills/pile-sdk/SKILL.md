@@ -18,14 +18,14 @@ The `pile-client` package is an `openapi-fetch` client typed against the Pile Op
 ## Setup
 
 1. Install `pile-client` from the workspace or registry.
-2. Create a client with a base URL and workspace-scoped API key.
+2. Create a client with the base URL of your Pile deployment (your Worker URL, or `http://127.0.0.1:8787` for local `wrangler dev`) and a workspace-scoped API key.
 3. Call typed methods like `client.GET`, `client.POST`, etc.
 
 ```typescript
 import { createPileClient } from "pile-client";
 
 const client = createPileClient({
-  baseUrl: "https://pile.nyc",
+  baseUrl: process.env.PILE_BASE_URL!, // e.g. https://<your-worker>
   apiKey: process.env.PILE_API_KEY!,
 });
 ```

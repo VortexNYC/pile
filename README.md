@@ -26,7 +26,7 @@ An open-source, agent-native issue tracker built on Cloudflare Workers, D1, and 
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/VortexNYC/pile)
 
-The committed `wrangler.toml` is already self-host-ready: D1 and R2 auto-provision on `wrangler deploy`, the Durable Object and cron trigger are declared, and the hosted Pile instance is isolated under `[env.production]` (deployed with `wrangler deploy -e production`).
+`wrangler.toml` is tracked in git and is the canonical config (there is no `wrangler.toml.example`). Its top-level section is self-host-ready: D1 and R2 auto-provision on `wrangler deploy`, the Durable Object, queue, and cron trigger are declared, and the hosted Pile instance is isolated under `[env.production]` (deployed with `pnpm deploy`, i.e. `wrangler deploy -e production`). The `[env.production]` values are specific to the hosted instance; do not copy them for a self-hosted deployment.
 
 Or from the CLI in one command:
 
@@ -47,7 +47,11 @@ pnpm run selfhost   # deploys Worker + auto-provisions D1/R2/DO + applies migrat
    wrangler secret put DEVIN_TOKEN
    wrangler secret put GITHUB_WEBHOOK_SECRET
    ```
-4. Deploy: `pnpm deploy`
+4. Deploy: `wrangler deploy` (`pnpm deploy` targets the hosted `production` environment)
+
+### Pointing agents at your deployment
+
+The CLI, SDK, and MCP examples in `packages/docs/docs/agents.mdx` and `.devin/skills/pile-*` use `https://<your-worker>` as a placeholder. Substitute your Worker URL (the same value as `BETTER_AUTH_URL`), or `http://127.0.0.1:8787` when running `wrangler dev` locally. The CLI reads it from `PILE_BASE_URL` or `pile config set --base-url <url>`.
 
 ## Tests
 
