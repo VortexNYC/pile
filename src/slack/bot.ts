@@ -1,17 +1,21 @@
 import { createSlackAdapter, type SlackAdapter } from "@chat-adapter/slack";
 import { postSlackMessage } from "@chat-adapter/slack/api";
 import { Chat } from "chat";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { D1StateAdapter } from "../global/chat-state.js";
 import { createD1, type D1Client } from "../global/db.js";
-import { slackInstallations } from "../global/schema.js";
+import { slackInstallations, supportConversations } from "../global/schema.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { AppEnv } from "../types/env.js";
 import type { RealtimeEvent } from "../types/workspace.js";
 import { handleViewInPile } from "./actions.js";
 import { workerdFetchAdapter } from "./fetch-adapter.js";
+import {
+  handleSlackThreadMessage,
+  storeSupportConversation,
+} from "./threads.js";
 
 export function isSlackConfigured(env: AppEnv): boolean {
   return Boolean(
@@ -38,6 +42,20 @@ function teamIdFromRaw(raw: unknown): string | undefined {
   const parsed = slackTeamSchema.safeParse(raw);
   if (!parsed.success) return undefined;
   return parsed.data.team_id ?? parsed.data.team;
+}
+
+function slackMessageFields(raw: unknown): {
+  ts?: string;
+  channel?: string;
+  team_id?: string;
+} {
+  if (typeof raw !== "object" || raw === null) return {};
+  const record = raw as Record<string, unknown>;
+  return {
+    ts: typeof record.ts === "string" ? record.ts : undefined,
+    channel: typeof record.channel === "string" ? record.channel : undefined,
+    team_id: typeof record.team_id === "string" ? record.team_id : undefined,
+  };
 }
 
 export async function slackOrgForTeam(
@@ -154,12 +172,49 @@ export function createSlackBot(
       );
       return;
     }
+
+    const raw = slackMessageFields(message.raw);
+    if (!raw.ts || !raw.channel) {
+      await thread.post("Couldn't read this Slack message.");
+      return;
+    }
+
+    const slackThreadTs =
+      raw.channel.startsWith("D") || raw.channel.startsWith("G") ? "" : raw.ts;
+    const existing = await db
+      .select()
+      .from(supportConversations)
+      .where(
+        and(
+          eq(supportConversations.slackTeamId, link.teamId),
+          eq(supportConversations.slackChannelId, raw.channel),
+          eq(supportConversations.slackThreadTs, slackThreadTs)
+        )
+      )
+      .get();
+
+    if (existing) {
+      await handleSlackThreadMessage(env, thread, message);
+      return;
+    }
+
     const title = text.trim() || "New issue";
     const issue = await createIssueFromText(env, link.organizationId, title);
     if (!issue) {
       await thread.post("Couldn't create an issue from that message.");
       return;
     }
+
+    await storeSupportConversation(db, {
+      organizationId: link.organizationId,
+      slackTeamId: link.teamId,
+      slackChannelId: raw.channel,
+      slackThreadTs,
+      issueId: issue.id,
+      isExternal: true,
+    });
+
+    await thread.subscribe();
     await thread.post(
       `Created issue ${issue.identifier ?? issue.id}: ${title}`
     );
@@ -167,6 +222,10 @@ export function createSlackBot(
 
   bot.onAction("view-in-pile", async (event) => {
     await handleViewInPile(event);
+  });
+
+  bot.onSubscribedMessage(async (thread, message) => {
+    await handleSlackThreadMessage(env, thread, message);
   });
 
   return { bot, slack };
@@ -220,6 +279,32 @@ export async function notifySlack(
   const stored = await slack.getInstallation(installation.teamId);
   const botToken = stored?.botToken;
   if (!botToken) return;
+
+  if (
+    event.type === "comment.created" &&
+    !event.comment.internal &&
+    event.comment.externalSource !== "slack"
+  ) {
+    const conversation = await db
+      .select()
+      .from(supportConversations)
+      .where(
+        and(
+          eq(supportConversations.organizationId, organizationId),
+          eq(supportConversations.issueId, event.issue.id)
+        )
+      )
+      .get();
+    if (conversation) {
+      await postSlackMessage({
+        token: botToken,
+        channel: conversation.slackChannelId,
+        threadTs: conversation.slackThreadTs,
+        text,
+      });
+      return;
+    }
+  }
 
   const options: import("@chat-adapter/slack/api").SlackMessageOptions = {
     token: botToken,

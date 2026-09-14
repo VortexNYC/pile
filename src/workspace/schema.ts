@@ -121,6 +121,9 @@ export const workspaceComments = sqliteTable(
     documentId: text("document_id" as string),
     authorId: text("author_id" as string),
     body: text("body" as string).notNull(),
+    internal: integer("internal" as string, { mode: "boolean" })
+      .notNull()
+      .default(false),
     externalId: text("external_id" as string),
     externalSource: text("external_source" as string),
     externalAuthor: text("external_author" as string),
