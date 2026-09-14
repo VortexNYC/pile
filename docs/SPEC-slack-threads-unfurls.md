@@ -186,6 +186,11 @@ Map emoji reactions on the top-level Slack message to Pile status transitions. W
 | `🔥`  | `urgent`      | Set priority to urgent.             |
 | `😴`  | `snoozed`     | Snooze until tomorrow.              |
 
-## Open questions
+## Link unfurl auth model
 
-1. Should link unfurls be public (no auth) or require the user to be in the linked workspace?
+Pile link unfurls are **channel-scoped**, not public on the open internet.
+
+- Slack sends `link_shared` for the channel where the link was posted. The bot then calls `chat.unfurl` with a per-channel block payload.
+- If the `channel_id` is a shared / Slack Connect channel, the unfurl shows a **customer-safe preview** (identifier, title, status, assignee) and hides internal comments or notes.
+- If the `channel_id` is an internal company channel, the unfurl can show richer blocks (priority, cycle, labels, quick actions).
+- No workspace user token is required for the unfurl itself; the bot uses the installation token tied to the channel. The preview is only visible to people already in that Slack channel.
