@@ -32,7 +32,7 @@ export function createAuth(env: AppEnv) {
             "",
             `Reset your Vortex password: ${data.url}`,
           ].join("\r\n");
-          void env.EMAIL.send(
+          await env.EMAIL.send(
             new EmailMessage(env.EMAIL_FROM, data.user.email, raw)
           );
         } catch {
@@ -57,7 +57,7 @@ export function createAuth(env: AppEnv) {
             "",
             `Verify your Vortex email: ${data.url}`,
           ].join("\r\n");
-          void env.EMAIL.send(
+          await env.EMAIL.send(
             new EmailMessage(env.EMAIL_FROM, data.user.email, raw)
           );
         } catch {
