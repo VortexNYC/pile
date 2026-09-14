@@ -15,11 +15,62 @@ export function createAuth(env: AppEnv) {
     database: drizzleAdapter(db, { provider: "sqlite", schema }),
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.BETTER_AUTH_URL,
-    emailAndPassword: { enabled: true },
+    emailAndPassword: {
+      enabled: true,
+      sendResetPassword: async (data) => {
+        if (!env.EMAIL || !env.EMAIL_FROM) {
+          return;
+        }
+        try {
+          const { EmailMessage } = await import("cloudflare:email");
+          const raw = [
+            `From: ${env.EMAIL_FROM}`,
+            `To: ${data.user.email}`,
+            "Subject: Reset your Vortex password",
+            "MIME-Version: 1.0",
+            'Content-Type: text/plain; charset="utf-8"',
+            "",
+            `Reset your Vortex password: ${data.url}`,
+          ].join("\r\n");
+          void env.EMAIL.send(
+            new EmailMessage(env.EMAIL_FROM, data.user.email, raw)
+          );
+        } catch {
+          // Email is best-effort.
+        }
+      },
+      revokeSessionsOnPasswordReset: true,
+    },
+    emailVerification: {
+      sendVerificationEmail: async (data) => {
+        if (!env.EMAIL || !env.EMAIL_FROM) {
+          return;
+        }
+        try {
+          const { EmailMessage } = await import("cloudflare:email");
+          const raw = [
+            `From: ${env.EMAIL_FROM}`,
+            `To: ${data.user.email}`,
+            "Subject: Verify your Vortex email",
+            "MIME-Version: 1.0",
+            'Content-Type: text/plain; charset="utf-8"',
+            "",
+            `Verify your Vortex email: ${data.url}`,
+          ].join("\r\n");
+          void env.EMAIL.send(
+            new EmailMessage(env.EMAIL_FROM, data.user.email, raw)
+          );
+        } catch {
+          // Email is best-effort.
+        }
+      },
+    },
     user: {
       additionalFields: {
         metadata: { type: "json", required: false },
       },
+      changeEmail: { enabled: true },
+      deleteUser: { enabled: true },
     },
     plugins: [
       apiKey({
