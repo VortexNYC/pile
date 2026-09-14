@@ -40256,6 +40256,505 @@
         "summary": "Create api auth verify password"
       }
     },
+    "/api/auth/admin/set-role": {
+      "post": {
+        "operationId": "setRole",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                },
+                "description": "Better Auth request body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "description": "Better Auth raw response (JSON or HTML)"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create api auth admin set role"
+      }
+    },
+    "/api/auth/admin/get-user": {
+      "get": {
+        "operationId": "getUser",
+        "tags": [
+          "Auth"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "description": "Better Auth raw response (JSON or HTML)"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List api auth admin get user"
+      }
+    },
+    "/api/auth/admin/create-user": {
+      "post": {
+        "operationId": "createUser",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                },
+                "description": "Better Auth request body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "description": "Better Auth raw response (JSON or HTML)"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create api auth admin create user"
+      }
+    },
+    "/api/auth/admin/update-user": {
+      "post": {
+        "operationId": "adminUpdateUser",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                },
+                "description": "Better Auth request body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "description": "Better Auth raw response (JSON or HTML)"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create api auth admin update user"
+      }
+    },
+    "/api/auth/admin/list-users": {
+      "get": {
+        "operationId": "listUsers",
+        "tags": [
+          "Auth"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "description": "Better Auth raw response (JSON or HTML)"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List api auth admin list users"
+      }
+    },
+    "/api/auth/admin/list-user-sessions": {
+      "post": {
+        "operationId": "listUserSessions",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                },
+                "description": "Better Auth request body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "description": "Better Auth raw response (JSON or HTML)"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create api auth admin list user session"
+      }
+    },
+    "/api/auth/admin/unban-user": {
+      "post": {
+        "operationId": "unbanUser",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                },
+                "description": "Better Auth request body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "description": "Better Auth raw response (JSON or HTML)"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create api auth admin unban user"
+      }
+    },
+    "/api/auth/admin/ban-user": {
+      "post": {
+        "operationId": "banUser",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                },
+                "description": "Better Auth request body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "description": "Better Auth raw response (JSON or HTML)"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create api auth admin ban user"
+      }
+    },
+    "/api/auth/admin/impersonate-user": {
+      "post": {
+        "operationId": "impersonateUser",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                },
+                "description": "Better Auth request body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "description": "Better Auth raw response (JSON or HTML)"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create api auth admin impersonate user"
+      }
+    },
+    "/api/auth/admin/stop-impersonating": {
+      "post": {
+        "operationId": "stopImpersonating",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                },
+                "description": "Better Auth request body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "description": "Better Auth raw response (JSON or HTML)"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create api auth admin stop impersonating"
+      }
+    },
+    "/api/auth/admin/revoke-user-session": {
+      "post": {
+        "operationId": "revokeUserSession",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                },
+                "description": "Better Auth request body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "description": "Better Auth raw response (JSON or HTML)"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create api auth admin revoke user session"
+      }
+    },
+    "/api/auth/admin/revoke-user-sessions": {
+      "post": {
+        "operationId": "revokeUserSessions",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                },
+                "description": "Better Auth request body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "description": "Better Auth raw response (JSON or HTML)"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create api auth admin revoke user session"
+      }
+    },
+    "/api/auth/admin/remove-user": {
+      "post": {
+        "operationId": "removeUser",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                },
+                "description": "Better Auth request body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "description": "Better Auth raw response (JSON or HTML)"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create api auth admin remove user"
+      }
+    },
+    "/api/auth/admin/set-user-password": {
+      "post": {
+        "operationId": "setUserPassword",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                },
+                "description": "Better Auth request body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "description": "Better Auth raw response (JSON or HTML)"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create api auth admin set user password"
+      }
+    },
+    "/api/auth/admin/has-permission": {
+      "post": {
+        "operationId": "userHasPermission",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                },
+                "description": "Better Auth request body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "description": "Better Auth raw response (JSON or HTML)"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create api auth admin has permission"
+      }
+    },
     "/github": {
       "post": {
         "tags": [

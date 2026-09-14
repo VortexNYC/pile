@@ -67,6 +67,67 @@ const endpoints = [
   { method: "post", path: "/api/auth/update-user", fn: "updateUser" },
   { method: "post", path: "/api/auth/delete-user", fn: "deleteUser" },
   { method: "post", path: "/api/auth/verify-password", fn: "verifyPassword" },
+  { method: "post", path: "/api/auth/admin/set-role", fn: "setRole" },
+  {
+    method: "get",
+    path: "/api/auth/admin/get-user",
+    fn: "getUser",
+    hasQuery: true,
+  },
+  {
+    method: "post",
+    path: "/api/auth/admin/create-user",
+    fn: "createUser",
+  },
+  {
+    method: "post",
+    path: "/api/auth/admin/update-user",
+    fn: "adminUpdateUser",
+  },
+  {
+    method: "get",
+    path: "/api/auth/admin/list-users",
+    fn: "listUsers",
+    hasQuery: true,
+  },
+  {
+    method: "post",
+    path: "/api/auth/admin/list-user-sessions",
+    fn: "listUserSessions",
+  },
+  { method: "post", path: "/api/auth/admin/unban-user", fn: "unbanUser" },
+  { method: "post", path: "/api/auth/admin/ban-user", fn: "banUser" },
+  {
+    method: "post",
+    path: "/api/auth/admin/impersonate-user",
+    fn: "impersonateUser",
+  },
+  {
+    method: "post",
+    path: "/api/auth/admin/stop-impersonating",
+    fn: "stopImpersonating",
+  },
+  {
+    method: "post",
+    path: "/api/auth/admin/revoke-user-session",
+    fn: "revokeUserSession",
+  },
+  {
+    method: "post",
+    path: "/api/auth/admin/revoke-user-sessions",
+    fn: "revokeUserSessions",
+  },
+  { method: "post", path: "/api/auth/admin/remove-user", fn: "removeUser" },
+  {
+    method: "post",
+    path: "/api/auth/admin/set-user-password",
+    fn: "setUserPassword",
+  },
+  {
+    method: "post",
+    path: "/api/auth/admin/has-permission",
+    fn: "userHasPermission",
+  },
 ] as const;
 
 type Endpoint = (typeof endpoints)[number];

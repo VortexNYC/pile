@@ -11,6 +11,42 @@ export interface McpToolDefinition {
 
 export const MCP_TOOLS: readonly McpToolDefinition[] = [
   {
+    "name": "adminUpdateUser",
+    "description": "Create api auth admin update user (POST /api/auth/admin/update-user)",
+    "method": "POST",
+    "path": "/api/auth/admin/update-user",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "type": "object",
+          "additionalProperties": {
+            "nullable": true
+          },
+          "description": "Better Auth request body"
+        }
+      }
+    }
+  },
+  {
+    "name": "banUser",
+    "description": "Create api auth admin ban user (POST /api/auth/admin/ban-user)",
+    "method": "POST",
+    "path": "/api/auth/admin/ban-user",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "type": "object",
+          "additionalProperties": {
+            "nullable": true
+          },
+          "description": "Better Auth request body"
+        }
+      }
+    }
+  },
+  {
     "name": "changeEmail",
     "description": "Create api auth change email (POST /api/auth/change-email)",
     "method": "POST",
@@ -33,6 +69,24 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "description": "Create api auth change password (POST /api/auth/change-password)",
     "method": "POST",
     "path": "/api/auth/change-password",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "type": "object",
+          "additionalProperties": {
+            "nullable": true
+          },
+          "description": "Better Auth request body"
+        }
+      }
+    }
+  },
+  {
+    "name": "createUser",
+    "description": "Create api auth admin create user (POST /api/auth/admin/create-user)",
+    "method": "POST",
+    "path": "/api/auth/admin/create-user",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1266,6 +1320,16 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "sessionId"
       ]
+    }
+  },
+  {
+    "name": "getUser",
+    "description": "List api auth admin get user (GET /api/auth/admin/get-user)",
+    "method": "GET",
+    "path": "/api/auth/admin/get-user",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
     }
   },
   {
@@ -4596,6 +4660,24 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "impersonateUser",
+    "description": "Create api auth admin impersonate user (POST /api/auth/admin/impersonate-user)",
+    "method": "POST",
+    "path": "/api/auth/admin/impersonate-user",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "type": "object",
+          "additionalProperties": {
+            "nullable": true
+          },
+          "description": "Better Auth request body"
+        }
+      }
+    }
+  },
+  {
     "name": "listSessions",
     "description": "List api auth list sessions (GET /api/auth/list-sessions)",
     "method": "GET",
@@ -4603,6 +4685,34 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "inputSchema": {
       "type": "object",
       "properties": {}
+    }
+  },
+  {
+    "name": "listUsers",
+    "description": "List api auth admin list users (GET /api/auth/admin/list-users)",
+    "method": "GET",
+    "path": "/api/auth/admin/list-users",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "listUserSessions",
+    "description": "Create api auth admin list user session (POST /api/auth/admin/list-user-sessions)",
+    "method": "POST",
+    "path": "/api/auth/admin/list-user-sessions",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "type": "object",
+          "additionalProperties": {
+            "nullable": true
+          },
+          "description": "Better Auth request body"
+        }
+      }
     }
   },
   {
@@ -12919,6 +13029,24 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "removeUser",
+    "description": "Create api auth admin remove user (POST /api/auth/admin/remove-user)",
+    "method": "POST",
+    "path": "/api/auth/admin/remove-user",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "type": "object",
+          "additionalProperties": {
+            "nullable": true
+          },
+          "description": "Better Auth request body"
+        }
+      }
+    }
+  },
+  {
     "name": "requestPasswordReset",
     "description": "Create api auth request password reset (POST /api/auth/request-password-reset)",
     "method": "POST",
@@ -13008,10 +13136,82 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "revokeUserSession",
+    "description": "Create api auth admin revoke user session (POST /api/auth/admin/revoke-user-session)",
+    "method": "POST",
+    "path": "/api/auth/admin/revoke-user-session",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "type": "object",
+          "additionalProperties": {
+            "nullable": true
+          },
+          "description": "Better Auth request body"
+        }
+      }
+    }
+  },
+  {
+    "name": "revokeUserSessions",
+    "description": "Create api auth admin revoke user session (POST /api/auth/admin/revoke-user-sessions)",
+    "method": "POST",
+    "path": "/api/auth/admin/revoke-user-sessions",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "type": "object",
+          "additionalProperties": {
+            "nullable": true
+          },
+          "description": "Better Auth request body"
+        }
+      }
+    }
+  },
+  {
     "name": "sendVerificationEmail",
     "description": "Create api auth send verification email (POST /api/auth/send-verification-email)",
     "method": "POST",
     "path": "/api/auth/send-verification-email",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "type": "object",
+          "additionalProperties": {
+            "nullable": true
+          },
+          "description": "Better Auth request body"
+        }
+      }
+    }
+  },
+  {
+    "name": "setRole",
+    "description": "Create api auth admin set role (POST /api/auth/admin/set-role)",
+    "method": "POST",
+    "path": "/api/auth/admin/set-role",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "type": "object",
+          "additionalProperties": {
+            "nullable": true
+          },
+          "description": "Better Auth request body"
+        }
+      }
+    }
+  },
+  {
+    "name": "setUserPassword",
+    "description": "Create api auth admin set user password (POST /api/auth/admin/set-user-password)",
+    "method": "POST",
+    "path": "/api/auth/admin/set-user-password",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -13080,10 +13280,64 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "stopImpersonating",
+    "description": "Create api auth admin stop impersonating (POST /api/auth/admin/stop-impersonating)",
+    "method": "POST",
+    "path": "/api/auth/admin/stop-impersonating",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "type": "object",
+          "additionalProperties": {
+            "nullable": true
+          },
+          "description": "Better Auth request body"
+        }
+      }
+    }
+  },
+  {
+    "name": "unbanUser",
+    "description": "Create api auth admin unban user (POST /api/auth/admin/unban-user)",
+    "method": "POST",
+    "path": "/api/auth/admin/unban-user",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "type": "object",
+          "additionalProperties": {
+            "nullable": true
+          },
+          "description": "Better Auth request body"
+        }
+      }
+    }
+  },
+  {
     "name": "updateUser",
     "description": "Create api auth update user (POST /api/auth/update-user)",
     "method": "POST",
     "path": "/api/auth/update-user",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "type": "object",
+          "additionalProperties": {
+            "nullable": true
+          },
+          "description": "Better Auth request body"
+        }
+      }
+    }
+  },
+  {
+    "name": "userHasPermission",
+    "description": "Create api auth admin has permission (POST /api/auth/admin/has-permission)",
+    "method": "POST",
+    "path": "/api/auth/admin/has-permission",
     "inputSchema": {
       "type": "object",
       "properties": {
