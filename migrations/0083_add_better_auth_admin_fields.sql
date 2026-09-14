@@ -1,6 +1,6 @@
 ALTER TABLE `user` ADD `role` text DEFAULT 'admin' NOT NULL;
 --> statement-breakpoint
-ALTER TABLE `user` ADD `banned` integer DEFAULT false;
+ALTER TABLE `user` ADD `banned` integer DEFAULT 0;
 --> statement-breakpoint
 ALTER TABLE `user` ADD `ban_reason` text;
 --> statement-breakpoint

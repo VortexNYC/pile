@@ -28,4 +28,5 @@ CREATE TABLE `support_snippets` (
 CREATE UNIQUE INDEX `support_snippets_organization_name_idx` ON `support_snippets` (`organization_id`,`name`);--> statement-breakpoint
 CREATE INDEX `support_snippets_organization_idx` ON `support_snippets` (`organization_id`);--> statement-breakpoint
 ALTER TABLE `labels` ADD `kind` text DEFAULT 'issue' NOT NULL;--> statement-breakpoint
-ALTER TABLE `labels` ADD `updated_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL;
+ALTER TABLE `labels` ADD `updated_at` text DEFAULT '1970-01-01T00:00:00Z' NOT NULL;
+UPDATE `labels` SET `updated_at` = CURRENT_TIMESTAMP;
