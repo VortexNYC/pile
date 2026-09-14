@@ -24,6 +24,8 @@ declare module "cloudflare:test" {
   interface ProvidedEnv extends WorkerEnv {}
 }
 
+env.GITHUB_WEBHOOK_SECRET = "github-webhook-secret";
+env.GITLAB_WEBHOOK_SECRET = "webhook-secret";
 env.WEBHOOK_QUEUE = null as unknown as typeof env.WEBHOOK_QUEUE;
 
 const ORIGIN = "https://your-domain.com";
@@ -3476,5 +3478,133 @@ describe("API integration", () => {
     } finally {
       globalThis.fetch = originalFetch;
     }
+  });
+
+  describe("GitHub webhooks", () => {
+    const issuePayload = {
+      action: "opened",
+      issue: {
+        number: 1,
+        title: "GitHub issue",
+        body: "body",
+        state: "open",
+        html_url: "https://github.com/owner/repo/issues/1",
+        labels: [],
+        assignee: null,
+        milestone: null,
+      },
+      repository: { full_name: "owner/repo" },
+    };
+
+    const pullRequestPayload = {
+      action: "opened",
+      pull_request: {
+        number: 2,
+        title: "PR",
+        body: null,
+        state: "open",
+        draft: false,
+        merged: false,
+        html_url: "https://github.com/owner/repo/pull/2",
+        head: { ref: "feature", repo: { full_name: "owner/repo" } },
+        labels: [],
+        assignee: null,
+        milestone: null,
+      },
+      repository: { full_name: "owner/repo" },
+    };
+
+    const checkRunPayload = {
+      action: "completed",
+      check_run: {
+        name: "ci",
+        head_branch: "main",
+        head_sha: "abc",
+        status: "completed",
+        conclusion: "success",
+      },
+      repository: { full_name: "owner/repo" },
+    };
+
+    async function signedGithubRequest(
+      event: string,
+      body: unknown
+    ): Promise<Request> {
+      const raw = JSON.stringify(body);
+      const signature = `sha256=${await hmacSha256Hex(
+        env.GITHUB_WEBHOOK_SECRET!,
+        raw
+      )}`;
+      return request("/github", {
+        method: "POST",
+        body: raw,
+        headers: {
+          "x-github-event": event,
+          "x-github-delivery": crypto.randomUUID(),
+          "x-hub-signature-256": signature,
+        },
+      });
+    }
+
+    it("rejects a missing signature", async () => {
+      const res = await app.fetch(
+        request("/github", {
+          method: "POST",
+          body: JSON.stringify(issuePayload),
+          headers: {
+            "x-github-event": "issues",
+            "x-github-delivery": crypto.randomUUID(),
+          },
+        }),
+        env
+      );
+      expect(res.status).toBe(401);
+    });
+
+    it("rejects an invalid signature", async () => {
+      const res = await app.fetch(
+        request("/github", {
+          method: "POST",
+          body: JSON.stringify(issuePayload),
+          headers: {
+            "x-github-event": "issues",
+            "x-github-delivery": crypto.randomUUID(),
+            "x-hub-signature-256": "sha256=invalid",
+          },
+        }),
+        env
+      );
+      expect(res.status).toBe(401);
+    });
+
+    it("accepts a signed issues event", async () => {
+      const res = await app.fetch(
+        await signedGithubRequest("issues", issuePayload),
+        env
+      );
+      expect(res.status).toBe(200);
+      const body = await res.json<{ ok: boolean }>();
+      expect(body.ok).toBe(true);
+    });
+
+    it("accepts a signed pull_request event", async () => {
+      const res = await app.fetch(
+        await signedGithubRequest("pull_request", pullRequestPayload),
+        env
+      );
+      expect(res.status).toBe(200);
+      const body = await res.json<{ ok: boolean }>();
+      expect(body.ok).toBe(true);
+    });
+
+    it("accepts a signed check_run event", async () => {
+      const res = await app.fetch(
+        await signedGithubRequest("check_run", checkRunPayload),
+        env
+      );
+      expect(res.status).toBe(200);
+      const body = await res.json<{ ok: boolean }>();
+      expect(body.ok).toBe(true);
+    });
   });
 });
