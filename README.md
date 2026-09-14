@@ -57,8 +57,7 @@ The CLI, SDK, and MCP examples in `packages/docs/docs/agents.mdx` and `.devin/sk
 
 ```bash
 pnpm install
-pnpm test
-pnpm typecheck
+pnpm run check
 ```
 
 ## License
