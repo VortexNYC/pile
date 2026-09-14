@@ -14,7 +14,7 @@ const dispatchResponseSchema = z.object({
 const cfAgentConfigSchema = z.object({
   endpoint: z.string(),
   agent: z.string().optional(),
-  dispatchPath: z.string().default("/dispatch/issuetracker"),
+  dispatchPath: z.string().default("/dispatch/pile"),
   agentsPath: z.string().default("/agents"),
 });
 
@@ -46,7 +46,7 @@ const agentSnapshotSchema = z.object({
  * Cloudflare-Agents-SDK provider: targets any worker that exposes the Agents
  * SDK agent-router shape (GET /agents/{agent}/{conversation} → messages +
  * settlements) plus a dispatch route. The flue worker is the reference
- * implementation: its /dispatch/issuetracker route starts a conversation and
+ * implementation: its /dispatch/pile route starts a conversation and
  * writes status/result back to the tracker session when submit_report fires.
  *
  * Workspace provider config (`PUT /agent/providers/cf-agent` or `/flue`):
@@ -54,7 +54,7 @@ const agentSnapshotSchema = z.object({
  *   config.endpoint     — worker base URL, or "service-binding" to use the
  *                         deployment's FLUE_WORKER binding (same-account)
  *   config.agent        — target agent slug (default "engineering")
- *   config.dispatchPath — override the dispatch route (default /dispatch/issuetracker)
+ *   config.dispatchPath — override the dispatch route (default /dispatch/pile)
  *   config.agentsPath   — override the agent-router prefix (default /agents)
  */
 export class CfAgentProvider implements AgentProvider {

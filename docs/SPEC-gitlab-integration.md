@@ -33,7 +33,7 @@ Mirror GitLab issues and issue notes into Vortex, matching the existing GitHub i
 | id             | text primary key                             |
 | organizationId | text not null                                |
 | projectId      | text (GitLab project id)                     |
-| projectPath    | text (e.g. `vortexnyc/issuetracker`)         |
+| projectPath    | text (e.g. `vortexnyc/pile`)         |
 | token          | text (encrypted at rest — not persisted raw) |
 | webhookSecret  | text                                         |
 | createdAt      | text                                         |

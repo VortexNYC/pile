@@ -13,7 +13,7 @@ echo
 echo "Done. Finish setup:"
 echo "  1. Edit wrangler.toml -> set BETTER_AUTH_URL, ALLOWED_ORIGINS, and"
 echo "     SLACK_REDIRECT_URI to your Worker URL"
-echo "     (https://issuetracker.<your-subdomain>.workers.dev)"
+echo "     (https://pile.<your-subdomain>.workers.dev)"
 echo "  2. Set secrets (never commit these):"
 echo "       pnpm exec wrangler secret put BETTER_AUTH_SECRET   # any long random string"
 echo "       pnpm exec wrangler secret put DEVIN_TOKEN          # optional, for agent dispatch"

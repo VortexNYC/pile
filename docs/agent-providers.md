@@ -129,7 +129,7 @@ curl -X PUT "$BASE/workspaces/$ORG/agent/providers/cf-agent" \
     "config": {
       "endpoint": "https://my-agent.workers.dev",
       "agent": "engineering",
-      "dispatchPath": "/dispatch/issuetracker",
+      "dispatchPath": "/dispatch/pile",
       "agentsPath": "/agents"
     }
   }'

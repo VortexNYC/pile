@@ -118,7 +118,7 @@ Already supported: `PATCH /support/tickets/:id` accepts `{ issueId: string | nul
 ## CLI/MCP example
 
 ```bash
-issuetracker support escalation-rules create \
+pile support escalation-rules create \
   --org org_vortex_main \
   --name "bug-from-intercom" \
   --conditions '{"keywords":["bug","broken"],"channels":["intercom"]}' \

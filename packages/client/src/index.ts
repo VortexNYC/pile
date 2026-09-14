@@ -5,9 +5,9 @@ import type { paths } from "./types.js";
 
 export type { paths };
 
-export type IssueTrackerClient = Client<paths>;
+export type PileClient = Client<paths>;
 
-export function createIssueTrackerClient(options: {
+export function createPileClient(options: {
   baseUrl: string;
   apiKey: string;
   fetch?: ClientOptions["fetch"];
