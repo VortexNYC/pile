@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -487,6 +487,93 @@ describe("CLI integration", () => {
     const exitCode = await runCli(["issues", "list", "--workspace", "ws-1"], {
       fetch: mockFetch,
     });
+
+    expect(exitCode).toBe(1);
+  });
+
+  it("logs in and stores the token", async () => {
+    const mockFetch = vi.fn().mockImplementation((url, init) => {
+      const requestUrl = new URL(
+        typeof url === "string" ? url : (url as URL).href
+      );
+      const pathname = requestUrl.pathname;
+      const method =
+        init && typeof init === "object" && "method" in init
+          ? String(init.method)
+          : "GET";
+
+      if (pathname === "/api/auth/sign-in/email" && method === "POST") {
+        return Promise.resolve(
+          new Response(JSON.stringify({ user: { id: "u-1" } }), {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+              "Set-Cookie": "session_token=abc123; Path=/; HttpOnly",
+            },
+          })
+        );
+      }
+      if (pathname === "/workspaces/ws-1/tokens" && method === "POST") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              id: "t-1",
+              organizationId: "ws-1",
+              name: "cli",
+              token: "api-token-1",
+              permissions: "admin",
+              createdAt: "2026-01-01T00:00:00Z",
+            }),
+            {
+              status: 201,
+              headers: { "Content-Type": "application/json" },
+            }
+          )
+        );
+      }
+      return Promise.resolve(new Response("not found", { status: 404 }));
+    });
+
+    const tmpDir = mkdtempSync(join(tmpdir(), "pile-auth-"));
+    process.env.HOME = tmpDir;
+    const configPath = join(tmpDir, ".pile", "config.json");
+    process.env.PILE_EMAIL = "user@example.com";
+    process.env.PILE_PASSWORD = "secret";
+
+    const exitCode = await runCli(["auth", "login", "--workspace", "ws-1"], {
+      fetch: mockFetch,
+    });
+
+    expect(exitCode).toBe(0);
+    const written = JSON.parse(readFileSync(configPath, "utf8")) as {
+      apiKey?: string;
+      baseUrl?: string;
+    };
+    expect(written.apiKey).toBe("api-token-1");
+    expect(written.baseUrl).toBe("http://127.0.0.1:8787");
+  });
+
+  it("rejects login when sign-in fails", async () => {
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ error: "invalid" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+
+    const exitCode = await runCli(
+      [
+        "auth",
+        "login",
+        "--email",
+        "user@example.com",
+        "--password",
+        "secret",
+        "--workspace",
+        "ws-1",
+      ],
+      { fetch: mockFetch }
+    );
 
     expect(exitCode).toBe(1);
   });
