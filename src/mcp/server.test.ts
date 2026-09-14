@@ -109,7 +109,7 @@ describe("MCP integration", () => {
     const listBody = (await listRes.json()) as {
       result?: { tools?: unknown[] };
     };
-    expect(listBody.result?.tools?.length).toBe(381);
+    expect(listBody.result?.tools?.length).toBe(382);
   });
 
   it("creates and manages an issue through MCP", async () => {

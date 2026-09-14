@@ -61,6 +61,26 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "workspaces onboard create": {
+    method: "POST",
+    path: "/workspaces/onboard",
+    params: [],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "slug",
+        flag: "slug",
+      },
+      {
+        name: "key",
+        flag: "key",
+      },
+    ],
+  },
   "tokens list": {
     method: "GET",
     path: "/workspaces/{organizationId}/tokens",

@@ -101,7 +101,13 @@ app.onError((err) => {
 app.use("*", observabilityMiddleware);
 app.use("*", ...securityMiddleware);
 
-app.use("/workspaces/:organizationId/*", workspaceAuthMiddleware);
+app.use("/workspaces/:organizationId/*", async (c, next) => {
+  if (c.req.path === "/workspaces/onboard") {
+    await next();
+    return;
+  }
+  await workspaceAuthMiddleware(c, next);
+});
 registerWorkspaceRoutes(app);
 registerTokenRoutes(app);
 registerOAuthClientRoutes(app);

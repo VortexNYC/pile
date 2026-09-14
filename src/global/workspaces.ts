@@ -107,7 +107,6 @@ export async function createWorkspace(
     body: {
       name: values.name,
       slug: values.slug,
-      userId: values.ownerId,
       metadata: { key: values.key ?? null },
     },
     headers,

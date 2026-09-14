@@ -7265,6 +7265,37 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOnboard",
+    "description": "Create workspace onboard (POST /workspaces/onboard)",
+    "method": "POST",
+    "path": "/workspaces/onboard",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "slug": {
+              "type": "string",
+              "minLength": 1
+            },
+            "key": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "slug"
+          ]
+        }
+      }
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdAgentSessionsSessionIdActivities",
     "description": "Create agent session activity (POST /workspaces/{organizationId}/agent/sessions/{sessionId}/activities)",
     "method": "POST",
