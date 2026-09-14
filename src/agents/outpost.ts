@@ -164,7 +164,6 @@ export async function provisionOutpostWorker(
     body: JSON.stringify({
       name,
       snapshot: env.DAYTONA_SNAPSHOT ?? "vortex-outpost-worker",
-      resources: { cpu: 4, memory: 8, disk: 10 },
       env: {
         OUTPOST_ID: outpostId,
         OUTPOST_TOKEN: outpostToken,
