@@ -30,6 +30,41 @@ const client = createPileClient({
 });
 ```
 
+### Auth options
+
+```typescript
+// Workspace API key (default)
+createPileClient({ baseUrl, apiKey });
+// Explicit session cookie (server-side, on behalf of a signed-in user)
+createPileClient({ baseUrl, auth: { type: "session", cookie: "better-auth.session_token=..." } });
+// Browser: send the ambient session cookie via credentials: "include"
+createPileClient({ baseUrl, auth: { type: "browser" } });
+```
+
+### Retries
+
+Idempotent requests (`GET`, `HEAD`, `OPTIONS`, `PUT`, `DELETE`) are retried on network failures and
+408/425/429/5xx with exponential backoff (2 retries, `Retry-After` honoured). Tune with
+`retry: { maxRetries, retryOnStatus, retryMethods, baseDelayMs, maxDelayMs }` or disable with `retry: false`.
+
+### Typed errors
+
+```typescript
+import { unwrap, PileRequestError, isPileErrorCodeOf, toPileError } from "pile-client";
+
+try {
+  const data = await unwrap(client.GET("/workspaces", {}));
+} catch (err) {
+  if (err instanceof PileRequestError && isPileErrorCodeOf(err.error, "UNAUTHORIZED")) { /* ... */ }
+}
+
+// or without throwing:
+const { error, response } = await client.GET("/workspaces", {});
+if (error) {
+  const pileError = toPileError(error, response); // PileApiError | PileHttpError | PileNetworkError
+}
+```
+
 ## Common workflows
 
 - List workspaces: `client.GET("/workspaces", {})`
