@@ -205,6 +205,26 @@ describe("WorkspaceDO", () => {
     expect(updated?.prState).toBe("open");
   });
 
+  it("rejects two issues with the same repo and branch", async () => {
+    const stub = getStub();
+    await withWorkspace(stub, (instance) =>
+      instance.createIssue({
+        title: "First",
+        repo: "owner/collision",
+        branch: "collision-branch",
+      })
+    );
+    await expect(
+      withWorkspace(stub, (instance) =>
+        instance.createIssue({
+          title: "Second",
+          repo: "owner/collision",
+          branch: "collision-branch",
+        })
+      )
+    ).rejects.toThrow();
+  });
+
   it("supports parent/child issue hierarchy", async () => {
     const stub = getStub();
     const parent = await withWorkspace(stub, (instance) =>
