@@ -1,4 +1,4 @@
-# Pile — Agent Operating Notes (Vortex family)
+# Pile — Agent Operating Notes
 
 ## Proof commands
 
