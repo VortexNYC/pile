@@ -1,32 +1,32 @@
 ---
-name: vortex-sdk
-description: Use the generated TypeScript SDK (openapi-fetch wrapper) to call the Vortex API with full type safety.
+name: pile-sdk
+description: Use the generated TypeScript SDK (openapi-fetch wrapper) to call the Pile API with full type safety.
 ---
 
-# Vortex SDK
+# Pile SDK
 
 ## Overview
 
-The `issuetracker-client` package is an `openapi-fetch` client typed against the Vortex OpenAPI spec. Import it to call Vortex endpoints with end-to-end type inference.
+The `pile-client` package is an `openapi-fetch` client typed against the Pile OpenAPI spec. Import it to call Pile endpoints with end-to-end type inference.
 
 ## When to use
 
 - You are building a TypeScript or JavaScript automation or integration.
-- You want type-safe access to the Vortex HTTP API.
+- You want type-safe access to the Pile HTTP API.
 - You need a lightweight client with minimal setup.
 
 ## Setup
 
-1. Install `issuetracker-client` from the workspace or registry.
+1. Install `pile-client` from the workspace or registry.
 2. Create a client with a base URL and workspace-scoped API key.
 3. Call typed methods like `client.GET`, `client.POST`, etc.
 
 ```typescript
-import { createIssueTrackerClient } from "issuetracker-client";
+import { createPileClient } from "pile-client";
 
-const client = createIssueTrackerClient({
-  baseUrl: "https://<your-worker>",
-  apiKey: process.env.VORTEX_API_KEY!,
+const client = createPileClient({
+  baseUrl: "https://pile.nyc",
+  apiKey: process.env.PILE_API_KEY!,
 });
 ```
 

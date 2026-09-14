@@ -1,7 +1,7 @@
 {
-  "name": "issuetracker-client",
+  "name": "pile-client",
   "version": "0.1.0",
-  "description": "Generated typed OpenAPI client for the Vortex issue tracker.",
+  "description": "Generated typed OpenAPI client for Pile.",
   "license": "MIT",
   "files": [
     "dist"
@@ -22,6 +22,6 @@
     "openapi-fetch": "0.17.0"
   },
   "devDependencies": {
-    "@issuetracker/tsconfig": "workspace:*"
+    "@pile/tsconfig": "workspace:*"
   }
 }

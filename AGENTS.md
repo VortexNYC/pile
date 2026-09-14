@@ -1,4 +1,4 @@
-# Vortex Issue Tracker — Agent Operating Notes
+# Pile — Agent Operating Notes
 
 ## Proof commands
 

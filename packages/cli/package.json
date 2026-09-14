@@ -1,10 +1,10 @@
 {
-  "name": "issuetracker-cli",
+  "name": "pile-cli",
   "version": "0.1.0",
-  "description": "CLI for the Vortex issue tracker.",
+  "description": "CLI for Pile.",
   "license": "MIT",
   "bin": {
-    "issuetracker": "./bin/issuetracker.js"
+    "pile": "./bin/pile.js"
   },
   "files": [
     "dist",
@@ -18,7 +18,7 @@
     "cli": "tsx src/index.ts"
   },
   "devDependencies": {
-    "@issuetracker/tsconfig": "workspace:*",
+    "@pile/tsconfig": "workspace:*",
     "tsx": "4.23.13"
   }
 }

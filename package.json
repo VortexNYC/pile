@@ -1,7 +1,7 @@
 {
-  "name": "issuetracker",
+  "name": "pile",
   "version": "0.1.0",
-  "description": "Vortex Issue Tracker — an open-source, agent-native issue tracker on Cloudflare Workers.",
+  "description": "Pile — an open-source, agent-native issue tracker on Cloudflare Workers.",
   "keywords": [
     "agent",
     "cloudflare",
@@ -61,7 +61,7 @@
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.19.1",
     "@cloudflare/workers-types": "5.20260730.1",
-    "@issuetracker/tsconfig": "workspace:*",
+    "@pile/tsconfig": "workspace:*",
     "@secretlint/secretlint-rule-preset-recommend": "^13.0.5",
     "@types/node": "^26.4.0",
     "drizzle-kit": "^0.31.10",

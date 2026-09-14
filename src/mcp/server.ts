@@ -41,7 +41,7 @@ export async function handleMcpRequest(
   app: HonoApp
 ) {
   const server = new McpServer({
-    name: "issuetracker",
+    name: "pile",
     version: "0.1.0",
   });
 

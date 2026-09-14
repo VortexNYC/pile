@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
-  "extends": "@issuetracker/tsconfig/worker.json",
+  "extends": "@pile/tsconfig/worker.json",
   "files": [
     "src/types/env.d.ts",
     "src/types/cloudflare-test.d.ts",

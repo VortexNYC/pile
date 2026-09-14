@@ -1,23 +1,23 @@
 ---
 title: Agent setup
-description: Connect coding agents to Vortex through MCP, the CLI, and the TypeScript SDK.
+description: Connect coding agents to Pile through MCP, the CLI, and the TypeScript SDK.
 ---
 
 # Agent setup
 
-Vortex is backend-first. The surfaces for humans and agents are the HTTP API, the MCP server, the CLI, and the TypeScript SDK.
+Pile is backend-first. The surfaces for humans and agents are the HTTP API, the MCP server, the CLI, and the TypeScript SDK.
 
 ## MCP
 
-The Vortex MCP server exposes every OpenAPI operation as a typed MCP tool. Point your MCP client at `https://<your-worker>/mcp` and include a workspace-scoped API token in the `Authorization` header.
+The Pile MCP server exposes every OpenAPI operation as a typed MCP tool. Point your MCP client at `https://<your-worker>/mcp` and include a workspace-scoped API token in the `Authorization` header.
 
 ### Cursor example
 
 ```json
 {
   "mcpServers": {
-    "vortex": {
-      "url": "https://issuetracker.shlomo-31b.workers.dev/mcp",
+    "pile": {
+      "url": "https://pile.nyc/mcp",
       "headers": {
         "Authorization": "Bearer <your-api-token>"
       }
@@ -36,24 +36,24 @@ The Vortex MCP server exposes every OpenAPI operation as a typed MCP tool. Point
 
 ## CLI
 
-Install the `issuetracker-cli` package and authenticate with an API key.
+Install the `pile-cli` package and authenticate with an API key.
 
 ```bash
-issuetracker config set --api-key <key>
-issuetracker issues list --workspace org_vortex_main
-issuetracker support tickets list --workspace org_vortex_main
+pile config set --api-key <key>
+pile issues list --workspace org_vortex_main
+pile support tickets list --workspace org_vortex_main
 ```
 
 ## SDK
 
-The `issuetracker-client` package is an `openapi-fetch` client typed against the Vortex OpenAPI spec.
+The `pile-client` package is an `openapi-fetch` client typed against the Pile OpenAPI spec.
 
 ```typescript
-import { createIssueTrackerClient } from "issuetracker-client";
+import { createPileClient } from "pile-client";
 
-const client = createIssueTrackerClient({
-  baseUrl: "https://<your-worker>",
-  apiKey: process.env.VORTEX_API_KEY!,
+const client = createPileClient({
+  baseUrl: "https://pile.nyc",
+  apiKey: process.env.PILE_API_KEY!,
 });
 
 const { data } = await client.GET("/workspaces", {});
@@ -63,8 +63,8 @@ const { data } = await client.GET("/workspaces", {});
 
 The local agent skills are in `.devin/skills`:
 
-- `vortex-mcp` — MCP usage
-- `vortex-cli` — CLI usage
-- `vortex-sdk` — TypeScript SDK usage
+- `pile-mcp` — MCP usage
+- `pile-cli` — CLI usage
+- `pile-sdk` — TypeScript SDK usage
 
 These skills are also published in `llms.txt` for agents that read the docs site.

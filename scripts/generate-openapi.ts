@@ -165,7 +165,7 @@ function makeSummary(method: string, path: string): string {
 const rawDoc: unknown = app.getOpenAPIDocument({
   openapi: "3.0.0",
   info: {
-    title: "Vortex Issue Tracker",
+    title: "Pile",
     version: "0.1.0",
     description: "OpenAPI source of truth for REST, CLI, and MCP surfaces.",
   },

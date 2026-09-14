@@ -57,7 +57,7 @@ importers:
       '@cloudflare/workers-types':
         specifier: 5.20260730.1
         version: 5.20260730.1
-      '@issuetracker/tsconfig':
+      '@pile/tsconfig':
         specifier: workspace:*
         version: link:packages/tsconfig
       '@secretlint/secretlint-rule-preset-recommend':
@@ -102,7 +102,7 @@ importers:
 
   packages/cli:
     devDependencies:
-      '@issuetracker/tsconfig':
+      '@pile/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
       tsx:
@@ -115,7 +115,7 @@ importers:
         specifier: 0.17.0
         version: 0.17.0
     devDependencies:
-      '@issuetracker/tsconfig':
+      '@pile/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
 

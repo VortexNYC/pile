@@ -140,16 +140,16 @@ describe("CLI integration", () => {
   let originalApiKey: string | undefined;
 
   beforeAll(() => {
-    home = mkdtempSync(join(tmpdir(), "issuetracker-cli-"));
+    home = mkdtempSync(join(tmpdir(), "pile-cli-"));
     originalHome = process.env.HOME;
-    originalApiKey = process.env.ISSUETRACKER_API_KEY;
+    originalApiKey = process.env.PILE_API_KEY;
     process.env.HOME = home;
-    process.env.ISSUETRACKER_API_KEY = "test-api-key";
+    process.env.PILE_API_KEY = "test-api-key";
   });
 
   afterAll(() => {
     process.env.HOME = originalHome;
-    process.env.ISSUETRACKER_API_KEY = originalApiKey;
+    process.env.PILE_API_KEY = originalApiKey;
     rmSync(home, { recursive: true, force: true });
   });
 
@@ -269,7 +269,7 @@ describe("CLI integration", () => {
   });
 
   it("runs capture run, uploads console logs and video, and finalizes", async () => {
-    const artifactsDir = mkdtempSync(join(tmpdir(), "issuetracker-capture-"));
+    const artifactsDir = mkdtempSync(join(tmpdir(), "pile-capture-"));
     writeFileSync(
       join(artifactsDir, "video.webm"),
       new Uint8Array([0, 0, 0, 24])
@@ -322,7 +322,7 @@ describe("CLI integration", () => {
   });
 
   it("capture run returns the wrapped command exit code and still finalizes", async () => {
-    const artifactsDir = mkdtempSync(join(tmpdir(), "issuetracker-capture-"));
+    const artifactsDir = mkdtempSync(join(tmpdir(), "pile-capture-"));
     writeFileSync(
       join(artifactsDir, "video.webm"),
       new Uint8Array([0, 0, 0, 24])
@@ -367,7 +367,7 @@ describe("CLI integration", () => {
   });
 
   it("capture run returns 1 when the token request fails", async () => {
-    const artifactsDir = mkdtempSync(join(tmpdir(), "issuetracker-capture-"));
+    const artifactsDir = mkdtempSync(join(tmpdir(), "pile-capture-"));
     writeFileSync(
       join(artifactsDir, "video.webm"),
       new Uint8Array([0, 0, 0, 24])

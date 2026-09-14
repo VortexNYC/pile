@@ -1,4 +1,4 @@
-# Vortex Issue Tracker
+# Pile
 
 An open-source, agent-native issue tracker built on Cloudflare Workers, D1, and Durable Objects.
 
@@ -24,9 +24,9 @@ An open-source, agent-native issue tracker built on Cloudflare Workers, D1, and 
 
 ### Self-host on Cloudflare (recommended)
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/VortexNYC/issuetracker)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/VortexNYC/pile)
 
-The committed `wrangler.toml` is already self-host-ready: D1 and R2 auto-provision on `wrangler deploy`, the Durable Object and cron trigger are declared, and the hosted Vortex instance is isolated under `[env.production]` (deployed with `wrangler deploy -e production`).
+The committed `wrangler.toml` is already self-host-ready: D1 and R2 auto-provision on `wrangler deploy`, the Durable Object and cron trigger are declared, and the hosted Pile instance is isolated under `[env.production]` (deployed with `wrangler deploy -e production`).
 
 Or from the CLI in one command:
 

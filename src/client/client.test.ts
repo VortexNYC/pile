@@ -1,12 +1,12 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
-import { createIssueTrackerClient } from "../../packages/client/src/index.js";
+import { createPileClient } from "../../packages/client/src/index.js";
 import app from "../index.js";
 
 describe("typed client integration", () => {
   it("lists workspaces", async () => {
-    const client = createIssueTrackerClient({
+    const client = createPileClient({
       baseUrl: "http://localhost",
       apiKey: "unused",
       fetch: async (request) => app.fetch(request, env),

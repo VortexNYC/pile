@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createIssueTrackerClient } from "./index.js";
+import { createPileClient } from "./index.js";
 
 describe("Issue Tracker client", () => {
   it("lists workspaces", async () => {
@@ -10,7 +10,7 @@ describe("Issue Tracker client", () => {
         headers: { "Content-Type": "application/json" },
       })
     );
-    const client = createIssueTrackerClient({
+    const client = createPileClient({
       baseUrl: "https://example.com",
       apiKey: "test-key",
       fetch: (url, init) => mockFetch(url, init),
@@ -31,7 +31,7 @@ describe("Issue Tracker client", () => {
         headers: { "Content-Type": "application/json" },
       })
     );
-    const client = createIssueTrackerClient({
+    const client = createPileClient({
       baseUrl: "https://example.com",
       apiKey: "test-key",
       fetch: (url, init) => mockFetch(url, init),
@@ -53,7 +53,7 @@ describe("Issue Tracker client", () => {
         headers: { "Content-Type": "application/json" },
       })
     );
-    const client = createIssueTrackerClient({
+    const client = createPileClient({
       baseUrl: "https://example.com",
       apiKey: "test-key",
       fetch: (url, init) => mockFetch(url, init),

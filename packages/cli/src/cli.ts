@@ -141,7 +141,7 @@ function configPath(): string {
   if (home === undefined || home.length === 0) {
     throw new Error("HOME is required");
   }
-  return join(home, ".issuetracker", "config.json");
+  return join(home, ".pile", "config.json");
 }
 
 function readStoredConfig(): CliConfig {
@@ -163,11 +163,10 @@ function resolveConfig(): Required<Pick<CliConfig, "baseUrl">> & CliConfig {
   const stored = readStoredConfig();
   return {
     ...stored,
-    baseUrl:
-      process.env.ISSUETRACKER_BASE_URL ?? stored.baseUrl ?? defaultBaseUrl,
-    apiKey: process.env.ISSUETRACKER_API_KEY ?? stored.apiKey,
+    baseUrl: process.env.PILE_BASE_URL ?? stored.baseUrl ?? defaultBaseUrl,
+    apiKey: process.env.PILE_API_KEY ?? stored.apiKey,
     capturePublicKey:
-      process.env.ISSUETRACKER_CAPTURE_PUBLIC_KEY ?? stored.capturePublicKey,
+      process.env.PILE_CAPTURE_PUBLIC_KEY ?? stored.capturePublicKey,
   };
 }
 
@@ -184,22 +183,18 @@ async function requestCommand(
 ): Promise<number> {
   const methodRaw = (positionals[1] ?? "").toUpperCase();
   if (!isHttpMethod(methodRaw)) {
-    throw new Error(
-      "Usage: issuetracker request METHOD PATH [--body-json ...]"
-    );
+    throw new Error("Usage: pile request METHOD PATH [--body-json ...]");
   }
   const method = methodRaw;
   const path = positionals[2];
   if (path === undefined) {
-    throw new Error(
-      "Usage: issuetracker request METHOD PATH [--body-json ...]"
-    );
+    throw new Error("Usage: pile request METHOD PATH [--body-json ...]");
   }
 
   const config = resolveConfig();
   if (config.apiKey === undefined || config.apiKey.length === 0) {
     throw new Error(
-      "Missing API key. Set ISSUETRACKER_API_KEY or run `issuetracker config set --api-key <key>`."
+      "Missing API key. Set PILE_API_KEY or run `pile config set --api-key <key>`."
     );
   }
 
@@ -264,7 +259,7 @@ async function commandCommand(
   const config = resolveConfig();
   if (config.apiKey === undefined || config.apiKey.length === 0) {
     throw new Error(
-      "Missing API key. Set ISSUETRACKER_API_KEY or run `issuetracker config set --api-key <key>`."
+      "Missing API key. Set PILE_API_KEY or run `pile config set --api-key <key>`."
     );
   }
 
@@ -391,7 +386,7 @@ async function captureRunCommand(
     config.capturePublicKey;
   if (publicKey === undefined || publicKey.length === 0) {
     throw new Error(
-      "Missing capture public key. Set ISSUETRACKER_CAPTURE_PUBLIC_KEY, use --public-key, or run `issuetracker config set --capture-public-key <key>`."
+      "Missing capture public key. Set PILE_CAPTURE_PUBLIC_KEY, use --public-key, or run `pile config set --capture-public-key <key>`."
     );
   }
 
