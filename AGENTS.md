@@ -45,7 +45,7 @@ Vortex is our own engineering source of truth. While working on this repo, agent
 
 - Workspace: `org_vortex_main`
 - Team for this repo: `Issue Tracker` (`ISS`)
-- Backlog: `ISS-1` through `ISS-8`
+- Backlog: `ISS-1` through `ISS-21`
 
 For every non-trivial chunk of work:
 
@@ -53,8 +53,7 @@ For every non-trivial chunk of work:
 2. Create or update an `ISS-*` issue describing the work.
 3. Use the issue identifier in branch names and commit messages where practical.
 4. Verify the change through the product API before reporting completion.
-
-Do not create parallel local issue trackers or todo files.
+5. Actively look for opportunities to use the Vortex API, CLI, SDK, or MCP for issue lifecycle (status, comments, assignments, branch/PR metadata) instead of `gh`, `git`, or external trackers. Default to the product for updates, verification, and triage.
 
 ## Where things live
 
