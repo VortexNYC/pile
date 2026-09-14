@@ -32,6 +32,7 @@ const teamSchema = z.object({
   parentAutoClose: z.boolean(),
   triageAssigneeId: z.string().nullable(),
   defaultTemplateId: z.string().nullable(),
+  defaultRepo: z.string().nullable(),
   subIssueAutoClose: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -49,6 +50,7 @@ function serializeTeam(record: TeamRecord) {
     parentAutoClose: record.parentAutoClose,
     triageAssigneeId: record.triageAssigneeId,
     defaultTemplateId: record.defaultTemplateId,
+    defaultRepo: record.defaultRepo,
     subIssueAutoClose: record.subIssueAutoClose,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
@@ -62,6 +64,7 @@ const createTeamBodySchema = z.object({
   parentAutoClose: z.boolean().optional(),
   triageAssigneeId: z.string().nullable().optional(),
   defaultTemplateId: z.string().nullable().optional(),
+  defaultRepo: z.string().nullable().optional(),
   subIssueAutoClose: z.boolean().optional(),
 });
 
@@ -72,6 +75,7 @@ const updateTeamBodySchema = z.object({
   parentAutoClose: z.boolean().optional(),
   triageAssigneeId: z.string().nullable().optional(),
   defaultTemplateId: z.string().nullable().optional(),
+  defaultRepo: z.string().nullable().optional(),
   subIssueAutoClose: z.boolean().optional(),
 });
 
@@ -332,6 +336,7 @@ export function registerTeamRoutes(app: OpenAPIHono<AppContext>) {
       parentAutoClose: body.parentAutoClose,
       triageAssigneeId: body.triageAssigneeId,
       defaultTemplateId: body.defaultTemplateId,
+      defaultRepo: body.defaultRepo,
       subIssueAutoClose: body.subIssueAutoClose,
     });
     return c.json(serializeTeam(record), 201);

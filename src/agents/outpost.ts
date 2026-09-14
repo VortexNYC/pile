@@ -7,7 +7,14 @@ const daytonaSandboxSchema = z.object({
   id: z.string(),
   name: z.string(),
   state: z.string(),
+  lastSeen: z.string().nullable().optional(),
+  nodeDomain: z.string().nullable().optional(),
+  error: z.string().nullable().optional(),
   labels: z.record(z.string(), z.string()).optional(),
+});
+
+const daytonaSandboxListSchema = z.object({
+  items: z.array(daytonaSandboxSchema),
 });
 
 const outpostQueueSchema = z.object({
@@ -85,6 +92,9 @@ function daytonaConfig(env: WorkerEnv) {
  * session. The sandbox snapshot runs `devin worker start --session <id>` as
  * its entrypoint, so the worker picks up exactly this session and exits when
  * it ends.
+ *
+ * This is idempotent: if a sandbox already exists for the session it is
+ * reused when healthy and recreated when it is not.
  */
 export async function provisionOutpostWorker(
   env: WorkerEnv,
@@ -100,6 +110,51 @@ export async function provisionOutpostWorker(
   const outpostToken = env.DEVIN_OUTPOST_TOKEN;
   if (!config || !outpostId || !outpostToken) return;
 
+  const shortId = devinSessionId.replace(/^devin-/, "").slice(0, 12);
+  const name = `vortex-outpost-${shortId}`;
+
+  // List all sandboxes and find any that already belong to this session.
+  const listRes = await fetch(`${config.apiUrl}/sandbox`, {
+    headers: { Authorization: `Bearer ${config.apiKey}` },
+  });
+  if (!listRes.ok) {
+    console.error("daytona sandbox list failed", listRes.status);
+    return;
+  }
+  const list = daytonaSandboxListSchema.parse(await listRes.json());
+  const existing = list.items.find(
+    (s) =>
+      s.name === name ||
+      (s.labels?.["vortex.outpost"] === "1" &&
+        s.labels?.["vortex.session"] === fleetId)
+  );
+
+  if (existing) {
+    if (existing.state === "started") {
+      console.log("outpost worker already healthy", {
+        session: fleetId,
+        sandbox: existing.id,
+      });
+      return;
+    }
+    console.log("outpost worker exists but is not healthy, recreating", {
+      session: fleetId,
+      sandbox: existing.id,
+      state: existing.state,
+    });
+    const del = await fetch(`${config.apiUrl}/sandbox/${existing.id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${config.apiKey}` },
+    });
+    if (!del.ok && del.status !== 404) {
+      console.error("daytona sandbox delete failed", {
+        session: fleetId,
+        status: del.status,
+      });
+      return;
+    }
+  }
+
   const res = await fetch(`${config.apiUrl}/sandbox`, {
     method: "POST",
     headers: {
@@ -107,7 +162,7 @@ export async function provisionOutpostWorker(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      name: `vortex-outpost-${devinSessionId.replace(/^devin-/, "").slice(0, 12)}`,
+      name,
       snapshot: env.DAYTONA_SNAPSHOT ?? "vortex-outpost-worker",
       env: {
         OUTPOST_ID: outpostId,
@@ -149,7 +204,7 @@ export async function provisionOutpostWorker(
 
   const sandbox = daytonaSandboxSchema.parse(await res.json());
   console.log("outpost worker provisioned", {
-    session: devinSessionId,
+    session: fleetId,
     sandbox: sandbox.id,
   });
 }
@@ -171,9 +226,7 @@ export async function sweepOutpostWorkers(env: WorkerEnv): Promise<void> {
     console.error("daytona sandbox list failed", res.status);
     return;
   }
-  const list = z
-    .object({ items: z.array(daytonaSandboxSchema) })
-    .parse(await res.json());
+  const list = daytonaSandboxListSchema.parse(await res.json());
 
   const workers = list.items.filter(
     (s) =>

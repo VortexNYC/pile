@@ -9,6 +9,7 @@ export const teamMetadataSchema = z.object({
   subIssueAutoClose: z.boolean(),
   triageAssigneeId: z.string().nullable().optional(),
   defaultTemplateId: z.string().nullable().optional(),
+  defaultRepo: z.string().nullable().optional(),
 });
 
 export type TeamMetadata = z.infer<typeof teamMetadataSchema>;
@@ -39,6 +40,7 @@ export function teamMetadataString(values: {
   subIssueAutoClose?: boolean;
   triageAssigneeId?: string | null;
   defaultTemplateId?: string | null;
+  defaultRepo?: string | null;
 }): string {
   return JSON.stringify({
     key: values.key,
@@ -49,5 +51,6 @@ export function teamMetadataString(values: {
     subIssueAutoClose: values.subIssueAutoClose ?? false,
     triageAssigneeId: values.triageAssigneeId ?? null,
     defaultTemplateId: values.defaultTemplateId ?? null,
+    defaultRepo: values.defaultRepo ?? null,
   });
 }

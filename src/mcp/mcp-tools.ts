@@ -6487,6 +6487,10 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string",
               "nullable": true
             },
+            "defaultRepo": {
+              "type": "string",
+              "nullable": true
+            },
             "subIssueAutoClose": {
               "type": "boolean"
             }
@@ -12315,6 +12319,10 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "nullable": true
             },
             "defaultTemplateId": {
+              "type": "string",
+              "nullable": true
+            },
+            "defaultRepo": {
               "type": "string",
               "nullable": true
             },

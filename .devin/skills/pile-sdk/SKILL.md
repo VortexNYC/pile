@@ -18,16 +18,64 @@ The `pile-client` package is an `openapi-fetch` client typed against the Pile Op
 ## Setup
 
 1. Install `pile-client` from the workspace or registry.
-2. Create a client with a base URL and workspace-scoped API key.
+2. Create a client with the base URL of your Pile deployment (your Worker URL, or `http://127.0.0.1:8787` for local `wrangler dev`) and a workspace-scoped API key.
 3. Call typed methods like `client.GET`, `client.POST`, etc.
 
 ```typescript
 import { createPileClient } from "pile-client";
 
 const client = createPileClient({
-  baseUrl: "https://pile.nyc",
+  baseUrl: process.env.PILE_BASE_URL!, // e.g. https://<your-worker>
   apiKey: process.env.PILE_API_KEY!,
 });
+```
+
+### Auth options
+
+```typescript
+// Workspace API key (default)
+createPileClient({ baseUrl, apiKey });
+// Explicit session cookie (server-side, on behalf of a signed-in user)
+createPileClient({
+  baseUrl,
+  auth: { type: "session", cookie: "better-auth.session_token=..." },
+});
+// Browser: send the ambient session cookie via credentials: "include"
+createPileClient({ baseUrl, auth: { type: "browser" } });
+```
+
+### Retries
+
+Idempotent requests (`GET`, `HEAD`, `OPTIONS`, `PUT`, `DELETE`) are retried on network failures and
+408/425/429/5xx with exponential backoff (2 retries, `Retry-After` honoured). Tune with
+`retry: { maxRetries, retryOnStatus, retryMethods, baseDelayMs, maxDelayMs }` or disable with `retry: false`.
+
+### Typed errors
+
+```typescript
+import {
+  unwrap,
+  PileRequestError,
+  isPileErrorCodeOf,
+  toPileError,
+} from "pile-client";
+
+try {
+  const data = await unwrap(client.GET("/workspaces", {}));
+} catch (err) {
+  if (
+    err instanceof PileRequestError &&
+    isPileErrorCodeOf(err.error, "UNAUTHORIZED")
+  ) {
+    /* ... */
+  }
+}
+
+// or without throwing:
+const { error, response } = await client.GET("/workspaces", {});
+if (error) {
+  const pileError = toPileError(error, response); // PileApiError | PileHttpError | PileNetworkError
+}
 ```
 
 ## Common workflows

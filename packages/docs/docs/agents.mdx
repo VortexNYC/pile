@@ -17,7 +17,7 @@ The Pile MCP server exposes every OpenAPI operation as a typed MCP tool. Point y
 {
   "mcpServers": {
     "pile": {
-      "url": "https://pile.nyc/mcp",
+      "url": "https://<your-worker>/mcp",
       "headers": {
         "Authorization": "Bearer <your-api-token>"
       }
@@ -36,9 +36,10 @@ The Pile MCP server exposes every OpenAPI operation as a typed MCP tool. Point y
 
 ## CLI
 
-Install the `pile-cli` package and authenticate with an API key.
+Install the `pile-cli` package and authenticate with an API key. The CLI defaults to `http://127.0.0.1:8787` (local `wrangler dev`); point it at your deployment with `PILE_BASE_URL` or `pile config set --base-url`.
 
 ```bash
+export PILE_BASE_URL=https://<your-worker>
 pile config set --api-key <key>
 pile issues list --workspace org_vortex_main
 pile support tickets list --workspace org_vortex_main
@@ -52,7 +53,7 @@ The `pile-client` package is an `openapi-fetch` client typed against the Pile Op
 import { createPileClient } from "pile-client";
 
 const client = createPileClient({
-  baseUrl: "https://pile.nyc",
+  baseUrl: process.env.PILE_BASE_URL!, // e.g. https://<your-worker>
   apiKey: process.env.PILE_API_KEY!,
 });
 

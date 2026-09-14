@@ -98,24 +98,6 @@ export async function setSupportUserStatus(
   return row as unknown as SupportUserStatus;
 }
 
-export async function getSupportUserStatus(
-  db: D1Client,
-  organizationId: string,
-  userId: string
-): Promise<SupportUserStatus | null> {
-  const row = await db
-    .select()
-    .from(supportUserStatus)
-    .where(
-      and(
-        eq(supportUserStatus.organizationId, organizationId),
-        eq(supportUserStatus.userId, userId)
-      )
-    )
-    .get();
-  return (row as unknown as SupportUserStatus | undefined) ?? null;
-}
-
 export async function listSupportAgents(
   db: D1Client,
   organizationId: string

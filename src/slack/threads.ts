@@ -14,34 +14,6 @@ export interface SlackFileAttachment {
   fetchData?: () => Promise<Buffer | ArrayBuffer>;
 }
 
-export interface SlackMessageRaw {
-  ts?: string;
-  thread_ts?: string;
-  channel?: string;
-  channel_type?: string;
-  team?: string;
-  team_id?: string;
-  user?: string;
-  text?: string;
-}
-
-export async function findSupportConversation(
-  db: D1Client,
-  organizationId: string,
-  issueId: string
-) {
-  return db
-    .select()
-    .from(supportConversations)
-    .where(
-      and(
-        eq(supportConversations.organizationId, organizationId),
-        eq(supportConversations.issueId, issueId)
-      )
-    )
-    .get();
-}
-
 export async function storeSupportConversation(
   db: D1Client,
   values: {

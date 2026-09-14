@@ -18680,6 +18680,7 @@ export interface paths {
                                 parentAutoClose: boolean;
                                 triageAssigneeId: string | null;
                                 defaultTemplateId: string | null;
+                                defaultRepo: string | null;
                                 subIssueAutoClose: boolean;
                                 createdAt: string;
                                 updatedAt: string;
@@ -18709,6 +18710,7 @@ export interface paths {
                         parentAutoClose?: boolean;
                         triageAssigneeId?: string | null;
                         defaultTemplateId?: string | null;
+                        defaultRepo?: string | null;
                         subIssueAutoClose?: boolean;
                     };
                 };
@@ -18731,6 +18733,7 @@ export interface paths {
                             parentAutoClose: boolean;
                             triageAssigneeId: string | null;
                             defaultTemplateId: string | null;
+                            defaultRepo: string | null;
                             subIssueAutoClose: boolean;
                             createdAt: string;
                             updatedAt: string;
@@ -18782,6 +18785,7 @@ export interface paths {
                             parentAutoClose: boolean;
                             triageAssigneeId: string | null;
                             defaultTemplateId: string | null;
+                            defaultRepo: string | null;
                             subIssueAutoClose: boolean;
                             createdAt: string;
                             updatedAt: string;
@@ -18843,6 +18847,7 @@ export interface paths {
                         parentAutoClose?: boolean;
                         triageAssigneeId?: string | null;
                         defaultTemplateId?: string | null;
+                        defaultRepo?: string | null;
                         subIssueAutoClose?: boolean;
                     };
                 };
@@ -18865,6 +18870,7 @@ export interface paths {
                             parentAutoClose: boolean;
                             triageAssigneeId: string | null;
                             defaultTemplateId: string | null;
+                            defaultRepo: string | null;
                             subIssueAutoClose: boolean;
                             createdAt: string;
                             updatedAt: string;
@@ -19068,6 +19074,7 @@ export interface paths {
                                 parentAutoClose: boolean;
                                 triageAssigneeId: string | null;
                                 defaultTemplateId: string | null;
+                                defaultRepo: string | null;
                                 subIssueAutoClose: boolean;
                                 createdAt: string;
                                 updatedAt: string;

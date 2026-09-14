@@ -7667,6 +7667,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "default-template-id",
       },
       {
+        name: "defaultRepo",
+        flag: "default-repo",
+      },
+      {
         name: "subIssueAutoClose",
         flag: "sub-issue-auto-close",
       },
@@ -7726,6 +7730,10 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "defaultTemplateId",
         flag: "default-template-id",
+      },
+      {
+        name: "defaultRepo",
+        flag: "default-repo",
       },
       {
         name: "subIssueAutoClose",

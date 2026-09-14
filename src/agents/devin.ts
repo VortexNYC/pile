@@ -35,7 +35,21 @@ const STATUS_MAP: Record<string, AgentSessionStatus> = {
 };
 
 function buildPrompt(issue: Issue): string {
-  return `# ${issue.title}\n\n${issue.description ?? ""}\n\nDo not attempt to update the issue tracker yourself — an external system will poll your session and write the PR URL and final status back automatically.`;
+  const repo = issue.repo ?? "this repository";
+  const branch = issue.branch ?? `issue-${issue.id}`;
+  return [
+    `# ${issue.title}`,
+    "",
+    `Repository: https://github.com/${repo}`,
+    `Suggested branch name: ${branch}`,
+    `Issue tracker: https://github.com/VortexNYC/pile`,
+    `Issue: ${issue.identifier ?? issue.id}`,
+    "",
+    issue.description ?? "",
+    "",
+    "Do all work in the Repository above. Do not open pull requests in any other repository. Open the PR against the main branch of that repository.",
+    "Do not attempt to update the issue tracker yourself — an external system will poll your session and write the PR URL and final status back automatically.",
+  ].join("\n");
 }
 
 export class DevinAgentProvider implements AgentProvider {
