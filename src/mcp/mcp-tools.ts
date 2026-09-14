@@ -7576,6 +7576,51 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdAgentSessionsSessionIdChildren",
+    "description": "Create agent session children (POST /workspaces/{organizationId}/agent/sessions/{sessionId}/children) Path params (top-level, required): organizationId, sessionId. Request body goes in the \"body\" object; fields: title*, description, agentId, model, repo (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/agent/sessions/{sessionId}/children",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": {
+              "type": "string"
+            },
+            "agentId": {
+              "type": "string"
+            },
+            "model": {
+              "type": "string"
+            },
+            "repo": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "title"
+          ]
+        }
+      },
+      "required": [
+        "organizationId",
+        "sessionId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdAgentSessionsSessionIdPoll",
     "description": "Poll agent session (POST /workspaces/{organizationId}/agent/sessions/{sessionId}/poll) Path params (top-level, required): organizationId, sessionId.",
     "method": "POST",

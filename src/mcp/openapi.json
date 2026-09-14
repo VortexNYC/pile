@@ -3684,6 +3684,265 @@
         "summary": "Poll agent session"
       }
     },
+    "/workspaces/{organizationId}/agent/sessions/{sessionId}/children": {
+      "post": {
+        "tags": [
+          "agent-sessions"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "sessionId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "agentId": {
+                    "type": "string"
+                  },
+                  "model": {
+                    "type": "string"
+                  },
+                  "repo": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "title"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Child session created and dispatched",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "session": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "issueId": {
+                          "type": "string"
+                        },
+                        "agentId": {
+                          "type": "string"
+                        },
+                        "provider": {
+                          "type": "string"
+                        },
+                        "actorId": {
+                          "type": "string"
+                        },
+                        "actorType": {
+                          "type": "string",
+                          "enum": [
+                            "user",
+                            "agent"
+                          ]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "created",
+                            "running",
+                            "waiting",
+                            "completed",
+                            "failed",
+                            "canceled"
+                          ]
+                        },
+                        "result": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "url": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "providerSessionId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        },
+                        "activities": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "sessionId": {
+                                "type": "string"
+                              },
+                              "actorId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "thought",
+                                  "response",
+                                  "error",
+                                  "elicitation",
+                                  "action",
+                                  "status"
+                                ]
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "payload": {
+                                "nullable": true
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "sessionId",
+                              "actorId",
+                              "type",
+                              "message",
+                              "createdAt"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "issueId",
+                        "agentId",
+                        "provider",
+                        "actorId",
+                        "actorType",
+                        "status",
+                        "result",
+                        "url",
+                        "providerSessionId",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    },
+                    "issue": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "identifier": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "priority": {
+                          "type": "string"
+                        },
+                        "repo": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "branch": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "parentId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "identifier",
+                        "title",
+                        "description",
+                        "status",
+                        "priority",
+                        "repo",
+                        "branch",
+                        "parentId",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "session",
+                    "issue"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "404": {
+            "description": "Session or parent issue not found"
+          },
+          "429": {
+            "description": "Too many active child sessions"
+          }
+        },
+        "summary": "Create agent session children"
+      }
+    },
     "/workspaces/{organizationId}/agent/providers": {
       "get": {
         "tags": [

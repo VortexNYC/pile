@@ -1679,6 +1679,117 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/agent/sessions/{sessionId}/children": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create agent session children */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    sessionId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        title: string;
+                        description?: string;
+                        agentId?: string;
+                        model?: string;
+                        repo?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Child session created and dispatched */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            session: {
+                                id: string;
+                                organizationId: string;
+                                issueId: string;
+                                agentId: string;
+                                provider: string;
+                                actorId: string;
+                                /** @enum {string} */
+                                actorType: "user" | "agent";
+                                /** @enum {string} */
+                                status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                                result: string | null;
+                                url: string | null;
+                                providerSessionId: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                activities?: {
+                                    id: string;
+                                    sessionId: string;
+                                    actorId: string | null;
+                                    /** @enum {string} */
+                                    type: "thought" | "response" | "error" | "elicitation" | "action" | "status";
+                                    message: string;
+                                    payload?: unknown;
+                                    createdAt: string;
+                                }[];
+                            };
+                            issue: {
+                                id: string;
+                                identifier: string | null;
+                                title: string;
+                                description: string | null;
+                                status: string;
+                                priority: string;
+                                repo: string | null;
+                                branch: string | null;
+                                parentId: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Bad request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Session or parent issue not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Too many active child sessions */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/agent/providers": {
         parameters: {
             query?: never;
