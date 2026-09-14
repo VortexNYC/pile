@@ -796,6 +796,30 @@ export const workspaceAgentActivities = sqliteTable(
   ]
 );
 
+export const workspaceMcpServers = sqliteTable(
+  "mcp_servers" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    name: text("name" as string).notNull(),
+    url: text("url" as string).notNull(),
+    scope: text("scope" as string, {
+      enum: ["workspace", "repo", "issue"],
+    }).notNull(),
+    repo: text("repo" as string),
+    issueId: text("issue_id" as string),
+    createdAt: text("created_at" as string).notNull(),
+    updatedAt: text("updated_at" as string).notNull(),
+  },
+  (table) => [
+    index("mcp_servers_organization_idx" as string).on(table.organizationId),
+    index("mcp_servers_scope_idx" as string).on(
+      table.organizationId,
+      table.scope
+    ),
+  ]
+);
+
 export const workspaceWebhookSubscriptions = sqliteTable(
   "webhook_subscriptions" as string,
   {

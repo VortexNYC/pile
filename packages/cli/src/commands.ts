@@ -6606,6 +6606,88 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "mcp servers list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/mcp/servers",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "scope",
+        flag: "scope",
+      },
+    ],
+    body: [],
+  },
+  "mcp servers create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/mcp/servers",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "url",
+        flag: "url",
+      },
+      {
+        name: "scope",
+        flag: "scope",
+      },
+      {
+        name: "repo",
+        flag: "repo",
+      },
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+    ],
+  },
+  "mcp servers get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/mcp/servers/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "mcp servers delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/mcp/servers/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "issues subscribers": {
     method: "POST",
     path: "/workspaces/{organizationId}/issues/{issueId}/subscribers",
