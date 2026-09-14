@@ -157,4 +157,72 @@ describe("support-migration API", () => {
     );
     expect(res.status).toBe(400);
   });
+
+  it("runs a Zendesk import with no tickets", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input) => {
+      const url = new URL(
+        typeof input === "string"
+          ? input
+          : input instanceof Request
+            ? input.url
+            : input.href
+      );
+      if (url.hostname === "test.zendesk.com") {
+        if (url.pathname === "/api/v2/organizations.json") {
+          return Response.json({
+            organizations: [],
+            meta: { has_more: false },
+          });
+        }
+        if (url.pathname === "/api/v2/groups.json") {
+          return Response.json({
+            groups: [],
+            meta: { has_more: false },
+          });
+        }
+        if (url.pathname === "/api/v2/tickets.json") {
+          return Response.json({
+            tickets: [],
+            users: [],
+            meta: { has_more: false },
+          });
+        }
+      }
+      return originalFetch(input);
+    };
+
+    try {
+      const res = await fetch(
+        `/workspaces/${organizationId}/support/imports`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            source: "zendesk",
+            credentials: {
+              subdomain: "test",
+              email: "admin@test.com",
+              token: "zendesk-token",
+            },
+            options: { limit: 10 },
+          }),
+        },
+        token
+      );
+      expect(res.status).toBe(200);
+      const body = await res.json<{
+        ok: boolean;
+        source: string;
+        jobId: string;
+        status: string;
+        counts: Record<string, number>;
+      }>();
+      expect(body.ok).toBe(true);
+      expect(body.source).toBe("zendesk");
+      expect(body.status).toBe("completed");
+      expect(body.counts.tickets).toBe(0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });
