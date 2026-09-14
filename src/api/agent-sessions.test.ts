@@ -77,7 +77,10 @@ describe("agent sessions API", () => {
       request(`/workspaces/${organizationId}/issues`, {
         method: "POST",
         token,
-        body: JSON.stringify({ title: "Agent test" }),
+        body: JSON.stringify({
+          title: "Agent test",
+          repo: "VortexNYC/pile",
+        }),
       }),
       env
     );

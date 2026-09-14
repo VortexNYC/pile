@@ -17,6 +17,7 @@ export interface TeamRecord {
   subIssueAutoClose: boolean;
   triageAssigneeId: string | null;
   defaultTemplateId: string | null;
+  defaultRepo: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -31,6 +32,7 @@ function teamRecordFromRow(row: typeof team.$inferSelect): TeamRecord {
     subIssueAutoClose: false,
     triageAssigneeId: null,
     defaultTemplateId: null,
+    defaultRepo: null,
   };
   return {
     id: row.id,
@@ -44,6 +46,7 @@ function teamRecordFromRow(row: typeof team.$inferSelect): TeamRecord {
     subIssueAutoClose: metadata.subIssueAutoClose,
     triageAssigneeId: metadata.triageAssigneeId ?? null,
     defaultTemplateId: metadata.defaultTemplateId ?? null,
+    defaultRepo: metadata.defaultRepo ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -108,6 +111,7 @@ interface CreateTeamInput {
   subIssueAutoClose?: boolean;
   triageAssigneeId?: string | null;
   defaultTemplateId?: string | null;
+  defaultRepo?: string | null;
 }
 
 export async function createTeam(
@@ -125,6 +129,7 @@ export async function createTeam(
     subIssueAutoClose: values.subIssueAutoClose ?? false,
     triageAssigneeId: values.triageAssigneeId,
     defaultTemplateId: values.defaultTemplateId,
+    defaultRepo: values.defaultRepo,
   });
   const id = crypto.randomUUID();
   const now = new Date();
@@ -175,6 +180,7 @@ export async function createDefaultTeam(
 interface UpdateTeamInput {
   triageAssigneeId?: string | null;
   defaultTemplateId?: string | null;
+  defaultRepo?: string | null;
   key?: string;
   name?: string;
   isPublic?: boolean;
@@ -208,6 +214,10 @@ export async function updateTeam(
       input.defaultTemplateId === undefined
         ? existing.defaultTemplateId
         : input.defaultTemplateId,
+    defaultRepo:
+      input.defaultRepo === undefined
+        ? existing.defaultRepo
+        : input.defaultRepo,
   });
 
   await db
