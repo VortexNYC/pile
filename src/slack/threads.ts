@@ -3,8 +3,16 @@ import { and, eq } from "drizzle-orm";
 import { createD1, type D1Client } from "../global/db.js";
 import { supportConversations } from "../global/schema.js";
 import { VortexError } from "../platform/errors.js";
-import type { AppEnv } from "../types/env.js";
+import type { WorkerEnv } from "../platform/middleware.js";
 import type { Comment } from "../types/workspace.js";
+import { captureSlackAttachments } from "./attachments.js";
+
+export interface SlackFileAttachment {
+  url?: string;
+  name?: string;
+  mimeType?: string;
+  fetchData?: () => Promise<Buffer | ArrayBuffer>;
+}
 
 export interface SlackMessageRaw {
   ts?: string;
@@ -76,7 +84,7 @@ export async function storeSupportConversation(
 }
 
 export async function createSlackComment(
-  env: AppEnv,
+  env: WorkerEnv,
   organizationId: string,
   issueId: string,
   values: {
@@ -130,11 +138,12 @@ export async function createSlackComment(
 }
 
 export async function handleSlackThreadMessage(
-  env: AppEnv,
+  env: WorkerEnv,
   thread: { channelId: string; id: string },
   message: {
     id: string;
     text?: string;
+    attachments: SlackFileAttachment[];
     raw: unknown;
     author?: { userId?: string; userName?: string };
   }
@@ -179,6 +188,13 @@ export async function handleSlackThreadMessage(
       internal: false,
       createdAt,
     }
+  );
+
+  await captureSlackAttachments(
+    env,
+    conversation.organizationId,
+    conversation.issueId,
+    message
   );
 }
 

@@ -11,6 +11,7 @@ import type { WorkerEnv } from "../platform/middleware.js";
 import type { AppEnv } from "../types/env.js";
 import type { RealtimeEvent } from "../types/workspace.js";
 import { handleViewInPile } from "./actions.js";
+import { captureSlackAttachments } from "./attachments.js";
 import { workerdFetchAdapter } from "./fetch-adapter.js";
 import {
   handleSlackThreadMessage,
@@ -213,6 +214,8 @@ export function createSlackBot(
       issueId: issue.id,
       isExternal: true,
     });
+
+    await captureSlackAttachments(env, link.organizationId, issue.id, message);
 
     await thread.subscribe();
     await thread.post(
