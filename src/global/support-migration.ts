@@ -13,22 +13,6 @@ import {
   zendeskSupportOptionsSchema,
 } from "../support-migration/index.js";
 
-export const supportMigrationSourceSchema = z.enum([
-  "intercom",
-  "jam",
-  "jam-mcp",
-  "plain",
-  "zendesk",
-]);
-
-export const supportMigrationSourceNames = [
-  "intercom",
-  "jam",
-  "jam-mcp",
-  "plain",
-  "zendesk",
-] as const;
-
 export const supportMigrationRunBodySchema = z.discriminatedUnion("source", [
   z.object({
     source: z.literal("intercom"),
@@ -57,10 +41,6 @@ export const supportMigrationRunBodySchema = z.discriminatedUnion("source", [
   }),
 ]);
 
-export type SupportMigrationRunBody = z.infer<
-  typeof supportMigrationRunBodySchema
->;
-
 export const supportMigrationValidateBodySchema = z.discriminatedUnion(
   "source",
   [
@@ -86,7 +66,3 @@ export const supportMigrationValidateBodySchema = z.discriminatedUnion(
     }),
   ]
 );
-
-export type SupportMigrationValidateBody = z.infer<
-  typeof supportMigrationValidateBodySchema
->;

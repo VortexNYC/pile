@@ -17,8 +17,6 @@ export const slackIngestionConfigSchema = z
   })
   .passthrough();
 
-export type SlackIngestionConfig = z.infer<typeof slackIngestionConfigSchema>;
-
 export function getSlackIngestionMode(raw: string): SlackIngestionMode {
   const parsed = safeJSON(raw);
   const result = slackIngestionConfigSchema.safeParse(parsed);
