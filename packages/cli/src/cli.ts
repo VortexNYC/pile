@@ -134,6 +134,7 @@ type CliConfig = {
   readonly baseUrl?: string;
   readonly apiKey?: string;
   readonly capturePublicKey?: string;
+  readonly session?: string;
 };
 
 function configPath(): string {
@@ -156,6 +157,7 @@ function readStoredConfig(): CliConfig {
       typeof parsed.capturePublicKey === "string"
         ? parsed.capturePublicKey
         : undefined,
+    session: typeof parsed.session === "string" ? parsed.session : undefined,
   };
 }
 
@@ -426,8 +428,72 @@ async function authLoginCommand(
     ...stored,
     baseUrl,
     apiKey: tokenBody.token,
+    session: cookie,
   });
   console.log(JSON.stringify({ ok: true, workspace }, null, 2));
+  return 0;
+}
+
+async function authStatusCommand(
+  _flags: Readonly<Record<string, string | boolean>>,
+  deps: CliDeps = {}
+): Promise<number> {
+  const stored = readStoredConfig();
+  const baseUrl = (
+    process.env.PILE_BASE_URL ??
+    stored.baseUrl ??
+    defaultBaseUrl
+  ).replace(/\/$/u, "");
+  const session =
+    process.env.PILE_SESSION ??
+    stored.session ??
+    process.env.PILE_SESSION_TOKEN;
+  if (session === undefined || session.length === 0) {
+    throw new Error("No session. Run `pile auth login` first.");
+  }
+  const doFetch = deps.fetch ?? fetch;
+  const res = await doFetch(`${baseUrl}/api/auth/get-session`, {
+    headers: { Cookie: session },
+  });
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`Session check failed: ${res.status} ${text}`);
+  }
+  console.log(text);
+  return 0;
+}
+
+async function authLogoutCommand(
+  _flags: Readonly<Record<string, string | boolean>>,
+  deps: CliDeps = {}
+): Promise<number> {
+  const stored = readStoredConfig();
+  const baseUrl = (
+    process.env.PILE_BASE_URL ??
+    stored.baseUrl ??
+    defaultBaseUrl
+  ).replace(/\/$/u, "");
+  const session =
+    process.env.PILE_SESSION ??
+    stored.session ??
+    process.env.PILE_SESSION_TOKEN;
+  if (session === undefined || session.length === 0) {
+    throw new Error("No session. Run `pile auth login` first.");
+  }
+  const doFetch = deps.fetch ?? fetch;
+  const res = await doFetch(`${baseUrl}/api/auth/sign-out`, {
+    method: "POST",
+    headers: { Cookie: session },
+  });
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`Sign out failed: ${res.status} ${text}`);
+  }
+  writeStoredConfig({
+    ...stored,
+    session: undefined,
+  });
+  console.log(text);
   return 0;
 }
 
@@ -680,6 +746,14 @@ export async function runCli(
 
     if (scope === "auth" && positionals[1] === "login") {
       return await authLoginCommand(flags, deps);
+    }
+
+    if (scope === "auth" && positionals[1] === "status") {
+      return await authStatusCommand(flags, deps);
+    }
+
+    if (scope === "auth" && positionals[1] === "logout") {
+      return await authLogoutCommand(flags, deps);
     }
 
     if (scope === "config" && positionals[1] === "set") {
