@@ -274,3 +274,33 @@ function safeJsonParse(value: string): unknown {
     return null;
   }
 }
+
+export async function sendZendeskMessage(input: {
+  subdomain: string;
+  accessToken: string;
+  email: string;
+  ticketId: string;
+  text: string;
+}): Promise<boolean> {
+  try {
+    const auth = btoa(`${input.email}/token:${input.accessToken}`);
+    const res = await fetch(
+      `https://${input.subdomain}.zendesk.com/api/v2/tickets/${input.ticketId}.json`,
+      {
+        method: "PUT",
+        headers: {
+          Authorization: `Basic ${auth}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ticket: {
+            comment: { body: input.text, public: true },
+          },
+        }),
+      }
+    );
+    return res.ok;
+  } catch {
+    return false;
+  }
+}

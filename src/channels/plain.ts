@@ -457,3 +457,54 @@ function safeJsonParse(value: string): unknown {
     return null;
   }
 }
+
+const plainReplyResponseSchema = z.object({
+  data: z.object({
+    replyToThread: z.object({
+      thread: z.object({
+        id: z.string(),
+      }),
+    }),
+  }),
+});
+
+export async function sendPlainMessage(input: {
+  accessToken: string;
+  threadId: string;
+  textContent: string;
+  markdownContent: string | null;
+}): Promise<boolean> {
+  try {
+    const res = await fetch("https://api.plain.com/v1/graphql", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${input.accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        query: `
+          mutation ReplyToThread($input: ReplyToThreadInput!) {
+            replyToThread(input: $input) {
+              thread { id }
+            }
+          }
+        `,
+        variables: {
+          input: {
+            threadId: input.threadId,
+            textContent: input.textContent,
+            markdownContent: input.markdownContent ?? input.textContent,
+          },
+        },
+      }),
+    });
+    if (!res.ok) {
+      return false;
+    }
+    const data = (await res.json()) as unknown;
+    const parsed = plainReplyResponseSchema.safeParse(data);
+    return parsed.success;
+  } catch {
+    return false;
+  }
+}
