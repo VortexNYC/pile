@@ -9,6 +9,7 @@ import { VortexError } from "../platform/errors.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 import { createSlackBot, isSlackConfigured } from "../slack/bot.js";
+import { handleSlackUnfurl, isLinkSharedPayload } from "../slack/unfurl.js";
 
 const slackStatusSchema = z.object({
   installed: z.boolean(),
@@ -263,6 +264,21 @@ export async function handleSlackEvents(c: {
   }
 
   const rawBody = await c.req.raw.text();
+
+  let rawEvent: unknown;
+  try {
+    rawEvent = JSON.parse(rawBody);
+  } catch {
+    rawEvent = undefined;
+  }
+  if (isLinkSharedPayload(rawEvent)) {
+    c.waitUntil(handleSlackUnfurl(c.env, rawEvent));
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   let teamId: string | undefined;
   try {
     const payload = parseSlackWebhookBody(rawBody);
