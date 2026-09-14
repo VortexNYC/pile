@@ -134,6 +134,7 @@ export interface Comment {
   documentId: Id | null;
   authorId: Id | null;
   body: string;
+  internal: boolean;
   externalId: string | null;
   externalSource: string | null;
   externalAuthor: string | null;

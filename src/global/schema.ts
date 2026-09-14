@@ -1773,14 +1773,59 @@ export const slackInstallations = sqliteTable(
     })
       .notNull()
       .default(false),
+    isInternal: integer("is_internal" as string, { mode: "boolean" })
+      .notNull()
+      .default(false),
     defaultChannelId: text("default_channel_id" as string),
     createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
     index("slack_installations_org_idx" as string).on(table.organizationId),
-    uniqueIndex("slack_installations_team_idx" as string).on(table.teamId),
+    uniqueIndex("slack_installations_org_team_idx" as string).on(
+      table.organizationId,
+      table.teamId
+    ),
+  ]
+);
+
+export const supportConversations = sqliteTable(
+  "support_conversations" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    slackTeamId: text("slack_team_id" as string).notNull(),
+    slackChannelId: text("slack_channel_id" as string).notNull(),
+    slackThreadTs: text("slack_thread_ts" as string).notNull(),
+    issueId: text("issue_id" as string).notNull(),
+    supportTicketId: text("support_ticket_id" as string),
+    isExternal: integer("is_external" as string, { mode: "boolean" })
+      .notNull()
+      .default(true),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("support_conversations_slack_idx" as string).on(
+      table.organizationId,
+      table.slackTeamId,
+      table.slackChannelId,
+      table.slackThreadTs
+    ),
+    index("support_conversations_issue_idx" as string).on(
+      table.organizationId,
+      table.issueId
+    ),
   ]
 );
 

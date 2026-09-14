@@ -589,6 +589,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     mentions?: string[];
     authorId?: string | null;
     body: string;
+    internal?: boolean;
     externalId?: string;
     externalSource?: string;
     externalAuthor?: string;
@@ -605,6 +606,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       documentId: values.documentId ?? null,
       authorId: values.authorId ?? null,
       body: values.body,
+      internal: values.internal ?? false,
       externalId: values.externalId ?? null,
       externalSource: values.externalSource ?? null,
       externalAuthor: values.externalAuthor ?? null,
