@@ -50,6 +50,10 @@ const capturePublicKeySchema = z.object({
   updatedAt: z.string(),
 });
 
+const publicCapturePublicKeySchema = capturePublicKeySchema.omit({
+  webhookSecret: true,
+});
+
 const createPublicKeyBodySchema = z.object({
   name: z.string().min(1),
   allowedOrigins: z.array(z.string()).default([]),
@@ -112,7 +116,7 @@ const createPublicKeyRoute = createRoute({
     201: {
       description: "Public key created",
       content: {
-        "application/json": { schema: capturePublicKeySchema },
+        "application/json": { schema: publicCapturePublicKeySchema },
       },
     },
   },
@@ -131,7 +135,9 @@ const listPublicKeysRoute = createRoute({
       description: "Public keys",
       content: {
         "application/json": {
-          schema: z.object({ publicKeys: z.array(capturePublicKeySchema) }),
+          schema: z.object({
+            publicKeys: z.array(publicCapturePublicKeySchema),
+          }),
         },
       },
     },
@@ -150,7 +156,7 @@ const revokePublicKeyRoute = createRoute({
     200: {
       description: "Public key revoked",
       content: {
-        "application/json": { schema: capturePublicKeySchema },
+        "application/json": { schema: publicCapturePublicKeySchema },
       },
     },
     404: {
@@ -1012,21 +1018,25 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
       name: body.name,
       allowedOrigins: body.allowedOrigins,
     });
-    return c.json(publicKey, 201);
+    return c.json(publicCapturePublicKeySchema.parse(publicKey), 201);
   });
 
   app.openapi(listPublicKeysRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
     const db = createD1(c.env.D1);
     const publicKeys = await listCapturePublicKeys(db, organizationId);
-    return c.json({ publicKeys });
+    return c.json({
+      publicKeys: publicKeys.map((pk) =>
+        publicCapturePublicKeySchema.parse(pk)
+      ),
+    });
   });
 
   app.openapi(revokePublicKeyRoute, async (c) => {
     const { organizationId, keyId } = c.req.valid("param");
     const db = createD1(c.env.D1);
     const publicKey = await revokeCapturePublicKey(db, organizationId, keyId);
-    return c.json(publicKey);
+    return c.json(publicCapturePublicKeySchema.parse(publicKey));
   });
 
   app.openapi(tokenRoute, async (c) => {

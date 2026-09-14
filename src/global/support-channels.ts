@@ -31,6 +31,7 @@ export type SupportChannel = typeof supportChannels.$inferSelect;
 export const supportChannelConfigSchema = z
   .object({
     secretName: z.string().min(1).optional(),
+    secret: z.string().min(1).optional(),
   })
   .passthrough();
 

@@ -906,6 +906,7 @@ describe("support-tickets API", () => {
         body: JSON.stringify({
           type: "api",
           name: "api-future",
+          config: { secret: "future-secret" },
         }),
       }
     );
@@ -916,7 +917,10 @@ describe("support-tickets API", () => {
     const incomingRes = await app.fetch(
       new Request(`https://example.com/support/incoming/${channelId}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-pile-channel-secret": "future-secret",
+        },
         body: JSON.stringify({
           fromEmail: "future@example.com",
           text: "Future message",
