@@ -355,6 +355,124 @@ function getSetCookie(headers: Headers): readonly string[] {
   return [raw];
 }
 
+function parsePrUrl(
+  prUrl: string
+): { owner: string; repo: string; number: string } | undefined {
+  const match =
+    /^(?:https?:\/\/)?github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)(?:\/|$)/u.exec(
+      prUrl
+    );
+  if (!match) return undefined;
+  return {
+    owner: match[1] as string,
+    repo: match[2] as string,
+    number: match[3] as string,
+  };
+}
+
+async function resolvePileIssue(
+  baseUrl: string,
+  apiKey: string,
+  organizationId: string,
+  value: string,
+  doFetch: typeof fetch
+): Promise<{ prUrl: string | null } | undefined> {
+  const headers = new Headers();
+  headers.set("Authorization", `Bearer ${apiKey}`);
+
+  const listUrl = new URL(`/workspaces/${organizationId}/issues`, baseUrl);
+  listUrl.searchParams.set("identifier", value);
+  const listRes = await doFetch(listUrl, { method: "GET", headers });
+  if (listRes.ok) {
+    const body = (await listRes.json()) as {
+      issues?: { prUrl: string | null }[];
+    };
+    if (body.issues && body.issues.length > 0) {
+      return body.issues[0];
+    }
+  }
+
+  const getUrl = new URL(
+    `/workspaces/${organizationId}/issues/${value}`,
+    baseUrl
+  );
+  const getRes = await doFetch(getUrl, { method: "GET", headers });
+  if (getRes.ok) {
+    return (await getRes.json()) as { prUrl: string | null };
+  }
+
+  return undefined;
+}
+
+async function prCommand(
+  positionals: readonly string[],
+  flags: Readonly<Record<string, string | boolean>>,
+  deps: CliDeps = {}
+): Promise<number> {
+  const subcommand = positionals[1];
+  if (subcommand !== "view" && subcommand !== "checks") {
+    throw new Error(
+      "Usage: pile pr view|checks --workspace <org> --id <issue>"
+    );
+  }
+
+  const config = resolveConfig();
+  if (config.apiKey === undefined || config.apiKey.length === 0) {
+    throw new Error(
+      "Missing API key. Set PILE_API_KEY or run `pile config set --api-key <key>`."
+    );
+  }
+
+  const organizationId = flagString(flags, "workspace");
+  if (organizationId === undefined) {
+    throw new Error("Missing --workspace");
+  }
+
+  const value = flagString(flags, "id");
+  if (value === undefined) {
+    throw new Error("Missing --id");
+  }
+
+  const doFetch = deps.fetch ?? fetch;
+  const issue = await resolvePileIssue(
+    config.baseUrl,
+    config.apiKey,
+    organizationId,
+    value,
+    doFetch
+  );
+  if (issue === undefined) {
+    throw new Error(`Issue not found: ${value}`);
+  }
+  if (issue.prUrl === null) {
+    throw new Error(`Issue ${value} has no linked pull request`);
+  }
+
+  const parsed = parsePrUrl(issue.prUrl);
+  if (parsed === undefined) {
+    throw new Error(`Invalid prUrl: ${issue.prUrl}`);
+  }
+
+  const ghCommand = `gh -R ${parsed.owner}/${parsed.repo} pr ${subcommand} ${parsed.number}`;
+  const child = (deps.spawn ?? spawn)(ghCommand, [], {
+    shell: true,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  child.stdout.on("data", (data: Buffer) => {
+    process.stdout.write(data);
+  });
+  child.stderr.on("data", (data: Buffer) => {
+    process.stderr.write(data);
+  });
+
+  const exitCode = await new Promise<number | null>((resolve) => {
+    child.on("close", resolve);
+  });
+
+  return exitCode ?? 1;
+}
+
 async function authLoginCommand(
   flags: Readonly<Record<string, string | boolean>>,
   deps: CliDeps = {}
@@ -762,6 +880,10 @@ export async function runCli(
 
     if (scope === "capture" && positionals[1] === "run") {
       return await captureRunCommand(flags, deps);
+    }
+
+    if (scope === "pr") {
+      return await prCommand(positionals, flags, deps);
     }
 
     return await commandCommand(positionals, flags, deps);
