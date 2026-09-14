@@ -35,19 +35,19 @@ pnpm install
 pnpm run selfhost   # deploys Worker + auto-provisions D1/R2/DO + applies migrations
 ```
 
-`selfhost` prints the remaining steps: set `BETTER_AUTH_URL`/`ALLOWED_ORIGINS` to your Worker URL, then `wrangler secret put BETTER_AUTH_SECRET` (plus optional `DEVIN_TOKEN`, `GITHUB_WEBHOOK_SECRET`, `SLACK_*`).
+`selfhost` prints the remaining steps: set `BETTER_AUTH_URL`, `ALLOWED_ORIGINS`, and `SLACK_REDIRECT_URI` in `wrangler.toml` `[vars]` to your Worker URL (`https://pile.<your-subdomain>.workers.dev`), run `wrangler secret put BETTER_AUTH_SECRET` (plus optional `DEVIN_TOKEN`, `GITHUB_WEBHOOK_SECRET`, `SLACK_*`), then re-run `wrangler deploy`.
 
 ### Manual
 
 1. `pnpm install`
-2. Edit `wrangler.toml` `[vars]` — set `BETTER_AUTH_URL` and `ALLOWED_ORIGINS` to your Worker URL (D1 auto-provisions on deploy).
+2. Edit `wrangler.toml` `[vars]` — set `BETTER_AUTH_URL`, `ALLOWED_ORIGINS`, and `SLACK_REDIRECT_URI` to your Worker URL (D1 and R2 auto-provision on deploy).
 3. Add secrets:
    ```bash
    wrangler secret put BETTER_AUTH_SECRET
    wrangler secret put DEVIN_TOKEN
    wrangler secret put GITHUB_WEBHOOK_SECRET
    ```
-4. Deploy: `wrangler deploy` (`pnpm deploy` targets the hosted `production` environment)
+4. Deploy: `wrangler deploy`, then apply D1 migrations: `wrangler d1 migrations apply D1 --remote` (`pnpm deploy` targets the hosted `production` environment and is not for self-hosting)
 
 ### Pointing agents at your deployment
 
