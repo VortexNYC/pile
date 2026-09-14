@@ -81,7 +81,7 @@ export function toErrorResponse(error: unknown): Response {
     status: vortex.status,
     headers: {
       "Content-Type": "application/json",
-      "X-Vortex-Error-Code": vortex.code,
+      "X-Pile-Error-Code": vortex.code,
     },
   });
 }

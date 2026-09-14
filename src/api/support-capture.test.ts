@@ -148,8 +148,8 @@ describe("support-capture API", () => {
     const res = await captureFetch("/support/capture/token", {
       method: "POST",
       headers: {
-        "x-vortex-capture-public-key": publicKey.key,
-        ...(reference ? { "x-vortex-capture-reference": reference } : {}),
+        "x-pile-capture-public-key": publicKey.key,
+        ...(reference ? { "x-pile-capture-reference": reference } : {}),
         origin,
       },
     });
@@ -173,7 +173,7 @@ describe("support-capture API", () => {
     const res = await captureFetch("/support/capture/token", {
       method: "POST",
       headers: {
-        "x-vortex-capture-public-key": "vtx_00000000000000000000000000000000",
+        "x-pile-capture-public-key": "pil_00000000000000000000000000000000",
         origin: "https://example.com",
       },
     });
@@ -195,7 +195,7 @@ describe("support-capture API", () => {
     const tokenRes = await captureFetch("/support/capture/token", {
       method: "POST",
       headers: {
-        "x-vortex-capture-public-key": publicKey.key,
+        "x-pile-capture-public-key": publicKey.key,
         origin: "https://example.com",
       },
     });
@@ -237,7 +237,7 @@ describe("support-capture API", () => {
         method: "POST",
         headers: {
           "Content-Type": "image/png",
-          "x-vortex-capture-token": "00000000-0000-0000-0000-000000000000",
+          "x-pile-capture-token": "00000000-0000-0000-0000-000000000000",
         },
         body: image,
       }
@@ -253,7 +253,7 @@ describe("support-capture API", () => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-vortex-capture-token": sessionToken,
+        "x-pile-capture-token": sessionToken,
       },
       body: JSON.stringify({
         title: "No email",
@@ -264,7 +264,7 @@ describe("support-capture API", () => {
 
     const finalizeRes = await captureFetch("/support/capture/finalize", {
       method: "POST",
-      headers: { "x-vortex-capture-token": sessionToken },
+      headers: { "x-pile-capture-token": sessionToken },
     });
     expect(finalizeRes.status).toBe(400);
   });
@@ -285,7 +285,7 @@ describe("support-capture API", () => {
     const badOriginRes = await captureFetch("/support/capture/token", {
       method: "POST",
       headers: {
-        "x-vortex-capture-public-key": publicKey.key,
+        "x-pile-capture-public-key": publicKey.key,
         origin: "https://evil.com",
       },
     });
@@ -297,7 +297,7 @@ describe("support-capture API", () => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-vortex-capture-token": sessionToken,
+        "x-pile-capture-token": sessionToken,
       },
       body: JSON.stringify({
         title: "Button is broken",
@@ -320,7 +320,7 @@ describe("support-capture API", () => {
       method: "POST",
       headers: {
         "Content-Type": "image/png",
-        "x-vortex-capture-token": sessionToken,
+        "x-pile-capture-token": sessionToken,
       },
       body: image,
     });
@@ -332,7 +332,7 @@ describe("support-capture API", () => {
 
     const finalizeRes = await captureFetch("/support/capture/finalize", {
       method: "POST",
-      headers: { "x-vortex-capture-token": sessionToken },
+      headers: { "x-pile-capture-token": sessionToken },
     });
     expect(finalizeRes.status).toBe(200);
     const final = (await finalizeRes.json()) as {
@@ -364,7 +364,7 @@ describe("support-capture API", () => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-vortex-capture-token": sessionToken,
+        "x-pile-capture-token": sessionToken,
       },
       body: JSON.stringify({
         title: "Idempotent finalize",
@@ -378,7 +378,7 @@ describe("support-capture API", () => {
 
     const finalizeRes1 = await captureFetch("/support/capture/finalize", {
       method: "POST",
-      headers: { "x-vortex-capture-token": sessionToken },
+      headers: { "x-pile-capture-token": sessionToken },
     });
     expect(finalizeRes1.status).toBe(200);
     const final1 = (await finalizeRes1.json()) as {
@@ -388,7 +388,7 @@ describe("support-capture API", () => {
 
     const finalizeRes2 = await captureFetch("/support/capture/finalize", {
       method: "POST",
-      headers: { "x-vortex-capture-token": sessionToken },
+      headers: { "x-pile-capture-token": sessionToken },
     });
     expect(finalizeRes2.status).toBe(200);
     const final2 = (await finalizeRes2.json()) as {
@@ -404,7 +404,7 @@ describe("support-capture API", () => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-vortex-capture-token": sessionToken,
+          "x-pile-capture-token": sessionToken,
         },
         body: JSON.stringify({
           title: "After finalize",
@@ -780,7 +780,7 @@ describe("support-capture API", () => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-vortex-capture-token": sessionToken,
+        "x-pile-capture-token": sessionToken,
       },
       body: JSON.stringify({
         title: "Screen recording",
@@ -800,7 +800,7 @@ describe("support-capture API", () => {
       method: "POST",
       headers: {
         "Content-Type": "image/png",
-        "x-vortex-capture-token": sessionToken,
+        "x-pile-capture-token": sessionToken,
       },
       body: image,
     });
@@ -808,7 +808,7 @@ describe("support-capture API", () => {
 
     const finalizeRes = await captureFetch("/support/capture/finalize", {
       method: "POST",
-      headers: { "x-vortex-capture-token": sessionToken },
+      headers: { "x-pile-capture-token": sessionToken },
     });
     expect(finalizeRes.status).toBe(200);
     const final = (await finalizeRes.json()) as { ticketId: string };
@@ -868,7 +868,7 @@ describe("support-capture API", () => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-vortex-capture-token": sessionToken,
+        "x-pile-capture-token": sessionToken,
       },
       body: JSON.stringify({
         title: "Screen recording",
@@ -888,7 +888,7 @@ describe("support-capture API", () => {
       method: "POST",
       headers: {
         "Content-Type": "image/png",
-        "x-vortex-capture-token": sessionToken,
+        "x-pile-capture-token": sessionToken,
       },
       body: image,
     });
@@ -896,7 +896,7 @@ describe("support-capture API", () => {
 
     const finalizeRes = await captureFetch("/support/capture/finalize", {
       method: "POST",
-      headers: { "x-vortex-capture-token": sessionToken },
+      headers: { "x-pile-capture-token": sessionToken },
     });
     expect(finalizeRes.status).toBe(200);
     const final = (await finalizeRes.json()) as { ticketId: string };
@@ -1101,7 +1101,7 @@ describe("support-capture API", () => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-vortex-capture-token": sessionToken,
+          "x-pile-capture-token": sessionToken,
         },
         body: JSON.stringify({
           attachmentType,
@@ -1126,7 +1126,7 @@ describe("support-capture API", () => {
         method: "POST",
         headers: {
           "Content-Type": contentType,
-          "x-vortex-capture-token": sessionToken,
+          "x-pile-capture-token": sessionToken,
         },
         body,
       });
@@ -1213,7 +1213,7 @@ describe("support-capture API", () => {
 
     const finalizeRes = await captureFetch("/support/capture/finalize", {
       method: "POST",
-      headers: { "x-vortex-capture-token": sessionToken },
+      headers: { "x-pile-capture-token": sessionToken },
     });
     expect(finalizeRes.status).toBe(200);
     const body = (await finalizeRes.json()) as { ticketId: string };

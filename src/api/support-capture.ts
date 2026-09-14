@@ -165,8 +165,8 @@ const tokenRoute = createRoute({
   tags: ["support-capture"],
   request: {
     headers: z.object({
-      "x-vortex-capture-public-key": z.string(),
-      "x-vortex-capture-reference": z.string().optional(),
+      "x-pile-capture-public-key": z.string(),
+      "x-pile-capture-reference": z.string().optional(),
       origin: z.string().optional(),
     }),
   },
@@ -189,7 +189,7 @@ const uploadSessionRoute = createRoute({
   tags: ["support-capture"],
   request: {
     headers: z.object({
-      "x-vortex-capture-token": z.string(),
+      "x-pile-capture-token": z.string(),
     }),
     body: {
       content: {
@@ -227,7 +227,7 @@ const uploadRoute = createRoute({
       fileName: z.string(),
     }),
     headers: z.object({
-      "x-vortex-capture-token": z.string(),
+      "x-pile-capture-token": z.string(),
     }),
   },
   responses: {
@@ -249,7 +249,7 @@ const finalizeRoute = createRoute({
   tags: ["support-capture"],
   request: {
     headers: z.object({
-      "x-vortex-capture-token": z.string(),
+      "x-pile-capture-token": z.string(),
     }),
   },
   responses: {
@@ -271,7 +271,7 @@ const metadataRoute = createRoute({
   tags: ["support-capture"],
   request: {
     headers: z.object({
-      "x-vortex-capture-token": z.string(),
+      "x-pile-capture-token": z.string(),
     }),
     body: {
       content: {
@@ -1030,13 +1030,13 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(tokenRoute, async (c) => {
-    const publicKeyValue = c.req.header("x-vortex-capture-public-key");
+    const publicKeyValue = c.req.header("x-pile-capture-public-key");
     const requestOrigin = c.req.header("origin") ?? c.req.header("Origin");
     if (!publicKeyValue) {
       throw new VortexError({
         status: 401,
         code: "UNAUTHORIZED",
-        message: "x-vortex-capture-public-key is required",
+        message: "x-pile-capture-public-key is required",
       });
     }
 
@@ -1052,7 +1052,7 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
 
     assertOriginAllowed(publicKey, requestOrigin);
 
-    const reference = c.req.header("x-vortex-capture-reference");
+    const reference = c.req.header("x-pile-capture-reference");
     const session = await createCaptureSession(
       db,
       publicKey.id,
@@ -1066,12 +1066,12 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(uploadSessionRoute, async (c) => {
-    const token = c.req.header("x-vortex-capture-token");
+    const token = c.req.header("x-pile-capture-token");
     if (!token) {
       throw new VortexError({
         status: 401,
         code: "UNAUTHORIZED",
-        message: "x-vortex-capture-token is required",
+        message: "x-pile-capture-token is required",
       });
     }
 
@@ -1131,7 +1131,7 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(uploadRoute, async (c) => {
     const { sessionId, attachmentType, fileName } = c.req.valid("param");
-    const token = c.req.header("x-vortex-capture-token");
+    const token = c.req.header("x-pile-capture-token");
     if (token !== sessionId) {
       throw new VortexError({
         status: 401,
@@ -1190,12 +1190,12 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(finalizeRoute, async (c) => {
-    const token = c.req.header("x-vortex-capture-token");
+    const token = c.req.header("x-pile-capture-token");
     if (!token) {
       throw new VortexError({
         status: 401,
         code: "UNAUTHORIZED",
-        message: "x-vortex-capture-token is required",
+        message: "x-pile-capture-token is required",
       });
     }
 
@@ -1362,12 +1362,12 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(metadataRoute, async (c) => {
-    const token = c.req.header("x-vortex-capture-token");
+    const token = c.req.header("x-pile-capture-token");
     if (!token) {
       throw new VortexError({
         status: 401,
         code: "UNAUTHORIZED",
-        message: "x-vortex-capture-token is required",
+        message: "x-pile-capture-token is required",
       });
     }
 
