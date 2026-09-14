@@ -10,6 +10,7 @@ import { slackInstallations } from "../global/schema.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { AppEnv } from "../types/env.js";
 import type { RealtimeEvent } from "../types/workspace.js";
+import { handleViewInPile } from "./actions.js";
 import { workerdFetchAdapter } from "./fetch-adapter.js";
 
 export function isSlackConfigured(env: AppEnv): boolean {
@@ -164,6 +165,10 @@ export function createSlackBot(
     );
   });
 
+  bot.onAction("view-in-pile", async (event) => {
+    await handleViewInPile(event);
+  });
+
   return { bot, slack };
 }
 
@@ -216,9 +221,33 @@ export async function notifySlack(
   const botToken = stored?.botToken;
   if (!botToken) return;
 
-  await postSlackMessage({
+  const options: import("@chat-adapter/slack/api").SlackMessageOptions = {
     token: botToken,
     channel: installation.defaultChannelId,
     text,
-  });
+  };
+
+  if ("issue" in event) {
+    const issue = event.issue;
+    const url = `https://pile.nyc/${organizationId}/issues/${issue.identifier ?? issue.id}`;
+    options.blocks = [
+      {
+        type: "section",
+        text: { type: "mrkdwn", text },
+      },
+      {
+        type: "actions",
+        elements: [
+          {
+            type: "button",
+            text: { type: "plain_text", text: "View in Pile" },
+            action_id: "view-in-pile",
+            value: url,
+          },
+        ],
+      },
+    ];
+  }
+
+  await postSlackMessage(options);
 }
