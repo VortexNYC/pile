@@ -3110,6 +3110,23 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "billing list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/billing",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "period",
+        flag: "period",
+      },
+    ],
+    body: [],
+  },
   "view preferences list": {
     method: "GET",
     path: "/workspaces/{organizationId}/view-preferences",
