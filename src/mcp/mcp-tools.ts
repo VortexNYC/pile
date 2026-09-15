@@ -2500,6 +2500,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdIssuesIdPr",
+    "description": "List issue pr (GET /workspaces/{organizationId}/issues/{id}/pr) Path params (top-level, required): organizationId, id.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/issues/{id}/pr",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdIssuesIdReactions",
     "description": "List issue reactions (GET /workspaces/{organizationId}/issues/{id}/reactions) Path params (top-level, required): organizationId, id.",
     "method": "GET",
@@ -9202,6 +9223,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "required": [
             "emoji"
           ]
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdIssuesIdReconcile",
+    "description": "Create issue reconcile (POST /workspaces/{organizationId}/issues/{id}/reconcile) Path params (top-level, required): organizationId, id.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/issues/{id}/reconcile",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
         }
       },
       "required": [
