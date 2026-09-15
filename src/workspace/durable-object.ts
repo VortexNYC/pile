@@ -1988,6 +1988,86 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return activity;
   }
 
+  async addAgentSessionArtifact(input: {
+    sessionId: string;
+    actorId?: string;
+    name: string;
+    type: string;
+    content?: string;
+    data?: string;
+    mimeType?: string;
+    url?: string;
+  }) {
+    const session = await this.getAgentSession(input.sessionId);
+    if (!session) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Session not found",
+      });
+    }
+
+    const artifactId = crypto.randomUUID();
+    const payload: Record<string, unknown> = {
+      artifactId,
+      name: input.name,
+      type: input.type,
+      provider: session.provider,
+      providerSessionId: session.providerSessionId,
+    };
+
+    if (input.content !== undefined) payload.content = input.content;
+    if (input.url !== undefined) payload.url = input.url;
+    if (input.mimeType !== undefined) payload.mimeType = input.mimeType;
+
+    if (input.data) {
+      if (this.env.ATTACHMENTS_BUCKET) {
+        const binary = new Uint8Array(
+          Array.from(atob(input.data), (char) => char.charCodeAt(0))
+        );
+        const r2Key = `artifacts/${this.organizationId}/${input.sessionId}/${artifactId}`;
+        await this.env.ATTACHMENTS_BUCKET.put(r2Key, binary, {
+          httpMetadata: {
+            contentType: input.mimeType ?? "application/octet-stream",
+            contentDisposition: `attachment; filename="${input.name}"`,
+          },
+        });
+        payload.r2Key = r2Key;
+        const attachment = await this.createAttachment({
+          issueId: session.issueId,
+          linearId: artifactId,
+          url: input.url ?? "",
+          title: input.name,
+          subtitle:
+            [input.type, input.mimeType].filter(Boolean).join(" / ") || null,
+          r2Key,
+        });
+        payload.attachmentId = attachment?.id;
+      } else {
+        payload.data = input.data;
+      }
+    } else if (input.url) {
+      const attachment = await this.createAttachment({
+        issueId: session.issueId,
+        linearId: artifactId,
+        url: input.url,
+        title: input.name,
+        subtitle:
+          [input.type, input.mimeType].filter(Boolean).join(" / ") || null,
+        r2Key: null,
+      });
+      payload.attachmentId = attachment?.id;
+    }
+
+    return this.addAgentActivity({
+      sessionId: input.sessionId,
+      actorId: input.actorId,
+      type: "artifact",
+      message: `Artifact: ${input.name}`,
+      payload,
+    });
+  }
+
   addAgentSessionEvent(input: data.AgentSessionEventInput) {
     return data.addAgentSessionEvent(this.db, input);
   }

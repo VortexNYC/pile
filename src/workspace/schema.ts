@@ -785,7 +785,15 @@ export const workspaceAgentActivities = sqliteTable(
     sessionId: text("session_id" as string).notNull(),
     actorId: text("actor_id" as string),
     type: text("type" as string, {
-      enum: ["thought", "response", "error", "elicitation", "action", "status"],
+      enum: [
+        "thought",
+        "response",
+        "error",
+        "elicitation",
+        "action",
+        "status",
+        "artifact",
+      ],
     }).notNull(),
     message: text("message" as string).notNull(),
     payload: text("payload" as string),

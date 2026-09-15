@@ -1041,7 +1041,14 @@ export async function updateAgentSession(
 export interface AgentActivityInput {
   sessionId: string;
   actorId?: string;
-  type: "thought" | "response" | "error" | "elicitation" | "action" | "status";
+  type:
+    | "thought"
+    | "response"
+    | "error"
+    | "elicitation"
+    | "action"
+    | "status"
+    | "artifact";
   message: string;
   payload?: Record<string, unknown>;
 }

@@ -33,6 +33,7 @@ const agentActivityTypeSchema = z.enum([
   "elicitation",
   "action",
   "status",
+  "artifact",
 ]);
 
 type AgentSession = InferSelectModel<typeof workspaceAgentSessions>;
@@ -215,6 +216,54 @@ const addActivityRoute = createRoute({
       content: {
         "application/json": { schema: agentActivitySchema },
       },
+    },
+    404: { description: "Session not found" },
+  },
+});
+
+const artifactTypeSchema = z.enum([
+  "diff",
+  "log",
+  "screenshot",
+  "trace",
+  "output",
+  "other",
+]);
+
+const createArtifactBodySchema = z
+  .object({
+    name: z.string().min(1),
+    type: artifactTypeSchema,
+    content: z.string().optional(),
+    data: z.string().optional(),
+    mimeType: z.string().optional(),
+    url: z.string().optional(),
+  })
+  .refine(
+    (value) =>
+      value.content !== undefined ||
+      value.data !== undefined ||
+      value.url !== undefined,
+    "At least one of content, data, or url is required"
+  );
+
+const createArtifactRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/artifacts",
+  tags: ["agent-sessions"],
+  middleware: [rls("write", "agent:write")],
+  request: {
+    params: z.object({ organizationId: z.string(), sessionId: z.string() }),
+    body: {
+      content: {
+        "application/json": { schema: createArtifactBodySchema },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "Artifact captured",
+      content: { "application/json": { schema: agentActivitySchema } },
     },
     404: { description: "Session not found" },
   },
@@ -409,6 +458,30 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       type: body.type,
       message: body.message,
       payload: body.payload,
+    });
+    return c.json(toActivityResponse(activity), 201);
+  });
+
+  app.openapi(createArtifactRoute, async (c) => {
+    const { organizationId, sessionId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const identity = c.var.workspaceIdentity;
+    const stub = getWorkspaceStub(c.env, organizationId);
+
+    const session = await stub.getAgentSession(sessionId);
+    if (!session) {
+      return c.json({ message: "Session not found" }, 404);
+    }
+
+    const activity = await stub.addAgentSessionArtifact({
+      sessionId,
+      actorId: identity.id,
+      name: body.name,
+      type: body.type,
+      content: body.content,
+      data: body.data,
+      mimeType: body.mimeType,
+      url: body.url,
     });
     return c.json(toActivityResponse(activity), 201);
   });

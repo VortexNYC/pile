@@ -1167,7 +1167,7 @@ export interface paths {
                                 sessionId: string;
                                 actorId: string | null;
                                 /** @enum {string} */
-                                type: "thought" | "response" | "error" | "elicitation" | "action" | "status";
+                                type: "thought" | "response" | "error" | "elicitation" | "action" | "status" | "artifact";
                                 message: string;
                                 payload?: unknown;
                                 createdAt: string;
@@ -1233,7 +1233,7 @@ export interface paths {
                                     sessionId: string;
                                     actorId: string | null;
                                     /** @enum {string} */
-                                    type: "thought" | "response" | "error" | "elicitation" | "action" | "status";
+                                    type: "thought" | "response" | "error" | "elicitation" | "action" | "status" | "artifact";
                                     message: string;
                                     payload?: unknown;
                                     createdAt: string;
@@ -1300,7 +1300,7 @@ export interface paths {
                                     sessionId: string;
                                     actorId: string | null;
                                     /** @enum {string} */
-                                    type: "thought" | "response" | "error" | "elicitation" | "action" | "status";
+                                    type: "thought" | "response" | "error" | "elicitation" | "action" | "status" | "artifact";
                                     message: string;
                                     payload?: unknown;
                                     createdAt: string;
@@ -1311,7 +1311,7 @@ export interface paths {
                                 sessionId: string;
                                 actorId: string | null;
                                 /** @enum {string} */
-                                type: "thought" | "response" | "error" | "elicitation" | "action" | "status";
+                                type: "thought" | "response" | "error" | "elicitation" | "action" | "status" | "artifact";
                                 message: string;
                                 payload?: unknown;
                                 createdAt: string;
@@ -1376,7 +1376,7 @@ export interface paths {
                                 sessionId: string;
                                 actorId: string | null;
                                 /** @enum {string} */
-                                type: "thought" | "response" | "error" | "elicitation" | "action" | "status";
+                                type: "thought" | "response" | "error" | "elicitation" | "action" | "status" | "artifact";
                                 message: string;
                                 payload?: unknown;
                                 createdAt: string;
@@ -1450,7 +1450,7 @@ export interface paths {
                                 sessionId: string;
                                 actorId: string | null;
                                 /** @enum {string} */
-                                type: "thought" | "response" | "error" | "elicitation" | "action" | "status";
+                                type: "thought" | "response" | "error" | "elicitation" | "action" | "status" | "artifact";
                                 message: string;
                                 payload?: unknown;
                                 createdAt: string;
@@ -1503,7 +1503,7 @@ export interface paths {
                                 sessionId: string;
                                 actorId: string | null;
                                 /** @enum {string} */
-                                type: "thought" | "response" | "error" | "elicitation" | "action" | "status";
+                                type: "thought" | "response" | "error" | "elicitation" | "action" | "status" | "artifact";
                                 message: string;
                                 payload?: unknown;
                                 createdAt: string;
@@ -1552,7 +1552,7 @@ export interface paths {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        type: "thought" | "response" | "error" | "elicitation" | "action" | "status";
+                        type: "thought" | "response" | "error" | "elicitation" | "action" | "status" | "artifact";
                         message: string;
                         payload?: {
                             [key: string]: unknown;
@@ -1572,7 +1572,74 @@ export interface paths {
                             sessionId: string;
                             actorId: string | null;
                             /** @enum {string} */
-                            type: "thought" | "response" | "error" | "elicitation" | "action" | "status";
+                            type: "thought" | "response" | "error" | "elicitation" | "action" | "status" | "artifact";
+                            message: string;
+                            payload?: unknown;
+                            createdAt: string;
+                        };
+                    };
+                };
+                /** @description Session not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/agent/sessions/{sessionId}/artifacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create agent session artifact */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    sessionId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        name: string;
+                        /** @enum {string} */
+                        type: "diff" | "log" | "screenshot" | "trace" | "output" | "other";
+                        content?: string;
+                        data?: string;
+                        mimeType?: string;
+                        url?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Artifact captured */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            sessionId: string;
+                            actorId: string | null;
+                            /** @enum {string} */
+                            type: "thought" | "response" | "error" | "elicitation" | "action" | "status" | "artifact";
                             message: string;
                             payload?: unknown;
                             createdAt: string;
@@ -1643,7 +1710,7 @@ export interface paths {
                                 sessionId: string;
                                 actorId: string | null;
                                 /** @enum {string} */
-                                type: "thought" | "response" | "error" | "elicitation" | "action" | "status";
+                                type: "thought" | "response" | "error" | "elicitation" | "action" | "status" | "artifact";
                                 message: string;
                                 payload?: unknown;
                                 createdAt: string;
@@ -1715,7 +1782,7 @@ export interface paths {
                                 sessionId: string;
                                 actorId: string | null;
                                 /** @enum {string} */
-                                type: "thought" | "response" | "error" | "elicitation" | "action" | "status";
+                                type: "thought" | "response" | "error" | "elicitation" | "action" | "status" | "artifact";
                                 message: string;
                                 payload?: unknown;
                                 createdAt: string;
@@ -1798,7 +1865,7 @@ export interface paths {
                                     sessionId: string;
                                     actorId: string | null;
                                     /** @enum {string} */
-                                    type: "thought" | "response" | "error" | "elicitation" | "action" | "status";
+                                    type: "thought" | "response" | "error" | "elicitation" | "action" | "status" | "artifact";
                                     message: string;
                                     payload?: unknown;
                                     createdAt: string;

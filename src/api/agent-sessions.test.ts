@@ -200,6 +200,136 @@ describe("agent sessions API", () => {
     expect(patched.result).toBe("done");
   });
 
+  it("captures a text artifact to the session timeline", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    const session = await stub.createAgentSession({
+      issueId: "issue-artifact-text",
+      agentId: "mock",
+      provider: "mock",
+      actorId: "user-1",
+      actorType: "user",
+    });
+
+    const res = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/artifacts`,
+        {
+          method: "POST",
+          token,
+          body: JSON.stringify({
+            name: "diff.patch",
+            type: "diff",
+            content: "@@ -1 +1 @@\n- old\n+ new",
+          }),
+        }
+      ),
+      env
+    );
+    expect(res.status).toBe(201);
+
+    const activity = await res.json<{
+      type: string;
+      message: string;
+      payload: {
+        name: string;
+        type: string;
+        content: string;
+        provider: string;
+      };
+    }>();
+    expect(activity.type).toBe("artifact");
+    expect(activity.message).toBe("Artifact: diff.patch");
+    expect(activity.payload.type).toBe("diff");
+    expect(activity.payload.content).toContain("+ new");
+    expect(activity.payload.provider).toBe("mock");
+
+    const eventsRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/events`,
+        { token }
+      ),
+      env
+    );
+    expect(eventsRes.status).toBe(200);
+    const eventsBody = await eventsRes.json<{
+      events: Array<{ type: string; payload: { type: string } }>;
+    }>();
+    expect(
+      eventsBody.events.some(
+        (event) =>
+          event.type === "artifact" || event.payload.type === "artifact"
+      )
+    ).toBe(true);
+  });
+
+  it("captures a binary artifact to R2", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    const session = await stub.createAgentSession({
+      issueId: "issue-artifact-binary",
+      agentId: "mock",
+      provider: "mock",
+      actorId: "user-1",
+      actorType: "user",
+    });
+
+    const res = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/artifacts`,
+        {
+          method: "POST",
+          token,
+          body: JSON.stringify({
+            name: "screenshot.png",
+            type: "screenshot",
+            data: btoa("binary content"),
+            mimeType: "image/png",
+          }),
+        }
+      ),
+      env
+    );
+    expect(res.status).toBe(201);
+
+    const activity = await res.json<{
+      payload: { r2Key: string; attachmentId: string };
+    }>();
+    expect(activity.payload.r2Key).toBeTruthy();
+    expect(activity.payload.attachmentId).toBeTruthy();
+
+    const stored = await env.ATTACHMENTS_BUCKET.get(activity.payload.r2Key);
+    expect(stored).not.toBeNull();
+  });
+
+  it("rejects an artifact with no content, data, or url", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    const session = await stub.createAgentSession({
+      issueId: "issue-artifact-empty",
+      agentId: "mock",
+      provider: "mock",
+      actorId: "user-1",
+      actorType: "user",
+    });
+
+    const res = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/artifacts`,
+        {
+          method: "POST",
+          token,
+          body: JSON.stringify({ name: "empty", type: "other" }),
+        }
+      ),
+      env
+    );
+    expect(res.status).toBe(400);
+  });
+
   it("shows live agent state for an issue", async () => {
     const stub = env.WORKSPACE_DURABLE_OBJECT.get(
       env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
