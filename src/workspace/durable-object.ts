@@ -2511,6 +2511,19 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const number = (last?.number ?? 0) + 1;
     const identifier = `${key}-${number}`;
 
+    if (typeof input.repo === "string" && typeof input.branch === "string") {
+      const branchExisting = await this.getIssueByBranch(
+        input.repo,
+        input.branch
+      );
+      if (branchExisting) {
+        throw VortexError.fromCode(
+          "CONFLICT",
+          `Issue ${branchExisting.identifier} already uses repo ${input.repo} and branch ${input.branch}`
+        );
+      }
+    }
+
     const issue = await this.db
       .insert(workspaceIssues)
       .values({
@@ -3056,6 +3069,22 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       newResolution
     );
 
+    const newRepo = patch.repo !== undefined ? patch.repo : old.repo;
+    const newBranch = patch.branch !== undefined ? patch.branch : old.branch;
+    if (
+      typeof newRepo === "string" &&
+      typeof newBranch === "string" &&
+      (newRepo !== old.repo || newBranch !== old.branch)
+    ) {
+      const existing = await this.getIssueByBranch(newRepo, newBranch);
+      if (existing && existing.id !== old.id) {
+        throw VortexError.fromCode(
+          "CONFLICT",
+          `Issue ${existing.identifier} already uses repo ${newRepo} and branch ${newBranch}`
+        );
+      }
+    }
+
     const set: Partial<Issue> = {
       updatedAt: new Date().toISOString(),
     };
@@ -3499,7 +3528,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       set.repo = repo;
     }
     if (old.branch === null) {
-      set.branch = branch;
+      const existing = await this.getIssueByBranch(repo, branch);
+      if (existing === undefined) {
+        set.branch = branch;
+      }
     }
 
     const issue = await this.db
@@ -3583,9 +3615,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const issue = await this.db
       .update(workspaceIssues)
       .set(set)
-      .where(
-        and(eq(workspaceIssues.repo, repo), eq(workspaceIssues.branch, branch))
-      )
+      .where(eq(workspaceIssues.id, old.id))
       .returning()
       .get();
     if (!issue) return undefined;
@@ -3644,9 +3674,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         prCheckState,
         updatedAt: new Date().toISOString(),
       })
-      .where(
-        and(eq(workspaceIssues.repo, repo), eq(workspaceIssues.branch, branch))
-      )
+      .where(eq(workspaceIssues.id, old.id))
       .returning()
       .get();
     if (!issue) return undefined;

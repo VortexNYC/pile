@@ -818,6 +818,27 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "agent sessions events list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/events",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "sessionId",
+        flag: "session",
+      },
+    ],
+    query: [
+      {
+        name: "limit",
+        flag: "limit",
+      },
+    ],
+    body: [],
+  },
   "agent sessions activities": {
     method: "POST",
     path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/activities",
