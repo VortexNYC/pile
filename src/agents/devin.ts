@@ -7,7 +7,11 @@ import type {
   GitIdentity,
   Issue,
 } from "../types/workspace.js";
-import type { AgentProvider, AgentProviderSession } from "./provider.js";
+import type {
+  AgentDispatchContext,
+  AgentProvider,
+  AgentProviderSession,
+} from "./provider.js";
 
 const devinCreateResponseSchema = z.object({
   session_id: z.string().optional(),
@@ -77,7 +81,8 @@ export class DevinAgentProvider implements AgentProvider {
   async dispatch(
     organizationId: string,
     issue: Issue,
-    model = "swe-1-7-medium"
+    model = "swe-1-7-medium",
+    sessionContext?: AgentDispatchContext
   ): Promise<AgentProviderSession> {
     const orgId = this.env.DEVIN_ORG_ID;
     if (!orgId) {
