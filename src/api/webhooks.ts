@@ -171,7 +171,7 @@ const webhookDeliverySchema = z.object({
   deliveryId: z.string(),
   source: z.string(),
   event: z.string(),
-  organizationId: z.string(),
+  organizationId: z.string().nullable(),
   processedAt: z.string(),
   status: z.string(),
   attemptCount: z.number(),

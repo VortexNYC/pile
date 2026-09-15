@@ -807,8 +807,8 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         cycleId: input.cycleId ?? templateDefaults.cycleId,
         labelIds: input.labelIds ?? templateDefaults.labelIds,
         teamId: resolvedTeamId,
-        repo: input.repo ?? teamRecord?.defaultRepo ?? null,
-        branch: input.branch ?? null,
+        repo: input.repo ?? teamRecord?.defaultRepo ?? undefined,
+        branch: input.branch,
       },
       identity.id
     );

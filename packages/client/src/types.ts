@@ -17707,7 +17707,7 @@ export interface paths {
                                 deliveryId: string;
                                 source: string;
                                 event: string;
-                                organizationId: string;
+                                organizationId: string | null;
                                 processedAt: string;
                                 status: string;
                                 attemptCount: number;

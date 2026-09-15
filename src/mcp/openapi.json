@@ -36174,7 +36174,8 @@
                             "type": "string"
                           },
                           "organizationId": {
-                            "type": "string"
+                            "type": "string",
+                            "nullable": true
                           },
                           "processedAt": {
                             "type": "string"

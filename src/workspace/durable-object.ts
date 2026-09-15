@@ -1977,8 +1977,26 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.updateAgentSession(this.db, this.organizationId, id, input);
   }
 
-  addAgentActivity(input: data.AgentActivityInput) {
-    return data.addAgentActivity(this.db, input);
+  async addAgentActivity(input: data.AgentActivityInput) {
+    const activity = await data.addAgentActivity(this.db, input);
+    await data.addAgentSessionEvent(this.db, {
+      sessionId: input.sessionId,
+      type: "activity",
+      message: activity.message,
+      payload: { activity },
+    });
+    return activity;
+  }
+
+  addAgentSessionEvent(input: data.AgentSessionEventInput) {
+    return data.addAgentSessionEvent(this.db, input);
+  }
+
+  listAgentSessionEvents(
+    sessionId: string,
+    options: { afterId?: number; limit?: number } = {}
+  ) {
+    return data.listAgentSessionEvents(this.db, sessionId, options);
   }
 
   // ---- agent provider configs ----
@@ -2028,6 +2046,48 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (!oldSession) return undefined;
 
     const issue = await this.getIssue(oldSession.issueId);
+
+    const terminal = new Set<AgentSessionStatus>([
+      "completed",
+      "failed",
+      "canceled",
+    ]);
+    const oldStatus = oldSession.status as AgentSessionStatus;
+    const newStatus = result.status;
+    const becameTerminal = !terminal.has(oldStatus) && terminal.has(newStatus);
+
+    const buildSessionEventPayloads = (
+      updatedSession: AgentSession
+    ): data.AgentSessionEventInput[] => {
+      const payloads: data.AgentSessionEventInput[] = [];
+      for (const field of [
+        "status",
+        "result",
+        "url",
+        "providerSessionId",
+      ] as const) {
+        const oldValue = oldSession[field];
+        const newValue = updatedSession[field];
+        if (newValue !== oldValue) {
+          payloads.push({
+            sessionId,
+            type: `session.${field}`,
+            message: `Session ${field} changed`,
+            payload: { field, old: oldValue, new: newValue },
+          });
+        }
+      }
+      if (becameTerminal) {
+        payloads.push({
+          sessionId,
+          type: "session.terminal",
+          message: `Session ${updatedSession.status}`,
+          payload: { status: updatedSession.status },
+        });
+      }
+      return payloads;
+    };
+
     if (!issue) {
       const set: Record<string, string | null> = {
         updatedAt: new Date().toISOString(),
@@ -2043,17 +2103,16 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         .where(eq(workspaceAgentSessions.id, sessionId))
         .returning()
         .all();
-      return rows[0] as AgentSession | undefined;
-    }
+      const updatedSession = rows[0] as AgentSession | undefined;
+      if (!updatedSession) return undefined;
 
-    const terminal = new Set<AgentSessionStatus>([
-      "completed",
-      "failed",
-      "canceled",
-    ]);
-    const oldStatus = oldSession.status as AgentSessionStatus;
-    const newStatus = result.status;
-    const becameTerminal = !terminal.has(oldStatus) && terminal.has(newStatus);
+      await Promise.all(
+        buildSessionEventPayloads(updatedSession).map((event) =>
+          this.addAgentSessionEvent(event)
+        )
+      );
+      return updatedSession;
+    }
 
     const set: Record<string, string | null> = {
       updatedAt: new Date().toISOString(),
@@ -2071,6 +2130,8 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       .returning()
       .get();
     if (!updatedSession) return undefined;
+
+    let sessionEventPayloads = buildSessionEventPayloads(updatedSession);
 
     const statusChanged = updatedSession.status !== oldSession.status;
     const resultChanged = updatedSession.result !== oldSession.result;
@@ -2202,6 +2263,23 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           await this.applyStatusAutomation(updatedIssue, issue, actorId);
         }
       }
+
+      const issueFields: Array<[string, string | null, string | null]> = [
+        ["prUrl", issue.prUrl, updatedIssue.prUrl],
+        ["prState", issue.prState, updatedIssue.prState],
+        ["branch", issue.branch, updatedIssue.branch],
+        ["status", issue.status, updatedIssue.status],
+      ];
+      for (const [field, oldValue, newValue] of issueFields) {
+        if (newValue !== oldValue) {
+          sessionEventPayloads.push({
+            sessionId,
+            type: `issue.${field}`,
+            message: `Issue ${field} changed`,
+            payload: { field, old: oldValue, new: newValue },
+          });
+        }
+      }
     }
 
     if (
@@ -2223,6 +2301,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         await this.emitCommentCreated(comment, updatedIssue ?? issue, actorId);
       }
     }
+
+    await Promise.all(
+      sessionEventPayloads.map((event) => this.addAgentSessionEvent(event))
+    );
 
     await this.emit({
       type: "agent_session.updated",
@@ -3530,7 +3612,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   async updatePrByIdentifier(
-    identifier: string,
+    identifier: string | null,
     prUrl: string,
     prState: string,
     repo: string,
@@ -3538,6 +3620,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     actorId?: string
   ): Promise<Issue | undefined> {
     await this.ready;
+    if (!identifier) return undefined;
     const old = await this.getIssueByIdentifier(identifier);
     if (!old) return undefined;
 
@@ -3878,7 +3961,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   async upsertGitIdentity(
-    identity: Omit<GitIdentity, "id" | "createdAt" | "updatedAt">
+    identity: Omit<
+      GitIdentity,
+      "id" | "organizationId" | "createdAt" | "updatedAt"
+    >
   ): Promise<GitIdentity> {
     await this.ready;
     const existing = await this.getGitIdentityByRepo(identity.repo);

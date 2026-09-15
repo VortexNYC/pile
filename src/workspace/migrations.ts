@@ -679,6 +679,17 @@ const v29 = `CREATE TABLE IF NOT EXISTS git_identities (
 --> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS git_identities_org_repo_idx ON git_identities (organization_id, repo)`;
 
+const v30 = `CREATE TABLE IF NOT EXISTS agent_session_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id TEXT NOT NULL,
+  type TEXT NOT NULL,
+  message TEXT NOT NULL,
+  payload TEXT,
+  created_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS agent_session_events_session_idx ON agent_session_events (session_id, id)`;
+
 export const workspaceMigrations = {
   journal: {
     entries: [
@@ -711,6 +722,7 @@ export const workspaceMigrations = {
       { idx: 26, when: 26, tag: "v27", breakpoints: true },
       { idx: 27, when: 27, tag: "v28", breakpoints: true },
       { idx: 28, when: 28, tag: "v29", breakpoints: true },
+      { idx: 29, when: 29, tag: "v30", breakpoints: true },
     ],
   },
   migrations: {
@@ -743,5 +755,6 @@ export const workspaceMigrations = {
     m0026: v27,
     m0027: v28,
     m0028: v29,
+    m0029: v30,
   },
 } satisfies Parameters<typeof migrate>[1];
