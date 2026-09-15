@@ -2,7 +2,7 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 import type { InferSelectModel } from "drizzle-orm";
 
-import { dispatchAgent } from "../agents/index.js";
+import { dispatchAgent, getAgentProvider } from "../agents/index.js";
 import { resolveAgentEnv } from "../agents/outpost.js";
 import { createD1 } from "../global/db.js";
 import { createRepoBranch } from "../global/repo-branches.js";

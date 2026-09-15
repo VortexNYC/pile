@@ -50,6 +50,10 @@ export async function dispatchAgent(
   );
   await stub.setOrganizationId(organizationId);
 
+  const gitIdentity = issue.repo
+    ? ((await stub.getGitIdentityByRepo(issue.repo)) ?? null)
+    : null;
+
   const active = await stub.getActiveAgentSessionForIssue(issue.id);
   if (active) {
     throw new VortexError({
@@ -82,7 +86,7 @@ export async function dispatchAgent(
       organizationId,
       issue,
       model,
-      { sessionId: session.id }
+      { sessionId: session.id, gitIdentity }
     );
 
     const updated = await stub.applyAgentSessionResult(
@@ -106,7 +110,8 @@ export async function dispatchAgent(
         env,
         providerSession.id,
         organizationId,
-        session.id
+        session.id,
+        gitIdentity
       ).catch((err) => console.error("outpost provisioning failed", err));
       if (ctx) ctx.waitUntil(provision);
       else await provision;

@@ -665,6 +665,20 @@ CREATE INDEX IF NOT EXISTS mcp_servers_organization_idx ON mcp_servers (organiza
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS mcp_servers_scope_idx ON mcp_servers (organization_id, scope)`;
 
+const v29 = `CREATE TABLE IF NOT EXISTS git_identities (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  repo TEXT NOT NULL,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  github_username TEXT,
+  signing_key_ref TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS git_identities_org_repo_idx ON git_identities (organization_id, repo)`;
+
 export const workspaceMigrations = {
   journal: {
     entries: [
@@ -696,6 +710,7 @@ export const workspaceMigrations = {
       { idx: 25, when: 25, tag: "v26", breakpoints: false },
       { idx: 26, when: 26, tag: "v27", breakpoints: true },
       { idx: 27, when: 27, tag: "v28", breakpoints: true },
+      { idx: 28, when: 28, tag: "v29", breakpoints: true },
     ],
   },
   migrations: {
@@ -727,5 +742,6 @@ export const workspaceMigrations = {
     m0025: v26,
     m0026: v27,
     m0027: v28,
+    m0028: v29,
   },
 } satisfies Parameters<typeof migrate>[1];

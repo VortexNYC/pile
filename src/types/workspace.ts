@@ -26,6 +26,18 @@ export interface AgentSessionResult {
   branch?: string | null;
 }
 
+export interface GitIdentity {
+  id: string;
+  organizationId: string;
+  repo: string;
+  name: string;
+  email: string;
+  githubUsername: string | null;
+  signingKeyRef: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export const ISSUE_STATUSES = [
   "triage",
   "backlog",

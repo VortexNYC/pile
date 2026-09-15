@@ -1,7 +1,7 @@
 import { z } from "@hono/zod-openapi";
 
 import type { WorkerEnv } from "../platform/middleware.js";
-import type { AgentSessionStatus } from "../types/workspace.js";
+import type { AgentSessionStatus, GitIdentity } from "../types/workspace.js";
 
 const daytonaSandboxSchema = z.object({
   id: z.string(),
@@ -100,7 +100,8 @@ export async function provisionOutpostWorker(
   env: WorkerEnv,
   devinSessionId: string,
   organizationId?: string,
-  trackerSessionId?: string
+  trackerSessionId?: string,
+  gitIdentity?: GitIdentity | null
 ): Promise<void> {
   const fleetId = devinSessionId.startsWith("devin-")
     ? devinSessionId
@@ -168,6 +169,14 @@ export async function provisionOutpostWorker(
         OUTPOST_ID: outpostId,
         OUTPOST_TOKEN: outpostToken,
         SESSION_ID: fleetId,
+        ...(gitIdentity
+          ? {
+              GIT_AUTHOR_NAME: gitIdentity.name,
+              GIT_AUTHOR_EMAIL: gitIdentity.email,
+              GIT_COMMITTER_NAME: gitIdentity.name,
+              GIT_COMMITTER_EMAIL: gitIdentity.email,
+            }
+          : {}),
       },
       labels: {
         "vortex.outpost": "1",

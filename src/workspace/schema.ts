@@ -972,3 +972,24 @@ export const gitAutomationTargetBranches = sqliteTable(
     ),
   ]
 );
+
+export const workspaceGitIdentities = sqliteTable(
+  "git_identities" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    repo: text("repo" as string).notNull(),
+    name: text("name" as string).notNull(),
+    email: text("email" as string).notNull(),
+    githubUsername: text("github_username" as string),
+    signingKeyRef: text("signing_key_ref" as string),
+    createdAt: text("created_at" as string).notNull(),
+    updatedAt: text("updated_at" as string).notNull(),
+  },
+  (table) => [
+    uniqueIndex("git_identities_org_repo_idx" as string).on(
+      table.organizationId,
+      table.repo
+    ),
+  ]
+);

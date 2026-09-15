@@ -3516,6 +3516,67 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "git identities list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/git/identities",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "git identities create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/git/identities",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "repo",
+        flag: "repo",
+      },
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "email",
+        flag: "email",
+      },
+      {
+        name: "githubUsername",
+        flag: "github-username",
+      },
+      {
+        name: "signingKeyRef",
+        flag: "signing-key-ref",
+      },
+    ],
+  },
+  "git identities delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/git/identities/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "files list": {
     method: "GET",
     path: "/workspaces/{organizationId}/files",

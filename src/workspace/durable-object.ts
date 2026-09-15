@@ -59,6 +59,7 @@ import {
   type AgentSessionResult,
   type AgentSessionStatus,
   type Comment,
+  type GitIdentity,
   type Issue,
   type IssueInput,
   type IssueResolution,
@@ -76,6 +77,7 @@ import {
   workspaceAttachments,
   workspaceComments,
   workspaceDocuments,
+  workspaceGitIdentities,
   workspaceIssueApprovals,
   workspaceIssueHistory,
   workspaceIssueRelations,
@@ -3748,9 +3750,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   async reconcileIssuePr(
     issueId: string,
-    prUrl: string,
-    prState: string,
-    prCheckState: string,
+    prUrl: string | null,
+    prState: string | null,
+    prCheckState: string | null,
     actorId?: string
   ): Promise<Issue | undefined> {
     await this.ready;
@@ -3763,11 +3765,11 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       merged: "done",
       closed: "canceled",
     };
-    const status = statusMap[prState];
+    const status = prState ? statusMap[prState] : undefined;
     const set: {
-      prUrl: string;
-      prState: string;
-      prCheckState: string;
+      prUrl: string | null;
+      prState: string | null;
+      prCheckState: string | null;
       updatedAt: string;
       status?: Issue["status"];
     } = {
@@ -3836,5 +3838,95 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       issue,
     });
     return issue;
+  }
+
+  async listGitIdentities(): Promise<GitIdentity[]> {
+    await this.ready;
+    return this.db
+      .select()
+      .from(workspaceGitIdentities)
+      .where(eq(workspaceGitIdentities.organizationId, this.organizationId))
+      .all();
+  }
+
+  async getGitIdentity(id: string): Promise<GitIdentity | undefined> {
+    await this.ready;
+    return this.db
+      .select()
+      .from(workspaceGitIdentities)
+      .where(
+        and(
+          eq(workspaceGitIdentities.id, id),
+          eq(workspaceGitIdentities.organizationId, this.organizationId)
+        )
+      )
+      .get();
+  }
+
+  async getGitIdentityByRepo(repo: string): Promise<GitIdentity | undefined> {
+    await this.ready;
+    return this.db
+      .select()
+      .from(workspaceGitIdentities)
+      .where(
+        and(
+          eq(workspaceGitIdentities.organizationId, this.organizationId),
+          eq(workspaceGitIdentities.repo, repo)
+        )
+      )
+      .get();
+  }
+
+  async upsertGitIdentity(
+    identity: Omit<GitIdentity, "id" | "createdAt" | "updatedAt">
+  ): Promise<GitIdentity> {
+    await this.ready;
+    const existing = await this.getGitIdentityByRepo(identity.repo);
+    const now = new Date().toISOString();
+    const id = existing?.id ?? crypto.randomUUID();
+    const row = {
+      ...identity,
+      id,
+      organizationId: this.organizationId,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    };
+    await this.db
+      .insert(workspaceGitIdentities)
+      .values(row)
+      .onConflictDoUpdate({
+        target: [
+          workspaceGitIdentities.organizationId,
+          workspaceGitIdentities.repo,
+        ],
+        set: {
+          name: row.name,
+          email: row.email,
+          githubUsername: row.githubUsername,
+          signingKeyRef: row.signingKeyRef,
+          updatedAt: row.updatedAt,
+        },
+      });
+    const updated = await this.getGitIdentity(id);
+    if (!updated) {
+      throw new VortexError({
+        code: "INTERNAL_ERROR",
+        status: 500,
+        message: "Failed to persist git identity",
+      });
+    }
+    return updated;
+  }
+
+  async deleteGitIdentity(id: string): Promise<void> {
+    await this.ready;
+    await this.db
+      .delete(workspaceGitIdentities)
+      .where(
+        and(
+          eq(workspaceGitIdentities.id, id),
+          eq(workspaceGitIdentities.organizationId, this.organizationId)
+        )
+      );
   }
 }

@@ -484,6 +484,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdGitIdentitiesId",
+    "description": "Delete git identity (DELETE /workspaces/{organizationId}/git/identities/{id}) Path params (top-level, required): organizationId, id.",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/git/identities/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdGitlabInstallationsId",
     "description": "Delete gitlab installation (DELETE /workspaces/{organizationId}/gitlab/installations/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
@@ -2222,6 +2243,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "description": "List github users (GET /workspaces/{organizationId}/github/users) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/github/users",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdGitIdentities",
+    "description": "List git identities (GET /workspaces/{organizationId}/git/identities) Path params (top-level, required): organizationId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/git/identities",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -8769,6 +8807,51 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "required": [
             "userId",
             "githubLogin"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdGitIdentities",
+    "description": "Create git identity (POST /workspaces/{organizationId}/git/identities) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: repo*, name*, email*, githubUsername, signingKeyRef (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/git/identities",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "repo": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "email": {
+              "type": "string",
+              "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
+            },
+            "githubUsername": {
+              "type": "string",
+              "nullable": true
+            },
+            "signingKeyRef": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          "required": [
+            "repo",
+            "name",
+            "email"
           ]
         }
       },

@@ -1,9 +1,10 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
-import { createD1 } from "../global/db.js";
-import { getInstallationToken } from "../global/github-auth.js";
-import { findGithubInstallation } from "../global/github-installations.js";
+import {
+  GITHUB_USER_AGENT,
+  getInstallationTokenForRepo,
+} from "../global/github-auth.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
@@ -15,6 +16,10 @@ const reconcileResponseSchema = z.object({
   prState: z.string().nullable(),
   prCheckState: z.string().nullable(),
   status: z.string(),
+});
+
+const reconcilePrBodySchema = z.object({
+  prUrl: z.string().url().nullable().optional(),
 });
 
 const reconcilePrRoute = createRoute({
@@ -84,7 +89,6 @@ function normalizeCheckState(
     "failure",
     "action_required",
     "cancelled",
-    "skipped",
     "stale",
     "timed_out",
   ]);
@@ -95,7 +99,10 @@ function normalizeCheckState(
   const hasPending = checkRuns.some((run) => run.status !== "completed");
   if (hasPending) return "pending";
   const allSuccess = checkRuns.every(
-    (run) => run.conclusion === "success" || run.conclusion === "neutral"
+    (run) =>
+      run.conclusion === "success" ||
+      run.conclusion === "neutral" ||
+      run.conclusion === "skipped"
   );
   return allSuccess ? "success" : "unknown";
 }
@@ -113,6 +120,7 @@ async function fetchGitHubPull(
         Authorization: `Bearer ${token}`,
         Accept: "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": GITHUB_USER_AGENT,
       },
     }
   );
@@ -142,6 +150,7 @@ async function fetchGitHubCheckRuns(
         Authorization: `Bearer ${token}`,
         Accept: "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": GITHUB_USER_AGENT,
       },
     }
   );
@@ -160,86 +169,143 @@ async function fetchGitHubCheckRuns(
   return parsed.success ? parsed.data.check_runs : [];
 }
 
+async function reconcileFromGitHub(
+  env: AppContext["env"],
+  stub: ReturnType<typeof getWorkspaceStub>,
+  issue: { id: string; prCheckState: string | null },
+  prUrl: string,
+  actorId: string
+) {
+  const parsed = parsePrUrl(prUrl);
+  if (!parsed) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Issue prUrl is not a GitHub pull request URL",
+    });
+  }
+
+  const token = await getInstallationTokenForRepo(
+    env,
+    parsed.owner,
+    parsed.name
+  );
+  if (!token) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "GitHub installation not found for repo",
+    });
+  }
+
+  const pr = await fetchGitHubPull(
+    token,
+    parsed.owner,
+    parsed.name,
+    parsed.number
+  );
+  if (!pr) {
+    throw new VortexError({
+      code: "BAD_GATEWAY",
+      status: 502,
+      message: "GitHub pull request API failed",
+    });
+  }
+
+  const checkRuns = await fetchGitHubCheckRuns(
+    token,
+    parsed.owner,
+    parsed.name,
+    pr.head.sha
+  );
+
+  const prState = normalizePrState(pr);
+  const prCheckState =
+    normalizeCheckState(checkRuns) ?? issue.prCheckState ?? null;
+
+  const updated = await stub.reconcileIssuePr(
+    issue.id,
+    prUrl,
+    prState,
+    prCheckState ?? "unknown",
+    actorId
+  );
+  return updated;
+}
+
 export function registerPrRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(reconcilePrRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
+    const rawBody: unknown = await c.req.json().catch(() => ({}));
+    const parsedBody = reconcilePrBodySchema.safeParse(rawBody);
+    if (!parsedBody.success) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: "Invalid reconcile body",
+      });
+    }
+    const body = parsedBody.data;
     const stub = getWorkspaceStub(c.env, organizationId);
     const issue = await stub.getIssue(id);
     if (!issue) {
       return c.json({ message: "Issue not found" }, 404);
     }
-    if (!issue.prUrl) {
-      throw new VortexError({
-        code: "BAD_REQUEST",
-        status: 400,
-        message: "Issue has no prUrl",
+
+    const override = body.prUrl;
+    if (override === undefined) {
+      if (issue.prUrl === null) {
+        throw new VortexError({
+          code: "BAD_REQUEST",
+          status: 400,
+          message: "Issue has no prUrl",
+        });
+      }
+      const updated = await reconcileFromGitHub(
+        c.env,
+        stub,
+        issue,
+        issue.prUrl,
+        c.var.workspaceIdentity.id
+      );
+      if (!updated) {
+        return c.json({ message: "Issue not found" }, 404);
+      }
+      return c.json({
+        id: updated.id,
+        prUrl: updated.prUrl,
+        prState: updated.prState,
+        prCheckState: updated.prCheckState,
+        status: updated.status,
       });
     }
 
-    const parsed = parsePrUrl(issue.prUrl);
-    if (!parsed) {
-      throw new VortexError({
-        code: "BAD_REQUEST",
-        status: 400,
-        message: "Issue prUrl is not a GitHub pull request URL",
+    if (override === null) {
+      const updated = await stub.reconcileIssuePr(
+        issue.id,
+        null,
+        null,
+        null,
+        c.var.workspaceIdentity.id
+      );
+      if (!updated) {
+        return c.json({ message: "Issue not found" }, 404);
+      }
+      return c.json({
+        id: updated.id,
+        prUrl: updated.prUrl,
+        prState: updated.prState,
+        prCheckState: updated.prCheckState,
+        status: updated.status,
       });
     }
 
-    const repo = `${parsed.owner}/${parsed.name}`;
-    const db = createD1(c.env.D1);
-    const installation = await findGithubInstallation(db, repo);
-    if (!installation) {
-      throw new VortexError({
-        code: "BAD_REQUEST",
-        status: 400,
-        message: "GitHub installation not found for repo",
-      });
-    }
-
-    const token = await getInstallationToken(
+    const updated = await reconcileFromGitHub(
       c.env,
-      installation.installationId
-    );
-    if (!token) {
-      throw new VortexError({
-        code: "BAD_REQUEST",
-        status: 400,
-        message: "GitHub installation token unavailable",
-      });
-    }
-
-    const pr = await fetchGitHubPull(
-      token,
-      parsed.owner,
-      parsed.name,
-      parsed.number
-    );
-    if (!pr) {
-      throw new VortexError({
-        code: "BAD_GATEWAY",
-        status: 502,
-        message: "GitHub pull request API failed",
-      });
-    }
-
-    const checkRuns = await fetchGitHubCheckRuns(
-      token,
-      parsed.owner,
-      parsed.name,
-      pr.head.sha
-    );
-
-    const prState = normalizePrState(pr);
-    const prCheckState =
-      normalizeCheckState(checkRuns) ?? issue.prCheckState ?? null;
-
-    const identity = c.var.workspaceIdentity;
-    const updated = await stub.reconcileIssuePr(
-      issue.id,
-      issue.prUrl,
-      prState,
-      prCheckState ?? "unknown",
-      identity.id
+      stub,
+      issue,
+      override,
+      c.var.workspaceIdentity.id
     );
     if (!updated) {
       return c.json({ message: "Issue not found" }, 404);

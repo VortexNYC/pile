@@ -12,6 +12,7 @@ import {
   getAgentProvider,
   registerAgentProvider,
 } from "./index.js";
+import type { AgentDispatchContext } from "./provider.js";
 
 const actor: WorkspaceIdentity = {
   id: "user-1",
@@ -218,5 +219,36 @@ describe("agent providers", () => {
 
     const sessions = await stub.listAgentSessions({ issueId: issue.id });
     expect(sessions[0]?.status).toBe("failed");
+  });
+
+  it("passes the repo git identity to the provider", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)
+    );
+    await stub.setOrganizationId(actor.organizationId);
+    const issue = await stub.createIssue({
+      title: "Git identity dispatch test",
+      repo: "VortexNYC/pile",
+    });
+    const identity = await stub.upsertGitIdentity({
+      repo: "VortexNYC/pile",
+      name: "Test Agent",
+      email: "agent@example.com",
+      githubUsername: "test-agent",
+      signingKeyRef: "veil://github-signing",
+    });
+
+    let captured: AgentDispatchContext | undefined;
+    const provider = new MockAgentProvider("mock", {
+      dispatch: (_1, _2, _3, ctx) => {
+        captured = ctx;
+        return { id: "gitid-1", agentId: "mock", status: "created" };
+      },
+    });
+    registerAgentProvider("mock-gitid", () => provider);
+
+    await dispatchAgent(env, "mock-gitid", actor.organizationId, issue, actor);
+
+    expect(captured?.gitIdentity).toEqual(identity);
   });
 });
