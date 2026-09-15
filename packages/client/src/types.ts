@@ -8091,7 +8091,6 @@ export interface paths {
                             organizationId: string;
                             repo: string;
                             name: string;
-                            /** Format: email */
                             email: string;
                             githubUsername: string | null;
                             signingKeyRef: string | null;
@@ -8118,7 +8117,6 @@ export interface paths {
                     "application/json": {
                         repo: string;
                         name: string;
-                        /** Format: email */
                         email: string;
                         githubUsername?: string | null;
                         signingKeyRef?: string | null;
@@ -8137,7 +8135,6 @@ export interface paths {
                             organizationId: string;
                             repo: string;
                             name: string;
-                            /** Format: email */
                             email: string;
                             githubUsername: string | null;
                             signingKeyRef: string | null;

@@ -15255,7 +15255,7 @@
                       },
                       "email": {
                         "type": "string",
-                        "format": "email"
+                        "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
                       },
                       "githubUsername": {
                         "type": "string",
@@ -15319,7 +15319,7 @@
                   },
                   "email": {
                     "type": "string",
-                    "format": "email"
+                    "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
                   },
                   "githubUsername": {
                     "type": "string",
@@ -15361,7 +15361,7 @@
                     },
                     "email": {
                       "type": "string",
-                      "format": "email"
+                      "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
                     },
                     "githubUsername": {
                       "type": "string",

@@ -6,12 +6,16 @@ import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 import { getWorkspaceStub } from "./stub.js";
 
+const gitEmail = z
+  .string()
+  .regex(/^[^@\s]+@[^@\s]+\.[^@\s]+$/, "invalid email address");
+
 const gitIdentitySchema = z.object({
   id: z.string(),
   organizationId: z.string(),
   repo: z.string(),
   name: z.string(),
-  email: z.string().email(),
+  email: gitEmail,
   githubUsername: z.string().nullable(),
   signingKeyRef: z.string().nullable(),
   createdAt: z.string(),
@@ -21,7 +25,7 @@ const gitIdentitySchema = z.object({
 const gitIdentityInputSchema = z.object({
   repo: z.string(),
   name: z.string(),
-  email: z.string().email(),
+  email: gitEmail,
   githubUsername: z.string().nullable().optional(),
   signingKeyRef: z.string().nullable().optional(),
 });

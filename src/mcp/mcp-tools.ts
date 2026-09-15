@@ -8837,7 +8837,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "email": {
               "type": "string",
-              "format": "email"
+              "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
             },
             "githubUsername": {
               "type": "string",
