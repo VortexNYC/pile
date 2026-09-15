@@ -7,6 +7,7 @@ import type {
   GitIdentity,
   Issue,
 } from "../types/workspace.js";
+import { provisionOutpostWorker } from "./outpost.js";
 import type {
   AgentDispatchContext,
   AgentProvider,
@@ -135,12 +136,27 @@ export class DevinAgentProvider implements AgentProvider {
       });
     }
 
+    const sessionUrl = body.url ?? `https://app.devin.ai/sessions/${id}`;
+    const provision = provisionOutpostWorker(
+      this.env,
+      id,
+      organizationId,
+      sessionContext?.sessionId,
+      sessionContext?.gitIdentity
+    ).catch((err) => console.error("outpost provisioning failed", err));
+
+    if (sessionContext?.waitUntil) {
+      sessionContext.waitUntil(provision);
+    } else {
+      await provision;
+    }
+
     return {
       id,
       agentId: this.id,
       issueId: issue.id,
       status: "created",
-      url: body.url ?? `https://app.devin.ai/sessions/${id}`,
+      url: sessionUrl,
     };
   }
 

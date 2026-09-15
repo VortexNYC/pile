@@ -6,7 +6,6 @@ import type { AgentSession, Issue } from "../types/workspace.js";
 import { CfAgentProvider } from "./cf-agent.js";
 import { CursorAgentProvider } from "./cursor.js";
 import { DevinAgentProvider } from "./devin.js";
-import { provisionOutpostWorker } from "./outpost.js";
 import type { AgentProvider } from "./provider.js";
 
 const providers: Record<string, (env: AppEnv) => AgentProvider> = {
@@ -86,7 +85,7 @@ export async function dispatchAgent(
       organizationId,
       issue,
       model,
-      { sessionId: session.id, gitIdentity }
+      { sessionId: session.id, gitIdentity, waitUntil: ctx?.waitUntil }
     );
 
     const updated = await stub.applyAgentSessionResult(
@@ -102,20 +101,6 @@ export async function dispatchAgent(
       },
       actor.id
     );
-
-    // Outpost provisioning is Devin-specific — only the Devin provider's
-    // sessions can be claimed by `devin worker` on a compute sandbox.
-    if (agentId === "devin" && providerSession.id) {
-      const provision = provisionOutpostWorker(
-        env,
-        providerSession.id,
-        organizationId,
-        session.id,
-        gitIdentity
-      ).catch((err) => console.error("outpost provisioning failed", err));
-      if (ctx) ctx.waitUntil(provision);
-      else await provision;
-    }
 
     return updated ?? session;
   } catch (error) {

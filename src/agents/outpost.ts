@@ -1,6 +1,7 @@
 import { z } from "@hono/zod-openapi";
 
 import type { WorkerEnv } from "../platform/middleware.js";
+import type { AppEnv } from "../types/env.js";
 import type { AgentSessionStatus, GitIdentity } from "../types/workspace.js";
 
 const daytonaSandboxSchema = z.object({
@@ -80,7 +81,7 @@ export function resolveAgentEnv(
   };
 }
 
-function daytonaConfig(env: WorkerEnv) {
+function daytonaConfig(env: AppEnv) {
   const apiKey = env.DAYTONA_API_KEY;
   const apiUrl = env.DAYTONA_API_URL ?? "https://app.daytona.io/api";
   if (!apiKey) return null;
@@ -97,7 +98,7 @@ function daytonaConfig(env: WorkerEnv) {
  * reused when healthy and recreated when it is not.
  */
 export async function provisionOutpostWorker(
-  env: WorkerEnv,
+  env: AppEnv,
   devinSessionId: string,
   organizationId?: string,
   trackerSessionId?: string,
