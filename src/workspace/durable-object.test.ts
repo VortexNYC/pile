@@ -513,4 +513,57 @@ describe("WorkspaceDO", () => {
     expect(a.number).not.toBe(b.number);
     expect(a.identifier).not.toBe(b.identifier);
   });
+
+  it("does not let updatePrByIdentifier overwrite an issue with a different branch", async () => {
+    const stub = getStub();
+    await stub.setOrganizationId(WORKSPACE_ID);
+    const owner = await withWorkspace(stub, (instance) =>
+      instance.createIssue({
+        title: "Owner issue",
+        repo: "VortexNYC/pile",
+        branch: "ISS-42-mcp-registry",
+      })
+    );
+    const referenced = await withWorkspace(stub, (instance) =>
+      instance.createIssue({
+        title: "Referenced issue",
+        repo: "VortexNYC/pile",
+        branch: "ISS-36-webhook-branch-unique",
+      })
+    );
+
+    await withWorkspace(stub, (instance) =>
+      instance.updatePrByIdentifier(
+        owner.identifier,
+        "https://github.com/VortexNYC/pile/pull/112",
+        "open",
+        "VortexNYC/pile",
+        "ISS-42-mcp-registry"
+      )
+    );
+
+    await withWorkspace(stub, (instance) =>
+      instance.updatePrByIdentifier(
+        referenced.identifier,
+        "https://github.com/VortexNYC/pile/pull/112",
+        "open",
+        "VortexNYC/pile",
+        "ISS-42-mcp-registry"
+      )
+    );
+
+    const after = await withWorkspace(stub, (instance) =>
+      instance.getIssue(referenced.id)
+    );
+    expect(after?.prUrl).toBeNull();
+    expect(after?.prState).toBeNull();
+
+    const ownerAfter = await withWorkspace(stub, (instance) =>
+      instance.getIssue(owner.id)
+    );
+    expect(ownerAfter?.prUrl).toBe(
+      "https://github.com/VortexNYC/pile/pull/112"
+    );
+    expect(ownerAfter?.prState).toBe("open");
+  });
 });
