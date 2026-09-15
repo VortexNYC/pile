@@ -1,6 +1,6 @@
 # Pile
 
-An open-source, agent-native issue tracker built on Cloudflare Workers, D1, and Durable Objects.
+An open-source, agent-native issue tracker, built on Cloudflare Workers, D1, and Durable Objects.
 
 ## Stack
 
