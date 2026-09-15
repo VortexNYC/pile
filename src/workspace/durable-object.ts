@@ -3393,6 +3393,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const old = await this.getIssueByIdentifier(identifier);
     if (!old) return undefined;
 
+    // A PR mention in a title/body must not overwrite the PR state of an
+    // issue that already owns a different branch. The branch is the
+    // authoritative link; a plain identifier mention is just a reference.
+    if (old.repo !== null && old.repo !== repo) return undefined;
+    if (old.branch !== null && old.branch !== branch) return undefined;
+
     const statusMap: Record<string, Issue["status"] | undefined> = {
       draft: "backlog",
       open: "in_progress",
