@@ -62,7 +62,10 @@ export const workspaceIssues = sqliteTable(
   },
   (table) => [
     index("idx_issues_status" as string).on(table.status, table.createdAt),
-    index("idx_issues_repo_branch" as string).on(table.repo, table.branch),
+    uniqueIndex("idx_issues_repo_branch" as string).on(
+      table.repo,
+      table.branch
+    ),
     index("idx_issues_created_at_id" as string).on(table.createdAt, table.id),
     index("idx_issues_priority" as string).on(table.priority, table.createdAt),
     index("idx_issues_parent" as string).on(

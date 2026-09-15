@@ -633,6 +633,10 @@ const v25 = `ALTER TABLE issues ADD COLUMN pr_check_state TEXT`;
 
 const v26 = `ALTER TABLE comments ADD COLUMN internal INTEGER NOT NULL DEFAULT 0`;
 
+const v27 = `DROP INDEX IF EXISTS idx_issues_repo_branch
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS idx_issues_repo_branch ON issues (repo, branch) WHERE branch IS NOT NULL`;
+
 const v24 = `ALTER TABLE issue_external_links RENAME TO external_links
 --> statement-breakpoint
 ALTER TABLE external_links ADD COLUMN entity_type TEXT
@@ -674,6 +678,7 @@ export const workspaceMigrations = {
       { idx: 23, when: 23, tag: "v24", breakpoints: true },
       { idx: 24, when: 24, tag: "v25", breakpoints: false },
       { idx: 25, when: 25, tag: "v26", breakpoints: false },
+      { idx: 26, when: 26, tag: "v27", breakpoints: true },
     ],
   },
   migrations: {
@@ -703,5 +708,6 @@ export const workspaceMigrations = {
     m0023: v24,
     m0024: v25,
     m0025: v26,
+    m0026: v27,
   },
 } satisfies Parameters<typeof migrate>[1];

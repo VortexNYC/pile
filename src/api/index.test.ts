@@ -1883,7 +1883,7 @@ describe("API integration", () => {
     );
     expect(linkedIssueAfterMr.prState).toBe("open");
     expect(linkedIssueAfterMr.repo).toBe(projectPath);
-    expect(linkedIssueAfterMr.branch).toBe("feature/backend");
+    expect(linkedIssueAfterMr.branch).toBeNull();
     expect(linkedIssueAfterMr.status).toBe("in_progress");
 
     const mrNotePayload = {

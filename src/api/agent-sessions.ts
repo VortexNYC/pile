@@ -197,6 +197,30 @@ const getSessionRoute = createRoute({
   },
 });
 
+const getSessionEventsRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/events",
+  tags: ["agent-sessions"],
+  middleware: [rls("read", "agent:read")],
+  request: {
+    params: z.object({ organizationId: z.string(), sessionId: z.string() }),
+    query: z.object({
+      limit: z.string().optional(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Agent session events",
+      content: {
+        "application/json": {
+          schema: z.object({ events: z.array(agentActivitySchema) }),
+        },
+      },
+    },
+    404: { description: "Session not found" },
+  },
+});
+
 const addActivityRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/activities",
@@ -383,6 +407,20 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       return c.json({ message: "Session not found" }, 404);
     }
     return c.json(toSessionResponse(session, session.activities));
+  });
+
+  app.openapi(getSessionEventsRoute, async (c) => {
+    const { organizationId, sessionId } = c.req.valid("param");
+    const { limit } = c.req.valid("query");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const session = await stub.getAgentSession(sessionId);
+    if (!session) {
+      return c.json({ message: "Session not found" }, 404);
+    }
+    const events = await stub.listAgentActivities(sessionId, {
+      limit: limit ? Number(limit) : undefined,
+    });
+    return c.json({ events: events.map(toActivityResponse) });
   });
 
   app.openapi(addActivityRoute, async (c) => {
