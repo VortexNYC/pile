@@ -9445,6 +9445,39 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdIssuesIdAssign",
+    "description": "Create issue assign (POST /workspaces/{organizationId}/issues/{id}/assign) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: assigneeId* (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/issues/{id}/assign",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "assigneeId": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          "required": [
+            "assigneeId"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdIssuesIdDispatch",
     "description": "Dispatch issue (POST /workspaces/{organizationId}/issues/{id}/dispatch) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: agentId, model.",
     "method": "POST",

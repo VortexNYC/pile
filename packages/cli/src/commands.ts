@@ -724,6 +724,27 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "issues assign create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/issues/{id}/assign",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "assigneeId",
+        flag: "assignee",
+      },
+    ],
+  },
   "agent sessions list": {
     method: "GET",
     path: "/workspaces/{organizationId}/agent/sessions",
