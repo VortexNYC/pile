@@ -1,9 +1,7 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
-import { createD1 } from "../global/db.js";
-import { getInstallationToken } from "../global/github-auth.js";
-import { findGithubInstallation } from "../global/github-installations.js";
+import { getInstallationTokenForRepo } from "../global/github-auth.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
@@ -185,26 +183,16 @@ export function registerPrRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
 
-    const repo = `${parsed.owner}/${parsed.name}`;
-    const db = createD1(c.env.D1);
-    const installation = await findGithubInstallation(db, repo);
-    if (!installation) {
-      throw new VortexError({
-        code: "BAD_REQUEST",
-        status: 400,
-        message: "GitHub installation not found for repo",
-      });
-    }
-
-    const token = await getInstallationToken(
+    const token = await getInstallationTokenForRepo(
       c.env,
-      installation.installationId
+      parsed.owner,
+      parsed.name
     );
     if (!token) {
       throw new VortexError({
         code: "BAD_REQUEST",
         status: 400,
-        message: "GitHub installation token unavailable",
+        message: "GitHub installation not found for repo",
       });
     }
 
