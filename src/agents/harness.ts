@@ -1,11 +1,16 @@
 import type { Issue } from "../types/workspace.js";
-import type { AgentProvider, AgentProviderSession } from "./provider.js";
+import type {
+  AgentDispatchContext,
+  AgentProvider,
+  AgentProviderSession,
+} from "./provider.js";
 
 export interface MockAgentProviderOptions {
   dispatch?: (
     organizationId: string,
     issue: Issue,
-    model?: string
+    model?: string,
+    sessionContext?: AgentDispatchContext
   ) => AgentProviderSession | Promise<AgentProviderSession>;
   poll?: (
     sessionId: string
@@ -24,10 +29,16 @@ export class MockAgentProvider implements AgentProvider {
   async dispatch(
     organizationId: string,
     issue: Issue,
-    model?: string
+    model?: string,
+    sessionContext?: AgentDispatchContext
   ): Promise<AgentProviderSession> {
     if (this.options.dispatch) {
-      return await this.options.dispatch(organizationId, issue, model);
+      return await this.options.dispatch(
+        organizationId,
+        issue,
+        model,
+        sessionContext
+      );
     }
     return {
       id: "mock-session",
