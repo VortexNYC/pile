@@ -37,6 +37,7 @@ import {
   issueSubscribers as globalIssueSubscribers,
   linearUsers as globalLinearUsers,
   notifications as globalNotifications,
+  organization,
   outboundWebhookDeliveries as globalOutboundDeliveries,
   reactions as globalReactions,
   savedViews as globalSavedViews,
@@ -45,6 +46,7 @@ import {
   viewFavorites as globalViewFavorites,
   webhookSubscriptions as globalWebhookSubs,
 } from "../global/schema.js";
+import { safeJSON } from "../global/team-metadata.js";
 import { getDefaultTeam, getTeamById } from "../global/teams.js";
 import { getWorkspaceMembership } from "../global/workspaces.js";
 import { getWorkspaceById } from "../global/workspaces.js";
@@ -1923,6 +1925,47 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   listAgentSessions(options: { issueId?: string; limit?: number } = {}) {
     return data.listAgentSessions(this.db, this.organizationId, options);
+  }
+
+  async getMaxConcurrentAgentChildren(): Promise<number> {
+    const d1 = createD1(this.env.D1);
+    const row = await d1
+      .select({ metadata: organization.metadata })
+      .from(organization)
+      .where(eq(organization.id, this.organizationId))
+      .get();
+    const parsed = safeJSON(row?.metadata ?? null) as Record<
+      string,
+      unknown
+    > | null;
+    const value = parsed?.maxConcurrentAgentChildren;
+    return typeof value === "number" ? value : 10;
+  }
+
+  async countActiveChildSessions(parentIssueId: string): Promise<number> {
+    await this.ready;
+    const childIssues = await this.db
+      .select({ id: workspaceIssues.id })
+      .from(workspaceIssues)
+      .where(eq(workspaceIssues.parentId, parentIssueId))
+      .all();
+    if (childIssues.length === 0) return 0;
+
+    const terminal: AgentSessionStatus[] = ["completed", "failed", "canceled"];
+    const result = await this.db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(workspaceAgentSessions)
+      .where(
+        and(
+          inArray(
+            workspaceAgentSessions.issueId,
+            childIssues.map((i) => i.id)
+          ),
+          not(inArray(workspaceAgentSessions.status, terminal))
+        )
+      )
+      .get();
+    return result?.count ?? 0;
   }
 
   updateAgentSession(
