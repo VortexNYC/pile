@@ -1,4 +1,8 @@
-import type { AgentSessionResult, Issue } from "../types/workspace.js";
+import type {
+  AgentSessionResult,
+  GitIdentity,
+  Issue,
+} from "../types/workspace.js";
 
 export interface AgentProviderSession extends AgentSessionResult {
   id: string;
@@ -11,6 +15,8 @@ export interface AgentDispatchContext {
   /** Tracker-side session id, pre-created so providers can hand it to the
    *  remote agent for write-back. */
   sessionId: string;
+  /** Git identity for the target repository, if one is configured. */
+  gitIdentity?: GitIdentity | null;
 }
 
 export interface AgentProvider {

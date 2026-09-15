@@ -15216,6 +15216,221 @@
         "summary": "Delete git automation target branche"
       }
     },
+    "/workspaces/{organizationId}/git/identities": {
+      "get": {
+        "tags": [
+          "git-identities"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Git identities",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "organizationId": {
+                        "type": "string"
+                      },
+                      "repo": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "email": {
+                        "type": "string",
+                        "format": "email"
+                      },
+                      "githubUsername": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "signingKeyRef": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "createdAt": {
+                        "type": "string"
+                      },
+                      "updatedAt": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "organizationId",
+                      "repo",
+                      "name",
+                      "email",
+                      "githubUsername",
+                      "signingKeyRef",
+                      "createdAt",
+                      "updatedAt"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "List git identities"
+      },
+      "post": {
+        "tags": [
+          "git-identities"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "repo": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "githubUsername": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "signingKeyRef": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "repo",
+                  "name",
+                  "email"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Git identity saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "repo": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string",
+                      "format": "email"
+                    },
+                    "githubUsername": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "signingKeyRef": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "repo",
+                    "name",
+                    "email",
+                    "githubUsername",
+                    "signingKeyRef",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create git identity"
+      }
+    },
+    "/workspaces/{organizationId}/git/identities/{id}": {
+      "delete": {
+        "tags": [
+          "git-identities"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Git identity deleted"
+          },
+          "404": {
+            "description": "Git identity not found"
+          }
+        },
+        "summary": "Delete git identity"
+      }
+    },
     "/workspaces/{organizationId}/files": {
       "post": {
         "tags": [

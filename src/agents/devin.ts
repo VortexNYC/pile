@@ -2,7 +2,11 @@ import { z } from "zod";
 
 import type { AppEnv } from "../platform/env.js";
 import { VortexError } from "../platform/errors.js";
-import type { AgentSessionStatus, Issue } from "../types/workspace.js";
+import type {
+  AgentSessionStatus,
+  GitIdentity,
+  Issue,
+} from "../types/workspace.js";
 import type { AgentProvider, AgentProviderSession } from "./provider.js";
 
 const devinCreateResponseSchema = z.object({
@@ -34,9 +38,20 @@ const STATUS_MAP: Record<string, AgentSessionStatus> = {
   created: "created",
 };
 
-function buildPrompt(issue: Issue): string {
+function buildPrompt(issue: Issue, gitIdentity?: GitIdentity | null): string {
   const repo = issue.repo ?? "this repository";
   const branch = issue.branch ?? `issue-${issue.id}`;
+  const identityLines = gitIdentity
+    ? [
+        `Git identity: ${gitIdentity.name} <${gitIdentity.email}>`,
+        ...(gitIdentity.githubUsername
+          ? [`GitHub user: ${gitIdentity.githubUsername}`]
+          : []),
+        ...(gitIdentity.signingKeyRef
+          ? [`Signing key reference: ${gitIdentity.signingKeyRef}`]
+          : []),
+      ]
+    : [];
   return [
     `# ${issue.title}`,
     "",
@@ -46,6 +61,8 @@ function buildPrompt(issue: Issue): string {
     `Issue: ${issue.identifier ?? issue.id}`,
     "",
     issue.description ?? "",
+    "",
+    ...identityLines,
     "",
     "Do all work in the Repository above. Do not open pull requests in any other repository. Open the PR against the main branch of that repository.",
     "Do not attempt to update the issue tracker yourself — an external system will poll your session and write the PR URL and final status back automatically.",
@@ -80,7 +97,7 @@ export class DevinAgentProvider implements AgentProvider {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          prompt: buildPrompt(issue),
+          prompt: buildPrompt(issue, sessionContext?.gitIdentity),
           ...(this.env.DEVIN_OUTPOST
             ? { platform: this.env.DEVIN_OUTPOST }
             : {}),
