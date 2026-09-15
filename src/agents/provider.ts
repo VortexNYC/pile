@@ -17,6 +17,9 @@ export interface AgentDispatchContext {
   sessionId: string;
   /** Git identity for the target repository, if one is configured. */
   gitIdentity?: GitIdentity | null;
+  /** Optional Worker execution context waitUntil for background work
+   *  that must not block the HTTP response. */
+  waitUntil?: (promise: Promise<unknown>) => void;
 }
 
 export interface AgentProvider {
