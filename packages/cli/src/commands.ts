@@ -2244,6 +2244,38 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "issues reconcile create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/issues/{id}/reconcile",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "issues pr list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/issues/{id}/pr",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "projects members": {
     method: "POST",
     path: "/workspaces/{organizationId}/projects/{projectId}/members",

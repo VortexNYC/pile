@@ -9249,6 +9249,148 @@
         "summary": "Create project update reminder fire due"
       }
     },
+    "/workspaces/{organizationId}/issues/{id}/reconcile": {
+      "post": {
+        "tags": [
+          "pr"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "PR state reconciled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "prUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "prState": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "prCheckState": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "status": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "prUrl",
+                    "prState",
+                    "prCheckState",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "404": {
+            "description": "Issue not found"
+          },
+          "502": {
+            "description": "GitHub API failure"
+          }
+        },
+        "summary": "Create issue reconcile"
+      }
+    },
+    "/workspaces/{organizationId}/issues/{id}/pr": {
+      "get": {
+        "tags": [
+          "pr"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "PR status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "prUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "prState": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "prCheckState": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "status": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "prUrl",
+                    "prState",
+                    "prCheckState",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Issue not found"
+          }
+        },
+        "summary": "List issue pr"
+      }
+    },
     "/workspaces/{organizationId}/projects/{projectId}/members": {
       "get": {
         "tags": [

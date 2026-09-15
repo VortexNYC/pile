@@ -3594,4 +3594,96 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     });
     return issue;
   }
+
+  async reconcileIssuePr(
+    issueId: string,
+    prUrl: string,
+    prState: string,
+    prCheckState: string,
+    actorId?: string
+  ): Promise<Issue | undefined> {
+    await this.ready;
+    const old = await this.getIssue(issueId);
+    if (!old) return undefined;
+
+    const statusMap: Record<string, Issue["status"] | undefined> = {
+      draft: "backlog",
+      open: "in_progress",
+      merged: "done",
+      closed: "canceled",
+    };
+    const status = statusMap[prState];
+    const set: {
+      prUrl: string;
+      prState: string;
+      prCheckState: string;
+      updatedAt: string;
+      status?: Issue["status"];
+    } = {
+      prUrl,
+      prState,
+      prCheckState,
+      updatedAt: new Date().toISOString(),
+    };
+    if (status !== undefined) {
+      set.status = status;
+    }
+
+    const issue = await this.db
+      .update(workspaceIssues)
+      .set(set)
+      .where(
+        and(
+          eq(workspaceIssues.id, issueId),
+          eq(workspaceIssues.organizationId, this.organizationId)
+        )
+      )
+      .returning()
+      .get();
+    if (!issue) return undefined;
+
+    const historyEntries: Array<{
+      field: string;
+      fromValue: string | null;
+      toValue: string | null;
+    }> = [];
+    if (old.prUrl !== issue.prUrl) {
+      historyEntries.push({
+        field: "pr_url",
+        fromValue: old.prUrl,
+        toValue: issue.prUrl,
+      });
+    }
+    if (old.prState !== issue.prState) {
+      historyEntries.push({
+        field: "pr_state",
+        fromValue: old.prState,
+        toValue: issue.prState,
+      });
+    }
+    if (old.prCheckState !== issue.prCheckState) {
+      historyEntries.push({
+        field: "pr_check_state",
+        fromValue: old.prCheckState,
+        toValue: issue.prCheckState,
+      });
+    }
+    if (old.status !== issue.status) {
+      historyEntries.push({
+        field: "status",
+        fromValue: old.status,
+        toValue: issue.status,
+      });
+    }
+    if (historyEntries.length > 0) {
+      await this.recordIssueHistory(issue.id, historyEntries, actorId);
+    }
+
+    await this.emit({
+      type: "pr.updated",
+      organizationId: this.organizationId,
+      issue,
+    });
+    return issue;
+  }
 }
