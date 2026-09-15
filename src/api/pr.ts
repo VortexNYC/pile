@@ -89,7 +89,6 @@ function normalizeCheckState(
     "failure",
     "action_required",
     "cancelled",
-    "skipped",
     "stale",
     "timed_out",
   ]);
@@ -100,7 +99,10 @@ function normalizeCheckState(
   const hasPending = checkRuns.some((run) => run.status !== "completed");
   if (hasPending) return "pending";
   const allSuccess = checkRuns.every(
-    (run) => run.conclusion === "success" || run.conclusion === "neutral"
+    (run) =>
+      run.conclusion === "success" ||
+      run.conclusion === "neutral" ||
+      run.conclusion === "skipped"
   );
   return allSuccess ? "success" : "unknown";
 }
