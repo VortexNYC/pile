@@ -300,6 +300,17 @@ async function commandCommand(
     }
   }
 
+  function parseBodyFlagValue(raw: string): unknown {
+    if (raw.startsWith("[") || raw.startsWith("{")) {
+      try {
+        return parseJson(raw);
+      } catch {
+        // keep as string if it looked like JSON but was not
+      }
+    }
+    return raw;
+  }
+
   const bodyJson = parseJsonObjectFlag(flags, "body-json");
   const body: Record<string, unknown> = bodyJson ? { ...bodyJson } : {};
   for (const field of def.body) {
@@ -307,7 +318,7 @@ async function commandCommand(
     if (value === true) {
       body[field.name] = true;
     } else if (typeof value === "string") {
-      body[field.name] = value;
+      body[field.name] = parseBodyFlagValue(value);
     }
   }
 
