@@ -7678,7 +7678,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "error",
                 "elicitation",
                 "action",
-                "status"
+                "status",
+                "artifact"
               ]
             },
             "message": {
@@ -7695,6 +7696,63 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "required": [
             "type",
             "message"
+          ]
+        }
+      },
+      "required": [
+        "organizationId",
+        "sessionId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdAgentSessionsSessionIdArtifacts",
+    "description": "Create agent session artifact (POST /workspaces/{organizationId}/agent/sessions/{sessionId}/artifacts) Path params (top-level, required): organizationId, sessionId. Request body goes in the \"body\" object; fields: name*, type*, content, data, mimeType, url (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/agent/sessions/{sessionId}/artifacts",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "diff",
+                "log",
+                "screenshot",
+                "trace",
+                "output",
+                "other"
+              ]
+            },
+            "content": {
+              "type": "string"
+            },
+            "data": {
+              "type": "string"
+            },
+            "mimeType": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "type"
           ]
         }
       },

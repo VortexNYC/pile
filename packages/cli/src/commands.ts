@@ -868,6 +868,47 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "agent sessions artifacts create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/artifacts",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "sessionId",
+        flag: "session",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "type",
+        flag: "type",
+      },
+      {
+        name: "content",
+        flag: "content",
+      },
+      {
+        name: "data",
+        flag: "data",
+      },
+      {
+        name: "mimeType",
+        flag: "mime-type",
+      },
+      {
+        name: "url",
+        flag: "url",
+      },
+    ],
+  },
   "agent sessions cancel create": {
     method: "POST",
     path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/cancel",

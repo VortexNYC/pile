@@ -2468,7 +2468,8 @@
                               "error",
                               "elicitation",
                               "action",
-                              "status"
+                              "status",
+                              "artifact"
                             ]
                           },
                           "message": {
@@ -2636,7 +2637,8 @@
                                     "error",
                                     "elicitation",
                                     "action",
-                                    "status"
+                                    "status",
+                                    "artifact"
                                   ]
                                 },
                                 "message": {
@@ -2801,7 +2803,8 @@
                                   "error",
                                   "elicitation",
                                   "action",
-                                  "status"
+                                  "status",
+                                  "artifact"
                                 ]
                               },
                               "message": {
@@ -2864,7 +2867,8 @@
                               "error",
                               "elicitation",
                               "action",
-                              "status"
+                              "status",
+                              "artifact"
                             ]
                           },
                           "message": {
@@ -3008,7 +3012,8 @@
                               "error",
                               "elicitation",
                               "action",
-                              "status"
+                              "status",
+                              "artifact"
                             ]
                           },
                           "message": {
@@ -3201,7 +3206,8 @@
                               "error",
                               "elicitation",
                               "action",
-                              "status"
+                              "status",
+                              "artifact"
                             ]
                           },
                           "message": {
@@ -3313,7 +3319,8 @@
                               "error",
                               "elicitation",
                               "action",
-                              "status"
+                              "status",
+                              "artifact"
                             ]
                           },
                           "message": {
@@ -3388,7 +3395,8 @@
                       "error",
                       "elicitation",
                       "action",
-                      "status"
+                      "status",
+                      "artifact"
                     ]
                   },
                   "message": {
@@ -3436,7 +3444,8 @@
                         "error",
                         "elicitation",
                         "action",
-                        "status"
+                        "status",
+                        "artifact"
                       ]
                     },
                     "message": {
@@ -3466,6 +3475,130 @@
           }
         },
         "summary": "Create agent session activity"
+      }
+    },
+    "/workspaces/{organizationId}/agent/sessions/{sessionId}/artifacts": {
+      "post": {
+        "tags": [
+          "agent-sessions"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "sessionId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "diff",
+                      "log",
+                      "screenshot",
+                      "trace",
+                      "output",
+                      "other"
+                    ]
+                  },
+                  "content": {
+                    "type": "string"
+                  },
+                  "data": {
+                    "type": "string"
+                  },
+                  "mimeType": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name",
+                  "type"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Artifact captured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "sessionId": {
+                      "type": "string"
+                    },
+                    "actorId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "thought",
+                        "response",
+                        "error",
+                        "elicitation",
+                        "action",
+                        "status",
+                        "artifact"
+                      ]
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "payload": {
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "sessionId",
+                    "actorId",
+                    "type",
+                    "message",
+                    "createdAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found"
+          }
+        },
+        "summary": "Create agent session artifact"
       }
     },
     "/workspaces/{organizationId}/agent/sessions/{sessionId}/cancel": {
@@ -3576,7 +3709,8 @@
                               "error",
                               "elicitation",
                               "action",
-                              "status"
+                              "status",
+                              "artifact"
                             ]
                           },
                           "message": {
@@ -3734,7 +3868,8 @@
                               "error",
                               "elicitation",
                               "action",
-                              "status"
+                              "status",
+                              "artifact"
                             ]
                           },
                           "message": {
@@ -3925,7 +4060,8 @@
                                   "error",
                                   "elicitation",
                                   "action",
-                                  "status"
+                                  "status",
+                                  "artifact"
                                 ]
                               },
                               "message": {
