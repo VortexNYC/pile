@@ -93,6 +93,7 @@ export class DevinAgentProvider implements AgentProvider {
       });
     }
 
+    const repo = issue.repo;
     const res = await fetch(
       `https://api.devin.ai/v3/organizations/${orgId}/sessions`,
       {
@@ -103,6 +104,8 @@ export class DevinAgentProvider implements AgentProvider {
         },
         body: JSON.stringify({
           prompt: buildPrompt(issue, sessionContext?.gitIdentity),
+          repos: repo ? [`https://github.com/${repo}`] : undefined,
+          bypass_approval: true,
           ...(this.env.DEVIN_OUTPOST
             ? { platform: this.env.DEVIN_OUTPOST }
             : {}),
