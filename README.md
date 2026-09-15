@@ -64,3 +64,4 @@ pnpm typecheck
 ## License
 
 MIT — see [LICENSE](./LICENSE).
+
