@@ -21,6 +21,7 @@ import type { FilterCondition } from "../filter.js";
 import type { workspaceSchema } from "../schema-map.js";
 import {
   workspaceAgentActivities,
+  workspaceAgentSessionEvents,
   workspaceDocumentHistory,
   workspaceDocumentLinks,
   workspaceDocumentPermissions,
@@ -1081,6 +1082,61 @@ export function listAgentActivities(
     .from(workspaceAgentActivities)
     .where(eq(workspaceAgentActivities.sessionId, sessionId))
     .orderBy(workspaceAgentActivities.createdAt)
+    .limit(options.limit ?? 100)
+    .all();
+}
+
+export interface AgentSessionEventInput {
+  sessionId: string;
+  type: string;
+  message: string;
+  payload?: Record<string, unknown>;
+}
+
+export async function addAgentSessionEvent(
+  db: WorkspaceDb,
+  input: AgentSessionEventInput
+) {
+  const ts = new Date().toISOString();
+  await db.insert(workspaceAgentSessionEvents).values({
+    sessionId: input.sessionId,
+    type: input.type,
+    message: input.message,
+    payload: input.payload ? JSON.stringify(input.payload) : null,
+    createdAt: ts,
+  });
+  const row = await db
+    .select()
+    .from(workspaceAgentSessionEvents)
+    .where(
+      and(
+        eq(workspaceAgentSessionEvents.sessionId, input.sessionId),
+        eq(workspaceAgentSessionEvents.createdAt, ts)
+      )
+    )
+    .orderBy(desc(workspaceAgentSessionEvents.id))
+    .limit(1)
+    .get();
+  if (!row) {
+    throw new Error("Failed to create agent session event");
+  }
+  return row;
+}
+
+export function listAgentSessionEvents(
+  db: WorkspaceDb,
+  sessionId: string,
+  options: { afterId?: number; limit?: number } = {}
+) {
+  const conditions = [eq(workspaceAgentSessionEvents.sessionId, sessionId)];
+  if (options.afterId !== undefined) {
+    conditions.push(gt(workspaceAgentSessionEvents.id, options.afterId));
+  }
+  return db
+    .select()
+    .from(workspaceAgentSessionEvents)
+    .where(and(...conditions))
+    .orderBy(workspaceAgentSessionEvents.id)
     .limit(options.limit ?? 100)
     .all();
 }

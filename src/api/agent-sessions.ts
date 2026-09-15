@@ -86,37 +86,6 @@ const agentActivitySchema = z.object({
   createdAt: z.string(),
 });
 
-function toStreamParts(a: AgentActivity): Record<string, unknown>[] {
-  if (a.type === "thought") {
-    return [
-      { type: "reasoning-start", id: a.id },
-      { type: "reasoning-delta", id: a.id, delta: a.message },
-      { type: "reasoning-end", id: a.id },
-    ];
-  }
-  if (a.type === "response") {
-    return [
-      { type: "text-start", id: a.id },
-      { type: "text-delta", id: a.id, delta: a.message },
-      { type: "text-end", id: a.id },
-    ];
-  }
-  if (a.type === "error") {
-    return [{ type: "error", errorText: a.message }];
-  }
-  return [
-    {
-      type: `data-${a.type}`,
-      id: a.id,
-      data: {
-        message: a.message,
-        payload: a.payload ?? null,
-        createdAt: a.createdAt,
-      },
-    },
-  ];
-}
-
 function toActivityResponse(row: AgentActivity) {
   return {
     ...row,
@@ -472,61 +441,114 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     return c.json(toSessionResponse(updated ?? session, activities));
   });
 
-  // Vercel AI SDK UI-message-stream (SSE) replay of the activity log, so any
-  // useChat-compatible consumer can read a session's history live.
+  // Server-sent event stream of agent session deltas. Supports Last-Event-ID
+  // for reconnect/replay and emits one event per changed field/activity.
   app.get(
     "/workspaces/:organizationId/agent/sessions/:sessionId/stream",
     async (c) => {
       const organizationId = c.req.param("organizationId");
       const sessionId = c.req.param("sessionId");
       const stub = getWorkspaceStub(c.env, organizationId);
-      const session = await stub.getAgentSessionWithActivities(sessionId);
+
+      const session = await stub.getAgentSession(sessionId);
       if (!session) {
         return c.json({ message: "Session not found" }, 404);
       }
 
-      const emitPart = toStreamParts;
+      const lastEventIdRaw =
+        c.req.header("Last-Event-ID") ?? c.req.query("lastEventId");
+      let afterId = 0;
+      if (lastEventIdRaw === undefined) {
+        const latest = await stub.listAgentSessionEvents(sessionId, {
+          limit: 1,
+        });
+        afterId = latest[0]?.id ?? 0;
+      } else {
+        afterId = Number(lastEventIdRaw);
+        if (Number.isNaN(afterId)) afterId = 0;
+      }
 
       const encoder = new TextEncoder();
-      const stream = new ReadableStream<Uint8Array>({
-        async start(controller) {
-          const enqueue = (part: Record<string, unknown>) =>
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify(part)}\n\n`)
-            );
+      let lastEmittedId = afterId;
+      const terminal = new Set(["completed", "failed", "canceled"]);
+      let closed = false;
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+      let streamController:
+        | ReadableStreamDefaultController<Uint8Array>
+        | undefined;
 
-          enqueue({ type: "start", messageId: sessionId });
-          const seen = new Set<string>();
-          let status = session.status;
-          for (const a of session.activities) {
-            seen.add(a.id);
-            for (const part of emitPart(a)) enqueue(part);
+      const safeClose = () => {
+        if (!closed) {
+          closed = true;
+          if (timeoutId) clearTimeout(timeoutId);
+          try {
+            streamController?.close();
+          } catch {
+            /* already closed */
           }
+        }
+      };
 
-          // Live tail: poll the DO until the session reaches a terminal
-          // status or the connection budget (90s) runs out. Consumers
-          // reconnect for a continued tail.
-          const deadline = Date.now() + 90_000;
-          const terminal = new Set(["completed", "failed", "canceled"]);
-          const tick = async (): Promise<void> => {
-            if (terminal.has(status) || Date.now() >= deadline) return;
-            await new Promise((r) => setTimeout(r, 2_000));
-            const fresh = await stub
-              .getAgentSessionWithActivities(sessionId)
-              .catch(() => null);
-            if (!fresh) return;
-            status = fresh.status;
-            for (const a of fresh.activities) {
-              if (seen.has(a.id)) continue;
-              seen.add(a.id);
-              for (const part of emitPart(a)) enqueue(part);
-            }
-            return tick();
-          };
-          await tick();
-          enqueue({ type: "data-session-status", data: { status } });
-          enqueue({ type: "finish" });
-          controller.close();
+      const sendEvent = (event: {
+        id: number;
+        type: string;
+        message: string;
+        payload: unknown;
+        createdAt: string;
+      }) => {
+        if (closed) return;
+        const lines = [
+          `id: ${event.id}`,
+          `event: ${event.type}`,
+          `data: ${JSON.stringify(event)}`,
+          "",
+        ].join("\n");
+        streamController?.enqueue(encoder.encode(lines));
+      };
+
+      const tick = async () => {
+        if (closed) return;
+        const current = await stub.getAgentSession(sessionId).catch(() => null);
+        if (!current) {
+          safeClose();
+          return;
+        }
+
+        const events = await stub
+          .listAgentSessionEvents(sessionId, {
+            afterId: lastEmittedId,
+            limit: 100,
+          })
+          .catch(() => []);
+
+        for (const row of events) {
+          const payload = row.payload ? JSON.parse(row.payload) : null;
+          sendEvent({
+            id: row.id,
+            type: row.type,
+            message: row.message,
+            payload,
+            createdAt: row.createdAt,
+          });
+          lastEmittedId = row.id;
+        }
+
+        if (terminal.has(current.status)) {
+          safeClose();
+          return;
+        }
+
+        timeoutId = setTimeout(tick, 1_000);
+      };
+
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          streamController = controller;
+          tick().catch(() => safeClose());
+        },
+        cancel() {
+          closed = true;
+          if (timeoutId) clearTimeout(timeoutId);
         },
       });
 
@@ -534,7 +556,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         headers: {
           "content-type": "text/event-stream",
           "cache-control": "no-cache",
-          "x-vercel-ai-ui-message-stream": "v1",
+          connection: "keep-alive",
         },
       });
     }
@@ -643,11 +665,10 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     const child = await stub.createIssue(
       {
         title: body.title,
-        description: body.description ?? null,
+        description: body.description,
         parentId: parentIssue.id,
         teamId: parentIssue.teamId,
         repo: body.repo ?? parentIssue.repo,
-        branch: null,
         priority: parentIssue.priority,
         status: "backlog",
       },

@@ -80,8 +80,8 @@ async function createIssueWithPrUrl(
     },
     token
   );
-  const issue = await res.json();
-  const id = issue.id as string;
+  const issue = (await res.json()) as { id: string };
+  const id = issue.id;
 
   const stub = env.WORKSPACE_DURABLE_OBJECT.get(
     env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)

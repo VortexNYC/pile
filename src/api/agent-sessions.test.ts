@@ -392,4 +392,78 @@ describe("agent sessions API", () => {
     );
     expect(thirdRes.status).toBe(429);
   });
+
+  it("streams session events as SSE with Last-Event-ID support", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const issue = await stub.createIssue({
+      title: "Stream test",
+      repo: "VortexNYC/pile",
+    });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "mock",
+      provider: "mock",
+      actorId: "user-1",
+      actorType: "user",
+    });
+
+    const streamRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/stream`,
+        { token }
+      ),
+      env
+    );
+    expect(streamRes.status).toBe(200);
+    expect(streamRes.headers.get("content-type")).toBe("text/event-stream");
+
+    const reader = streamRes.body!.getReader();
+    const decoder = new TextDecoder();
+
+    const patchResPromise = app.fetch(
+      request(`/workspaces/${organizationId}/agent/sessions/${session.id}`, {
+        method: "PATCH",
+        token,
+        body: JSON.stringify({ status: "running" }),
+      }),
+      env
+    );
+
+    let buffer = "";
+    let found = false;
+    while (!found) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      if (buffer.includes("event: session.status")) {
+        found = true;
+      }
+    }
+    await reader.cancel();
+    await patchResPromise;
+
+    expect(found).toBe(true);
+    expect(buffer).toContain('"type":"session.status"');
+    expect(buffer).toContain('"new":"running"');
+
+    const lastEventIdMatch = buffer.match(/id: (\d+)/);
+    expect(lastEventIdMatch).not.toBeNull();
+    const lastEventId = Number(lastEventIdMatch![1]);
+
+    const reconnectRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/stream`,
+        {
+          token,
+          headers: { "Last-Event-ID": String(lastEventId) },
+        }
+      ),
+      env
+    );
+    expect(reconnectRes.status).toBe(200);
+    await reconnectRes.body?.cancel?.();
+  });
 });

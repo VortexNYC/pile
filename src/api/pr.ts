@@ -170,7 +170,7 @@ async function fetchGitHubCheckRuns(
 }
 
 async function reconcileFromGitHub(
-  env: AppContext["env"],
+  env: AppContext["Bindings"],
   stub: ReturnType<typeof getWorkspaceStub>,
   issue: { id: string; prCheckState: string | null },
   prUrl: string,
@@ -206,7 +206,7 @@ async function reconcileFromGitHub(
   );
   if (!pr) {
     throw new VortexError({
-      code: "BAD_GATEWAY",
+      code: "AGENT_ERROR",
       status: 502,
       message: "GitHub pull request API failed",
     });

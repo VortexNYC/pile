@@ -799,6 +799,26 @@ export const workspaceAgentActivities = sqliteTable(
   ]
 );
 
+export const workspaceAgentSessionEvents = sqliteTable(
+  "agent_session_events" as string,
+  {
+    id: integer("id" as string, { mode: "number" }).primaryKey({
+      autoIncrement: true,
+    }),
+    sessionId: text("session_id" as string).notNull(),
+    type: text("type" as string).notNull(),
+    message: text("message" as string).notNull(),
+    payload: text("payload" as string),
+    createdAt: text("created_at" as string).notNull(),
+  },
+  (table) => [
+    index("agent_session_events_session_idx" as string).on(
+      table.sessionId,
+      table.id
+    ),
+  ]
+);
+
 export const workspaceMcpServers = sqliteTable(
   "mcp_servers" as string,
   {

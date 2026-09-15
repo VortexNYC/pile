@@ -1,6 +1,7 @@
 import {
   workspaceAgentActivities,
   workspaceAgentProviderConfigs,
+  workspaceAgentSessionEvents,
   workspaceAgentSessions,
   workspaceAttachments,
   workspaceAuditLog,
@@ -55,6 +56,7 @@ export const workspaceSchema = {
   workspaceLinearUsers,
   workspaceAgentSessions,
   workspaceAgentActivities,
+  workspaceAgentSessionEvents,
   workspaceAgentProviderConfigs,
   workspaceWebhookSubscriptions,
   workspaceOutboundWebhookDeliveries,
