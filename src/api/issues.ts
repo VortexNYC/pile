@@ -2,7 +2,7 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 import { eq, and } from "drizzle-orm";
 
-import { dispatchAgent } from "../agents/index.js";
+import { dispatchAgent, getAgentProvider } from "../agents/index.js";
 import { resolveAgentEnv } from "../agents/outpost.js";
 import { createD1 } from "../global/db.js";
 import { deleteIssueReferences } from "../global/issue-data.js";
@@ -578,6 +578,38 @@ const dispatchRoute = createRoute({
   },
 });
 
+const assignIssueSchema = z.object({
+  assigneeId: z.string().nullable(),
+});
+
+const assignIssueResponseSchema = z.object({
+  issue: issueApiSchema,
+  session: agentSessionSchema.optional(),
+});
+
+const assignIssueRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/issues/{id}/assign",
+  tags: ["issues"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+    body: {
+      content: {
+        "application/json": { schema: assignIssueSchema },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Issue assigned",
+      content: {
+        "application/json": { schema: assignIssueResponseSchema },
+      },
+    },
+  },
+});
+
 export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listIssuesRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
@@ -1072,5 +1104,74 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     }
 
     return c.json(session, 201);
+  });
+
+  app.openapi(assignIssueRoute, async (c) => {
+    const { assigneeId } = c.req.valid("json");
+    const { organizationId, id } = c.req.valid("param");
+    const identity = c.get("workspaceIdentity");
+    const db = createD1(c.env.D1);
+    const stub = await getStub(c.env, organizationId);
+    const existing = await stub.getIssue(id);
+    if (!existing) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Issue not found",
+      });
+    }
+    await assertIssueAccess(db, existing, identity);
+
+    const issue = await stub.updateIssue(id, { assigneeId }, identity.id);
+    if (!issue) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Issue not found",
+      });
+    }
+
+    let session: Awaited<ReturnType<typeof dispatchAgent>> | undefined;
+    if (assigneeId) {
+      let isAgent = false;
+      try {
+        getAgentProvider(assigneeId, c.env);
+        isAgent = true;
+      } catch {
+        isAgent = false;
+      }
+      if (isAgent) {
+        if (!issue.repo) {
+          throw new VortexError({
+            code: "BAD_REQUEST",
+            status: 400,
+            message: "Issue must have a repository to dispatch an agent",
+          });
+        }
+        if (!identity.permissions.includes("agent:write")) {
+          throw new VortexError({
+            code: "FORBIDDEN",
+            status: 403,
+            message: "Missing permission: agent:write",
+          });
+        }
+        const providerConfig = await stub.getAgentProviderConfig(assigneeId);
+        const effectiveEnv = resolveAgentEnv(
+          c.env,
+          providerConfig ?? undefined
+        );
+        session = await dispatchAgent(
+          effectiveEnv,
+          assigneeId,
+          organizationId,
+          issue,
+          identity,
+          undefined,
+          getExecutionCtx(c)
+        );
+      }
+    }
+
+    return c.json({ issue, session }, 200);
   });
 }
