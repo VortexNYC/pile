@@ -1,11 +1,12 @@
 import { env } from "cloudflare:test";
+import { eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { MockAgentProvider } from "../agents/harness.js";
 import { registerAgentProvider } from "../agents/index.js";
 import { createD1 } from "../global/db.js";
-import { user as userTable } from "../global/schema.js";
+import { organization, user as userTable } from "../global/schema.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
@@ -59,6 +60,15 @@ describe("agent sessions API", () => {
       ownerId: "user-1",
     });
     organizationId = workspace!.id;
+    await db
+      .update(organization)
+      .set({
+        metadata: JSON.stringify({
+          key: workspace?.key ?? null,
+          maxConcurrentAgentChildren: 2,
+        }),
+      })
+      .where(eq(organization.id, organizationId));
     const auth = createAuth(env);
     const result = await auth.api.createApiKey({
       body: {
@@ -319,5 +329,67 @@ describe("agent sessions API", () => {
       env
     );
     expect(forbiddenPatchRes.status).toBe(403);
+  });
+
+  it("creates a child issue and dispatches a child session", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    const parent = await stub.createIssue({
+      title: "Parent issue",
+      repo: "VortexNYC/pile",
+    });
+    const session = await stub.createAgentSession({
+      issueId: parent.id,
+      agentId: "mock",
+      provider: "mock",
+      actorId: "user-1",
+      actorType: "user",
+    });
+
+    const childRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/children`,
+        {
+          method: "POST",
+          token,
+          body: JSON.stringify({ title: "Child task", agentId: "mock" }),
+        }
+      ),
+      env
+    );
+    expect(childRes.status).toBe(201);
+    const child = await childRes.json<{
+      session: { id: string; issueId: string };
+      issue: { id: string; parentId: string };
+    }>();
+    expect(child.issue.parentId).toBe(parent.id);
+    expect(child.session.issueId).toBe(child.issue.id);
+
+    const secondRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/children`,
+        {
+          method: "POST",
+          token,
+          body: JSON.stringify({ title: "Child 2", agentId: "mock" }),
+        }
+      ),
+      env
+    );
+    expect(secondRes.status).toBe(201);
+
+    const thirdRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/children`,
+        {
+          method: "POST",
+          token,
+          body: JSON.stringify({ title: "Child 3", agentId: "mock" }),
+        }
+      ),
+      env
+    );
+    expect(thirdRes.status).toBe(429);
   });
 });

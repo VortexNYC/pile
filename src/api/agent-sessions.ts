@@ -2,8 +2,11 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 import type { InferSelectModel } from "drizzle-orm";
 
-import { getAgentProvider } from "../agents/index.js";
+import { dispatchAgent } from "../agents/index.js";
 import { resolveAgentEnv } from "../agents/outpost.js";
+import { createD1 } from "../global/db.js";
+import { createRepoBranch } from "../global/repo-branches.js";
+import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 import type { AgentSessionStatus } from "../types/workspace.js";
@@ -12,6 +15,16 @@ import type {
   workspaceAgentSessions,
 } from "../workspace/schema.js";
 import { getWorkspaceStub } from "./stub.js";
+
+function getExecutionCtx(c: {
+  executionCtx?: { waitUntil: (promise: Promise<unknown>) => void };
+}): { waitUntil: (promise: Promise<unknown>) => void } | undefined {
+  try {
+    return c.executionCtx;
+  } catch {
+    return undefined;
+  }
+}
 
 const agentActivityTypeSchema = z.enum([
   "thought",
@@ -309,6 +322,59 @@ const pollSessionRoute = createRoute({
   },
 });
 
+const childIssueSchema = z.object({
+  id: z.string(),
+  identifier: z.string().nullable(),
+  title: z.string(),
+  description: z.string().nullable(),
+  status: z.string(),
+  priority: z.string(),
+  repo: z.string().nullable(),
+  branch: z.string().nullable(),
+  parentId: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+const createChildSessionRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/children",
+  tags: ["agent-sessions"],
+  middleware: [rls("write", "agent:write")],
+  request: {
+    params: z.object({ organizationId: z.string(), sessionId: z.string() }),
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            title: z.string().min(1),
+            description: z.string().optional(),
+            agentId: z.string().optional(),
+            model: z.string().optional(),
+            repo: z.string().optional(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "Child session created and dispatched",
+      content: {
+        "application/json": {
+          schema: z.object({
+            session: agentSessionSchema,
+            issue: childIssueSchema,
+          }),
+        },
+      },
+    },
+    400: { description: "Bad request" },
+    404: { description: "Session or parent issue not found" },
+    429: { description: "Too many active child sessions" },
+  },
+});
+
 export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listSessionsRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
@@ -538,5 +604,81 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
 
     const activities = await stub.listAgentActivities(sessionId);
     return c.json(toSessionResponse(updated ?? session, activities));
+  });
+
+  app.openapi(createChildSessionRoute, async (c) => {
+    const { organizationId, sessionId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const identity = c.var.workspaceIdentity;
+    const db = createD1(c.env.D1);
+    const stub = getWorkspaceStub(c.env, organizationId);
+
+    const session = await stub.getAgentSession(sessionId);
+    if (!session) {
+      return c.json({ message: "Session not found" }, 404);
+    }
+
+    const parentIssue = await stub.getIssue(session.issueId);
+    if (!parentIssue) {
+      return c.json({ message: "Parent issue not found" }, 404);
+    }
+    if (!parentIssue.repo) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: "Parent issue has no repository",
+      });
+    }
+
+    const active = await stub.countActiveChildSessions(parentIssue.id);
+    const max = await stub.getMaxConcurrentAgentChildren();
+    if (active >= max) {
+      throw new VortexError({
+        code: "TOO_MANY_REQUESTS",
+        status: 429,
+        message: `Maximum concurrent child sessions (${max}) reached`,
+      });
+    }
+
+    const child = await stub.createIssue(
+      {
+        title: body.title,
+        description: body.description ?? null,
+        parentId: parentIssue.id,
+        teamId: parentIssue.teamId,
+        repo: body.repo ?? parentIssue.repo,
+        branch: null,
+        priority: parentIssue.priority,
+        status: "backlog",
+      },
+      identity.id
+    );
+
+    const resolvedAgentId = body.agentId ?? "devin";
+    const providerConfig = await stub.getAgentProviderConfig(resolvedAgentId);
+    const effectiveEnv = resolveAgentEnv(c.env, providerConfig ?? undefined);
+
+    const childSession = await dispatchAgent(
+      effectiveEnv,
+      resolvedAgentId,
+      organizationId,
+      child,
+      identity,
+      body.model,
+      getExecutionCtx(c)
+    );
+
+    const childAfter = await stub.getIssue(child.id);
+    if (childAfter?.repo && childAfter?.branch) {
+      await createRepoBranch(
+        db,
+        organizationId,
+        childAfter.repo,
+        childAfter.branch,
+        childAfter.id
+      );
+    }
+
+    return c.json({ session: childSession, issue: childAfter ?? child }, 201);
   });
 }
