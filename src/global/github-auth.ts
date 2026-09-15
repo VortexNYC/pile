@@ -6,6 +6,8 @@ import type { AppEnv } from "../types/env.js";
 const tokenResponseSchema = z.object({ token: z.string() });
 const installationSchema = z.object({ id: z.number() });
 
+export const GITHUB_USER_AGENT = "vortex-agent";
+
 async function getAppJwt(env: AppEnv): Promise<string | undefined> {
   const appId = env.GITHUB_APP_ID;
   const privateKey = env.GITHUB_PRIVATE_KEY;
@@ -21,9 +23,9 @@ async function getAppJwt(env: AppEnv): Promise<string | undefined> {
   const now = Math.floor(Date.now() / 1000);
   const jwt = await new SignJWT({})
     .setProtectedHeader({ alg: "RS256" })
-    .setIssuedAt(now)
+    .setIssuedAt(now - 60)
     .setIssuer(appId)
-    .setExpirationTime(now + 600)
+    .setExpirationTime(now + 540)
     .sign(key);
 
   return jwt;
@@ -44,6 +46,7 @@ export async function getInstallationToken(
         Authorization: `Bearer ${jwt}`,
         Accept: "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": GITHUB_USER_AGENT,
       },
     }
   );
@@ -70,6 +73,7 @@ async function getInstallationIdForRepo(
         Authorization: `Bearer ${jwt}`,
         Accept: "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": GITHUB_USER_AGENT,
       },
     }
   );

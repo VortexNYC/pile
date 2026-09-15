@@ -3748,9 +3748,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   async reconcileIssuePr(
     issueId: string,
-    prUrl: string,
-    prState: string,
-    prCheckState: string,
+    prUrl: string | null,
+    prState: string | null,
+    prCheckState: string | null,
     actorId?: string
   ): Promise<Issue | undefined> {
     await this.ready;
@@ -3763,11 +3763,11 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       merged: "done",
       closed: "canceled",
     };
-    const status = statusMap[prState];
+    const status = prState ? statusMap[prState] : undefined;
     const set: {
-      prUrl: string;
-      prState: string;
-      prCheckState: string;
+      prUrl: string | null;
+      prState: string | null;
+      prCheckState: string | null;
       updatedAt: string;
       status?: Issue["status"];
     } = {
