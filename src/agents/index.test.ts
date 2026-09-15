@@ -221,6 +221,83 @@ describe("agent providers", () => {
     expect(sessions[0]?.status).toBe("failed");
   });
 
+  it("allows dispatch when no teamIds are configured", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)
+    );
+    await stub.setOrganizationId(actor.organizationId);
+    const issue = await stub.createIssue({
+      title: "No team scoping test",
+    });
+    await stub.upsertAgentProviderConfig({
+      agentId: "mock-no-teams",
+      token: "test-token",
+    });
+
+    const provider = new MockAgentProvider("mock-no-teams");
+    registerAgentProvider("mock-no-teams", () => provider);
+
+    const session = await dispatchAgent(
+      env,
+      "mock-no-teams",
+      actor.organizationId,
+      issue,
+      actor
+    );
+
+    expect(session.agentId).toBe("mock-no-teams");
+  });
+
+  it("rejects dispatch when the issue team is not in teamIds", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)
+    );
+    await stub.setOrganizationId(actor.organizationId);
+    const issue = await stub.createIssue({
+      title: "Team scoping reject test",
+    });
+    await stub.upsertAgentProviderConfig({
+      agentId: "mock-scoped",
+      token: "test-token",
+      teamIds: ["other-team-id"],
+    });
+
+    const provider = new MockAgentProvider("mock-scoped");
+    registerAgentProvider("mock-scoped", () => provider);
+
+    await expect(
+      dispatchAgent(env, "mock-scoped", actor.organizationId, issue, actor)
+    ).rejects.toThrow("not enabled for this team");
+  });
+
+  it("allows dispatch when the issue team is in teamIds", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)
+    );
+    await stub.setOrganizationId(actor.organizationId);
+    const issue = await stub.createIssue({
+      title: "Team scoping allow test",
+    });
+    await stub.upsertAgentProviderConfig({
+      agentId: "mock-scoped-allow",
+      token: "test-token",
+      teamIds: [issue.teamId],
+    });
+
+    const provider = new MockAgentProvider("mock-scoped-allow");
+    registerAgentProvider("mock-scoped-allow", () => provider);
+
+    const session = await dispatchAgent(
+      env,
+      "mock-scoped-allow",
+      actor.organizationId,
+      issue,
+      actor
+    );
+
+    expect(session.agentId).toBe("mock-scoped-allow");
+  });
+
   it("passes the repo git identity to the provider", async () => {
     const stub = env.WORKSPACE_DURABLE_OBJECT.get(
       env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)

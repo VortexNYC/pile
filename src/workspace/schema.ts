@@ -918,6 +918,7 @@ export const workspaceAgentProviderConfigs = sqliteTable(
     computeSnapshot: text("compute_snapshot" as string),
     computeVolumeId: text("compute_volume_id" as string),
     config: text("config" as string),
+    teamIds: text("team_ids" as string),
     createdAt: text("created_at" as string).notNull(),
     updatedAt: text("updated_at" as string).notNull(),
   },

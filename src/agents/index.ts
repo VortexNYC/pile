@@ -15,6 +15,21 @@ const providers: Record<string, (env: AppEnv) => AgentProvider> = {
   flue: (env) => new CfAgentProvider(env, "flue"),
 };
 
+function parseAgentProviderTeamIds(
+  teamIds: string | null | undefined
+): string[] | null {
+  if (!teamIds) return null;
+  try {
+    const value: unknown = JSON.parse(teamIds);
+    if (Array.isArray(value) && value.every((v) => typeof v === "string")) {
+      return value;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
 export function getAgentProvider(agentId: string, env: AppEnv): AgentProvider {
   const factory = providers[agentId];
   if (!factory) {
@@ -48,6 +63,16 @@ export async function dispatchAgent(
     env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
   );
   await stub.setOrganizationId(organizationId);
+
+  const providerConfig = await stub.getAgentProviderConfig(agentId);
+  const allowedTeamIds = parseAgentProviderTeamIds(providerConfig?.teamIds);
+  if (allowedTeamIds && !allowedTeamIds.includes(issue.teamId)) {
+    throw new VortexError({
+      code: "FORBIDDEN",
+      status: 403,
+      message: `Agent provider ${agentId} is not enabled for this team`,
+    });
+  }
 
   const gitIdentity = issue.repo
     ? ((await stub.getGitIdentityByRepo(issue.repo)) ?? null)
