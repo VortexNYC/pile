@@ -649,6 +649,22 @@ CREATE INDEX IF NOT EXISTS external_links_organization_idx ON external_links (or
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS external_links_entity_idx ON external_links (organization_id, entity_type, entity_id)`;
 
+const v28 = `CREATE TABLE IF NOT EXISTS mcp_servers (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  url TEXT NOT NULL,
+  scope TEXT NOT NULL,
+  repo TEXT,
+  issue_id TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS mcp_servers_organization_idx ON mcp_servers (organization_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS mcp_servers_scope_idx ON mcp_servers (organization_id, scope)`;
+
 export const workspaceMigrations = {
   journal: {
     entries: [
@@ -679,6 +695,7 @@ export const workspaceMigrations = {
       { idx: 24, when: 24, tag: "v25", breakpoints: false },
       { idx: 25, when: 25, tag: "v26", breakpoints: false },
       { idx: 26, when: 26, tag: "v27", breakpoints: true },
+      { idx: 27, when: 27, tag: "v28", breakpoints: true },
     ],
   },
   migrations: {
@@ -709,5 +726,6 @@ export const workspaceMigrations = {
     m0024: v25,
     m0025: v26,
     m0026: v27,
+    m0027: v28,
   },
 } satisfies Parameters<typeof migrate>[1];

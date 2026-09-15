@@ -86,6 +86,7 @@ import {
   workspaceOutboundWebhookDeliveries,
   workspaceReactions,
   workspaceSavedViews,
+  workspaceMcpServers,
   workspaceUserPreferences,
   workspaceViewFavorites,
   workspaceWebhookSubscriptions,
@@ -2293,6 +2294,79 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   deleteWebhookSubscription(id: string) {
     return data.deleteWebhookSubscription(this.db, this.organizationId, id);
+  }
+
+  // ---- MCP server registry ----
+  async createMcpServer(input: {
+    id?: string;
+    name: string;
+    url: string;
+    scope: "workspace" | "repo" | "issue";
+    repo?: string | null;
+    issueId?: string | null;
+  }) {
+    await this.ready;
+    const now = new Date().toISOString();
+    const id = input.id ?? crypto.randomUUID();
+    const row = await this.db
+      .insert(workspaceMcpServers)
+      .values({
+        id,
+        organizationId: this.organizationId,
+        name: input.name,
+        url: input.url,
+        scope: input.scope,
+        repo: input.repo ?? null,
+        issueId: input.issueId ?? null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning()
+      .get();
+    return row;
+  }
+
+  async getMcpServer(id: string) {
+    await this.ready;
+    return this.db
+      .select()
+      .from(workspaceMcpServers)
+      .where(
+        and(
+          eq(workspaceMcpServers.id, id),
+          eq(workspaceMcpServers.organizationId, this.organizationId)
+        )
+      )
+      .get();
+  }
+
+  async listMcpServers(scope?: "workspace" | "repo" | "issue") {
+    await this.ready;
+    return this.db
+      .select()
+      .from(workspaceMcpServers)
+      .where(
+        and(
+          eq(workspaceMcpServers.organizationId, this.organizationId),
+          scope ? eq(workspaceMcpServers.scope, scope) : undefined
+        )
+      )
+      .all();
+  }
+
+  async deleteMcpServer(id: string) {
+    await this.ready;
+    const row = await this.db
+      .delete(workspaceMcpServers)
+      .where(
+        and(
+          eq(workspaceMcpServers.id, id),
+          eq(workspaceMcpServers.organizationId, this.organizationId)
+        )
+      )
+      .returning()
+      .get();
+    return row;
   }
 
   listWebhookDeliveries(subscriptionId: string) {

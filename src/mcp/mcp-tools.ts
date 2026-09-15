@@ -668,6 +668,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdMcpServersId",
+    "description": "Delete mcp server (DELETE /workspaces/{organizationId}/mcp/servers/{id}) Path params (top-level, required): organizationId, id.",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/mcp/servers/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdOauthclientsId",
     "description": "Delete oauth client (DELETE /workspaces/{organizationId}/oauth-clients/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
@@ -2929,6 +2950,52 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "linearId",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdMcpServers",
+    "description": "List mcp servers (GET /workspaces/{organizationId}/mcp/servers) Path params (top-level, required): organizationId. Query params (top-level, optional): scope.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/mcp/servers",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string",
+          "enum": [
+            "workspace",
+            "repo",
+            "issue"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdMcpServersId",
+    "description": "Get mcp server (GET /workspaces/{organizationId}/mcp/servers/{id}) Path params (top-level, required): organizationId, id.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/mcp/servers/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
         "organizationId"
       ]
     }
@@ -9666,6 +9733,55 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           },
           "required": [
             "linearId"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdMcpServers",
+    "description": "Create mcp server (POST /workspaces/{organizationId}/mcp/servers) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, url*, scope*, repo, issueId (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/mcp/servers",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "scope": {
+              "type": "string",
+              "enum": [
+                "workspace",
+                "repo",
+                "issue"
+              ]
+            },
+            "repo": {
+              "type": "string"
+            },
+            "issueId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "url",
+            "scope"
           ]
         }
       },
