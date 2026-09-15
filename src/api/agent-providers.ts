@@ -17,6 +17,7 @@ const providerConfigInputSchema = z.object({
   computeSnapshot: z.string().nullable().optional(),
   computeVolumeId: z.string().nullable().optional(),
   config: z.record(z.string(), z.unknown()).nullable().optional(),
+  teamIds: z.array(z.string()).nullable().optional(),
 });
 
 const providerConfigSchema = z.object({
@@ -30,6 +31,7 @@ const providerConfigSchema = z.object({
   computeSnapshot: z.string().nullable(),
   computeVolumeId: z.string().nullable(),
   config: z.record(z.string(), z.unknown()).nullable(),
+  teamIds: z.array(z.string()).nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -45,6 +47,7 @@ type ProviderConfigRow = {
   computeSnapshot: string | null;
   computeVolumeId: string | null;
   config: string | null;
+  teamIds: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -65,6 +68,17 @@ function redact(row: ProviderConfigRow) {
       parsedConfig = null;
     }
   }
+  let parsedTeamIds: string[] | null = null;
+  if (row.teamIds) {
+    try {
+      const value: unknown = JSON.parse(row.teamIds);
+      if (Array.isArray(value) && value.every((v) => typeof v === "string")) {
+        parsedTeamIds = value;
+      }
+    } catch {
+      parsedTeamIds = null;
+    }
+  }
   return {
     agentId: row.agentId,
     hasToken: row.token !== null && row.token !== "",
@@ -76,6 +90,7 @@ function redact(row: ProviderConfigRow) {
     computeSnapshot: row.computeSnapshot,
     computeVolumeId: row.computeVolumeId,
     config: parsedConfig,
+    teamIds: parsedTeamIds,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

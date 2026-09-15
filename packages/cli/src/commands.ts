@@ -1066,6 +1066,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "config",
         flag: "config",
       },
+      {
+        name: "teamIds",
+        flag: "team-ids",
+      },
     ],
   },
   "agent providers delete": {

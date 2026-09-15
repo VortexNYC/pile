@@ -4428,6 +4428,13 @@
                           "nullable": true
                         }
                       },
+                      "teamIds": {
+                        "type": "array",
+                        "nullable": true,
+                        "items": {
+                          "type": "string"
+                        }
+                      },
                       "createdAt": {
                         "type": "string"
                       },
@@ -4446,6 +4453,7 @@
                       "computeSnapshot",
                       "computeVolumeId",
                       "config",
+                      "teamIds",
                       "createdAt",
                       "updatedAt"
                     ]
@@ -4529,6 +4537,13 @@
                     "additionalProperties": {
                       "nullable": true
                     }
+                  },
+                  "teamIds": {
+                    "type": "array",
+                    "nullable": true,
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -4582,6 +4597,13 @@
                         "nullable": true
                       }
                     },
+                    "teamIds": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -4600,6 +4622,7 @@
                     "computeSnapshot",
                     "computeVolumeId",
                     "config",
+                    "teamIds",
                     "createdAt",
                     "updatedAt"
                   ]

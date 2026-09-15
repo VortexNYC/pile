@@ -2028,6 +2028,7 @@ export interface paths {
                             config: {
                                 [key: string]: unknown;
                             } | null;
+                            teamIds: string[] | null;
                             createdAt: string;
                             updatedAt: string;
                         }[];
@@ -2077,6 +2078,7 @@ export interface paths {
                         config?: {
                             [key: string]: unknown;
                         } | null;
+                        teamIds?: string[] | null;
                     };
                 };
             };
@@ -2100,6 +2102,7 @@ export interface paths {
                             config: {
                                 [key: string]: unknown;
                             } | null;
+                            teamIds: string[] | null;
                             createdAt: string;
                             updatedAt: string;
                         };
