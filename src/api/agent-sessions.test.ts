@@ -126,6 +126,26 @@ describe("agent sessions API", () => {
     expect(getRes.status).toBe(200);
     const got = await getRes.json<{ activities: unknown[] }>();
     expect(got.activities.length).toBeGreaterThanOrEqual(1);
+
+    const eventsRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/events`,
+        { token }
+      ),
+      env
+    );
+    expect(eventsRes.status).toBe(200);
+    const eventsBody = await eventsRes.json<{ events: unknown[] }>();
+    expect(eventsBody.events.length).toBeGreaterThanOrEqual(1);
+
+    const missingRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/00000000-0000-0000-0000-000000000000/events`,
+        { token }
+      ),
+      env
+    );
+    expect(missingRes.status).toBe(404);
   });
 
   it("appends an activity and updates session state", async () => {
