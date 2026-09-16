@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { AppEnv } from "../platform/env.js";
 import { CodexAgentProvider } from "./codex.js";
 
 function codexEnv(overrides?: { config?: string }): {
@@ -54,9 +55,7 @@ describe("CodexAgentProvider", () => {
       },
     ]);
 
-    const provider = new CodexAgentProvider(
-      codexEnv() as unknown as Parameters<typeof CodexAgentProvider>[0]
-    );
+    const provider = new CodexAgentProvider(codexEnv() as unknown as AppEnv);
     const result = await provider.dispatch("org-1", {
       id: "issue-1",
       title: "Add a thing",
@@ -94,9 +93,7 @@ describe("CodexAgentProvider", () => {
       },
     ]);
 
-    const provider = new CodexAgentProvider(
-      codexEnv() as unknown as Parameters<typeof CodexAgentProvider>[0]
-    );
+    const provider = new CodexAgentProvider(codexEnv() as unknown as AppEnv);
     const result = await provider.poll("sess_123");
 
     expect(result.status).toBe("completed");
@@ -119,9 +116,7 @@ describe("CodexAgentProvider", () => {
       },
     ]);
 
-    const provider = new CodexAgentProvider(
-      codexEnv() as unknown as Parameters<typeof CodexAgentProvider>[0]
-    );
+    const provider = new CodexAgentProvider(codexEnv() as unknown as AppEnv);
     const result = await provider.poll("sess_123");
     expect(result.status).toBe("running");
   });
@@ -135,9 +130,7 @@ describe("CodexAgentProvider", () => {
       },
     ]);
 
-    const provider = new CodexAgentProvider(
-      codexEnv() as unknown as Parameters<typeof CodexAgentProvider>[0]
-    );
+    const provider = new CodexAgentProvider(codexEnv() as unknown as AppEnv);
     await provider.cancel("sess_123");
 
     expect(fetchSpy).toHaveBeenCalledOnce();

@@ -11,6 +11,13 @@ export interface AgentProviderSession extends AgentSessionResult {
   issueId?: string;
 }
 
+/** Optional structured state that a provider can return for live introspection
+ *  by the workspace (e.g. raw provider session + compute sandbox details). */
+export interface AgentProviderState {
+  provider?: unknown;
+  compute?: unknown;
+}
+
 export interface AgentDispatchContext {
   /** Tracker-side session id, pre-created so providers can hand it to the
    *  remote agent for write-back. */
@@ -37,4 +44,12 @@ export interface AgentProvider {
    * locally.
    */
   cancel?(sessionId: string): Promise<void>;
+  /**
+   * Optional live state for the provider and underlying compute. Used by the
+   * session state endpoint to expose raw provider/compute details.
+   */
+  getState?(
+    providerSessionId: string,
+    trackerSessionId: string
+  ): Promise<AgentProviderState | null>;
 }

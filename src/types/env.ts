@@ -23,6 +23,10 @@ export interface AppEnv {
   OPENAI_API_KEY?: string;
   AGENT_PROVIDER_TOKEN?: string;
   AGENT_PROVIDER_CONFIG?: string;
+  /** Base64-encoded `~/.codex/auth.json` for the `codex-cli` provider. */
+  CODEX_AUTH_JSON_B64?: string;
+  /** Codex CLI model override (defaults to `gpt-reserve`). */
+  CODEX_CLI_MODEL?: string;
   FLUE_WORKER?: Fetcher;
   TOKEN_HASH_SECRET?: string;
   SLACK_CLIENT_ID?: string;

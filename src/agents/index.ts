@@ -4,6 +4,7 @@ import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { AgentSession, Issue } from "../types/workspace.js";
 import { CfAgentProvider } from "./cf-agent.js";
+import { CodexCliAgentProvider } from "./codex-cli.js";
 import { CodexAgentProvider } from "./codex.js";
 import { CursorAgentProvider } from "./cursor.js";
 import { DevinAgentProvider } from "./devin.js";
@@ -12,6 +13,7 @@ import type { AgentProvider } from "./provider.js";
 const providers: Record<string, (env: AppEnv) => AgentProvider> = {
   devin: (env) => new DevinAgentProvider(env),
   codex: (env) => new CodexAgentProvider(env),
+  "codex-cli": (env) => new CodexCliAgentProvider(env),
   "cf-agent": (env) => new CfAgentProvider(env, "cf-agent"),
   cursor: (env) => new CursorAgentProvider(env),
   flue: (env) => new CfAgentProvider(env, "flue"),

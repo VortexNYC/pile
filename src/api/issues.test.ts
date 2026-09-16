@@ -9,6 +9,12 @@ import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
 import { createAdminHeaders } from "../platform/test-auth.js";
 
+interface CaptureIssue {
+  status: string;
+  title?: string;
+  description?: string;
+}
+
 async function seedWorkspace() {
   const db = createD1(env.D1);
   const now = new Date();
@@ -180,7 +186,7 @@ describe("issues API", () => {
       token
     );
     expect(res.status).toBe(201);
-    const issue = await res.json();
+    const issue = (await res.json()) as CaptureIssue;
     expect(issue.status).toBe("triage");
     expect(issue.title).toBe("Example page");
     expect(issue.description).toContain("https://example.com/page");
@@ -200,7 +206,7 @@ describe("issues API", () => {
       token
     );
     expect(res.status).toBe(201);
-    const issue = await res.json();
+    const issue = (await res.json()) as CaptureIssue;
     expect(issue.title).toBe("https://example.com/untitled");
     expect(issue.status).toBe("triage");
   });
@@ -237,7 +243,7 @@ describe("issues API", () => {
     expect(res.headers.get("access-control-allow-origin")).toBe(
       "chrome-extension://test-extension-id"
     );
-    const issue = await res.json();
+    const issue = (await res.json()) as CaptureIssue;
     expect(issue.status).toBe("triage");
   });
 });
