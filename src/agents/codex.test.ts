@@ -138,4 +138,36 @@ describe("CodexAgentProvider", () => {
     const body = JSON.parse(init?.body as string);
     expect(body.events[0].type).toBe("agent.session.input.cancel");
   });
+
+  it("parseWebhook maps OpenAI statuses to tracker statuses", () => {
+    const provider = new CodexAgentProvider(codexEnv() as unknown as AppEnv);
+
+    const inProgress = provider.parseWebhook?.(
+      { id: "sess_1", status: "in_progress" },
+      new Headers()
+    );
+    expect(inProgress?.sessionId).toBe("sess_1");
+    expect(inProgress?.session?.status).toBe("running");
+
+    const idle = provider.parseWebhook?.(
+      { session_id: "sess_2", status: "idle" },
+      new Headers()
+    );
+    expect(idle?.sessionId).toBe("sess_2");
+    expect(idle?.session?.status).toBe("completed");
+
+    const action = provider.parseWebhook?.(
+      { id: "sess_3", status: "requires_action" },
+      new Headers()
+    );
+    expect(action?.session?.status).toBe("waiting");
+  });
+
+  it("parseWebhook returns null without a session id", () => {
+    const provider = new CodexAgentProvider(codexEnv() as unknown as AppEnv);
+    expect(
+      provider.parseWebhook?.({ status: "idle" }, new Headers())
+    ).toBeNull();
+    expect(provider.parseWebhook?.("nope", new Headers())).toBeNull();
+  });
 });

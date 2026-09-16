@@ -250,9 +250,20 @@ Providers can push instead of waiting for poll:
 
 Payload must include `session_id` / `sessionId` / `id` (provider-side id).
 `status`, `result`, `pr_url` are applied onto the matching session and land
-on the timeline. Devin maps its native statuses (`exit` → `completed`, etc.).
-Cursor Cloud Agents v1 still has no webhooks — poll remains the recovery
-path.
+on the timeline. Each provider's `parseWebhook` maps its native shape first,
+falling back to the generic parser:
+
+- **Devin** — native statuses (`exit` → `completed`, etc.) via `session_id`.
+- **Cursor** — `{agent: {id}, run: {id, status}}` or flat
+  `agentId`/`runId`; rebuilds the composite `<agentId>/<runId>` session id
+  and maps `RUNNING`/`FINISHED`/`ERROR`/etc. Cursor Cloud Agents v1 still
+  has no documented webhooks — poll remains the recovery path.
+- **Codex** — `id`/`session_id` + OpenAI statuses (`in_progress`,
+  `requires_action`, `failed`; `idle` → `completed`).
+- **Flue / cf-agent** — `conversationId`/`conversation_id`/`sessionId` plus
+  a settlement `outcome` (`completed`/`aborted`/`failed`) or tracker status.
+- **codex-cli** — webhook payloads carry the tracker `sessionId`; the
+  generic parser covers it.
 
 ## Agent environment (ISS-31)
 

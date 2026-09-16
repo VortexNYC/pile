@@ -155,6 +155,48 @@ describe("agent providers", () => {
       expect(fetchSpy).toHaveBeenCalledOnce();
       expect(String(fetchSpy.mock.calls[0]?.[0] ?? "")).toContain("/cancel");
     });
+
+    it("parseWebhook maps nested agent/run payload to composite session id", () => {
+      const provider = new CursorAgentProvider(cursorEnv());
+      const parsed = provider.parseWebhook?.(
+        {
+          agent: { id: "agent-1", url: "https://cursor.test/agent-1" },
+          run: { id: "run-9", status: "FINISHED" },
+        },
+        new Headers()
+      );
+
+      expect(parsed?.sessionId).toBe("agent-1/run-9");
+      expect(parsed?.session?.status).toBe("completed");
+      expect(parsed?.session?.url).toBe("https://cursor.test/agent-1");
+    });
+
+    it("parseWebhook accepts flat agentId/runId and extracts pr fields", () => {
+      const provider = new CursorAgentProvider(cursorEnv());
+      const parsed = provider.parseWebhook?.(
+        {
+          agentId: "agent-2",
+          runId: "run-2",
+          status: "RUNNING",
+          prUrl: "https://github.com/org/repo/pull/5",
+          branch: "cursor/run-2",
+        },
+        new Headers()
+      );
+
+      expect(parsed?.sessionId).toBe("agent-2/run-2");
+      expect(parsed?.session?.status).toBe("running");
+      expect(parsed?.session?.prUrl).toBe("https://github.com/org/repo/pull/5");
+      expect(parsed?.session?.branch).toBe("cursor/run-2");
+    });
+
+    it("parseWebhook returns null for unrecognized payloads", () => {
+      const provider = new CursorAgentProvider(cursorEnv());
+      expect(
+        provider.parseWebhook?.({ hello: "world" }, new Headers())
+      ).toBeNull();
+      expect(provider.parseWebhook?.(null, new Headers())).toBeNull();
+    });
   });
 
   describe("flue", () => {
@@ -179,6 +221,36 @@ describe("agent providers", () => {
       expect(fetchSpy).toHaveBeenCalledOnce();
       const request = fetchSpy.mock.calls[0]?.[0] as Request;
       expect(request.headers.get("Authorization")).toBe("Bearer flue-token");
+    });
+
+    it("parseWebhook maps conversationId and settlement outcome", () => {
+      const provider = new CfAgentProvider(flueEnv(), "flue");
+      const parsed = provider.parseWebhook?.(
+        { conversationId: "conv-9", outcome: "completed", result: "shipped" },
+        new Headers()
+      );
+
+      expect(parsed?.sessionId).toBe("conv-9");
+      expect(parsed?.session?.status).toBe("completed");
+      expect(parsed?.session?.result).toBe("shipped");
+    });
+
+    it("parseWebhook maps aborted outcome to canceled", () => {
+      const provider = new CfAgentProvider(flueEnv(), "flue");
+      const parsed = provider.parseWebhook?.(
+        { conversation_id: "conv-2", outcome: "aborted" },
+        new Headers()
+      );
+
+      expect(parsed?.sessionId).toBe("conv-2");
+      expect(parsed?.session?.status).toBe("canceled");
+    });
+
+    it("parseWebhook returns null without a conversation id", () => {
+      const provider = new CfAgentProvider(flueEnv(), "flue");
+      expect(
+        provider.parseWebhook?.({ outcome: "completed" }, new Headers())
+      ).toBeNull();
     });
   });
 });

@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import type { AppEnv } from "../platform/env.js";
 import { VortexError } from "../platform/errors.js";
-import type { Issue } from "../types/workspace.js";
+import type { AgentSessionStatus, Issue } from "../types/workspace.js";
 import type {
   AgentProvider,
   AgentProviderHealth,
@@ -208,6 +208,57 @@ export class CfAgentProvider implements AgentProvider {
       agentId: this.id,
       status,
       ...(lastText ? { result: lastText } : {}),
+    };
+  }
+
+  parseWebhook(body: unknown): {
+    sessionId: string;
+    session?: AgentProviderSession;
+  } | null {
+    if (typeof body !== "object" || body === null) return null;
+    const record = body as Record<string, unknown>;
+    // Provider-side id is the conversation id; the tracker session id is also
+    // accepted since the worker knows it from dispatch.
+    const sessionId =
+      record.conversationId ?? record.conversation_id ?? record.sessionId;
+    if (typeof sessionId !== "string" || sessionId.length === 0) return null;
+
+    const outcomeMap: Record<string, AgentSessionStatus> = {
+      completed: "completed",
+      aborted: "canceled",
+      failed: "failed",
+    };
+    const rawOutcome = record.outcome;
+    const rawStatus = record.status;
+    const status =
+      typeof rawOutcome === "string"
+        ? outcomeMap[rawOutcome]
+        : typeof rawStatus === "string" &&
+            (
+              [
+                "created",
+                "running",
+                "waiting",
+                "completed",
+                "failed",
+                "canceled",
+              ] as const
+            ).includes(rawStatus as AgentSessionStatus)
+          ? (rawStatus as AgentSessionStatus)
+          : undefined;
+
+    return {
+      sessionId,
+      session: status
+        ? {
+            id: sessionId,
+            agentId: this.id,
+            status,
+            result:
+              typeof record.result === "string" ? record.result : undefined,
+            prUrl: typeof record.prUrl === "string" ? record.prUrl : undefined,
+          }
+        : undefined,
     };
   }
 
