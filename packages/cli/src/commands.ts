@@ -995,6 +995,22 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "agent sessions state list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/state",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "sessionId",
+        flag: "session",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "agent sessions children create": {
     method: "POST",
     path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/children",

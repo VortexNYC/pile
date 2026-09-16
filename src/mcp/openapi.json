@@ -4165,6 +4165,182 @@
         "summary": "Poll agent session"
       }
     },
+    "/workspaces/{organizationId}/agent/sessions/{sessionId}/state": {
+      "get": {
+        "tags": [
+          "agent-sessions"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "sessionId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Live agent session state from provider and compute",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "session": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "issueId": {
+                          "type": "string"
+                        },
+                        "agentId": {
+                          "type": "string"
+                        },
+                        "provider": {
+                          "type": "string"
+                        },
+                        "actorId": {
+                          "type": "string"
+                        },
+                        "actorType": {
+                          "type": "string",
+                          "enum": [
+                            "user",
+                            "agent"
+                          ]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "created",
+                            "running",
+                            "waiting",
+                            "completed",
+                            "failed",
+                            "canceled"
+                          ]
+                        },
+                        "result": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "url": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "providerSessionId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        },
+                        "activities": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "sessionId": {
+                                "type": "string"
+                              },
+                              "actorId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "thought",
+                                  "response",
+                                  "error",
+                                  "elicitation",
+                                  "action",
+                                  "status",
+                                  "artifact"
+                                ]
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "payload": {
+                                "nullable": true
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "sessionId",
+                              "actorId",
+                              "type",
+                              "message",
+                              "createdAt"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "issueId",
+                        "agentId",
+                        "provider",
+                        "actorId",
+                        "actorType",
+                        "status",
+                        "result",
+                        "url",
+                        "providerSessionId",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    },
+                    "devin": {
+                      "nullable": true
+                    },
+                    "daytona": {
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "session"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not supported for this agent or not configured"
+          },
+          "404": {
+            "description": "Session not found"
+          }
+        },
+        "summary": "List agent session state"
+      }
+    },
     "/workspaces/{organizationId}/agent/sessions/{sessionId}/children": {
       "post": {
         "tags": [
