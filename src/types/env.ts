@@ -20,6 +20,7 @@ export interface AppEnv {
   DAYTONA_SNAPSHOT?: string;
   DAYTONA_VOLUME_ID?: string;
   DAYTONA_LABEL_ID?: string;
+  OPENAI_API_KEY?: string;
   AGENT_PROVIDER_TOKEN?: string;
   AGENT_PROVIDER_CONFIG?: string;
   FLUE_WORKER?: Fetcher;

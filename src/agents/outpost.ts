@@ -68,6 +68,7 @@ export function resolveAgentEnv(
   return {
     ...env,
     DEVIN_TOKEN: config.token ?? env.DEVIN_TOKEN,
+    OPENAI_API_KEY: config.token ?? env.OPENAI_API_KEY,
     AGENT_PROVIDER_TOKEN: config.token ?? env.AGENT_PROVIDER_TOKEN,
     DEVIN_ORG_ID: config.providerOrgId ?? env.DEVIN_ORG_ID,
     DEVIN_OUTPOST: config.outpost ?? env.DEVIN_OUTPOST,
