@@ -77,6 +77,10 @@ export const agentSessionSchema = z.object({
         type: agentActivityTypeSchema,
         message: z.string(),
         payload: z.unknown().nullable(),
+        parentId: z.string().nullable(),
+        startedAt: z.string().nullable(),
+        endedAt: z.string().nullable(),
+        durationMs: z.number().nullable(),
         createdAt: z.string(),
       })
     )
@@ -90,6 +94,10 @@ const agentActivitySchema = z.object({
   type: agentActivityTypeSchema,
   message: z.string(),
   payload: z.unknown().nullable(),
+  parentId: z.string().nullable(),
+  startedAt: z.string().nullable(),
+  endedAt: z.string().nullable(),
+  durationMs: z.number().nullable(),
   createdAt: z.string(),
 });
 
@@ -211,6 +219,10 @@ const addActivityRoute = createRoute({
             type: agentActivityTypeSchema,
             message: z.string().min(1),
             payload: z.record(z.string(), z.unknown()).optional(),
+            parentId: z.string().optional(),
+            startedAt: z.string().optional(),
+            endedAt: z.string().optional(),
+            durationMs: z.number().optional(),
           }),
         },
       },
@@ -493,6 +505,10 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       type: body.type,
       message: body.message,
       payload: body.payload,
+      parentId: body.parentId,
+      startedAt: body.startedAt,
+      endedAt: body.endedAt,
+      durationMs: body.durationMs,
     });
     return c.json(toActivityResponse(activity), 201);
   });

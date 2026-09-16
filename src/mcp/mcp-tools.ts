@@ -7796,7 +7796,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdAgentSessionsSessionIdActivities",
-    "description": "Create agent session activity (POST /workspaces/{organizationId}/agent/sessions/{sessionId}/activities) Path params (top-level, required): organizationId, sessionId. Request body goes in the \"body\" object; fields: type*, message*, payload (* = required).",
+    "description": "Create agent session activity (POST /workspaces/{organizationId}/agent/sessions/{sessionId}/activities) Path params (top-level, required): organizationId, sessionId. Request body goes in the \"body\" object; fields: type*, message*, payload, parentId, startedAt, endedAt, durationMs (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/agent/sessions/{sessionId}/activities",
     "inputSchema": {
@@ -7832,6 +7832,18 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "additionalProperties": {
                 "nullable": true
               }
+            },
+            "parentId": {
+              "type": "string"
+            },
+            "startedAt": {
+              "type": "string"
+            },
+            "endedAt": {
+              "type": "string"
+            },
+            "durationMs": {
+              "type": "number"
             }
           },
           "required": [

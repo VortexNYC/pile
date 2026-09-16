@@ -948,6 +948,22 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "payload",
         flag: "payload",
       },
+      {
+        name: "parentId",
+        flag: "parent",
+      },
+      {
+        name: "startedAt",
+        flag: "started-at",
+      },
+      {
+        name: "endedAt",
+        flag: "ended-at",
+      },
+      {
+        name: "durationMs",
+        flag: "duration-ms",
+      },
     ],
   },
   "agent sessions artifacts create": {

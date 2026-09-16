@@ -1083,6 +1083,13 @@ export interface AgentActivityInput {
     | "artifact";
   message: string;
   payload?: Record<string, unknown>;
+  /** Parent activity id — links child events under a span. */
+  parentId?: string;
+  /** Span timing. `startedAt` alone marks an open span; pair with `endedAt`
+   *  (or `durationMs`) to record a completed span. */
+  startedAt?: string;
+  endedAt?: string;
+  durationMs?: number;
 }
 
 export async function addAgentActivity(
@@ -1091,6 +1098,13 @@ export async function addAgentActivity(
 ) {
   const id = crypto.randomUUID();
   const ts = new Date().toISOString();
+  const startedAt = input.startedAt ?? null;
+  const endedAt = input.endedAt ?? null;
+  const durationMs =
+    input.durationMs ??
+    (startedAt && endedAt
+      ? Math.max(0, Date.parse(endedAt) - Date.parse(startedAt))
+      : null);
   await db.insert(workspaceAgentActivities).values({
     id,
     sessionId: input.sessionId,
@@ -1098,6 +1112,10 @@ export async function addAgentActivity(
     type: input.type,
     message: input.message,
     payload: input.payload ? JSON.stringify(input.payload) : null,
+    parentId: input.parentId ?? null,
+    startedAt,
+    endedAt,
+    durationMs,
     createdAt: ts,
   });
   const row = await db
@@ -1127,6 +1145,27 @@ export function listAgentActivities(
     .orderBy(workspaceAgentActivities.createdAt)
     .limit(options.limit ?? 100)
     .all();
+}
+
+/** Close an open span: stamps ended_at and computes duration_ms from
+ *  started_at. No-op when the activity is missing or not a span. */
+export async function closeAgentActivity(db: WorkspaceDb, id: string) {
+  const row = await db
+    .select()
+    .from(workspaceAgentActivities)
+    .where(eq(workspaceAgentActivities.id, id))
+    .get();
+  if (!row?.startedAt) return null;
+  const endedAt = new Date().toISOString();
+  const durationMs = Math.max(
+    0,
+    Date.parse(endedAt) - Date.parse(row.startedAt)
+  );
+  await db
+    .update(workspaceAgentActivities)
+    .set({ endedAt, durationMs })
+    .where(eq(workspaceAgentActivities.id, id));
+  return { ...row, endedAt, durationMs };
 }
 
 export interface AgentSessionEventInput {

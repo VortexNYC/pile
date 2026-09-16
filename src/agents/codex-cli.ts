@@ -14,7 +14,10 @@ import {
   daytonaSandboxListSchema,
   daytonaSandboxSchema,
   writeAgentSessionActivity,
+  openAgentSessionSpan,
+  closeAgentSessionSpan,
 } from "./outpost.js";
+import type { ActivitySpanOptions } from "./outpost.js";
 import type {
   AgentDispatchContext,
   AgentProvider,
@@ -401,7 +404,8 @@ export class CodexCliAgentProvider implements AgentProvider {
     sessionId: string | undefined,
     type: "status" | "error" | "action",
     message: string,
-    payload?: Record<string, unknown>
+    payload?: Record<string, unknown>,
+    span?: ActivitySpanOptions
   ): Promise<void> {
     if (!("WORKSPACE_DURABLE_OBJECT" in this.env)) return;
     await writeAgentSessionActivity(
@@ -410,8 +414,33 @@ export class CodexCliAgentProvider implements AgentProvider {
       sessionId,
       type,
       message,
+      payload,
+      span
+    );
+  }
+
+  private async openSpan(
+    organizationId: string | undefined,
+    sessionId: string | undefined,
+    message: string,
+    payload?: Record<string, unknown>
+  ): Promise<string | undefined> {
+    if (!("WORKSPACE_DURABLE_OBJECT" in this.env)) return undefined;
+    return openAgentSessionSpan(
+      this.env as WorkerEnv,
+      organizationId,
+      sessionId,
+      message,
       payload
     );
+  }
+
+  private async closeSpan(
+    organizationId: string | undefined,
+    spanId: string | undefined
+  ): Promise<void> {
+    if (!("WORKSPACE_DURABLE_OBJECT" in this.env)) return;
+    await closeAgentSessionSpan(this.env as WorkerEnv, organizationId, spanId);
   }
 
   private requireAuth(): string {
@@ -708,6 +737,12 @@ export class CodexCliAgentProvider implements AgentProvider {
     const shortId = sessionId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 12);
     const name = `vortex-codex-${shortId}`;
 
+    const spanId = await this.openSpan(
+      organizationId,
+      sessionId,
+      "provision codex-cli sandbox",
+      { session: sessionId }
+    );
     try {
       const list = await this.listSandboxes(config);
       const existing = list.items.find(
@@ -719,7 +754,8 @@ export class CodexCliAgentProvider implements AgentProvider {
           sessionId,
           "status",
           "codex-cli sandbox exists, recreating",
-          { sandbox: existing.id, state: existing.state }
+          { sandbox: existing.id, state: existing.state },
+          { parentId: spanId }
         );
         await this.deleteSandbox(config, existing.id);
       }
@@ -744,7 +780,8 @@ export class CodexCliAgentProvider implements AgentProvider {
         sessionId,
         "status",
         "codex-cli sandbox created",
-        { sandbox: sandbox.id, state: sandbox.state }
+        { sandbox: sandbox.id, state: sandbox.state },
+        { parentId: spanId }
       );
       const started = await this.waitForStarted(config, sandbox.id);
       await this.note(
@@ -752,7 +789,8 @@ export class CodexCliAgentProvider implements AgentProvider {
         sessionId,
         "status",
         "codex-cli sandbox started",
-        { sandbox: started.id, state: started.state }
+        { sandbox: started.id, state: started.state },
+        { parentId: spanId }
       );
       const base = toolboxBase(started);
       await this.createProcessSession(base, sessionId, config.apiKey);
@@ -767,7 +805,8 @@ export class CodexCliAgentProvider implements AgentProvider {
         sessionId,
         "action",
         "codex-cli runner started",
-        { sandbox: started.id }
+        { sandbox: started.id },
+        { parentId: spanId }
       );
     } catch (err) {
       await this.note(
@@ -777,9 +816,12 @@ export class CodexCliAgentProvider implements AgentProvider {
         err instanceof Error ? err.message : "codex-cli provision failed",
         {
           error: err instanceof Error ? err.message : String(err),
-        }
+        },
+        { parentId: spanId }
       );
       throw err;
+    } finally {
+      await this.closeSpan(organizationId, spanId);
     }
   }
 

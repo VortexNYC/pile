@@ -200,6 +200,85 @@ describe("agent sessions API", () => {
     expect(patched.result).toBe("done");
   });
 
+  it("records span activities with parent links and close-out duration", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    const session = await stub.createAgentSession({
+      issueId: "issue-span",
+      agentId: "mock",
+      provider: "mock",
+      actorId: "user-1",
+      actorType: "user",
+    });
+
+    const spanRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/activities`,
+        {
+          method: "POST",
+          token,
+          body: JSON.stringify({
+            type: "action",
+            message: "provision sandbox",
+            startedAt: new Date(Date.now() - 1500).toISOString(),
+          }),
+        }
+      ),
+      env
+    );
+    expect(spanRes.status).toBe(201);
+    const span = await spanRes.json<{
+      id: string;
+      startedAt: string | null;
+      endedAt: string | null;
+    }>();
+    expect(span.startedAt).toBeTruthy();
+    expect(span.endedAt).toBeNull();
+
+    const childRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/activities`,
+        {
+          method: "POST",
+          token,
+          body: JSON.stringify({
+            type: "status",
+            message: "sandbox created",
+            parentId: span.id,
+          }),
+        }
+      ),
+      env
+    );
+    expect(childRes.status).toBe(201);
+    const child = await childRes.json<{ parentId: string | null }>();
+    expect(child.parentId).toBe(span.id);
+
+    const closed = await stub.closeAgentActivity(span.id);
+    expect(closed?.endedAt).toBeTruthy();
+    expect(closed?.durationMs).toBeGreaterThanOrEqual(0);
+
+    const eventsRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/events`,
+        { token }
+      ),
+      env
+    );
+    const events = await eventsRes.json<{
+      events: {
+        id: string;
+        parentId: string | null;
+        durationMs: number | null;
+      }[];
+    }>();
+    const spanEvent = events.events.find((e) => e.id === span.id);
+    expect(spanEvent?.durationMs).toBeGreaterThanOrEqual(0);
+    const childEvent = events.events.find((e) => e.parentId === span.id);
+    expect(childEvent).toBeTruthy();
+  });
+
   it("captures a text artifact to the session timeline", async () => {
     const stub = env.WORKSPACE_DURABLE_OBJECT.get(
       env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)

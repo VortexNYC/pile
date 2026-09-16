@@ -1235,6 +1235,10 @@ export interface paths {
                                 type: "thought" | "response" | "error" | "elicitation" | "action" | "status" | "artifact";
                                 message: string;
                                 payload?: unknown;
+                                parentId: string | null;
+                                startedAt: string | null;
+                                endedAt: string | null;
+                                durationMs: number | null;
                                 createdAt: string;
                             }[];
                         };
@@ -1313,6 +1317,10 @@ export interface paths {
                                     type: "thought" | "response" | "error" | "elicitation" | "action" | "status" | "artifact";
                                     message: string;
                                     payload?: unknown;
+                                    parentId: string | null;
+                                    startedAt: string | null;
+                                    endedAt: string | null;
+                                    durationMs: number | null;
                                     createdAt: string;
                                 }[];
                             };
@@ -1385,6 +1393,10 @@ export interface paths {
                                     type: "thought" | "response" | "error" | "elicitation" | "action" | "status" | "artifact";
                                     message: string;
                                     payload?: unknown;
+                                    parentId: string | null;
+                                    startedAt: string | null;
+                                    endedAt: string | null;
+                                    durationMs: number | null;
                                     createdAt: string;
                                 }[];
                             }[];
@@ -1457,6 +1469,10 @@ export interface paths {
                                     type: "thought" | "response" | "error" | "elicitation" | "action" | "status" | "artifact";
                                     message: string;
                                     payload?: unknown;
+                                    parentId: string | null;
+                                    startedAt: string | null;
+                                    endedAt: string | null;
+                                    durationMs: number | null;
                                     createdAt: string;
                                 }[];
                             } | null;
@@ -1468,6 +1484,10 @@ export interface paths {
                                 type: "thought" | "response" | "error" | "elicitation" | "action" | "status" | "artifact";
                                 message: string;
                                 payload?: unknown;
+                                parentId: string | null;
+                                startedAt: string | null;
+                                endedAt: string | null;
+                                durationMs: number | null;
                                 createdAt: string;
                             }[];
                         };
@@ -1538,6 +1558,10 @@ export interface paths {
                                 type: "thought" | "response" | "error" | "elicitation" | "action" | "status" | "artifact";
                                 message: string;
                                 payload?: unknown;
+                                parentId: string | null;
+                                startedAt: string | null;
+                                endedAt: string | null;
+                                durationMs: number | null;
                                 createdAt: string;
                             }[];
                         };
@@ -1617,6 +1641,10 @@ export interface paths {
                                 type: "thought" | "response" | "error" | "elicitation" | "action" | "status" | "artifact";
                                 message: string;
                                 payload?: unknown;
+                                parentId: string | null;
+                                startedAt: string | null;
+                                endedAt: string | null;
+                                durationMs: number | null;
                                 createdAt: string;
                             }[];
                         };
@@ -1670,6 +1698,10 @@ export interface paths {
                                 type: "thought" | "response" | "error" | "elicitation" | "action" | "status" | "artifact";
                                 message: string;
                                 payload?: unknown;
+                                parentId: string | null;
+                                startedAt: string | null;
+                                endedAt: string | null;
+                                durationMs: number | null;
                                 createdAt: string;
                             }[];
                         };
@@ -1721,6 +1753,10 @@ export interface paths {
                         payload?: {
                             [key: string]: unknown;
                         };
+                        parentId?: string;
+                        startedAt?: string;
+                        endedAt?: string;
+                        durationMs?: number;
                     };
                 };
             };
@@ -1739,6 +1775,10 @@ export interface paths {
                             type: "thought" | "response" | "error" | "elicitation" | "action" | "status" | "artifact";
                             message: string;
                             payload?: unknown;
+                            parentId: string | null;
+                            startedAt: string | null;
+                            endedAt: string | null;
+                            durationMs: number | null;
                             createdAt: string;
                         };
                     };
@@ -1806,6 +1846,10 @@ export interface paths {
                             type: "thought" | "response" | "error" | "elicitation" | "action" | "status" | "artifact";
                             message: string;
                             payload?: unknown;
+                            parentId: string | null;
+                            startedAt: string | null;
+                            endedAt: string | null;
+                            durationMs: number | null;
                             createdAt: string;
                         };
                     };
@@ -1882,6 +1926,10 @@ export interface paths {
                                 type: "thought" | "response" | "error" | "elicitation" | "action" | "status" | "artifact";
                                 message: string;
                                 payload?: unknown;
+                                parentId: string | null;
+                                startedAt: string | null;
+                                endedAt: string | null;
+                                durationMs: number | null;
                                 createdAt: string;
                             }[];
                         };
@@ -1959,6 +2007,10 @@ export interface paths {
                                 type: "thought" | "response" | "error" | "elicitation" | "action" | "status" | "artifact";
                                 message: string;
                                 payload?: unknown;
+                                parentId: string | null;
+                                startedAt: string | null;
+                                endedAt: string | null;
+                                durationMs: number | null;
                                 createdAt: string;
                             }[];
                         };
@@ -2035,6 +2087,10 @@ export interface paths {
                                     type: "thought" | "response" | "error" | "elicitation" | "action" | "status" | "artifact";
                                     message: string;
                                     payload?: unknown;
+                                    parentId: string | null;
+                                    startedAt: string | null;
+                                    endedAt: string | null;
+                                    durationMs: number | null;
                                     createdAt: string;
                                 }[];
                             };
@@ -2135,6 +2191,10 @@ export interface paths {
                                     type: "thought" | "response" | "error" | "elicitation" | "action" | "status" | "artifact";
                                     message: string;
                                     payload?: unknown;
+                                    parentId: string | null;
+                                    startedAt: string | null;
+                                    endedAt: string | null;
+                                    durationMs: number | null;
                                     createdAt: string;
                                 }[];
                             };
