@@ -806,6 +806,10 @@ export const workspaceAgentActivities = sqliteTable(
     }).notNull(),
     message: text("message" as string).notNull(),
     payload: text("payload" as string),
+    parentId: text("parent_id" as string),
+    startedAt: text("started_at" as string),
+    endedAt: text("ended_at" as string),
+    durationMs: integer("duration_ms" as string, { mode: "number" }),
     createdAt: text("created_at" as string).notNull(),
   },
   (table) => [

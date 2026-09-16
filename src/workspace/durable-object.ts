@@ -2002,6 +2002,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return activity;
   }
 
+  async closeAgentActivity(id: string) {
+    return data.closeAgentActivity(this.db, id);
+  }
+
   async addAgentSessionArtifact(input: {
     sessionId: string;
     actorId?: string;

@@ -143,32 +143,92 @@ type ActivityType =
   | "status"
   | "artifact";
 
+export interface ActivitySpanOptions {
+  /** Parent activity id — nests this event under an open span. */
+  parentId?: string;
+  /** ISO timestamp marking span start. Pass to open a span. */
+  startedAt?: string;
+  /** ISO timestamp marking span end (completed span record). */
+  endedAt?: string;
+  /** Explicit duration when started/ended aren't both known. */
+  durationMs?: number;
+}
+
 export async function writeAgentSessionActivity(
   env: WorkerEnv,
   organizationId: string | undefined,
   sessionId: string | undefined,
   type: ActivityType,
   message: string,
-  payload?: Record<string, unknown>
-): Promise<void> {
-  if (!organizationId || !sessionId) return;
+  payload?: Record<string, unknown>,
+  span?: ActivitySpanOptions
+): Promise<string | undefined> {
+  if (!organizationId || !sessionId) return undefined;
   try {
     const stub = env.WORKSPACE_DURABLE_OBJECT.get(
       env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
     );
     await stub.setOrganizationId(organizationId);
-    await stub.addAgentActivity({
+    const activity = await stub.addAgentActivity({
       sessionId,
       actorId: undefined,
       type,
       message,
       payload,
+      parentId: span?.parentId,
+      startedAt: span?.startedAt,
+      endedAt: span?.endedAt,
+      durationMs: span?.durationMs,
     });
+    return activity.id;
   } catch (err) {
     console.error("outpost: failed to write session activity", {
       organizationId,
       sessionId,
       message,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return undefined;
+  }
+}
+
+/** Open a span activity. Returns its id for use as `parentId` on child
+ *  events; pass the id to `closeAgentSessionSpan` when the step ends. */
+export function openAgentSessionSpan(
+  env: WorkerEnv,
+  organizationId: string | undefined,
+  sessionId: string | undefined,
+  message: string,
+  payload?: Record<string, unknown>,
+  parentId?: string
+): Promise<string | undefined> {
+  return writeAgentSessionActivity(
+    env,
+    organizationId,
+    sessionId,
+    "action",
+    message,
+    payload,
+    { startedAt: new Date().toISOString(), parentId }
+  );
+}
+
+export async function closeAgentSessionSpan(
+  env: WorkerEnv,
+  organizationId: string | undefined,
+  spanId: string | undefined
+): Promise<void> {
+  if (!organizationId || !spanId) return;
+  try {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    await stub.closeAgentActivity(spanId);
+  } catch (err) {
+    console.error("outpost: failed to close session span", {
+      organizationId,
+      spanId,
       error: err instanceof Error ? err.message : String(err),
     });
   }
@@ -180,6 +240,38 @@ export async function provisionOutpostWorker(
   organizationId?: string,
   trackerSessionId?: string,
   gitIdentity?: GitIdentity | null
+): Promise<void> {
+  const fleetId = devinSessionId.startsWith("devin-")
+    ? devinSessionId
+    : `devin-${devinSessionId}`;
+  const spanId = await openAgentSessionSpan(
+    env,
+    organizationId,
+    trackerSessionId,
+    "provision outpost worker",
+    { session: fleetId }
+  );
+  try {
+    await provisionOutpostWorkerInner(
+      env,
+      devinSessionId,
+      organizationId,
+      trackerSessionId,
+      gitIdentity,
+      spanId
+    );
+  } finally {
+    await closeAgentSessionSpan(env, organizationId, spanId);
+  }
+}
+
+async function provisionOutpostWorkerInner(
+  env: WorkerEnv,
+  devinSessionId: string,
+  organizationId: string | undefined,
+  trackerSessionId: string | undefined,
+  gitIdentity: GitIdentity | null | undefined,
+  spanId: string | undefined
 ): Promise<void> {
   const fleetId = devinSessionId.startsWith("devin-")
     ? devinSessionId
@@ -204,7 +296,8 @@ export async function provisionOutpostWorker(
       trackerSessionId,
       "error",
       "daytona sandbox list failed",
-      { status: listRes.status, session: fleetId }
+      { status: listRes.status, session: fleetId },
+      { parentId: spanId }
     );
     return;
   }
@@ -228,7 +321,8 @@ export async function provisionOutpostWorker(
         trackerSessionId,
         "status",
         "outpost worker already healthy",
-        { sandbox: existing.id, state: existing.state, session: fleetId }
+        { sandbox: existing.id, state: existing.state, session: fleetId },
+        { parentId: spanId }
       );
       return;
     }
@@ -243,7 +337,8 @@ export async function provisionOutpostWorker(
       trackerSessionId,
       "status",
       "outpost worker exists but is not healthy, recreating",
-      { sandbox: existing.id, state: existing.state, session: fleetId }
+      { sandbox: existing.id, state: existing.state, session: fleetId },
+      { parentId: spanId }
     );
     const del = await fetch(`${config.apiUrl}/sandbox/${existing.id}`, {
       method: "DELETE",
@@ -260,7 +355,8 @@ export async function provisionOutpostWorker(
         trackerSessionId,
         "error",
         "daytona sandbox delete failed",
-        { status: del.status, session: fleetId }
+        { status: del.status, session: fleetId },
+        { parentId: spanId }
       );
       return;
     }
@@ -324,7 +420,8 @@ export async function provisionOutpostWorker(
       trackerSessionId,
       "error",
       "daytona sandbox create failed",
-      { status: res.status, body: text.slice(0, 500), session: fleetId }
+      { status: res.status, body: text.slice(0, 500), session: fleetId },
+      { parentId: spanId }
     );
     return;
   }
@@ -345,7 +442,8 @@ export async function provisionOutpostWorker(
       state: sandbox.state,
       nodeDomain: sandbox.nodeDomain,
       session: fleetId,
-    }
+    },
+    { parentId: spanId }
   );
 }
 

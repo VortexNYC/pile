@@ -715,6 +715,14 @@ const v36 = `CREATE TABLE IF NOT EXISTS agent_environment_files (
 --> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS agent_environment_files_path_idx ON agent_environment_files (organization_id, path)`;
 
+const v37 = `ALTER TABLE agent_activities ADD COLUMN parent_id TEXT
+--> statement-breakpoint
+ALTER TABLE agent_activities ADD COLUMN started_at TEXT
+--> statement-breakpoint
+ALTER TABLE agent_activities ADD COLUMN ended_at TEXT
+--> statement-breakpoint
+ALTER TABLE agent_activities ADD COLUMN duration_ms INTEGER`;
+
 export const workspaceMigrations = {
   journal: {
     entries: [
@@ -754,6 +762,7 @@ export const workspaceMigrations = {
       { idx: 33, when: 33, tag: "v34", breakpoints: false },
       { idx: 34, when: 34, tag: "v35", breakpoints: true },
       { idx: 35, when: 35, tag: "v36", breakpoints: true },
+      { idx: 36, when: 36, tag: "v37", breakpoints: true },
     ],
   },
   migrations: {
@@ -793,5 +802,6 @@ export const workspaceMigrations = {
     m0033: v34,
     m0034: v35,
     m0035: v36,
+    m0036: v37,
   },
 } satisfies Parameters<typeof migrate>[1];
