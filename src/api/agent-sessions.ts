@@ -358,8 +358,8 @@ const getSessionStateRoute = createRoute({
         "application/json": {
           schema: z.object({
             session: agentSessionSchema,
-            devin: z.unknown().nullable().optional(),
-            daytona: z.unknown().nullable().optional(),
+            provider: z.unknown().nullable().optional(),
+            compute: z.unknown().nullable().optional(),
           }),
         },
       },
@@ -739,67 +739,24 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       return c.json({ message: "Session not found" }, 404);
     }
 
-    if (session.agentId !== "devin") {
-      return c.json(
-        { message: "Live state only available for devin sessions" },
-        400
-      );
-    }
-
-    const providerConfig = await stub.getAgentProviderConfig("devin");
+    const providerConfig = await stub.getAgentProviderConfig(session.agentId);
     const effectiveEnv = resolveAgentEnv(c.env, providerConfig ?? undefined);
+    const provider = getAgentProvider(session.agentId, effectiveEnv);
 
-    const devinOrgId = effectiveEnv.DEVIN_ORG_ID;
-    const devinToken = effectiveEnv.DEVIN_TOKEN;
-    const daytonaApiKey = effectiveEnv.DAYTONA_API_KEY;
-    const daytonaApiUrl =
-      effectiveEnv.DAYTONA_API_URL ?? "https://app.daytona.io/api";
-
-    if (!devinOrgId || !devinToken || !daytonaApiKey) {
+    if (!provider.getState) {
       return c.json(
-        { message: "devin or daytona not configured for workspace" },
+        { message: `Live state not available for ${session.agentId}` },
         400
       );
     }
 
     const remoteId = session.providerSessionId ?? sessionId;
-
-    const devinRes = await fetch(
-      `https://api.devin.ai/v3/organizations/${devinOrgId}/sessions/${remoteId}`,
-      { headers: { Authorization: `Bearer ${devinToken}` } }
-    );
-    const devinJson = devinRes.ok ? await devinRes.json() : null;
-
-    const daytonaRes = await fetch(`${daytonaApiUrl}/sandbox`, {
-      headers: { Authorization: `Bearer ${daytonaApiKey}` },
-    });
-    const daytonaJson = daytonaRes.ok ? await daytonaRes.json() : null;
-    const daytonaList = z
-      .object({ items: z.array(z.unknown()) })
-      .safeParse(daytonaJson);
-    const fleetId = remoteId.startsWith("devin-")
-      ? remoteId
-      : `devin-${remoteId}`;
-    const daytonaSandbox = daytonaList.success
-      ? (daytonaList.data.items.find((item) => {
-          const parsed = z
-            .object({ labels: z.record(z.string(), z.string()).optional() })
-            .safeParse(item);
-          if (!parsed.success) return false;
-          const labels = parsed.data.labels;
-          return (
-            labels?.["vortex.tracker_session"] === sessionId ||
-            labels?.["vortex.session"] === fleetId ||
-            labels?.["vortex.session"] === remoteId
-          );
-        }) ?? null)
-      : null;
-
+    const state = await provider.getState(remoteId, sessionId);
     const activities = await stub.listAgentActivities(sessionId);
     return c.json({
       session: toSessionResponse(session, activities),
-      devin: devinJson,
-      daytona: daytonaSandbox,
+      provider: state?.provider ?? null,
+      compute: state?.compute ?? null,
     });
   });
 

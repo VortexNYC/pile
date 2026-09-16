@@ -22,6 +22,11 @@ export interface AgentDispatchContext {
   waitUntil?: (promise: Promise<unknown>) => void;
 }
 
+export interface AgentProviderState {
+  provider: unknown;
+  compute?: unknown;
+}
+
 export interface AgentProvider {
   id: string;
   dispatch(
@@ -37,4 +42,12 @@ export interface AgentProvider {
    * locally.
    */
   cancel?(sessionId: string): Promise<void>;
+  /**
+   * Return live provider-side state for a session. Optional — providers that
+   * can't expose live state omit this.
+   */
+  getState?(
+    providerSessionId: string,
+    trackerSessionId: string
+  ): Promise<AgentProviderState | null>;
 }

@@ -81,7 +81,7 @@ export function resolveAgentEnv(
   };
 }
 
-function daytonaConfig(env: AppEnv) {
+export function daytonaConfig(env: AppEnv) {
   const apiKey = env.DAYTONA_API_KEY;
   const apiUrl = env.DAYTONA_API_URL ?? "https://app.daytona.io/api";
   if (!apiKey) return null;

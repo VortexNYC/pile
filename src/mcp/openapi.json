@@ -4317,10 +4317,10 @@
                         "updatedAt"
                       ]
                     },
-                    "devin": {
+                    "provider": {
                       "nullable": true
                     },
-                    "daytona": {
+                    "compute": {
                       "nullable": true
                     }
                   },

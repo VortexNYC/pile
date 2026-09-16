@@ -3,7 +3,11 @@ import { z } from "zod";
 import type { AppEnv } from "../platform/env.js";
 import { VortexError } from "../platform/errors.js";
 import type { Issue } from "../types/workspace.js";
-import type { AgentProvider, AgentProviderSession } from "./provider.js";
+import type {
+  AgentProvider,
+  AgentProviderSession,
+  AgentProviderState,
+} from "./provider.js";
 
 const dispatchResponseSchema = z.object({
   ok: z.boolean(),
@@ -142,7 +146,12 @@ export class CfAgentProvider implements AgentProvider {
         : config.endpoint.replace(/\/$/, "");
     const request = new Request(
       `${base}${config.agentsPath}/${agent}/${encodeURIComponent(sessionId)}`,
-      { headers: { accept: "application/json" } }
+      {
+        headers: {
+          accept: "application/json",
+          Authorization: `Bearer ${this.env.AGENT_PROVIDER_TOKEN ?? ""}`,
+        },
+      }
     );
     const res = this.env.FLUE_WORKER
       ? await this.env.FLUE_WORKER.fetch(request)
@@ -190,5 +199,36 @@ export class CfAgentProvider implements AgentProvider {
       status,
       ...(lastText ? { result: lastText } : {}),
     };
+  }
+
+  async getState(
+    sessionId: string,
+    _trackerSessionId: string
+  ): Promise<AgentProviderState | null> {
+    const config = cfAgentConfigSchema.parse(
+      this.env.AGENT_PROVIDER_CONFIG
+        ? (JSON.parse(this.env.AGENT_PROVIDER_CONFIG) as unknown)
+        : {}
+    );
+    const agent = config.agent ?? "engineering";
+    const base =
+      config.endpoint === "service-binding"
+        ? "https://cf-agent.internal"
+        : config.endpoint.replace(/\/$/, "");
+    const request = new Request(
+      `${base}${config.agentsPath}/${agent}/${encodeURIComponent(sessionId)}`,
+      {
+        headers: {
+          accept: "application/json",
+          Authorization: `Bearer ${this.env.AGENT_PROVIDER_TOKEN ?? ""}`,
+        },
+      }
+    );
+    const res = this.env.FLUE_WORKER
+      ? await this.env.FLUE_WORKER.fetch(request)
+      : await fetch(request);
+    if (res.status === 404 || !res.ok) return null;
+    const provider = await res.json();
+    return { provider };
   }
 }
