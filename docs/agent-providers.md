@@ -5,6 +5,34 @@ provider with a `dispatch`/`poll` contract, and each workspace configures its
 own providers. Credentials are per-workspace, stored in that workspace's own
 Durable Object, write-only via the API, and never shared between workspaces.
 
+## Adding an agent
+
+No wizard. The API is the form:
+
+1. `GET /workspaces/{org}/agent/providers/catalog` — which agents exist, and
+   for each: **hosted cloud** vs **your computer or server**, plus the fields
+   that mode needs.
+2. `PUT /workspaces/{org}/agent/providers/{agentId}` with `mode` and those
+   fields.
+3. `POST /workspaces/{org}/agent/providers/{agentId}/health` — the key works.
+
+```bash
+# Codex on OpenAI's cloud
+curl -X PUT "$BASE/workspaces/$ORG/agent/providers/codex" \
+  -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+  -d '{"mode":"hosted","token":"<openai api key>"}'
+
+# Codex on your machine (self-hosted executor)
+curl -X PUT "$BASE/workspaces/$ORG/agent/providers/codex" \
+  -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+  -d '{"mode":"byo","token":"<openai api key>"}'
+```
+
+`mode` is stored on `config.mode`. Omitting it keeps the old bag-of-fields
+upsert (no required-field check). Sending `mode` validates required catalog
+fields and stamps provider-specific discriminants (Codex
+`environment.type`, etc.).
+
 ## Devin Cloud (hosted)
 
 The default path. A workspace supplies its own Devin API credentials; sessions
@@ -268,14 +296,15 @@ connect an OpenAI executor to `session.environment.remote_url`.
 
 ## API
 
-| route                                                     | perm          | notes                                     |
-| --------------------------------------------------------- | ------------- | ----------------------------------------- |
-| `GET /workspaces/{org}/agent/providers`                   | `agent:read`  | secrets redacted (`hasToken` etc.)        |
-| `PUT /workspaces/{org}/agent/providers/{agentId}`         | `admin`       | upsert; unset fields keep existing values |
-| `DELETE /workspaces/{org}/agent/providers/{agentId}`      | `admin`       | revert to deployment defaults             |
-| `POST /workspaces/{org}/agent/providers/{agentId}/health` | `admin`       | credential/config probe, no session       |
-| `POST /workspaces/{org}/agent/providers/{agentId}/hooks`  | `agent:write` | authenticated push                        |
-| `POST /webhooks/agent/{org}/{agentId}`                    | secret        | inbound push (`config.webhookSecret`)     |
+| route                                                     | perm          | notes                                   |
+| --------------------------------------------------------- | ------------- | --------------------------------------- |
+| `GET /workspaces/{org}/agent/providers/catalog`           | `agent:read`  | agents + hosted/BYO fields              |
+| `GET /workspaces/{org}/agent/providers`                   | `agent:read`  | secrets redacted (`hasToken` etc.)      |
+| `PUT /workspaces/{org}/agent/providers/{agentId}`         | `admin`       | upsert; `mode` validates catalog fields |
+| `DELETE /workspaces/{org}/agent/providers/{agentId}`      | `admin`       | revert to deployment defaults           |
+| `POST /workspaces/{org}/agent/providers/{agentId}/health` | `admin`       | credential/config probe, no session     |
+| `POST /workspaces/{org}/agent/providers/{agentId}/hooks`  | `agent:write` | authenticated push                      |
+| `POST /webhooks/agent/{org}/{agentId}`                    | secret        | inbound push (`config.webhookSecret`)   |
 
 ## Custom agents
 

@@ -4869,6 +4869,138 @@
         "summary": "Create agent session children"
       }
     },
+    "/workspaces/{organizationId}/agent/providers/catalog": {
+      "get": {
+        "tags": [
+          "agent-providers"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Agents a workspace can add, with hosted vs BYO modes and required fields",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "providers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "modes": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "enum": [
+                                    "hosted",
+                                    "byo"
+                                  ]
+                                },
+                                "label": {
+                                  "type": "string"
+                                },
+                                "help": {
+                                  "type": "string"
+                                },
+                                "fields": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "key": {
+                                        "type": "string"
+                                      },
+                                      "label": {
+                                        "type": "string"
+                                      },
+                                      "required": {
+                                        "type": "boolean"
+                                      },
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "text",
+                                          "secret",
+                                          "select"
+                                        ]
+                                      },
+                                      "options": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "value": {
+                                              "type": "string"
+                                            },
+                                            "label": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "value",
+                                            "label"
+                                          ]
+                                        }
+                                      },
+                                      "help": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "key",
+                                      "label",
+                                      "required",
+                                      "type"
+                                    ]
+                                  }
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "label",
+                                "fields"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "modes"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "providers"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List agent provider catalog"
+      }
+    },
     "/workspaces/{organizationId}/agent/providers": {
       "get": {
         "tags": [
@@ -5000,6 +5132,13 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "hosted",
+                      "byo"
+                    ]
+                  },
                   "token": {
                     "type": "string",
                     "nullable": true

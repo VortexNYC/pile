@@ -2183,6 +2183,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/agent/providers/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List agent provider catalog */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Agents a workspace can add, with hosted vs BYO modes and required fields */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            providers: {
+                                id: string;
+                                name: string;
+                                modes: {
+                                    /** @enum {string} */
+                                    id: "hosted" | "byo";
+                                    label: string;
+                                    help?: string;
+                                    fields: {
+                                        key: string;
+                                        label: string;
+                                        required: boolean;
+                                        /** @enum {string} */
+                                        type: "text" | "secret" | "select";
+                                        options?: {
+                                            value: string;
+                                            label: string;
+                                        }[];
+                                        help?: string;
+                                    }[];
+                                }[];
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/agent/providers": {
         parameters: {
             query?: never;
@@ -2259,6 +2320,8 @@ export interface paths {
             requestBody?: {
                 content: {
                     "application/json": {
+                        /** @enum {string} */
+                        mode?: "hosted" | "byo";
                         token?: string | null;
                         providerOrgId?: string | null;
                         outpost?: string | null;

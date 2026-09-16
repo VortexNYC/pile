@@ -1480,6 +1480,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdAgentProvidersCatalog",
+    "description": "List agent provider catalog (GET /workspaces/{organizationId}/agent/providers/catalog) Path params (top-level, required): organizationId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/agent/providers/catalog",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdAgentSessions",
     "description": "List agent sessions (GET /workspaces/{organizationId}/agent/sessions) Path params (top-level, required): organizationId. Query params (top-level, optional): issueId, limit.",
     "method": "GET",
@@ -13228,7 +13245,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "putWorkspacesOrganizationIdAgentProvidersAgentId",
-    "description": "Update agent provider (PUT /workspaces/{organizationId}/agent/providers/{agentId}) Path params (top-level, required): organizationId, agentId. Request body goes in the \"body\" object; fields: token, providerOrgId, outpost, outpostId, outpostToken, computeApiKey, computeApiUrl, computeSnapshot, computeVolumeId, config, teamIds.",
+    "description": "Update agent provider (PUT /workspaces/{organizationId}/agent/providers/{agentId}) Path params (top-level, required): organizationId, agentId. Request body goes in the \"body\" object; fields: mode, token, providerOrgId, outpost, outpostId, outpostToken, computeApiKey, computeApiUrl, computeSnapshot, computeVolumeId, config, teamIds.",
     "method": "PUT",
     "path": "/workspaces/{organizationId}/agent/providers/{agentId}",
     "inputSchema": {
@@ -13243,6 +13260,13 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         "body": {
           "type": "object",
           "properties": {
+            "mode": {
+              "type": "string",
+              "enum": [
+                "hosted",
+                "byo"
+              ]
+            },
             "token": {
               "type": "string",
               "nullable": true

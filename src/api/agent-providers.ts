@@ -1,6 +1,12 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
+import {
+  AGENT_PROVIDER_CATALOG,
+  AGENT_SETUP_MODES,
+  applyCatalogMode,
+  validateProviderSetup,
+} from "../agents/catalog.js";
 import { getAgentProvider } from "../agents/index.js";
 import { resolveAgentEnv } from "../agents/outpost.js";
 import type { AgentProviderSession } from "../agents/provider.js";
@@ -12,7 +18,10 @@ import type { AgentSessionStatus } from "../types/workspace.js";
 import { captureSessionPrArtifact } from "./agent-artifacts.js";
 import { getWorkspaceStub } from "./stub.js";
 
+const setupModeSchema = z.enum(AGENT_SETUP_MODES);
+
 const providerConfigInputSchema = z.object({
+  mode: setupModeSchema.optional(),
   token: z.string().nullable().optional(),
   providerOrgId: z.string().nullable().optional(),
   outpost: z.string().nullable().optional(),
@@ -127,6 +136,51 @@ function redact(row: ProviderConfigRow) {
     updatedAt: row.updatedAt,
   };
 }
+
+const catalogFieldSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  required: z.boolean(),
+  type: z.enum(["text", "secret", "select"]),
+  options: z
+    .array(z.object({ value: z.string(), label: z.string() }))
+    .optional(),
+  help: z.string().optional(),
+});
+
+const catalogModeSchema = z.object({
+  id: setupModeSchema,
+  label: z.string(),
+  help: z.string().optional(),
+  fields: z.array(catalogFieldSchema),
+});
+
+const catalogProviderSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  modes: z.array(catalogModeSchema),
+});
+
+const catalogRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/agent/providers/catalog",
+  tags: ["agent-providers"],
+  middleware: [rls("read", "agent:read")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+  },
+  responses: {
+    200: {
+      description:
+        "Agents a workspace can add, with hosted vs BYO modes and required fields",
+      content: {
+        "application/json": {
+          schema: z.object({ providers: z.array(catalogProviderSchema) }),
+        },
+      },
+    },
+  },
+});
 
 const listConfigsRoute = createRoute({
   method: "get",
@@ -395,6 +449,10 @@ async function applyInboundWebhook(
 }
 
 export function registerAgentProviderRoutes(app: OpenAPIHono<AppContext>) {
+  app.openapi(catalogRoute, async (c) => {
+    return c.json({ providers: AGENT_PROVIDER_CATALOG });
+  });
+
   app.openapi(listConfigsRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
@@ -405,8 +463,19 @@ export function registerAgentProviderRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(upsertConfigRoute, async (c) => {
     const { organizationId, agentId } = c.req.valid("param");
     const body = c.req.valid("json");
+    const { mode, ...fields } = body;
+    if (mode) {
+      validateProviderSetup(agentId, mode, body);
+    }
+    const config = mode
+      ? applyCatalogMode(agentId, mode, fields.config ?? undefined)
+      : fields.config;
     const stub = getWorkspaceStub(c.env, organizationId);
-    await stub.upsertAgentProviderConfig({ agentId, ...body });
+    await stub.upsertAgentProviderConfig({
+      agentId,
+      ...fields,
+      config,
+    });
     const row = await stub.getAgentProviderConfig(agentId);
     if (!row) {
       throw new VortexError({

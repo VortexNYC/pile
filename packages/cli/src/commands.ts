@@ -1076,6 +1076,18 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "agent providers catalog list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/agent/providers/catalog",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "agent providers list": {
     method: "GET",
     path: "/workspaces/{organizationId}/agent/providers",
@@ -1103,6 +1115,10 @@ export const COMMANDS: Record<string, CommandDef> = {
     ],
     query: [],
     body: [
+      {
+        name: "mode",
+        flag: "mode",
+      },
       {
         name: "token",
         flag: "token",
