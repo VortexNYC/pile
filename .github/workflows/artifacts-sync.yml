@@ -1,0 +1,35 @@
+name: Artifacts Sync
+
+on:
+  push:
+    branches:
+      - "**"
+  workflow_dispatch:
+
+concurrency:
+  group: artifacts-sync-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    name: Push to Cloudflare Artifacts
+    runs-on: blacksmith-4vcpu-ubuntu-2204
+    timeout-minutes: 10
+    env:
+      ARTIFACTS_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      ARTIFACTS_TOKEN: ${{ secrets.ARTIFACTS_PUSH_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+
+      - name: Push to Artifacts
+        run: |
+          set -euo pipefail
+          REMOTE="https://${ARTIFACTS_ACCOUNT_ID}.artifacts.cloudflare.net/git/vortex/pile.git"
+          # Artifacts is a mirror: force-push so rebased/rewritten branches still sync.
+          git -c http.extraHeader="Authorization: Bearer ${ARTIFACTS_TOKEN}" push --force "$REMOTE" "HEAD:refs/heads/${GITHUB_REF_NAME}"

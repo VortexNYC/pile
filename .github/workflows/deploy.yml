@@ -1,8 +1,8 @@
 name: Deploy
 
 on:
-  push:
-    branches: [main]
+  # Deploys run through the shared vortex-ci Worker on main pushes.
+  # This workflow remains as a manual fallback only.
   workflow_dispatch:
 
 concurrency:
