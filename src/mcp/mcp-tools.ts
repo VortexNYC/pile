@@ -7886,6 +7886,48 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdCapture",
+    "description": "Create capture (POST /workspaces/{organizationId}/capture) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: url*, title, selection, source, teamId (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/capture",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1
+            },
+            "selection": {
+              "type": "string"
+            },
+            "source": {
+              "type": "string"
+            },
+            "teamId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "url"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdCommentsCommentIdReactions",
     "description": "Create comment reaction (POST /workspaces/{organizationId}/comments/{commentId}/reactions) Path params (top-level, required): organizationId, commentId. Request body goes in the \"body\" object; fields: emoji* (* = required).",
     "method": "POST",

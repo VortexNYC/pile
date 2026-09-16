@@ -229,6 +229,14 @@ const createIssueSchema = z.object({
 
 const updateIssueSchema = createIssueSchema.partial();
 
+const captureIssueSchema = z.object({
+  url: z.string().url(),
+  title: z.string().min(1).optional(),
+  selection: z.string().optional(),
+  source: z.string().optional(),
+  teamId: z.string().optional(),
+});
+
 const issueApiSchema = z
   .object({
     id: z.string(),
@@ -439,6 +447,29 @@ const createIssueRoute = createRoute({
   responses: {
     201: {
       description: "Issue created",
+      content: {
+        "application/json": { schema: issueApiSchema },
+      },
+    },
+  },
+});
+
+const captureIssueRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/capture",
+  tags: ["capture"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+    body: {
+      content: {
+        "application/json": { schema: captureIssueSchema },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "Captured issue created",
       content: {
         "application/json": { schema: issueApiSchema },
       },
@@ -853,6 +884,41 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         issue.id
       );
     }
+    return c.json(issue, 201);
+  });
+
+  app.openapi(captureIssueRoute, async (c) => {
+    const input = c.req.valid("json");
+    const { organizationId } = c.req.valid("param");
+    const identity = c.get("workspaceIdentity");
+    const db = createD1(c.env.D1);
+    const stub = await getStub(c.env, organizationId);
+    const resolvedTeamId = await assertTeamAccess(
+      db,
+      organizationId,
+      input.teamId,
+      identity
+    );
+    const teamRecord = await getTeamById(db, resolvedTeamId, organizationId);
+    const title =
+      input.title && input.title.length > 0 ? input.title : input.url;
+    const descriptionParts = [
+      `Source: ${input.source ?? "web clipper"}`,
+      `[${title}](${input.url})`,
+    ];
+    if (input.selection && input.selection.length > 0) {
+      descriptionParts.push(`> ${input.selection}`);
+    }
+    const issue = await stub.createIssue(
+      {
+        title,
+        description: descriptionParts.join("\n\n"),
+        status: "triage",
+        teamId: resolvedTeamId,
+        repo: teamRecord?.defaultRepo ?? undefined,
+      },
+      identity.id
+    );
     return c.json(issue, 201);
   });
 

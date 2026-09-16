@@ -119,6 +119,8 @@ importers:
         specifier: workspace:*
         version: link:../tsconfig
 
+  packages/clipper: {}
+
   packages/docs:
     dependencies:
       '@astrojs/cloudflare':

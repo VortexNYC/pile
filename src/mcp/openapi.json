@@ -1934,6 +1934,67 @@
         "summary": "List issue analytic burndown"
       }
     },
+    "/workspaces/{organizationId}/capture": {
+      "post": {
+        "tags": [
+          "capture"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "selection": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "teamId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "url"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Captured issue created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Issue"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create capture"
+      }
+    },
     "/workspaces/{organizationId}/issues/{id}": {
       "get": {
         "tags": [
