@@ -39,7 +39,11 @@ function getExecutionCtx(c: {
   executionCtx?: { waitUntil: (promise: Promise<unknown>) => void };
 }): { waitUntil: (promise: Promise<unknown>) => void } | undefined {
   try {
-    return c.executionCtx;
+    const ctx = c.executionCtx;
+    if (!ctx) return undefined;
+    return {
+      waitUntil: (promise: Promise<unknown>) => ctx.waitUntil(promise),
+    };
   } catch {
     return undefined;
   }
