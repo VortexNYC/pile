@@ -173,6 +173,71 @@ export class CursorAgentProvider implements AgentProvider {
     };
   }
 
+  parseWebhook(body: unknown): {
+    sessionId: string;
+    session?: AgentProviderSession;
+  } | null {
+    if (typeof body !== "object" || body === null) return null;
+    const record = body as Record<string, unknown>;
+
+    // Tracker session ids are "<agentId>/<runId>"; rebuild the composite from
+    // whichever shape the payload carries.
+    const nestedAgent = record.agent as Record<string, unknown> | undefined;
+    const nestedRun = record.run as Record<string, unknown> | undefined;
+    const agentId =
+      (typeof nestedAgent?.id === "string" && nestedAgent.id) ||
+      (typeof record.agentId === "string" && record.agentId) ||
+      (typeof record.agent_id === "string" && record.agent_id) ||
+      null;
+    const runId =
+      (typeof nestedRun?.id === "string" && nestedRun.id) ||
+      (typeof record.runId === "string" && record.runId) ||
+      (typeof record.run_id === "string" && record.run_id) ||
+      null;
+
+    let sessionId: string;
+    if (agentId && runId) {
+      sessionId = `${agentId}/${runId}`;
+    } else if (typeof record.id === "string" && record.id.includes("/")) {
+      sessionId = record.id;
+    } else {
+      return null;
+    }
+
+    const rawStatus =
+      (typeof nestedRun?.status === "string" && nestedRun.status) ||
+      (typeof record.status === "string" && record.status) ||
+      undefined;
+    const status = rawStatus ? STATUS_MAP[rawStatus] : undefined;
+    const url =
+      typeof nestedAgent?.url === "string" ? nestedAgent.url : undefined;
+    const prUrl =
+      typeof record.prUrl === "string"
+        ? record.prUrl
+        : typeof record.pr_url === "string"
+          ? record.pr_url
+          : undefined;
+    const branch =
+      typeof record.branch === "string" ? record.branch : undefined;
+    const result =
+      typeof record.result === "string" ? record.result : undefined;
+
+    return {
+      sessionId,
+      session: status
+        ? {
+            id: sessionId,
+            agentId: this.id,
+            status,
+            url,
+            result,
+            prUrl,
+            branch,
+          }
+        : undefined,
+    };
+  }
+
   async cancel(sessionId: string): Promise<void> {
     const [agentId, runId] = sessionId.split("/");
     const res = await fetch(

@@ -49,6 +49,14 @@ const STATUS_MAP: Record<string, AgentSessionStatus> = {
   failed: "failed",
 };
 
+// Webhook payloads carry no session items, so `idle` is terminal here —
+// poll() requires assistant output before treating idle as completed.
+const WEBHOOK_STATUS_MAP: Record<string, AgentSessionStatus> = {
+  ...STATUS_MAP,
+  idle: "completed",
+  canceled: "canceled",
+};
+
 function extractText(item: unknown): string | null {
   const parsed = codexItemSchema.safeParse(item);
   if (!parsed.success) return null;
@@ -278,6 +286,39 @@ export class CodexAgentProvider implements AgentProvider {
         message: `OpenAI Codex cancel failed: ${res.status} ${text}`,
       });
     }
+  }
+
+  parseWebhook(body: unknown): {
+    sessionId: string;
+    session?: AgentProviderSession;
+  } | null {
+    if (typeof body !== "object" || body === null) return null;
+    const record = body as Record<string, unknown>;
+    const sessionId = record.session_id ?? record.sessionId ?? record.id;
+    if (typeof sessionId !== "string" || sessionId.length === 0) return null;
+    const rawStatus = record.status;
+    const status =
+      typeof rawStatus === "string"
+        ? (WEBHOOK_STATUS_MAP[rawStatus] ?? undefined)
+        : undefined;
+    return {
+      sessionId,
+      session: status
+        ? {
+            id: sessionId,
+            agentId: this.id,
+            status,
+            result:
+              typeof record.result === "string" ? record.result : undefined,
+            prUrl:
+              typeof record.pr_url === "string"
+                ? record.pr_url
+                : typeof record.prUrl === "string"
+                  ? record.prUrl
+                  : undefined,
+          }
+        : undefined,
+    };
   }
 
   async getState(
