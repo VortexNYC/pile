@@ -3,7 +3,6 @@
   "version": "1.1.0",
   "private": true,
   "description": "One-button Pile web clipper extension",
-  "type": "module",
   "files": [
     "manifest.json",
     "popup.html",
@@ -11,5 +10,6 @@
     "popup.css",
     "auth.js",
     "keychain.js"
-  ]
+  ],
+  "type": "module"
 }

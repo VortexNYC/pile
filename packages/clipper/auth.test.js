@@ -25,7 +25,8 @@ describe("clipper auth", () => {
     expect(sessionTokenFromBody({ token: "json-token" })).toBe("json-token");
     const cookieResponse = new Response("{}", {
       headers: {
-        "Set-Cookie": "better-auth.session_token=cookie-token; Path=/; HttpOnly",
+        "Set-Cookie":
+          "better-auth.session_token=cookie-token; Path=/; HttpOnly",
       },
     });
     expect(extractSessionToken(cookieResponse, "{}")).toBe("cookie-token");

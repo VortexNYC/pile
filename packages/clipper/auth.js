@@ -41,7 +41,9 @@ export function sessionTokenFromHeaders(headers) {
   const headerCookie = headers.get("set-cookie");
   const all = headerCookie ? [...cookies, headerCookie] : cookies;
   for (const cookie of all) {
-    const match = cookie.match(/(?:^|,\s*)(?:better-auth\.)?session_token=([^;]+)/);
+    const match = cookie.match(
+      /(?:^|,\s*)(?:better-auth\.)?session_token=([^;]+)/
+    );
     if (match?.[1]) {
       return decodeURIComponent(match[1]);
     }
