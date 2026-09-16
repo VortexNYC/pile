@@ -2500,6 +2500,18 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "prUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "prState": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "branch": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -2566,6 +2578,9 @@
                     "result",
                     "url",
                     "providerSessionId",
+                    "prUrl",
+                    "prState",
+                    "branch",
                     "createdAt",
                     "updatedAt"
                   ]
@@ -2680,6 +2695,18 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "prUrl": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "prState": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "branch": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -2746,6 +2773,9 @@
                         "result",
                         "url",
                         "providerSessionId",
+                        "prUrl",
+                        "prState",
+                        "branch",
                         "createdAt",
                         "updatedAt"
                       ]
@@ -2854,6 +2884,18 @@
                             "type": "string",
                             "nullable": true
                           },
+                          "prUrl": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "prState": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "branch": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "createdAt": {
                             "type": "string"
                           },
@@ -2920,6 +2962,9 @@
                           "result",
                           "url",
                           "providerSessionId",
+                          "prUrl",
+                          "prState",
+                          "branch",
                           "createdAt",
                           "updatedAt"
                         ]
@@ -3020,6 +3065,18 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "prUrl": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "prState": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "branch": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -3086,6 +3143,9 @@
                         "result",
                         "url",
                         "providerSessionId",
+                        "prUrl",
+                        "prState",
+                        "branch",
                         "createdAt",
                         "updatedAt"
                       ]
@@ -3229,6 +3289,18 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "prUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "prState": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "branch": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -3295,6 +3367,9 @@
                     "result",
                     "url",
                     "providerSessionId",
+                    "prUrl",
+                    "prState",
+                    "branch",
                     "createdAt",
                     "updatedAt"
                   ]
@@ -3423,6 +3498,18 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "prUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "prState": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "branch": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -3489,6 +3576,9 @@
                     "result",
                     "url",
                     "providerSessionId",
+                    "prUrl",
+                    "prState",
+                    "branch",
                     "createdAt",
                     "updatedAt"
                   ]
@@ -3926,6 +4016,18 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "prUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "prState": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "branch": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -3992,6 +4094,9 @@
                     "result",
                     "url",
                     "providerSessionId",
+                    "prUrl",
+                    "prState",
+                    "branch",
                     "createdAt",
                     "updatedAt"
                   ]
@@ -4085,6 +4190,18 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "prUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "prState": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "branch": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -4151,6 +4268,9 @@
                     "result",
                     "url",
                     "providerSessionId",
+                    "prUrl",
+                    "prState",
+                    "branch",
                     "createdAt",
                     "updatedAt"
                   ]
@@ -4247,6 +4367,18 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "prUrl": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "prState": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "branch": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -4313,6 +4445,9 @@
                         "result",
                         "url",
                         "providerSessionId",
+                        "prUrl",
+                        "prState",
+                        "branch",
                         "createdAt",
                         "updatedAt"
                       ]
@@ -4453,6 +4588,18 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "prUrl": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "prState": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "branch": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -4519,6 +4666,9 @@
                         "result",
                         "url",
                         "providerSessionId",
+                        "prUrl",
+                        "prState",
+                        "branch",
                         "createdAt",
                         "updatedAt"
                       ]

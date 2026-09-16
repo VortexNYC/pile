@@ -60,6 +60,9 @@ export const agentSessionSchema = z.object({
   result: z.string().nullable(),
   url: z.string().nullable(),
   providerSessionId: z.string().nullable(),
+  prUrl: z.string().nullable(),
+  prState: z.string().nullable(),
+  branch: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
   activities: z
