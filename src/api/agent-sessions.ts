@@ -340,6 +340,35 @@ const pollSessionRoute = createRoute({
   },
 });
 
+const getSessionStateRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/state",
+  tags: ["agent-sessions"],
+  middleware: [rls("read", "agent:read")],
+  request: {
+    params: z.object({
+      organizationId: z.string(),
+      sessionId: z.string(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Live agent session state from provider and compute",
+      content: {
+        "application/json": {
+          schema: z.object({
+            session: agentSessionSchema,
+            devin: z.unknown().nullable().optional(),
+            daytona: z.unknown().nullable().optional(),
+          }),
+        },
+      },
+    },
+    400: { description: "Not supported for this agent or not configured" },
+    404: { description: "Session not found" },
+  },
+});
+
 const childIssueSchema = z.object({
   id: z.string(),
   identifier: z.string().nullable(),
@@ -699,6 +728,79 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
 
     const activities = await stub.listAgentActivities(sessionId);
     return c.json(toSessionResponse(updated ?? session, activities));
+  });
+
+  app.openapi(getSessionStateRoute, async (c) => {
+    const { organizationId, sessionId } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+
+    const session = await stub.getAgentSession(sessionId);
+    if (!session) {
+      return c.json({ message: "Session not found" }, 404);
+    }
+
+    if (session.agentId !== "devin") {
+      return c.json(
+        { message: "Live state only available for devin sessions" },
+        400
+      );
+    }
+
+    const providerConfig = await stub.getAgentProviderConfig("devin");
+    const effectiveEnv = resolveAgentEnv(c.env, providerConfig ?? undefined);
+
+    const devinOrgId = effectiveEnv.DEVIN_ORG_ID;
+    const devinToken = effectiveEnv.DEVIN_TOKEN;
+    const daytonaApiKey = effectiveEnv.DAYTONA_API_KEY;
+    const daytonaApiUrl =
+      effectiveEnv.DAYTONA_API_URL ?? "https://app.daytona.io/api";
+
+    if (!devinOrgId || !devinToken || !daytonaApiKey) {
+      return c.json(
+        { message: "devin or daytona not configured for workspace" },
+        400
+      );
+    }
+
+    const remoteId = session.providerSessionId ?? sessionId;
+
+    const devinRes = await fetch(
+      `https://api.devin.ai/v3/organizations/${devinOrgId}/sessions/${remoteId}`,
+      { headers: { Authorization: `Bearer ${devinToken}` } }
+    );
+    const devinJson = devinRes.ok ? await devinRes.json() : null;
+
+    const daytonaRes = await fetch(`${daytonaApiUrl}/sandbox`, {
+      headers: { Authorization: `Bearer ${daytonaApiKey}` },
+    });
+    const daytonaJson = daytonaRes.ok ? await daytonaRes.json() : null;
+    const daytonaList = z
+      .object({ items: z.array(z.unknown()) })
+      .safeParse(daytonaJson);
+    const fleetId = remoteId.startsWith("devin-")
+      ? remoteId
+      : `devin-${remoteId}`;
+    const daytonaSandbox = daytonaList.success
+      ? (daytonaList.data.items.find((item) => {
+          const parsed = z
+            .object({ labels: z.record(z.string(), z.string()).optional() })
+            .safeParse(item);
+          if (!parsed.success) return false;
+          const labels = parsed.data.labels;
+          return (
+            labels?.["vortex.tracker_session"] === sessionId ||
+            labels?.["vortex.session"] === fleetId ||
+            labels?.["vortex.session"] === remoteId
+          );
+        }) ?? null)
+      : null;
+
+    const activities = await stub.listAgentActivities(sessionId);
+    return c.json({
+      session: toSessionResponse(session, activities),
+      devin: devinJson,
+      daytona: daytonaSandbox,
+    });
   });
 
   app.openapi(createChildSessionRoute, async (c) => {

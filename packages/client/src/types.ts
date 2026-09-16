@@ -1928,6 +1928,89 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/agent/sessions/{sessionId}/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List agent session state */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    sessionId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Live agent session state from provider and compute */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            session: {
+                                id: string;
+                                organizationId: string;
+                                issueId: string;
+                                agentId: string;
+                                provider: string;
+                                actorId: string;
+                                /** @enum {string} */
+                                actorType: "user" | "agent";
+                                /** @enum {string} */
+                                status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                                result: string | null;
+                                url: string | null;
+                                providerSessionId: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                activities?: {
+                                    id: string;
+                                    sessionId: string;
+                                    actorId: string | null;
+                                    /** @enum {string} */
+                                    type: "thought" | "response" | "error" | "elicitation" | "action" | "status" | "artifact";
+                                    message: string;
+                                    payload?: unknown;
+                                    createdAt: string;
+                                }[];
+                            };
+                            devin?: unknown;
+                            daytona?: unknown;
+                        };
+                    };
+                };
+                /** @description Not supported for this agent or not configured */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Session not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/agent/sessions/{sessionId}/children": {
         parameters: {
             query?: never;
