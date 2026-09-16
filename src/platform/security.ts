@@ -60,7 +60,8 @@ function isPublicPath(pathname: string): boolean {
     pathname.startsWith("/notion/") ||
     pathname.startsWith("/support/webhooks/") ||
     pathname.startsWith("/support/incoming/") ||
-    pathname.startsWith("/support/capture/")
+    pathname.startsWith("/support/capture/") ||
+    pathname.startsWith("/webhooks/agent/")
   );
 }
 

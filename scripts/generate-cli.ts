@@ -12,6 +12,7 @@ const EXCLUDED = new Set([
   "/health",
   "/workspaces/{organizationId}/ws",
   "/openapi.json",
+  "/webhooks/agent/{organizationId}/{agentId}",
 ]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {

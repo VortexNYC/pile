@@ -698,6 +698,23 @@ const v33 = `ALTER TABLE agent_sessions ADD COLUMN pr_state TEXT`;
 
 const v34 = `ALTER TABLE agent_sessions ADD COLUMN branch TEXT`;
 
+const v35 = `ALTER TABLE agent_sessions ADD COLUMN last_progress_at TEXT
+--> statement-breakpoint
+ALTER TABLE agent_sessions ADD COLUMN last_state_hash TEXT
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS agent_sessions_provider_session_idx ON agent_sessions (organization_id, provider_session_id)`;
+
+const v36 = `CREATE TABLE IF NOT EXISTS agent_environment_files (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  path TEXT NOT NULL,
+  content TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS agent_environment_files_path_idx ON agent_environment_files (organization_id, path)`;
+
 export const workspaceMigrations = {
   journal: {
     entries: [
@@ -735,6 +752,8 @@ export const workspaceMigrations = {
       { idx: 31, when: 31, tag: "v32", breakpoints: false },
       { idx: 32, when: 32, tag: "v33", breakpoints: false },
       { idx: 33, when: 33, tag: "v34", breakpoints: false },
+      { idx: 34, when: 34, tag: "v35", breakpoints: true },
+      { idx: 35, when: 35, tag: "v36", breakpoints: true },
     ],
   },
   migrations: {
@@ -772,5 +791,7 @@ export const workspaceMigrations = {
     m0031: v32,
     m0032: v33,
     m0033: v34,
+    m0034: v35,
+    m0035: v36,
   },
 } satisfies Parameters<typeof migrate>[1];

@@ -11,6 +11,7 @@ const EXCLUDED_PATH_PREFIXES = [
   "/health",
   "/workspaces/{organizationId}/ws",
   "/openapi",
+  "/webhooks/agent",
 ] as const;
 const HTTP_METHODS = ["get", "post", "put", "patch", "delete"] as const;
 

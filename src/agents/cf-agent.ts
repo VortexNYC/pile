@@ -5,6 +5,7 @@ import { VortexError } from "../platform/errors.js";
 import type { Issue } from "../types/workspace.js";
 import type {
   AgentProvider,
+  AgentProviderHealth,
   AgentProviderSession,
   AgentProviderState,
 } from "./provider.js";
@@ -218,5 +219,22 @@ export class CfAgentProvider implements AgentProvider {
     const json = await res.json();
     const snapshot = agentSnapshotSchema.safeParse(json);
     return { provider: snapshot.success ? snapshot.data : json };
+  }
+
+  async health(): Promise<AgentProviderHealth> {
+    if (!this.env.AGENT_PROVIDER_TOKEN) {
+      return { ok: false, message: "Agent worker token missing" };
+    }
+    try {
+      const res = await this.fetchSnapshot("health");
+      if (res.status === 404 || res.ok) return { ok: true };
+      const text = await res.text();
+      return { ok: false, message: `${res.status} ${text.slice(0, 200)}` };
+    } catch (err) {
+      return {
+        ok: false,
+        message: err instanceof Error ? err.message : String(err),
+      };
+    }
   }
 }

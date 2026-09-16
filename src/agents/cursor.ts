@@ -5,9 +5,11 @@ import { VortexError } from "../platform/errors.js";
 import type { AgentSessionStatus, Issue } from "../types/workspace.js";
 import type {
   AgentProvider,
+  AgentProviderHealth,
   AgentProviderSession,
   AgentProviderState,
 } from "./provider.js";
+import { probeUrl } from "./provider.js";
 
 const cursorConfigSchema = z.object({
   endpoint: z.string().default("https://api.cursor.com"),
@@ -199,5 +201,14 @@ export class CursorAgentProvider implements AgentProvider {
     const json = await res.json();
     const run = runSchema.safeParse(json);
     return { provider: run.success ? run.data : json };
+  }
+
+  async health(): Promise<AgentProviderHealth> {
+    if (!this.env.AGENT_PROVIDER_TOKEN) {
+      return { ok: false, message: "Cursor API token missing" };
+    }
+    return probeUrl(`${this.api}/v1/agents?limit=1`, {
+      headers: { Authorization: this.auth },
+    });
   }
 }

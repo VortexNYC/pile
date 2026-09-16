@@ -770,6 +770,8 @@ export const workspaceAgentSessions = sqliteTable(
     branch: text("branch" as string),
     createdAt: text("created_at" as string).notNull(),
     updatedAt: text("updated_at" as string).notNull(),
+    lastProgressAt: text("last_progress_at" as string),
+    lastStateHash: text("last_state_hash" as string),
   },
   (table) => [
     index("agent_sessions_organization_idx" as string).on(
@@ -778,6 +780,10 @@ export const workspaceAgentSessions = sqliteTable(
       table.id
     ),
     index("agent_sessions_issue_idx" as string).on(table.issueId),
+    index("agent_sessions_provider_session_idx" as string).on(
+      table.organizationId,
+      table.providerSessionId
+    ),
   ]
 );
 
@@ -1022,6 +1028,24 @@ export const workspaceGitIdentities = sqliteTable(
     uniqueIndex("git_identities_org_repo_idx" as string).on(
       table.organizationId,
       table.repo
+    ),
+  ]
+);
+
+export const workspaceAgentEnvironmentFiles = sqliteTable(
+  "agent_environment_files" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    path: text("path" as string).notNull(),
+    content: text("content" as string).notNull(),
+    createdAt: text("created_at" as string).notNull(),
+    updatedAt: text("updated_at" as string).notNull(),
+  },
+  (table) => [
+    uniqueIndex("agent_environment_files_path_idx" as string).on(
+      table.organizationId,
+      table.path
     ),
   ]
 );
