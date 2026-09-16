@@ -542,10 +542,17 @@ export class CodexCliAgentProvider implements AgentProvider {
     return poll(0);
   }
 
-  private async createProcessSession(base: string, sessionId: string) {
+  private async createProcessSession(
+    base: string,
+    sessionId: string,
+    apiKey: string
+  ) {
     const res = await fetch(`${base}/process/session`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
       body: JSON.stringify({ sessionId }),
     });
     if (!res.ok && res.status !== 409) {
@@ -558,10 +565,18 @@ export class CodexCliAgentProvider implements AgentProvider {
     }
   }
 
-  private async execCommand(base: string, sessionId: string, command: string) {
+  private async execCommand(
+    base: string,
+    sessionId: string,
+    command: string,
+    apiKey: string
+  ) {
     const res = await fetch(`${base}/process/session/${sessionId}/exec`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
       body: JSON.stringify({ command, runAsync: true }),
     });
     if (!res.ok) {
@@ -575,8 +590,14 @@ export class CodexCliAgentProvider implements AgentProvider {
     return daytonaCommandExecSchema.parse(await res.json());
   }
 
-  private async getProcessSession(base: string, sessionId: string) {
-    const res = await fetch(`${base}/process/session/${sessionId}`);
+  private async getProcessSession(
+    base: string,
+    sessionId: string,
+    apiKey: string
+  ) {
+    const res = await fetch(`${base}/process/session/${sessionId}`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
     if (!res.ok && res.status !== 404) {
       const text = await res.text();
       throw new VortexError({
@@ -590,12 +611,19 @@ export class CodexCliAgentProvider implements AgentProvider {
   }
 
   private async readResult(
-    base: string
+    base: string,
+    apiKey: string
   ): Promise<z.infer<typeof codexResultSchema> | null> {
     const res = await fetch(`${base}/process/execute`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ command: "cat /tmp/codex-result.json", cwd: "/" }),
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        command: "cat /tmp/codex-result.json",
+        cwd: "/",
+      }),
     });
     if (!res.ok) return null;
     const data = daytonaSyncExecSchema.parse(await res.json());
@@ -651,8 +679,13 @@ export class CodexCliAgentProvider implements AgentProvider {
     );
     const started = await this.waitForStarted(config, sandbox.id);
     const base = toolboxBase(started);
-    await this.createProcessSession(base, sessionId);
-    await this.execCommand(base, sessionId, buildRunnerCommand());
+    await this.createProcessSession(base, sessionId, config.apiKey);
+    await this.execCommand(
+      base,
+      sessionId,
+      buildRunnerCommand(),
+      config.apiKey
+    );
   }
 
   async dispatch(
@@ -720,7 +753,11 @@ export class CodexCliAgentProvider implements AgentProvider {
     }
 
     const base = toolboxBase(sandbox);
-    const session = await this.getProcessSession(base, sessionId);
+    const session = await this.getProcessSession(
+      base,
+      sessionId,
+      config.apiKey
+    );
     if (!session) {
       return { id: sessionId, agentId: this.id, status: "created" };
     }
@@ -731,7 +768,7 @@ export class CodexCliAgentProvider implements AgentProvider {
       return { id: sessionId, agentId: this.id, status: "running" };
     }
 
-    const result = await this.readResult(base);
+    const result = await this.readResult(base, config.apiKey);
     if (!result) {
       return { id: sessionId, agentId: this.id, status: "running" };
     }
@@ -768,7 +805,11 @@ export class CodexCliAgentProvider implements AgentProvider {
     const sandbox = await this.findSandbox(config, providerSessionId);
     if (!sandbox) return null;
     const base = toolboxBase(sandbox);
-    const session = await this.getProcessSession(base, providerSessionId);
+    const session = await this.getProcessSession(
+      base,
+      providerSessionId,
+      config.apiKey
+    );
     return { provider: session, compute: sandbox };
   }
 }
