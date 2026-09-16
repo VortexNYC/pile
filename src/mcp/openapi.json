@@ -1971,6 +1971,44 @@
                   },
                   "teamId": {
                     "type": "string"
+                  },
+                  "teamKey": {
+                    "type": "string"
+                  },
+                  "projectId": {
+                    "type": "string"
+                  },
+                  "labelIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "pageText": {
+                    "type": "string"
+                  },
+                  "includeFullText": {
+                    "type": "boolean"
+                  },
+                  "summarize": {
+                    "type": "boolean"
+                  },
+                  "screenshot": {
+                    "type": "object",
+                    "properties": {
+                      "contentBase64": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "contentType": {
+                        "type": "string",
+                        "pattern": "^image\\/(png|jpeg|webp)$",
+                        "default": "image/png"
+                      }
+                    },
+                    "required": [
+                      "contentBase64"
+                    ]
                   }
                 },
                 "required": [

@@ -89,6 +89,25 @@ export function sessionCookie(sessionToken) {
 }
 
 /**
+ * @param {unknown} body
+ * @param {string} key
+ * @param {(item: Record<string, unknown>) => boolean} isValid
+ * @returns {Array<Record<string, unknown>>}
+ */
+function pickList(body, key, isValid) {
+  if (body === null || typeof body !== "object") {
+    throw new Error(`Unexpected ${key} response`);
+  }
+  const list = /** @type {Record<string, unknown>} */ (body)[key];
+  if (!Array.isArray(list)) {
+    throw new Error(`Unexpected ${key} response`);
+  }
+  return list.flatMap((item) =>
+    item !== null && typeof item === "object" && isValid(item) ? [item] : []
+  );
+}
+
+/**
  * @param {{
  *   fetch?: typeof fetch,
  *   getOrigin: () => string,
@@ -232,9 +251,88 @@ export function createAuthClient(deps) {
      * @param {string} baseUrl
      * @param {string} token
      * @param {string} workspaceId
-     * @param {{ url: string, title: string, selection: string }} page
+     * @returns {Promise<{
+     *   teams: Array<{ id: string, key: string, name: string }>,
+     *   projects: Array<{ id: string, name: string }>,
+     *   labels: Array<{ id: string, name: string }>,
+     * }>}
+     */
+    async listRoutingOptions(baseUrl, token, workspaceId) {
+      const prefix = `/workspaces/${encodeURIComponent(workspaceId)}`;
+      const init = {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+      };
+      const [teams, projects, labels] = await Promise.all([
+        request(baseUrl, `${prefix}/teams`, init),
+        request(baseUrl, `${prefix}/projects`, init),
+        request(baseUrl, `${prefix}/labels`, init),
+      ]);
+      return {
+        teams: pickList(
+          teams.body,
+          "teams",
+          (item) =>
+            typeof item.id === "string" &&
+            typeof item.key === "string" &&
+            typeof item.name === "string"
+        ).map((item) => ({
+          id: String(item.id),
+          key: String(item.key),
+          name: String(item.name),
+        })),
+        projects: pickList(
+          projects.body,
+          "projects",
+          (item) =>
+            typeof item.id === "string" &&
+            typeof item.name === "string" &&
+            item.archivedAt == null
+        ).map((item) => ({ id: String(item.id), name: String(item.name) })),
+        labels: pickList(
+          labels.body,
+          "labels",
+          (item) => typeof item.id === "string" && typeof item.name === "string"
+        ).map((item) => ({ id: String(item.id), name: String(item.name) })),
+      };
+    },
+
+    /**
+     * @param {string} baseUrl
+     * @param {string} token
+     * @param {string} workspaceId
+     * @param {{
+     *   url: string,
+     *   title: string,
+     *   selection: string,
+     *   pageText?: string,
+     *   summarize?: boolean,
+     *   includeFullText?: boolean,
+     *   screenshot?: { contentType: string, contentBase64: string } | null,
+     *   teamId?: string,
+     *   projectId?: string,
+     *   labelIds?: string[],
+     * }} page
      */
     async capture(baseUrl, token, workspaceId, page) {
+      /** @type {Record<string, unknown>} */
+      const payload = {
+        url: page.url,
+        title: page.title,
+        selection: page.selection,
+        source: "pile-clipper",
+      };
+      if (page.pageText) payload.pageText = page.pageText;
+      if (page.summarize !== undefined) payload.summarize = page.summarize;
+      if (page.includeFullText !== undefined) {
+        payload.includeFullText = page.includeFullText;
+      }
+      if (page.screenshot) payload.screenshot = page.screenshot;
+      if (page.teamId) payload.teamId = page.teamId;
+      if (page.projectId) payload.projectId = page.projectId;
+      if (page.labelIds && page.labelIds.length > 0) {
+        payload.labelIds = page.labelIds;
+      }
       const { body } = await request(
         baseUrl,
         `/workspaces/${encodeURIComponent(workspaceId)}/capture`,
@@ -244,12 +342,7 @@ export function createAuthClient(deps) {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({
-            url: page.url,
-            title: page.title,
-            selection: page.selection,
-            source: "pile-clipper",
-          }),
+          body: JSON.stringify(payload),
         }
       );
       return body;
