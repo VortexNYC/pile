@@ -14,6 +14,7 @@ import type {
   workspaceAgentActivities,
   workspaceAgentSessions,
 } from "../workspace/schema.js";
+import { captureSessionPrArtifact } from "./agent-artifacts.js";
 import { getWorkspaceStub } from "./stub.js";
 
 function getExecutionCtx(c: {
@@ -65,6 +66,8 @@ export const agentSessionSchema = z.object({
   branch: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  lastProgressAt: z.string().nullable().optional(),
+  lastStateHash: z.string().nullable().optional(),
   activities: z
     .array(
       z.object({
@@ -728,6 +731,8 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       },
       identity.id
     );
+
+    await captureSessionPrArtifact(stub, sessionId, identity.id, polled.prUrl);
 
     const activities = await stub.listAgentActivities(sessionId);
     return c.json(toSessionResponse(updated ?? session, activities));

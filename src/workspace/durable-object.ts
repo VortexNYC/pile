@@ -1925,6 +1925,14 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.getAgentSession(this.db, this.organizationId, id);
   }
 
+  getAgentSessionByProviderSessionId(providerSessionId: string) {
+    return data.getAgentSessionByProviderSessionId(
+      this.db,
+      this.organizationId,
+      providerSessionId
+    );
+  }
+
   listAgentSessions(
     options: {
       issueId?: string;
@@ -2106,6 +2114,27 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     );
   }
 
+  listAgentEnvironmentFiles() {
+    return data.listAgentEnvironmentFiles(this.db, this.organizationId);
+  }
+
+  getAgentEnvironmentFile(path: string) {
+    return data.getAgentEnvironmentFile(this.db, this.organizationId, path);
+  }
+
+  upsertAgentEnvironmentFile(path: string, content: string) {
+    return data.upsertAgentEnvironmentFile(
+      this.db,
+      this.organizationId,
+      path,
+      content
+    );
+  }
+
+  deleteAgentEnvironmentFile(path: string) {
+    return data.deleteAgentEnvironmentFile(this.db, this.organizationId, path);
+  }
+
   listAgentActivities(sessionId: string, options: { limit?: number } = {}) {
     return data.listAgentActivities(this.db, sessionId, options);
   }
@@ -2180,6 +2209,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (!issue) {
       const set: Record<string, string | null> = {
         updatedAt: new Date().toISOString(),
+        lastProgressAt: new Date().toISOString(),
       };
       if (result.status !== undefined) set.status = result.status;
       if (result.result !== undefined) set.result = result.result;
@@ -2208,6 +2238,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
     const set: Record<string, string | null> = {
       updatedAt: new Date().toISOString(),
+      lastProgressAt: new Date().toISOString(),
     };
     if (result.status !== undefined) set.status = result.status;
     if (result.result !== undefined) set.result = result.result;

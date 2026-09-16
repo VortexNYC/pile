@@ -10,9 +10,11 @@ import type {
 import type {
   AgentDispatchContext,
   AgentProvider,
+  AgentProviderHealth,
   AgentProviderSession,
   AgentProviderState,
 } from "./provider.js";
+import { probeUrl } from "./provider.js";
 
 const API_BASE = "https://api.openai.com/v1";
 const BETA_HEADER = "agents=v1";
@@ -298,5 +300,13 @@ export class CodexAgentProvider implements AgentProvider {
     const provider = sessionRes.ok ? await sessionRes.json() : null;
     const compute = itemsRes.ok ? await itemsRes.json() : null;
     return { provider, compute };
+  }
+
+  async health(): Promise<AgentProviderHealth> {
+    const token = this.env.OPENAI_API_KEY;
+    if (!token) return { ok: false, message: "OPENAI_API_KEY missing" };
+    return probeUrl(`${API_BASE}/models?limit=1`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
   }
 }

@@ -143,7 +143,7 @@ type ActivityType =
   | "status"
   | "artifact";
 
-async function addSessionActivity(
+export async function writeAgentSessionActivity(
   env: WorkerEnv,
   organizationId: string | undefined,
   sessionId: string | undefined,
@@ -198,7 +198,7 @@ export async function provisionOutpostWorker(
   });
   if (!listRes.ok) {
     console.error("daytona sandbox list failed", listRes.status);
-    await addSessionActivity(
+    await writeAgentSessionActivity(
       env,
       organizationId,
       trackerSessionId,
@@ -222,7 +222,7 @@ export async function provisionOutpostWorker(
         session: fleetId,
         sandbox: existing.id,
       });
-      await addSessionActivity(
+      await writeAgentSessionActivity(
         env,
         organizationId,
         trackerSessionId,
@@ -237,7 +237,7 @@ export async function provisionOutpostWorker(
       sandbox: existing.id,
       state: existing.state,
     });
-    await addSessionActivity(
+    await writeAgentSessionActivity(
       env,
       organizationId,
       trackerSessionId,
@@ -254,7 +254,7 @@ export async function provisionOutpostWorker(
         session: fleetId,
         status: del.status,
       });
-      await addSessionActivity(
+      await writeAgentSessionActivity(
         env,
         organizationId,
         trackerSessionId,
@@ -318,7 +318,7 @@ export async function provisionOutpostWorker(
       status: res.status,
       body: text.slice(0, 500),
     });
-    await addSessionActivity(
+    await writeAgentSessionActivity(
       env,
       organizationId,
       trackerSessionId,
@@ -334,7 +334,7 @@ export async function provisionOutpostWorker(
     session: fleetId,
     sandbox: sandbox.id,
   });
-  await addSessionActivity(
+  await writeAgentSessionActivity(
     env,
     organizationId,
     trackerSessionId,
@@ -404,7 +404,7 @@ export async function sweepOutpostWorkers(env: WorkerEnv): Promise<void> {
           if (cfg?.providerOrgId) sessionOrgId = cfg.providerOrgId;
         } catch (err) {
           console.error("outpost sweep: config lookup failed", err);
-          await addSessionActivity(
+          await writeAgentSessionActivity(
             env,
             sandboxOrg,
             trackerSessionId,
@@ -451,7 +451,7 @@ export async function sweepOutpostWorkers(env: WorkerEnv): Promise<void> {
             session: sessionId,
             err,
           });
-          await addSessionActivity(
+          await writeAgentSessionActivity(
             env,
             sandboxOrg,
             trackerSessionId,
@@ -475,7 +475,7 @@ export async function sweepOutpostWorkers(env: WorkerEnv): Promise<void> {
           sandbox: sandbox.id,
           ok: del.ok,
         });
-        await addSessionActivity(
+        await writeAgentSessionActivity(
           env,
           sandboxOrg,
           trackerSessionId,
