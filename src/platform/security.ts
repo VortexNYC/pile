@@ -34,6 +34,20 @@ function normalizeOrigin(value: string | undefined): string {
   }
 }
 
+const EXTENSION_ORIGIN_PROTOCOLS = new Set([
+  "chrome-extension:",
+  "moz-extension:",
+  "safari-web-extension:",
+]);
+
+function isExtensionOrigin(origin: string): boolean {
+  try {
+    return EXTENSION_ORIGIN_PROTOCOLS.has(new URL(origin).protocol);
+  } catch {
+    return false;
+  }
+}
+
 function isPublicPath(pathname: string): boolean {
   return (
     pathname === "/health" ||
@@ -62,7 +76,11 @@ function isAllowedOrigin(
   if (allowed.size === 0) {
     return true;
   }
-  return allowed.has(origin) || allowed.has(normalizeOrigin(origin));
+  return (
+    allowed.has(origin) ||
+    allowed.has(normalizeOrigin(origin)) ||
+    isExtensionOrigin(origin)
+  );
 }
 
 export const corsMiddleware = createMiddleware<AppContext>(async (c, next) => {

@@ -216,4 +216,28 @@ describe("issues API", () => {
     );
     expect(res.status).toBe(400);
   });
+
+  it("allows capture from a browser extension origin", async () => {
+    const res = await app.fetch(
+      new Request(`https://example.com/workspaces/${organizationId}/capture`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          Origin: "chrome-extension://test-extension-id",
+        },
+        body: JSON.stringify({
+          url: "https://example.com/extension-capture",
+          title: "Extension capture",
+        }),
+      }),
+      env
+    );
+    expect(res.status).toBe(201);
+    expect(res.headers.get("access-control-allow-origin")).toBe(
+      "chrome-extension://test-extension-id"
+    );
+    const issue = await res.json();
+    expect(issue.status).toBe("triage");
+  });
 });
