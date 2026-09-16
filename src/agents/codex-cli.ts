@@ -691,7 +691,7 @@ export class CodexCliAgentProvider implements AgentProvider {
   async dispatch(
     organizationId: string,
     issue: Issue,
-    model = DEFAULT_MODEL,
+    model: string | undefined,
     sessionContext?: AgentDispatchContext
   ): Promise<AgentProviderSession> {
     const sessionId = sessionContext?.sessionId;

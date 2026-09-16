@@ -203,6 +203,32 @@ PR URL, it is lifted into `prUrl`.
 repositories that require a private checkout; the workspace must then start and
 connect an OpenAI executor to `session.environment.remote_url`.
 
+## Codex CLI Cloud (ChatGPT subscription)
+
+The `codex-cli` provider runs the authenticated Codex CLI in a dedicated
+Daytona sandbox, submits work with `codex cloud exec`, and polls Codex Cloud
+until the task is ready or applied. It is intended for a ChatGPT subscription
+rather than an OpenAI API key.
+
+Configure these deployment or workspace-effective environment values:
+
+| variable              | purpose                                                                    |
+| --------------------- | -------------------------------------------------------------------------- |
+| `CODEX_AUTH_JSON_B64` | Base64-encoded contents of the ChatGPT-authenticated `~/.codex/auth.json`. |
+| `CODEX_CLI_ENV_ID`    | Codex Cloud environment ID used by `codex cloud exec`.                     |
+| `DAYTONA_API_KEY`     | Daytona API and Toolbox bearer token.                                      |
+| `DAYTONA_API_URL`     | Optional Daytona API URL; defaults to `https://app.daytona.io/api`.        |
+| `DAYTONA_SNAPSHOT`    | Optional sandbox snapshot; defaults to `daytona-vm-small`.                 |
+| `CODEX_CLI_MODEL`     | Optional default model; a model supplied during dispatch takes precedence. |
+
+The sandbox writes the authenticated Codex home directory under its writable
+`HOME`, installs the Codex CLI if needed, creates the issue branch, then runs
+`codex cloud exec --env <environment> --branch <branch> -`. When Codex Cloud
+finishes, the runner records its terminal state, branch, task summary, and PR
+URL for the provider poller. The GitHub App installation token and the issue's
+configured git identity are passed into the sandbox so Codex can push the
+branch and create the PR.
+
 ## API
 
 | route                                                | perm         | notes                                     |

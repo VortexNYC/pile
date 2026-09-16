@@ -180,6 +180,68 @@ describe("CodexCliAgentProvider", () => {
     expect(body.labels["vortex.agent"]).toBe("codex-cli");
   });
 
+  it("uses the configured Codex CLI model when dispatch does not specify one", async () => {
+    const sandboxId = "sb-1";
+    const toolboxBase = `https://proxy.app.daytona.io/toolbox/${sandboxId}`;
+    const fetchSpy = mockFetch([
+      {
+        url: "https://app.daytona.io/api/sandbox",
+        method: "GET",
+        response: () => ({ items: [] }),
+      },
+      {
+        url: "https://app.daytona.io/api/sandbox",
+        method: "POST",
+        response: () => ({
+          id: sandboxId,
+          name: "vortex-codex-sess1",
+          state: "creating",
+          toolboxProxyUrl: "https://proxy.app.daytona.io/toolbox",
+        }),
+      },
+      {
+        url: `https://app.daytona.io/api/sandbox/${sandboxId}`,
+        method: "GET",
+        response: () => ({
+          id: sandboxId,
+          name: "vortex-codex-sess1",
+          state: "started",
+          toolboxProxyUrl: "https://proxy.app.daytona.io/toolbox",
+        }),
+      },
+      {
+        url: `${toolboxBase}/process/session`,
+        method: "POST",
+        response: () => ({ sessionId: "sess-1" }),
+      },
+      {
+        url: `${toolboxBase}/process/session/sess-1/exec`,
+        method: "POST",
+        response: () => ({ cmdId: "cmd-1" }),
+      },
+    ]);
+
+    const provider = new CodexCliAgentProvider(
+      cliEnv({ CODEX_CLI_MODEL: "gpt-5.6-codex" })
+    );
+    (
+      provider as unknown as { githubToken: (repo: string) => Promise<string> }
+    ).githubToken = vi.fn().mockResolvedValue("gh-token");
+
+    await provider.dispatch("org-1", issueFixture(), undefined, {
+      sessionId: "sess-1",
+      gitIdentity: gitIdentityFixture(),
+    });
+
+    const createCall = fetchSpy.mock.calls.find(
+      ([input, init]) =>
+        String(input) === "https://app.daytona.io/api/sandbox" &&
+        (init as RequestInit | undefined)?.method === "POST"
+    );
+    const body = JSON.parse((createCall![1] as RequestInit).body as string);
+    expect(body.env.MODEL).toBe("gpt-5.6-codex");
+  });
+
   it("polls running while command is in progress", async () => {
     const sandboxId = "sb-1";
     const toolboxBase = `https://proxy.app.daytona.io/toolbox/${sandboxId}`;
