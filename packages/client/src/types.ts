@@ -2009,8 +2009,8 @@ export interface paths {
                                     createdAt: string;
                                 }[];
                             };
-                            devin?: unknown;
-                            daytona?: unknown;
+                            provider?: unknown;
+                            compute?: unknown;
                         };
                     };
                 };

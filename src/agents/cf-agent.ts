@@ -3,7 +3,11 @@ import { z } from "zod";
 import type { AppEnv } from "../platform/env.js";
 import { VortexError } from "../platform/errors.js";
 import type { Issue } from "../types/workspace.js";
-import type { AgentProvider, AgentProviderSession } from "./provider.js";
+import type {
+  AgentProvider,
+  AgentProviderSession,
+  AgentProviderState,
+} from "./provider.js";
 
 const dispatchResponseSchema = z.object({
   ok: z.boolean(),
@@ -125,28 +129,42 @@ export class CfAgentProvider implements AgentProvider {
     };
   }
 
-  async poll(sessionId: string): Promise<AgentProviderSession> {
-    // Status is pushed by the flue worker (PATCH on the session). This is the
-    // recovery path: read the conversation snapshot and map its settlements
-    // onto a session status so a crashed run cannot leave the tracker stuck
-    // on "running" forever.
-    const config = cfAgentConfigSchema.parse(
+  private config() {
+    return cfAgentConfigSchema.parse(
       this.env.AGENT_PROVIDER_CONFIG
         ? (JSON.parse(this.env.AGENT_PROVIDER_CONFIG) as unknown)
         : {}
     );
+  }
+
+  private snapshotUrl(sessionId: string) {
+    const config = this.config();
     const agent = config.agent ?? "engineering";
     const base =
       config.endpoint === "service-binding"
         ? "https://cf-agent.internal"
         : config.endpoint.replace(/\/$/, "");
-    const request = new Request(
-      `${base}${config.agentsPath}/${agent}/${encodeURIComponent(sessionId)}`,
-      { headers: { accept: "application/json" } }
-    );
-    const res = this.env.FLUE_WORKER
+    return `${base}${config.agentsPath}/${agent}/${encodeURIComponent(sessionId)}`;
+  }
+
+  private async fetchSnapshot(sessionId: string): Promise<Response> {
+    const request = new Request(this.snapshotUrl(sessionId), {
+      headers: {
+        accept: "application/json",
+        Authorization: `Bearer ${this.env.AGENT_PROVIDER_TOKEN ?? ""}`,
+      },
+    });
+    return this.env.FLUE_WORKER
       ? await this.env.FLUE_WORKER.fetch(request)
       : await fetch(request);
+  }
+
+  async poll(sessionId: string): Promise<AgentProviderSession> {
+    // Status is pushed by the flue worker (PATCH on the session). This is the
+    // recovery path: read the conversation snapshot and map its settlements
+    // onto a session status so a crashed run cannot leave the tracker stuck
+    // on "running" forever.
+    const res = await this.fetchSnapshot(sessionId);
     if (res.status === 404) {
       return {
         id: sessionId,
@@ -190,5 +208,15 @@ export class CfAgentProvider implements AgentProvider {
       status,
       ...(lastText ? { result: lastText } : {}),
     };
+  }
+
+  async getState(
+    providerSessionId: string
+  ): Promise<AgentProviderState | null> {
+    const res = await this.fetchSnapshot(providerSessionId);
+    if (!res.ok) return null;
+    const json = await res.json();
+    const snapshot = agentSnapshotSchema.safeParse(json);
+    return { provider: snapshot.success ? snapshot.data : json };
   }
 }

@@ -366,6 +366,71 @@ describe("agent sessions API", () => {
     expect(body.activities[0]?.type).toBe("status");
   });
 
+  it("returns live provider state for sessions that support it", async () => {
+    registerAgentProvider(
+      "mock-state",
+      () =>
+        new MockAgentProvider("mock-state", {
+          getState: (_providerSessionId, trackerSessionId) => ({
+            provider: { status: "running" },
+            compute: { sandbox: trackerSessionId },
+          }),
+        })
+    );
+
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    const session = await stub.createAgentSession({
+      issueId: "issue-state",
+      agentId: "mock-state",
+      provider: "mock-state",
+      actorId: "user-1",
+      actorType: "user",
+      status: "running",
+    });
+
+    const res = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/state`,
+        { token }
+      ),
+      env
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      session: { id: string; status: string };
+      provider: { status: string };
+      compute: { sandbox: string };
+    };
+    expect(body.session.id).toBe(session.id);
+    expect(body.provider.status).toBe("running");
+    expect(body.compute.sandbox).toBe(session.id);
+  });
+
+  it("returns 400 for live state when the agent does not support it", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    const session = await stub.createAgentSession({
+      issueId: "issue-no-state",
+      agentId: "mock",
+      provider: "mock",
+      actorId: "user-1",
+      actorType: "user",
+      status: "running",
+    });
+
+    const res = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/state`,
+        { token }
+      ),
+      env
+    );
+    expect(res.status).toBe(400);
+  });
+
   it("uses scoped agent:read and agent:write permissions", async () => {
     const stub = env.WORKSPACE_DURABLE_OBJECT.get(
       env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
