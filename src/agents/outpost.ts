@@ -4,7 +4,7 @@ import type { WorkerEnv } from "../platform/middleware.js";
 import type { AppEnv } from "../types/env.js";
 import type { AgentSessionStatus, GitIdentity } from "../types/workspace.js";
 
-const daytonaSandboxSchema = z.object({
+export const daytonaSandboxSchema = z.object({
   id: z.string(),
   name: z.string(),
   state: z.string(),
@@ -12,9 +12,10 @@ const daytonaSandboxSchema = z.object({
   nodeDomain: z.string().nullable().optional(),
   error: z.string().nullable().optional(),
   labels: z.record(z.string(), z.string()).optional(),
+  toolboxProxyUrl: z.string().nullable().optional(),
 });
 
-const daytonaSandboxListSchema = z.object({
+export const daytonaSandboxListSchema = z.object({
   items: z.array(daytonaSandboxSchema),
 });
 
@@ -60,6 +61,38 @@ export interface AgentProviderConfigRow {
  * workspace can BYO only the pieces it owns (e.g. its own Devin token while
  * running on classic hosted Devin).
  */
+function parseConfigModel(
+  configJson: string | null | undefined
+): string | undefined {
+  if (!configJson) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(configJson);
+    if (typeof parsed === "object" && parsed !== null) {
+      const model = (parsed as Record<string, unknown>).model;
+      if (typeof model === "string") return model;
+    }
+  } catch {
+    // ignore malformed config JSON
+  }
+  return undefined;
+}
+
+function parseConfigEnvId(
+  configJson: string | null | undefined
+): string | undefined {
+  if (!configJson) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(configJson);
+    if (typeof parsed === "object" && parsed !== null) {
+      const envId = (parsed as Record<string, unknown>).envId;
+      if (typeof envId === "string") return envId;
+    }
+  } catch {
+    // ignore malformed config JSON
+  }
+  return undefined;
+}
+
 export function resolveAgentEnv(
   env: WorkerEnv,
   config: AgentProviderConfigRow | undefined
@@ -68,7 +101,11 @@ export function resolveAgentEnv(
   return {
     ...env,
     DEVIN_TOKEN: config.token ?? env.DEVIN_TOKEN,
+    OPENAI_API_KEY: config.token ?? env.OPENAI_API_KEY,
     AGENT_PROVIDER_TOKEN: config.token ?? env.AGENT_PROVIDER_TOKEN,
+    CODEX_AUTH_JSON_B64: config.token ?? env.CODEX_AUTH_JSON_B64,
+    CODEX_CLI_MODEL: parseConfigModel(config.config) ?? env.CODEX_CLI_MODEL,
+    CODEX_CLI_ENV_ID: parseConfigEnvId(config.config) ?? env.CODEX_CLI_ENV_ID,
     DEVIN_ORG_ID: config.providerOrgId ?? env.DEVIN_ORG_ID,
     DEVIN_OUTPOST: config.outpost ?? env.DEVIN_OUTPOST,
     DEVIN_OUTPOST_ID: config.outpostId ?? env.DEVIN_OUTPOST_ID,
@@ -81,7 +118,7 @@ export function resolveAgentEnv(
   };
 }
 
-function daytonaConfig(env: AppEnv) {
+export function daytonaConfig(env: AppEnv) {
   const apiKey = env.DAYTONA_API_KEY;
   const apiUrl = env.DAYTONA_API_URL ?? "https://app.daytona.io/api";
   if (!apiKey) return null;

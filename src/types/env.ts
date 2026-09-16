@@ -20,8 +20,15 @@ export interface AppEnv {
   DAYTONA_SNAPSHOT?: string;
   DAYTONA_VOLUME_ID?: string;
   DAYTONA_LABEL_ID?: string;
+  OPENAI_API_KEY?: string;
   AGENT_PROVIDER_TOKEN?: string;
   AGENT_PROVIDER_CONFIG?: string;
+  /** Base64-encoded `~/.codex/auth.json` for the `codex-cli` provider. */
+  CODEX_AUTH_JSON_B64?: string;
+  /** Codex CLI model override (defaults to `gpt-reserve`). */
+  CODEX_CLI_MODEL?: string;
+  /** Codex Cloud environment id used by the `codex-cli` provider. */
+  CODEX_CLI_ENV_ID?: string;
   FLUE_WORKER?: Fetcher;
   TOKEN_HASH_SECRET?: string;
   SLACK_CLIENT_ID?: string;
