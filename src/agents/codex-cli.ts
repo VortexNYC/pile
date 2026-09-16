@@ -135,7 +135,7 @@ const PYTHON_RUNNER = [
   "import urllib.error",
   "import urllib.request",
   "",
-  "HOME = '/workspace/codex-home'",
+  "HOME = os.environ.get('HOME', '/tmp')",
   "CODEX_HOME = HOME",
   "CODEX_INSTALL_DIR = os.path.join(HOME, '.local', 'bin')",
   "REPO = os.environ['REPO']",
