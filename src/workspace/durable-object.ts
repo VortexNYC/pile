@@ -1925,7 +1925,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.getAgentSession(this.db, this.organizationId, id);
   }
 
-  listAgentSessions(options: { issueId?: string; limit?: number } = {}) {
+  listAgentSessions(
+    options: {
+      issueId?: string;
+      status?: AgentSessionStatus;
+      limit?: number;
+    } = {}
+  ) {
     return data.listAgentSessions(this.db, this.organizationId, options);
   }
 

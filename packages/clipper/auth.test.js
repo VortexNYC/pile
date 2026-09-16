@@ -115,5 +115,95 @@ describe("clipper auth", () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toBe("https://pile.nyc/workspaces/org_1/capture");
     expect(init.headers.get("Authorization")).toBe("Bearer pile_write_token");
+    expect(JSON.parse(init.body)).toEqual({
+      url: "https://example.com",
+      title: "Example",
+      selection: "hi",
+      source: "pile-clipper",
+    });
+  });
+
+  it("captures with screenshot, page text, and routing fields", async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse(201, { identifier: "VOR-2" })
+    );
+    const client = createAuthClient({
+      fetch: fetchMock,
+      getOrigin: () => "chrome-extension://clipper",
+    });
+
+    await client.capture(DEFAULT_BASE_URL, "pile_write_token", "org_1", {
+      url: "https://example.com",
+      title: "Example",
+      selection: "",
+      pageText: "Body text",
+      summarize: true,
+      includeFullText: false,
+      screenshot: { contentType: "image/png", contentBase64: "aGk=" },
+      teamId: "team_1",
+      projectId: "proj_1",
+      labelIds: ["lbl_1"],
+    });
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(init.body)).toEqual({
+      url: "https://example.com",
+      title: "Example",
+      selection: "",
+      source: "pile-clipper",
+      pageText: "Body text",
+      summarize: true,
+      includeFullText: false,
+      screenshot: { contentType: "image/png", contentBase64: "aGk=" },
+      teamId: "team_1",
+      projectId: "proj_1",
+      labelIds: ["lbl_1"],
+    });
+  });
+
+  it("lists teams, projects, and labels for routing", async () => {
+    const fetchMock = vi.fn(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/workspaces/org_1/teams")) {
+        return jsonResponse(200, {
+          teams: [{ id: "team_1", key: "ISS", name: "Issue Tracker" }],
+        });
+      }
+      if (url.endsWith("/workspaces/org_1/projects")) {
+        return jsonResponse(200, {
+          projects: [
+            { id: "proj_1", name: "Clipper", archivedAt: null },
+            { id: "proj_2", name: "Old", archivedAt: "2026-01-01T00:00:00Z" },
+          ],
+        });
+      }
+      if (url.endsWith("/workspaces/org_1/labels")) {
+        return jsonResponse(200, {
+          labels: [
+            { id: "lbl_1", name: "bug" },
+            { id: 7, name: "bad" },
+          ],
+        });
+      }
+      throw new Error(`unexpected url ${url}`);
+    });
+    const client = createAuthClient({
+      fetch: fetchMock,
+      getOrigin: () => "chrome-extension://clipper",
+    });
+
+    const options = await client.listRoutingOptions(
+      DEFAULT_BASE_URL,
+      "pile_write_token",
+      "org_1"
+    );
+    expect(options).toEqual({
+      teams: [{ id: "team_1", key: "ISS", name: "Issue Tracker" }],
+      projects: [{ id: "proj_1", name: "Clipper" }],
+      labels: [{ id: "lbl_1", name: "bug" }],
+    });
+    for (const [, init] of fetchMock.mock.calls) {
+      expect(init.headers.get("Authorization")).toBe("Bearer pile_write_token");
+    }
   });
 });
