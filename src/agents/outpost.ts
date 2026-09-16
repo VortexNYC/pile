@@ -97,8 +97,48 @@ function daytonaConfig(env: AppEnv) {
  * This is idempotent: if a sandbox already exists for the session it is
  * reused when healthy and recreated when it is not.
  */
+type ActivityType =
+  | "thought"
+  | "response"
+  | "error"
+  | "elicitation"
+  | "action"
+  | "status"
+  | "artifact";
+
+async function addSessionActivity(
+  env: WorkerEnv,
+  organizationId: string | undefined,
+  sessionId: string | undefined,
+  type: ActivityType,
+  message: string,
+  payload?: Record<string, unknown>
+): Promise<void> {
+  if (!organizationId || !sessionId) return;
+  try {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    await stub.addAgentActivity({
+      sessionId,
+      actorId: undefined,
+      type,
+      message,
+      payload,
+    });
+  } catch (err) {
+    console.error("outpost: failed to write session activity", {
+      organizationId,
+      sessionId,
+      message,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
 export async function provisionOutpostWorker(
-  env: AppEnv,
+  env: WorkerEnv,
   devinSessionId: string,
   organizationId?: string,
   trackerSessionId?: string,
@@ -121,6 +161,14 @@ export async function provisionOutpostWorker(
   });
   if (!listRes.ok) {
     console.error("daytona sandbox list failed", listRes.status);
+    await addSessionActivity(
+      env,
+      organizationId,
+      trackerSessionId,
+      "error",
+      "daytona sandbox list failed",
+      { status: listRes.status, session: fleetId }
+    );
     return;
   }
   const list = daytonaSandboxListSchema.parse(await listRes.json());
@@ -137,6 +185,14 @@ export async function provisionOutpostWorker(
         session: fleetId,
         sandbox: existing.id,
       });
+      await addSessionActivity(
+        env,
+        organizationId,
+        trackerSessionId,
+        "status",
+        "outpost worker already healthy",
+        { sandbox: existing.id, state: existing.state, session: fleetId }
+      );
       return;
     }
     console.log("outpost worker exists but is not healthy, recreating", {
@@ -144,6 +200,14 @@ export async function provisionOutpostWorker(
       sandbox: existing.id,
       state: existing.state,
     });
+    await addSessionActivity(
+      env,
+      organizationId,
+      trackerSessionId,
+      "status",
+      "outpost worker exists but is not healthy, recreating",
+      { sandbox: existing.id, state: existing.state, session: fleetId }
+    );
     const del = await fetch(`${config.apiUrl}/sandbox/${existing.id}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${config.apiKey}` },
@@ -153,6 +217,14 @@ export async function provisionOutpostWorker(
         session: fleetId,
         status: del.status,
       });
+      await addSessionActivity(
+        env,
+        organizationId,
+        trackerSessionId,
+        "error",
+        "daytona sandbox delete failed",
+        { status: del.status, session: fleetId }
+      );
       return;
     }
   }
@@ -209,6 +281,14 @@ export async function provisionOutpostWorker(
       status: res.status,
       body: text.slice(0, 500),
     });
+    await addSessionActivity(
+      env,
+      organizationId,
+      trackerSessionId,
+      "error",
+      "daytona sandbox create failed",
+      { status: res.status, body: text.slice(0, 500), session: fleetId }
+    );
     return;
   }
 
@@ -217,6 +297,19 @@ export async function provisionOutpostWorker(
     session: fleetId,
     sandbox: sandbox.id,
   });
+  await addSessionActivity(
+    env,
+    organizationId,
+    trackerSessionId,
+    "status",
+    "outpost worker provisioned",
+    {
+      sandbox: sandbox.id,
+      state: sandbox.state,
+      nodeDomain: sandbox.nodeDomain,
+      session: fleetId,
+    }
+  );
 }
 
 /**
@@ -274,6 +367,17 @@ export async function sweepOutpostWorkers(env: WorkerEnv): Promise<void> {
           if (cfg?.providerOrgId) sessionOrgId = cfg.providerOrgId;
         } catch (err) {
           console.error("outpost sweep: config lookup failed", err);
+          await addSessionActivity(
+            env,
+            sandboxOrg,
+            trackerSessionId,
+            "error",
+            "outpost sweep: config lookup failed",
+            {
+              error: err instanceof Error ? err.message : String(err),
+              session: sessionId,
+            }
+          );
         }
       }
 
@@ -310,6 +414,17 @@ export async function sweepOutpostWorkers(env: WorkerEnv): Promise<void> {
             session: sessionId,
             err,
           });
+          await addSessionActivity(
+            env,
+            sandboxOrg,
+            trackerSessionId,
+            "error",
+            "outpost status write-back failed",
+            {
+              error: err instanceof Error ? err.message : String(err),
+              session: sessionId,
+            }
+          );
         }
       }
 
@@ -323,6 +438,14 @@ export async function sweepOutpostWorkers(env: WorkerEnv): Promise<void> {
           sandbox: sandbox.id,
           ok: del.ok,
         });
+        await addSessionActivity(
+          env,
+          sandboxOrg,
+          trackerSessionId,
+          "status",
+          "outpost worker reaped",
+          { sandbox: sandbox.id, session: sessionId, ok: del.ok }
+        );
       }
     })
   );
