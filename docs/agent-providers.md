@@ -75,6 +75,25 @@ vars (`DEVIN_TOKEN`, `DEVIN_OUTPOST`, `DAYTONA_*`), so a self-hosted
 deployment can set one provider for all workspaces; on a hosted deployment
 each workspace brings its own.
 
+### Smoke-testing a provisioned sandbox
+
+Dispatch a trivial task to the outpost and, from inside the session, run
+`bash scripts/outpost-smoke.sh`. It confirms:
+
+- `DAYTONA_SANDBOX_ID`, `OUTPOST_ID` and `SESSION_ID` (the env
+  `provisionOutpostWorker` sets on the sandbox) are present, i.e. the sandbox
+  was created for this session rather than being a manually started worker.
+- `devin worker start` is running and pinned to `--session=$SESSION_ID`.
+- `GIT_AUTHOR_NAME`/`GIT_AUTHOR_EMAIL` are set when the issue's repo has a git
+  identity, and node/pnpm meet the repo's requirements (warnings only).
+
+Then confirm the session reaches the user (a message or PR arrives), and the
+sandbox disappears from `GET $DAYTONA_API_URL/sandbox` after the session ends.
+
+The snapshot must ship the toolchain the target repo needs; the worker itself only
+adds the `devin` binary. For this repo that means Node `>=20.12` and
+`pnpm` (see `engines` / `packageManager` in `package.json`).
+
 ## Cursor Cloud Agents
 
 The `cursor` provider targets Cursor's Cloud Agents v1 API
