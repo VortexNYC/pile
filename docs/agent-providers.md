@@ -75,6 +75,22 @@ vars (`DEVIN_TOKEN`, `DEVIN_OUTPOST`, `DAYTONA_*`), so a self-hosted
 deployment can set one provider for all workspaces; on a hosted deployment
 each workspace brings its own.
 
+### Smoke-testing a provisioned sandbox
+
+Dispatch a trivial task to the outpost and, from inside the session, confirm:
+
+- `DAYTONA_SANDBOX_ID`, `DAYTONA_SANDBOX_SNAPSHOT` and `DEVIN_OUTPOST_SESSION_ID`
+  are set (the sandbox was created from the configured snapshot for this
+  session, not a manually started worker).
+- `ps aux | grep 'devin worker start'` shows the worker running with
+  `--outpost=<outpostId> --session=<sessionId>`.
+- The session reaches the user (a message or PR arrives), and the sandbox
+  disappears from `GET $DAYTONA_API_URL/sandbox` after the session ends.
+
+The snapshot must ship the toolchain the target repo needs; the worker itself only
+adds the `devin` binary. For this repo that means Node `>=20.12` and
+`pnpm` (see `engines` / `packageManager` in `package.json`).
+
 ## Cursor Cloud Agents
 
 The `cursor` provider targets Cursor's Cloud Agents v1 API
