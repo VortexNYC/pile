@@ -60,6 +60,9 @@ export const agentSessionSchema = z.object({
   result: z.string().nullable(),
   url: z.string().nullable(),
   providerSessionId: z.string().nullable(),
+  prUrl: z.string().nullable(),
+  prState: z.string().nullable(),
+  branch: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
   activities: z
@@ -745,18 +748,25 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
 
     if (!provider.getState) {
       return c.json(
-        { message: `Live state not available for ${session.agentId}` },
+        { message: "Live state not supported for this agent" },
         400
       );
     }
 
     const remoteId = session.providerSessionId ?? sessionId;
     const state = await provider.getState(remoteId, sessionId);
+    if (!state) {
+      return c.json(
+        { message: "Provider or compute not configured for this agent" },
+        400
+      );
+    }
+
     const activities = await stub.listAgentActivities(sessionId);
     return c.json({
       session: toSessionResponse(session, activities),
-      provider: state?.provider ?? null,
-      compute: state?.compute ?? null,
+      provider: state.provider ?? null,
+      compute: state.compute ?? null,
     });
   });
 

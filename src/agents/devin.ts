@@ -1,13 +1,17 @@
 import { z } from "zod";
 
-import type { AppEnv } from "../platform/env.js";
 import { VortexError } from "../platform/errors.js";
+import type { WorkerEnv } from "../platform/middleware.js";
 import type {
   AgentSessionStatus,
   GitIdentity,
   Issue,
 } from "../types/workspace.js";
-import { daytonaConfig, provisionOutpostWorker } from "./outpost.js";
+import {
+  daytonaConfig,
+  daytonaSandboxListSchema,
+  provisionOutpostWorker,
+} from "./outpost.js";
 import type {
   AgentDispatchContext,
   AgentProvider,
@@ -78,7 +82,7 @@ function buildPrompt(issue: Issue, gitIdentity?: GitIdentity | null): string {
 export class DevinAgentProvider implements AgentProvider {
   readonly id = "devin";
 
-  constructor(private env: AppEnv) {}
+  constructor(private env: WorkerEnv) {}
 
   async dispatch(
     organizationId: string,
@@ -229,6 +233,38 @@ export class DevinAgentProvider implements AgentProvider {
     }
   }
 
+  private async getDaytonaSandbox(
+    providerSessionId: string,
+    trackerSessionId: string
+  ): Promise<unknown> {
+    const config = daytonaConfig(this.env);
+    if (!config) return null;
+    const res = await fetch(`${config.apiUrl}/sandbox`, {
+      headers: { Authorization: `Bearer ${config.apiKey}` },
+    });
+    if (!res.ok) return null;
+    const list = daytonaSandboxListSchema.safeParse(await res.json());
+    if (!list.success) return null;
+    const remoteId = providerSessionId;
+    const fleetId = remoteId.startsWith("devin-")
+      ? remoteId
+      : `devin-${remoteId}`;
+    return (
+      list.data.items.find((item) => {
+        const parsed = z
+          .object({ labels: z.record(z.string(), z.string()).optional() })
+          .safeParse(item);
+        if (!parsed.success) return false;
+        const labels = parsed.data.labels;
+        return (
+          labels?.["vortex.tracker_session"] === trackerSessionId ||
+          labels?.["vortex.session"] === fleetId ||
+          labels?.["vortex.session"] === remoteId
+        );
+      }) ?? null
+    );
+  }
+
   async getState(
     providerSessionId: string,
     trackerSessionId: string
@@ -236,43 +272,14 @@ export class DevinAgentProvider implements AgentProvider {
     const orgId = this.env.DEVIN_ORG_ID;
     const token = this.env.DEVIN_TOKEN;
     if (!orgId || !token) return null;
-
-    const devinRes = await fetch(
-      `https://api.devin.ai/v3/organizations/${orgId}/sessions/${providerSessionId}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
+    const [devinRes, compute] = await Promise.all([
+      fetch(
+        `https://api.devin.ai/v3/organizations/${orgId}/sessions/${providerSessionId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      ),
+      this.getDaytonaSandbox(providerSessionId, trackerSessionId),
+    ]);
     const provider = devinRes.ok ? await devinRes.json() : null;
-
-    const config = daytonaConfig(this.env);
-    let compute: unknown = null;
-    if (config) {
-      const fleetId = providerSessionId.startsWith("devin-")
-        ? providerSessionId
-        : `devin-${providerSessionId}`;
-      const daytonaRes = await fetch(`${config.apiUrl}/sandbox`, {
-        headers: { Authorization: `Bearer ${config.apiKey}` },
-      });
-      const daytonaJson = daytonaRes.ok ? await daytonaRes.json() : null;
-      const daytonaList = z
-        .object({ items: z.array(z.unknown()) })
-        .safeParse(daytonaJson);
-      compute = daytonaList.success
-        ? (daytonaList.data.items.find((item) => {
-            const parsed = z
-              .object({
-                labels: z.record(z.string(), z.string()).optional(),
-              })
-              .safeParse(item);
-            if (!parsed.success) return false;
-            const labels = parsed.data.labels;
-            return (
-              labels?.["vortex.tracker_session"] === trackerSessionId ||
-              labels?.["vortex.session"] === fleetId ||
-              labels?.["vortex.session"] === providerSessionId
-            );
-          }) ?? null)
-        : null;
-    }
     return { provider, compute };
   }
 }

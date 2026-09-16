@@ -16,9 +16,14 @@ import {
   getDefaultTeam,
   getTeamById,
   getVisibleTeamIds,
+  listTeams,
 } from "../global/teams.js";
 import { getTemplate } from "../global/templates.js";
-import { getCycle } from "../global/workspace-entities.js";
+import {
+  getCycle,
+  getLabel,
+  getProject,
+} from "../global/workspace-entities.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
@@ -34,6 +39,11 @@ import {
 } from "../types/workspace.js";
 import { filterConditionSchema } from "../workspace/filter.js";
 import { agentSessionSchema } from "./agent-sessions.js";
+import {
+  cleanPageText,
+  fetchReadablePage,
+  summarizeText,
+} from "./page-summary.js";
 
 function getExecutionCtx(c: {
   executionCtx?: { waitUntil: (promise: Promise<unknown>) => void };
@@ -233,13 +243,51 @@ const createIssueSchema = z.object({
 
 const updateIssueSchema = createIssueSchema.partial();
 
+const CAPTURE_SCREENSHOT_MAX_BYTES = 8 * 1024 * 1024;
+
+const captureScreenshotSchema = z.object({
+  contentBase64: z.string().min(1),
+  contentType: z
+    .string()
+    .regex(/^image\/(png|jpeg|webp)$/)
+    .default("image/png"),
+});
+
 const captureIssueSchema = z.object({
   url: z.string().url(),
   title: z.string().min(1).optional(),
   selection: z.string().optional(),
   source: z.string().optional(),
   teamId: z.string().optional(),
+  teamKey: z.string().optional(),
+  projectId: z.string().optional(),
+  labelIds: z.array(z.string()).optional(),
+  pageText: z.string().optional(),
+  includeFullText: z.boolean().optional(),
+  summarize: z.boolean().optional(),
+  screenshot: captureScreenshotSchema.optional(),
 });
+
+function base64ToBytes(value: string): Uint8Array {
+  const normalized = value.replace(/^data:[^;]+;base64,/, "");
+  let binary: string;
+  try {
+    binary = atob(normalized);
+  } catch {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Screenshot is not valid base64",
+    });
+  }
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
+function screenshotExtension(contentType: string): string {
+  if (contentType === "image/jpeg") return "jpg";
+  if (contentType === "image/webp") return "webp";
+  return "png";
+}
 
 const issueApiSchema = z
   .object({
@@ -897,15 +945,86 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     const identity = c.get("workspaceIdentity");
     const db = createD1(c.env.D1);
     const stub = await getStub(c.env, organizationId);
+
+    let teamId = input.teamId;
+    if (!teamId && input.teamKey) {
+      const wanted = input.teamKey.toUpperCase();
+      const match = (await listTeams(db, organizationId)).find(
+        (team) => team.key.toUpperCase() === wanted
+      );
+      if (!match) {
+        throw new VortexError({
+          code: "NOT_FOUND",
+          status: 404,
+          message: "Team not found",
+        });
+      }
+      teamId = match.id;
+    }
     const resolvedTeamId = await assertTeamAccess(
       db,
       organizationId,
-      input.teamId,
+      teamId,
       identity
     );
     const teamRecord = await getTeamById(db, resolvedTeamId, organizationId);
+
+    if (input.projectId) {
+      const project = await getProject(db, organizationId, input.projectId);
+      if (!project) {
+        throw new VortexError({
+          code: "NOT_FOUND",
+          status: 404,
+          message: "Project not found",
+        });
+      }
+    }
+    const labelIds = [...new Set(input.labelIds ?? [])];
+    const labels = await Promise.all(
+      labelIds.map((labelId) => getLabel(db, organizationId, labelId))
+    );
+    const missingLabel = labelIds.find((_, index) => !labels[index]);
+    if (missingLabel) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: `Label not found: ${missingLabel}`,
+      });
+    }
+
+    let screenshotBytes: Uint8Array | null = null;
+    const bucket = c.env.ATTACHMENTS_BUCKET;
+    if (input.screenshot) {
+      screenshotBytes = base64ToBytes(input.screenshot.contentBase64);
+      if (screenshotBytes.byteLength > CAPTURE_SCREENSHOT_MAX_BYTES) {
+        throw new VortexError({
+          code: "BAD_REQUEST",
+          status: 400,
+          message: "Screenshot exceeds 8MB",
+        });
+      }
+    }
+
+    const wantsSummary = input.summarize === true;
+    const wantsFullText = input.includeFullText === true;
+    let pageText =
+      input.pageText && input.pageText.trim().length > 0
+        ? cleanPageText(input.pageText)
+        : null;
+    let fetchedTitle: string | null = null;
+    if ((wantsSummary || wantsFullText) && pageText === null) {
+      const fetched = await fetchReadablePage(input.url);
+      if (fetched && fetched.text.length > 0) {
+        pageText = fetched.text;
+        fetchedTitle = fetched.title;
+      }
+    }
+    const summary = wantsSummary && pageText ? summarizeText(pageText) : null;
+
     const title =
-      input.title && input.title.length > 0 ? input.title : input.url;
+      input.title && input.title.length > 0
+        ? input.title
+        : (fetchedTitle ?? input.url);
     const descriptionParts = [
       `Source: ${input.source ?? "web clipper"}`,
       `[${title}](${input.url})`,
@@ -913,16 +1032,59 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     if (input.selection && input.selection.length > 0) {
       descriptionParts.push(`> ${input.selection}`);
     }
+    if (summary && summary.length > 0) {
+      descriptionParts.push(`**Summary**\n\n${summary}`);
+    }
+
+    let screenshotKey: string | null = null;
+    let screenshotUrl: string | null = null;
+    if (input.screenshot && screenshotBytes) {
+      if (!bucket) {
+        throw new VortexError({
+          code: "INTERNAL_ERROR",
+          status: 503,
+          message: "File storage not configured",
+        });
+      }
+      const contentType = input.screenshot.contentType;
+      const fileId = crypto.randomUUID();
+      screenshotKey = `${organizationId}/files/${fileId}/screenshot.${screenshotExtension(contentType)}`;
+      await bucket.put(screenshotKey, screenshotBytes, {
+        httpMetadata: { contentType },
+      });
+      screenshotUrl = `/workspaces/${organizationId}/files?key=${encodeURIComponent(screenshotKey)}`;
+      descriptionParts.push(`![Screenshot](${screenshotUrl})`);
+    }
+
+    if (wantsFullText && pageText && pageText.length > 0) {
+      descriptionParts.push(
+        `<details>\n<summary>Full page text</summary>\n\n${pageText}\n\n</details>`
+      );
+    }
+
     const issue = await stub.createIssue(
       {
         title,
         description: descriptionParts.join("\n\n"),
         status: "triage",
         teamId: resolvedTeamId,
+        projectId: input.projectId,
+        labelIds: labelIds.length > 0 ? labelIds.join(",") : undefined,
         repo: teamRecord?.defaultRepo ?? undefined,
       },
       identity.id
     );
+
+    if (screenshotKey && screenshotUrl) {
+      await stub.createAttachment({
+        issueId: issue.id,
+        linearId: "",
+        url: screenshotUrl,
+        title: "Screenshot",
+        subtitle: input.screenshot?.contentType ?? null,
+        r2Key: screenshotKey,
+      });
+    }
     return c.json(issue, 201);
   });
 

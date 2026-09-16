@@ -189,15 +189,15 @@ export class CursorAgentProvider implements AgentProvider {
   }
 
   async getState(
-    providerSessionId: string,
-    _trackerSessionId: string
+    providerSessionId: string
   ): Promise<AgentProviderState | null> {
     const [agentId, runId] = providerSessionId.split("/");
     const res = await fetch(`${this.api}/v1/agents/${agentId}/runs/${runId}`, {
       headers: { Authorization: this.auth },
     });
     if (!res.ok) return null;
-    const provider = await res.json();
-    return { provider };
+    const json = await res.json();
+    const run = runSchema.safeParse(json);
+    return { provider: run.success ? run.data : json };
   }
 }

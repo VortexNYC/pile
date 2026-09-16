@@ -572,6 +572,34 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "teamId",
         flag: "team",
       },
+      {
+        name: "teamKey",
+        flag: "team-key",
+      },
+      {
+        name: "projectId",
+        flag: "project",
+      },
+      {
+        name: "labelIds",
+        flag: "label-ids",
+      },
+      {
+        name: "pageText",
+        flag: "page-text",
+      },
+      {
+        name: "includeFullText",
+        flag: "include-full-text",
+      },
+      {
+        name: "summarize",
+        flag: "summarize",
+      },
+      {
+        name: "screenshot",
+        flag: "screenshot",
+      },
     ],
   },
   "issues get": {

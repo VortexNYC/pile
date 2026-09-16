@@ -9,6 +9,12 @@ import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
 import { createAdminHeaders } from "../platform/test-auth.js";
 
+interface CaptureIssue {
+  status: string;
+  title?: string;
+  description?: string;
+}
+
 async function seedWorkspace() {
   const db = createD1(env.D1);
   const now = new Date();
@@ -180,7 +186,7 @@ describe("issues API", () => {
       token
     );
     expect(res.status).toBe(201);
-    const issue = await res.json();
+    const issue = (await res.json()) as CaptureIssue;
     expect(issue.status).toBe("triage");
     expect(issue.title).toBe("Example page");
     expect(issue.description).toContain("https://example.com/page");
@@ -200,7 +206,7 @@ describe("issues API", () => {
       token
     );
     expect(res.status).toBe(201);
-    const issue = await res.json();
+    const issue = (await res.json()) as CaptureIssue;
     expect(issue.title).toBe("https://example.com/untitled");
     expect(issue.status).toBe("triage");
   });
@@ -215,6 +221,197 @@ describe("issues API", () => {
       token
     );
     expect(res.status).toBe(400);
+  });
+
+  it("captures a screenshot, summary, and full text", async () => {
+    const pageText = [
+      "Pile is an agent-native issue tracker. It runs on Cloudflare Workers.",
+      "The clipper sends page context to triage. This line should be in the full text only.",
+    ].join("\n\n");
+    const pngBytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+    const res = await fetch(
+      `/workspaces/${organizationId}/capture`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          url: "https://example.com/screenshot",
+          title: "Screenshot capture",
+          source: "pile-clipper",
+          pageText,
+          summarize: true,
+          includeFullText: true,
+          screenshot: {
+            contentType: "image/png",
+            contentBase64: btoa(String.fromCharCode(...pngBytes)),
+          },
+        }),
+      },
+      token
+    );
+    expect(res.status).toBe(201);
+    const issue = z
+      .object({ id: z.string(), description: z.string() })
+      .parse(await res.json());
+    expect(issue.description).toContain("**Summary**");
+    expect(issue.description).toContain(
+      "Pile is an agent-native issue tracker."
+    );
+    expect(issue.description).toContain("<details>");
+    expect(issue.description).toContain(
+      "This line should be in the full text only."
+    );
+    expect(issue.description).toContain("![Screenshot](");
+
+    const attachmentsRes = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}/attachments`,
+      {},
+      token
+    );
+    expect(attachmentsRes.status).toBe(200);
+    const { attachments } = z
+      .object({
+        attachments: z.array(
+          z.object({
+            title: z.string().nullable(),
+            url: z.string(),
+            r2Key: z.string().nullable(),
+          })
+        ),
+      })
+      .parse(await attachmentsRes.json());
+    expect(attachments).toHaveLength(1);
+    expect(attachments[0].title).toBe("Screenshot");
+    expect(attachments[0].r2Key).toMatch(
+      new RegExp(`^${organizationId}/files/.+/screenshot\\.png$`)
+    );
+    const stored = await env.ATTACHMENTS_BUCKET.get(attachments[0].r2Key!);
+    expect(stored).not.toBeNull();
+    expect(new Uint8Array(await stored!.arrayBuffer())).toEqual(pngBytes);
+
+    const fileRes = await fetch(attachments[0].url, {}, token);
+    expect(fileRes.status).toBe(200);
+    expect(fileRes.headers.get("content-type")).toBe("image/png");
+  });
+
+  it("rejects an invalid screenshot payload", async () => {
+    const res = await fetch(
+      `/workspaces/${organizationId}/capture`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          url: "https://example.com/bad-shot",
+          screenshot: { contentType: "text/plain", contentBase64: "aGk=" },
+        }),
+      },
+      token
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("routes a capture to a team, project, and labels", async () => {
+    const teamRes = await fetch(
+      `/workspaces/${organizationId}/teams`,
+      {
+        method: "POST",
+        body: JSON.stringify({ key: "CLIP", name: "Clipper team" }),
+      },
+      token
+    );
+    expect(teamRes.status).toBe(201);
+    const team = z.object({ id: z.string() }).parse(await teamRes.json());
+
+    const projectRes = await fetch(
+      `/workspaces/${organizationId}/projects`,
+      {
+        method: "POST",
+        body: JSON.stringify({ name: "Clipper project" }),
+      },
+      token
+    );
+    expect(projectRes.status).toBe(201);
+    const project = z.object({ id: z.string() }).parse(await projectRes.json());
+
+    const labelRes = await fetch(
+      `/workspaces/${organizationId}/labels`,
+      {
+        method: "POST",
+        body: JSON.stringify({ name: "clipped", color: "#00ff00" }),
+      },
+      token
+    );
+    expect(labelRes.status).toBe(201);
+    const label = z.object({ id: z.string() }).parse(await labelRes.json());
+
+    const res = await fetch(
+      `/workspaces/${organizationId}/capture`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          url: "https://example.com/routed",
+          title: "Routed capture",
+          teamKey: "clip",
+          projectId: project.id,
+          labelIds: [label.id, label.id],
+        }),
+      },
+      token
+    );
+    expect(res.status).toBe(201);
+    const issue = z
+      .object({
+        teamId: z.string(),
+        projectId: z.string().nullable(),
+        labelIds: z.string().nullable(),
+        identifier: z.string().nullable(),
+        status: z.string(),
+      })
+      .parse(await res.json());
+    expect(issue.teamId).toBe(team.id);
+    expect(issue.projectId).toBe(project.id);
+    expect(issue.labelIds).toBe(label.id);
+    expect(issue.identifier).toMatch(/^CLIP-\d+$/);
+    expect(issue.status).toBe("triage");
+  });
+
+  it("rejects capture routing to unknown targets", async () => {
+    const unknownTeam = await fetch(
+      `/workspaces/${organizationId}/capture`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          url: "https://example.com/no-team",
+          teamKey: "NOPE",
+        }),
+      },
+      token
+    );
+    expect(unknownTeam.status).toBe(404);
+
+    const unknownProject = await fetch(
+      `/workspaces/${organizationId}/capture`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          url: "https://example.com/no-project",
+          projectId: "missing-project",
+        }),
+      },
+      token
+    );
+    expect(unknownProject.status).toBe(404);
+
+    const unknownLabel = await fetch(
+      `/workspaces/${organizationId}/capture`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          url: "https://example.com/no-label",
+          labelIds: ["missing-label"],
+        }),
+      },
+      token
+    );
+    expect(unknownLabel.status).toBe(404);
   });
 
   it("allows capture from a browser extension origin", async () => {
@@ -237,7 +434,7 @@ describe("issues API", () => {
     expect(res.headers.get("access-control-allow-origin")).toBe(
       "chrome-extension://test-extension-id"
     );
-    const issue = await res.json();
+    const issue = (await res.json()) as CaptureIssue;
     expect(issue.status).toBe("triage");
   });
 });

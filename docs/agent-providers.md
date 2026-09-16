@@ -177,12 +177,31 @@ provider-side termination when the provider supports it (Cursor `runs/{id}/
 cancel`, Devin `DELETE /sessions/{id}`), then the local session is marked
 `canceled` either way.
 
-## Not dispatchable
+## Codex (OpenAI Agents API)
 
-**OpenAI Codex cloud** has no public dispatch/status API — tasks start only
-from the ChatGPT/Codex UI, the GitHub/GitLab apps, Slack, or the `codex` CLI.
-There is no provider adapter to write; use Codex's own Linear-style
-integrations instead.
+The `codex` provider targets the OpenAI Agents API
+(`https://api.openai.com/v1/agents/sessions`). The workspace token is the
+OpenAI API key.
+
+```bash
+curl -X PUT "$BASE/workspaces/$ORG/agent/providers/codex" \
+  -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+  -d '{
+    "token": "<OpenAI API key>",
+    "config": {
+      "environment": { "type": "openai_hosted" }
+    }
+  }'
+```
+
+Dispatch creates a managed-harness session. Poll maps `in_progress` →
+`running`, `requires_action` → `waiting`, `failed` → `failed`, and `idle` +
+assistant output → `completed`. If the final assistant message contains a GitHub
+PR URL, it is lifted into `prUrl`.
+
+`config.environment` can be set to `{"type":"self_hosted", ...}` for
+repositories that require a private checkout; the workspace must then start and
+connect an OpenAI executor to `session.environment.remote_url`.
 
 ## API
 

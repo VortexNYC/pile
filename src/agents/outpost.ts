@@ -4,7 +4,7 @@ import type { WorkerEnv } from "../platform/middleware.js";
 import type { AppEnv } from "../types/env.js";
 import type { AgentSessionStatus, GitIdentity } from "../types/workspace.js";
 
-const daytonaSandboxSchema = z.object({
+export const daytonaSandboxSchema = z.object({
   id: z.string(),
   name: z.string(),
   state: z.string(),
@@ -12,9 +12,10 @@ const daytonaSandboxSchema = z.object({
   nodeDomain: z.string().nullable().optional(),
   error: z.string().nullable().optional(),
   labels: z.record(z.string(), z.string()).optional(),
+  toolboxProxyUrl: z.string().nullable().optional(),
 });
 
-const daytonaSandboxListSchema = z.object({
+export const daytonaSandboxListSchema = z.object({
   items: z.array(daytonaSandboxSchema),
 });
 
@@ -60,6 +61,38 @@ export interface AgentProviderConfigRow {
  * workspace can BYO only the pieces it owns (e.g. its own Devin token while
  * running on classic hosted Devin).
  */
+function parseConfigModel(
+  configJson: string | null | undefined
+): string | undefined {
+  if (!configJson) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(configJson);
+    if (typeof parsed === "object" && parsed !== null) {
+      const model = (parsed as Record<string, unknown>).model;
+      if (typeof model === "string") return model;
+    }
+  } catch {
+    // ignore malformed config JSON
+  }
+  return undefined;
+}
+
+function parseConfigEnvId(
+  configJson: string | null | undefined
+): string | undefined {
+  if (!configJson) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(configJson);
+    if (typeof parsed === "object" && parsed !== null) {
+      const envId = (parsed as Record<string, unknown>).envId;
+      if (typeof envId === "string") return envId;
+    }
+  } catch {
+    // ignore malformed config JSON
+  }
+  return undefined;
+}
+
 export function resolveAgentEnv(
   env: WorkerEnv,
   config: AgentProviderConfigRow | undefined
@@ -68,7 +101,11 @@ export function resolveAgentEnv(
   return {
     ...env,
     DEVIN_TOKEN: config.token ?? env.DEVIN_TOKEN,
+    OPENAI_API_KEY: config.token ?? env.OPENAI_API_KEY,
     AGENT_PROVIDER_TOKEN: config.token ?? env.AGENT_PROVIDER_TOKEN,
+    CODEX_AUTH_JSON_B64: config.token ?? env.CODEX_AUTH_JSON_B64,
+    CODEX_CLI_MODEL: parseConfigModel(config.config) ?? env.CODEX_CLI_MODEL,
+    CODEX_CLI_ENV_ID: parseConfigEnvId(config.config) ?? env.CODEX_CLI_ENV_ID,
     DEVIN_ORG_ID: config.providerOrgId ?? env.DEVIN_ORG_ID,
     DEVIN_OUTPOST: config.outpost ?? env.DEVIN_OUTPOST,
     DEVIN_OUTPOST_ID: config.outpostId ?? env.DEVIN_OUTPOST_ID,
@@ -97,8 +134,48 @@ export function daytonaConfig(env: AppEnv) {
  * This is idempotent: if a sandbox already exists for the session it is
  * reused when healthy and recreated when it is not.
  */
+type ActivityType =
+  | "thought"
+  | "response"
+  | "error"
+  | "elicitation"
+  | "action"
+  | "status"
+  | "artifact";
+
+async function addSessionActivity(
+  env: WorkerEnv,
+  organizationId: string | undefined,
+  sessionId: string | undefined,
+  type: ActivityType,
+  message: string,
+  payload?: Record<string, unknown>
+): Promise<void> {
+  if (!organizationId || !sessionId) return;
+  try {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    await stub.addAgentActivity({
+      sessionId,
+      actorId: undefined,
+      type,
+      message,
+      payload,
+    });
+  } catch (err) {
+    console.error("outpost: failed to write session activity", {
+      organizationId,
+      sessionId,
+      message,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
 export async function provisionOutpostWorker(
-  env: AppEnv,
+  env: WorkerEnv,
   devinSessionId: string,
   organizationId?: string,
   trackerSessionId?: string,
@@ -121,6 +198,14 @@ export async function provisionOutpostWorker(
   });
   if (!listRes.ok) {
     console.error("daytona sandbox list failed", listRes.status);
+    await addSessionActivity(
+      env,
+      organizationId,
+      trackerSessionId,
+      "error",
+      "daytona sandbox list failed",
+      { status: listRes.status, session: fleetId }
+    );
     return;
   }
   const list = daytonaSandboxListSchema.parse(await listRes.json());
@@ -137,6 +222,14 @@ export async function provisionOutpostWorker(
         session: fleetId,
         sandbox: existing.id,
       });
+      await addSessionActivity(
+        env,
+        organizationId,
+        trackerSessionId,
+        "status",
+        "outpost worker already healthy",
+        { sandbox: existing.id, state: existing.state, session: fleetId }
+      );
       return;
     }
     console.log("outpost worker exists but is not healthy, recreating", {
@@ -144,6 +237,14 @@ export async function provisionOutpostWorker(
       sandbox: existing.id,
       state: existing.state,
     });
+    await addSessionActivity(
+      env,
+      organizationId,
+      trackerSessionId,
+      "status",
+      "outpost worker exists but is not healthy, recreating",
+      { sandbox: existing.id, state: existing.state, session: fleetId }
+    );
     const del = await fetch(`${config.apiUrl}/sandbox/${existing.id}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${config.apiKey}` },
@@ -153,6 +254,14 @@ export async function provisionOutpostWorker(
         session: fleetId,
         status: del.status,
       });
+      await addSessionActivity(
+        env,
+        organizationId,
+        trackerSessionId,
+        "error",
+        "daytona sandbox delete failed",
+        { status: del.status, session: fleetId }
+      );
       return;
     }
   }
@@ -209,6 +318,14 @@ export async function provisionOutpostWorker(
       status: res.status,
       body: text.slice(0, 500),
     });
+    await addSessionActivity(
+      env,
+      organizationId,
+      trackerSessionId,
+      "error",
+      "daytona sandbox create failed",
+      { status: res.status, body: text.slice(0, 500), session: fleetId }
+    );
     return;
   }
 
@@ -217,6 +334,19 @@ export async function provisionOutpostWorker(
     session: fleetId,
     sandbox: sandbox.id,
   });
+  await addSessionActivity(
+    env,
+    organizationId,
+    trackerSessionId,
+    "status",
+    "outpost worker provisioned",
+    {
+      sandbox: sandbox.id,
+      state: sandbox.state,
+      nodeDomain: sandbox.nodeDomain,
+      session: fleetId,
+    }
+  );
 }
 
 /**
@@ -274,6 +404,17 @@ export async function sweepOutpostWorkers(env: WorkerEnv): Promise<void> {
           if (cfg?.providerOrgId) sessionOrgId = cfg.providerOrgId;
         } catch (err) {
           console.error("outpost sweep: config lookup failed", err);
+          await addSessionActivity(
+            env,
+            sandboxOrg,
+            trackerSessionId,
+            "error",
+            "outpost sweep: config lookup failed",
+            {
+              error: err instanceof Error ? err.message : String(err),
+              session: sessionId,
+            }
+          );
         }
       }
 
@@ -310,6 +451,17 @@ export async function sweepOutpostWorkers(env: WorkerEnv): Promise<void> {
             session: sessionId,
             err,
           });
+          await addSessionActivity(
+            env,
+            sandboxOrg,
+            trackerSessionId,
+            "error",
+            "outpost status write-back failed",
+            {
+              error: err instanceof Error ? err.message : String(err),
+              session: sessionId,
+            }
+          );
         }
       }
 
@@ -323,6 +475,14 @@ export async function sweepOutpostWorkers(env: WorkerEnv): Promise<void> {
           sandbox: sandbox.id,
           ok: del.ok,
         });
+        await addSessionActivity(
+          env,
+          sandboxOrg,
+          trackerSessionId,
+          "status",
+          "outpost worker reaped",
+          { sandbox: sandbox.id, session: sessionId, ok: del.ok }
+        );
       }
     })
   );

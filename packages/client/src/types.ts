@@ -920,6 +920,17 @@ export interface paths {
                         selection?: string;
                         source?: string;
                         teamId?: string;
+                        teamKey?: string;
+                        projectId?: string;
+                        labelIds?: string[];
+                        pageText?: string;
+                        includeFullText?: boolean;
+                        summarize?: boolean;
+                        screenshot?: {
+                            contentBase64: string;
+                            /** @default image/png */
+                            contentType?: string;
+                        };
                     };
                 };
             };
@@ -1209,6 +1220,9 @@ export interface paths {
                             result: string | null;
                             url: string | null;
                             providerSessionId: string | null;
+                            prUrl: string | null;
+                            prState: string | null;
+                            branch: string | null;
                             createdAt: string;
                             updatedAt: string;
                             activities?: {
@@ -1282,6 +1296,9 @@ export interface paths {
                                 result: string | null;
                                 url: string | null;
                                 providerSessionId: string | null;
+                                prUrl: string | null;
+                                prState: string | null;
+                                branch: string | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 activities?: {
@@ -1349,6 +1366,9 @@ export interface paths {
                                 result: string | null;
                                 url: string | null;
                                 providerSessionId: string | null;
+                                prUrl: string | null;
+                                prState: string | null;
+                                branch: string | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 activities?: {
@@ -1416,6 +1436,9 @@ export interface paths {
                                 result: string | null;
                                 url: string | null;
                                 providerSessionId: string | null;
+                                prUrl: string | null;
+                                prState: string | null;
+                                branch: string | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 activities?: {
@@ -1492,6 +1515,9 @@ export interface paths {
                             result: string | null;
                             url: string | null;
                             providerSessionId: string | null;
+                            prUrl: string | null;
+                            prState: string | null;
+                            branch: string | null;
                             createdAt: string;
                             updatedAt: string;
                             activities?: {
@@ -1566,6 +1592,9 @@ export interface paths {
                             result: string | null;
                             url: string | null;
                             providerSessionId: string | null;
+                            prUrl: string | null;
+                            prState: string | null;
+                            branch: string | null;
                             createdAt: string;
                             updatedAt: string;
                             activities?: {
@@ -1826,6 +1855,9 @@ export interface paths {
                             result: string | null;
                             url: string | null;
                             providerSessionId: string | null;
+                            prUrl: string | null;
+                            prState: string | null;
+                            branch: string | null;
                             createdAt: string;
                             updatedAt: string;
                             activities?: {
@@ -1898,6 +1930,9 @@ export interface paths {
                             result: string | null;
                             url: string | null;
                             providerSessionId: string | null;
+                            prUrl: string | null;
+                            prState: string | null;
+                            branch: string | null;
                             createdAt: string;
                             updatedAt: string;
                             activities?: {
@@ -1969,6 +2004,9 @@ export interface paths {
                                 result: string | null;
                                 url: string | null;
                                 providerSessionId: string | null;
+                                prUrl: string | null;
+                                prState: string | null;
+                                branch: string | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 activities?: {
@@ -2064,6 +2102,9 @@ export interface paths {
                                 result: string | null;
                                 url: string | null;
                                 providerSessionId: string | null;
+                                prUrl: string | null;
+                                prState: string | null;
+                                branch: string | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 activities?: {

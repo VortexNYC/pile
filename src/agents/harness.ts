@@ -3,6 +3,7 @@ import type {
   AgentDispatchContext,
   AgentProvider,
   AgentProviderSession,
+  AgentProviderState,
 } from "./provider.js";
 
 export interface MockAgentProviderOptions {
@@ -15,6 +16,10 @@ export interface MockAgentProviderOptions {
   poll?: (
     sessionId: string
   ) => AgentProviderSession | Promise<AgentProviderSession>;
+  getState?: (
+    providerSessionId: string,
+    trackerSessionId: string
+  ) => AgentProviderState | Promise<AgentProviderState | null> | null;
 }
 
 export class MockAgentProvider implements AgentProvider {
@@ -59,5 +64,15 @@ export class MockAgentProvider implements AgentProvider {
       status: "completed",
       result: "mock-result",
     };
+  }
+
+  async getState(
+    providerSessionId: string,
+    trackerSessionId: string
+  ): Promise<AgentProviderState | null> {
+    if (this.options.getState) {
+      return await this.options.getState(providerSessionId, trackerSessionId);
+    }
+    return null;
   }
 }

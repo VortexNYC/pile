@@ -53,6 +53,28 @@ pnpm run selfhost   # deploys Worker + auto-provisions D1/R2/DO + applies migrat
 
 The CLI, SDK, and MCP examples in `packages/docs/docs/agents.mdx` and `.devin/skills/pile-*` use `https://<your-worker>` as a placeholder. Substitute your Worker URL (the same value as `BETTER_AUTH_URL`), or `http://127.0.0.1:8787` when running `wrangler dev` locally. The CLI reads it from `PILE_BASE_URL` or `pile config set --base-url <url>`.
 
+### Codex CLI provider
+
+The `codex-cli` provider runs Codex Cloud jobs from a Daytona sandbox. Configure
+these Worker secrets before dispatching a session:
+
+```bash
+# Base64-encode the auth.json created by `codex login`.
+base64 < ~/.codex/auth.json | tr -d '\n' | wrangler secret put CODEX_AUTH_JSON_B64
+
+# Set this to the Codex Cloud environment ID that should run the job.
+wrangler secret put CODEX_CLI_ENV_ID
+
+# Create an API key in Daytona and provide it to Pile.
+wrangler secret put DAYTONA_API_KEY
+```
+
+Enter the Codex Cloud environment ID and Daytona API key when prompted. Treat
+`~/.codex/auth.json` and all three values as secrets; do not commit them. You
+can optionally set `DAYTONA_API_URL`, `DAYTONA_SNAPSHOT`, and
+`DAYTONA_VOLUME_ID` to use a non-default Daytona API endpoint, snapshot, or
+cache volume.
+
 ## Tests
 
 ```bash

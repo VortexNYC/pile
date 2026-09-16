@@ -1971,6 +1971,44 @@
                   },
                   "teamId": {
                     "type": "string"
+                  },
+                  "teamKey": {
+                    "type": "string"
+                  },
+                  "projectId": {
+                    "type": "string"
+                  },
+                  "labelIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "pageText": {
+                    "type": "string"
+                  },
+                  "includeFullText": {
+                    "type": "boolean"
+                  },
+                  "summarize": {
+                    "type": "boolean"
+                  },
+                  "screenshot": {
+                    "type": "object",
+                    "properties": {
+                      "contentBase64": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "contentType": {
+                        "type": "string",
+                        "pattern": "^image\\/(png|jpeg|webp)$",
+                        "default": "image/png"
+                      }
+                    },
+                    "required": [
+                      "contentBase64"
+                    ]
                   }
                 },
                 "required": [
@@ -2500,6 +2538,18 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "prUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "prState": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "branch": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -2566,6 +2616,9 @@
                     "result",
                     "url",
                     "providerSessionId",
+                    "prUrl",
+                    "prState",
+                    "branch",
                     "createdAt",
                     "updatedAt"
                   ]
@@ -2680,6 +2733,18 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "prUrl": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "prState": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "branch": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -2746,6 +2811,9 @@
                         "result",
                         "url",
                         "providerSessionId",
+                        "prUrl",
+                        "prState",
+                        "branch",
                         "createdAt",
                         "updatedAt"
                       ]
@@ -2854,6 +2922,18 @@
                             "type": "string",
                             "nullable": true
                           },
+                          "prUrl": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "prState": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "branch": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "createdAt": {
                             "type": "string"
                           },
@@ -2920,6 +3000,9 @@
                           "result",
                           "url",
                           "providerSessionId",
+                          "prUrl",
+                          "prState",
+                          "branch",
                           "createdAt",
                           "updatedAt"
                         ]
@@ -3020,6 +3103,18 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "prUrl": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "prState": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "branch": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -3086,6 +3181,9 @@
                         "result",
                         "url",
                         "providerSessionId",
+                        "prUrl",
+                        "prState",
+                        "branch",
                         "createdAt",
                         "updatedAt"
                       ]
@@ -3229,6 +3327,18 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "prUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "prState": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "branch": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -3295,6 +3405,9 @@
                     "result",
                     "url",
                     "providerSessionId",
+                    "prUrl",
+                    "prState",
+                    "branch",
                     "createdAt",
                     "updatedAt"
                   ]
@@ -3423,6 +3536,18 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "prUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "prState": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "branch": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -3489,6 +3614,9 @@
                     "result",
                     "url",
                     "providerSessionId",
+                    "prUrl",
+                    "prState",
+                    "branch",
                     "createdAt",
                     "updatedAt"
                   ]
@@ -3926,6 +4054,18 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "prUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "prState": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "branch": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -3992,6 +4132,9 @@
                     "result",
                     "url",
                     "providerSessionId",
+                    "prUrl",
+                    "prState",
+                    "branch",
                     "createdAt",
                     "updatedAt"
                   ]
@@ -4085,6 +4228,18 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "prUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "prState": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "branch": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -4151,6 +4306,9 @@
                     "result",
                     "url",
                     "providerSessionId",
+                    "prUrl",
+                    "prState",
+                    "branch",
                     "createdAt",
                     "updatedAt"
                   ]
@@ -4247,6 +4405,18 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "prUrl": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "prState": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "branch": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -4313,6 +4483,9 @@
                         "result",
                         "url",
                         "providerSessionId",
+                        "prUrl",
+                        "prState",
+                        "branch",
                         "createdAt",
                         "updatedAt"
                       ]
@@ -4453,6 +4626,18 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "prUrl": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "prState": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "branch": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -4519,6 +4704,9 @@
                         "result",
                         "url",
                         "providerSessionId",
+                        "prUrl",
+                        "prState",
+                        "branch",
                         "createdAt",
                         "updatedAt"
                       ]
