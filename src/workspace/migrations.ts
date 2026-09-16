@@ -692,6 +692,12 @@ CREATE INDEX IF NOT EXISTS agent_session_events_session_idx ON agent_session_eve
 
 const v31 = `ALTER TABLE agent_provider_configs ADD COLUMN team_ids TEXT`;
 
+const v32 = `ALTER TABLE agent_sessions ADD COLUMN pr_url TEXT`;
+
+const v33 = `ALTER TABLE agent_sessions ADD COLUMN pr_state TEXT`;
+
+const v34 = `ALTER TABLE agent_sessions ADD COLUMN branch TEXT`;
+
 export const workspaceMigrations = {
   journal: {
     entries: [
@@ -726,6 +732,9 @@ export const workspaceMigrations = {
       { idx: 28, when: 28, tag: "v29", breakpoints: true },
       { idx: 29, when: 29, tag: "v30", breakpoints: true },
       { idx: 30, when: 30, tag: "v31", breakpoints: false },
+      { idx: 31, when: 31, tag: "v32", breakpoints: false },
+      { idx: 32, when: 32, tag: "v33", breakpoints: false },
+      { idx: 33, when: 33, tag: "v34", breakpoints: false },
     ],
   },
   migrations: {
@@ -760,5 +769,8 @@ export const workspaceMigrations = {
     m0028: v29,
     m0029: v30,
     m0030: v31,
+    m0031: v32,
+    m0032: v33,
+    m0033: v34,
   },
 } satisfies Parameters<typeof migrate>[1];

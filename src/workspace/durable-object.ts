@@ -2145,6 +2145,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         "result",
         "url",
         "providerSessionId",
+        "prUrl",
+        "prState",
+        "branch",
       ] as const) {
         const oldValue = oldSession[field];
         const newValue = updatedSession[field];
@@ -2177,6 +2180,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       if (result.url !== undefined) set.url = result.url;
       if (result.providerSessionId !== undefined)
         set.providerSessionId = result.providerSessionId;
+      if (result.prUrl !== undefined) set.prUrl = result.prUrl;
+      if (result.prState !== undefined) set.prState = result.prState;
+      if (result.branch !== undefined) set.branch = result.branch;
       const rows = await this.db
         .update(workspaceAgentSessions)
         .set(set)
@@ -2202,6 +2208,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (result.url !== undefined) set.url = result.url;
     if (result.providerSessionId !== undefined)
       set.providerSessionId = result.providerSessionId;
+    if (result.prUrl !== undefined) set.prUrl = result.prUrl;
+    if (result.prState !== undefined) set.prState = result.prState;
+    if (result.branch !== undefined) set.branch = result.branch;
 
     const updatedSession = await this.db
       .update(workspaceAgentSessions)
