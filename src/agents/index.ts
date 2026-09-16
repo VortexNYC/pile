@@ -1,4 +1,3 @@
-import type { AppEnv } from "../platform/env.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { WorkerEnv } from "../platform/middleware.js";
@@ -10,7 +9,7 @@ import { CursorAgentProvider } from "./cursor.js";
 import { DevinAgentProvider } from "./devin.js";
 import type { AgentProvider } from "./provider.js";
 
-const providers: Record<string, (env: AppEnv) => AgentProvider> = {
+const providers: Record<string, (env: WorkerEnv) => AgentProvider> = {
   devin: (env) => new DevinAgentProvider(env),
   codex: (env) => new CodexAgentProvider(env),
   "codex-cli": (env) => new CodexCliAgentProvider(env),
@@ -40,7 +39,10 @@ function parseAgentProviderTeamIds(
   });
 }
 
-export function getAgentProvider(agentId: string, env: AppEnv): AgentProvider {
+export function getAgentProvider(
+  agentId: string,
+  env: WorkerEnv
+): AgentProvider {
   const factory = providers[agentId];
   if (!factory) {
     throw new VortexError({
@@ -54,7 +56,7 @@ export function getAgentProvider(agentId: string, env: AppEnv): AgentProvider {
 
 export function registerAgentProvider(
   agentId: string,
-  factory: (env: AppEnv) => AgentProvider
+  factory: (env: WorkerEnv) => AgentProvider
 ) {
   providers[agentId] = factory;
 }

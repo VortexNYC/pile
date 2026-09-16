@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-import type { AppEnv } from "../platform/env.js";
 import { VortexError } from "../platform/errors.js";
+import type { WorkerEnv } from "../platform/middleware.js";
 import type {
   AgentSessionStatus,
   GitIdentity,
@@ -82,7 +82,7 @@ function buildPrompt(issue: Issue, gitIdentity?: GitIdentity | null): string {
 export class DevinAgentProvider implements AgentProvider {
   readonly id = "devin";
 
-  constructor(private env: AppEnv) {}
+  constructor(private env: WorkerEnv) {}
 
   async dispatch(
     organizationId: string,
