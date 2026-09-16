@@ -69,6 +69,11 @@ reference integration): snapshot image → `devin worker start --session=<id>`
 | `computeSnapshot` | `DAYTONA_SNAPSHOT`                                       |
 | `computeVolumeId` | `DAYTONA_VOLUME_ID`                                      |
 
+To smoke-test a provisioned sandbox, run `bash scripts/outpost-smoke.sh` from
+inside it (e.g. as the first step of a dispatched session). It checks the
+Daytona sandbox id, `OUTPOST_ID`/`SESSION_ID`, that `devin worker start` is
+pinned to that session, the git identity env, and the node/pnpm toolchain.
+
 If unset, the outpost queue still works — sessions wait for whatever workers
 you've started manually. Everything above falls back to deployment-level env
 vars (`DEVIN_TOKEN`, `DEVIN_OUTPOST`, `DAYTONA_*`), so a self-hosted
