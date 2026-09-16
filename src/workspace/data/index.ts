@@ -1387,7 +1387,7 @@ export interface AgentProviderConfigInput {
   computeSnapshot?: string | null;
   computeVolumeId?: string | null;
   config?: Record<string, unknown> | null;
-  teamIds?: string[] | null;
+  teamIds?: string | string[] | null;
 }
 
 export async function upsertAgentProviderConfig(
@@ -1427,7 +1427,9 @@ export async function upsertAgentProviderConfig(
         ? undefined
         : input.teamIds === null
           ? null
-          : JSON.stringify(input.teamIds),
+          : typeof input.teamIds === "string"
+            ? input.teamIds
+            : JSON.stringify(input.teamIds),
   };
   if (existing) {
     const set: Record<string, string | null> = { updatedAt: now };

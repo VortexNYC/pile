@@ -18,16 +18,22 @@ const providers: Record<string, (env: AppEnv) => AgentProvider> = {
 function parseAgentProviderTeamIds(
   teamIds: string | null | undefined
 ): string[] | null {
-  if (!teamIds) return null;
+  if (teamIds === null || teamIds === undefined || teamIds === "") {
+    return null;
+  }
   try {
     const value: unknown = JSON.parse(teamIds);
     if (Array.isArray(value) && value.every((v) => typeof v === "string")) {
       return value;
     }
   } catch {
-    // ignore
+    // fall through to config error
   }
-  return null;
+  throw new VortexError({
+    code: "CONFIG_ERROR",
+    status: 500,
+    message: "Invalid agent provider teamIds configuration",
+  });
 }
 
 export function getAgentProvider(agentId: string, env: AppEnv): AgentProvider {

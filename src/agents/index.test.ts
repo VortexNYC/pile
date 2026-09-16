@@ -328,4 +328,49 @@ describe("agent providers", () => {
 
     expect(captured?.gitIdentity).toEqual(identity);
   });
+
+  it("rejects all teams when teamIds is an empty array", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)
+    );
+    await stub.setOrganizationId(actor.organizationId);
+    const issue = await stub.createIssue({
+      title: "Empty teamIds test",
+    });
+    await stub.upsertAgentProviderConfig({
+      agentId: "mock-empty-teams",
+      token: "test-token",
+      teamIds: [],
+    });
+
+    const provider = new MockAgentProvider("mock-empty-teams");
+    registerAgentProvider("mock-empty-teams", () => provider);
+
+    await expect(
+      dispatchAgent(env, "mock-empty-teams", actor.organizationId, issue, actor)
+    ).rejects.toThrow("not enabled for this team");
+  });
+
+  it("throws for malformed teamIds configuration", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)
+    );
+    await stub.setOrganizationId(actor.organizationId);
+    const issue = await stub.createIssue({
+      title: "Malformed teamIds test",
+    });
+    const agentId = "mock-malformed-teams";
+    await stub.upsertAgentProviderConfig({
+      agentId,
+      token: "test-token",
+      teamIds: "not-json",
+    });
+
+    const provider = new MockAgentProvider(agentId);
+    registerAgentProvider(agentId, () => provider);
+
+    await expect(
+      dispatchAgent(env, agentId, actor.organizationId, issue, actor)
+    ).rejects.toThrow("Invalid agent provider teamIds configuration");
+  });
 });
