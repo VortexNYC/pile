@@ -1487,6 +1487,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdAgentSessionsSessionIdState",
+    "description": "List agent session state (GET /workspaces/{organizationId}/agent/sessions/{sessionId}/state) Path params (top-level, required): organizationId, sessionId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/agent/sessions/{sessionId}/state",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "sessionId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdAuditlog",
     "description": "List audit log (GET /workspaces/{organizationId}/audit-log) Path params (top-level, required): organizationId. Query params (top-level, optional): entityType, entityId, action, actorId, limit.",
     "method": "GET",
