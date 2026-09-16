@@ -1,12 +1,15 @@
 {
   "name": "@vortexnyc/pile-clipper",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "One-button Pile web clipper extension",
   "files": [
     "manifest.json",
     "popup.html",
     "popup.js",
-    "popup.css"
-  ]
+    "popup.css",
+    "auth.js",
+    "keychain.js"
+  ],
+  "type": "module"
 }

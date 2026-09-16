@@ -65,6 +65,20 @@ export async function listWorkspaces(db: D1Client) {
   return Promise.all(rows.map((row) => buildWorkspace(db, row)));
 }
 
+export async function listWorkspacesForUser(db: D1Client, userId: string) {
+  const memberships = await db
+    .select()
+    .from(member)
+    .where(eq(member.userId, userId))
+    .all();
+  const workspaces = await Promise.all(
+    memberships.map((row) => getWorkspaceById(db, row.organizationId))
+  );
+  return workspaces.filter(
+    (workspace): workspace is WorkspaceRecord => workspace !== undefined
+  );
+}
+
 export async function getWorkspaceBySlug(
   db: D1Client,
   slug: string
