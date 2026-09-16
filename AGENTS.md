@@ -5,11 +5,14 @@
 Run from the repo root before committing:
 
 ```bash
-pnpm install
-pnpm run check
+vp install
+vp run check
+vp run contract:check
+vp run test
+vp run knip
 ```
 
-`pnpm run check` runs `contract:check` (generated artifacts), `vp check` (format, lint, type), and `pnpm test`.
+`vp run check` is Vite+ (`vp check`: format, lint, types). `contract:check` diffs generated artifacts and needs git — GitHub `ci.yml` owns it; do not put it on the vortex-ci sandbox path. Tests run in vortex-ci proof (`pnpm test`), same split as vortex-sign.
 
 ## Stack
 

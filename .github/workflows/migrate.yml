@@ -1,0 +1,77 @@
+name: Migrate D1
+
+# Applies D1 migrations before a Worker deploy. Called by deploy.yml.
+# Can also be triggered manually for recovery.
+# Main-line migrates run through vortex-ci, same as vortex-sign.
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    outputs:
+      d1-stamp:
+        description: SHA whose migrations were applied
+        value: ${{ jobs.migrate.outputs.d1-stamp }}
+
+concurrency:
+  group: migrate-d1-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    name: Apply D1 migrations
+    runs-on: blacksmith-4vcpu-ubuntu-2204
+    timeout-minutes: 10
+    outputs:
+      d1-stamp: ${{ steps.stamp.outputs.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@313600b80b104eadebb9111787d37a2e83e014ca # v1.17.0
+        with:
+          node-version: "24"
+          cache: true
+          run-install: false
+
+      - name: Install
+        run: vp install --frozen-lockfile
+
+      - name: Fail closed without Cloudflare credentials
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "CLOUDFLARE_API_TOKEN is not set."
+            exit 1
+          fi
+          if [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "CLOUDFLARE_ACCOUNT_ID is not set."
+            exit 1
+          fi
+
+      - name: Apply D1 migrations
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          vp exec wrangler d1 migrations apply issuetracker-global --env production --remote
+
+      - name: Stamp deployed/d1-production
+        id: stamp
+        env:
+          TAG: deployed/d1-production
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f "$TAG" "$GITHUB_SHA"
+          git push -f origin "refs/tags/$TAG"
+          echo "sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          echo "Advanced $TAG -> $GITHUB_SHA"

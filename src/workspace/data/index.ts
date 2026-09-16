@@ -17,6 +17,7 @@ import {
 } from "drizzle-orm";
 import type { DrizzleSqliteDODatabase } from "drizzle-orm/durable-sqlite";
 
+import type { AgentSessionStatus } from "../../types/workspace.js";
 import type { FilterCondition } from "../filter.js";
 import type { workspaceSchema } from "../schema-map.js";
 import {
