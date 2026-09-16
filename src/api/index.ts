@@ -24,6 +24,7 @@ import { registerAttachmentRoutes } from "./attachments.js";
 import { registerAuditRoutes } from "./audit.js";
 import { registerAuthRoutes } from "./auth-routes.js";
 import { registerBillingRoutes } from "./billing.js";
+import { registerClipperRoutes } from "./clipper.js";
 import { registerCommentRoutes } from "./comments.js";
 import { registerCsvExportRoutes } from "./csv-export.js";
 import { registerCustomerRoutes } from "./customers.js";
@@ -115,6 +116,7 @@ app.use("/workspaces/:organizationId/*", async (c, next) => {
 });
 registerWorkspaceRoutes(app);
 registerTokenRoutes(app);
+registerClipperRoutes(app);
 registerOAuthClientRoutes(app);
 registerIssueRoutes(app);
 registerAgentSessionRoutes(app);
