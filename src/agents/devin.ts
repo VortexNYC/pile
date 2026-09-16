@@ -7,11 +7,16 @@ import type {
   GitIdentity,
   Issue,
 } from "../types/workspace.js";
-import { provisionOutpostWorker } from "./outpost.js";
+import {
+  daytonaConfig,
+  daytonaSandboxListSchema,
+  provisionOutpostWorker,
+} from "./outpost.js";
 import type {
   AgentDispatchContext,
   AgentProvider,
   AgentProviderSession,
+  AgentProviderState,
 } from "./provider.js";
 
 const devinCreateResponseSchema = z.object({
@@ -226,5 +231,55 @@ export class DevinAgentProvider implements AgentProvider {
         message: `Devin terminate failed: ${res.status} ${text}`,
       });
     }
+  }
+
+  private async getDaytonaSandbox(
+    providerSessionId: string,
+    trackerSessionId: string
+  ): Promise<unknown> {
+    const config = daytonaConfig(this.env);
+    if (!config) return null;
+    const res = await fetch(`${config.apiUrl}/sandbox`, {
+      headers: { Authorization: `Bearer ${config.apiKey}` },
+    });
+    if (!res.ok) return null;
+    const list = daytonaSandboxListSchema.safeParse(await res.json());
+    if (!list.success) return null;
+    const remoteId = providerSessionId;
+    const fleetId = remoteId.startsWith("devin-")
+      ? remoteId
+      : `devin-${remoteId}`;
+    return (
+      list.data.items.find((item) => {
+        const parsed = z
+          .object({ labels: z.record(z.string(), z.string()).optional() })
+          .safeParse(item);
+        if (!parsed.success) return false;
+        const labels = parsed.data.labels;
+        return (
+          labels?.["vortex.tracker_session"] === trackerSessionId ||
+          labels?.["vortex.session"] === fleetId ||
+          labels?.["vortex.session"] === remoteId
+        );
+      }) ?? null
+    );
+  }
+
+  async getState(
+    providerSessionId: string,
+    trackerSessionId: string
+  ): Promise<AgentProviderState | null> {
+    const orgId = this.env.DEVIN_ORG_ID;
+    const token = this.env.DEVIN_TOKEN;
+    if (!orgId || !token) return null;
+    const [devinRes, compute] = await Promise.all([
+      fetch(
+        `https://api.devin.ai/v3/organizations/${orgId}/sessions/${providerSessionId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      ),
+      this.getDaytonaSandbox(providerSessionId, trackerSessionId),
+    ]);
+    const provider = devinRes.ok ? await devinRes.json() : null;
+    return { provider, compute };
   }
 }

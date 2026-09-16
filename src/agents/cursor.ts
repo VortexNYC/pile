@@ -3,7 +3,11 @@ import { z } from "zod";
 import type { AppEnv } from "../platform/env.js";
 import { VortexError } from "../platform/errors.js";
 import type { AgentSessionStatus, Issue } from "../types/workspace.js";
-import type { AgentProvider, AgentProviderSession } from "./provider.js";
+import type {
+  AgentProvider,
+  AgentProviderSession,
+  AgentProviderState,
+} from "./provider.js";
 
 const cursorConfigSchema = z.object({
   endpoint: z.string().default("https://api.cursor.com"),
@@ -182,5 +186,18 @@ export class CursorAgentProvider implements AgentProvider {
         message: `Cursor cancel failed: ${res.status} ${text.slice(0, 500)}`,
       });
     }
+  }
+
+  async getState(
+    providerSessionId: string
+  ): Promise<AgentProviderState | null> {
+    const [agentId, runId] = providerSessionId.split("/");
+    const res = await fetch(`${this.api}/v1/agents/${agentId}/runs/${runId}`, {
+      headers: { Authorization: this.auth },
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const run = runSchema.safeParse(json);
+    return { provider: run.success ? run.data : json };
   }
 }
