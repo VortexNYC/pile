@@ -2,11 +2,12 @@ import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AppEnv } from "../platform/env.js";
+import type { WorkerEnv } from "../platform/middleware.js";
 import { CfAgentProvider } from "./cf-agent.js";
 import { CursorAgentProvider } from "./cursor.js";
 import { DevinAgentProvider } from "./devin.js";
 
-function devinEnv(): AppEnv {
+function devinEnv(): WorkerEnv {
   return {
     ...env,
     DEVIN_ORG_ID: "devin-org",
@@ -91,6 +92,7 @@ describe("agent providers", () => {
             items: [
               {
                 id: "sandbox-1",
+                name: "worker-devin-123",
                 state: "started",
                 labels: {
                   "vortex.session": "devin-123",
