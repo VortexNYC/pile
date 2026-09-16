@@ -7887,7 +7887,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdCapture",
-    "description": "Create capture (POST /workspaces/{organizationId}/capture) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: url*, title, selection, source, teamId (* = required).",
+    "description": "Create capture (POST /workspaces/{organizationId}/capture) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: url*, title, selection, source, teamId, teamKey, projectId, labelIds, pageText, includeFullText, summarize, screenshot (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/capture",
     "inputSchema": {
@@ -7915,6 +7915,44 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "teamId": {
               "type": "string"
+            },
+            "teamKey": {
+              "type": "string"
+            },
+            "projectId": {
+              "type": "string"
+            },
+            "labelIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "pageText": {
+              "type": "string"
+            },
+            "includeFullText": {
+              "type": "boolean"
+            },
+            "summarize": {
+              "type": "boolean"
+            },
+            "screenshot": {
+              "type": "object",
+              "properties": {
+                "contentBase64": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "contentType": {
+                  "type": "string",
+                  "pattern": "^image\\/(png|jpeg|webp)$",
+                  "default": "image/png"
+                }
+              },
+              "required": [
+                "contentBase64"
+              ]
             }
           },
           "required": [

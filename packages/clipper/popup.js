@@ -1,4 +1,12 @@
 import { createAuthClient, DEFAULT_BASE_URL } from "./auth.js";
+import {
+  buildCapturePayload,
+  extractPageContext,
+  normalizePrefs,
+  PAGE_TEXT_MAX_CHARS,
+  PREFS_KEY,
+  screenshotFromDataUrl,
+} from "./capture.js";
 import { createKeychain } from "./keychain.js";
 
 function getApi() {
@@ -46,19 +54,56 @@ async function getActiveTab(api) {
   return tabs[0];
 }
 
-async function getPageInfo(api) {
-  const tab = await getActiveTab(api);
+async function getPageInfo(api, tab) {
   const results = await callApi(api.scripting, api.scripting.executeScript, {
     target: { tabId: tab.id },
-    func: () => {
-      return {
-        url: location.href,
-        title: document.title,
-        selection: window.getSelection().toString(),
-      };
-    },
+    func: extractPageContext,
+    args: [PAGE_TEXT_MAX_CHARS],
   });
   return results[0].result;
+}
+
+/**
+ * @returns {Promise<{ contentType: string, contentBase64: string } | null>}
+ */
+async function captureScreenshot(api, tab) {
+  try {
+    const dataUrl = await callApi(
+      api.tabs,
+      api.tabs.captureVisibleTab,
+      tab.windowId,
+      {
+        format: "png",
+      }
+    );
+    return typeof dataUrl === "string" ? screenshotFromDataUrl(dataUrl) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * @param {HTMLSelectElement} select
+ * @param {Array<{ id: string, label: string }>} items
+ * @param {string | string[]} selected
+ * @param {string | null} placeholder
+ */
+function fillSelect(select, items, selected, placeholder) {
+  const selectedIds = new Set(Array.isArray(selected) ? selected : [selected]);
+  select.replaceChildren();
+  if (placeholder !== null) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = placeholder;
+    select.append(option);
+  }
+  for (const item of items) {
+    const option = document.createElement("option");
+    option.value = item.id;
+    option.textContent = item.label;
+    option.selected = selectedIds.has(item.id);
+    select.append(option);
+  }
 }
 
 function showStatus(element, message, type) {
@@ -96,14 +141,85 @@ document.addEventListener("DOMContentLoaded", () => {
   const workspaceLabel = requireElement("workspace");
   const captureButton = requireElement("capture");
   const signOutButton = requireElement("sign-out");
+  const screenshotToggle = /** @type {HTMLInputElement} */ (
+    requireElement("include-screenshot")
+  );
+  const summaryToggle = /** @type {HTMLInputElement} */ (
+    requireElement("include-summary")
+  );
+  const fullTextToggle = /** @type {HTMLInputElement} */ (
+    requireElement("include-full-text")
+  );
+  const teamSelect = /** @type {HTMLSelectElement} */ (requireElement("team"));
+  const projectSelect = /** @type {HTMLSelectElement} */ (
+    requireElement("project")
+  );
+  const labelsSelect = /** @type {HTMLSelectElement} */ (
+    requireElement("labels")
+  );
+  const storage = createStorage(api);
 
   /** @type {string | null} */
   let pendingCookie = null;
+
+  function readPrefs() {
+    return normalizePrefs({
+      includeScreenshot: screenshotToggle.checked,
+      includeSummary: summaryToggle.checked,
+      includeFullText: fullTextToggle.checked,
+      teamId: teamSelect.value,
+      projectId: projectSelect.value,
+      labelIds: Array.from(labelsSelect.selectedOptions, (o) => o.value),
+    });
+  }
+
+  async function savePrefs() {
+    await storage.set({ [PREFS_KEY]: readPrefs() });
+  }
+
+  /**
+   * @param {import("./keychain.js").ClipperSession} session
+   */
+  async function loadRoutingOptions(session) {
+    const items = await storage.get([PREFS_KEY]);
+    const prefs = normalizePrefs(items[PREFS_KEY]);
+    screenshotToggle.checked = prefs.includeScreenshot;
+    summaryToggle.checked = prefs.includeSummary;
+    fullTextToggle.checked = prefs.includeFullText;
+    try {
+      const options = await auth.listRoutingOptions(
+        session.baseUrl,
+        session.token,
+        session.workspaceId
+      );
+      fillSelect(
+        teamSelect,
+        options.teams.map((t) => ({ id: t.id, label: `${t.key} · ${t.name}` })),
+        prefs.teamId,
+        "Default team"
+      );
+      fillSelect(
+        projectSelect,
+        options.projects.map((p) => ({ id: p.id, label: p.name })),
+        prefs.projectId,
+        "No project"
+      );
+      fillSelect(
+        labelsSelect,
+        options.labels.map((l) => ({ id: l.id, label: l.name })),
+        prefs.labelIds,
+        null
+      );
+    } catch (error) {
+      showStatus(status, String(error.message ?? error), "error");
+    }
+  }
 
   function renderSignedIn(session) {
     pendingCookie = null;
     workspaceLabel.textContent = session.workspaceName;
     showPanel("signed-in");
+    void loadRoutingOptions(session);
   }
 
   function renderSignIn() {
@@ -211,8 +327,22 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  for (const control of [
+    screenshotToggle,
+    summaryToggle,
+    fullTextToggle,
+    teamSelect,
+    projectSelect,
+    labelsSelect,
+  ]) {
+    control.addEventListener("change", () => {
+      void savePrefs();
+    });
+  }
+
   signOutButton.addEventListener("click", async () => {
     await keychain.clearSession();
+    await storage.remove(PREFS_KEY);
     renderSignIn();
     showStatus(status, "Signed out", "");
   });
@@ -228,12 +358,20 @@ document.addEventListener("DOMContentLoaded", () => {
     captureButton.disabled = true;
     showStatus(status, "Capturing…", "");
     try {
-      const page = await getPageInfo(api);
+      const prefs = readPrefs();
+      const tab = await getActiveTab(api);
+      const [page, screenshot] = await Promise.all([
+        getPageInfo(api, tab),
+        prefs.includeScreenshot ? captureScreenshot(api, tab) : null,
+      ]);
+      if (prefs.includeScreenshot && !screenshot) {
+        showStatus(status, "Screenshot unavailable, capturing without it…", "");
+      }
       const issue = await auth.capture(
         session.baseUrl,
         session.token,
         session.workspaceId,
-        page
+        buildCapturePayload(page, prefs, screenshot)
       );
       const identifier =
         issue &&

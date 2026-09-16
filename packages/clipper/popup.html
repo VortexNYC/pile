@@ -31,6 +31,39 @@
 
       <section data-panel="signed-in" hidden>
         <button id="capture" type="button">Pile it</button>
+        <div class="options">
+          <label class="check">
+            <input id="include-screenshot" type="checkbox" checked />
+            Attach screenshot
+          </label>
+          <label class="check">
+            <input id="include-summary" type="checkbox" checked />
+            Summarize page
+          </label>
+          <label class="check">
+            <input id="include-full-text" type="checkbox" />
+            Include full page text
+          </label>
+        </div>
+        <details class="routing">
+          <summary>Route to…</summary>
+          <label>
+            Team
+            <select id="team">
+              <option value="">Default team</option>
+            </select>
+          </label>
+          <label>
+            Project
+            <select id="project">
+              <option value="">No project</option>
+            </select>
+          </label>
+          <label>
+            Labels
+            <select id="labels" multiple size="4"></select>
+          </label>
+        </details>
         <p id="workspace" class="workspace"></p>
         <button id="sign-out" type="button" class="text">Sign out</button>
       </section>

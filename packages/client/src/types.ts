@@ -920,6 +920,17 @@ export interface paths {
                         selection?: string;
                         source?: string;
                         teamId?: string;
+                        teamKey?: string;
+                        projectId?: string;
+                        labelIds?: string[];
+                        pageText?: string;
+                        includeFullText?: boolean;
+                        summarize?: boolean;
+                        screenshot?: {
+                            contentBase64: string;
+                            /** @default image/png */
+                            contentType?: string;
+                        };
                     };
                 };
             };
