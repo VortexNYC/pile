@@ -15,9 +15,11 @@ import {
 import type {
   AgentDispatchContext,
   AgentProvider,
+  AgentProviderHealth,
   AgentProviderSession,
   AgentProviderState,
 } from "./provider.js";
+import { probeUrl } from "./provider.js";
 
 const devinCreateResponseSchema = z.object({
   session_id: z.string().optional(),
@@ -281,5 +283,50 @@ export class DevinAgentProvider implements AgentProvider {
     ]);
     const provider = devinRes.ok ? await devinRes.json() : null;
     return { provider, compute };
+  }
+
+  async health(): Promise<AgentProviderHealth> {
+    const orgId = this.env.DEVIN_ORG_ID;
+    const token = this.env.DEVIN_TOKEN;
+    if (!orgId || !token) {
+      return { ok: false, message: "DEVIN_ORG_ID or DEVIN_TOKEN missing" };
+    }
+    return probeUrl(
+      `https://api.devin.ai/v3/organizations/${orgId}/sessions?limit=1`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+  }
+
+  parseWebhook(body: unknown): {
+    sessionId: string;
+    session?: AgentProviderSession;
+  } | null {
+    if (typeof body !== "object" || body === null) return null;
+    const record = body as Record<string, unknown>;
+    const sessionId = record.session_id ?? record.sessionId ?? record.id;
+    if (typeof sessionId !== "string" || sessionId.length === 0) return null;
+    const rawStatus = record.status;
+    const status =
+      typeof rawStatus === "string"
+        ? (STATUS_MAP[rawStatus] ?? undefined)
+        : undefined;
+    return {
+      sessionId,
+      session: {
+        id: sessionId,
+        agentId: this.id,
+        status: status ?? "running",
+        result:
+          typeof record.status_detail === "string"
+            ? record.status_detail
+            : undefined,
+        prUrl:
+          typeof record.pr_url === "string"
+            ? record.pr_url
+            : typeof record.prUrl === "string"
+              ? record.prUrl
+              : undefined,
+      },
+    };
   }
 }

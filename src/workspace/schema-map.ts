@@ -37,6 +37,7 @@ import {
   timeSchedules,
   gitAutomationStates,
   gitAutomationTargetBranches,
+  workspaceAgentEnvironmentFiles,
 } from "./schema.js";
 
 export const workspaceSchema = {
@@ -78,4 +79,5 @@ export const workspaceSchema = {
   timeSchedules,
   gitAutomationStates,
   gitAutomationTargetBranches,
+  workspaceAgentEnvironmentFiles,
 };

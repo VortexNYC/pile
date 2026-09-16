@@ -661,4 +661,190 @@ describe("agent sessions API", () => {
     expect(reconnectRes.status).toBe(200);
     await reconnectRes.body?.cancel?.();
   });
+
+  it("probes provider health", async () => {
+    registerAgentProvider(
+      "healthy",
+      () =>
+        new MockAgentProvider("healthy", {
+          health: () => ({ ok: true, message: "up" }),
+        })
+    );
+    const res = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/providers/healthy/health`, {
+        method: "POST",
+        token,
+      }),
+      env
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json<{ ok: boolean; message?: string }>();
+    expect(body.ok).toBe(true);
+    expect(body.message).toBe("up");
+  });
+
+  it("applies inbound provider webhooks onto the matching session", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const issue = await stub.createIssue({
+      title: "Webhook test",
+      repo: "VortexNYC/pile",
+    });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "mock",
+      provider: "mock",
+      actorId: "user-1",
+      actorType: "user",
+      status: "running",
+      providerSessionId: "remote-webhook-1",
+    });
+
+    const res = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/providers/mock/hooks`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          session_id: "remote-webhook-1",
+          status: "completed",
+          result: "done via hook",
+        }),
+      }),
+      env
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json<{ ok: boolean; sessionId: string }>();
+    expect(body.ok).toBe(true);
+    expect(body.sessionId).toBe(session.id);
+
+    const got = await stub.getAgentSession(session.id);
+    expect(got?.status).toBe("completed");
+    expect(got?.result).toBe("done via hook");
+  });
+
+  it("accepts inbound provider webhooks with a configured secret", async () => {
+    const put = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/providers/mock`, {
+        method: "PUT",
+        token,
+        body: JSON.stringify({
+          config: { webhookSecret: "hook-secret" },
+        }),
+      }),
+      env
+    );
+    expect(put.status).toBe(200);
+    const saved = await put.json<{
+      config: { hasWebhookSecret?: boolean; webhookSecret?: string };
+    }>();
+    expect(saved.config.hasWebhookSecret).toBe(true);
+    expect(saved.config.webhookSecret).toBeUndefined();
+
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const issue = await stub.createIssue({
+      title: "Inbound webhook",
+      repo: "VortexNYC/pile",
+    });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "mock",
+      provider: "mock",
+      actorId: "user-1",
+      actorType: "user",
+      status: "running",
+      providerSessionId: "remote-inbound-1",
+    });
+
+    const denied = await app.fetch(
+      request(`/webhooks/agent/${organizationId}/mock`, {
+        method: "POST",
+        body: JSON.stringify({
+          session_id: "remote-inbound-1",
+          status: "failed",
+        }),
+      }),
+      env
+    );
+    expect(denied.status).toBe(401);
+
+    const res = await app.fetch(
+      request(`/webhooks/agent/${organizationId}/mock`, {
+        method: "POST",
+        headers: { "X-Pile-Webhook-Secret": "hook-secret" },
+        body: JSON.stringify({
+          session_id: "remote-inbound-1",
+          status: "failed",
+          result: "provider push",
+        }),
+      }),
+      env
+    );
+    expect(res.status).toBe(200);
+    const got = await stub.getAgentSession(session.id);
+    expect(got?.status).toBe("failed");
+    expect(got?.result).toBe("provider push");
+  });
+
+  it("captures a PR URL from poll as a session artifact", async () => {
+    registerAgentProvider(
+      "pr-mock",
+      () =>
+        new MockAgentProvider("pr-mock", {
+          dispatch: (_org, issue) => ({
+            id: "pr-remote",
+            agentId: "pr-mock",
+            issueId: issue.id,
+            status: "running",
+          }),
+          poll: (sessionId) => ({
+            id: sessionId,
+            agentId: "pr-mock",
+            status: "running",
+            prUrl: "https://github.com/VortexNYC/pile/pull/999",
+            prState: "open",
+          }),
+        })
+    );
+    const issueRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          title: "PR artifact",
+          repo: "VortexNYC/pile",
+        }),
+      }),
+      env
+    );
+    const issue = await issueRes.json<{ id: string }>();
+    const dispatchRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${issue.id}/dispatch`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ agentId: "pr-mock" }),
+      }),
+      env
+    );
+    const session = await dispatchRes.json<{ id: string }>();
+    const pollRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/poll`,
+        { method: "POST", token }
+      ),
+      env
+    );
+    expect(pollRes.status).toBe(200);
+    const polled = await pollRes.json<{
+      activities: Array<{ type: string; payload: { url?: string } | null }>;
+    }>();
+    const artifact = polled.activities.find((a) => a.type === "artifact");
+    expect(artifact?.payload?.url).toBe(
+      "https://github.com/VortexNYC/pile/pull/999"
+    );
+  });
 });

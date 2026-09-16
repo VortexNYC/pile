@@ -2556,6 +2556,14 @@
                     "updatedAt": {
                       "type": "string"
                     },
+                    "lastProgressAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "lastStateHash": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "activities": {
                       "type": "array",
                       "items": {
@@ -2751,6 +2759,14 @@
                         "updatedAt": {
                           "type": "string"
                         },
+                        "lastProgressAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "lastStateHash": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "activities": {
                           "type": "array",
                           "items": {
@@ -2940,6 +2956,14 @@
                           "updatedAt": {
                             "type": "string"
                           },
+                          "lastProgressAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "lastStateHash": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "activities": {
                             "type": "array",
                             "items": {
@@ -3120,6 +3144,14 @@
                         },
                         "updatedAt": {
                           "type": "string"
+                        },
+                        "lastProgressAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "lastStateHash": {
+                          "type": "string",
+                          "nullable": true
                         },
                         "activities": {
                           "type": "array",
@@ -3345,6 +3377,14 @@
                     "updatedAt": {
                       "type": "string"
                     },
+                    "lastProgressAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "lastStateHash": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "activities": {
                       "type": "array",
                       "items": {
@@ -3553,6 +3593,14 @@
                     },
                     "updatedAt": {
                       "type": "string"
+                    },
+                    "lastProgressAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "lastStateHash": {
+                      "type": "string",
+                      "nullable": true
                     },
                     "activities": {
                       "type": "array",
@@ -4072,6 +4120,14 @@
                     "updatedAt": {
                       "type": "string"
                     },
+                    "lastProgressAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "lastStateHash": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "activities": {
                       "type": "array",
                       "items": {
@@ -4245,6 +4301,14 @@
                     },
                     "updatedAt": {
                       "type": "string"
+                    },
+                    "lastProgressAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "lastStateHash": {
+                      "type": "string",
+                      "nullable": true
                     },
                     "activities": {
                       "type": "array",
@@ -4422,6 +4486,14 @@
                         },
                         "updatedAt": {
                           "type": "string"
+                        },
+                        "lastProgressAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "lastStateHash": {
+                          "type": "string",
+                          "nullable": true
                         },
                         "activities": {
                           "type": "array",
@@ -4643,6 +4715,14 @@
                         },
                         "updatedAt": {
                           "type": "string"
+                        },
+                        "lastProgressAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "lastStateHash": {
+                          "type": "string",
+                          "nullable": true
                         },
                         "activities": {
                           "type": "array",
@@ -5086,6 +5166,388 @@
           }
         },
         "summary": "Delete agent provider"
+      }
+    },
+    "/workspaces/{organizationId}/agent/providers/{agentId}/health": {
+      "post": {
+        "tags": [
+          "agent-providers"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "agentId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Provider credential/config probe",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Health agent provider"
+      }
+    },
+    "/workspaces/{organizationId}/agent/providers/{agentId}/hooks": {
+      "post": {
+        "tags": [
+          "agent-providers"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "agentId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "sessionId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found"
+          }
+        },
+        "summary": "Create agent provider hook"
+      }
+    },
+    "/webhooks/agent/{organizationId}/{agentId}": {
+      "post": {
+        "tags": [
+          "agent-providers"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "agentId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "sessionId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid webhook secret"
+          },
+          "404": {
+            "description": "Session not found"
+          }
+        },
+        "summary": "POST /webhooks/agent/{organizationId}/{agentId}"
+      }
+    },
+    "/workspaces/{organizationId}/agent/environment": {
+      "get": {
+        "tags": [
+          "agent-environment"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workspace agent environment files",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "files": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "content": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "content",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "files"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List agent environment"
+      },
+      "put": {
+        "tags": [
+          "agent-environment"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "content": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path",
+                  "content"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "File saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string"
+                    },
+                    "content": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "content",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Update agent environment"
+      }
+    },
+    "/workspaces/{organizationId}/agent/environment/file": {
+      "get": {
+        "tags": [
+          "agent-environment"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "path",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One environment file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string"
+                    },
+                    "content": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "content",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "File not found"
+          }
+        },
+        "summary": "List agent environment file"
+      },
+      "delete": {
+        "tags": [
+          "agent-environment"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "path",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "File deleted"
+          },
+          "404": {
+            "description": "File not found"
+          }
+        },
+        "summary": "Delete agent environment file"
       }
     },
     "/workspaces/{organizationId}/issues/{issueId}/approvals": {

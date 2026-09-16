@@ -29,6 +29,23 @@ export interface AgentDispatchContext {
   waitUntil?: (promise: Promise<unknown>) => void;
 }
 
+export interface AgentProviderHealth {
+  ok: boolean;
+  message?: string;
+}
+
+export async function probeUrl(
+  url: string,
+  init?: RequestInit
+): Promise<AgentProviderHealth> {
+  const res = await fetch(url, init);
+  if (!res.ok) {
+    const text = await res.text();
+    return { ok: false, message: `${res.status} ${text.slice(0, 200)}` };
+  }
+  return { ok: true };
+}
+
 export interface AgentProvider {
   id: string;
   dispatch(
@@ -52,4 +69,18 @@ export interface AgentProvider {
     providerSessionId: string,
     trackerSessionId: string
   ): Promise<AgentProviderState | null>;
+  /**
+   * Optional credential/config probe. Must not start a session. Used by
+   * POST /agent/providers/{agentId}/health so a bad token fails at save-time
+   * rather than eight hours into a run.
+   */
+  health?(): Promise<AgentProviderHealth>;
+  /**
+   * Optional inbound webhook parser. Return null when the payload is not
+   * for this provider. sessionId is the provider-side id.
+   */
+  parseWebhook?(
+    body: unknown,
+    headers: Headers
+  ): { sessionId: string; session?: AgentProviderSession } | null;
 }

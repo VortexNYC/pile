@@ -128,10 +128,18 @@ run that execute tool calls while the agent loop stays in Cursor's cloud:
   (`agent worker --pool <name> start`). Requires a Cursor Enterprise
   **service account** key — personal keys can't start pool workers.
 
+The adapter already sends `env: { type: "pool" }`. That is not ISS-64.
+ISS-64 is the missing **controller**: a Daytona snapshot that runs
+`agent worker --pool`, a service-account key, and provision/reap of that
+sandbox the way Outpost does for Devin. Until that snapshot exists, Cursor
+BYOM still cannot clone a private repo from a Pile dispatch. Do not add
+more adapter code for this.
+
 Workers need outbound HTTPS only. There is no `metadata` field on v1 agents —
 tracker context rides inside the prompt. v1 has no webhooks yet; status is
 polled (same as Devin). The legacy v0 API does support HMAC-signed
-`statusChange` webhooks if push is ever required.
+`statusChange` webhooks if push is ever required. Pile's inbound webhook
+route will accept them if Cursor adds v1 push.
 
 ## cf-agent (Cloudflare Agents SDK workers)
 
@@ -177,6 +185,61 @@ provider-side termination when the provider supports it (Cursor `runs/{id}/
 cancel`, Devin `DELETE /sessions/{id}`), then the local session is marked
 `canceled` either way.
 
+`POST /workspaces/{org}/agent/sessions/{id}/poll` writes provider status back
+and, when a new `prUrl` appears, records it as a session **artifact** (same
+path as `POST …/artifacts`).
+
+## Timeouts
+
+A cron sweep cancels running sessions that exceed the workspace provider
+`config.timeout` (minutes, default **60**) or go silent for
+`config.inactivityTimeout` (minutes, default **20**). Silence is not “no Pile
+activity”: the sweep probes `getState` (hash / compute `lastSeen`) or `poll`
+before killing, so a Devin session that never streams still lives while the
+provider payload changes. A probe error does **not** cancel; max-runtime is
+the hard cap.
+
+```json
+{ "timeout": 60, "inactivityTimeout": 20 }
+```
+
+## Health
+
+`POST /workspaces/{org}/agent/providers/{agentId}/health` probes credentials
+and config without starting a session. A bad token should fail here, not
+eight hours into a run.
+
+## Webhooks
+
+Providers can push instead of waiting for poll:
+
+- Authenticated: `POST /workspaces/{org}/agent/providers/{agentId}/hooks`
+  (workspace API key, `agent:write`).
+- Inbound: `POST /webhooks/agent/{org}/{agentId}` with
+  `X-Pile-Webhook-Secret` (or `Authorization: Bearer`) matching
+  `config.webhookSecret`. The secret is write-only; reads show
+  `hasWebhookSecret`.
+
+Payload must include `session_id` / `sessionId` / `id` (provider-side id).
+`status`, `result`, `pr_url` are applied onto the matching session and land
+on the timeline. Devin maps its native statuses (`exit` → `completed`, etc.).
+Cursor Cloud Agents v1 still has no webhooks — poll remains the recovery
+path.
+
+## Agent environment (ISS-31)
+
+Workspace-scoped files the agent can read without cloning the repo. This is
+storage + fetch, **not** prompt injection (ISS-43 was canceled).
+
+Allowed paths: `AGENTS.md`, `skills/<name>.md`, `rules/<name>.md`.
+
+| route                                                   | perm         | notes               |
+| ------------------------------------------------------- | ------------ | ------------------- |
+| `GET /workspaces/{org}/agent/environment`               | `agent:read` | list                |
+| `GET /workspaces/{org}/agent/environment/file?path=`    | `agent:read` | one file            |
+| `PUT /workspaces/{org}/agent/environment`               | `admin`      | `{ path, content }` |
+| `DELETE /workspaces/{org}/agent/environment/file?path=` | `admin`      |                     |
+
 ## Codex (OpenAI Agents API)
 
 The `codex` provider targets the OpenAI Agents API
@@ -205,11 +268,14 @@ connect an OpenAI executor to `session.environment.remote_url`.
 
 ## API
 
-| route                                                | perm         | notes                                     |
-| ---------------------------------------------------- | ------------ | ----------------------------------------- |
-| `GET /workspaces/{org}/agent/providers`              | `agent:read` | secrets redacted (`hasToken` etc.)        |
-| `PUT /workspaces/{org}/agent/providers/{agentId}`    | `admin`      | upsert; unset fields keep existing values |
-| `DELETE /workspaces/{org}/agent/providers/{agentId}` | `admin`      | revert to deployment defaults             |
+| route                                                     | perm          | notes                                     |
+| --------------------------------------------------------- | ------------- | ----------------------------------------- |
+| `GET /workspaces/{org}/agent/providers`                   | `agent:read`  | secrets redacted (`hasToken` etc.)        |
+| `PUT /workspaces/{org}/agent/providers/{agentId}`         | `admin`       | upsert; unset fields keep existing values |
+| `DELETE /workspaces/{org}/agent/providers/{agentId}`      | `admin`       | revert to deployment defaults             |
+| `POST /workspaces/{org}/agent/providers/{agentId}/health` | `admin`       | credential/config probe, no session       |
+| `POST /workspaces/{org}/agent/providers/{agentId}/hooks`  | `agent:write` | authenticated push                        |
+| `POST /webhooks/agent/{org}/{agentId}`                    | secret        | inbound push (`config.webhookSecret`)     |
 
 ## Custom agents
 

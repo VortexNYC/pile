@@ -31,6 +31,7 @@ import {
   workspaceDocumentWatchers,
   workspaceAgentProviderConfigs,
   workspaceAgentSessions,
+  workspaceAgentEnvironmentFiles,
   workspaceAttachments,
   workspaceAuditLog,
   workspaceCustomerNeeds,
@@ -981,6 +982,23 @@ export function getAgentSession(
     .get();
 }
 
+export function getAgentSessionByProviderSessionId(
+  db: WorkspaceDb,
+  organizationId: string,
+  providerSessionId: string
+) {
+  return db
+    .select()
+    .from(workspaceAgentSessions)
+    .where(
+      and(
+        eq(workspaceAgentSessions.organizationId, organizationId),
+        eq(workspaceAgentSessions.providerSessionId, providerSessionId)
+      )
+    )
+    .get();
+}
+
 export function listAgentSessions(
   db: WorkspaceDb,
   organizationId: string,
@@ -1026,6 +1044,8 @@ export async function updateAgentSession(
     result: string | null;
     url: string | null;
     providerSessionId: string | null;
+    lastProgressAt: string | null;
+    lastStateHash: string | null;
   }>
 ) {
   const existing = await getAgentSession(db, organizationId, id);
@@ -1038,6 +1058,10 @@ export async function updateAgentSession(
   if (input.url !== undefined) set.url = input.url;
   if (input.providerSessionId !== undefined)
     set.providerSessionId = input.providerSessionId;
+  if (input.lastProgressAt !== undefined)
+    set.lastProgressAt = input.lastProgressAt;
+  if (input.lastStateHash !== undefined)
+    set.lastStateHash = input.lastStateHash;
   await db
     .update(workspaceAgentSessions)
     .set(set)
@@ -1083,6 +1107,10 @@ export async function addAgentActivity(
   if (!row) {
     throw new Error("Failed to create agent activity");
   }
+  await db
+    .update(workspaceAgentSessions)
+    .set({ lastProgressAt: ts, updatedAt: ts })
+    .where(eq(workspaceAgentSessions.id, input.sessionId));
   return row;
 }
 
@@ -1512,6 +1540,75 @@ export async function deleteAgentProviderConfig(
         eq(workspaceAgentProviderConfigs.agentId, agentId)
       )
     );
+}
+
+export function listAgentEnvironmentFiles(
+  db: WorkspaceDb,
+  organizationId: string
+) {
+  return db
+    .select()
+    .from(workspaceAgentEnvironmentFiles)
+    .where(eq(workspaceAgentEnvironmentFiles.organizationId, organizationId))
+    .orderBy(workspaceAgentEnvironmentFiles.path)
+    .all();
+}
+
+export function getAgentEnvironmentFile(
+  db: WorkspaceDb,
+  organizationId: string,
+  path: string
+) {
+  return db
+    .select()
+    .from(workspaceAgentEnvironmentFiles)
+    .where(
+      and(
+        eq(workspaceAgentEnvironmentFiles.organizationId, organizationId),
+        eq(workspaceAgentEnvironmentFiles.path, path)
+      )
+    )
+    .get();
+}
+
+export async function upsertAgentEnvironmentFile(
+  db: WorkspaceDb,
+  organizationId: string,
+  path: string,
+  content: string
+) {
+  const existing = await getAgentEnvironmentFile(db, organizationId, path);
+  const now = new Date().toISOString();
+  if (existing) {
+    await db
+      .update(workspaceAgentEnvironmentFiles)
+      .set({ content, updatedAt: now })
+      .where(eq(workspaceAgentEnvironmentFiles.id, existing.id));
+    return getAgentEnvironmentFile(db, organizationId, path);
+  }
+  const id = crypto.randomUUID();
+  await db.insert(workspaceAgentEnvironmentFiles).values({
+    id,
+    organizationId,
+    path,
+    content,
+    createdAt: now,
+    updatedAt: now,
+  });
+  return getAgentEnvironmentFile(db, organizationId, path);
+}
+
+export async function deleteAgentEnvironmentFile(
+  db: WorkspaceDb,
+  organizationId: string,
+  path: string
+) {
+  const existing = await getAgentEnvironmentFile(db, organizationId, path);
+  if (!existing) return false;
+  await db
+    .delete(workspaceAgentEnvironmentFiles)
+    .where(eq(workspaceAgentEnvironmentFiles.id, existing.id));
+  return true;
 }
 
 // ---- documents ----

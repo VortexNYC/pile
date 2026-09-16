@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getInstallationTokenForRepo } from "../global/github-auth.js";
 import type { AppEnv } from "../platform/env.js";
 import { VortexError } from "../platform/errors.js";
+import type { WorkerEnv } from "../platform/middleware.js";
 import type {
   AgentSessionStatus,
   GitIdentity,
@@ -12,10 +13,12 @@ import {
   daytonaConfig,
   daytonaSandboxListSchema,
   daytonaSandboxSchema,
+  writeAgentSessionActivity,
 } from "./outpost.js";
 import type {
   AgentDispatchContext,
   AgentProvider,
+  AgentProviderHealth,
   AgentProviderSession,
   AgentProviderState,
 } from "./provider.js";
@@ -393,6 +396,24 @@ export class CodexCliAgentProvider implements AgentProvider {
 
   constructor(private env: AppEnv) {}
 
+  private async note(
+    organizationId: string | undefined,
+    sessionId: string | undefined,
+    type: "status" | "error" | "action",
+    message: string,
+    payload?: Record<string, unknown>
+  ): Promise<void> {
+    if (!("WORKSPACE_DURABLE_OBJECT" in this.env)) return;
+    await writeAgentSessionActivity(
+      this.env as WorkerEnv,
+      organizationId,
+      sessionId,
+      type,
+      message,
+      payload
+    );
+  }
+
   private requireAuth(): string {
     const auth = normalizeAuthB64(this.env.CODEX_AUTH_JSON_B64);
     if (!auth) {
@@ -687,38 +708,79 @@ export class CodexCliAgentProvider implements AgentProvider {
     const shortId = sessionId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 12);
     const name = `vortex-codex-${shortId}`;
 
-    const list = await this.listSandboxes(config);
-    const existing = list.items.find(
-      (s) => s.labels?.["vortex.session"] === sessionId || s.name === name
-    );
-    if (existing) {
-      await this.deleteSandbox(config, existing.id);
-    }
+    try {
+      const list = await this.listSandboxes(config);
+      const existing = list.items.find(
+        (s) => s.labels?.["vortex.session"] === sessionId || s.name === name
+      );
+      if (existing) {
+        await this.note(
+          organizationId,
+          sessionId,
+          "status",
+          "codex-cli sandbox exists, recreating",
+          { sandbox: existing.id, state: existing.state }
+        );
+        await this.deleteSandbox(config, existing.id);
+      }
 
-    const sandboxEnv = buildSandboxEnv(
-      issue,
-      model,
-      authB64,
-      githubToken,
-      gitIdentity,
-      envId
-    );
-    const sandbox = await this.createSandbox(
-      config,
-      name,
-      sessionId,
-      organizationId,
-      sandboxEnv
-    );
-    const started = await this.waitForStarted(config, sandbox.id);
-    const base = toolboxBase(started);
-    await this.createProcessSession(base, sessionId, config.apiKey);
-    await this.execCommand(
-      base,
-      sessionId,
-      buildRunnerCommand(),
-      config.apiKey
-    );
+      const sandboxEnv = buildSandboxEnv(
+        issue,
+        model,
+        authB64,
+        githubToken,
+        gitIdentity,
+        envId
+      );
+      const sandbox = await this.createSandbox(
+        config,
+        name,
+        sessionId,
+        organizationId,
+        sandboxEnv
+      );
+      await this.note(
+        organizationId,
+        sessionId,
+        "status",
+        "codex-cli sandbox created",
+        { sandbox: sandbox.id, state: sandbox.state }
+      );
+      const started = await this.waitForStarted(config, sandbox.id);
+      await this.note(
+        organizationId,
+        sessionId,
+        "status",
+        "codex-cli sandbox started",
+        { sandbox: started.id, state: started.state }
+      );
+      const base = toolboxBase(started);
+      await this.createProcessSession(base, sessionId, config.apiKey);
+      await this.execCommand(
+        base,
+        sessionId,
+        buildRunnerCommand(),
+        config.apiKey
+      );
+      await this.note(
+        organizationId,
+        sessionId,
+        "action",
+        "codex-cli runner started",
+        { sandbox: started.id }
+      );
+    } catch (err) {
+      await this.note(
+        organizationId,
+        sessionId,
+        "error",
+        err instanceof Error ? err.message : "codex-cli provision failed",
+        {
+          error: err instanceof Error ? err.message : String(err),
+        }
+      );
+      throw err;
+    }
   }
 
   async dispatch(
@@ -827,6 +889,13 @@ export class CodexCliAgentProvider implements AgentProvider {
     const sandbox = await this.findSandbox(config, sessionId);
     if (sandbox) {
       await this.deleteSandbox(config, sandbox.id);
+      await this.note(
+        sandbox.labels?.["vortex.org"],
+        sessionId,
+        "status",
+        "codex-cli sandbox deleted",
+        { sandbox: sandbox.id }
+      );
     }
   }
 
@@ -844,5 +913,26 @@ export class CodexCliAgentProvider implements AgentProvider {
       config.apiKey
     );
     return { provider: session, compute: sandbox };
+  }
+
+  async health(): Promise<AgentProviderHealth> {
+    try {
+      this.requireAuth();
+      const config = this.requireDaytona();
+      this.requireEnvId();
+      const res = await fetch(`${config.apiUrl}/sandbox`, {
+        headers: { Authorization: `Bearer ${config.apiKey}` },
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        return { ok: false, message: `${res.status} ${text.slice(0, 200)}` };
+      }
+      return { ok: true };
+    } catch (err) {
+      return {
+        ok: false,
+        message: err instanceof Error ? err.message : String(err),
+      };
+    }
   }
 }

@@ -1165,6 +1165,105 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "agent providers health create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/agent/providers/{agentId}/health",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "agentId",
+        flag: "agent-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "agent providers hooks create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/agent/providers/{agentId}/hooks",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "agentId",
+        flag: "agent-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "agent environment list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/agent/environment",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "agent environment update": {
+    method: "PUT",
+    path: "/workspaces/{organizationId}/agent/environment",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "path",
+        flag: "path",
+      },
+      {
+        name: "content",
+        flag: "content",
+      },
+    ],
+  },
+  "agent environment file list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/agent/environment/file",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "path",
+        flag: "path",
+      },
+    ],
+    body: [],
+  },
+  "agent environment file delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/agent/environment/file",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "path",
+        flag: "path",
+      },
+    ],
+    body: [],
+  },
   "issues approvals": {
     method: "POST",
     path: "/workspaces/{organizationId}/issues/{issueId}/approvals",

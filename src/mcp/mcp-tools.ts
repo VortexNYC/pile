@@ -119,6 +119,28 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdAgentEnvironmentFile",
+    "description": "Delete agent environment file (DELETE /workspaces/{organizationId}/agent/environment/file) Path params (top-level, required): organizationId. Query params (top-level, optional): path.",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/agent/environment/file",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "organizationId",
+        "path"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdAgentProvidersAgentId",
     "description": "Delete agent provider (DELETE /workspaces/{organizationId}/agent/providers/{agentId}) Path params (top-level, required): organizationId, agentId.",
     "method": "DELETE",
@@ -1398,6 +1420,45 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdAgentEnvironment",
+    "description": "List agent environment (GET /workspaces/{organizationId}/agent/environment) Path params (top-level, required): organizationId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/agent/environment",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdAgentEnvironmentFile",
+    "description": "List agent environment file (GET /workspaces/{organizationId}/agent/environment/file) Path params (top-level, required): organizationId. Query params (top-level, optional): path.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/agent/environment/file",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "organizationId",
+        "path"
       ]
     }
   },
@@ -7675,6 +7736,48 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdAgentProvidersAgentIdHealth",
+    "description": "Health agent provider (POST /workspaces/{organizationId}/agent/providers/{agentId}/health) Path params (top-level, required): organizationId, agentId.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/agent/providers/{agentId}/health",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "agentId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "agentId",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdAgentProvidersAgentIdHooks",
+    "description": "Create agent provider hook (POST /workspaces/{organizationId}/agent/providers/{agentId}/hooks) Path params (top-level, required): organizationId, agentId.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/agent/providers/{agentId}/hooks",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "agentId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "agentId",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdAgentSessionsSessionIdActivities",
     "description": "Create agent session activity (POST /workspaces/{organizationId}/agent/sessions/{sessionId}/activities) Path params (top-level, required): organizationId, sessionId. Request body goes in the \"body\" object; fields: type*, message*, payload (* = required).",
     "method": "POST",
@@ -13082,6 +13185,39 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           },
           "required": [
             "url"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "putWorkspacesOrganizationIdAgentEnvironment",
+    "description": "Update agent environment (PUT /workspaces/{organizationId}/agent/environment) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: path*, content* (* = required).",
+    "method": "PUT",
+    "path": "/workspaces/{organizationId}/agent/environment",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "content": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "content"
           ]
         }
       },

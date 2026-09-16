@@ -1225,6 +1225,8 @@ export interface paths {
                             branch: string | null;
                             createdAt: string;
                             updatedAt: string;
+                            lastProgressAt?: string | null;
+                            lastStateHash?: string | null;
                             activities?: {
                                 id: string;
                                 sessionId: string;
@@ -1301,6 +1303,8 @@ export interface paths {
                                 branch: string | null;
                                 createdAt: string;
                                 updatedAt: string;
+                                lastProgressAt?: string | null;
+                                lastStateHash?: string | null;
                                 activities?: {
                                     id: string;
                                     sessionId: string;
@@ -1371,6 +1375,8 @@ export interface paths {
                                 branch: string | null;
                                 createdAt: string;
                                 updatedAt: string;
+                                lastProgressAt?: string | null;
+                                lastStateHash?: string | null;
                                 activities?: {
                                     id: string;
                                     sessionId: string;
@@ -1441,6 +1447,8 @@ export interface paths {
                                 branch: string | null;
                                 createdAt: string;
                                 updatedAt: string;
+                                lastProgressAt?: string | null;
+                                lastStateHash?: string | null;
                                 activities?: {
                                     id: string;
                                     sessionId: string;
@@ -1520,6 +1528,8 @@ export interface paths {
                             branch: string | null;
                             createdAt: string;
                             updatedAt: string;
+                            lastProgressAt?: string | null;
+                            lastStateHash?: string | null;
                             activities?: {
                                 id: string;
                                 sessionId: string;
@@ -1597,6 +1607,8 @@ export interface paths {
                             branch: string | null;
                             createdAt: string;
                             updatedAt: string;
+                            lastProgressAt?: string | null;
+                            lastStateHash?: string | null;
                             activities?: {
                                 id: string;
                                 sessionId: string;
@@ -1860,6 +1872,8 @@ export interface paths {
                             branch: string | null;
                             createdAt: string;
                             updatedAt: string;
+                            lastProgressAt?: string | null;
+                            lastStateHash?: string | null;
                             activities?: {
                                 id: string;
                                 sessionId: string;
@@ -1935,6 +1949,8 @@ export interface paths {
                             branch: string | null;
                             createdAt: string;
                             updatedAt: string;
+                            lastProgressAt?: string | null;
+                            lastStateHash?: string | null;
                             activities?: {
                                 id: string;
                                 sessionId: string;
@@ -2009,6 +2025,8 @@ export interface paths {
                                 branch: string | null;
                                 createdAt: string;
                                 updatedAt: string;
+                                lastProgressAt?: string | null;
+                                lastStateHash?: string | null;
                                 activities?: {
                                     id: string;
                                     sessionId: string;
@@ -2107,6 +2125,8 @@ export interface paths {
                                 branch: string | null;
                                 createdAt: string;
                                 updatedAt: string;
+                                lastProgressAt?: string | null;
+                                lastStateHash?: string | null;
                                 activities?: {
                                     id: string;
                                     sessionId: string;
@@ -2299,6 +2319,313 @@ export interface paths {
             responses: {
                 /** @description Provider config deleted */
                 204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/agent/providers/{agentId}/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Health agent provider */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    agentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Provider credential/config probe */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                            message?: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/agent/providers/{agentId}/hooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create agent provider hook */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    agentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Webhook accepted */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                            sessionId?: string;
+                        };
+                    };
+                };
+                /** @description Session not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/webhooks/agent/{organizationId}/{agentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** POST /webhooks/agent/{organizationId}/{agentId} */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    agentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Webhook accepted */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                            sessionId?: string;
+                        };
+                    };
+                };
+                /** @description Missing or invalid webhook secret */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Session not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/agent/environment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List agent environment */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Workspace agent environment files */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            files: {
+                                path: string;
+                                content: string;
+                                createdAt: string;
+                                updatedAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        /** Update agent environment */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        path: string;
+                        content: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description File saved */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            path: string;
+                            content: string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/agent/environment/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List agent environment file */
+        get: {
+            parameters: {
+                query: {
+                    path: string;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description One environment file */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            path: string;
+                            content: string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description File not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        /** Delete agent environment file */
+        delete: {
+            parameters: {
+                query: {
+                    path: string;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description File deleted */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description File not found */
+                404: {
                     headers: {
                         [name: string]: unknown;
                     };

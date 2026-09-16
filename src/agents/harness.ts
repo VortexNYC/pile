@@ -2,6 +2,7 @@ import type { Issue } from "../types/workspace.js";
 import type {
   AgentDispatchContext,
   AgentProvider,
+  AgentProviderHealth,
   AgentProviderSession,
   AgentProviderState,
 } from "./provider.js";
@@ -20,6 +21,7 @@ export interface MockAgentProviderOptions {
     providerSessionId: string,
     trackerSessionId: string
   ) => AgentProviderState | Promise<AgentProviderState | null> | null;
+  health?: () => AgentProviderHealth | Promise<AgentProviderHealth>;
 }
 
 export class MockAgentProvider implements AgentProvider {
@@ -74,5 +76,10 @@ export class MockAgentProvider implements AgentProvider {
       return await this.options.getState(providerSessionId, trackerSessionId);
     }
     return null;
+  }
+
+  async health(): Promise<AgentProviderHealth> {
+    if (this.options.health) return await this.options.health();
+    return { ok: true };
   }
 }
