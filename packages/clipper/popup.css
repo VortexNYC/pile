@@ -32,6 +32,14 @@ button:disabled {
   cursor: not-allowed;
 }
 
+button.text {
+  background: transparent;
+  color: #555;
+  font-weight: 500;
+  font-size: 12px;
+  padding: 4px 0;
+}
+
 #capture {
   font-size: 16px;
   padding: 12px;
@@ -52,10 +60,23 @@ button:disabled {
   color: #090;
 }
 
-details summary {
-  cursor: pointer;
+.workspace {
+  margin: 0;
   font-size: 12px;
   color: #555;
+  text-align: center;
+}
+
+.hint {
+  margin: 0;
+  font-size: 12px;
+  color: #555;
+}
+
+.workspace-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 label {

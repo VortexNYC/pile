@@ -8,25 +8,31 @@
   </head>
   <body>
     <main>
-      <button id="capture" type="button">Pile it</button>
+      <section data-panel="sign-in" hidden>
+        <label>
+          Email
+          <input id="email" type="email" autocomplete="username" />
+        </label>
+        <label>
+          Password
+          <input id="password" type="password" autocomplete="current-password" />
+        </label>
+        <button id="sign-in" type="button">Sign in to Pile</button>
+      </section>
+
+      <section data-panel="workspaces" hidden>
+        <p class="hint">Choose a workspace</p>
+        <div id="workspace-list" class="workspace-list"></div>
+      </section>
+
+      <section data-panel="signed-in" hidden>
+        <button id="capture" type="button">Pile it</button>
+        <p id="workspace" class="workspace"></p>
+        <button id="sign-out" type="button" class="text">Sign out</button>
+      </section>
+
       <div id="status" class="status" aria-live="polite"></div>
-      <details id="settings">
-        <summary>Settings</summary>
-        <label>
-          Pile base URL
-          <input id="baseUrl" type="text" placeholder="https://pile.nyc" />
-        </label>
-        <label>
-          API key
-          <input id="apiKey" type="password" placeholder="Bearer token" />
-        </label>
-        <label>
-          Workspace
-          <input id="orgId" type="text" placeholder="org_vortex_main" />
-        </label>
-        <button id="save" type="button">Save</button>
-      </details>
     </main>
-    <script src="popup.js"></script>
+    <script type="module" src="popup.js"></script>
   </body>
 </html>
