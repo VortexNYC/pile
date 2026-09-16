@@ -984,13 +984,20 @@ export function getAgentSession(
 export function listAgentSessions(
   db: WorkspaceDb,
   organizationId: string,
-  options: { issueId?: string; limit?: number } = {}
+  options: {
+    issueId?: string;
+    status?: AgentSessionStatus;
+    limit?: number;
+  } = {}
 ) {
   const conditions = [
     eq(workspaceAgentSessions.organizationId, organizationId),
   ];
   if (options.issueId) {
     conditions.push(eq(workspaceAgentSessions.issueId, options.issueId));
+  }
+  if (options.status) {
+    conditions.push(eq(workspaceAgentSessions.status, options.status));
   }
   return db
     .select()
