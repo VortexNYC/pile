@@ -77,6 +77,22 @@ function parseConfigModel(
   return undefined;
 }
 
+function parseConfigEnvId(
+  configJson: string | null | undefined
+): string | undefined {
+  if (!configJson) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(configJson);
+    if (typeof parsed === "object" && parsed !== null) {
+      const envId = (parsed as Record<string, unknown>).envId;
+      if (typeof envId === "string") return envId;
+    }
+  } catch {
+    // ignore malformed config JSON
+  }
+  return undefined;
+}
+
 export function resolveAgentEnv(
   env: WorkerEnv,
   config: AgentProviderConfigRow | undefined
@@ -89,6 +105,7 @@ export function resolveAgentEnv(
     AGENT_PROVIDER_TOKEN: config.token ?? env.AGENT_PROVIDER_TOKEN,
     CODEX_AUTH_JSON_B64: config.token ?? env.CODEX_AUTH_JSON_B64,
     CODEX_CLI_MODEL: parseConfigModel(config.config) ?? env.CODEX_CLI_MODEL,
+    CODEX_CLI_ENV_ID: parseConfigEnvId(config.config) ?? env.CODEX_CLI_ENV_ID,
     DEVIN_ORG_ID: config.providerOrgId ?? env.DEVIN_ORG_ID,
     DEVIN_OUTPOST: config.outpost ?? env.DEVIN_OUTPOST,
     DEVIN_OUTPOST_ID: config.outpostId ?? env.DEVIN_OUTPOST_ID,

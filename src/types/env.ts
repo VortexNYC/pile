@@ -27,6 +27,8 @@ export interface AppEnv {
   CODEX_AUTH_JSON_B64?: string;
   /** Codex CLI model override (defaults to `gpt-reserve`). */
   CODEX_CLI_MODEL?: string;
+  /** Codex Cloud environment id used by the `codex-cli` provider. */
+  CODEX_CLI_ENV_ID?: string;
   FLUE_WORKER?: Fetcher;
   TOKEN_HASH_SECRET?: string;
   SLACK_CLIENT_ID?: string;

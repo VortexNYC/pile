@@ -8,6 +8,7 @@ function cliEnv(overrides?: Partial<AppEnv>): AppEnv {
   return {
     DAYTONA_API_KEY: "daytona-key",
     CODEX_AUTH_JSON_B64: btoa(JSON.stringify({ access_token: "test" })),
+    CODEX_CLI_ENV_ID: "env-test-123",
     ...overrides,
   } as AppEnv;
 }
@@ -76,6 +77,18 @@ describe("CodexCliAgentProvider", () => {
         gitIdentity: gitIdentityFixture(),
       })
     ).rejects.toThrow("CODEX_AUTH_JSON_B64 is not configured");
+  });
+
+  it("throws when Codex Cloud env id is missing", async () => {
+    const provider = new CodexCliAgentProvider(
+      cliEnv({ CODEX_CLI_ENV_ID: undefined })
+    );
+    await expect(
+      provider.dispatch("org-1", issueFixture(), "gpt-reserve", {
+        sessionId: "sess-1",
+        gitIdentity: gitIdentityFixture(),
+      })
+    ).rejects.toThrow("CODEX_CLI_ENV_ID is not configured");
   });
 
   it("throws when Daytona is not configured", async () => {
@@ -163,6 +176,7 @@ describe("CodexCliAgentProvider", () => {
     const body = JSON.parse((createCall![1] as RequestInit).body as string);
     expect(body.env.MODEL).toBe("gpt-reserve");
     expect(body.env.REPO).toBe("VortexNYC/pile");
+    expect(body.env.CODEX_CLI_ENV_ID).toBe("env-test-123");
     expect(body.labels["vortex.agent"]).toBe("codex-cli");
   });
 
