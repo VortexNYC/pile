@@ -541,6 +541,39 @@ export const COMMANDS: Record<string, CommandDef> = {
     ],
     body: [],
   },
+  "capture create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/capture",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "url",
+        flag: "url",
+      },
+      {
+        name: "title",
+        flag: "title",
+      },
+      {
+        name: "selection",
+        flag: "selection",
+      },
+      {
+        name: "source",
+        flag: "source",
+      },
+      {
+        name: "teamId",
+        flag: "team",
+      },
+    ],
+  },
   "issues get": {
     method: "GET",
     path: "/workspaces/{organizationId}/issues/{id}",

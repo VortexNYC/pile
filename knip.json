@@ -1,6 +1,10 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "ignore": ["packages/client/src/types.ts", "packages/docs/blume.config.ts"],
+  "ignore": [
+    "packages/client/src/types.ts",
+    "packages/docs/blume.config.ts",
+    "packages/clipper/**"
+  ],
   "ignoreDependencies": [
     "cloudflare",
     "@secretlint/secretlint-rule-preset-recommend"

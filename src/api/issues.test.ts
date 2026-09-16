@@ -164,4 +164,80 @@ describe("issues API", () => {
     );
     expect(res.status).toBe(400);
   });
+
+  it("captures a page to a triage issue", async () => {
+    const res = await fetch(
+      `/workspaces/${organizationId}/capture`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          url: "https://example.com/page",
+          title: "Example page",
+          selection: "selected text",
+          source: "web-clipper",
+        }),
+      },
+      token
+    );
+    expect(res.status).toBe(201);
+    const issue = await res.json();
+    expect(issue.status).toBe("triage");
+    expect(issue.title).toBe("Example page");
+    expect(issue.description).toContain("https://example.com/page");
+    expect(issue.description).toContain("selected text");
+    expect(issue.description).toContain("web-clipper");
+  });
+
+  it("captures without a title using the url", async () => {
+    const res = await fetch(
+      `/workspaces/${organizationId}/capture`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          url: "https://example.com/untitled",
+        }),
+      },
+      token
+    );
+    expect(res.status).toBe(201);
+    const issue = await res.json();
+    expect(issue.title).toBe("https://example.com/untitled");
+    expect(issue.status).toBe("triage");
+  });
+
+  it("rejects capture without a url", async () => {
+    const res = await fetch(
+      `/workspaces/${organizationId}/capture`,
+      {
+        method: "POST",
+        body: JSON.stringify({ title: "No url" }),
+      },
+      token
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("allows capture from a browser extension origin", async () => {
+    const res = await app.fetch(
+      new Request(`https://example.com/workspaces/${organizationId}/capture`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          Origin: "chrome-extension://test-extension-id",
+        },
+        body: JSON.stringify({
+          url: "https://example.com/extension-capture",
+          title: "Extension capture",
+        }),
+      }),
+      env
+    );
+    expect(res.status).toBe(201);
+    expect(res.headers.get("access-control-allow-origin")).toBe(
+      "chrome-extension://test-extension-id"
+    );
+    const issue = await res.json();
+    expect(issue.status).toBe("triage");
+  });
 });
