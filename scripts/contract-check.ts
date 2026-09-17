@@ -4,7 +4,7 @@ import { execSync } from "node:child_process";
 const generated = [
   "src/mcp/openapi.json",
   "src/mcp/mcp-tools.ts",
-  "packages/client/src/types.ts",
+  "packages/cli/src/client/types.ts",
   "packages/cli/src/commands.ts",
 ];
 

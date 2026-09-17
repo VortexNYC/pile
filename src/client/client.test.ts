@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
-import { createPileClient } from "../../packages/client/src/index.js";
+import { createPileClient } from "../../packages/cli/src/client/index.js";
 import app from "../index.js";
 
 describe("typed client integration", () => {

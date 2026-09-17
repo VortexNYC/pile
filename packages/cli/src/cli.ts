@@ -576,7 +576,7 @@ async function captureRunCommand(
     method: "POST",
     headers: {
       "x-pile-capture-public-key": publicKey,
-      origin: "pile-cli",
+      origin: "@vortex-api/pile",
     },
   });
   if (!tokenRes.ok) {
