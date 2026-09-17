@@ -198,7 +198,7 @@ export const jamSupportImportSource: ImportSource<
           );
 
           const origin =
-            ctx.requestHeaders.get("origin") ?? "https://docs.vortex.nyc";
+            ctx.requestHeaders.get("origin") ?? "https://pile.nyc";
           const remoteAttachments: {
             type: "screenshot" | "video";
             url: string;

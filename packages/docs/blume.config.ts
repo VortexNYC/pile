@@ -16,7 +16,7 @@ export default defineConfig({
     },
   },
   deployment: {
-    site: "https://docs.vortex.nyc",
+    site: "https://docs.pile.nyc",
     output: "server",
     adapter: "cloudflare",
   },

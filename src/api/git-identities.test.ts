@@ -76,7 +76,7 @@ describe("git identity API", () => {
         body: JSON.stringify({
           repo: "VortexNYC/pile",
           name: "Vortex Agent",
-          email: "agent@vortex.nyc",
+          email: "agent@pile.nyc",
           githubUsername: "vortex-agent",
         }),
       }),

@@ -67,7 +67,7 @@ describe("clipper auth", () => {
 
     const signedIn = await client.signIn(
       DEFAULT_BASE_URL,
-      "shlomo@vortex.nyc",
+      "shlomo@pile.nyc",
       "secret"
     );
     expect(signedIn.cookie).toBe("better-auth.session_token=sess_1");
