@@ -814,7 +814,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           .where(eq(globalUser.id, input.recipientId))
           .get();
         if (!recipient?.email) return;
-        const subject = `Vortex: ${input.type.replace(/_/g, " ")}`;
+        const subject = `Pile: ${input.type.replace(/_/g, " ")}`;
         const text = `You have a new ${input.type.replace(
           /_/g,
           " "

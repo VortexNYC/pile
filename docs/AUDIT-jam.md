@@ -57,16 +57,16 @@ Hosted bug reporting tool. Captures bugs with screenshot, screen recording, or I
 - **Recording Links for support:** no install on customer side; the link opens a recorder on the page.
 - **AI is post-capture:** titles and repro steps, plus MCP for coding agents.
 
-## 8. What to Borrow for Vortex
+## 8. What to Borrow for Pile
 
 - **Capture as a support channel.** A support ticket can be created from a Jam-style capture, with attachments for screenshot/video and debugger JSON.
 - **Recording links for support.** Send a customer a link to record their issue without an extension.
-- **`jam.metadata()` pattern.** A `vortex.capture.metadata()` SDK call on the customer's site attaches custom data to the ticket.
+- **`jam.metadata()` pattern.** A `pile.capture.metadata()` SDK call on the customer's site attaches custom data to the ticket.
 - **DevTools attachment per ticket.** `support_ticket_messages` can link to attachments for console log and network JSON.
-- **MCP / AI agent integration.** Vortex's MCP layer can expose the same "read Jam context" tools.
-- **Issue tracker promotion.** Jam turns captures into Jira/Linear/GitHub issues. Vortex can turn a capture `support_ticket` into a Vortex `issue` via `issue_id`.
+- **MCP / AI agent integration.** Pile's MCP layer can expose the same "read Jam context" tools.
+- **Issue tracker promotion.** Jam turns captures into Jira/Linear/GitHub issues. Pile can turn a capture `support_ticket` into a Pile `issue` via `issue_id`.
 
 ## 9. Gaps to Decide
 
-- Jam is SaaS-first and does not expose a self-hosted embed SDK like Crikket. Vortex can build a Crikket-style SDK (`@vortex/capture`) for its own capture channel.
-- Jam's AI features are hosted. Vortex provides primitives; customers bring their own model.
+- Jam is SaaS-first and does not expose a self-hosted embed SDK like Crikket. Pile can build a Crikket-style SDK (`@pile/capture`) for its own capture channel.
+- Jam's AI features are hosted. Pile provides primitives; customers bring their own model.

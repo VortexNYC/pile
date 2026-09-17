@@ -2,20 +2,20 @@
 
 ## Objective
 
-Extend the GitLab webhook integration to mirror GitLab merge requests into Vortex the same way GitHub pull requests are handled: update a linked Vortex issue's `prState`, `prUrl`, `repo`, and `branch`, and parse `fixes KEY-123` / `closes KEY-123` references in MR title, description, or source branch.
+Extend the GitLab webhook integration to mirror GitLab merge requests into Pile the same way GitHub pull requests are handled: update a linked Pile issue's `prState`, `prUrl`, `repo`, and `branch`, and parse `fixes KEY-123` / `closes KEY-123` references in MR title, description, or source branch.
 
 This is the second GitLab slice, building directly on the issue/note webhook work in `docs/SPEC-gitlab-integration.md`.
 
 ## In scope
 
 - `Merge Request Hook` events: `open`, `update`, `merge`, `close`, `reopen` (and draft transitions).
-  - Map MR state to Vortex `prState`: `draft`, `opened`, `merged`, `closed`.
+  - Map MR state to Pile `prState`: `draft`, `opened`, `merged`, `closed`.
   - Call `WorkspaceDurableObject.updatePrState(repo, branch, prUrl, prState, "gitlab")`.
   - Parse `fixes|closes|resolves KEY-123` from MR title, description, and `source_branch`.
   - Call `WorkspaceDurableObject.updatePrByIdentifier(identifier, prUrl, prState, repo, branch, "gitlab")` for each found identifier.
 - `Note Hook` events on merge requests (`object_attributes.noteable_type === "MergeRequest"`).
-  - Resolve the linked Vortex issue by `repo` + `source_branch`.
-  - Create / update / delete Vortex comments with `externalSource: "gitlab"` and the GitLab note ID.
+  - Resolve the linked Pile issue by `repo` + `source_branch`.
+  - Create / update / delete Pile comments with `externalSource: "gitlab"` and the GitLab note ID.
 - Zod schemas for the new payloads (no `any`).
 - Idempotent delivery handling via `webhookDeliveries`.
 - Generated OpenAPI / MCP / client / CLI parity.

@@ -7,7 +7,7 @@
 
 ## Objective
 
-Let Vortex replace Notion as the source of truth for documents and issue backlogs by importing Notion pages into the existing Vortex `documents` model and Notion databases into Vortex `issues`. Ongoing webhook sync keeps documents in sync after the initial import.
+Let Pile replace Notion as the source of truth for documents and issue backlogs by importing Notion pages into the existing Pile `documents` model and Notion databases into Pile `issues`. Ongoing webhook sync keeps documents in sync after the initial import.
 
 ## In scope — Phase 1: page import (done)
 
@@ -17,13 +17,13 @@ Let Vortex replace Notion as the source of truth for documents and issue backlog
   - If `rootPageId` is provided, import that single page.
   - If omitted, use `POST /v1/search` to discover and import all pages reachable by the integration.
   - Parent pages are imported before children where possible; `parentDocumentId` is set on a second pass using `notion_page_mappings`.
-  - Creates or updates Vortex documents with `contentFormat: "markdown"`.
+  - Creates or updates Pile documents with `contentFormat: "markdown"`.
   - Preserves parent/child page hierarchy as `parentDocumentId`.
   - Records a `notion_page_mappings` row per page so re-imports update instead of duplicate.
   - Returns a summary: `{ created: number; updated: number; errors: number }`.
 - `POST /workspaces/{organizationId}/notion/users`
   - Body: `{ userId: string; notionUserId: string }`
-  - Map a Notion user ID to a Vortex user ID for `createdById` / `updatedById`.
+  - Map a Notion user ID to a Pile user ID for `createdById` / `updatedById`.
 - D1 tables:
   - `notion_installations` — `organizationId`, `workspaceId`, `token` (encrypted at rest by D1), `createdAt`.
   - `notion_users` — `organizationId`, `notionUserId`, `userId`.
@@ -47,7 +47,7 @@ Let Vortex replace Notion as the source of truth for documents and issue backlog
   - Fetches database metadata with `GET /v1/databases/{database_id}` to discover the title property.
   - Paginates through rows with `POST /v1/databases/{database_id}/query`.
   - For each row, fetches `GET /v1/pages/{page_id}/markdown` for the description.
-  - Creates or updates Vortex `issues` through the native Workspace DO `createIssue` / `updateIssue` paths.
+  - Creates or updates Pile `issues` through the native Workspace DO `createIssue` / `updateIssue` paths.
   - Records `notion_issue_mappings` (organizationId, notionPageId, issueId) for idempotent re-imports.
   - `teamId` is passed through to `createIssue`; the workspace default team is used otherwise.
 - D1 tables:
@@ -55,7 +55,7 @@ Let Vortex replace Notion as the source of truth for documents and issue backlog
 
 ## Out of scope
 
-- Writing Vortex document edits back to Notion.
+- Writing Pile document edits back to Notion.
 - Importing comments, permissions, file attachments, or embedded databases.
 - Converting Notion blocks to BlockNote JSON (markdown is sufficient for page content).
 
@@ -71,7 +71,7 @@ POST /workspaces/{organizationId}/import { source: "notion" }
   │   ├─ GET /v1/pages/{id}/markdown   → content
   │   ├─ resolve parentDocumentId from notion_page_mappings
   │   ├─ resolve createdById/updatedById from notion_users (fallback to importer)
-  │   ├─ create or update Vortex document via WorkspaceDO
+  │   ├─ create or update Pile document via WorkspaceDO
   │   └─ upsert notion_page_mappings
   └─ return summary
 ```
@@ -84,7 +84,7 @@ Notion sends signed `POST` events to `/notion/{organizationId}/{workspaceId}`:
 - Event requests include `X-Notion-Signature: sha256=<hmac>` signed with the workspace's stored `verification_token`. The handler uses a constant-time comparison.
 - Supported events: `page.created`, `page.content_updated`, `page.properties_updated`, `page.deleted`, `page.moved`.
 - Event payload contains `entity.id` (page id) and `workspace_id`; handler fetches full page + markdown on create/update/move events and reuses the shared `syncNotionPage` logic.
-- Update or create the mapped Vortex document; soft-delete on `page.deleted` by setting `trashedAt`.
+- Update or create the mapped Pile document; soft-delete on `page.deleted` by setting `trashedAt`.
 
 ## Security
 

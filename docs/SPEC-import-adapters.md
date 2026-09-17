@@ -2,7 +2,7 @@
 
 ## Objective
 
-Make Vortex the easiest place to land engineering data from Linear, Jira, Notion, Confluence, GitHub, or any other source. A single `POST /workspaces/{id}/import` endpoint accepts a `source` name and source-specific credentials, runs the import inside the workspace Durable Object, and returns a summary of what was imported along with a persistent `jobId`.
+Make Pile the easiest place to land engineering data from Linear, Jira, Notion, Confluence, GitHub, or any other source. A single `POST /workspaces/{id}/import` endpoint accepts a `source` name and source-specific credentials, runs the import inside the workspace Durable Object, and returns a summary of what was imported along with a persistent `jobId`.
 
 This spec covers the shared framework plus all adapters folded into it: Jira, Confluence, Linear, Notion, and GitHub Issues.
 
@@ -15,7 +15,7 @@ This spec covers the shared framework plus all adapters folded into it: Jira, Co
 | `import-confluence`    | Confluence Cloud page import: spaces, pages, ADF-to-markdown conversion                                     | `import-core`, `import-jira` (Atlassian credentials are identical) |
 | `import-notion`        | Notion page and database import into documents and issues                                                   | `import-core`                                                      |
 | `import-linear`        | Linear issue migration                                                                                      | `import-core`                                                      |
-| `import-github-issues` | GitHub repository issue import into Vortex issues                                                           | `import-core`                                                      |
+| `import-github-issues` | GitHub repository issue import into Pile issues                                                             | `import-core`                                                      |
 
 Build order: `import-core` → adapters (Jira, Confluence, Linear, Notion, GitHub Issues).
 
@@ -63,7 +63,7 @@ src/
 - Credentials and options are plain objects parsed by Zod in the route.
 - External API responses are validated with Zod; failures throw `ImportError`.
 - Sequential API calls where rate limits exist; no `Promise.all` over unbounded lists.
-- User resolution: try email first, create a placeholder Vortex user if no email is available.
+- User resolution: try email first, create a placeholder Pile user if no email is available.
 
 ## Testing strategy
 
@@ -101,11 +101,11 @@ Credentials:
 Behavior:
 
 - Validate with `GET /rest/api/3/myself`.
-- Fetch statuses and create Vortex `states` (todo, in_progress, done mapping).
-- Fetch projects and create Vortex `projects`.
-- Fetch users by email and create Vortex users as needed.
+- Fetch statuses and create Pile `states` (todo, in_progress, done mapping).
+- Fetch projects and create Pile `projects`.
+- Fetch users by email and create Pile users as needed.
 - Search issues with `POST /rest/api/3/search/jql`.
-- Map each Jira issue to a Vortex issue:
+- Map each Jira issue to a Pile issue:
   - `identifier` uses project key + issue number (`KEY-123`).
   - `title` from `fields.summary`.
   - `description` from `fields.description` converted from ADF to markdown.
@@ -130,9 +130,9 @@ Behavior:
 - List pages with `GET /wiki/api/v2/pages?body-format=atlas_doc_format`.
 - For each page:
   - Convert `body.atlas_doc_format` from ADF JSON to markdown.
-  - Create/update Vortex document.
+  - Create/update Pile document.
   - Resolve `parentDocumentId` on a second pass.
-  - Map `authorId` / `ownerId` to Vortex users via account lookup.
+  - Map `authorId` / `ownerId` to Pile users via account lookup.
 
 ### ADF-to-markdown
 
@@ -150,7 +150,7 @@ Behavior:
 ## Success criteria
 
 - `POST /workspaces/{id}/import` with `source: "jira"` imports issues, comments, and attachments from a Jira Cloud project.
-- `POST /workspaces/{id}/import` with `source: "confluence"` imports pages as Vortex documents with markdown content.
+- `POST /workspaces/{id}/import` with `source: "confluence"` imports pages as Pile documents with markdown content.
 - `pnpm run check` passes with no errors and `knip` reports no unused exports.
 - Adapters are isolated; adding a new source requires only a new adapter file and a route schema branch.
 

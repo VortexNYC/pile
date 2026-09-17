@@ -17,7 +17,7 @@ What we are building:
 
 Out of scope for this spec:
 
-- Slash commands (already in `bot.onSlashCommand`/`/vortex`).
+- Slash commands (already in `bot.onSlashCommand`/`/pile`).
 - @mention issue creation (already in `bot.onNewMention`).
 - Real-time agent chat (covered by the `chat` SDK, not Slack-specific).
 - AI-based grouping of related Slack messages into a single issue (post-MVP).
@@ -69,7 +69,7 @@ B2B support happens in shared Slack Connect channels, so the design must not ass
 - **Internal-only notes** — add an `internal` boolean to `comments` and `support_messages`. Internal comments sync only to internal Slack threads or the Pile web surface; they never post to a customer-visible Slack thread.
 - **Identity resolution** — a Slack `user_id` in a customer workspace is not the same as a Pile `user_id`. Link them lazily through `support_contacts.external_id` using a composite key `<slack_team_id>:<slack_user_id>`. Email from `users:read.email` is a best-effort enrichment, not a primary key, because external emails are often hidden in Slack Connect.
 - Required OAuth scopes:
-  - `commands` — for the existing `/vortex` slash command.
+  - `commands` — for the existing `/pile` slash command.
   - `app_mentions:read` — for existing @mention issue creation.
   - `chat:write`, `chat:write.public` — to post replies in public and private channels.
   - `channels:history`, `groups:history`, `im:history`, `mpim:history` — to read messages in public, private, DM, and group DM contexts.

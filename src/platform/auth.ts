@@ -26,11 +26,11 @@ export function createAuth(env: AppEnv) {
           const raw = [
             `From: ${env.EMAIL_FROM}`,
             `To: ${data.user.email}`,
-            "Subject: Reset your Vortex password",
+            "Subject: Reset your Pile password",
             "MIME-Version: 1.0",
             'Content-Type: text/plain; charset="utf-8"',
             "",
-            `Reset your Vortex password: ${data.url}`,
+            `Reset your Pile password: ${data.url}`,
           ].join("\r\n");
           await env.EMAIL.send(
             new EmailMessage(env.EMAIL_FROM, data.user.email, raw)
@@ -51,11 +51,11 @@ export function createAuth(env: AppEnv) {
           const raw = [
             `From: ${env.EMAIL_FROM}`,
             `To: ${data.user.email}`,
-            "Subject: Verify your Vortex email",
+            "Subject: Verify your Pile email",
             "MIME-Version: 1.0",
             'Content-Type: text/plain; charset="utf-8"',
             "",
-            `Verify your Vortex email: ${data.url}`,
+            `Verify your Pile email: ${data.url}`,
           ].join("\r\n");
           await env.EMAIL.send(
             new EmailMessage(env.EMAIL_FROM, data.user.email, raw)

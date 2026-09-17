@@ -48,7 +48,7 @@ Public keys scoped to a website or app surface. Reuses the Crikket pattern.
 
 | Column            | Type                   | Notes                            |
 | ----------------- | ---------------------- | -------------------------------- |
-| `id`              | text PK                | Vortex UUID                      |
+| `id`              | text PK                | Pile UUID                        |
 | `organization_id` | text FK → organization | workspace                        |
 | `name`            | text                   | not null; e.g., "Marketing Site" |
 | `key`             | text                   | not null; `crk_...` or `vtx_...` |
@@ -65,7 +65,7 @@ Pending upload session. Crikket calls this `bugReportUploadSession`.
 
 | Column            | Type                                  | Notes                                                                  |
 | ----------------- | ------------------------------------- | ---------------------------------------------------------------------- |
-| `id`              | text PK                               | Vortex UUID                                                            |
+| `id`              | text PK                               | Pile UUID                                                              |
 | `organization_id` | text FK → organization                | workspace                                                              |
 | `public_key_id`   | text FK → support_capture_public_keys | which key started it                                                   |
 | `customer_id`     | text FK → support_customers           | nullable until identified                                              |
@@ -83,7 +83,7 @@ Artifacts linked to a ticket. Screenshot, video, or debugger payload.
 
 | Column            | Type                            | Notes                                                    |
 | ----------------- | ------------------------------- | -------------------------------------------------------- |
-| `id`              | text PK                         | Vortex UUID                                              |
+| `id`              | text PK                         | Pile UUID                                                |
 | `organization_id` | text FK → organization          | workspace                                                |
 | `ticket_id`       | text FK → support_tickets       | not null                                                 |
 | `event_id`        | text FK → support_ticket_events | the message/note this attachment belongs to              |
@@ -201,6 +201,6 @@ Client-side SDK helper. Accepts `metadata` to attach to the next capture. This i
 
 ## Open Questions
 
-1. Should the capture widget be a standalone `@vortex/capture` SDK, or is it a `vortexSupport.capture()` method in a future client SDK?
+1. Should the capture widget be a standalone `@pile/capture` SDK, or is it a `pileSupport.capture()` method in a future client SDK?
 2. Do we support video and screenshot in v1, or just screenshot?
 3. Should the debugger payload be stored as one large JSON, or split into `console_logs`, `network_requests`, and `user_events` files?

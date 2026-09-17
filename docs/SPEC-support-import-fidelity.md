@@ -2,7 +2,7 @@
 
 ## Objective
 
-Make the Intercom, Plain, and Zendesk support import adapters capture the full provider timeline, not just the message text. Every `part`, `timelineEntry`, and `comment` the provider returns should be preserved in Vortex as a `support_ticket_event` of the closest native type.
+Make the Intercom, Plain, and Zendesk support import adapters capture the full provider timeline, not just the message text. Every `part`, `timelineEntry`, and `comment` the provider returns should be preserved in Pile as a `support_ticket_event` of the closest native type.
 
 ## Success Criteria
 
@@ -17,7 +17,7 @@ Make the Intercom, Plain, and Zendesk support import adapters capture the full p
 
 ### Schema
 
-- `support_ticket_events.type` is a typed, native Vortex event category (e.g. `status_change`, `label_added`, `link_added`).
+- `support_ticket_events.type` is a typed, native Pile event category (e.g. `status_change`, `label_added`, `link_added`).
 - `support_ticket_events.sub_type` stores the exact provider entry name (e.g. `ThreadLinkCreatedEntry`, `conversation_rating`, `Change:tags`) so every provider concept has a home.
 - `support_ticket_events.metadata` stores the full provider payload / delta as JSON text.
 - `support_ticket_attachments` links attachments to `ticketId` and `eventId` with `externalId`, `url`, `fileName`, `contentType`, `size`, `r2Key`, `createdAt`.
@@ -26,8 +26,8 @@ Make the Intercom, Plain, and Zendesk support import adapters capture the full p
 
 - `addTicketMessage`, `addTicketNote`, `addTicketEvent`, `addSupportTicketAttachment` accept explicit `actorType`, `actorId`, `subType`, `metadata`, and `createdAt`.
 - `ingestSupportTimeline` creates the first inbound message, then replies and events in provider order, attaching attachments to the correct event.
-- `findUserByEmail` resolves a provider agent to a Vortex `user` by email.
-- `setTicketAssignees` replaces a ticket's current assignees; only matched Vortex users are linked, preserving `isPrimary` for the primary owner.
+- `findUserByEmail` resolves a provider agent to a Pile `user` by email.
+- `setTicketAssignees` replaces a ticket's current assignees; only matched Pile users are linked, preserving `isPrimary` for the primary owner.
 
 ### Contact graph
 
@@ -41,7 +41,7 @@ Make the Intercom, Plain, and Zendesk support import adapters capture the full p
 - The primary contact from `conversation.contacts` is looked up with `/contacts/{id}` to fetch `companies`, `phone`, `external_id`, `custom_attributes`, and `social_profiles`.
 - `companies` become `support_companies` (domain from `website`, external id from `company_id` > `id`).
 - `email` and `phone` become `email`/`phone` identities; `social_profiles` become `social` or `custom` identities with the provider `sub_type` preserved.
-- `conversation.assignee` with `type = "admin"` and a matching Vortex user email populates `support_ticket_assignments`.
+- `conversation.assignee` with `type = "admin"` and a matching Pile user email populates `support_ticket_assignments`.
 
 ### Plain customers
 
@@ -49,14 +49,14 @@ Make the Intercom, Plain, and Zendesk support import adapters capture the full p
 - `customer.company` becomes the primary `support_company`.
 - `customer.tenantMemberships.edges[].node.tenant` become additional `support_company` rows (`externalId` from `externalId` > `id`).
 - `customer.identities` (`EmailCustomerIdentity`, `SlackCustomerIdentity`, `DiscordCustomerIdentity`) become `support_customer_identities` with the original `__typename` as `sub_type`.
-- `thread.assignedTo` (when `User` with email) and `thread.additionalAssignees` resolve to Vortex users and populate `support_ticket_assignments`.
+- `thread.assignedTo` (when `User` with email) and `thread.additionalAssignees` resolve to Pile users and populate `support_ticket_assignments`.
 
 ### Zendesk users and organizations
 
 - `listZendeskTickets` includes `users`; `users` now include `phone` and `organization_id`.
 - `listAllZendeskOrganizations` fetches all organizations and maps `requester.organization_id` to a `support_company`.
 - `requester.email` and `requester.phone` become `email`/`phone` identities.
-- `ticket.assignee_id` resolves to a Vortex user by email and populates `support_ticket_assignments`.
+- `ticket.assignee_id` resolves to a Pile user by email and populates `support_ticket_assignments`.
 
 ### Intercom
 

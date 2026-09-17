@@ -1,9 +1,9 @@
 import { defineConfig } from "blume";
 
 export default defineConfig({
-  title: "Vortex",
+  title: "Pile",
   description:
-    "Vortex issue tracker — open-source, agent-native, Linear alternative.",
+    "Pile issue tracker — open-source, agent-native, Linear alternative.",
   openapi: {
     enabled: true,
     route: "/api",

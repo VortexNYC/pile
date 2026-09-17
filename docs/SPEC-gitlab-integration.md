@@ -2,7 +2,7 @@
 
 ## Goal
 
-Mirror GitLab issues and issue notes into Vortex, matching the existing GitHub integration pattern. This is the smallest useful slice before merge requests, labels, milestones, and assignees.
+Mirror GitLab issues and issue notes into Pile, matching the existing GitHub integration pattern. This is the smallest useful slice before merge requests, labels, milestones, and assignees.
 
 ## Scope
 
@@ -14,7 +14,7 @@ Mirror GitLab issues and issue notes into Vortex, matching the existing GitHub i
 - HMAC/token verification using `X-Gitlab-Token` and a configurable `GITLAB_WEBHOOK_SECRET`.
 - Issue mapping via `repoIssues` (add `source` enum defaulting to `github`; allow `gitlab`).
 - Comment mapping with `externalSource: "gitlab"` and `externalId` = GitLab note id.
-- Outbound writeback: when a Vortex comment is added to a GitLab-mapped issue, post it as a GitLab issue note.
+- Outbound writeback: when a Pile comment is added to a GitLab-mapped issue, post it as a GitLab issue note.
 - API routes under `/workspaces/{organizationId}/gitlab/install` and `/gitlab/users` to store per-workspace access token and username mappings.
 - New global tables `gitlab_installations` and `gitlab_users`, following `github_installations` / `github_users`.
 
@@ -43,12 +43,12 @@ For the first slice the token is a GitLab personal/project access token provided
 
 ### `gitlab_users`
 
-| column         | type               |
-| -------------- | ------------------ |
-| id             | text primary key   |
-| organizationId | text not null      |
-| userId         | text (Vortex user) |
-| gitlabUsername | text               |
+| column         | type             |
+| -------------- | ---------------- |
+| id             | text primary key |
+| organizationId | text not null    |
+| userId         | text (Pile user) |
+| gitlabUsername | text             |
 
 ### `repoIssues` extension
 
@@ -67,7 +67,7 @@ Payloads are parsed with Zod. Duplicates are ignored by `object_attributes.id` /
 
 ## Issue mapping
 
-GitLab project path (`project.path_with_namespace`) + issue IID (`object_attributes.iid`) maps to one Vortex issue.
+GitLab project path (`project.path_with_namespace`) + issue IID (`object_attributes.iid`) maps to one Pile issue.
 
 - `open` → create issue if missing, otherwise update status to `backlog`/`triage`.
 - `update` → update title/description.
