@@ -2,6 +2,8 @@
 
 An open-source, agent-native issue tracker, built on Cloudflare Workers, D1, and Durable Objects.
 
+Hosted instance: [pile.nyc](https://pile.nyc) · Docs: [docs.pile.nyc](https://docs.pile.nyc)
+
 ## Stack
 
 - Cloudflare Workers
