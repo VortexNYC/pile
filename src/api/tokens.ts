@@ -160,7 +160,7 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
       await db.insert(userTable).values({
         id: agentId,
         name: input.name,
-        email: `agent-${agentId}@${organizationId}.vortex.nyc`,
+        email: `agent-${agentId}@${organizationId}.pile.nyc`,
         emailVerified: true,
         metadata: JSON.stringify({
           type: "agent",
