@@ -2,9 +2,9 @@
 
 ## Objective
 
-Make agents first-class actors in Vortex by tracking every agent run as a session with a stream of activities. A session is created when an agent is dispatched to an issue; activities capture thoughts, responses, errors, elicitations, and actions. The API lets users and other agents inspect progress, resume context, and audit agent work.
+Make agents first-class actors in Pile by tracking every agent run as a session with a stream of activities. A session is created when an agent is dispatched to an issue; activities capture thoughts, responses, errors, elicitations, and actions. The API lets users and other agents inspect progress, resume context, and audit agent work.
 
-This is not a new auth system. It is the session/activity surface on top of Vortex's existing `WorkspaceIdentity` auth. Human and agent actors are both Better Auth `user` rows; agent users are marked with `metadata.type: "agent"`. Workspace access is verified through Better Auth `member` records, and API keys are Better Auth credentials linked to those users. The `actorId`/`actorType` fields map to `WorkspaceIdentity.id` (the underlying `user.id`) and `WorkspaceIdentity.type` (from `user.metadata` or API key metadata).
+This is not a new auth system. It is the session/activity surface on top of Pile's existing `WorkspaceIdentity` auth. Human and agent actors are both Better Auth `user` rows; agent users are marked with `metadata.type: "agent"`. Workspace access is verified through Better Auth `member` records, and API keys are Better Auth credentials linked to those users. The `actorId`/`actorType` fields map to `WorkspaceIdentity.id` (the underlying `user.id`) and `WorkspaceIdentity.type` (from `user.metadata` or API key metadata).
 
 ## Data Model
 
@@ -90,4 +90,4 @@ Authorization:
 
 ## Better Auth alignment
 
-Current auth resolves to `WorkspaceIdentity { id, organizationId, type, permissions }`. The `actorId`/`actorType` columns in `agent_sessions` map directly to that identity. When Vortex migrates agent auth to Better Auth (`@better-auth/api-key` for workspace-scoped keys or `@better-auth/agent-auth` for the Agent Auth Protocol), the session/activity surface does not change: the middleware resolves a `WorkspaceIdentity` and the session records `actorId`/`actorType`.
+Current auth resolves to `WorkspaceIdentity { id, organizationId, type, permissions }`. The `actorId`/`actorType` columns in `agent_sessions` map directly to that identity. When Pile migrates agent auth to Better Auth (`@better-auth/api-key` for workspace-scoped keys or `@better-auth/agent-auth` for the Agent Auth Protocol), the session/activity surface does not change: the middleware resolves a `WorkspaceIdentity` and the session records `actorId`/`actorType`.

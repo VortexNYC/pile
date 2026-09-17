@@ -44,7 +44,7 @@ migrations/                         # Drizzle-generated D1 migrations
 
 | Column                     | Type                        | Notes                                                                                            |
 | -------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------ |
-| `id`                       | text PK                     | Vortex UUID                                                                                      |
+| `id`                       | text PK                     | Pile UUID                                                                                        |
 | `organization_id`          | text FK → organization      | workspace                                                                                        |
 | `customer_id`              | text FK → support_customers | who opened it                                                                                    |
 | `number`                   | integer                     | per-workspace ticket number, monotonic, not null                                                 |
@@ -54,7 +54,7 @@ migrations/                         # Drizzle-generated D1 migrations
 | `status`                   | text                        | `todo`, `done`, `snoozed`                                                                        |
 | `priority`                 | text                        | `low`, `medium`, `high`, `urgent`                                                                |
 | `source_channel`           | text                        | `email`, `slack`, `msteams`, `discord`, `chat`, `capture`, `api`, `intercom`, `zendesk`, `plain` |
-| `issue_id`                 | text                        | optional; links to a Vortex issue when a ticket is promoted to engineering work                  |
+| `issue_id`                 | text                        | optional; links to a Pile issue when a ticket is promoted to engineering work                    |
 | `last_customer_message_at` | text                        | ISO timestamp, nullable                                                                          |
 | `last_agent_message_at`    | text                        | ISO timestamp, nullable                                                                          |
 | `created_at`               | text                        | ISO timestamp                                                                                    |
@@ -80,7 +80,7 @@ A timeline of anything that happened on the ticket. Every row has a type. Detail
 
 | Column       | Type                      | Notes                                                                                                                                        |
 | ------------ | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`         | text PK                   | Vortex UUID                                                                                                                                  |
+| `id`         | text PK                   | Pile UUID                                                                                                                                    |
 | `ticket_id`  | text FK → support_tickets | not null                                                                                                                                     |
 | `type`       | text                      | `message`, `note`, `status_change`, `priority_change`, `assignment_change`, `label_added`, `label_removed`, `customer_event`, `field_change` |
 | `actor_type` | text                      | `customer`, `user`, `machine`, `system`                                                                                                      |
@@ -95,7 +95,7 @@ Customer-visible events with actual content. A message is always an `event`.
 
 | Column             | Type                            | Notes                                                      |
 | ------------------ | ------------------------------- | ---------------------------------------------------------- |
-| `id`               | text PK                         | Vortex UUID                                                |
+| `id`               | text PK                         | Pile UUID                                                  |
 | `event_id`         | text FK → support_ticket_events | not null                                                   |
 | `direction`        | text                            | `inbound` or `outbound`                                    |
 | `text_content`     | text                            | plain text, required                                       |
@@ -108,11 +108,11 @@ Customer-visible events with actual content. A message is always an `event`.
 
 Internal-only events. Customers never see these.
 
-| Column     | Type                            | Notes       |
-| ---------- | ------------------------------- | ----------- |
-| `id`       | text PK                         | Vortex UUID |
-| `event_id` | text FK → support_ticket_events | not null    |
-| `body`     | text                            | not null    |
+| Column     | Type                            | Notes     |
+| ---------- | ------------------------------- | --------- |
+| `id`       | text PK                         | Pile UUID |
+| `event_id` | text FK → support_ticket_events | not null  |
+| `body`     | text                            | not null  |
 
 ### `support_ticket_assignments`
 
@@ -120,7 +120,7 @@ Plain supports one primary assignee + additional assignees. This table models al
 
 | Column       | Type                      | Notes         |
 | ------------ | ------------------------- | ------------- |
-| `id`         | text PK                   | Vortex UUID   |
+| `id`         | text PK                   | Pile UUID     |
 | `ticket_id`  | text FK → support_tickets | not null      |
 | `user_id`    | text FK → user            | not null      |
 | `is_primary` | boolean                   | default false |
@@ -130,11 +130,11 @@ Index: `(ticket_id, is_primary)`.
 
 ### `support_ticket_labels`
 
-| Column      | Type                      | Notes                                          |
-| ----------- | ------------------------- | ---------------------------------------------- |
-| `id`        | text PK                   | Vortex UUID                                    |
-| `ticket_id` | text FK → support_tickets | not null                                       |
-| `label_id`  | text FK → labels          | not null; reuse existing Vortex `labels` table |
+| Column      | Type                      | Notes                                        |
+| ----------- | ------------------------- | -------------------------------------------- |
+| `id`        | text PK                   | Pile UUID                                    |
+| `ticket_id` | text FK → support_tickets | not null                                     |
+| `label_id`  | text FK → labels          | not null; reuse existing Pile `labels` table |
 
 Unique: `(ticket_id, label_id)`.
 
@@ -303,6 +303,6 @@ createTicketFromIntercom(db, organizationId, customerId, conversation, {
 ## Decisions
 
 1. **No `waiting` status for v1.** `todo` + `last_customer_message_at` is enough. Add a `waiting` status later if the inbox needs it.
-2. **Dedicated `support_tickets` table.** Vortex `issues` and support tickets have different lifecycles. `support_tickets` has an optional `issue_id` for the clean link when a ticket is promoted to engineering work.
-3. **Vercel AI SDK is a primitive, not an autonomous agent.** It powers the in-app chat widget and agent-generated suggestions. Final outbound messages are sent through the API by a user or an external agent the customer builds. Vortex provides the primitives; it does not run the support agent.
+2. **Dedicated `support_tickets` table.** Pile `issues` and support tickets have different lifecycles. `support_tickets` has an optional `issue_id` for the clean link when a ticket is promoted to engineering work.
+3. **Vercel AI SDK is a primitive, not an autonomous agent.** It powers the in-app chat widget and agent-generated suggestions. Final outbound messages are sent through the API by a user or an external agent the customer builds. Pile provides the primitives; it does not run the support agent.
 4. **`support_ticket_counters` stays separate for v1.** A generic `workspace_counters` table is cleaner but would require touching existing issue numbering. Separate is safer until support is stable.

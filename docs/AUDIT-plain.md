@@ -155,22 +155,22 @@ Imports preserve original timestamps and conversation history.
 - File uploads/downloads with signed URLs.
 - HMAC webhook signatures.
 
-## 13. Key Takeaways for Vortex
+## 13. Key Takeaways for Pile
 
-1. **Thread == Issue**: Plain's `Thread` is the closest analog to a Vortex `Issue`.
+1. **Thread == Issue**: Plain's `Thread` is the closest analog to a Pile `Issue`.
 2. **Customer + Tenant == Contact + Company/Workspace**: reuse the `support-contacts` model.
-3. **Timeline == comments + history**: Vortex `comments` and `issue_history` can model the thread timeline.
-4. **Machine user == Agent**: already planned in Vortex; agent sessions and activities exist.
-5. **Labels, snippets, tasks, SLAs** map directly to Vortex `labels`, `templates`/`comments`, `tasks` (new), `cycles`/deadlines.
+3. **Timeline == comments + history**: Pile `comments` and `issue_history` can model the thread timeline.
+4. **Machine user == Agent**: already planned in Pile; agent sessions and activities exist.
+5. **Labels, snippets, tasks, SLAs** map directly to Pile `labels`, `templates`/`comments`, `tasks` (new), `cycles`/deadlines.
 6. **Channels** are ingestion: each is a webhook/POST that creates/updates a thread.
 7. **Custom channel protocol** is the pattern for plugging in any external source (Discourse, Hubspot, etc.).
-8. **Help center + knowledge sources** are documents; Vortex documents can model them.
-9. **GraphQL is the API shape**; Vortex should expose REST/OpenAPI first, but the object model can mirror Plain's.
-10. **MCP server is the agent interface**: Vortex's MCP generation should expose the same verbs.
+8. **Help center + knowledge sources** are documents; Pile documents can model them.
+9. **GraphQL is the API shape**; Pile should expose REST/OpenAPI first, but the object model can mirror Plain's.
+10. **MCP server is the agent interface**: Pile's MCP generation should expose the same verbs.
 
 ## 14. Gaps to Decide
 
-- Plain uses a **single workspace-wide email address**; Vortex needs per-workspace support inboxes.
-- Plain has **native chat widget**; Vortex would need a chat SDK or iframe.
-- Plain has **billing/credits** for support usage; Vortex may need `ISS-5` billing first.
-- Plain's **customer cards** are UI components; Vortex can defer to JSON-rendered components.
+- Plain uses a **single workspace-wide email address**; Pile needs per-workspace support inboxes.
+- Plain has **native chat widget**; Pile would need a chat SDK or iframe.
+- Plain has **billing/credits** for support usage; Pile may need `ISS-5` billing first.
+- Plain's **customer cards** are UI components; Pile can defer to JSON-rendered components.

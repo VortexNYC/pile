@@ -1,18 +1,18 @@
-# Vortex Issue Tracker — Feature Parity Roadmap
+# Pile Issue Tracker — Feature Parity Roadmap
 
 This is the durable tracker for the open-source Linear alternative. Operational todos live in the agent session; the plan lives here.
 
 ## Done
 
-- Linear API / CLI / MCP / docs parity audit and gap mapping (#20): `docs/linear-parity.md` maps all major Linear domains to Vortex status and identifies the next slices.
+- Linear API / CLI / MCP / docs parity audit and gap mapping (#20): `docs/linear-parity.md` maps all major Linear domains to Pile status and identifies the next slices.
 - Better Auth human sign-in and workspace user mapping: workspace routes now accept workspace tokens _or_ Better Auth sessions; membership roles enforce permissions; `POST /workspaces` creates an owner membership.
 - `GET /workspaces/{id}/issues?identifier=KEY-123` lookup.
 - `POST /workspaces` create endpoint (with `key`).
-- GitHub assignee sync: map GitHub logins to Vortex users via github_users and set assigneeId on assigned/unassigned webhooks.
-- GitHub milestone sync: create Vortex cycles from GitHub milestones and update issue cycleId on milestoned/demilestoned webhooks.
-- GitHub issue label sync: map GitHub label names to Vortex labels and update issue labelIds on labeled/unlabeled webhooks.
-- Outbound GitHub comment writeback: Vortex comment -> GitHub issue/PR comment.
-- Magic-word PR linking: parse `fixes KEY-123` / `closes KEY-123` from PR title, body, or branch and update the linked Vortex issue.
+- GitHub assignee sync: map GitHub logins to Pile users via github_users and set assigneeId on assigned/unassigned webhooks.
+- GitHub milestone sync: create Pile cycles from GitHub milestones and update issue cycleId on milestoned/demilestoned webhooks.
+- GitHub issue label sync: map GitHub label names to Pile labels and update issue labelIds on labeled/unlabeled webhooks.
+- Outbound GitHub comment writeback: Pile comment -> GitHub issue/PR comment.
+- Magic-word PR linking: parse `fixes KEY-123` / `closes KEY-123` from PR title, body, or branch and update the linked Pile issue.
 - Outbound webhooks + notification delivery: issue/comment lifecycle events are emitted as realtime events, delivered to webhook subscriptions with retries, logged in `outbound_webhook_deliveries`, and surfaced as in-app notifications for assignees/subscribers.
 - Workspace-scoped D1 + Durable Object SQLite architecture
 - Hono `@hono/zod-openapi` API with generated OpenAPI/MCP/client
@@ -35,7 +35,7 @@ This is the durable tracker for the open-source Linear alternative. Operational 
   - GitHub issue `opened`/`edited`/`closed`/`reopened` sync
   - Inbound `issue_comment` and `pull_request_review_comment` sync
 - Workspace `key` and issue `identifier` (`KEY-123`)
-- Blume docs site: `packages/docs` with OpenAPI reference, `llms.txt`, search, and the Vortex intro.
+- Blume docs site: `packages/docs` with OpenAPI reference, `llms.txt`, search, and the Pile intro.
 - Issue estimates, drafts, and Linear two-level sub-issue depth enforcement.
 - Triage inbox (`GET /workspaces/{id}/triage`), triage auto-assignee per team, issue snoozing.
 - Notification inbox: unread, snooze/unsnooze, per-recipient unread badge.
@@ -43,7 +43,7 @@ This is the durable tracker for the open-source Linear alternative. Operational 
 - Issue templates: `templateId` on create + per-team `defaultTemplateId` defaults.
 - Cycles: status/number/auto-rollover, scheduled cron rollover, capacity endpoint.
 - Issue analytics: `groupBy` aggregates and per-cycle burndown series.
-- Linear workspace migration and dogfooding: imported the Vortex Linear workspace (148 issues, 75 parent links, VOR team) into the production Vortex instance.
+- Linear workspace migration and dogfooding: imported the Pile workspace (148 issues, 75 parent links, VOR team) into the production Pile instance.
 - One-command Cloudflare self-host (`pnpm run selfhost`) + Deploy-to-Cloudflare button for forks.
 - GitLab integration:
   - Issue and note/comment webhook sync
@@ -56,11 +56,11 @@ This is the durable tracker for the open-source Linear alternative. Operational 
 - Import approval gates with `import_approvals` table, `POST /{jobId}/approve`, and `POST /{jobId}/reject`.
 - Notion / documents integration:
   - `POST /workspaces/{id}/import` with `source: "notion"` (root page or workspace-wide search)
-  - Markdown content import into Vortex documents
+  - Markdown content import into Pile documents
   - `notion_users` mapping for `createdById` / `updatedById`
   - `notion_installations` and `notion_page_mappings` D1 tables
   - Ongoing Notion webhook sync for page create/update/delete events
-  - Notion database migration into Vortex issues
+  - Notion database migration into Pile issues
 - Import adapters framework and first Atlassian adapters:
   - Generic `ImportSource` contract in `src/import`
   - `POST /workspaces/{id}/import` with `source: "jira" | "confluence"`

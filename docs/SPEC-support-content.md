@@ -46,7 +46,7 @@ Canned replies that an agent can insert into a message. Plain calls these `Snipp
 
 | Column             | Type                   | Notes                   |
 | ------------------ | ---------------------- | ----------------------- |
-| `id`               | text PK                | Vortex UUID             |
+| `id`               | text PK                | Pile UUID               |
 | `organization_id`  | text FK → organization | workspace               |
 | `name`             | text                   | not null; shortcut name |
 | `text_content`     | text                   | plain text output       |
@@ -63,7 +63,7 @@ Rules that send an automatic reply under a condition. Plain's `Autoresponders`.
 
 | Column            | Type                       | Notes                                                                  |
 | ----------------- | -------------------------- | ---------------------------------------------------------------------- |
-| `id`              | text PK                    | Vortex UUID                                                            |
+| `id`              | text PK                    | Pile UUID                                                              |
 | `organization_id` | text FK → organization     | workspace                                                              |
 | `name`            | text                       | not null                                                               |
 | `enabled`         | boolean                    | default true                                                           |

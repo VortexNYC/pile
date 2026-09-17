@@ -72,16 +72,16 @@ Key insight: the actual debugger payload is uploaded as a separate artifact; the
 - **Orphan cleanup:** periodic cleanup of stale pending uploads and artifacts.
 - **Entitlements:** checks usage limits before creating a report.
 
-## 8. What to Borrow for Vortex
+## 8. What to Borrow for Pile
 
 - **Capture channel as a first-class support channel.** A bug report is just a support ticket with `source_channel = capture`.
 - **Public key + origin allowlist for embeds.** Reuse for the in-app chat / capture widget.
 - **Upload session pattern for large attachments (screenshot/video/debugger).** R2 for artifacts, D1 for ticket metadata.
 - **Debugger payload as an attachment.** The `support_ticket_events` table can point to `attachments` for console logs / network JSON.
-- **Bug report → issue tracker promotion.** Crikket has share links; Vortex can promote a capture to a `support_ticket` and then to a Vortex `issue` via `issue_id`.
+- **Bug report → issue tracker promotion.** Crikket has share links; Pile can promote a capture to a `support_ticket` and then to a Pile `issue` via `issue_id`.
 - **Visibility (public/private) on captures.** Useful for customer share links vs internal reports.
 
 ## 9. Gaps to Decide
 
-- Crikket is a dedicated bug-reporting product, not a full support inbox. Its "team" model is simpler. Vortex should not copy the entire Crikket dashboard; just the capture + report primitives.
-- Crikket uses Bun. Vortex uses pnpm/Cloudflare Workers. Do not copy the monorepo shape; only the data model and API flow.
+- Crikket is a dedicated bug-reporting product, not a full support inbox. Its "team" model is simpler. Pile should not copy the entire Crikket dashboard; just the capture + report primitives.
+- Crikket uses Bun. Pile uses pnpm/Cloudflare Workers. Do not copy the monorepo shape; only the data model and API flow.

@@ -1,8 +1,8 @@
-# Spec: Vortex Linear — Backend Migration
+# Spec: Pile — Backend Migration
 
 ## Assumptions
 
-1. Product is an **open-source, agent-native Linear alternative** (codename: Vortex Linear).
+1. Product is an **open-source, agent-native Linear alternative** (codename: Pile).
 2. **No Notion.** Source of truth is Cloudflare primitives.
 3. Target scale: **1000+ B2B workspaces**, ~20 users each.
 4. Runtime: **Cloudflare Workers**.
@@ -57,7 +57,7 @@ This is not a Devin integration. It is a generic agent-native issue tracker. The
 - **Action/approval flow:** agents can request approval; users approve/reject via the API.
 - **Multi-provider dispatch:** the `dispatch` endpoint routes to any agent provider via an adapter (Devin, OpenAI, cloud agents).
 - **OAuth and PAT support:** workspace admins install apps via OAuth; scripts/agents use PATs.
-- **External platform adapters (deferred):** Notion/Linear/Slack/GitHub can call Vortex Linear's webhooks and API, not the other way around.
+- **External platform adapters (deferred):** Notion/Linear/Slack/GitHub can call Pile's webhooks and API, not the other way around.
 
 ## Tech Stack
 
@@ -139,4 +139,4 @@ tests/
 
 ## Open Questions
 
-1. **Repo name:** Keep `notion-engineering-queue` or rename to `vortex-linear` / `linear-for-agents`?
+1. **Repo name:** Keep `notion-engineering-queue` or rename to `pile-linear` / `linear-for-agents`?

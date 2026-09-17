@@ -4,7 +4,7 @@
 
 Define the third module of the customer support layer: the team and assignment model.
 
-`support-team` controls who works support tickets, whether they are available, how tickets are routed, and how SLAs are tracked. It reuses Vortex's existing `users`, `teams`, and `team_member` tables where possible and adds support-specific tables for status, tiers, and SLAs.
+`support-team` controls who works support tickets, whether they are available, how tickets are routed, and how SLAs are tracked. It reuses Pile's existing `users`, `teams`, and `team_member` tables where possible and adds support-specific tables for status, tiers, and SLAs.
 
 This module is the foundation for the `support-inbox` and `support-migration`.
 
@@ -46,7 +46,7 @@ Tracks whether a support agent is currently available. This is per-user, per-wor
 
 | Column            | Type                   | Notes                                  |
 | ----------------- | ---------------------- | -------------------------------------- |
-| `id`              | text PK                | Vortex UUID                            |
+| `id`              | text PK                | Pile UUID                              |
 | `organization_id` | text FK → organization | workspace                              |
 | `user_id`         | text FK → user         | not null                               |
 | `status`          | text                   | `active`, `away`, `snoozed`, `offline` |
@@ -61,12 +61,12 @@ Unique: `(organization_id, user_id)`.
 
 Customer / support tiers. Plain uses these for routing and SLA. A tier is just a named group in v1.
 
-| Column            | Type                   | Notes       |
-| ----------------- | ---------------------- | ----------- |
-| `id`              | text PK                | Vortex UUID |
-| `organization_id` | text FK → organization | workspace   |
-| `name`            | text                   | not null    |
-| `level`           | integer                | not null    |
+| Column            | Type                   | Notes     |
+| ----------------- | ---------------------- | --------- |
+| `id`              | text PK                | Pile UUID |
+| `organization_id` | text FK → organization | workspace |
+| `name`            | text                   | not null  |
+| `level`           | integer                | not null  |
 
 Unique: `(organization_id, name)`.
 
@@ -74,11 +74,11 @@ Unique: `(organization_id, name)`.
 
 Which users belong to which tier.
 
-| Column    | Type                    | Notes       |
-| --------- | ----------------------- | ----------- |
-| `id`      | text PK                 | Vortex UUID |
-| `tier_id` | text FK → support_tiers | not null    |
-| `user_id` | text FK → user          | not null    |
+| Column    | Type                    | Notes     |
+| --------- | ----------------------- | --------- |
+| `id`      | text PK                 | Pile UUID |
+| `tier_id` | text FK → support_tiers | not null  |
+| `user_id` | text FK → user          | not null  |
 
 Unique: `(tier_id, user_id)`.
 
@@ -88,7 +88,7 @@ SLA rules. Each rule applies to a priority and a tier.
 
 | Column                   | Type                    | Notes                             |
 | ------------------------ | ----------------------- | --------------------------------- |
-| `id`                     | text PK                 | Vortex UUID                       |
+| `id`                     | text PK                 | Pile UUID                         |
 | `organization_id`        | text FK → organization  | workspace                         |
 | `name`                   | text                    | not null                          |
 | `tier_id`                | text FK → support_tiers | nullable; null means "all tiers"  |
@@ -105,7 +105,7 @@ Tracks SLA targets and breaches for each ticket. An event is recorded when the c
 
 | Column      | Type                      | Notes                                                                |
 | ----------- | ------------------------- | -------------------------------------------------------------------- |
-| `id`        | text PK                   | Vortex UUID                                                          |
+| `id`        | text PK                   | Pile UUID                                                            |
 | `ticket_id` | text FK → support_tickets | not null                                                             |
 | `sla_id`    | text FK → support_slas    | not null                                                             |
 | `type`      | text                      | `first_response_target`, `next_response_target`, `resolution_target` |

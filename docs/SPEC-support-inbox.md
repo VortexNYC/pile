@@ -44,7 +44,7 @@ Saved filters for the inbox. A view is a stored `filter` plus a `sort`.
 
 | Column            | Type                   | Notes                                          |
 | ----------------- | ---------------------- | ---------------------------------------------- |
-| `id`              | text PK                | Vortex UUID                                    |
+| `id`              | text PK                | Pile UUID                                      |
 | `organization_id` | text FK → organization | workspace                                      |
 | `user_id`         | text FK → user         | nullable; personal view if set, shared if null |
 | `name`            | text                   | not null                                       |

@@ -1,8 +1,8 @@
-# Capability Map: Customer Support Layer in Vortex
+# Capability Map: Customer Support Layer in Pile
 
 ## Objective
 
-Replace Intercom / Zendesk / Plain.com with an internal, developer-friendly and agent-friendly customer support surface nested inside Vortex. The customer support tool should feel native to the issue tracker and to the agents that work it.
+Replace Intercom / Zendesk / Plain.com with an internal, developer-friendly and agent-friendly customer support surface nested inside Pile. The customer support tool should feel native to the issue tracker and to the agents that work it.
 
 Build order follows the data dependencies, but migration adapters from Intercom and Zendesk are used as the reference schema to validate the internal model as we build it.
 
@@ -11,7 +11,7 @@ Build order follows the data dependencies, but migration adapters from Intercom 
 1. The support model is centered on **tickets** (a.k.a. conversations) and **contacts** (customers / companies / leads).
 2. The first channel is **email** + a webhook/POST endpoint; Slack, SMS and in-app messenger come later.
 3. In-app chat and agent-side messaging use the **Vercel AI SDK** (`ai` package) rather than a custom chat layer.
-4. Agent identity, assignment and team membership reuse existing Vortex `users`, `teams` and `organization_role` where possible.
+4. Agent identity, assignment and team membership reuse existing Pile `users`, `teams` and `organization_role` where possible.
 5. Macros, canned replies and tags reuse the existing `labels` and `templates` concepts where possible.
 6. Webhook HMAC verification follows the same pattern as the GitHub and GitLab handlers.
 

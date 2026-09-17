@@ -2,7 +2,7 @@
 
 ## Objective
 
-Make agent runs in Vortex behave like Linear agent sessions: a single active session per issue, visible lifecycle state, automatic result/PR writeback to the issue, and lifecycle events that webhooks and realtime consumers can subscribe to.
+Make agent runs in Pile behave like Linear agent sessions: a single active session per issue, visible lifecycle state, automatic result/PR writeback to the issue, and lifecycle events that webhooks and realtime consumers can subscribe to.
 
 ## Tech Stack
 

@@ -2,11 +2,11 @@
 
 ## Objective
 
-Define the sixth module of the customer support layer: how tickets get in and out of Vortex.
+Define the sixth module of the customer support layer: how tickets get in and out of Pile.
 
 `support-channels` provides the ingestion endpoints for every channel (email, Slack, MS Teams, Discord, in-app chat, Intercom, Zendesk, Plain) and the outgoing send path for replies. It is the HTTP surface that `support-migration` adapters and external providers call to create and update `support_tickets` and `support_ticket_events`.
 
-The in-app chat widget uses the **Vercel AI SDK** for the client-side chat UI. Vortex provides the message persistence; the customer brings their own model if they want an AI agent.
+The in-app chat widget uses the **Vercel AI SDK** for the client-side chat UI. Pile provides the message persistence; the customer brings their own model if they want an AI agent.
 
 ## Tech Stack
 
@@ -55,7 +55,7 @@ Configuration for each enabled channel in a workspace.
 
 | Column            | Type                   | Notes                                                                                            |
 | ----------------- | ---------------------- | ------------------------------------------------------------------------------------------------ |
-| `id`              | text PK                | Vortex UUID                                                                                      |
+| `id`              | text PK                | Pile UUID                                                                                        |
 | `organization_id` | text FK → organization | workspace                                                                                        |
 | `type`            | text                   | `email`, `slack`, `msteams`, `discord`, `chat`, `capture`, `api`, `intercom`, `zendesk`, `plain` |
 | `name`            | text                   | not null                                                                                         |
@@ -74,7 +74,7 @@ A chat session ties a customer to a ticket. The Vercel AI SDK `useChat` hooks li
 
 | Column            | Type                        | Notes                        |
 | ----------------- | --------------------------- | ---------------------------- |
-| `id`              | text PK                     | Vortex UUID                  |
+| `id`              | text PK                     | Pile UUID                    |
 | `organization_id` | text FK → organization      | workspace                    |
 | `customer_id`     | text FK → support_customers | who is chatting              |
 | `ticket_id`       | text FK → support_tickets   | nullable until first message |

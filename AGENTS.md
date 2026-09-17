@@ -44,7 +44,7 @@ vp run knip
 
 ## Dogfooding
 
-Vortex is our own engineering source of truth. While working on this repo, agents must use the production Vortex instance rather than Linear or Notion.
+Pile is our own engineering source of truth. While working on this repo, agents must use the production Pile instance rather than Linear or Notion.
 
 - Workspace: `org_vortex_main`
 - Team for this repo: `Issue Tracker` (`ISS`)
@@ -56,7 +56,7 @@ For every non-trivial chunk of work:
 2. Create or update an `ISS-*` issue describing the work.
 3. Use the issue identifier in branch names and commit messages where practical.
 4. Verify the change through the product API before reporting completion.
-5. Actively look for opportunities to use the Vortex API, CLI, SDK, or MCP for issue lifecycle (status, comments, assignments, branch/PR metadata) instead of `gh`, `git`, or external trackers. Default to the product for updates, verification, and triage.
+5. Actively look for opportunities to use the Pile API, CLI, SDK, or MCP for issue lifecycle (status, comments, assignments, branch/PR metadata) instead of `gh`, `git`, or external trackers. Default to the product for updates, verification, and triage.
 
 ## Where things live
 

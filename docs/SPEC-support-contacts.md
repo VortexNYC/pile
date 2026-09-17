@@ -51,7 +51,7 @@ migrations/                      # Drizzle-generated D1 migrations
 
 | Column            | Type                   | Notes                                    |
 | ----------------- | ---------------------- | ---------------------------------------- |
-| `id`              | text PK                | Vortex UUID                              |
+| `id`              | text PK                | Pile UUID                                |
 | `organization_id` | text FK → organization | workspace                                |
 | `user_id`         | text FK → user         | optional; internal user submitting a bug |
 | `external_id`     | text                   | optional Intercom/Zendesk/Plain id       |
@@ -71,7 +71,7 @@ Index: `(organization_id, external_id, external_source)`.
 
 | Column            | Type                   | Notes                             |
 | ----------------- | ---------------------- | --------------------------------- |
-| `id`              | text PK                | Vortex UUID                       |
+| `id`              | text PK                | Pile UUID                         |
 | `organization_id` | text FK → organization | workspace                         |
 | `external_id`     | text                   | optional external id              |
 | `external_source` | text                   | source system                     |
@@ -89,7 +89,7 @@ Index: `(organization_id, domain)`.
 
 | Column        | Type                        | Notes                             |
 | ------------- | --------------------------- | --------------------------------- |
-| `id`          | text PK                     | Vortex UUID                       |
+| `id`          | text PK                     | Pile UUID                         |
 | `customer_id` | text FK → support_customers | not null                          |
 | `type`        | text                        | `email`, `phone`, `slack`, `chat` |
 | `value`       | text                        | not null                          |
@@ -104,7 +104,7 @@ This table lets a customer have multiple identities (work email, personal email,
 
 | Column        | Type                        | Notes                          |
 | ------------- | --------------------------- | ------------------------------ |
-| `id`          | text PK                     | Vortex UUID                    |
+| `id`          | text PK                     | Pile UUID                      |
 | `customer_id` | text FK → support_customers | not null                       |
 | `company_id`  | text FK → support_companies | not null                       |
 | `is_primary`  | boolean                     | default false; primary company |
@@ -255,7 +255,7 @@ The helper creates or updates `support_customers`, then syncs `support_customer_
 
 ## Decisions
 
-1. **Vortex `user` vs support customer** — keep them separate. `support_customers` has an optional `user_id` for internal bug submissions, but the support contact is a separate entity.
+1. **Pile `user` vs support customer** — keep them separate. `support_customers` has an optional `user_id` for internal bug submissions, but the support contact is a separate entity.
 2. **Leads** — no `support_leads` table for v1. `support_customers` covers all contacts; sales leads will be a future concern.
 3. **Company auto-resolution** — yes. Match incoming email domain to `support_companies.domain` when a company with that domain exists.
 4. **Tenants** — use a join table `support_customer_companies` so one customer can belong to multiple companies. v1 creates one row per customer, but the schema supports many.
