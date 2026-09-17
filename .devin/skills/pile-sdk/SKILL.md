@@ -7,7 +7,7 @@ description: Use the generated TypeScript SDK (openapi-fetch wrapper) to call th
 
 ## Overview
 
-The `pile-client` package is an `openapi-fetch` client typed against the Pile OpenAPI spec. Import it to call Pile endpoints with end-to-end type inference.
+The `@vortex-api/pile` package is an `openapi-fetch` client typed against the Pile OpenAPI spec. Import it to call Pile endpoints with end-to-end type inference.
 
 ## When to use
 
@@ -17,12 +17,12 @@ The `pile-client` package is an `openapi-fetch` client typed against the Pile Op
 
 ## Setup
 
-1. Install `pile-client` from the workspace or registry.
+1. Install `@vortex-api/pile` from the workspace or registry.
 2. Create a client with the base URL of your Pile deployment (your Worker URL, or `http://127.0.0.1:8787` for local `wrangler dev`) and a workspace-scoped API key.
 3. Call typed methods like `client.GET`, `client.POST`, etc.
 
 ```typescript
-import { createPileClient } from "pile-client";
+import { createPileClient } from "`@vortex-api/pile`";
 
 const client = createPileClient({
   baseUrl: process.env.PILE_BASE_URL!, // e.g. https://<your-worker>
@@ -58,7 +58,7 @@ import {
   PileRequestError,
   isPileErrorCodeOf,
   toPileError,
-} from "pile-client";
+} from "`@vortex-api/pile`";
 
 try {
   const data = await unwrap(client.GET("/workspaces", {}));

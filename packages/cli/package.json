@@ -1,7 +1,7 @@
 {
-  "name": "pile-cli",
+  "name": "@vortex-api/pile",
   "version": "0.1.0",
-  "description": "CLI for Pile.",
+  "description": "TypeScript SDK and CLI for Pile.",
   "license": "MIT",
   "bin": {
     "pile": "./bin/pile.js"
@@ -11,12 +11,21 @@
     "bin"
   ],
   "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/client/index.js",
+  "types": "./dist/client/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/client/index.d.ts",
+      "default": "./dist/client/index.js"
+    }
+  },
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "prepack": "pnpm run build",
     "cli": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "openapi-fetch": "0.17.0"
   },
   "devDependencies": {
     "@pile/tsconfig": "workspace:*",

@@ -101,15 +101,6 @@ importers:
         version: 4.129.0(@cloudflare/workers-types@5.20260730.1)
 
   packages/cli:
-    devDependencies:
-      '@pile/tsconfig':
-        specifier: workspace:*
-        version: link:../tsconfig
-      tsx:
-        specifier: 4.23.13
-        version: 4.23.13
-
-  packages/client:
     dependencies:
       openapi-fetch:
         specifier: 0.17.0
@@ -118,6 +109,9 @@ importers:
       '@pile/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
+      tsx:
+        specifier: 4.23.13
+        version: 4.23.13
 
   packages/clipper: {}
 

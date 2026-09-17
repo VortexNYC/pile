@@ -26,7 +26,7 @@ vp run knip
 ```
 
 `contract:check` regenerates `src/mcp/openapi.json`, `src/mcp/mcp-tools.ts`,
-`packages/client/src/types.ts`, and `packages/cli/src/commands.ts` — commit the
+`packages/cli/src/client/types.ts`, and `packages/cli/src/commands.ts` — commit the
 regenerated files with your change.
 
 ## Rules
@@ -45,7 +45,7 @@ regenerated files with your change.
 - `src/workspace/durable-object.ts` — per-workspace state (Durable Object SQLite)
 - `src/global/schema.ts` — D1 Drizzle schema (global metadata, auth)
 - `src/mcp/` — generated MCP tools from the OpenAPI surface
-- `packages/cli`, `packages/client`, `packages/docs`, `packages/clipper`
+- `packages/cli`, `packages/docs`, `packages/clipper`
 
 ## Reporting issues
 
