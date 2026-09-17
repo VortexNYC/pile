@@ -197,8 +197,7 @@ export const jamSupportImportSource: ImportSource<
             }
           );
 
-          const origin =
-            ctx.requestHeaders.get("origin") ?? "https://pile.nyc";
+          const origin = ctx.requestHeaders.get("origin") ?? "https://pile.nyc";
           const remoteAttachments: {
             type: "screenshot" | "video";
             url: string;
