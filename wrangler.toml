@@ -15,7 +15,7 @@ SLACK_REDIRECT_URI = "https://pile.example.workers.dev/slack/oauth"
 # Optional: agent dispatch defaults
 # DEVIN_OUTPOST = "vortex-daytona"
 # DEVIN_MODEL = "swe-1-7-medium"
-EMAIL_FROM = "notifications@vortex.nyc"
+EMAIL_FROM = "notifications@pile.nyc"
 INTERCOM_CLIENT_SECRET = "test"
 
 [[d1_databases]]
@@ -62,7 +62,7 @@ DEVIN_OUTPOST = "vortex-daytona"
 DAYTONA_SNAPSHOT = "vortex-outpost-worker-v6"
 DAYTONA_VOLUME_ID = "0f79e741-e373-496b-a83f-7252cd5b9f12"
 DEVIN_MODEL = "swe-1-7-medium"
-EMAIL_FROM = "notifications@vortex.nyc"
+EMAIL_FROM = "notifications@pile.nyc"
 
 [[env.production.services]]
 binding = "FLUE_WORKER"
