@@ -266,7 +266,8 @@ falling back to the generic parser:
   generic parser covers it.
 - **devin-cli** — runs `devin -p` headlessly inside a Daytona sandbox using
   the workspace's `credentials.toml`; poll-only, no webhooks, and does not
-  use the Devin organization sessions API.
+  use the Devin organization sessions API. Verified live via Daytona sandbox
+  dispatch (ISS-80).
 - **cursor-cli** — runs `cursor-agent -p --force --trust` headlessly inside
   a Daytona sandbox using the workspace's Cursor API key; poll-only, does
   not use the Cursor cloud agents API.
