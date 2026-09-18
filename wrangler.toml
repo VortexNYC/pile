@@ -80,6 +80,23 @@ bucket_name = "issuetracker-attachments"
 name = "WORKSPACE_DURABLE_OBJECT"
 class_name = "WorkspaceDO"
 
+[[env.production.durable_objects.bindings]]
+name = "SANDBOX"
+class_name = "Sandbox"
+
+[[env.production.containers]]
+class_name = "Sandbox"
+image = "./Dockerfile.sandbox"
+max_instances = 20
+
+[[env.production.migrations]]
+tag = "v1"
+new_sqlite_classes = ["WorkspaceDO"]
+
+[[env.production.migrations]]
+tag = "v2"
+new_sqlite_classes = ["Sandbox"]
+
 [[env.production.queues.producers]]
 binding = "WEBHOOK_QUEUE"
 queue = "webhook-queue"
