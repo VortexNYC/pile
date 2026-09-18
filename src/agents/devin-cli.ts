@@ -634,7 +634,9 @@ export class DevinCliAgentProvider implements AgentProvider {
     );
     if (!sandbox) return null;
     const runner = await compute.runnerState(sandbox, providerSessionId);
-    return { provider: runner, compute: sandbox };
+    const logs =
+      (await compute.runnerLogs?.(sandbox, providerSessionId)) ?? null;
+    return { provider: { state: runner, logs }, compute: sandbox };
   }
 
   async health(): Promise<AgentProviderHealth> {
