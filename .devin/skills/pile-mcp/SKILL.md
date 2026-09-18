@@ -92,7 +92,7 @@ Create a team:
   "name": "create_team",
   "arguments": {
     "organizationId": "org_123",
-    "body": { "key": "ISS", "name": "Issue Tracker" }
+    "body": { "key": "ISS", "name": "Pile" }
   }
 }
 ```

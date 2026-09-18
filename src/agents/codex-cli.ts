@@ -120,7 +120,7 @@ function buildPrompt(issue: Issue, gitIdentity?: GitIdentity | null): string {
     ...identityLines,
     "",
     "Implement the requested change. Run the project's dependency installation and test/lint commands (for example `pnpm install` and `pnpm run check`). Make commits with clear messages. Push your changes to the current branch and open a GitHub pull request. Include the full PR URL in your final message.",
-    "Do not attempt to update the issue tracker yourself — an external system will poll your session and write the status back automatically.",
+    "Do not attempt to update Pile yourself — an external system will poll your session and write the status back automatically.",
   ].join("\n");
 }
 

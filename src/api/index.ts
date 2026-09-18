@@ -295,7 +295,7 @@ app.all("/api/auth/*", (c) => {
 app.doc("/openapi.json", {
   openapi: "3.0.0",
   info: {
-    title: "Vortex Issue Tracker",
+    title: "Pile",
     version: "0.1.0",
     description: "Agent-native issue tracker on Cloudflare Workers.",
   },
