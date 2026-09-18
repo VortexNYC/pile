@@ -1,3 +1,5 @@
+import type { Sandbox } from "@cloudflare/sandbox";
+
 export interface AppEnv {
   D1: D1Database;
   ATTACHMENTS_BUCKET?: R2Bucket;
@@ -17,6 +19,10 @@ export interface AppEnv {
   DAYTONA_SNAPSHOT?: string;
   DAYTONA_VOLUME_ID?: string;
   DAYTONA_LABEL_ID?: string;
+  /** Compute backend for headless CLI providers: "daytona" (default) or "cloudflare". */
+  COMPUTE_PROVIDER?: string;
+  /** Cloudflare Sandbox binding (Workers Containers) for COMPUTE_PROVIDER=cloudflare. */
+  SANDBOX?: DurableObjectNamespace<Sandbox>;
   OPENAI_API_KEY?: string;
   AGENT_PROVIDER_TOKEN?: string;
   AGENT_PROVIDER_CONFIG?: string;

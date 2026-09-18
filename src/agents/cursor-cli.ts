@@ -9,10 +9,9 @@ import type {
   GitIdentity,
   Issue,
 } from "../types/workspace.js";
+import { computeBackend } from "./compute.js";
+import type { ComputeBackend } from "./compute.js";
 import {
-  daytonaConfig,
-  daytonaSandboxListSchema,
-  daytonaSandboxSchema,
   writeAgentSessionActivity,
   openAgentSessionSpan,
   closeAgentSessionSpan,
@@ -27,35 +26,9 @@ import type {
 } from "./provider.js";
 
 const DEFAULT_MODEL = "";
-const DEFAULT_FALLBACK_TOOLBOX = "https://proxy.app.daytona.io/toolbox";
-const POLL_INTERVAL_MS = 5000;
-const MAX_START_POLLS = 60; // 5 minutes
-
-const daytonaProcessSessionSchema = z.object({
-  sessionId: z.string(),
-  commands: z
-    .array(
-      z.object({
-        id: z.string(),
-        command: z.string(),
-        exitCode: z.number().optional(),
-      })
-    )
-    .default([]),
-});
-
-const daytonaCommandExecSchema = z.object({
-  cmdId: z.string().nullish(),
-  exitCode: z.number().nullish(),
-  output: z.string().nullish(),
-  stdout: z.string().nullish(),
-  stderr: z.string().nullish(),
-});
-
-const daytonaSyncExecSchema = z.object({
-  result: z.string().nullish(),
-  exitCode: z.number().nullish(),
-});
+const RESULT_PATH = "/tmp/cursor-result.json";
+const NAME_PREFIX = "vortex-cursorcli";
+const AGENT_LABEL = "cursor-cli";
 
 const cursorResultSchema = z.object({
   status: z.enum(["completed", "failed"]).optional(),
@@ -321,20 +294,12 @@ function buildSandboxEnv(
   };
 }
 
+function sandboxName(sessionId: string): string {
+  return `${NAME_PREFIX}-${sessionId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 12)}`;
+}
+
 function buildRunnerCommand(): string {
   return "printf '%s' \"$RUNNER_PY_B64\" | base64 -d > /tmp/run.py && python3 /tmp/run.py";
-}
-
-function toolboxBase(sandbox: {
-  id: string;
-  toolboxProxyUrl?: string | null;
-}): string {
-  const proxy = sandbox.toolboxProxyUrl ?? DEFAULT_FALLBACK_TOOLBOX;
-  return `${proxy}/${sandbox.id}`;
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export class CursorCliAgentProvider implements AgentProvider {
@@ -398,16 +363,8 @@ export class CursorCliAgentProvider implements AgentProvider {
     return apiKey;
   }
 
-  private requireDaytona() {
-    const config = daytonaConfig(this.env);
-    if (!config) {
-      throw new VortexError({
-        code: "CONFIG_ERROR",
-        status: 500,
-        message: "DAYTONA_API_KEY is not configured",
-      });
-    }
-    return config;
+  private requireCompute(): ComputeBackend {
+    return computeBackend(this.env);
   }
 
   private async githubToken(repo: string): Promise<string> {
@@ -423,229 +380,6 @@ export class CursorCliAgentProvider implements AgentProvider {
     return token;
   }
 
-  private async listSandboxes(config: { apiKey: string; apiUrl: string }) {
-    const res = await fetch(`${config.apiUrl}/sandbox`, {
-      headers: { Authorization: `Bearer ${config.apiKey}` },
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      throw new VortexError({
-        code: "AGENT_ERROR",
-        status: 502,
-        message: `Daytona sandbox list failed: ${res.status} ${text}`,
-      });
-    }
-    return daytonaSandboxListSchema.parse(await res.json());
-  }
-
-  private async deleteSandbox(
-    config: { apiKey: string; apiUrl: string },
-    sandboxId: string
-  ) {
-    const res = await fetch(`${config.apiUrl}/sandbox/${sandboxId}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${config.apiKey}` },
-    });
-    if (!res.ok && res.status !== 404) {
-      const text = await res.text();
-      throw new VortexError({
-        code: "AGENT_ERROR",
-        status: 502,
-        message: `Daytona sandbox delete failed: ${res.status} ${text}`,
-      });
-    }
-  }
-
-  private async findSandbox(
-    config: { apiKey: string; apiUrl: string },
-    sessionId: string
-  ) {
-    const list = await this.listSandboxes(config);
-    return (
-      list.items.find(
-        (s) =>
-          s.labels?.["vortex.session"] === sessionId ||
-          s.name ===
-            `vortex-cursorcli-${sessionId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 12)}`
-      ) ?? null
-    );
-  }
-
-  private async createSandbox(
-    config: { apiKey: string; apiUrl: string },
-    name: string,
-    sessionId: string,
-    organizationId: string,
-    sandboxEnv: Record<string, string>
-  ) {
-    const res = await fetch(`${config.apiUrl}/sandbox`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        name,
-        snapshot: this.env.DAYTONA_SNAPSHOT ?? "daytona-vm-small",
-        env: sandboxEnv,
-        labels: {
-          "vortex.session": sessionId,
-          "vortex.org": organizationId,
-          "vortex.agent": "cursor-cli",
-        },
-        autoStopInterval: 240, // leak ceiling: 4h, above the runner's 2h timeout
-        autoDeleteInterval: -1,
-        ...(this.env.DAYTONA_VOLUME_ID
-          ? {
-              volumes: [
-                {
-                  volumeId: this.env.DAYTONA_VOLUME_ID,
-                  mountPath: "/home/daytona/cache",
-                },
-              ],
-            }
-          : {}),
-      }),
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      throw new VortexError({
-        code: "AGENT_ERROR",
-        status: 502,
-        message: `Daytona sandbox create failed: ${res.status} ${text}`,
-      });
-    }
-    return daytonaSandboxSchema.parse(await res.json());
-  }
-
-  private async waitForStarted(
-    config: { apiKey: string; apiUrl: string },
-    sandboxId: string
-  ) {
-    const poll = async (i: number) => {
-      if (i >= MAX_START_POLLS) {
-        throw new VortexError({
-          code: "AGENT_ERROR",
-          status: 504,
-          message: "Daytona sandbox did not start in time",
-        });
-      }
-      const res = await fetch(`${config.apiUrl}/sandbox/${sandboxId}`, {
-        headers: { Authorization: `Bearer ${config.apiKey}` },
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new VortexError({
-          code: "AGENT_ERROR",
-          status: 502,
-          message: `Daytona sandbox get failed: ${res.status} ${text}`,
-        });
-      }
-      const sandbox = daytonaSandboxSchema.parse(await res.json());
-      if (sandbox.state === "started") return sandbox;
-      if (sandbox.state === "error") {
-        throw new VortexError({
-          code: "AGENT_ERROR",
-          status: 502,
-          message: `Daytona sandbox failed: ${sandbox.error ?? "unknown error"}`,
-        });
-      }
-      await delay(POLL_INTERVAL_MS);
-      return poll(i + 1);
-    };
-    return poll(0);
-  }
-
-  private async createProcessSession(
-    base: string,
-    sessionId: string,
-    apiKey: string
-  ) {
-    const res = await fetch(`${base}/process/session`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({ sessionId }),
-    });
-    if (!res.ok && res.status !== 409) {
-      const text = await res.text();
-      throw new VortexError({
-        code: "AGENT_ERROR",
-        status: 502,
-        message: `Daytona process session create failed: ${res.status} ${text}`,
-      });
-    }
-  }
-
-  private async execCommand(
-    base: string,
-    sessionId: string,
-    command: string,
-    apiKey: string
-  ) {
-    const res = await fetch(`${base}/process/session/${sessionId}/exec`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({ command, runAsync: true }),
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      throw new VortexError({
-        code: "AGENT_ERROR",
-        status: 502,
-        message: `Daytona process exec failed: ${res.status} ${text}`,
-      });
-    }
-    return daytonaCommandExecSchema.parse(await res.json());
-  }
-
-  private async getProcessSession(
-    base: string,
-    sessionId: string,
-    apiKey: string
-  ) {
-    const res = await fetch(`${base}/process/session/${sessionId}`, {
-      headers: { Authorization: `Bearer ${apiKey}` },
-    });
-    if (!res.ok && res.status !== 404) {
-      const text = await res.text();
-      throw new VortexError({
-        code: "AGENT_ERROR",
-        status: 502,
-        message: `Daytona process session get failed: ${res.status} ${text}`,
-      });
-    }
-    if (!res.ok) return null;
-    return daytonaProcessSessionSchema.parse(await res.json());
-  }
-
-  private async readResult(
-    base: string,
-    apiKey: string
-  ): Promise<z.infer<typeof cursorResultSchema> | null> {
-    const res = await fetch(`${base}/process/execute`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        command: "cat /tmp/cursor-result.json",
-        cwd: "/",
-      }),
-    });
-    if (!res.ok) return null;
-    const data = daytonaSyncExecSchema.parse(await res.json());
-    if (data.exitCode !== 0 || !data.result) return null;
-    const parsed = cursorResultSchema.safeParse(JSON.parse(data.result));
-    return parsed.success ? parsed.data : null;
-  }
-
   private async start(
     organizationId: string,
     issue: Issue,
@@ -654,7 +388,7 @@ export class CursorCliAgentProvider implements AgentProvider {
     gitIdentity: GitIdentity
   ) {
     const apiKey = this.requireAuth();
-    const config = this.requireDaytona();
+    const compute = this.requireCompute();
     if (!issue.repo) {
       throw new VortexError({
         code: "BAD_REQUEST",
@@ -663,9 +397,7 @@ export class CursorCliAgentProvider implements AgentProvider {
       });
     }
     const githubToken = await this.githubToken(issue.repo);
-
-    const shortId = sessionId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 12);
-    const name = `vortex-cursorcli-${shortId}`;
+    const name = sandboxName(sessionId);
 
     const spanId = await this.openSpan(
       organizationId,
@@ -674,10 +406,7 @@ export class CursorCliAgentProvider implements AgentProvider {
       { session: sessionId }
     );
     try {
-      const list = await this.listSandboxes(config);
-      const existing = list.items.find(
-        (s) => s.labels?.["vortex.session"] === sessionId || s.name === name
-      );
+      const existing = await compute.findSandbox(sessionId, name);
       if (existing) {
         await this.note(
           organizationId,
@@ -687,7 +416,7 @@ export class CursorCliAgentProvider implements AgentProvider {
           { sandbox: existing.id, state: existing.state },
           { parentId: spanId }
         );
-        await this.deleteSandbox(config, existing.id);
+        await compute.deleteSandbox(existing);
       }
 
       const sandboxEnv = buildSandboxEnv(
@@ -697,44 +426,28 @@ export class CursorCliAgentProvider implements AgentProvider {
         githubToken,
         gitIdentity
       );
-      const sandbox = await this.createSandbox(
-        config,
+      const sandbox = await compute.createSandbox({
         name,
         sessionId,
         organizationId,
-        sandboxEnv
-      );
-      await this.note(
-        organizationId,
-        sessionId,
-        "status",
-        "cursor-cli sandbox created",
-        { sandbox: sandbox.id, state: sandbox.state },
-        { parentId: spanId }
-      );
-      const started = await this.waitForStarted(config, sandbox.id);
+        agentLabel: AGENT_LABEL,
+        env: sandboxEnv,
+      });
       await this.note(
         organizationId,
         sessionId,
         "status",
         "cursor-cli sandbox started",
-        { sandbox: started.id, state: started.state },
+        { sandbox: sandbox.id, state: sandbox.state, backend: compute.kind },
         { parentId: spanId }
       );
-      const base = toolboxBase(started);
-      await this.createProcessSession(base, sessionId, config.apiKey);
-      await this.execCommand(
-        base,
-        sessionId,
-        buildRunnerCommand(),
-        config.apiKey
-      );
+      await compute.startRunner(sandbox, sessionId, buildRunnerCommand());
       await this.note(
         organizationId,
         sessionId,
         "action",
         "cursor-cli runner started",
-        { sandbox: started.id },
+        { sandbox: sandbox.id },
         { parentId: spanId }
       );
     } catch (err) {
@@ -801,8 +514,11 @@ export class CursorCliAgentProvider implements AgentProvider {
   }
 
   async poll(sessionId: string): Promise<AgentProviderSession> {
-    const config = this.requireDaytona();
-    const sandbox = await this.findSandbox(config, sessionId);
+    const compute = this.requireCompute();
+    const sandbox = await compute.findSandbox(
+      sessionId,
+      sandboxName(sessionId)
+    );
     if (!sandbox) {
       return { id: sessionId, agentId: this.id, status: "created" };
     }
@@ -811,37 +527,38 @@ export class CursorCliAgentProvider implements AgentProvider {
         id: sessionId,
         agentId: this.id,
         status: "failed",
-        result: sandbox.error ?? "Daytona sandbox error",
+        result: sandbox.error ?? "compute sandbox error",
       };
     }
     if (sandbox.state !== "started") {
       return { id: sessionId, agentId: this.id, status: "created" };
     }
 
-    const base = toolboxBase(sandbox);
-    const session = await this.getProcessSession(
-      base,
-      sessionId,
-      config.apiKey
-    );
-    if (!session) {
+    const runner = await compute.runnerState(sandbox, sessionId);
+    if (runner === "pending") {
       return { id: sessionId, agentId: this.id, status: "created" };
     }
-    const completedCommand = session.commands.find(
-      (c) => typeof c.exitCode === "number"
-    );
-    if (!completedCommand || completedCommand.exitCode === undefined) {
+    if (runner === "running") {
       return { id: sessionId, agentId: this.id, status: "running" };
     }
 
-    const result = await this.readResult(base, config.apiKey);
+    const raw = await compute.readFile(sandbox, RESULT_PATH);
+    let result: z.infer<typeof cursorResultSchema> | null = null;
+    if (raw) {
+      try {
+        const parsed = cursorResultSchema.safeParse(JSON.parse(raw));
+        if (parsed.success) result = parsed.data;
+      } catch {
+        result = null;
+      }
+    }
     if (!result) {
-      await this.deleteSandbox(config, sandbox.id);
+      await compute.deleteSandbox(sandbox);
       return {
         id: sessionId,
         agentId: this.id,
         status: "failed",
-        result: `runner exited (code ${completedCommand.exitCode}) without a result file`,
+        result: `runner exited (code ${runner.exitCode}) without a result file`,
       };
     }
 
@@ -850,9 +567,9 @@ export class CursorCliAgentProvider implements AgentProvider {
     const prUrl = result.prUrl?.trim() || null;
     const prState = prUrl ? "open" : null;
 
-    await this.deleteSandbox(config, sandbox.id);
+    await compute.deleteSandbox(sandbox);
     await this.note(
-      sandbox.labels?.["vortex.org"],
+      sandbox.organizationId,
       sessionId,
       "status",
       "sandbox deleted after terminal result",
@@ -871,12 +588,15 @@ export class CursorCliAgentProvider implements AgentProvider {
   }
 
   async cancel(sessionId: string): Promise<void> {
-    const config = this.requireDaytona();
-    const sandbox = await this.findSandbox(config, sessionId);
+    const compute = this.requireCompute();
+    const sandbox = await compute.findSandbox(
+      sessionId,
+      sandboxName(sessionId)
+    );
     if (sandbox) {
-      await this.deleteSandbox(config, sandbox.id);
+      await compute.deleteSandbox(sandbox);
       await this.note(
-        sandbox.labels?.["vortex.org"],
+        sandbox.organizationId,
         sessionId,
         "status",
         "cursor-cli sandbox deleted",
@@ -889,30 +609,20 @@ export class CursorCliAgentProvider implements AgentProvider {
     providerSessionId: string,
     _trackerSessionId: string
   ): Promise<AgentProviderState | null> {
-    const config = this.requireDaytona();
-    const sandbox = await this.findSandbox(config, providerSessionId);
-    if (!sandbox) return null;
-    const base = toolboxBase(sandbox);
-    const session = await this.getProcessSession(
-      base,
+    const compute = this.requireCompute();
+    const sandbox = await compute.findSandbox(
       providerSessionId,
-      config.apiKey
+      sandboxName(providerSessionId)
     );
-    return { provider: session, compute: sandbox };
+    if (!sandbox) return null;
+    const runner = await compute.runnerState(sandbox, providerSessionId);
+    return { provider: runner, compute: sandbox };
   }
 
   async health(): Promise<AgentProviderHealth> {
     try {
       this.requireAuth();
-      const config = this.requireDaytona();
-      const res = await fetch(`${config.apiUrl}/sandbox`, {
-        headers: { Authorization: `Bearer ${config.apiKey}` },
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        return { ok: false, message: `${res.status} ${text.slice(0, 200)}` };
-      }
-      return { ok: true };
+      return await this.requireCompute().health();
     } catch (err) {
       return {
         ok: false,

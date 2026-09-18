@@ -17,6 +17,9 @@ importers:
       '@chat-adapter/slack':
         specifier: ^4.40.0
         version: 4.40.0(ai@7.0.92(zod@4.5.4))(zod@4.5.4)
+      '@cloudflare/sandbox':
+        specifier: 0.12.9
+        version: 0.12.9
       '@hono/zod-openapi':
         specifier: 1.6.2
         version: 1.6.2(hono@4.13.5)(zod@4.5.4)
@@ -119,13 +122,13 @@ importers:
     dependencies:
       '@astrojs/cloudflare':
         specifier: ^14.3.0
-        version: 14.3.0(@types/node@26.4.0)(astro@7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(wrangler@4.129.0(@cloudflare/workers-types@5.20260730.1))(yaml@2.9.0)
+        version: 14.3.0(@types/node@26.4.0)(astro@7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(aws4fetch@1.0.20)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(wrangler@4.129.0(@cloudflare/workers-types@5.20260730.1))(yaml@2.9.0)
       '@openrouter/ai-sdk-provider':
         specifier: ^3.0.0
         version: 3.0.0(ai@7.0.92(zod@4.5.4))(zod@4.5.4)
       blume:
         specifier: ^1.6.0
-        version: 1.6.0(@astrojs/cloudflare@14.3.0(@types/node@26.4.0)(astro@7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(wrangler@4.129.0(@cloudflare/workers-types@5.20260730.1))(yaml@2.9.0))(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@openrouter/ai-sdk-provider@3.0.0(ai@7.0.92(zod@4.5.4))(zod@4.5.4))(@shikijs/themes@4.4.3)(@types/node@26.4.0)(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(@vercel/functions@3.9.5(ws@8.21.3))(csstype@3.2.3)(esbuild@0.28.2)(prettier@3.9.6)(rollup@4.63.1)(tsx@4.23.13)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))(ws@8.21.3)(yaml@2.9.0)
+        version: 1.6.0(@astrojs/cloudflare@14.3.0(@types/node@26.4.0)(astro@7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(aws4fetch@1.0.20)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(wrangler@4.129.0(@cloudflare/workers-types@5.20260730.1))(yaml@2.9.0))(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@openrouter/ai-sdk-provider@3.0.0(ai@7.0.92(zod@4.5.4))(zod@4.5.4))(@shikijs/themes@4.4.3)(@types/node@26.4.0)(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(@vercel/functions@3.9.5(ws@8.21.3))(aws4fetch@1.0.20)(csstype@3.2.3)(esbuild@0.28.2)(prettier@3.9.6)(rollup@4.63.1)(tsx@4.23.13)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))(ws@8.21.3)(yaml@2.9.0)
 
   packages/tsconfig: {}
 
@@ -564,9 +567,26 @@ packages:
     resolution: {integrity: sha512-y7/yvZ2TPAnR9+jnc00klvNNLkJiXFFrQA/hlLCcxA9a2A4zQIOimyFQ9XfwYKiGD1fb5GY8vbKIIgO8d5Tb2A==}
     engines: {node: '>= 20.12.0'}
 
+  '@cloudflare/containers@0.3.7':
+    resolution: {integrity: sha512-DM9dm3FnIBSyiSJ1FLavKwl/lk3oAmTaynCzZQ9pZR0ncRPquSxkxd8Nu2MFILxmDDsPkxKsSNEh9mHHMty4Fw==}
+
   '@cloudflare/kv-asset-handler@0.5.0':
     resolution: {integrity: sha512-jxQYkj8dSIzc0cD6cMMNdOc1UVjqSqu8BZdor5s8cGjW2I8BjODt/kWPVdY+u9zj3ms75Q5qaZgnxUad83+eAg==}
     engines: {node: '>=22.0.0'}
+
+  '@cloudflare/sandbox@0.12.9':
+    resolution: {integrity: sha512-JlCQ8adVaHT3TrZO13X6US2LJTyQ4YvoEZpfh5EewRqcxPfMHZNJPB/1dsRdiFqmtzpz+lMxGazSUa2H/g2IKg==}
+    peerDependencies:
+      '@openai/agents': ^0.3.3
+      '@opencode-ai/sdk': ^1.1.40
+      '@xterm/xterm': '>=5.0.0'
+    peerDependenciesMeta:
+      '@openai/agents':
+        optional: true
+      '@opencode-ai/sdk':
+        optional: true
+      '@xterm/xterm':
+        optional: true
 
   '@cloudflare/unenv-preset@2.16.1':
     resolution: {integrity: sha512-ECxObrMfyTl5bhQf/lZCXwo5G6xX9IAUo+nDMKK4SZ8m4Jvvxp52vilxyySSWh2YTZz8+HQ07qGH/2rEom1vDw==}
@@ -3721,6 +3741,9 @@ packages:
     resolution: {integrity: sha512-yOA4wFeI7ET3v32Di/sUybQ+ttP20JHSW3mxLuNGeO0uD6PPcvLrIQXSvy/rhJOWU5JrYh7U4OHplWMmtAtjMg==}
     engines: {node: '>=0.11'}
 
+  aws4fetch@1.0.20:
+    resolution: {integrity: sha512-/djoAN709iY65ETD6LKCtyyEI04XIBP5xVvfmNxsEP0uJB5tyaGBztSryRr4HqMStr9R06PisQE7m9zDTXKu6g==}
+
   axios@1.20.0:
     resolution: {integrity: sha512-r8aOh8j9cGKpgQAqpzrUHnSIc6a59Y3Xf/cv8sy1DrHCkZHzQGEuoq1tARk6qSyDdtQGSDgpb9kFlruzPvrgwg==}
 
@@ -3922,6 +3945,9 @@ packages:
 
   caniuse-lite@1.0.30001810:
     resolution: {integrity: sha512-TITQPUkaz+aVk5GL6NhOdwk1aEaNTSDPsGFWrTuhKGtjTF70jL/Oht2W4c6rXUe5fu7Ie19VIahAXHIIiWWNeg==}
+
+  capnweb@0.8.0:
+    resolution: {integrity: sha512-BK/TuXUiyfLSKsmjojn70yN7oYG/JJzoURZ3tckjg5Zj2KcygPm0A5jyOlswK7SYB4f0Gh9tt+RZ132b80iLfA==}
 
   ccount@2.0.1:
     resolution: {integrity: sha512-eyrF0jiFpY+3drT6383f1qhkbGsLSifNAjA61IUjZjmLCWjItY6LB9ft9YhoDgwfmclB2zhu51Lc7+95b8NRAg==}
@@ -7494,12 +7520,12 @@ snapshots:
       - prettier
       - prettier-plugin-astro
 
-  '@astrojs/cloudflare@14.3.0(@types/node@26.4.0)(astro@7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(wrangler@4.129.0(@cloudflare/workers-types@5.20260730.1))(yaml@2.9.0)':
+  '@astrojs/cloudflare@14.3.0(@types/node@26.4.0)(astro@7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(aws4fetch@1.0.20)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(wrangler@4.129.0(@cloudflare/workers-types@5.20260730.1))(yaml@2.9.0)':
     dependencies:
       '@astrojs/internal-helpers': 0.11.0
       '@astrojs/underscore-redirects': 1.0.4
       '@cloudflare/vite-plugin': 1.54.4(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))(wrangler@4.129.0(@cloudflare/workers-types@5.20260730.1))
-      astro: 7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)
+      astro: 7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(aws4fetch@1.0.20)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)
       piccolore: 0.1.3
       vite: 8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)
       wrangler: 4.129.0(@cloudflare/workers-types@5.20260730.1)
@@ -7658,13 +7684,13 @@ snapshots:
       github-slugger: 2.0.0
       satteri: 0.10.5
 
-  '@astrojs/mdx@7.0.8(@astrojs/markdown-satteri@0.3.8)(astro@7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))':
+  '@astrojs/mdx@7.0.8(@astrojs/markdown-satteri@0.3.8)(astro@7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(aws4fetch@1.0.20)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))':
     dependencies:
       '@astrojs/internal-helpers': 0.10.4
       '@astrojs/markdown-remark': 7.2.4
       '@mdx-js/mdx': 3.1.1
       acorn: 8.18.0
-      astro: 7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)
+      astro: 7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(aws4fetch@1.0.20)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)
       es-module-lexer: 2.3.2
       estree-util-visit: 2.0.0
       hast-util-to-html: 9.0.5
@@ -7680,10 +7706,10 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@astrojs/node@11.1.5(astro@7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))':
+  '@astrojs/node@11.1.5(astro@7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(aws4fetch@1.0.20)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))':
     dependencies:
       '@astrojs/internal-helpers': 0.11.0
-      astro: 7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)
+      astro: 7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(aws4fetch@1.0.20)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)
       send: 1.2.1
       server-destroy: 1.0.1
     transitivePeerDependencies:
@@ -7728,14 +7754,14 @@ snapshots:
 
   '@astrojs/underscore-redirects@1.0.4': {}
 
-  '@astrojs/vercel@11.0.10(astro@7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))(react@19.2.8)(rollup@4.63.1)(ws@8.21.3)':
+  '@astrojs/vercel@11.0.10(astro@7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(aws4fetch@1.0.20)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))(react@19.2.8)(rollup@4.63.1)(ws@8.21.3)':
     dependencies:
       '@astrojs/internal-helpers': 0.11.0
       '@vercel/analytics': 2.0.1(react@19.2.8)
       '@vercel/functions': 3.9.5(ws@8.21.3)
       '@vercel/nft': 1.11.0(rollup@4.63.1)
       '@vercel/routing-utils': 6.5.0
-      astro: 7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)
+      astro: 7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(aws4fetch@1.0.20)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)
       esbuild: 0.28.2
       tinyglobby: 0.2.17
     transitivePeerDependencies:
@@ -8053,7 +8079,16 @@ snapshots:
       fast-wrap-ansi: 0.2.2
       sisteransi: 1.0.5
 
+  '@cloudflare/containers@0.3.7': {}
+
   '@cloudflare/kv-asset-handler@0.5.0': {}
+
+  '@cloudflare/sandbox@0.12.9':
+    dependencies:
+      '@cloudflare/containers': 0.3.7
+      aws4fetch: 1.0.20
+      capnweb: 0.8.0
+      hono: 4.13.5
 
   '@cloudflare/unenv-preset@2.16.1(unenv@2.0.0-rc.24)(workerd@1.20260730.1)':
     dependencies:
@@ -9368,10 +9403,10 @@ snapshots:
   '@rollup/rollup-win32-x64-msvc@4.63.1':
     optional: true
 
-  '@scalar/astro@0.4.17(astro@7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))':
+  '@scalar/astro@0.4.17(astro@7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(aws4fetch@1.0.20)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))':
     dependencies:
       '@scalar/client-side-rendering': 0.3.10
-      astro: 7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)
+      astro: 7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(aws4fetch@1.0.20)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)
 
   '@scalar/client-side-rendering@0.3.10':
     dependencies:
@@ -10593,7 +10628,7 @@ snapshots:
 
   astring@1.9.0: {}
 
-  astro@7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0):
+  astro@7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(aws4fetch@1.0.20)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0):
     dependencies:
       '@astrojs/compiler-rs': 0.4.0(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)
       '@astrojs/internal-helpers': 0.11.0
@@ -10642,7 +10677,7 @@ snapshots:
       tinyglobby: 0.2.17
       ultrahtml: 1.7.0
       unifont: 0.7.5
-      unstorage: 1.17.5(@vercel/functions@3.9.5(ws@8.21.3))
+      unstorage: 1.17.5(@vercel/functions@3.9.5(ws@8.21.3))(aws4fetch@1.0.20)
       vite: 8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)
       vitefu: 1.1.3(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))
       xxhash-wasm: 1.1.0
@@ -10697,6 +10732,8 @@ snapshots:
       possible-typed-array-names: 1.1.0
 
   avsc@5.7.9: {}
+
+  aws4fetch@1.0.20: {}
 
   axios@1.20.0:
     dependencies:
@@ -10770,14 +10807,14 @@ snapshots:
 
   blake3-wasm@2.1.5: {}
 
-  blume@1.6.0(@astrojs/cloudflare@14.3.0(@types/node@26.4.0)(astro@7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(wrangler@4.129.0(@cloudflare/workers-types@5.20260730.1))(yaml@2.9.0))(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@openrouter/ai-sdk-provider@3.0.0(ai@7.0.92(zod@4.5.4))(zod@4.5.4))(@shikijs/themes@4.4.3)(@types/node@26.4.0)(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(@vercel/functions@3.9.5(ws@8.21.3))(csstype@3.2.3)(esbuild@0.28.2)(prettier@3.9.6)(rollup@4.63.1)(tsx@4.23.13)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))(ws@8.21.3)(yaml@2.9.0):
+  blume@1.6.0(@astrojs/cloudflare@14.3.0(@types/node@26.4.0)(astro@7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(aws4fetch@1.0.20)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(wrangler@4.129.0(@cloudflare/workers-types@5.20260730.1))(yaml@2.9.0))(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@openrouter/ai-sdk-provider@3.0.0(ai@7.0.92(zod@4.5.4))(zod@4.5.4))(@shikijs/themes@4.4.3)(@types/node@26.4.0)(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(@vercel/functions@3.9.5(ws@8.21.3))(aws4fetch@1.0.20)(csstype@3.2.3)(esbuild@0.28.2)(prettier@3.9.6)(rollup@4.63.1)(tsx@4.23.13)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))(ws@8.21.3)(yaml@2.9.0):
     dependencies:
       '@astrojs/check': 0.9.10(prettier@3.9.6)(typescript@6.0.3)
       '@astrojs/markdown-satteri': 0.3.8
-      '@astrojs/mdx': 7.0.8(@astrojs/markdown-satteri@0.3.8)(astro@7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))
-      '@astrojs/node': 11.1.5(astro@7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))
+      '@astrojs/mdx': 7.0.8(@astrojs/markdown-satteri@0.3.8)(astro@7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(aws4fetch@1.0.20)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))
+      '@astrojs/node': 11.1.5(astro@7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(aws4fetch@1.0.20)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))
       '@astrojs/react': 6.0.5(@types/node@26.4.0)(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(esbuild@0.28.2)(jiti@2.7.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(tsx@4.23.13)(yaml@2.9.0)
-      '@astrojs/vercel': 11.0.10(astro@7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))(react@19.2.8)(rollup@4.63.1)(ws@8.21.3)
+      '@astrojs/vercel': 11.0.10(astro@7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(aws4fetch@1.0.20)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))(react@19.2.8)(rollup@4.63.1)(ws@8.21.3)
       '@asyncapi/converter': 2.0.2
       '@clack/prompts': 1.7.0
       '@iconify-json/lucide': 1.2.129
@@ -10786,7 +10823,7 @@ snapshots:
       '@modelcontextprotocol/sdk': 1.30.0(zod@4.5.4)
       '@orama/orama': 3.1.18
       '@pierre/diffs': 1.4.0(@shikijs/themes@4.4.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@scalar/astro': 0.4.17(astro@7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))
+      '@scalar/astro': 0.4.17(astro@7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(aws4fetch@1.0.20)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))
       '@scalar/openapi-parser': 0.29.0
       '@scalar/openapi-types': 0.9.5
       '@shikijs/transformers': 4.4.3
@@ -10796,7 +10833,7 @@ snapshots:
       '@types/mdast': 4.0.4
       '@vercel/analytics': 2.0.1(react@19.2.8)
       ai: 7.0.92(zod@4.5.4)
-      astro: 7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)
+      astro: 7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(aws4fetch@1.0.20)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)
       babel-plugin-react-compiler: 1.0.0
       chokidar: 5.0.0
       citty: 0.1.6
@@ -10853,7 +10890,7 @@ snapshots:
       write-file-atomic: 8.0.0
       zod: 4.5.4
     optionalDependencies:
-      '@astrojs/cloudflare': 14.3.0(@types/node@26.4.0)(astro@7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(wrangler@4.129.0(@cloudflare/workers-types@5.20260730.1))(yaml@2.9.0)
+      '@astrojs/cloudflare': 14.3.0(@types/node@26.4.0)(astro@7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.4.0)(@vercel/functions@3.9.5(ws@8.21.3))(aws4fetch@1.0.20)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(wrangler@4.129.0(@cloudflare/workers-types@5.20260730.1))(yaml@2.9.0)
       '@openrouter/ai-sdk-provider': 3.0.0(ai@7.0.92(zod@4.5.4))(zod@4.5.4)
     transitivePeerDependencies:
       - '@astrojs/markdown-remark'
@@ -10974,6 +11011,8 @@ snapshots:
   callsites@3.1.0: {}
 
   caniuse-lite@1.0.30001810: {}
+
+  capnweb@0.8.0: {}
 
   ccount@2.0.1: {}
 
@@ -14660,7 +14699,7 @@ snapshots:
 
   unpipe@1.0.0: {}
 
-  unstorage@1.17.5(@vercel/functions@3.9.5(ws@8.21.3)):
+  unstorage@1.17.5(@vercel/functions@3.9.5(ws@8.21.3))(aws4fetch@1.0.20):
     dependencies:
       anymatch: 3.1.3
       chokidar: 5.0.0
@@ -14672,6 +14711,7 @@ snapshots:
       ufo: 1.6.4
     optionalDependencies:
       '@vercel/functions': 3.9.5(ws@8.21.3)
+      aws4fetch: 1.0.20
 
   update-browserslist-db@1.3.2(browserslist@4.28.9):
     dependencies:

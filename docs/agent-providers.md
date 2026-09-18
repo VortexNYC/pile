@@ -68,10 +68,25 @@ env vars:
 | `computeSnapshot` | `DAYTONA_SNAPSHOT`                                       |
 | `computeVolumeId` | `DAYTONA_VOLUME_ID`                                      |
 
+Two compute backends exist behind the same runner/result contract
+(`src/agents/compute.ts`), selected by `COMPUTE_PROVIDER`:
+
+- `daytona` (default) — Daytona sandboxes via the `DAYTONA_*` env vars above.
+- `cloudflare` — Cloudflare Sandbox (Workers Containers) via the Worker's own
+  `SANDBOX` binding and `Dockerfile.sandbox` image. No external API key or
+  snapshot registry; env vars are injected per-process and the sandbox sleeps
+  after `sleepAfter` (4h) if polling stops. `destroy()` runs on terminal
+  results, same as Daytona.
+
+A workspace can also select the backend via `config.computeProvider`
+(`"daytona"` | `"cloudflare"`) in the provider upsert — it overrides the
+deployment-level `COMPUTE_PROVIDER`.
+
 If unset, the deployment-level `DAYTONA_*` env vars apply, so a self-hosted
 deployment can set one compute provider for all workspaces; on a hosted
 deployment each workspace brings its own. Sandboxes are deleted when the
-session reaches a terminal state, with an `autoStopInterval` safety ceiling.
+session reaches a terminal state, with an `autoStopInterval` safety ceiling
+on Daytona (`sleepAfter` on Cloudflare).
 
 ## Cursor Cloud Agents
 
