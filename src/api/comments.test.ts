@@ -221,7 +221,9 @@ describe("comment creation", () => {
       seeded.token
     );
     expect(res.status).toBe(201);
-    const comment = z.object({ id: z.string(), body: z.string() }).parse(await res.json());
+    const comment = z
+      .object({ id: z.string(), body: z.string() })
+      .parse(await res.json());
     expect(comment.body).toBe("Hello world");
   });
 });

@@ -66,6 +66,22 @@ function parseConfigEnvId(
   return undefined;
 }
 
+function parseConfigComputeProvider(
+  configJson: string | null | undefined
+): string | undefined {
+  if (!configJson) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(configJson);
+    if (typeof parsed === "object" && parsed !== null) {
+      const value = (parsed as Record<string, unknown>).computeProvider;
+      if (typeof value === "string") return value;
+    }
+  } catch {
+    // ignore malformed config JSON
+  }
+  return undefined;
+}
+
 export function resolveAgentEnv(
   env: WorkerEnv,
   config: AgentProviderConfigRow | undefined
@@ -86,6 +102,8 @@ export function resolveAgentEnv(
     DAYTONA_API_URL: config.computeApiUrl ?? env.DAYTONA_API_URL,
     DAYTONA_SNAPSHOT: config.computeSnapshot ?? env.DAYTONA_SNAPSHOT,
     DAYTONA_VOLUME_ID: config.computeVolumeId ?? env.DAYTONA_VOLUME_ID,
+    COMPUTE_PROVIDER:
+      parseConfigComputeProvider(config.config) ?? env.COMPUTE_PROVIDER,
     AGENT_PROVIDER_CONFIG: config.config ?? env.AGENT_PROVIDER_CONFIG,
   };
 }

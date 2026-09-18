@@ -47,6 +47,7 @@
   "dependencies": {
     "@better-auth/api-key": "1.7.2",
     "@chat-adapter/slack": "^4.40.0",
+    "@cloudflare/sandbox": "0.12.9",
     "@hono/zod-openapi": "1.6.2",
     "@modelcontextprotocol/server": "^2.0.0",
     "@orama/orama": "3.1.18",

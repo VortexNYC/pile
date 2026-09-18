@@ -18,6 +18,7 @@ import {
 import type { WorkerEnv } from "./platform/middleware.js";
 
 export { WorkspaceDO } from "./workspace/durable-object.js";
+export { Sandbox } from "@cloudflare/sandbox";
 
 async function scheduled(
   _event: ScheduledController,
