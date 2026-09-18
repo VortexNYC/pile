@@ -165,7 +165,7 @@ describe("MCP integration", () => {
       "postWorkspacesOrganizationIdTeams",
       {
         organizationId: workspace.id,
-        body: { key: "ISS", name: "Issue Tracker" },
+        body: { key: "ISS", name: "Pile" },
       },
       adminHeaders
     );

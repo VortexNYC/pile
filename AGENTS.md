@@ -47,8 +47,7 @@ vp run knip
 Pile is our own engineering source of truth. While working on this repo, agents must use the production Pile instance rather than Linear or Notion.
 
 - Workspace: `org_vortex_main`
-- Team for this repo: `Issue Tracker` (`ISS`)
-- Backlog: `ISS-1` through `ISS-21`
+- Team for this repo: `Pile` (`ISS`)
 
 For every non-trivial chunk of work:
 

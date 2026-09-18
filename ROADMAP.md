@@ -1,4 +1,4 @@
-# Pile Issue Tracker — Feature Parity Roadmap
+# Pile — Feature Parity Roadmap
 
 This is the durable tracker for the open-source Linear alternative. Operational todos live in the agent session; the plan lives here.
 

@@ -166,7 +166,7 @@ describe("clipper auth", () => {
       const url = String(input);
       if (url.endsWith("/workspaces/org_1/teams")) {
         return jsonResponse(200, {
-          teams: [{ id: "team_1", key: "ISS", name: "Issue Tracker" }],
+          teams: [{ id: "team_1", key: "ISS", name: "Pile" }],
         });
       }
       if (url.endsWith("/workspaces/org_1/projects")) {
@@ -198,7 +198,7 @@ describe("clipper auth", () => {
       "org_1"
     );
     expect(options).toEqual({
-      teams: [{ id: "team_1", key: "ISS", name: "Issue Tracker" }],
+      teams: [{ id: "team_1", key: "ISS", name: "Pile" }],
       projects: [{ id: "proj_1", name: "Clipper" }],
       labels: [{ id: "lbl_1", name: "bug" }],
     });

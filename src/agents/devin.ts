@@ -77,7 +77,7 @@ function buildPrompt(issue: Issue, gitIdentity?: GitIdentity | null): string {
     ...identityLines,
     "",
     "Do all work in the Repository above. Do not open pull requests in any other repository. Open the PR against the main branch of that repository.",
-    "Do not attempt to update the issue tracker yourself — an external system will poll your session and write the PR URL and final status back automatically.",
+    "Do not attempt to update Pile yourself — an external system will poll your session and write the PR URL and final status back automatically.",
   ].join("\n");
 }
 

@@ -10,7 +10,7 @@ import {
 
 type FetchFn = (request: Request) => Promise<Response>;
 
-describe("Issue Tracker client", () => {
+describe("Pile client", () => {
   it("lists workspaces", async () => {
     const mockFetch = vi.fn<FetchFn>().mockResolvedValue(
       new Response(JSON.stringify({ workspaces: [] }), {
