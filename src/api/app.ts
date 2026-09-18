@@ -60,6 +60,15 @@ const PAGE = `<!DOCTYPE html>
   <input id="pass" type="password" placeholder="password" autocomplete="current-password" />
   <button id="signin">Sign in</button>
   <p id="autherr" class="err muted" style="margin-top:.6rem"></p>
+  <p class="muted" style="margin-top:.8rem"><a href="#" id="signup">Create an account</a></p>
+</div>
+<div id="onboard" hidden>
+  <div class="card" style="max-width:340px;margin:6rem auto 0">
+    <h1 style="margin-bottom:1rem">Create your workspace</h1>
+    <input id="wsname" type="text" placeholder="workspace name" />
+    <button id="mkws" style="width:100%">Create</button>
+    <p id="wserr" class="err muted" style="margin-top:.6rem"></p>
+  </div>
 </div>
 <main id="app" hidden>
   <header>
@@ -94,8 +103,9 @@ async function boot() {
   let session = null;
   try { session = await api("/api/auth/get-session"); } catch {}
   if (!session || !session.user) { $("auth").hidden = false; return; }
-  $("app").hidden = false;
   const { workspaces } = await api("/workspaces");
+  if (!workspaces.length) { $("onboard").hidden = false; return; }
+  $("app").hidden = false;
   $("ws").innerHTML = workspaces.map((w) => "<option value='" + esc(w.id) + "'>" + esc(w.name) + "</option>").join("");
   if (!workspaces.find((w) => w.id === ws)) ws = workspaces[0]?.id || "";
   $("ws").value = ws;
@@ -167,6 +177,24 @@ $("signin").addEventListener("click", async () => {
     await api("/api/auth/sign-in/email", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: $("email").value, password: $("pass").value }) });
     location.reload();
   } catch { $("autherr").textContent = "Sign in failed."; }
+});
+$("signup").addEventListener("click", async (e) => {
+  e.preventDefault();
+  $("autherr").textContent = "";
+  try {
+    await api("/api/auth/sign-up/email", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: $("email").value, password: $("pass").value, name: $("email").value.split("@")[0] }) });
+    location.reload();
+  } catch { $("autherr").textContent = "Sign up failed."; }
+});
+$("mkws").addEventListener("click", async () => {
+  $("wserr").textContent = "";
+  const name = $("wsname").value.trim();
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  if (!slug) { $("wserr").textContent = "Name required."; return; }
+  try {
+    await api("/workspaces/onboard", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name, slug }) });
+    location.reload();
+  } catch (e) { $("wserr").textContent = "Could not create workspace."; }
 });
 boot();
 </script>
