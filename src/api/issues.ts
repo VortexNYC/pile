@@ -2,8 +2,8 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 import { eq, and } from "drizzle-orm";
 
+import { resolveAgentEnv } from "../agents/daytona.js";
 import { dispatchAgent, getAgentProvider } from "../agents/index.js";
-import { resolveAgentEnv } from "../agents/outpost.js";
 import { createD1 } from "../global/db.js";
 import { deleteIssueReferences } from "../global/issue-data.js";
 import {

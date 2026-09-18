@@ -4,7 +4,6 @@ import type {
 } from "@cloudflare/workers-types";
 import { ne } from "drizzle-orm";
 
-import { drainOutpostQueue, sweepOutpostWorkers } from "./agents/outpost.js";
 import { sweepAgentSessions } from "./agents/sweep.js";
 import app from "./api/index.js";
 import { handleIncomingEmail } from "./channels/email.js";
@@ -26,10 +25,9 @@ async function scheduled(
   ctx: ExecutionContext
 ) {
   ctx.waitUntil(
-    drainOutpostQueue(env)
-      .then(() => sweepOutpostWorkers(env))
-      .then(() => sweepAgentSessions(env))
-      .catch((err) => console.error("outpost sweep failed", err))
+    sweepAgentSessions(env).catch((err) =>
+      console.error("agent session sweep failed", err)
+    )
   );
   ctx.waitUntil(
     (async () => {

@@ -5328,13 +5328,6 @@
                         "type": "string",
                         "nullable": true
                       },
-                      "outpost": {
-                        "type": "string",
-                        "nullable": true
-                      },
-                      "hasOutpostToken": {
-                        "type": "boolean"
-                      },
                       "hasComputeApiKey": {
                         "type": "boolean"
                       },
@@ -5375,8 +5368,6 @@
                       "agentId",
                       "hasToken",
                       "providerOrgId",
-                      "outpost",
-                      "hasOutpostToken",
                       "hasComputeApiKey",
                       "computeApiUrl",
                       "computeSnapshot",
@@ -5439,18 +5430,6 @@
                     "type": "string",
                     "nullable": true
                   },
-                  "outpost": {
-                    "type": "string",
-                    "nullable": true
-                  },
-                  "outpostId": {
-                    "type": "string",
-                    "nullable": true
-                  },
-                  "outpostToken": {
-                    "type": "string",
-                    "nullable": true
-                  },
                   "computeApiKey": {
                     "type": "string",
                     "nullable": true
@@ -5504,13 +5483,6 @@
                       "type": "string",
                       "nullable": true
                     },
-                    "outpost": {
-                      "type": "string",
-                      "nullable": true
-                    },
-                    "hasOutpostToken": {
-                      "type": "boolean"
-                    },
                     "hasComputeApiKey": {
                       "type": "boolean"
                     },
@@ -5551,8 +5523,6 @@
                     "agentId",
                     "hasToken",
                     "providerOrgId",
-                    "outpost",
-                    "hasOutpostToken",
                     "hasComputeApiKey",
                     "computeApiUrl",
                     "computeSnapshot",

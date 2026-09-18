@@ -3,8 +3,8 @@ import { organization } from "../global/schema.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { AgentSession } from "../types/workspace.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
+import { resolveAgentEnv } from "./daytona.js";
 import { getAgentProvider } from "./index.js";
-import { resolveAgentEnv } from "./outpost.js";
 import type { AgentProvider, AgentProviderState } from "./provider.js";
 
 export const DEFAULT_TIMEOUT_MINUTES = 60;

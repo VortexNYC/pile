@@ -1454,9 +1454,6 @@ export interface AgentProviderConfigInput {
   agentId: string;
   token?: string | null;
   providerOrgId?: string | null;
-  outpost?: string | null;
-  outpostId?: string | null;
-  outpostToken?: string | null;
   computeApiKey?: string | null;
   computeApiUrl?: string | null;
   computeSnapshot?: string | null;
@@ -1484,9 +1481,6 @@ export async function upsertAgentProviderConfig(
   const fields = {
     token: input.token,
     providerOrgId: input.providerOrgId,
-    outpost: input.outpost,
-    outpostId: input.outpostId,
-    outpostToken: input.outpostToken,
     computeApiKey: input.computeApiKey,
     computeApiUrl: input.computeApiUrl,
     computeSnapshot: input.computeSnapshot,
@@ -1524,9 +1518,6 @@ export async function upsertAgentProviderConfig(
     agentId: input.agentId,
     token: fields.token ?? null,
     providerOrgId: fields.providerOrgId ?? null,
-    outpost: fields.outpost ?? null,
-    outpostId: fields.outpostId ?? null,
-    outpostToken: fields.outpostToken ?? null,
     computeApiKey: fields.computeApiKey ?? null,
     computeApiUrl: fields.computeApiUrl ?? null,
     computeSnapshot: fields.computeSnapshot ?? null,

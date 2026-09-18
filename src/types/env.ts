@@ -12,9 +12,6 @@ export interface AppEnv {
   WEBHOOK_SECRET?: string;
   DISPATCH_SECRET?: string;
   DEVIN_ORG_ID?: string;
-  DEVIN_OUTPOST?: string;
-  DEVIN_OUTPOST_ID?: string;
-  DEVIN_OUTPOST_TOKEN?: string;
   DAYTONA_API_KEY?: string;
   DAYTONA_API_URL?: string;
   DAYTONA_SNAPSHOT?: string;

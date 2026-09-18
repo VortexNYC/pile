@@ -13,8 +13,7 @@ BETTER_AUTH_URL = "https://pile.example.workers.dev"
 ALLOWED_ORIGINS = "https://pile.example.workers.dev"
 SLACK_REDIRECT_URI = "https://pile.example.workers.dev/slack/oauth"
 # Optional: agent dispatch defaults
-# DEVIN_OUTPOST = "vortex-daytona"
-# DEVIN_MODEL = "swe-1-7-medium"
+# DEVIN_MODEL = "swe-2"
 EMAIL_FROM = "notifications@pile.nyc"
 INTERCOM_CLIENT_SECRET = "test"
 
@@ -58,10 +57,9 @@ name = "issuetracker"
 BETTER_AUTH_URL = "https://pile.nyc"
 ALLOWED_ORIGINS = "https://pile.nyc"
 SLACK_REDIRECT_URI = "https://pile.nyc/slack/oauth"
-DEVIN_OUTPOST = "vortex-daytona"
-DAYTONA_SNAPSHOT = "vortex-outpost-worker-v6"
+DAYTONA_SNAPSHOT = "vortex-cli-runner-v2"
 DAYTONA_VOLUME_ID = "0f79e741-e373-496b-a83f-7252cd5b9f12"
-DEVIN_MODEL = "swe-1-7-medium"
+DEVIN_MODEL = "swe-2"
 EMAIL_FROM = "notifications@pile.nyc"
 
 [[env.production.services]]

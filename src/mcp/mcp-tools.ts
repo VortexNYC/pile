@@ -13257,7 +13257,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "putWorkspacesOrganizationIdAgentProvidersAgentId",
-    "description": "Update agent provider (PUT /workspaces/{organizationId}/agent/providers/{agentId}) Path params (top-level, required): organizationId, agentId. Request body goes in the \"body\" object; fields: mode, token, providerOrgId, outpost, outpostId, outpostToken, computeApiKey, computeApiUrl, computeSnapshot, computeVolumeId, config, teamIds.",
+    "description": "Update agent provider (PUT /workspaces/{organizationId}/agent/providers/{agentId}) Path params (top-level, required): organizationId, agentId. Request body goes in the \"body\" object; fields: mode, token, providerOrgId, computeApiKey, computeApiUrl, computeSnapshot, computeVolumeId, config, teamIds.",
     "method": "PUT",
     "path": "/workspaces/{organizationId}/agent/providers/{agentId}",
     "inputSchema": {
@@ -13284,18 +13284,6 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "nullable": true
             },
             "providerOrgId": {
-              "type": "string",
-              "nullable": true
-            },
-            "outpost": {
-              "type": "string",
-              "nullable": true
-            },
-            "outpostId": {
-              "type": "string",
-              "nullable": true
-            },
-            "outpostToken": {
               "type": "string",
               "nullable": true
             },
