@@ -1,3 +1,4 @@
+import { HTTPException } from "hono/http-exception";
 import { ZodError } from "zod";
 
 export const ERROR_CATALOG = {
@@ -61,6 +62,13 @@ export function toErrorResponse(error: unknown): Response {
   let vortex: VortexError;
   if (error instanceof VortexError) {
     vortex = error;
+  } else if (error instanceof HTTPException) {
+    vortex = new VortexError({
+      code: error.status === 400 ? "BAD_REQUEST" : "INTERNAL_ERROR",
+      status: error.status,
+      message: error.status < 500 ? error.message : "Internal error",
+      hint: error.status < 500 ? undefined : error.message,
+    });
   } else if (error instanceof ZodError) {
     vortex = new VortexError({
       code: "BAD_REQUEST",
