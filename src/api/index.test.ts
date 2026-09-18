@@ -110,11 +110,9 @@ function request(
 }
 
 describe("API integration", () => {
-  it("lists workspaces", async () => {
+  it("requires a session to list workspaces", async () => {
     const res = await app.fetch(request("/workspaces"), env);
-    expect(res.status).toBe(200);
-    const body = await res.json<{ workspaces: unknown[] }>();
-    expect(Array.isArray(body.workspaces)).toBe(true);
+    expect(res.status).toBe(401);
   });
 
   it("manages workspace states", async () => {

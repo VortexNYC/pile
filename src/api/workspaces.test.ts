@@ -54,6 +54,20 @@ describe("workspaces API", () => {
     expect(res.status).toBe(401);
   });
 
+  it("lists only the user's workspaces", async () => {
+    const cookie = await getSessionCookie();
+    const res = await app.fetch(
+      new Request(new URL("/workspaces", origin).toString(), {
+        headers: { Cookie: cookie, Origin: origin },
+      }),
+      env
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { workspaces: { id: string }[] };
+    expect(Array.isArray(body.workspaces)).toBe(true);
+    expect(body.workspaces).toHaveLength(0);
+  });
+
   it("onboards a workspace with a default team and admin token", async () => {
     const cookie = await getSessionCookie();
     const res = await app.fetch(

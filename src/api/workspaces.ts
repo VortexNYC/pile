@@ -7,7 +7,7 @@ import {
   createWorkspace,
   getWorkspaceById,
   getWorkspaceBySlug,
-  listWorkspaces,
+  listWorkspacesForUser,
 } from "../global/workspaces.js";
 import { createAuth } from "../platform/auth.js";
 import { VortexError } from "../platform/errors.js";
@@ -58,6 +58,7 @@ const listWorkspacesRoute = createRoute({
   method: "get",
   path: "/workspaces",
   tags: ["workspaces"],
+  middleware: [requireHumanSession],
   request: {},
   responses: {
     200: {
@@ -178,7 +179,15 @@ export function registerWorkspaceRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(listWorkspacesRoute, async (c) => {
     const db = createD1(c.env.D1);
-    const items = await listWorkspaces(db);
+    const userId = c.get("userId");
+    if (!userId) {
+      throw new VortexError({
+        code: "UNAUTHORIZED",
+        status: 401,
+        message: "Authentication required",
+      });
+    }
+    const items = await listWorkspacesForUser(db, userId);
     return c.json({ workspaces: items });
   });
 
