@@ -33,6 +33,10 @@ export interface AppEnv {
   DEVIN_CLI_CREDENTIALS_B64?: string;
   /** Devin CLI model override (defaults to `swe-2`). */
   DEVIN_CLI_MODEL?: string;
+  /** Cursor API key override for the `cursor-cli` provider (falls back to AGENT_PROVIDER_TOKEN). */
+  CURSOR_API_KEY?: string;
+  /** Cursor CLI model override (defaults to the CLI's own default). */
+  CURSOR_CLI_MODEL?: string;
   FLUE_WORKER?: Fetcher;
   TOKEN_HASH_SECRET?: string;
   SLACK_CLIENT_ID?: string;
