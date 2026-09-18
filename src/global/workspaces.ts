@@ -60,11 +60,6 @@ async function buildWorkspace(
   };
 }
 
-export async function listWorkspaces(db: D1Client) {
-  const rows = await db.select().from(organization).all();
-  return Promise.all(rows.map((row) => buildWorkspace(db, row)));
-}
-
 export async function listWorkspacesForUser(db: D1Client, userId: string) {
   const memberships = await db
     .select()
