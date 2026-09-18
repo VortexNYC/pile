@@ -264,6 +264,9 @@ falling back to the generic parser:
   a settlement `outcome` (`completed`/`aborted`/`failed`) or tracker status.
 - **codex-cli** — webhook payloads carry the tracker `sessionId`; the
   generic parser covers it.
+- **devin-cli** — runs `devin -p` headlessly inside a Daytona sandbox using
+  the workspace's `credentials.toml`; poll-only, no webhooks, and does not
+  use the Devin organization sessions API.
 
 ## Agent environment (ISS-31)
 

@@ -106,6 +106,8 @@ export function resolveAgentEnv(
     CODEX_AUTH_JSON_B64: config.token ?? env.CODEX_AUTH_JSON_B64,
     CODEX_CLI_MODEL: parseConfigModel(config.config) ?? env.CODEX_CLI_MODEL,
     CODEX_CLI_ENV_ID: parseConfigEnvId(config.config) ?? env.CODEX_CLI_ENV_ID,
+    DEVIN_CLI_CREDENTIALS_B64: config.token ?? env.DEVIN_CLI_CREDENTIALS_B64,
+    DEVIN_CLI_MODEL: parseConfigModel(config.config) ?? env.DEVIN_CLI_MODEL,
     DEVIN_ORG_ID: config.providerOrgId ?? env.DEVIN_ORG_ID,
     DEVIN_OUTPOST: config.outpost ?? env.DEVIN_OUTPOST,
     DEVIN_OUTPOST_ID: config.outpostId ?? env.DEVIN_OUTPOST_ID,

@@ -214,6 +214,49 @@ export const AGENT_PROVIDER_CATALOG: CatalogProvider[] = [
     ],
   },
   {
+    id: "devin-cli",
+    name: "Devin CLI",
+    modes: [
+      {
+        id: "byo",
+        label: "Your computer or server",
+        help: "Pile provisions a Daytona sandbox and runs Devin CLI there. Uses your Devin account credentials, not the organization API.",
+        fields: [
+          {
+            key: "token",
+            label: "Devin credentials.toml (base64)",
+            required: true,
+            type: "secret",
+          },
+          {
+            key: "computeApiKey",
+            label: "Daytona API key",
+            required: true,
+            type: "secret",
+          },
+          {
+            key: "computeApiUrl",
+            label: "Daytona API URL",
+            required: false,
+            type: "text",
+          },
+          {
+            key: "computeSnapshot",
+            label: "Snapshot",
+            required: false,
+            type: "text",
+          },
+          {
+            key: "config.model",
+            label: "Model",
+            required: false,
+            type: "text",
+          },
+        ],
+      },
+    ],
+  },
+  {
     id: "cf-agent",
     name: "cf-agent",
     modes: [
