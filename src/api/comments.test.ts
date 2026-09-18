@@ -89,6 +89,25 @@ describe("comments API", () => {
     expect(res.status).toBe(404);
   });
 
+  it("rejects creating a comment with no JSON body", async () => {
+    const res = await fetch(
+      `/workspaces/${organizationId}/issues/00000000-0000-0000-0000-000000000000/comments`,
+      { method: "POST" },
+      token
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects creating a comment with no content-type or body", async () => {
+    const request = new Request(
+      `https://example.com/workspaces/${organizationId}/issues/00000000-0000-0000-0000-000000000000/comments`,
+      { method: "POST", headers: { Authorization: `Bearer ${token}` } }
+    );
+    const res = await app.fetch(request, env);
+    console.log("status", res.status, await res.text());
+    expect(res.status).toBe(400);
+  });
+
   it("rejects creating a comment with an empty body", async () => {
     const res = await fetch(
       `/workspaces/${organizationId}/issues/00000000-0000-0000-0000-000000000000/comments`,
@@ -176,5 +195,33 @@ describe("comments API", () => {
       token
     );
     expect(res.status).toBe(404);
+  });
+});
+
+describe("comment creation", () => {
+  it("creates a comment on an issue", async () => {
+    const seeded = await seedWorkspace();
+    const issueRes = await fetch(
+      `/workspaces/${seeded.organizationId}/issues`,
+      {
+        method: "POST",
+        body: JSON.stringify({ title: "Comment target" }),
+      },
+      seeded.token
+    );
+    expect(issueRes.status).toBe(201);
+    const issue = z.object({ id: z.string() }).parse(await issueRes.json());
+
+    const res = await fetch(
+      `/workspaces/${seeded.organizationId}/issues/${issue.id}/comments`,
+      {
+        method: "POST",
+        body: JSON.stringify({ body: "Hello world" }),
+      },
+      seeded.token
+    );
+    expect(res.status).toBe(201);
+    const comment = z.object({ id: z.string(), body: z.string() }).parse(await res.json());
+    expect(comment.body).toBe("Hello world");
   });
 });

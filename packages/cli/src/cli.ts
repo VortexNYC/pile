@@ -200,7 +200,9 @@ async function requestCommand(
     );
   }
 
-  const body = parseJsonObjectFlag(flags, "body-json");
+  const body =
+    parseJsonObjectFlag(flags, "body-json") ??
+    parseJsonObjectFlag(flags, "body");
 
   const targetUrl = new URL(path, config.baseUrl.replace(/\/$/u, ""));
   const headers = new Headers();
