@@ -562,8 +562,8 @@ export class CodexCliAgentProvider implements AgentProvider {
           "vortex.org": organizationId,
           "vortex.agent": "codex-cli",
         },
-        autoStopInterval: 0,
-        autoDeleteInterval: 0,
+        autoStopInterval: 240, // leak ceiling: 4h, above the runner's 2h timeout
+        autoDeleteInterval: -1,
         ...(this.env.DAYTONA_VOLUME_ID
           ? {
               volumes: [
@@ -907,13 +907,28 @@ export class CodexCliAgentProvider implements AgentProvider {
 
     const result = await this.readResult(base, config.apiKey);
     if (!result) {
-      return { id: sessionId, agentId: this.id, status: "running" };
+      await this.deleteSandbox(config, sandbox.id);
+      return {
+        id: sessionId,
+        agentId: this.id,
+        status: "failed",
+        result: `runner exited (code ${completedCommand.exitCode}) without a result file`,
+      };
     }
 
     const status: AgentSessionStatus =
       result.status === "completed" ? "completed" : "failed";
     const prUrl = result.prUrl?.trim() || null;
     const prState = prUrl ? "open" : null;
+
+    await this.deleteSandbox(config, sandbox.id);
+    await this.note(
+      sandbox.labels?.["vortex.org"],
+      sessionId,
+      "status",
+      "sandbox deleted after terminal result",
+      { sandbox: sandbox.id }
+    );
 
     return {
       id: sessionId,
