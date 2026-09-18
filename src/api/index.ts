@@ -20,6 +20,7 @@ import { registerActivityRoutes } from "./activities.js";
 import { registerAgentEnvironmentRoutes } from "./agent-environment.js";
 import { registerAgentProviderRoutes } from "./agent-providers.js";
 import { registerAgentSessionRoutes } from "./agent-sessions.js";
+import { registerAppRoute } from "./app.js";
 import { registerApprovalRoutes } from "./approvals.js";
 import { registerAttachmentRoutes } from "./attachments.js";
 import { registerAuditRoutes } from "./audit.js";
@@ -284,6 +285,8 @@ app.get("/api/auth/organization/accept-invitation", (c) => {
 </html>`;
   return c.html(html);
 });
+
+registerAppRoute(app);
 
 app.all("/api/auth/*", (c) => {
   return createAuth(c.env).handler(c.req.raw);
