@@ -260,7 +260,7 @@ const PYTHON_RUNNER = [
   "    prompt = base64.b64decode(os.environ['PROMPT_B64']).decode('utf-8')",
   "    model = os.environ.get('MODEL', 'swe-2')",
   "    result = subprocess.run(",
-  "        [devin_bin, '-p', prompt, '--model', model, '--permission-mode', 'dangerous'],",
+  "        [devin_bin, '-p', prompt, '--model', model, '--permission-mode', 'dangerous', '--respect-workspace-trust', 'false'],",
   "        cwd=REPO_DIR, env=devin_env(), capture_output=True, text=True, timeout=7200",
   "    )",
   "    print('devin exit:', result.returncode)",
