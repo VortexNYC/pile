@@ -45,16 +45,16 @@ const daytonaProcessSessionSchema = z.object({
 });
 
 const daytonaCommandExecSchema = z.object({
-  cmdId: z.string().optional(),
-  exitCode: z.number().optional(),
-  output: z.string().optional(),
-  stdout: z.string().optional(),
-  stderr: z.string().optional(),
+  cmdId: z.string().nullish(),
+  exitCode: z.number().nullish(),
+  output: z.string().nullish(),
+  stdout: z.string().nullish(),
+  stderr: z.string().nullish(),
 });
 
 const daytonaSyncExecSchema = z.object({
-  result: z.string().optional(),
-  exitCode: z.number().optional(),
+  result: z.string().nullish(),
+  exitCode: z.number().nullish(),
 });
 
 const codexResultSchema = z.object({
