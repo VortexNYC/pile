@@ -5,6 +5,7 @@ import type { AgentSession, Issue } from "../types/workspace.js";
 import { CfAgentProvider } from "./cf-agent.js";
 import { CodexCliAgentProvider } from "./codex-cli.js";
 import { CodexAgentProvider } from "./codex.js";
+import { CursorCliAgentProvider } from "./cursor-cli.js";
 import { CursorAgentProvider } from "./cursor.js";
 import { DevinCliAgentProvider } from "./devin-cli.js";
 import { DevinAgentProvider } from "./devin.js";
@@ -15,6 +16,7 @@ const providers: Record<string, (env: WorkerEnv) => AgentProvider> = {
   codex: (env) => new CodexAgentProvider(env),
   "codex-cli": (env) => new CodexCliAgentProvider(env),
   "devin-cli": (env) => new DevinCliAgentProvider(env),
+  "cursor-cli": (env) => new CursorCliAgentProvider(env),
   "cf-agent": (env) => new CfAgentProvider(env, "cf-agent"),
   cursor: (env) => new CursorAgentProvider(env),
   flue: (env) => new CfAgentProvider(env, "flue"),

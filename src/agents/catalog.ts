@@ -257,6 +257,49 @@ export const AGENT_PROVIDER_CATALOG: CatalogProvider[] = [
     ],
   },
   {
+    id: "cursor-cli",
+    name: "Cursor CLI",
+    modes: [
+      {
+        id: "byo",
+        label: "Your computer or server",
+        help: "Pile provisions a Daytona sandbox and runs cursor-agent there. Uses your Cursor API key, not the Cursor cloud agents API.",
+        fields: [
+          {
+            key: "token",
+            label: "Cursor API key",
+            required: true,
+            type: "secret",
+          },
+          {
+            key: "computeApiKey",
+            label: "Daytona API key",
+            required: true,
+            type: "secret",
+          },
+          {
+            key: "computeApiUrl",
+            label: "Daytona API URL",
+            required: false,
+            type: "text",
+          },
+          {
+            key: "computeSnapshot",
+            label: "Snapshot",
+            required: false,
+            type: "text",
+          },
+          {
+            key: "config.model",
+            label: "Model",
+            required: false,
+            type: "text",
+          },
+        ],
+      },
+    ],
+  },
+  {
     id: "cf-agent",
     name: "cf-agent",
     modes: [
