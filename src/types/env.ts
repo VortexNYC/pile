@@ -29,6 +29,10 @@ export interface AppEnv {
   CODEX_CLI_MODEL?: string;
   /** Codex Cloud environment id used by the `codex-cli` provider. */
   CODEX_CLI_ENV_ID?: string;
+  /** Base64-encoded `~/.local/share/devin/credentials.toml` for the `devin-cli` provider. */
+  DEVIN_CLI_CREDENTIALS_B64?: string;
+  /** Devin CLI model override (defaults to `swe-2`). */
+  DEVIN_CLI_MODEL?: string;
   FLUE_WORKER?: Fetcher;
   TOKEN_HASH_SECRET?: string;
   SLACK_CLIENT_ID?: string;
