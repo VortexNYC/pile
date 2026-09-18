@@ -123,14 +123,31 @@ describe("CloudflareBackend", () => {
     expect(found?.id).toBe("vortex-codex-abc123");
   });
 
-  it("runnerState reports pending, running, and exited", async () => {
+  it("findSandbox falls back to the result file when the process is gone", async () => {
+    const { handle, readFile } = fakeSandbox({});
+    readFile.mockResolvedValueOnce({
+      success: true,
+      content: '{"status":"completed"}',
+    });
+    const backend = new CloudflareBackend(() => Promise.resolve(handle));
+    const found = await backend.findSandbox(
+      "sess-1",
+      "vortex-codex-abc123",
+      "/tmp/r.json"
+    );
+    expect(found?.id).toBe("vortex-codex-abc123");
+  });
+
+  it("runnerState reports exited, running, and missing-record as exited", async () => {
     const { handle } = fakeSandbox({
       running: fakeProcess("running"),
       done: fakeProcess("completed", 0),
       failed: fakeProcess("failed"),
     });
     const backend = new CloudflareBackend(() => Promise.resolve(handle));
-    expect(await backend.runnerState(sandboxRecord, "missing")).toBe("pending");
+    expect(await backend.runnerState(sandboxRecord, "missing")).toEqual({
+      exitCode: 1,
+    });
     expect(await backend.runnerState(sandboxRecord, "running")).toBe("running");
     expect(await backend.runnerState(sandboxRecord, "done")).toEqual({
       exitCode: 0,

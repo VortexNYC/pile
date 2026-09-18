@@ -535,7 +535,8 @@ export class DevinCliAgentProvider implements AgentProvider {
     const compute = this.requireCompute();
     const sandbox = await compute.findSandbox(
       sessionId,
-      sandboxName(sessionId)
+      sandboxName(sessionId),
+      RESULT_PATH
     );
     if (!sandbox) {
       return { id: sessionId, agentId: this.id, status: "created" };
@@ -609,7 +610,8 @@ export class DevinCliAgentProvider implements AgentProvider {
     const compute = this.requireCompute();
     const sandbox = await compute.findSandbox(
       sessionId,
-      sandboxName(sessionId)
+      sandboxName(sessionId),
+      RESULT_PATH
     );
     if (sandbox) {
       await compute.deleteSandbox(sandbox);
@@ -630,7 +632,8 @@ export class DevinCliAgentProvider implements AgentProvider {
     const compute = this.requireCompute();
     const sandbox = await compute.findSandbox(
       providerSessionId,
-      sandboxName(providerSessionId)
+      sandboxName(providerSessionId),
+      RESULT_PATH
     );
     if (!sandbox) return null;
     const runner = await compute.runnerState(sandbox, providerSessionId);
