@@ -55,7 +55,11 @@ export interface ComputeBackend {
     agentLabel: string;
     env: Record<string, string>;
   }): Promise<ComputeSandbox>;
-  findSandbox(sessionId: string, name: string): Promise<ComputeSandbox | null>;
+  findSandbox(
+    sessionId: string,
+    name: string,
+    resultPath?: string
+  ): Promise<ComputeSandbox | null>;
   startRunner(
     sandbox: ComputeSandbox,
     sessionId: string,
@@ -339,12 +343,21 @@ export class CloudflareBackend implements ComputeBackend {
 
   async findSandbox(
     sessionId: string,
-    name: string
+    name: string,
+    resultPath?: string
   ): Promise<ComputeSandbox | null> {
     const sandbox = await this.sandbox(name);
     const proc = await sandbox.getProcess(sessionId).catch(() => null);
-    if (!proc) return null;
-    return { id: name, name, state: "started" };
+    if (proc) return { id: name, name, state: "started" };
+    // Process records can disappear after exit or a container sleep/restart.
+    // The result file surviving is proof the sandbox (and its disk) is alive.
+    if (
+      resultPath &&
+      (await this.readFile({ id: name, name, state: "started" }, resultPath))
+    ) {
+      return { id: name, name, state: "started" };
+    }
+    return null;
   }
 
   async startRunner(
@@ -366,7 +379,9 @@ export class CloudflareBackend implements ComputeBackend {
     sessionId: string
   ): Promise<RunnerState> {
     const proc = await (await this.sandbox(sandbox.name)).getProcess(sessionId);
-    if (!proc) return "pending";
+    // A missing record on a live sandbox means the runner exited (or its
+    // record was lost to a container sleep) — let the result file decide.
+    if (!proc) return { exitCode: 1 };
     const status = await proc.getStatus();
     if (status === "starting" || status === "running") return "running";
     return { exitCode: proc.exitCode ?? (status === "completed" ? 0 : 1) };
