@@ -63,6 +63,10 @@ export interface ComputeBackend {
   ): Promise<void>;
   runnerState(sandbox: ComputeSandbox, sessionId: string): Promise<RunnerState>;
   readFile(sandbox: ComputeSandbox, path: string): Promise<string | null>;
+  runnerLogs?(
+    sandbox: ComputeSandbox,
+    sessionId: string
+  ): Promise<string | null>;
   deleteSandbox(sandbox: ComputeSandbox): Promise<void>;
   health(): Promise<{ ok: boolean; message?: string }>;
 }
@@ -305,7 +309,7 @@ class DaytonaBackend implements ComputeBackend {
 
 export type SandboxHandle = Pick<
   Sandbox,
-  "getProcess" | "startProcess" | "readFile" | "destroy"
+  "getProcess" | "startProcess" | "readFile" | "destroy" | "getProcessLogs"
 >;
 
 export class CloudflareBackend implements ComputeBackend {
@@ -375,6 +379,21 @@ export class CloudflareBackend implements ComputeBackend {
     try {
       const res = await (await this.sandbox(sandbox.name)).readFile(path);
       return res.success && res.content ? res.content : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async runnerLogs(
+    sandbox: ComputeSandbox,
+    sessionId: string
+  ): Promise<string | null> {
+    try {
+      const logs = await (
+        await this.sandbox(sandbox.name)
+      ).getProcessLogs(sessionId);
+      const tail = `${logs.stdout}\n${logs.stderr}`.trim();
+      return tail ? tail.slice(-4000) : null;
     } catch {
       return null;
     }

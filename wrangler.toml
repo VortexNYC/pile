@@ -88,6 +88,7 @@ class_name = "Sandbox"
 class_name = "Sandbox"
 image = "./Dockerfile.sandbox"
 max_instances = 20
+instance_type = "standard-1"
 
 [[env.production.migrations]]
 tag = "v1"
