@@ -270,6 +270,7 @@ falling back to the generic parser:
 - **cursor-cli** — runs `cursor-agent -p --force --trust` headlessly inside
   a Daytona sandbox using the workspace's Cursor API key; poll-only, does
   not use the Cursor cloud agents API.
+  Verified live via Daytona sandbox dispatch (ISS-81).
 
 ## Agent environment (ISS-31)
 
