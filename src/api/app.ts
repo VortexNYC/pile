@@ -98,6 +98,7 @@ const dur = (a, b) => { const s = ((new Date(b) - new Date(a)) / 1000) | 0; retu
 
 let ws = localStorage.getItem("pile_ws") || "";
 let sessions = [];
+let issueById = {};
 
 async function boot() {
   let session = null;
@@ -121,6 +122,7 @@ async function refresh() {
       api("/workspaces/" + ws + "/issues"),
     ]);
     sessions = s;
+    issueById = Object.fromEntries(issues.map((i) => [i.id, i]));
     const blocked = s.filter((x) => x.status === "failed" || x.status === "waiting").length;
     $("needs").textContent = blocked ? blocked + " need" + (blocked > 1 ? "s" : "") + " you" : "";
     renderSessions(s);
@@ -131,10 +133,15 @@ async function refresh() {
 function renderSessions(s) {
   $("sessions").innerHTML = s.length ? s.map((x) => {
     const blocked = x.status === "failed" || x.status === "waiting";
+    const issue = issueById[x.issueId];
+    const label = issue ? issue.identifier + " — " + issue.title : x.result || x.id;
+    const time = (x.status === "completed" || x.status === "failed" || x.status === "canceled")
+      ? dur(x.createdAt, x.updatedAt)
+      : ago(x.updatedAt);
     return "<div class='row" + (blocked ? " blocked" : "") + "' data-id='" + esc(x.id) + "'>" +
       "<span class='badge b-" + esc(x.status) + "'>" + esc(x.status) + "</span>" +
-      "<span class='grow'>" + esc(x.result || x.issueId || x.id) + "</span>" +
-      "<span class='muted'>" + esc(x.provider) + (x.prUrl ? " · <a href='" + esc(x.prUrl) + "' onclick='event.stopPropagation()'>PR</a>" : "") + " · " + ago(x.updatedAt) + "</span></div>";
+      "<span class='grow'>" + esc(label) + "</span>" +
+      "<span class='muted'>" + esc(x.provider) + (x.branch ? " · " + esc(x.branch) : "") + (x.prUrl ? " · <a href='" + esc(x.prUrl) + "' onclick='event.stopPropagation()'>PR</a>" : "") + " · " + time + "</span></div>";
   }).join("") : "<p class='muted'>No agent sessions yet.</p>";
   document.querySelectorAll("#sessions .row").forEach((r) => r.addEventListener("click", () => openDetail(r.dataset.id)));
 }
@@ -152,9 +159,17 @@ function renderBoard(issues) {
 async function openDetail(id) {
   const x = sessions.find((s) => s.id === id);
   const { events } = await api("/workspaces/" + ws + "/agent/sessions/" + id + "/events");
-  const kids = Object.fromEntries(events.map((e) => [e.id, []]));
+  const artifacts = events.filter((e) => e.type === "artifact");
+  const timeline = events.filter((e) => e.type !== "artifact");
+  const kids = Object.fromEntries(timeline.map((e) => [e.id, []]));
   const roots = [];
-  for (const e of events) (e.parentId && kids[e.parentId] ? kids[e.parentId] : roots).push(e);
+  for (const e of timeline) (e.parentId && kids[e.parentId] ? kids[e.parentId] : roots).push(e);
+  const artifactCard = (a) => {
+    const p = a.payload || {};
+    return "<div class='issue'><b>" + esc(p.name || a.message) + "</b>" +
+      (p.type ? " <span class='muted'>" + esc(p.type) + "</span>" : "") +
+      (p.url ? " — <a href='" + esc(p.url) + "'>" + esc(p.url) + "</a>" : "") + "</div>";
+  };
   const node = (e) => "<div class='event" + (e.parentId ? " indent" : "") + "'>" +
     "<span class='muted'>" + ago(e.createdAt) + (e.endedAt ? " · " + dur(e.startedAt || e.createdAt, e.endedAt) : "") + "</span> " +
     "<b class='" + (e.type === "error" ? "err" : "") + "'>" + esc(e.type) + "</b> " + esc(e.message) +
@@ -163,7 +178,9 @@ async function openDetail(id) {
     "<span class='badge b-" + esc(x.status) + "'>" + esc(x.status) + "</span><h1>" + esc(x.provider) + " session</h1></div>" +
     (x.url ? "<p><a href='" + esc(x.url) + "'>provider session</a></p>" : "") +
     (x.prUrl ? "<p><a href='" + esc(x.prUrl) + "'>pull request</a></p>" : "") +
+    (x.branch ? "<p class='muted'>branch: " + esc(x.branch) + "</p>" : "") +
     (x.result ? "<p class='muted'>" + esc(x.result) + "</p>" : "") +
+    (artifacts.length ? "<div class='section'><h2>Artifacts</h2>" + artifacts.map(artifactCard).join("") + "</div>" : "") +
     "<div class='section'><h2>Timeline</h2>" + (roots.map(node).join("") || "<p class='muted'>No events.</p>") + "</div>" +
     "<p style='margin-top:1rem'><button onclick='document.getElementById(&quot;detail&quot;).classList.remove(&quot;open&quot;)'>Close</button></p>";
   $("detail").classList.add("open");
