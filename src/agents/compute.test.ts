@@ -84,7 +84,7 @@ const sandboxRecord: ComputeSandbox = {
 describe("CloudflareBackend", () => {
   it("createSandbox returns a started handle carrying runner env", async () => {
     const { handle } = fakeSandbox({});
-    const backend = new CloudflareBackend(() => handle);
+    const backend = new CloudflareBackend(() => Promise.resolve(handle));
     const created = await backend.createSandbox({
       name: "vortex-codex-abc123",
       sessionId: "sess-1",
@@ -98,7 +98,7 @@ describe("CloudflareBackend", () => {
 
   it("startRunner starts a process with the runner env and session id", async () => {
     const { handle, startProcess } = fakeSandbox({});
-    const backend = new CloudflareBackend(() => handle);
+    const backend = new CloudflareBackend(() => Promise.resolve(handle));
     const sandbox = { ...sandboxRecord, runnerEnv: { FOO: "bar" } };
     await backend.startRunner(sandbox, "sess-1", "python3 /tmp/run.py");
     expect(startProcess).toHaveBeenCalledWith("python3 /tmp/run.py", {
@@ -110,7 +110,7 @@ describe("CloudflareBackend", () => {
 
   it("findSandbox returns null when no process exists", async () => {
     const { handle } = fakeSandbox({});
-    const backend = new CloudflareBackend(() => handle);
+    const backend = new CloudflareBackend(() => Promise.resolve(handle));
     expect(
       await backend.findSandbox("sess-1", "vortex-codex-abc123")
     ).toBeNull();
@@ -118,7 +118,7 @@ describe("CloudflareBackend", () => {
 
   it("findSandbox returns the sandbox when a runner process exists", async () => {
     const { handle } = fakeSandbox({ "sess-1": fakeProcess("running") });
-    const backend = new CloudflareBackend(() => handle);
+    const backend = new CloudflareBackend(() => Promise.resolve(handle));
     const found = await backend.findSandbox("sess-1", "vortex-codex-abc123");
     expect(found?.id).toBe("vortex-codex-abc123");
   });
@@ -129,7 +129,7 @@ describe("CloudflareBackend", () => {
       done: fakeProcess("completed", 0),
       failed: fakeProcess("failed"),
     });
-    const backend = new CloudflareBackend(() => handle);
+    const backend = new CloudflareBackend(() => Promise.resolve(handle));
     expect(await backend.runnerState(sandboxRecord, "missing")).toBe("pending");
     expect(await backend.runnerState(sandboxRecord, "running")).toBe("running");
     expect(await backend.runnerState(sandboxRecord, "done")).toEqual({
@@ -148,7 +148,7 @@ describe("CloudflareBackend", () => {
         content: '{"status":"completed"}',
       })
       .mockRejectedValueOnce(new Error("no such file"));
-    const backend = new CloudflareBackend(() => handle);
+    const backend = new CloudflareBackend(() => Promise.resolve(handle));
     expect(await backend.readFile(sandboxRecord, "/tmp/r.json")).toBe(
       '{"status":"completed"}'
     );
@@ -157,7 +157,7 @@ describe("CloudflareBackend", () => {
 
   it("deleteSandbox destroys the sandbox", async () => {
     const { handle, destroy } = fakeSandbox({});
-    const backend = new CloudflareBackend(() => handle);
+    const backend = new CloudflareBackend(() => Promise.resolve(handle));
     await backend.deleteSandbox(sandboxRecord);
     expect(destroy).toHaveBeenCalledOnce();
   });
