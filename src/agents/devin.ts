@@ -89,7 +89,7 @@ export class DevinAgentProvider implements AgentProvider {
   async dispatch(
     organizationId: string,
     issue: Issue,
-    model = "swe-1-7-medium",
+    model = "swe-2",
     sessionContext?: AgentDispatchContext
   ): Promise<AgentProviderSession> {
     const orgId = this.env.DEVIN_ORG_ID;
