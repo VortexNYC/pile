@@ -81,30 +81,8 @@ export const AGENT_PROVIDER_CATALOG: CatalogProvider[] = [
       {
         id: "byo",
         label: "Your computer or server",
-        help: "Devin Outpost. Run workers yourself, or let Pile provision them on Daytona.",
-        fields: [
-          token,
-          providerOrgId,
-          {
-            key: "outpost",
-            label: "Outpost name",
-            required: true,
-            type: "text",
-          },
-          {
-            key: "outpostId",
-            label: "Outpost id",
-            required: true,
-            type: "text",
-          },
-          {
-            key: "outpostToken",
-            label: "Outpost token",
-            required: true,
-            type: "secret",
-          },
-          ...computeFields,
-        ],
+        help: "Devin Outpost. Run workers yourself and point Devin at them.",
+        fields: [token, providerOrgId, ...computeFields],
       },
     ],
   },
@@ -363,9 +341,6 @@ export function getCatalogMode(
 export type ProviderSetupInput = {
   token?: string | null;
   providerOrgId?: string | null;
-  outpost?: string | null;
-  outpostId?: string | null;
-  outpostToken?: string | null;
   computeApiKey?: string | null;
   computeApiUrl?: string | null;
   computeSnapshot?: string | null;

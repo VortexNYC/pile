@@ -7,8 +7,8 @@ import {
   applyCatalogMode,
   validateProviderSetup,
 } from "../agents/catalog.js";
+import { resolveAgentEnv } from "../agents/daytona.js";
 import { getAgentProvider } from "../agents/index.js";
-import { resolveAgentEnv } from "../agents/outpost.js";
 import type { AgentProviderSession } from "../agents/provider.js";
 import { sha256Hex, timingSafeEqualHex } from "../global/crypto.js";
 import { VortexError } from "../platform/errors.js";
@@ -24,9 +24,6 @@ const providerConfigInputSchema = z.object({
   mode: setupModeSchema.optional(),
   token: z.string().nullable().optional(),
   providerOrgId: z.string().nullable().optional(),
-  outpost: z.string().nullable().optional(),
-  outpostId: z.string().nullable().optional(),
-  outpostToken: z.string().nullable().optional(),
   computeApiKey: z.string().nullable().optional(),
   computeApiUrl: z.string().nullable().optional(),
   computeSnapshot: z.string().nullable().optional(),
@@ -39,8 +36,6 @@ const providerConfigSchema = z.object({
   agentId: z.string(),
   hasToken: z.boolean(),
   providerOrgId: z.string().nullable(),
-  outpost: z.string().nullable(),
-  hasOutpostToken: z.boolean(),
   hasComputeApiKey: z.boolean(),
   computeApiUrl: z.string().nullable(),
   computeSnapshot: z.string().nullable(),
@@ -55,8 +50,6 @@ type ProviderConfigRow = {
   agentId: string;
   token: string | null;
   providerOrgId: string | null;
-  outpost: string | null;
-  outpostToken: string | null;
   computeApiKey: string | null;
   computeApiUrl: string | null;
   computeSnapshot: string | null;
@@ -124,8 +117,6 @@ function redact(row: ProviderConfigRow) {
     agentId: row.agentId,
     hasToken: row.token !== null && row.token !== "",
     providerOrgId: row.providerOrgId,
-    outpost: row.outpost,
-    hasOutpostToken: row.outpostToken !== null && row.outpostToken !== "",
     hasComputeApiKey: row.computeApiKey !== null && row.computeApiKey !== "",
     computeApiUrl: row.computeApiUrl,
     computeSnapshot: row.computeSnapshot,

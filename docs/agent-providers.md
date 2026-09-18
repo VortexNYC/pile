@@ -48,47 +48,18 @@ curl -X PUT "$BASE/workspaces/$ORG/agent/providers/devin" \
 ```
 
 Then `POST /workspaces/$ORG/issues/{id}/dispatch` with `{"agentId":"devin"}`
-creates a standard hosted Devin session (no `platform` field is sent unless an
-outpost is configured).
+creates a standard hosted Devin session on Devin's infrastructure.
 
-## Devin Outposts (self-hosted)
+To run Devin on your own compute, use `devin-cli` instead — it runs the
+vendor's CLI headlessly inside your Daytona sandbox and bills to your own
+Devin account, bypassing the organization sessions API entirely.
 
-Outposts are a **Devin-native primitive**: a named pool of workers you run
-yourself (`devin worker start`), claimed through Devin's fleet API. The tracker
-supports targeting an outpost instead of hosted Devin Cloud.
+## Compute (optional, per-workspace)
 
-Setup for a workspace:
-
-1. In Devin Cloud → org **Settings → Environment → Outposts → Create outpost**,
-   pick a name and platform (`linux`). Devin shows the outpost token **once**.
-2. Configure the provider on the tracker:
-
-```bash
-curl -X PUT "$BASE/workspaces/$ORG/agent/providers/devin" \
-  -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
-  -d '{
-    "token": "<devin service-user api key>",
-    "providerOrgId": "org-…",
-    "outpost": "my-outpost-name",
-    "outpostId": "outpost_env-…",
-    "outpostToken": "cog_…"
-  }'
-```
-
-3. Run workers wherever you like: `devin worker start --outpost=<outpostId>
---token=<outpostToken>`. Each worker serves one session at a time — run N
-   workers for N concurrent sessions, or let a compute integration provision a
-   worker per session (see below).
-
-Dispatch then sends `platform: <outpost>` and the session is queued on the
-outpost's fleet endpoint until one of your workers claims it.
-
-## Compute provisioning (optional, per-workspace)
-
-When `compute*` fields are set, dispatch additionally provisions a dedicated
-worker sandbox per session on your own compute provider (Daytona is the
-reference integration): snapshot image → `devin worker start --session=<id>`
-→ sandbox deleted when the session ends. Fields:
+The headless CLI providers (`codex-cli`, `devin-cli`, `cursor-cli`) provision a
+dedicated sandbox per session on your own compute provider (Daytona is the
+reference integration). The `compute*` fields override the deployment-level
+env vars:
 
 | field             | maps to                                                  |
 | ----------------- | -------------------------------------------------------- |
@@ -97,30 +68,10 @@ reference integration): snapshot image → `devin worker start --session=<id>`
 | `computeSnapshot` | `DAYTONA_SNAPSHOT`                                       |
 | `computeVolumeId` | `DAYTONA_VOLUME_ID`                                      |
 
-If unset, the outpost queue still works — sessions wait for whatever workers
-you've started manually. Everything above falls back to deployment-level env
-vars (`DEVIN_TOKEN`, `DEVIN_OUTPOST`, `DAYTONA_*`), so a self-hosted
-deployment can set one provider for all workspaces; on a hosted deployment
-each workspace brings its own.
-
-### Smoke-testing a provisioned sandbox
-
-Dispatch a trivial task to the outpost and, from inside the session, run
-`bash scripts/outpost-smoke.sh`. It confirms:
-
-- `DAYTONA_SANDBOX_ID`, `OUTPOST_ID` and `SESSION_ID` (the env
-  `provisionOutpostWorker` sets on the sandbox) are present, i.e. the sandbox
-  was created for this session rather than being a manually started worker.
-- `devin worker start` is running and pinned to `--session=$SESSION_ID`.
-- `GIT_AUTHOR_NAME`/`GIT_AUTHOR_EMAIL` are set when the issue's repo has a git
-  identity, and node/pnpm meet the repo's requirements (warnings only).
-
-Then confirm the session reaches the user (a message or PR arrives), and the
-sandbox disappears from `GET $DAYTONA_API_URL/sandbox` after the session ends.
-
-The snapshot must ship the toolchain the target repo needs; the worker itself only
-adds the `devin` binary. For this repo that means Node `>=20.12` and
-`pnpm` (see `engines` / `packageManager` in `package.json`).
+If unset, the deployment-level `DAYTONA_*` env vars apply, so a self-hosted
+deployment can set one compute provider for all workspaces; on a hosted
+deployment each workspace brings its own. Sandboxes are deleted when the
+session reaches a terminal state, with an `autoStopInterval` safety ceiling.
 
 ## Cursor Cloud Agents
 

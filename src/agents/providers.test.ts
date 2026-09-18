@@ -77,30 +77,14 @@ describe("agent providers", () => {
       );
     });
 
-    it("getState returns provider and compute", async () => {
-      const fetchSpy = vi
-        .spyOn(globalThis, "fetch")
-        .mockResolvedValueOnce(
-          jsonResponse({
-            session_id: "devin-123",
-            status: "running",
-            status_detail: "working",
-          })
-        )
-        .mockResolvedValueOnce(
-          jsonResponse({
-            items: [
-              {
-                id: "sandbox-1",
-                name: "worker-devin-123",
-                state: "started",
-                labels: {
-                  "vortex.session": "devin-123",
-                },
-              },
-            ],
-          })
-        );
+    it("getState returns provider without compute", async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+        jsonResponse({
+          session_id: "devin-123",
+          status: "running",
+          status_detail: "working",
+        })
+      );
 
       const provider = new DevinAgentProvider(devinEnv());
       const state = await provider.getState("devin-123", "tracker-123");
@@ -110,8 +94,8 @@ describe("agent providers", () => {
       expect((state.provider as Record<string, string>).session_id).toBe(
         "devin-123"
       );
-      expect((state.compute as { id: string }).id).toBe("sandbox-1");
-      expect(fetchSpy).toHaveBeenCalledTimes(2);
+      expect(state.compute).toBeNull();
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
     });
   });
 

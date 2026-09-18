@@ -2333,8 +2333,6 @@ export interface paths {
                             agentId: string;
                             hasToken: boolean;
                             providerOrgId: string | null;
-                            outpost: string | null;
-                            hasOutpostToken: boolean;
                             hasComputeApiKey: boolean;
                             computeApiUrl: string | null;
                             computeSnapshot: string | null;
@@ -2384,9 +2382,6 @@ export interface paths {
                         mode?: "hosted" | "byo";
                         token?: string | null;
                         providerOrgId?: string | null;
-                        outpost?: string | null;
-                        outpostId?: string | null;
-                        outpostToken?: string | null;
                         computeApiKey?: string | null;
                         computeApiUrl?: string | null;
                         computeSnapshot?: string | null;
@@ -2409,8 +2404,6 @@ export interface paths {
                             agentId: string;
                             hasToken: boolean;
                             providerOrgId: string | null;
-                            outpost: string | null;
-                            hasOutpostToken: boolean;
                             hasComputeApiKey: boolean;
                             computeApiUrl: string | null;
                             computeSnapshot: string | null;

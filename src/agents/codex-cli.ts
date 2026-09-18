@@ -16,8 +16,8 @@ import {
   writeAgentSessionActivity,
   openAgentSessionSpan,
   closeAgentSessionSpan,
-} from "./outpost.js";
-import type { ActivitySpanOptions } from "./outpost.js";
+} from "./daytona.js";
+import type { ActivitySpanOptions } from "./daytona.js";
 import type {
   AgentDispatchContext,
   AgentProvider,

@@ -1144,18 +1144,6 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "provider-org-id",
       },
       {
-        name: "outpost",
-        flag: "outpost",
-      },
-      {
-        name: "outpostId",
-        flag: "outpost-id",
-      },
-      {
-        name: "outpostToken",
-        flag: "outpost-token",
-      },
-      {
         name: "computeApiKey",
         flag: "compute-api-key",
       },
