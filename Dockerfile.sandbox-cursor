@@ -1,0 +1,13 @@
+FROM docker.io/cloudflare/sandbox:0.12.9
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git python3 curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Provider CLI baked at image build time — the runner skips installation
+# when the binary already exists in ~/.local/bin.
+ENV HOME=/root
+RUN mkdir -p /root/.local/bin \
+    && curl -fsSL https://cursor.com/install | bash \
+    && (test -x /root/.local/bin/cursor-agent || test -x /root/.local/bin/agent)
+ENV PATH="/root/.local/bin:${PATH}"

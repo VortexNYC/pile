@@ -23,6 +23,10 @@ export interface AppEnv {
   COMPUTE_PROVIDER?: string;
   /** Cloudflare Sandbox binding (Workers Containers) for COMPUTE_PROVIDER=cloudflare. */
   SANDBOX?: DurableObjectNamespace<Sandbox>;
+  /** Per-provider sandbox bindings — each backed by its own image. */
+  SANDBOX_CURSOR?: DurableObjectNamespace<Sandbox>;
+  SANDBOX_DEVIN?: DurableObjectNamespace<Sandbox>;
+  SANDBOX_CODEX?: DurableObjectNamespace<Sandbox>;
   OPENAI_API_KEY?: string;
   AGENT_PROVIDER_TOKEN?: string;
   AGENT_PROVIDER_CONFIG?: string;

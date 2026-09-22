@@ -1,0 +1,13 @@
+FROM docker.io/cloudflare/sandbox:0.12.9
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git python3 curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV HOME=/root
+# The devin installer exits non-zero when its interactive wizard bails
+# without a TTY; verify the binary directly.
+RUN mkdir -p /root/.local/bin \
+    && (curl -fsSL https://cli.devin.ai/install.sh | bash || true) \
+    && test -x /root/.local/bin/devin
+ENV PATH="/root/.local/bin:${PATH}"

@@ -401,7 +401,7 @@ export class DevinCliAgentProvider implements AgentProvider {
   }
 
   private requireCompute(): ComputeBackend {
-    return computeBackend(this.env);
+    return computeBackend(this.env, "devin-cli");
   }
 
   private async githubToken(repo: string): Promise<string> {

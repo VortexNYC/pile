@@ -383,7 +383,7 @@ export class CursorCliAgentProvider implements AgentProvider {
   }
 
   private requireCompute(): ComputeBackend {
-    return computeBackend(this.env);
+    return computeBackend(this.env, "cursor-cli");
   }
 
   private async githubToken(repo: string): Promise<string> {
