@@ -1,5 +1,10 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/consolidate-linear-import.ts"]
+    }
+  },
   "ignore": [
     "packages/cli/src/client/types.ts",
     "packages/docs/blume.config.ts",
