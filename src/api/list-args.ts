@@ -24,7 +24,8 @@ export const listIssuesQuerySchema = z.object({
   limit: z.preprocess((val) => {
     if (val === undefined) return DEFAULT_LIMIT;
     const n = Number(val);
-    return Number.isNaN(n) || n < 1 || n > MAX_LIMIT ? DEFAULT_LIMIT : n;
+    if (Number.isNaN(n) || n < 1) return DEFAULT_LIMIT;
+    return Math.min(n, MAX_LIMIT);
   }, z.number().int().min(1).max(MAX_LIMIT)),
   cursor: z.string().optional(),
   teamId: z.string().optional(),
@@ -41,6 +42,7 @@ export const listIssuesQuerySchema = z.object({
   labelId: z.string().optional(),
   search: z.string().optional(),
   identifier: z.string().optional(),
+  externalRef: z.string().optional(),
   view: z.string().optional(),
 });
 
@@ -124,6 +126,9 @@ export function toListArgs(query: ListIssuesQuery): ListIssuesArgs {
   }
   if (query.search) {
     args.search = query.search;
+  }
+  if (query.externalRef) {
+    args.externalRef = query.externalRef;
   }
   return args;
 }
