@@ -743,6 +743,36 @@ async function captureRunCommand(
   return exitCode;
 }
 
+function printUsage(): void {
+  const groups = new Map<string, string[]>();
+  for (const name of Object.keys(COMMANDS)) {
+    const [group, ...rest] = name.split(" ");
+    const list = groups.get(group) ?? [];
+    list.push(rest.join(" "));
+    groups.set(group, list);
+  }
+  console.log("pile — Pile CLI\n");
+  console.log("Usage: pile <command> [flags]\n");
+  console.log("Core commands:");
+  for (const cmd of [
+    "auth login",
+    "auth status",
+    "auth logout",
+    "config set",
+    "request <METHOD> <path>",
+    "capture run",
+  ]) {
+    console.log(`  ${cmd}`);
+  }
+  console.log("\nAPI commands:");
+  for (const [group, subs] of groups) {
+    console.log(`  ${group}: ${subs.join(", ")}`);
+  }
+  console.log(
+    "\nConfig: PILE_BASE_URL, PILE_API_KEY, or `pile config set --base-url <url> --api-key <key>`"
+  );
+}
+
 export async function runCli(
   args: readonly string[] = process.argv.slice(2),
   deps: CliDeps = {}
@@ -750,6 +780,16 @@ export async function runCli(
   try {
     const { positionals, flags } = parseArgs(args);
     const [scope] = positionals;
+
+    if (
+      positionals.length === 0 ||
+      flags.help === true ||
+      flags.h === true ||
+      scope === "help"
+    ) {
+      printUsage();
+      return 0;
+    }
 
     if (scope === "request") {
       return await requestCommand(positionals, flags, deps);
