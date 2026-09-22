@@ -87,7 +87,12 @@ export function registerHealthRoutes(app: OpenAPIHono<AppContext>) {
       const sandboxConfigured =
         computeProvider === "daytona"
           ? Boolean(env.DAYTONA_API_KEY)
-          : Boolean(env.SANDBOX);
+          : Boolean(
+              env.SANDBOX ??
+              env.SANDBOX_CURSOR ??
+              env.SANDBOX_DEVIN ??
+              env.SANDBOX_CODEX
+            );
       checks.push({
         name: "compute",
         healthy: sandboxConfigured,

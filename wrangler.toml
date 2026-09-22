@@ -41,9 +41,39 @@ class_name = "WorkspaceDO"
 name = "SANDBOX"
 class_name = "Sandbox"
 
+[[durable_objects.bindings]]
+name = "SANDBOX_CURSOR"
+class_name = "CursorSandbox"
+
+[[durable_objects.bindings]]
+name = "SANDBOX_DEVIN"
+class_name = "DevinSandbox"
+
+[[durable_objects.bindings]]
+name = "SANDBOX_CODEX"
+class_name = "CodexSandbox"
+
 [[containers]]
 class_name = "Sandbox"
 image = "./Dockerfile.sandbox"
+max_instances = 20
+instance_type = "standard-1"
+
+[[containers]]
+class_name = "CursorSandbox"
+image = "./Dockerfile.sandbox-cursor"
+max_instances = 20
+instance_type = "standard-1"
+
+[[containers]]
+class_name = "DevinSandbox"
+image = "./Dockerfile.sandbox-devin"
+max_instances = 20
+instance_type = "standard-1"
+
+[[containers]]
+class_name = "CodexSandbox"
+image = "./Dockerfile.sandbox-codex"
 max_instances = 20
 instance_type = "standard-1"
 
@@ -99,9 +129,39 @@ class_name = "WorkspaceDO"
 name = "SANDBOX"
 class_name = "Sandbox"
 
+[[env.production.durable_objects.bindings]]
+name = "SANDBOX_CURSOR"
+class_name = "CursorSandbox"
+
+[[env.production.durable_objects.bindings]]
+name = "SANDBOX_DEVIN"
+class_name = "DevinSandbox"
+
+[[env.production.durable_objects.bindings]]
+name = "SANDBOX_CODEX"
+class_name = "CodexSandbox"
+
 [[env.production.containers]]
 class_name = "Sandbox"
 image = "./Dockerfile.sandbox"
+max_instances = 20
+instance_type = "standard-1"
+
+[[env.production.containers]]
+class_name = "CursorSandbox"
+image = "./Dockerfile.sandbox-cursor"
+max_instances = 20
+instance_type = "standard-1"
+
+[[env.production.containers]]
+class_name = "DevinSandbox"
+image = "./Dockerfile.sandbox-devin"
+max_instances = 20
+instance_type = "standard-1"
+
+[[env.production.containers]]
+class_name = "CodexSandbox"
+image = "./Dockerfile.sandbox-codex"
 max_instances = 20
 instance_type = "standard-1"
 

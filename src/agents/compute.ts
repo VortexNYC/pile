@@ -427,17 +427,34 @@ export class CloudflareBackend implements ComputeBackend {
 // Selection
 // ---------------------------------------------------------------------------
 
-export function computeBackend(env: AppEnv): ComputeBackend {
+const SANDBOX_BINDING_BY_AGENT = {
+  "cursor-cli": "SANDBOX_CURSOR",
+  "devin-cli": "SANDBOX_DEVIN",
+  "codex-cli": "SANDBOX_CODEX",
+} as const;
+
+export function computeBackend(env: AppEnv, agentId?: string): ComputeBackend {
   const provider = env.COMPUTE_PROVIDER ?? "daytona";
   if (provider === "cloudflare") {
-    if (!env.SANDBOX) {
+    // Per-provider image/binding first; fall back to the shared SANDBOX
+    // binding so single-image self-host setups keep working.
+    const specific = agentId
+      ? (
+          SANDBOX_BINDING_BY_AGENT as Record<
+            string,
+            "SANDBOX_CURSOR" | "SANDBOX_DEVIN" | "SANDBOX_CODEX" | undefined
+          >
+        )[agentId]
+      : undefined;
+    const ns = (specific ? env[specific] : undefined) ?? env.SANDBOX;
+    if (!ns) {
       throw new VortexError({
         code: "CONFIG_ERROR",
         status: 500,
-        message: "COMPUTE_PROVIDER=cloudflare requires a SANDBOX binding",
+        message:
+          "COMPUTE_PROVIDER=cloudflare requires a SANDBOX binding (or a per-provider SANDBOX_* binding)",
       });
     }
-    const ns = env.SANDBOX;
     return new CloudflareBackend(async (name) => {
       // Lazy: @cloudflare/sandbox pulls in cloudflare: specifiers that plain
       // Node (openapi/mcp generators) cannot resolve.

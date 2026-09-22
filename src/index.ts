@@ -18,7 +18,14 @@ import {
 import type { WorkerEnv } from "./platform/middleware.js";
 
 export { WorkspaceDO } from "./workspace/durable-object.js";
-export { Sandbox } from "@cloudflare/sandbox";
+import { Sandbox } from "@cloudflare/sandbox";
+
+// Per-provider sandbox classes — each maps to its own image/binding so a
+// workload only carries the CLI it needs.
+export class CursorSandbox extends Sandbox {}
+export class DevinSandbox extends Sandbox {}
+export class CodexSandbox extends Sandbox {}
+export { Sandbox };
 
 async function scheduled(
   _event: ScheduledController,

@@ -432,7 +432,7 @@ export class CodexCliAgentProvider implements AgentProvider {
   }
 
   private requireCompute(): ComputeBackend {
-    return computeBackend(this.env);
+    return computeBackend(this.env, "codex-cli");
   }
 
   private requireEnvId(): string {
