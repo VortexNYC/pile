@@ -222,6 +222,13 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(createCommentRoute, async (c) => {
     const { organizationId, issueId } = c.req.valid("param");
     const { body } = c.req.valid("json");
+    if (!body) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: "Comment body is required",
+      });
+    }
     const identity = c.var.workspaceIdentity;
     const db = createD1(c.env.D1);
     const issueStub = await getStub(c.env, organizationId);
