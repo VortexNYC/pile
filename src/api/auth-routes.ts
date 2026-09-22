@@ -170,10 +170,14 @@ export function registerAuthRoutes(app: OpenAPIHono<AppContext>) {
         endpoint.method === "post"
           ? ((await c.req.json()) as Record<string, unknown>)
           : undefined;
+      const headers = new Headers(c.req.raw.headers);
+      // Body is re-serialized below, so a stale content-length could truncate it.
+      headers.delete("content-length");
+      headers.delete("transfer-encoding");
       const result = await auth.handler(
         new Request(c.req.url, {
           method: c.req.method,
-          headers: c.req.raw.headers,
+          headers,
           body: body === undefined ? undefined : JSON.stringify(body),
         })
       );
