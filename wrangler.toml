@@ -79,6 +79,7 @@ DAYTONA_SNAPSHOT = "vortex-cli-runner-v2"
 DAYTONA_VOLUME_ID = "0f79e741-e373-496b-a83f-7252cd5b9f12"
 DEVIN_MODEL = "swe-2"
 EMAIL_FROM = "notifications@pile.nyc"
+COMPUTE_PROVIDER = "cloudflare"
 
 [[env.production.d1_databases]]
 binding = "D1"
