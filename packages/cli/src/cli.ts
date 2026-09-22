@@ -818,6 +818,26 @@ async function sessionWatchCommand(
   for (;;) {
     const res = await doFetch(url, { headers });
     if (!res.ok) {
+      // /state 400s once the compute is destroyed — the session record itself
+      // still exists, so check it before giving up.
+      const sessionRes = await doFetch(
+        `${baseUrl}/workspaces/${workspace}/agent/sessions/${sessionId}`,
+        { headers }
+      );
+      if (sessionRes.ok) {
+        const record = (await sessionRes.json()) as {
+          session?: { status?: string; prUrl?: string | null };
+          status?: string;
+          prUrl?: string | null;
+        };
+        const flat = record.session ?? record;
+        const status = flat.status ?? "";
+        if (TERMINAL_SESSION_STATUSES.has(status)) {
+          console.log(`status: ${status}`);
+          if (flat.prUrl) console.log(`pr: ${flat.prUrl}`);
+          return status === "completed" ? 0 : 1;
+        }
+      }
       console.error(`watch: GET /state returned ${res.status}`);
       return 1;
     }
