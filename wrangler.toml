@@ -98,6 +98,10 @@ new_sqlite_classes = ["WorkspaceDO"]
 tag = "v2"
 new_sqlite_classes = ["Sandbox"]
 
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["CursorSandbox", "DevinSandbox", "CodexSandbox"]
+
 [env.production]
 name = "issuetracker"
 
@@ -172,6 +176,10 @@ new_sqlite_classes = ["WorkspaceDO"]
 [[env.production.migrations]]
 tag = "v2"
 new_sqlite_classes = ["Sandbox"]
+
+[[env.production.migrations]]
+tag = "v3"
+new_sqlite_classes = ["CursorSandbox", "DevinSandbox", "CodexSandbox"]
 
 [[env.production.queues.producers]]
 binding = "WEBHOOK_QUEUE"
