@@ -62,10 +62,6 @@ DAYTONA_VOLUME_ID = "0f79e741-e373-496b-a83f-7252cd5b9f12"
 DEVIN_MODEL = "swe-2"
 EMAIL_FROM = "notifications@pile.nyc"
 
-[[env.production.services]]
-binding = "FLUE_WORKER"
-service = "flue-cf-teammate"
-
 [[env.production.d1_databases]]
 binding = "D1"
 database_name = "issuetracker-global"
