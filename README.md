@@ -55,27 +55,32 @@ pnpm run selfhost   # deploys Worker + auto-provisions D1/R2/DO + applies migrat
 
 The CLI, SDK, and MCP examples in `packages/docs/docs/agents.mdx` and `.devin/skills/pile-*` use `https://<your-worker>` as a placeholder. Substitute your Worker URL (the same value as `BETTER_AUTH_URL`), or `http://127.0.0.1:8787` when running `wrangler dev` locally. The CLI reads it from `PILE_BASE_URL` or `pile config set --base-url <url>`.
 
-### Codex CLI provider
+### Headless CLI providers (codex-cli, devin-cli, cursor-cli)
 
-The `codex-cli` provider runs Codex Cloud jobs from a Daytona sandbox. Configure
-these Worker secrets before dispatching a session:
+The CLI providers run the vendor's own CLI inside a compute sandbox. The
+default backend is `COMPUTE_PROVIDER = "cloudflare"` — a Workers Container
+built from `Dockerfile.sandbox`, no external account required. To use Daytona
+instead, set `COMPUTE_PROVIDER = "daytona"` and add `DAYTONA_API_KEY` (plus
+optional `DAYTONA_API_URL`, `DAYTONA_SNAPSHOT`, `DAYTONA_VOLUME_ID`).
+
+Each provider needs its own vendor credentials as Worker secrets:
 
 ```bash
-# Base64-encode the auth.json created by `codex login`.
+# codex-cli: base64 the auth.json created by `codex login`, plus the Codex
+# Cloud environment ID
 base64 < ~/.codex/auth.json | tr -d '\n' | wrangler secret put CODEX_AUTH_JSON_B64
-
-# Set this to the Codex Cloud environment ID that should run the job.
 wrangler secret put CODEX_CLI_ENV_ID
 
-# Create an API key in Daytona and provide it to Pile.
-wrangler secret put DAYTONA_API_KEY
+# devin-cli: base64 the credentials created by `devin login`
+wrangler secret put DEVIN_CLI_CREDENTIALS_B64
+
+# cursor-cli: an API key from cursor.com/settings
+wrangler secret put CURSOR_API_KEY
 ```
 
-Enter the Codex Cloud environment ID and Daytona API key when prompted. Treat
-`~/.codex/auth.json` and all three values as secrets; do not commit them. You
-can optionally set `DAYTONA_API_URL`, `DAYTONA_SNAPSHOT`, and
-`DAYTONA_VOLUME_ID` to use a non-default Daytona API endpoint, snapshot, or
-cache volume.
+Provider secrets can also be set per workspace via
+`PUT /workspaces/:id/agent/providers/:agentId`, including a per-workspace
+`config.computeProvider` override.
 
 ## Tests
 
