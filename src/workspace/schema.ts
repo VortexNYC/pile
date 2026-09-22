@@ -777,6 +777,10 @@ export const workspaceAgentSessions = sqliteTable(
     updatedAt: text("updated_at" as string).notNull(),
     lastProgressAt: text("last_progress_at" as string),
     lastStateHash: text("last_state_hash" as string),
+    retryOf: text("retry_of" as string),
+    retryCount: integer("retry_count" as string)
+      .notNull()
+      .default(0),
   },
   (table) => [
     index("agent_sessions_organization_idx" as string).on(

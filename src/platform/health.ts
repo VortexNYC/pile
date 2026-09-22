@@ -73,9 +73,34 @@ export function registerHealthRoutes(app: OpenAPIHono<AppContext>) {
         });
       }
 
+      // Configuration presence checks — binding exists, no secrets exposed.
+      // Missing config degrades rather than fails: self-hosters may not use
+      // email or agents at all.
+      const emailConfigured = Boolean(env.EMAIL && env.EMAIL_FROM);
+      checks.push({
+        name: "email",
+        healthy: emailConfigured,
+        message: emailConfigured ? undefined : "no EMAIL binding or EMAIL_FROM",
+      });
+
+      const computeProvider = env.COMPUTE_PROVIDER ?? "daytona";
+      const sandboxConfigured =
+        computeProvider === "daytona"
+          ? Boolean(env.DAYTONA_API_KEY)
+          : Boolean(env.SANDBOX);
+      checks.push({
+        name: "compute",
+        healthy: sandboxConfigured,
+        message: `provider=${computeProvider}`,
+      });
+
       const healthy = checks.every((check) => check.healthy);
-      const status: "healthy" | "unhealthy" = healthy ? "healthy" : "unhealthy";
-      const statusCode = healthy ? 200 : 503;
+      const status: "healthy" | "degraded" | "unhealthy" = healthy
+        ? "healthy"
+        : checks.some((check) => check.healthy)
+          ? "degraded"
+          : "unhealthy";
+      const statusCode = status === "unhealthy" ? 503 : 200;
 
       return c.json(
         {

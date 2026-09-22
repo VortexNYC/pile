@@ -3,3 +3,17 @@ FROM docker.io/cloudflare/sandbox:0.12.9
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git python3 curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+
+# Bake provider CLIs at image build time so dispatch skips the per-run
+# curl|bash install. Runners skip installation when the binary already
+# exists in ~/.local/bin.
+ENV HOME=/root
+RUN mkdir -p /root/.local/bin \
+    && curl -fsSL https://cursor.com/install | bash \
+    && (test -x /root/.local/bin/cursor-agent || test -x /root/.local/bin/agent) \
+    && (curl -fsSL https://cli.devin.ai/install.sh | bash || true) \
+    && test -x /root/.local/bin/devin \
+    && curl -fsSL https://raw.githubusercontent.com/openai/codex/main/scripts/install/install.sh \
+       | CODEX_NON_INTERACTIVE=1 CODEX_INSTALL_DIR=/root/.local/bin CODEX_HOME=/root/.codex sh \
+    && /root/.local/bin/codex --version
+ENV PATH="/root/.local/bin:${PATH}"

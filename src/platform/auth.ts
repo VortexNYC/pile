@@ -109,7 +109,10 @@ export function createAuth(env: AppEnv) {
           },
         },
         rateLimit: {
-          enabled: false,
+          enabled: true,
+          // Per-key limit: 600 requests/minute (~10 req/s).
+          timeWindow: 60_000,
+          maxRequests: 600,
         },
         customAPIKeyGetter: (ctx) => {
           const auth = ctx.headers?.get("Authorization") ?? "";
