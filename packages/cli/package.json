@@ -1,6 +1,6 @@
 {
   "name": "@vortex-api/pile",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "TypeScript SDK and CLI for Pile.",
   "license": "MIT",
   "bin": {
