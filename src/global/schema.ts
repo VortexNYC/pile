@@ -1433,11 +1433,16 @@ export const apikey = sqliteTable(
   ]
 );
 
-export const rateLimit = sqliteTable("rate_limit" as string, {
-  key: text("key" as string).primaryKey(),
-  count: integer("count" as string).notNull(),
-  lastRequest: integer("last_request" as string).notNull(),
-});
+export const rateLimit = sqliteTable(
+  "rate_limit" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    key: text("key" as string).notNull(),
+    count: integer("count" as string).notNull(),
+    lastRequest: integer("last_request" as string).notNull(),
+  },
+  (table) => [uniqueIndex("rate_limit_key_idx" as string).on(table.key)]
+);
 
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),

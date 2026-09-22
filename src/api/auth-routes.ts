@@ -22,14 +22,6 @@ const authResponseSchema = z.string().openapi({
   description: "Better Auth raw response (JSON or HTML)",
 });
 
-type AuthMethod = (args: {
-  body?: Record<string, unknown>;
-  headers: Headers;
-  params?: Record<string, string>;
-  query?: Record<string, string>;
-  asResponse: true;
-}) => Promise<Response>;
-
 const endpoints = [
   { method: "post", path: "/api/auth/sign-up/email", fn: "signUpEmail" },
   { method: "post", path: "/api/auth/sign-in/email", fn: "signInEmail" },
@@ -173,30 +165,18 @@ export function registerAuthRoutes(app: OpenAPIHono<AppContext>) {
     const route = buildRoute(endpoint);
     app.openapi(route, async (c) => {
       const auth = createAuth(c.env);
-      const caller = (auth.api as unknown as Record<string, AuthMethod>)[
-        endpoint.fn
-      ];
 
       const body =
         endpoint.method === "post"
           ? ((await c.req.json()) as Record<string, unknown>)
           : undefined;
-      const params =
-        "hasParams" in endpoint && endpoint.hasParams
-          ? (c.req.param() as Record<string, string>)
-          : undefined;
-      const query =
-        "hasQuery" in endpoint && endpoint.hasQuery
-          ? (c.req.query() as Record<string, string>)
-          : undefined;
-
-      const result = await caller({
-        headers: c.req.raw.headers,
-        body,
-        params,
-        query,
-        asResponse: true,
-      });
+      const result = await auth.handler(
+        new Request(c.req.url, {
+          method: c.req.method,
+          headers: c.req.raw.headers,
+          body: body === undefined ? undefined : JSON.stringify(body),
+        })
+      );
 
       return new Response(await result.text(), {
         status: result.status,
