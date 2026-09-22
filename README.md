@@ -21,6 +21,7 @@ Hosted instance: [pile.nyc](https://pile.nyc) · Docs: [docs.pile.nyc](https://d
 - `GET/POST/PATCH /workspaces/:workspaceId/issues` for issue CRUD
 - `POST /github` to sync PR state from GitHub `pull_request` webhooks
 - Workspace-scoped API tokens
+- Rate limiting on `/api/auth/*` via Better Auth (D1-backed, per-IP by `cf-connecting-ip`; defaults: 100 req/60s global, 3 req/10s on sign-in/sign-up)
 
 ## Setup
 
