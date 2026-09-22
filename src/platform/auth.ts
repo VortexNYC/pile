@@ -65,6 +65,12 @@ export function createAuth(env: AppEnv) {
         }
       },
     },
+    rateLimit: {
+      enabled: true,
+      storage: "database",
+      window: 60,
+      max: 100,
+    },
     user: {
       additionalFields: {
         metadata: { type: "json", required: false },
