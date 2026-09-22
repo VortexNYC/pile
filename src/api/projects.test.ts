@@ -86,6 +86,30 @@ describe("projects API", () => {
     expect(res.status).toBe(403);
   });
 
+  it("rejects duplicate project names ignoring case and whitespace", async () => {
+    const first = await fetch(
+      `/workspaces/${organizationId}/projects`,
+      {
+        method: "POST",
+        body: JSON.stringify({ name: "Unique Project" }),
+      },
+      token
+    );
+    expect(first.status).toBe(201);
+    const second = await fetch(
+      `/workspaces/${organizationId}/projects`,
+      {
+        method: "POST",
+        body: JSON.stringify({ name: "  unique project " }),
+      },
+      token
+    );
+    expect(second.status).toBe(409);
+    expect(await second.text()).toContain(
+      "A project with this name already exists"
+    );
+  });
+
   it("rejects creating a project without a name", async () => {
     const res = await fetch(
       `/workspaces/${organizationId}/projects`,
