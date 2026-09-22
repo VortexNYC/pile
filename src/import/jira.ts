@@ -575,6 +575,7 @@ export const jiraImportSource: ImportSource<JiraCredentials, JiraOptions> = {
 
         const input: IssueInput = {
           id: issue.id,
+          externalRef: `jira:${issue.key}`,
           title: extractField(issue.fields, "summary", z.string()) ?? issue.key,
           description: adfToMarkdown(issue.fields.description),
           status: status ? mapStatus(status) : undefined,

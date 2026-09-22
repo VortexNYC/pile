@@ -517,6 +517,23 @@ describe("WorkspaceDO", () => {
     expect(a.id).toBe(b.id);
   });
 
+  it("returns the same issue for createIssue with the same externalRef", async () => {
+    const stub = getStub();
+    await stub.setOrganizationId(WORKSPACE_ID);
+    const externalRef = `test:${crypto.randomUUID()}`;
+    const first = await stub.createIssue({
+      title: "External ref first",
+      externalRef,
+    });
+    const second = await stub.createIssue({
+      title: "External ref second",
+      externalRef,
+    });
+    expect(second.id).toBe(first.id);
+    expect(second.title).toBe(first.title);
+    expect(second.externalRef).toBe(externalRef);
+  });
+
   it("assigns distinct numbers for concurrent createIssue with different ids", async () => {
     const stub = getStub();
     await stub.setOrganizationId(WORKSPACE_ID);

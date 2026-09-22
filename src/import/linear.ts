@@ -162,6 +162,7 @@ const linearHistorySchema = z.object({
 
 const linearIssueSchema = z.object({
   id: z.string(),
+  identifier: z.string(),
   title: z.string(),
   description: z.string().nullable().optional(),
   state: linearStateSchema.nullable().optional(),
@@ -410,6 +411,7 @@ class LinearClient {
           issues(first: $first, after: $after) {
             nodes {
               id
+              identifier
               title
               description
               state {
@@ -1113,6 +1115,7 @@ export const linearImportSource: ImportSource<
 
         const input: IssueInput = {
           teamId,
+          externalRef: `linear:${issue.identifier}`,
           title: issue.title,
           description: issue.description ?? undefined,
           status: mapStatus(

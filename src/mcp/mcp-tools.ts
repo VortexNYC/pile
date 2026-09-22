@@ -2519,7 +2519,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdIssues",
-    "description": "List issues (GET /workspaces/{organizationId}/issues) Path params (top-level, required): organizationId. Query params (top-level, optional): limit, cursor, teamId, status, priority, parentId, hasParent, isParent, isDraft, includeSnoozed, assigneeId, projectId, cycleId, labelId, search, identifier, view.",
+    "description": "List issues (GET /workspaces/{organizationId}/issues) Path params (top-level, required): organizationId. Query params (top-level, optional): limit, cursor, teamId, status, priority, parentId, hasParent, isParent, isDraft, includeSnoozed, assigneeId, projectId, cycleId, labelId, search, identifier, externalRef, view.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/issues",
     "inputSchema": {
@@ -2607,6 +2607,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "type": "string"
         },
         "identifier": {
+          "type": "string"
+        },
+        "externalRef": {
           "type": "string"
         },
         "view": {
@@ -4664,7 +4667,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdTriage",
-    "description": "List triage (GET /workspaces/{organizationId}/triage) Path params (top-level, required): organizationId. Query params (top-level, optional): limit, cursor, teamId, status, priority, parentId, hasParent, isParent, isDraft, includeSnoozed, assigneeId, projectId, cycleId, labelId, search, identifier, view.",
+    "description": "List triage (GET /workspaces/{organizationId}/triage) Path params (top-level, required): organizationId. Query params (top-level, optional): limit, cursor, teamId, status, priority, parentId, hasParent, isParent, isDraft, includeSnoozed, assigneeId, projectId, cycleId, labelId, search, identifier, externalRef, view.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/triage",
     "inputSchema": {
@@ -4752,6 +4755,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "type": "string"
         },
         "identifier": {
+          "type": "string"
+        },
+        "externalRef": {
           "type": "string"
         },
         "view": {
@@ -5574,7 +5580,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdIssuesId",
-    "description": "Update issue (PATCH /workspaces/{organizationId}/issues/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: title, teamId, description, status, priority, resolution, parentId, subIssueSortOrder, estimate, isDraft, templateId, snoozedUntil, assigneeId, projectId, cycleId, labelIds, repo, branch.",
+    "description": "Update issue (PATCH /workspaces/{organizationId}/issues/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: title, externalRef, teamId, description, status, priority, resolution, parentId, subIssueSortOrder, estimate, isDraft, templateId, snoozedUntil, assigneeId, projectId, cycleId, labelIds, repo, branch.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/issues/{id}",
     "inputSchema": {
@@ -5592,6 +5598,12 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "title": {
               "type": "string",
               "minLength": 1
+            },
+            "externalRef": {
+              "type": "string",
+              "nullable": true,
+              "minLength": 1,
+              "maxLength": 255
             },
             "teamId": {
               "type": "string"
@@ -9438,7 +9450,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdIssues",
-    "description": "Create issue (POST /workspaces/{organizationId}/issues) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: title*, teamId, description, status, priority, resolution, parentId, subIssueSortOrder, estimate, isDraft, templateId, snoozedUntil, assigneeId, projectId, cycleId, labelIds, repo, branch (* = required).",
+    "description": "Create issue (POST /workspaces/{organizationId}/issues) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: title*, externalRef, teamId, description, status, priority, resolution, parentId, subIssueSortOrder, estimate, isDraft, templateId, snoozedUntil, assigneeId, projectId, cycleId, labelIds, repo, branch (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/issues",
     "inputSchema": {
@@ -9453,6 +9465,12 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "title": {
               "type": "string",
               "minLength": 1
+            },
+            "externalRef": {
+              "type": "string",
+              "nullable": true,
+              "minLength": 1,
+              "maxLength": 255
             },
             "teamId": {
               "type": "string"
@@ -9578,6 +9596,12 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "title": {
                   "type": "string",
                   "minLength": 1
+                },
+                "externalRef": {
+                  "type": "string",
+                  "nullable": true,
+                  "minLength": 1,
+                  "maxLength": 255
                 },
                 "teamId": {
                   "type": "string"

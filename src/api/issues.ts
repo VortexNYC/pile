@@ -219,6 +219,7 @@ function validateIssueState(
 
 const createIssueSchema = z.object({
   title: z.string().min(1),
+  externalRef: z.string().min(1).max(255).nullable().optional(),
   teamId: z.string().optional(),
   description: z.string().optional(),
   status: z.enum(ISSUE_STATUSES).optional(),
@@ -293,6 +294,7 @@ const issueApiSchema = z
   .object({
     id: z.string(),
     organizationId: z.string(),
+    externalRef: z.string().nullable(),
     teamId: z.string(),
     title: z.string(),
     description: z.string().nullable(),
@@ -499,6 +501,13 @@ const createIssueRoute = createRoute({
   responses: {
     201: {
       description: "Issue created",
+      content: {
+        "application/json": { schema: issueApiSchema },
+      },
+    },
+    200: {
+      description:
+        "Existing issue with the same externalRef (idempotent create)",
       content: {
         "application/json": { schema: issueApiSchema },
       },
@@ -1202,6 +1211,17 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
           code: "BAD_REQUEST",
           status: 400,
           message: "Parent would create a cycle",
+        });
+      }
+    }
+    if (typeof input.externalRef === "string") {
+      const existingByRef = await stub.getIssueByExternalRef(input.externalRef);
+      if (existingByRef && existingByRef.id !== id) {
+        throw new VortexError({
+          code: "CONFLICT",
+          status: 409,
+          message: "externalRef already used",
+          hint: `Issue ${existingByRef.identifier} already has externalRef ${input.externalRef}`,
         });
       }
     }

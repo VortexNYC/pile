@@ -84,6 +84,115 @@ describe("issues API", () => {
     expect(res.status).toBe(401);
   });
 
+  it("clamps an oversized issue list limit", async () => {
+    const res = await fetch(
+      `/workspaces/${organizationId}/issues?limit=500`,
+      {},
+      token
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("returns an existing issue for an idempotent externalRef create", async () => {
+    const externalRef = `test:${crypto.randomUUID()}`;
+    const first = await fetch(
+      `/workspaces/${organizationId}/issues`,
+      {
+        method: "POST",
+        body: JSON.stringify({ title: "Idempotent issue", externalRef }),
+      },
+      token
+    );
+    expect(first.status).toBe(201);
+    const firstIssue = z.object({ id: z.string() }).parse(await first.json());
+
+    const second = await fetch(
+      `/workspaces/${organizationId}/issues`,
+      {
+        method: "POST",
+        body: JSON.stringify({ title: "Should not duplicate", externalRef }),
+      },
+      token
+    );
+    expect(second.status).toBe(200);
+    const secondIssue = z.object({ id: z.string() }).parse(await second.json());
+    expect(secondIssue.id).toBe(firstIssue.id);
+
+    const listed = await fetch(
+      `/workspaces/${organizationId}/issues?externalRef=${encodeURIComponent(externalRef)}`,
+      {},
+      token
+    );
+    expect(listed.status).toBe(200);
+    const body = z
+      .object({ issues: z.array(z.object({ id: z.string() })) })
+      .parse(await listed.json());
+    expect(body.issues.map((issue) => issue.id)).toEqual([firstIssue.id]);
+
+    const other = await fetch(
+      `/workspaces/${organizationId}/issues`,
+      {
+        method: "POST",
+        body: JSON.stringify({ title: "Another issue" }),
+      },
+      token
+    );
+    const otherIssue = z.object({ id: z.string() }).parse(await other.json());
+    const conflict = await fetch(
+      `/workspaces/${organizationId}/issues/${otherIssue.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ externalRef }),
+      },
+      token
+    );
+    expect(conflict.status).toBe(409);
+  });
+
+  it("rejects nested parent updates and parenting issues with children", async () => {
+    const create = async (title: string, parentId?: string) => {
+      const res = await fetch(
+        `/workspaces/${organizationId}/issues`,
+        {
+          method: "POST",
+          body: JSON.stringify({ title, ...(parentId ? { parentId } : {}) }),
+        },
+        token
+      );
+      expect(res.status).toBe(201);
+      return z.object({ id: z.string() }).parse(await res.json());
+    };
+    const parent = await create("Parent");
+    const child = await create("Child", parent.id);
+    const candidate = await create("Candidate");
+
+    const nested = await fetch(
+      `/workspaces/${organizationId}/issues/${candidate.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ parentId: child.id }),
+      },
+      token
+    );
+    expect(nested.status).toBe(400);
+    expect(await nested.text()).toContain(
+      "Sub-issues can only be nested one level"
+    );
+
+    const withChildren = await fetch(
+      `/workspaces/${organizationId}/issues/${parent.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ parentId: candidate.id }),
+      },
+      token
+    );
+    expect(withChildren.status).toBe(400);
+    expect(await withChildren.text()).toContain(
+      "An issue with sub-issues cannot become a sub-issue"
+    );
+  });
+
   it("rejects creating an issue without a title", async () => {
     const res = await fetch(
       `/workspaces/${organizationId}/issues`,

@@ -723,6 +723,10 @@ ALTER TABLE agent_activities ADD COLUMN ended_at TEXT
 --> statement-breakpoint
 ALTER TABLE agent_activities ADD COLUMN duration_ms INTEGER`;
 
+const v38 = `ALTER TABLE issues ADD COLUMN external_ref TEXT
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS idx_issues_external_ref ON issues (organization_id, external_ref)`;
+
 export const workspaceMigrations = {
   journal: {
     entries: [
@@ -763,6 +767,7 @@ export const workspaceMigrations = {
       { idx: 34, when: 34, tag: "v35", breakpoints: true },
       { idx: 35, when: 35, tag: "v36", breakpoints: true },
       { idx: 36, when: 36, tag: "v37", breakpoints: true },
+      { idx: 37, when: 37, tag: "v38", breakpoints: true },
     ],
   },
   migrations: {
@@ -803,5 +808,6 @@ export const workspaceMigrations = {
     m0034: v35,
     m0035: v36,
     m0036: v37,
+    m0037: v38,
   },
 } satisfies Parameters<typeof migrate>[1];
