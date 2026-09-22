@@ -8,6 +8,46 @@ import * as schema from "../global/schema.js";
 import { organizationOptions } from "./access.js";
 import type { AppEnv } from "./env.js";
 
+async function sendEmail(
+  env: AppEnv,
+  kind: string,
+  to: string,
+  subject: string,
+  text: string
+) {
+  if (!env.EMAIL || !env.EMAIL_FROM) {
+    console.warn(
+      JSON.stringify({
+        event: "email_skipped",
+        kind,
+        reason: "no EMAIL binding or EMAIL_FROM",
+      })
+    );
+    return;
+  }
+  try {
+    const { EmailMessage } = await import("cloudflare:email");
+    const raw = [
+      `From: ${env.EMAIL_FROM}`,
+      `To: ${to}`,
+      `Subject: ${subject}`,
+      "MIME-Version: 1.0",
+      'Content-Type: text/plain; charset="utf-8"',
+      "",
+      text,
+    ].join("\r\n");
+    await env.EMAIL.send(new EmailMessage(env.EMAIL_FROM, to, raw));
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        event: "email_send_failed",
+        kind,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    );
+  }
+}
+
 export function createAuth(env: AppEnv) {
   const db = createD1(env.D1);
 
@@ -18,51 +58,25 @@ export function createAuth(env: AppEnv) {
     emailAndPassword: {
       enabled: true,
       sendResetPassword: async (data) => {
-        if (!env.EMAIL || !env.EMAIL_FROM) {
-          return;
-        }
-        try {
-          const { EmailMessage } = await import("cloudflare:email");
-          const raw = [
-            `From: ${env.EMAIL_FROM}`,
-            `To: ${data.user.email}`,
-            "Subject: Reset your Pile password",
-            "MIME-Version: 1.0",
-            'Content-Type: text/plain; charset="utf-8"',
-            "",
-            `Reset your Pile password: ${data.url}`,
-          ].join("\r\n");
-          await env.EMAIL.send(
-            new EmailMessage(env.EMAIL_FROM, data.user.email, raw)
-          );
-        } catch {
-          // Email is best-effort.
-        }
+        await sendEmail(
+          env,
+          "password_reset",
+          data.user.email,
+          "Reset your Pile password",
+          `Reset your Pile password: ${data.url}`
+        );
       },
       revokeSessionsOnPasswordReset: true,
     },
     emailVerification: {
       sendVerificationEmail: async (data) => {
-        if (!env.EMAIL || !env.EMAIL_FROM) {
-          return;
-        }
-        try {
-          const { EmailMessage } = await import("cloudflare:email");
-          const raw = [
-            `From: ${env.EMAIL_FROM}`,
-            `To: ${data.user.email}`,
-            "Subject: Verify your Pile email",
-            "MIME-Version: 1.0",
-            'Content-Type: text/plain; charset="utf-8"',
-            "",
-            `Verify your Pile email: ${data.url}`,
-          ].join("\r\n");
-          await env.EMAIL.send(
-            new EmailMessage(env.EMAIL_FROM, data.user.email, raw)
-          );
-        } catch {
-          // Email is best-effort.
-        }
+        await sendEmail(
+          env,
+          "email_verification",
+          data.user.email,
+          "Verify your Pile email",
+          `Verify your Pile email: ${data.url}`
+        );
       },
     },
     rateLimit: {
@@ -130,27 +144,17 @@ export function createAuth(env: AppEnv) {
           },
         },
         sendInvitationEmail: async (data) => {
-          if (!env.EMAIL || !env.EMAIL_FROM || !env.BETTER_AUTH_URL) {
+          if (!env.BETTER_AUTH_URL) {
             return;
           }
-          try {
-            const { EmailMessage } = await import("cloudflare:email");
-            const url = `${env.BETTER_AUTH_URL}/api/auth/organization/accept-invitation?id=${encodeURIComponent(data.id)}`;
-            const raw = [
-              `From: ${env.EMAIL_FROM}`,
-              `To: ${data.email}`,
-              `Subject: Invitation to join the workspace`,
-              "MIME-Version: 1.0",
-              'Content-Type: text/plain; charset="utf-8"',
-              "",
-              `You have been invited to join the workspace. Accept here: ${url}`,
-            ].join("\r\n");
-            await env.EMAIL.send(
-              new EmailMessage(env.EMAIL_FROM, data.email, raw)
-            );
-          } catch {
-            // Email is best-effort.
-          }
+          const url = `${env.BETTER_AUTH_URL}/api/auth/organization/accept-invitation?id=${encodeURIComponent(data.id)}`;
+          await sendEmail(
+            env,
+            "invitation",
+            data.email,
+            "Invitation to join the workspace",
+            `You have been invited to join the workspace. Accept here: ${url}`
+          );
         },
       }),
     ],
