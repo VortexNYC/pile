@@ -13,6 +13,7 @@ export const workspaceIssues = sqliteTable(
   {
     id: text("id" as string).primaryKey(),
     organizationId: text("organization_id" as string).notNull(),
+    externalRef: text("external_ref" as string),
     teamId: text("team_id" as string).notNull(),
     title: text("title" as string).notNull(),
     description: text("description" as string),
@@ -81,6 +82,10 @@ export const workspaceIssues = sqliteTable(
       table.organizationId,
       table.teamId,
       table.number
+    ),
+    uniqueIndex("idx_issues_external_ref" as string).on(
+      table.organizationId,
+      table.externalRef
     ),
     index("idx_issues_triage" as string).on(
       table.organizationId,

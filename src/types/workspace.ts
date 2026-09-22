@@ -63,6 +63,7 @@ export type IssueResolution = (typeof ISSUE_RESOLUTIONS)[number];
 
 export interface IssueInput {
   id?: Id;
+  externalRef?: string | null;
   teamId?: string;
   title: string;
   description?: string;
@@ -108,11 +109,13 @@ export interface ListIssuesArgs {
   labelId?: string;
   search?: string;
   filter?: FilterCondition;
+  externalRef?: string;
 }
 
 export interface Issue {
   id: Id;
   organizationId: Id;
+  externalRef: string | null;
   teamId: string;
   title: string;
   description: string | null;

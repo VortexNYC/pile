@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, lte } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, lte, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { createAuth } from "../platform/auth.js";
@@ -36,6 +36,27 @@ export function getProject(db: D1Client, organizationId: string, id: string) {
     .where(
       and(eq(projects.organizationId, organizationId), eq(projects.id, id))
     )
+    .get();
+}
+
+export function findProjectByName(
+  db: D1Client,
+  organizationId: string,
+  name: string,
+  excludeId?: string
+) {
+  const conditions = [
+    eq(projects.organizationId, organizationId),
+    isNull(projects.archivedAt),
+    sql`lower(trim(${projects.name})) = ${name.trim().toLowerCase()}`,
+  ];
+  if (excludeId) {
+    conditions.push(sql`${projects.id} <> ${excludeId}`);
+  }
+  return db
+    .select()
+    .from(projects)
+    .where(and(...conditions))
     .get();
 }
 

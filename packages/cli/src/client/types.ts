@@ -611,6 +611,7 @@ export interface paths {
                     labelId?: string;
                     search?: string;
                     identifier?: string;
+                    externalRef?: string;
                     view?: string;
                 };
                 header?: never;
@@ -650,6 +651,7 @@ export interface paths {
                 content: {
                     "application/json": {
                         title: string;
+                        externalRef?: string | null;
                         teamId?: string;
                         description?: string;
                         /** @enum {string} */
@@ -674,6 +676,15 @@ export interface paths {
                 };
             };
             responses: {
+                /** @description Existing issue with the same externalRef (idempotent create) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Issue"];
+                    };
+                };
                 /** @description Issue created */
                 201: {
                     headers: {
@@ -718,6 +729,7 @@ export interface paths {
                     labelId?: string;
                     search?: string;
                     identifier?: string;
+                    externalRef?: string;
                     view?: string;
                 };
                 header?: never;
@@ -1024,6 +1036,7 @@ export interface paths {
                 content: {
                     "application/json": {
                         title?: string;
+                        externalRef?: string | null;
                         teamId?: string;
                         description?: string;
                         /** @enum {string} */
@@ -1127,6 +1140,7 @@ export interface paths {
                         ids: string[];
                         patch: {
                             title?: string;
+                            externalRef?: string | null;
                             teamId?: string;
                             description?: string;
                             /** @enum {string} */
@@ -22028,6 +22042,7 @@ export interface components {
         Issue: {
             id: string;
             organizationId: string;
+            externalRef: string | null;
             teamId: string;
             title: string;
             description: string | null;

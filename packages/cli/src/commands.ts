@@ -319,6 +319,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "identifier",
       },
       {
+        name: "externalRef",
+        flag: "external-ref",
+      },
+      {
         name: "view",
         flag: "view",
       },
@@ -339,6 +343,10 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "title",
         flag: "title",
+      },
+      {
+        name: "externalRef",
+        flag: "external-ref",
       },
       {
         name: "teamId",
@@ -483,6 +491,10 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "identifier",
         flag: "identifier",
+      },
+      {
+        name: "externalRef",
+        flag: "external-ref",
       },
       {
         name: "view",
@@ -636,6 +648,10 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "title",
         flag: "title",
+      },
+      {
+        name: "externalRef",
+        flag: "external-ref",
       },
       {
         name: "teamId",

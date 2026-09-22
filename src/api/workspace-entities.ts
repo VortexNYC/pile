@@ -16,6 +16,7 @@ import {
   deleteInitiative,
   deleteLabel,
   deleteProject,
+  findProjectByName,
   deleteRoadmap,
   getCycle,
   getInitiative,
@@ -881,6 +882,15 @@ export function registerWorkspaceEntityRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId } = c.req.valid("param");
     const input = c.req.valid("json");
     const db = createD1(c.env.D1);
+    const existing = await findProjectByName(db, organizationId, input.name);
+    if (existing) {
+      throw new VortexError({
+        code: "CONFLICT",
+        status: 409,
+        message: "A project with this name already exists",
+        hint: `Existing project id: ${existing.id}`,
+      });
+    }
     const item = await createProject(db, organizationId, input);
     return c.json(item, 201);
   });
@@ -903,6 +913,22 @@ export function registerWorkspaceEntityRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId, id } = c.req.valid("param");
     const input = c.req.valid("json");
     const db = createD1(c.env.D1);
+    if (input.name !== undefined) {
+      const existingByName = await findProjectByName(
+        db,
+        organizationId,
+        input.name,
+        id
+      );
+      if (existingByName) {
+        throw new VortexError({
+          code: "CONFLICT",
+          status: 409,
+          message: "A project with this name already exists",
+          hint: `Existing project id: ${existingByName.id}`,
+        });
+      }
+    }
     const item = await updateProject(db, organizationId, id, input);
     if (!item) {
       throw new VortexError({

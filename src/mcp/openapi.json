@@ -16,6 +16,10 @@
           "organizationId": {
             "type": "string"
           },
+          "externalRef": {
+            "type": "string",
+            "nullable": true
+          },
           "teamId": {
             "type": "string"
           },
@@ -132,6 +136,7 @@
         "required": [
           "id",
           "organizationId",
+          "externalRef",
           "teamId",
           "title",
           "description",
@@ -1361,6 +1366,14 @@
               "type": "string"
             },
             "required": false,
+            "name": "externalRef",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
             "name": "view",
             "in": "query"
           }
@@ -1416,6 +1429,12 @@
                   "title": {
                     "type": "string",
                     "minLength": 1
+                  },
+                  "externalRef": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 255
                   },
                   "teamId": {
                     "type": "string"
@@ -1510,6 +1529,16 @@
           }
         },
         "responses": {
+          "200": {
+            "description": "Existing issue with the same externalRef (idempotent create)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Issue"
+                }
+              }
+            }
+          },
           "201": {
             "description": "Issue created",
             "content": {
@@ -1697,6 +1726,14 @@
             },
             "required": false,
             "name": "identifier",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "externalRef",
             "in": "query"
           },
           {
@@ -2102,6 +2139,12 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "externalRef": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 255
+                  },
                   "teamId": {
                     "type": "string"
                   },
@@ -2320,6 +2363,12 @@
                       "title": {
                         "type": "string",
                         "minLength": 1
+                      },
+                      "externalRef": {
+                        "type": "string",
+                        "nullable": true,
+                        "minLength": 1,
+                        "maxLength": 255
                       },
                       "teamId": {
                         "type": "string"

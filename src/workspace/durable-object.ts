@@ -2709,6 +2709,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
     const existing = await this.getIssue(id);
     if (existing) return existing;
+    if (input.externalRef) {
+      const byRef = await this.getIssueByExternalRef(input.externalRef);
+      if (byRef) return byRef;
+    }
 
     const status = input.status ?? "backlog";
     const resolution = validateIssueResolution(
@@ -2786,6 +2790,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       .values({
         id,
         organizationId: this.organizationId,
+        externalRef: input.externalRef ?? null,
         teamId: team.id,
         title: input.title,
         description: input.description ?? null,
@@ -3184,6 +3189,20 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       .get();
   }
 
+  async getIssueByExternalRef(externalRef: string): Promise<Issue | undefined> {
+    await this.ready;
+    return this.db
+      .select()
+      .from(workspaceIssues)
+      .where(
+        and(
+          eq(workspaceIssues.organizationId, this.organizationId),
+          eq(workspaceIssues.externalRef, externalRef)
+        )
+      )
+      .get();
+  }
+
   async indexComment(comment: CommentForSearch) {
     await this.ready;
     const index = await this.ensureSearchIndex();
@@ -3251,6 +3270,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     }
     if (args.projectId) {
       conditions.push(eq(workspaceIssues.projectId, args.projectId));
+    }
+    if (args.externalRef) {
+      conditions.push(eq(workspaceIssues.externalRef, args.externalRef));
     }
     if (args.cycleId) {
       conditions.push(eq(workspaceIssues.cycleId, args.cycleId));
@@ -3348,6 +3370,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
     const allowed: Array<{ key: IssueKey; field: string }> = [
       { key: "teamId", field: "team_id" },
+      { key: "externalRef", field: "external_ref" },
       { key: "title", field: "title" },
       { key: "description", field: "description" },
       { key: "status", field: "status" },
@@ -3429,6 +3452,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       set.identifier = `${team.key}-${number}`;
     }
     if (patch.title !== undefined) set.title = patch.title;
+    if (patch.externalRef !== undefined) set.externalRef = patch.externalRef;
     if (patch.description !== undefined) set.description = patch.description;
     if (patch.status !== undefined) set.status = patch.status;
     if (patch.priority !== undefined) set.priority = patch.priority;

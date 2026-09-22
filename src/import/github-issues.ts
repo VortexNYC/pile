@@ -216,6 +216,7 @@ async function syncGithubIssue(
 
   const created = await ctx.stub.createIssue(
     {
+      externalRef: `github:${repo}#${issue.number}`,
       title: issue.title,
       description: issue.body ?? undefined,
       status,

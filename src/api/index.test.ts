@@ -3034,6 +3034,7 @@ describe("API integration", () => {
                 nodes: [
                   {
                     id: "linear-issue-1",
+                    identifier: "VOR-1",
                     title: "Linear issue title",
                     description: "Linear body",
                     state: {

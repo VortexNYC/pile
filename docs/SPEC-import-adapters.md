@@ -6,6 +6,15 @@ Make Pile the easiest place to land engineering data from Linear, Jira, Notion, 
 
 This spec covers the shared framework plus all adapters folded into it: Jira, Confluence, Linear, Notion, and GitHub Issues.
 
+## Import idempotency (`externalRef`)
+
+Issues may include an optional `externalRef`, which is unique within a workspace. A
+`POST /workspaces/{id}/issues` request with an existing `externalRef` returns the
+existing issue with status `200` instead of creating a duplicate. The same key can
+be queried with `GET /workspaces/{id}/issues?externalRef=...`; clients may also
+supply `id` for idempotent creates. The Linear adapter uses the convention
+`linear:<IDENTIFIER>` (for example, `linear:VOR-188`).
+
 ## Capability map
 
 | Module                 | Responsibility                                                                                              | Depends on                                                         |
@@ -161,3 +170,18 @@ Behavior:
 - `POST /import/{jobId}/resume` accepts fresh credentials and an optional `limit` and continues from the stored `cursor`.
 - `POST /import` with `options.approvalRequired: true` creates a `pending_approval` job and an `import_approvals` row; `/approve` and `/reject` endpoints gate execution.
 - `ImportSource.run` now returns `{ counts, nextCursor? }` so the runner can accumulate counts and pause/resume per adapter. GitHub Issues is the first adapter with full cursor support; the rest return `nextCursor: null` for now.
+
+## Consolidating a Linear import
+
+`scripts/consolidate-linear-import.ts` plans a safe, sequential consolidation of
+duplicate Linear imports. It is a dry run by default and requires
+`PILE_API_KEY`; set `PILE_BASE_URL` when using a non-default deployment.
+
+```bash
+PILE_API_KEY=... pnpm exec tsx scripts/consolidate-linear-import.ts \
+  --workspace org_vortex_main
+PILE_API_KEY=... pnpm exec tsx scripts/consolidate-linear-import.ts \
+  --workspace org_vortex_main --apply
+PILE_API_KEY=... pnpm exec tsx scripts/consolidate-linear-import.ts \
+  --workspace org_vortex_main --apply --delete-duplicates
+```
