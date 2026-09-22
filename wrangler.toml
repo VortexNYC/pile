@@ -14,8 +14,12 @@ ALLOWED_ORIGINS = "https://pile.example.workers.dev"
 SLACK_REDIRECT_URI = "https://pile.example.workers.dev/slack/oauth"
 # Optional: agent dispatch defaults
 # DEVIN_MODEL = "swe-2"
-EMAIL_FROM = "notifications@pile.nyc"
-INTERCOM_CLIENT_SECRET = "test"
+# Compute backend for headless CLI providers. "cloudflare" uses the Sandbox
+# container below (no external account needed); "daytona" requires
+# DAYTONA_API_KEY as a secret.
+COMPUTE_PROVIDER = "cloudflare"
+# Must be a verified sender on your account's Email Routing domain.
+EMAIL_FROM = "notifications@example.com"
 
 [[d1_databases]]
 binding = "D1"
@@ -33,6 +37,16 @@ bucket_name = "issuetracker-attachments"
 name = "WORKSPACE_DURABLE_OBJECT"
 class_name = "WorkspaceDO"
 
+[[durable_objects.bindings]]
+name = "SANDBOX"
+class_name = "Sandbox"
+
+[[containers]]
+class_name = "Sandbox"
+image = "./Dockerfile.sandbox"
+max_instances = 20
+instance_type = "standard-1"
+
 [[queues.producers]]
 binding = "WEBHOOK_QUEUE"
 queue = "webhook-queue"
@@ -49,6 +63,10 @@ crons = ["*/5 * * * *"]
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["WorkspaceDO"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Sandbox"]
 
 [env.production]
 name = "issuetracker"
