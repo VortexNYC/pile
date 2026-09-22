@@ -71,6 +71,13 @@ export function createAuth(env: AppEnv) {
       window: 60,
       max: 100,
     },
+    advanced: {
+      ipAddress: {
+        // Cloudflare sets cf-connecting-ip at the edge; x-forwarded-for is
+        // client-supplied and spoofable, so it is not trusted here.
+        ipAddressHeaders: ["cf-connecting-ip"],
+      },
+    },
     user: {
       additionalFields: {
         metadata: { type: "json", required: false },
