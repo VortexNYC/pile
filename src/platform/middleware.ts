@@ -38,18 +38,7 @@ export const workspaceAuthMiddleware = createMiddleware<{
       result = await auth.api.verifyApiKey({
         body: { key: token },
       });
-    } catch (err) {
-      const code =
-        err && typeof err === "object" && "body" in err
-          ? (err.body as { code?: string } | undefined)?.code
-          : undefined;
-      if (code === "RATE_LIMITED" || code === "RATE_LIMIT_EXCEEDED") {
-        throw new VortexError({
-          code: "RATE_LIMITED",
-          status: 429,
-          message: "API key rate limit exceeded",
-        });
-      }
+    } catch {
       throw new VortexError({
         code: "UNAUTHORIZED",
         status: 401,
@@ -65,6 +54,20 @@ export const workspaceAuthMiddleware = createMiddleware<{
       !("key" in result) ||
       !result.key
     ) {
+      const code =
+        "error" in result &&
+        result.error &&
+        typeof result.error === "object" &&
+        "code" in result.error
+          ? (result.error as { code?: string }).code
+          : undefined;
+      if (code === "RATE_LIMITED" || code === "RATE_LIMIT_EXCEEDED") {
+        throw new VortexError({
+          code: "RATE_LIMITED",
+          status: 429,
+          message: "API key rate limit exceeded",
+        });
+      }
       throw new VortexError({
         code: "UNAUTHORIZED",
         status: 401,
