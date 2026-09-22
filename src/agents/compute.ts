@@ -1,4 +1,4 @@
-import { getSandbox, type Sandbox } from "@cloudflare/sandbox";
+import type { Sandbox } from "@cloudflare/sandbox";
 import { z } from "zod";
 
 import { VortexError } from "../platform/errors.js";
@@ -55,7 +55,11 @@ export interface ComputeBackend {
     agentLabel: string;
     env: Record<string, string>;
   }): Promise<ComputeSandbox>;
-  findSandbox(sessionId: string, name: string): Promise<ComputeSandbox | null>;
+  findSandbox(
+    sessionId: string,
+    name: string,
+    resultPath?: string
+  ): Promise<ComputeSandbox | null>;
   startRunner(
     sandbox: ComputeSandbox,
     sessionId: string,
@@ -63,6 +67,10 @@ export interface ComputeBackend {
   ): Promise<void>;
   runnerState(sandbox: ComputeSandbox, sessionId: string): Promise<RunnerState>;
   readFile(sandbox: ComputeSandbox, path: string): Promise<string | null>;
+  runnerLogs?(
+    sandbox: ComputeSandbox,
+    sessionId: string
+  ): Promise<string | null>;
   deleteSandbox(sandbox: ComputeSandbox): Promise<void>;
   health(): Promise<{ ok: boolean; message?: string }>;
 }
@@ -305,15 +313,15 @@ class DaytonaBackend implements ComputeBackend {
 
 export type SandboxHandle = Pick<
   Sandbox,
-  "getProcess" | "startProcess" | "readFile" | "destroy"
+  "getProcess" | "startProcess" | "readFile" | "destroy" | "getProcessLogs"
 >;
 
 export class CloudflareBackend implements ComputeBackend {
   readonly kind = "cloudflare" as const;
 
-  constructor(private getHandle: (name: string) => SandboxHandle) {}
+  constructor(private getHandle: (name: string) => Promise<SandboxHandle>) {}
 
-  private sandbox(name: string): SandboxHandle {
+  private sandbox(name: string): Promise<SandboxHandle> {
     return this.getHandle(name);
   }
 
@@ -335,12 +343,21 @@ export class CloudflareBackend implements ComputeBackend {
 
   async findSandbox(
     sessionId: string,
-    name: string
+    name: string,
+    resultPath?: string
   ): Promise<ComputeSandbox | null> {
-    const sandbox = this.sandbox(name);
+    const sandbox = await this.sandbox(name);
     const proc = await sandbox.getProcess(sessionId).catch(() => null);
-    if (!proc) return null;
-    return { id: name, name, state: "started" };
+    if (proc) return { id: name, name, state: "started" };
+    // Process records can disappear after exit or a container sleep/restart.
+    // The result file surviving is proof the sandbox (and its disk) is alive.
+    if (
+      resultPath &&
+      (await this.readFile({ id: name, name, state: "started" }, resultPath))
+    ) {
+      return { id: name, name, state: "started" };
+    }
+    return null;
   }
 
   async startRunner(
@@ -348,7 +365,9 @@ export class CloudflareBackend implements ComputeBackend {
     sessionId: string,
     command: string
   ): Promise<void> {
-    await this.sandbox(sandbox.name).startProcess(command, {
+    await (
+      await this.sandbox(sandbox.name)
+    ).startProcess(command, {
       processId: sessionId,
       env: sandbox.runnerEnv,
       autoCleanup: false,
@@ -359,8 +378,10 @@ export class CloudflareBackend implements ComputeBackend {
     sandbox: ComputeSandbox,
     sessionId: string
   ): Promise<RunnerState> {
-    const proc = await this.sandbox(sandbox.name).getProcess(sessionId);
-    if (!proc) return "pending";
+    const proc = await (await this.sandbox(sandbox.name)).getProcess(sessionId);
+    // A missing record on a live sandbox means the runner exited (or its
+    // record was lost to a container sleep) — let the result file decide.
+    if (!proc) return { exitCode: 1 };
     const status = await proc.getStatus();
     if (status === "starting" || status === "running") return "running";
     return { exitCode: proc.exitCode ?? (status === "completed" ? 0 : 1) };
@@ -371,15 +392,30 @@ export class CloudflareBackend implements ComputeBackend {
     path: string
   ): Promise<string | null> {
     try {
-      const res = await this.sandbox(sandbox.name).readFile(path);
+      const res = await (await this.sandbox(sandbox.name)).readFile(path);
       return res.success && res.content ? res.content : null;
     } catch {
       return null;
     }
   }
 
+  async runnerLogs(
+    sandbox: ComputeSandbox,
+    sessionId: string
+  ): Promise<string | null> {
+    try {
+      const logs = await (
+        await this.sandbox(sandbox.name)
+      ).getProcessLogs(sessionId);
+      const tail = `${logs.stdout}\n${logs.stderr}`.trim();
+      return tail ? tail.slice(-4000) : null;
+    } catch {
+      return null;
+    }
+  }
+
   async deleteSandbox(sandbox: ComputeSandbox): Promise<void> {
-    await this.sandbox(sandbox.name).destroy();
+    await (await this.sandbox(sandbox.name)).destroy();
   }
 
   async health(): Promise<{ ok: boolean; message?: string }> {
@@ -402,12 +438,15 @@ export function computeBackend(env: AppEnv): ComputeBackend {
       });
     }
     const ns = env.SANDBOX;
-    return new CloudflareBackend((name) =>
-      getSandbox(ns, name, {
+    return new CloudflareBackend(async (name) => {
+      // Lazy: @cloudflare/sandbox pulls in cloudflare: specifiers that plain
+      // Node (openapi/mcp generators) cannot resolve.
+      const { getSandbox } = await import("@cloudflare/sandbox");
+      return getSandbox(ns, name, {
         sleepAfter: CF_SLEEP_AFTER,
         normalizeId: true,
-      })
-    );
+      });
+    });
   }
   const config = daytonaConfig(env);
   if (!config) {

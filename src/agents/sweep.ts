@@ -103,7 +103,10 @@ export async function sweepAgentSessions(env: WorkerEnv): Promise<void> {
         env.WORKSPACE_DURABLE_OBJECT.idFromName(id)
       );
       await stub.setOrganizationId(id);
-      const sessions = await stub.listAgentSessions({ status: "running" });
+      const sessions = [
+        ...(await stub.listAgentSessions({ status: "running" })),
+        ...(await stub.listAgentSessions({ status: "created" })),
+      ];
       if (sessions.length === 0) continue;
       for (const session of sessions) {
         const providerConfig = await stub.getAgentProviderConfig(
@@ -128,20 +131,39 @@ export async function sweepAgentSessions(env: WorkerEnv): Promise<void> {
           continue;
         }
 
-        if (
-          !progressIsStale({
-            now,
-            createdAt: session.createdAt,
-            lastProgressAt: session.lastProgressAt,
-            inactivityMinutes,
-          })
-        ) {
-          continue;
-        }
-
         const remoteId = session.providerSessionId ?? session.id;
         let stillAlive = false;
         try {
+          const polled = await provider.poll(remoteId);
+          if (
+            polled.status === "completed" ||
+            polled.status === "failed" ||
+            polled.status === "canceled"
+          ) {
+            await stub.applyAgentSessionResult(session.id, polled);
+            continue;
+          }
+          if (
+            polled.status !== session.status ||
+            polled.result !== session.result ||
+            polled.url !== session.url ||
+            polled.prUrl !== session.prUrl
+          ) {
+            stillAlive = true;
+            await stub.applyAgentSessionResult(session.id, polled);
+          }
+
+          if (
+            !progressIsStale({
+              now,
+              createdAt: session.createdAt,
+              lastProgressAt: session.lastProgressAt,
+              inactivityMinutes,
+            })
+          ) {
+            continue;
+          }
+
           if (provider.getState) {
             const state = await provider.getState(remoteId, session.id);
             const lastSeen = computeLastSeen(state);
@@ -158,24 +180,6 @@ export async function sweepAgentSessions(env: WorkerEnv): Promise<void> {
                 lastProgressAt: new Date(now).toISOString(),
                 lastStateHash: hash,
               });
-            }
-          } else {
-            const polled = await provider.poll(remoteId);
-            if (
-              polled.status === "completed" ||
-              polled.status === "failed" ||
-              polled.status === "canceled"
-            ) {
-              await stub.applyAgentSessionResult(session.id, polled);
-              continue;
-            }
-            if (
-              polled.result !== session.result ||
-              polled.url !== session.url ||
-              polled.prUrl !== session.prUrl
-            ) {
-              stillAlive = true;
-              await stub.applyAgentSessionResult(session.id, polled);
             }
           }
         } catch (err) {
