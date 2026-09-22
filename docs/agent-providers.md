@@ -298,3 +298,5 @@ comments, `agent/sessions`, `agent/sessions/{id}/activities`, webhooks, MCP)
 is the full surface. Registering a new provider is for agents that want
 dispatch + poll through the tracker's provider interface — see
 `src/agents/provider.ts`.
+
+- Verified end-to-end on Cloudflare Sandbox compute.
