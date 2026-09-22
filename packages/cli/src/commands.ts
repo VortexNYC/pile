@@ -796,6 +796,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "agent-id",
       },
       {
+        name: "provider",
+        flag: "provider",
+      },
+      {
         name: "model",
         flag: "model",
       },

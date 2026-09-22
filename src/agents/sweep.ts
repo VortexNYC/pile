@@ -4,7 +4,7 @@ import type { WorkerEnv } from "../platform/middleware.js";
 import type { AgentSession } from "../types/workspace.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
 import { resolveAgentEnv } from "./daytona.js";
-import { getAgentProvider } from "./index.js";
+import { dispatchAgent, getAgentProvider } from "./index.js";
 import type { AgentProvider, AgentProviderState } from "./provider.js";
 
 export const DEFAULT_TIMEOUT_MINUTES = 60;
@@ -90,7 +90,61 @@ async function cancelSession(
   );
 }
 
-export async function sweepAgentSessions(env: WorkerEnv): Promise<void> {
+const MAX_INFRA_RETRIES = 1;
+
+// Redispatch once when the compute substrate failed underneath the agent —
+// sandbox error, runner dying without a result — not when the agent itself
+// reported a task failure (infraFailure stays unset for those).
+async function retryInfraSession(
+  env: WorkerEnv,
+  stub: DurableObjectStub<WorkspaceDO>,
+  organizationId: string,
+  session: AgentSession,
+  ctx?: { waitUntil: (promise: Promise<unknown>) => void }
+): Promise<void> {
+  if ((session.retryCount ?? 0) >= MAX_INFRA_RETRIES) return;
+  try {
+    const issue = await stub.getIssue(session.issueId);
+    if (!issue) return;
+    const providerConfig = await stub.getAgentProviderConfig(session.agentId);
+    const effectiveEnv = resolveAgentEnv(env, providerConfig ?? undefined);
+    const retried = await dispatchAgent(
+      effectiveEnv,
+      session.agentId,
+      organizationId,
+      issue,
+      {
+        id: session.actorId,
+        organizationId,
+        type: session.actorType,
+        permissions: [],
+      },
+      undefined,
+      ctx
+    );
+    await stub.updateAgentSession(retried.id, {
+      retryOf: session.id,
+      retryCount: (session.retryCount ?? 0) + 1,
+    });
+    await stub.addAgentActivity({
+      sessionId: session.id,
+      actorId: session.actorId,
+      type: "thought",
+      message: `Infrastructure failure — redispatched as session ${retried.id}`,
+    });
+  } catch (err) {
+    console.error("agent session infra retry failed", {
+      session: session.id,
+      agentId: session.agentId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+export async function sweepAgentSessions(
+  env: WorkerEnv,
+  ctx?: { waitUntil: (promise: Promise<unknown>) => void }
+): Promise<void> {
   const d1 = createD1(env.D1);
   const orgs = await d1
     .select({ id: organization.id })
@@ -141,6 +195,9 @@ export async function sweepAgentSessions(env: WorkerEnv): Promise<void> {
             polled.status === "canceled"
           ) {
             await stub.applyAgentSessionResult(session.id, polled);
+            if (polled.status === "failed" && polled.infraFailure) {
+              await retryInfraSession(env, stub, id, session, ctx);
+            }
             continue;
           }
           if (

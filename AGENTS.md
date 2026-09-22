@@ -12,7 +12,7 @@ vp run test
 vp run knip
 ```
 
-`vp run check` is Vite+ (`vp check`: format, lint, types). `contract:check` diffs generated artifacts and needs git — GitHub `ci.yml` owns it; do not put it on the vortex-ci sandbox path. Tests run in vortex-ci proof (`pnpm test`), same split as vortex-sign.
+`vp run check` is Vite+ (`vp check`: format, lint, types). `contract:check` diffs generated artifacts and needs git — GitHub `ci.yml` owns it; do not put it on the CI path. Tests gate locally via the `vp` pre-push hook; CI is `deps → build (typecheck) → migrate+deploy` on `main`, owned by `cloudflare-ci` (`~/Projects/cloudflare-ci`). If CI behavior is wrong, fix it there — not here.
 
 ## Stack
 

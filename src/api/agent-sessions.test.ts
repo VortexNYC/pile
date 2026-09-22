@@ -158,6 +158,41 @@ describe("agent sessions API", () => {
     expect(missingRes.status).toBe(404);
   });
 
+  it("dispatches via the provider alias and rejects unknown body keys", async () => {
+    const issueRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ title: "Alias", repo: "VortexNYC/pile" }),
+      }),
+      env
+    );
+    expect(issueRes.status).toBe(201);
+    const issue = await issueRes.json<{ id: string }>();
+
+    const aliasRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${issue.id}/dispatch`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ provider: "mock" }),
+      }),
+      env
+    );
+    expect(aliasRes.status).toBe(201);
+    const session = await aliasRes.json<{ agentId: string }>();
+    expect(session.agentId).toBe("mock");
+
+    const badRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${issue.id}/dispatch`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ provdier: "mock" }),
+      }),
+      env
+    );
+    expect(badRes.status).toBe(400);
+  });
+
   it("appends an activity and updates session state", async () => {
     const stub = env.WORKSPACE_DURABLE_OBJECT.get(
       env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)

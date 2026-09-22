@@ -26,7 +26,7 @@ async function scheduled(
   ctx: ExecutionContext
 ) {
   ctx.waitUntil(
-    sweepAgentSessions(env).catch((err) =>
+    sweepAgentSessions(env, ctx).catch((err) =>
       console.error("agent session sweep failed", err)
     )
   );

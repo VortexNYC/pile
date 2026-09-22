@@ -1047,11 +1047,13 @@ export async function updateAgentSession(
     providerSessionId: string | null;
     lastProgressAt: string | null;
     lastStateHash: string | null;
+    retryOf: string | null;
+    retryCount: number;
   }>
 ) {
   const existing = await getAgentSession(db, organizationId, id);
   if (!existing) return null;
-  const set: Record<string, string | null> = {
+  const set: Record<string, string | number | null> = {
     updatedAt: new Date().toISOString(),
   };
   if (input.status !== undefined) set.status = input.status;
@@ -1063,6 +1065,8 @@ export async function updateAgentSession(
     set.lastProgressAt = input.lastProgressAt;
   if (input.lastStateHash !== undefined)
     set.lastStateHash = input.lastStateHash;
+  if (input.retryOf !== undefined) set.retryOf = input.retryOf;
+  if (input.retryCount !== undefined) set.retryCount = input.retryCount;
   await db
     .update(workspaceAgentSessions)
     .set(set)

@@ -9736,7 +9736,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdIssuesIdDispatch",
-    "description": "Dispatch issue (POST /workspaces/{organizationId}/issues/{id}/dispatch) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: agentId, model.",
+    "description": "Dispatch issue (POST /workspaces/{organizationId}/issues/{id}/dispatch) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: agentId, provider, model.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/issues/{id}/dispatch",
     "inputSchema": {
@@ -9754,10 +9754,14 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "agentId": {
               "type": "string"
             },
+            "provider": {
+              "type": "string"
+            },
             "model": {
               "type": "string"
             }
-          }
+          },
+          "additionalProperties": false
         }
       },
       "required": [

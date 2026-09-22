@@ -2523,10 +2523,14 @@
                   "agentId": {
                     "type": "string"
                   },
+                  "provider": {
+                    "type": "string"
+                  },
                   "model": {
                     "type": "string"
                   }
-                }
+                },
+                "additionalProperties": false
               }
             }
           }

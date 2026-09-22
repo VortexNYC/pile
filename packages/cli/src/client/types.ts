@@ -1209,6 +1209,7 @@ export interface paths {
                 content: {
                     "application/json": {
                         agentId?: string;
+                        provider?: string;
                         model?: string;
                     };
                 };

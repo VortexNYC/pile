@@ -652,10 +652,15 @@ const dispatchRoute = createRoute({
     body: {
       content: {
         "application/json": {
-          schema: z.object({
-            agentId: z.string().optional(),
-            model: z.string().optional(),
-          }),
+          schema: z
+            .object({
+              agentId: z.string().optional(),
+              // Alias for agentId — silently dropped provider params caused
+              // dispatches to fall back to the default agent.
+              provider: z.string().optional(),
+              model: z.string().optional(),
+            })
+            .strict(),
         },
       },
     },
@@ -1340,7 +1345,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(dispatchRoute, async (c) => {
-    const { agentId, model } = c.req.valid("json");
+    const { agentId, provider, model } = c.req.valid("json");
     const { organizationId, id } = c.req.valid("param");
     const identity = c.get("workspaceIdentity");
     const db = createD1(c.env.D1);
@@ -1363,7 +1368,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
 
-    const resolvedAgentId = agentId ?? "devin";
+    const resolvedAgentId = agentId ?? provider ?? "devin";
     const providerConfig = await stub.getAgentProviderConfig(resolvedAgentId);
     const effectiveEnv = resolveAgentEnv(c.env, providerConfig ?? undefined);
 

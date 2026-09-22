@@ -565,6 +565,7 @@ export class DevinCliAgentProvider implements AgentProvider {
         id: sessionId,
         agentId: this.id,
         status: "failed",
+        infraFailure: true,
         result: sandbox.error ?? "compute sandbox error",
       };
     }
@@ -596,6 +597,7 @@ export class DevinCliAgentProvider implements AgentProvider {
         id: sessionId,
         agentId: this.id,
         status: "failed",
+        infraFailure: true,
         result: `runner exited (code ${runner.exitCode}) without a result file`,
       };
     }

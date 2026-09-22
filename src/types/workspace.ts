@@ -24,6 +24,9 @@ export interface AgentSessionResult {
   prUrl?: string | null;
   prState?: string | null;
   branch?: string | null;
+  // True when the failure came from the compute substrate (sandbox error,
+  // runner died without a result) rather than the agent's task outcome.
+  infraFailure?: boolean;
 }
 
 export interface GitIdentity {
