@@ -884,7 +884,22 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         });
       }
       await assertIssueAccess(db, parent, identity);
+      if (parent.parentId) {
+        throw new VortexError({
+          code: "BAD_REQUEST",
+          status: 400,
+          message: "Sub-issues can only be nested one level",
+          hint: `Parent ${parent.identifier} is already a sub-issue`,
+        });
+      }
       teamId ??= parent.teamId;
+    }
+    if (input.externalRef) {
+      const existing = await stub.getIssueByExternalRef(input.externalRef);
+      if (existing) {
+        await assertIssueAccess(db, existing, identity);
+        return c.json(existing, 200);
+      }
     }
     const resolvedTeamId = await assertTeamAccess(
       db,
@@ -1165,6 +1180,23 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         });
       }
       await assertIssueAccess(db, parent, identity);
+      if (parent.parentId) {
+        throw new VortexError({
+          code: "BAD_REQUEST",
+          status: 400,
+          message: "Sub-issues can only be nested one level",
+          hint: `Parent ${parent.identifier} is already a sub-issue`,
+        });
+      }
+      const children = await stub.getIssueChildren(id);
+      if (children.length > 0) {
+        throw new VortexError({
+          code: "BAD_REQUEST",
+          status: 400,
+          message: "An issue with sub-issues cannot become a sub-issue",
+          hint: `Children: ${children.map((child) => child.identifier).join(", ")}`,
+        });
+      }
       if (await wouldCreateCycle(stub, id, input.parentId, new Set<string>())) {
         throw new VortexError({
           code: "BAD_REQUEST",
