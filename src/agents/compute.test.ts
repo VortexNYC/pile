@@ -37,6 +37,24 @@ describe("computeBackend", () => {
     const env = { ...baseEnv(), COMPUTE_PROVIDER: "cloudflare" };
     expect(() => computeBackend(env)).toThrow(/SANDBOX binding/);
   });
+
+  it("prefers SANDBOX_CURSOR for cursor-cli when bound", () => {
+    const env = {
+      ...baseEnv(),
+      COMPUTE_PROVIDER: "cloudflare",
+      SANDBOX_CURSOR: {} as NonNullable<AppEnv["SANDBOX_CURSOR"]>,
+    };
+    expect(computeBackend(env, "cursor-cli").kind).toBe("cloudflare");
+  });
+
+  it("falls back to shared SANDBOX when the per-provider binding is absent", () => {
+    const env = {
+      ...baseEnv(),
+      COMPUTE_PROVIDER: "cloudflare",
+      SANDBOX: {} as NonNullable<AppEnv["SANDBOX"]>,
+    };
+    expect(computeBackend(env, "cursor-cli").kind).toBe("cloudflare");
+  });
 });
 
 function fakeProcess(

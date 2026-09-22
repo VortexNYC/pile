@@ -77,6 +77,10 @@ Two compute backends exist behind the same runner/result contract
   snapshot registry; env vars are injected per-process and the sandbox sleeps
   after `sleepAfter` (4h) if polling stops. `destroy()` runs on terminal
   results, same as Daytona.
+  Per-provider images (`SANDBOX_CURSOR`/`Dockerfile.sandbox-cursor`, and the
+  Devin/Codex equivalents) bake each CLI at build time so dispatch skips
+  per-run install; verified end-to-end for cursor-cli on `CursorSandbox`
+  (VTX-265).
 
 A workspace can also select the backend via `config.computeProvider`
 (`"daytona"` | `"cloudflare"`) in the provider upsert — it overrides the
@@ -298,5 +302,3 @@ comments, `agent/sessions`, `agent/sessions/{id}/activities`, webhooks, MCP)
 is the full surface. Registering a new provider is for agents that want
 dispatch + poll through the tracker's provider interface — see
 `src/agents/provider.ts`.
-
-- Verified end-to-end on Cloudflare Sandbox compute.
