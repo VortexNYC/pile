@@ -763,6 +763,7 @@ function printUsage(): void {
     "config set",
     "request <METHOD> <path>",
     "capture run",
+    "agent sessions watch <sessionId> --workspace <org>",
   ]) {
     console.log(`  ${cmd}`);
   }
@@ -773,6 +774,112 @@ function printUsage(): void {
   console.log(
     "\nConfig: PILE_BASE_URL, PILE_API_KEY, or `pile config set --base-url <url> --api-key <key>`"
   );
+}
+
+const TERMINAL_SESSION_STATUSES = new Set(["completed", "failed", "canceled"]);
+
+// `pile agent sessions watch <id> --workspace <org>` — tails the runner's
+// live logs and session status until the session reaches a terminal state.
+async function sessionWatchCommand(
+  sessionId: string | undefined,
+  flags: Readonly<Record<string, string | boolean>>,
+  deps: CliDeps = {}
+): Promise<number> {
+  if (sessionId === undefined || sessionId.length === 0) {
+    throw new Error(
+      "Usage: pile agent sessions watch <sessionId> --workspace <org>"
+    );
+  }
+  const workspace =
+    flagString(flags, "workspace") ?? flagString(flags, "workspace-id");
+  if (workspace === undefined || workspace.length === 0) {
+    throw new Error("Missing --workspace. Use --workspace <org>.");
+  }
+
+  const config = resolveConfig();
+  if (config.apiKey === undefined || config.apiKey.length === 0) {
+    throw new Error(
+      "Missing API key. Set PILE_API_KEY or run `pile config set --api-key <key>`."
+    );
+  }
+
+  const baseUrl = config.baseUrl.replace(/\/$/u, "");
+  const url = `${baseUrl}/workspaces/${workspace}/agent/sessions/${sessionId}/state`;
+  const headers = new Headers({ Authorization: `Bearer ${config.apiKey}` });
+  const doFetch = deps.fetch ?? fetch;
+  const intervalMs = Number(flagString(flags, "interval") ?? "4000");
+
+  let lastStatus = "";
+  let logOffset = 0;
+  let idle = 0;
+  const maxIdle = Number(flagString(flags, "idle-minutes") ?? "70") * 60 * 1000;
+  const started = Date.now();
+
+  for (;;) {
+    const res = await doFetch(url, { headers });
+    if (!res.ok) {
+      // /state 400s once the compute is destroyed — the session record itself
+      // still exists, so check it before giving up.
+      const sessionRes = await doFetch(
+        `${baseUrl}/workspaces/${workspace}/agent/sessions/${sessionId}`,
+        { headers }
+      );
+      if (sessionRes.ok) {
+        const record = (await sessionRes.json()) as {
+          session?: { status?: string; prUrl?: string | null };
+          status?: string;
+          prUrl?: string | null;
+        };
+        const flat = record.session ?? record;
+        const status = flat.status ?? "";
+        if (TERMINAL_SESSION_STATUSES.has(status)) {
+          console.log(`status: ${status}`);
+          if (flat.prUrl) console.log(`pr: ${flat.prUrl}`);
+          return status === "completed" ? 0 : 1;
+        }
+      }
+      console.error(`watch: GET /state returned ${res.status}`);
+      return 1;
+    }
+    const state = (await res.json()) as {
+      session?: {
+        status?: string;
+        result?: string | null;
+        prUrl?: string | null;
+        branch?: string | null;
+      };
+      provider?: { logs?: string | null } | null;
+    };
+
+    const status = state.session?.status ?? "unknown";
+    if (status !== lastStatus) {
+      console.log(`status: ${status}`);
+      lastStatus = status;
+    }
+
+    const logs = state.provider?.logs ?? "";
+    if (logs.length > logOffset) {
+      process.stdout.write(logs.slice(logOffset));
+      if (!logs.endsWith("\n")) process.stdout.write("\n");
+      logOffset = logs.length;
+      idle = 0;
+    } else {
+      idle += intervalMs;
+    }
+
+    if (TERMINAL_SESSION_STATUSES.has(status)) {
+      const result = state.session?.result;
+      const prUrl = state.session?.prUrl;
+      if (result) console.log(result);
+      if (prUrl) console.log(`pr: ${prUrl}`);
+      return status === "completed" ? 0 : 1;
+    }
+    if (idle > maxIdle || Date.now() - started > maxIdle) {
+      console.error("watch: timed out waiting for terminal status");
+      return 1;
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
 }
 
 export async function runCli(
@@ -815,6 +922,14 @@ export async function runCli(
 
     if (scope === "capture" && positionals[1] === "run") {
       return await captureRunCommand(flags, deps);
+    }
+
+    if (
+      scope === "agent" &&
+      positionals[1] === "sessions" &&
+      positionals[2] === "watch"
+    ) {
+      return await sessionWatchCommand(positionals[3], flags, deps);
     }
 
     return await commandCommand(positionals, flags, deps);
