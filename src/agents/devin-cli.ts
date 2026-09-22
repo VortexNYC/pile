@@ -195,7 +195,7 @@ const PYTHON_RUNNER = [
   "    if os.path.exists(REPO_DIR):",
   "        shutil.rmtree(REPO_DIR)",
   "    os.makedirs(os.path.dirname(REPO_DIR), exist_ok=True)",
-  "    run(['git', 'clone', '--depth', '1', '--branch', BRANCH, '--single-branch', f'https://x-access-token:{GITHUB_TOKEN}@github.com/{REPO}.git', REPO_DIR], check=True)",
+  "    run(['timeout', '300', 'git', '-c', 'http.lowSpeedLimit=1000', '-c', 'http.lowSpeedTime=60', 'clone', '--depth', '1', '--branch', BRANCH, '--single-branch', f'https://x-access-token:{GITHUB_TOKEN}@github.com/{REPO}.git', REPO_DIR], check=True)",
   "    run(['git', '-C', REPO_DIR, 'config', 'user.name', os.environ.get('GIT_AUTHOR_NAME', 'Devin')], check=True)",
   "    run(['git', '-C', REPO_DIR, 'config', 'user.email', os.environ.get('GIT_AUTHOR_EMAIL', 'devin@pile.nyc')], check=True)",
   "",
