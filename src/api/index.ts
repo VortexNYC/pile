@@ -114,6 +114,15 @@ app.use("/workspaces/:organizationId/*", async (c, next) => {
     await next();
     return;
   }
+  // Agent runners push log lines with a per-session HMAC token instead of a
+  // user/API-key identity — verified inside the route handler.
+  if (
+    c.req.method === "POST" &&
+    /\/agent\/sessions\/[^/]+\/logs$/.test(c.req.path)
+  ) {
+    await next();
+    return;
+  }
   await workspaceAuthMiddleware(c, next);
 });
 registerWorkspaceRoutes(app);

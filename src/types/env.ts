@@ -32,6 +32,8 @@ export interface AppEnv {
   AGENT_PROVIDER_CONFIG?: string;
   /** Encryption key for workspace-scoped agent credentials at rest. Falls back to BETTER_AUTH_SECRET. */
   AGENT_SETTINGS_KEK?: string;
+  /** Public API origin agents call back to (log ingest). Defaults to BETTER_AUTH_URL. */
+  PUBLIC_API_URL?: string;
   /** Base64-encoded `~/.codex/auth.json` for the `codex-cli` provider. */
   CODEX_AUTH_JSON_B64?: string;
   /** Codex CLI model override (defaults to `gpt-reserve`). */

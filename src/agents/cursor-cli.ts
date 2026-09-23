@@ -11,6 +11,7 @@ import type {
 } from "../types/workspace.js";
 import { computeBackend } from "./compute.js";
 import type { ComputeBackend } from "./compute.js";
+import { agentLogToken, agentLogUrl } from "./credentials.js";
 import {
   writeAgentSessionActivity,
   openAgentSessionSpan,
@@ -117,6 +118,7 @@ const PYTHON_RUNNER = [
   "import shutil",
   "import subprocess",
   "import sys",
+  "import threading",
   "import time",
   "import urllib.error",
   "import urllib.request",
@@ -133,6 +135,41 @@ const PYTHON_RUNNER = [
   "        for st in self.streams:",
   "            st.flush()",
   "sys.stdout = sys.stderr = _Tee(sys.__stdout__, open('/tmp/agent.log', 'a', buffering=1))",
+  "",
+  "# Push appended transcript lines back to Pile so they land in the session",
+  "# event log and stream out over SSE — no polling of this sandbox's fs.",
+  "PILE_LOG_URL = os.environ.get('PILE_LOG_URL')",
+  "PILE_LOG_TOKEN = os.environ.get('PILE_LOG_TOKEN')",
+  "_ship_stop = threading.Event()",
+  "_ship_pos = 0",
+  "",
+  "def _ship_logs():",
+  "    global _ship_pos",
+  "    if not (PILE_LOG_URL and PILE_LOG_TOKEN):",
+  "        return",
+  "    try:",
+  "        with open('/tmp/agent.log') as f:",
+  "            f.seek(_ship_pos)",
+  "            data = f.read()",
+  "            _ship_pos = f.tell()",
+  "        lines = [l for l in data.splitlines() if l.strip()]",
+  "        if not lines:",
+  "            return",
+  "        req = urllib.request.Request(",
+  "            PILE_LOG_URL,",
+  "            data=json.dumps({'lines': lines[-100:]}).encode(),",
+  "            headers={'Authorization': 'Bearer ' + PILE_LOG_TOKEN, 'Content-Type': 'application/json'})",
+  "        urllib.request.urlopen(req, timeout=10)",
+  "    except Exception:",
+  "        pass",
+  "",
+  "def _ship_loop():",
+  "    while not _ship_stop.is_set():",
+  "        _ship_logs()",
+  "        _ship_stop.wait(1)",
+  "",
+  "if PILE_LOG_URL and PILE_LOG_TOKEN:",
+  "    threading.Thread(target=_ship_loop, daemon=True).start()",
   "",
   "HOME = os.environ.get('HOME', '/tmp')",
   "CURSOR_INSTALL_DIR = os.path.join(HOME, '.local', 'bin')",
@@ -352,6 +389,8 @@ const PYTHON_RUNNER = [
   "    result_text = json.dumps({'output_tail': output, 'transcript': transcript, 'pr_errors': PR_ERRORS})",
   "    with open('/tmp/cursor-result.json', 'w') as f:",
   "        json.dump({'status': 'completed', 'prUrl': pr_url, 'branch': BRANCH, 'result': result_text}, f)",
+  "    _ship_stop.set()",
+  "    _ship_logs()",
   "    return 0",
   "",
   "if __name__ == '__main__':",
@@ -360,6 +399,8 @@ const PYTHON_RUNNER = [
   "    except Exception as e:",
   "        with open('/tmp/cursor-result.json', 'w') as f:",
   "            json.dump({'status': 'failed', 'prUrl': '', 'branch': BRANCH, 'result': str(e)}, f)",
+  "        _ship_stop.set()",
+  "        _ship_logs()",
   "        sys.exit(1)",
 ].join("\n");
 
@@ -369,13 +410,18 @@ function buildSandboxEnv(
   apiKey: string,
   githubToken: string,
   gitIdentity: GitIdentity,
-  comments?: DispatchComment[]
+  comments?: DispatchComment[],
+  logUrl?: string | null,
+  logToken?: string | null
 ): Record<string, string> {
   const branch = issue.branch ?? `issue-${issue.id}`;
   const repo = issue.repo ?? "";
   const identifier = issue.identifier ?? issue.id;
   const prompt = buildPrompt(issue, gitIdentity, comments);
   return {
+    ...(logUrl && logToken
+      ? { PILE_LOG_URL: logUrl, PILE_LOG_TOKEN: logToken }
+      : {}),
     CURSOR_API_KEY: apiKey,
     GITHUB_TOKEN: githubToken,
     GIT_AUTHOR_NAME: sanitizeEnv(gitIdentity.name),
@@ -519,13 +565,16 @@ export class CursorCliAgentProvider implements AgentProvider {
         await compute.deleteSandbox(existing);
       }
 
+      const workerEnv = this.env as WorkerEnv;
       const sandboxEnv = buildSandboxEnv(
         issue,
         model,
         apiKey,
         githubToken,
         gitIdentity,
-        comments
+        comments,
+        agentLogUrl(workerEnv, organizationId, sessionId),
+        await agentLogToken(workerEnv, organizationId, sessionId)
       );
       const sandbox = await compute.createSandbox({
         name,

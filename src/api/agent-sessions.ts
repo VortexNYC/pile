@@ -5,6 +5,7 @@ import type { InferSelectModel } from "drizzle-orm";
 import { loadProviderConfig } from "../agents/credentials.js";
 import { resolveAgentEnv } from "../agents/daytona.js";
 import { dispatchAgent, getAgentProvider } from "../agents/index.js";
+import { timingSafeEqualHex } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
 import { createRepoBranch } from "../global/repo-branches.js";
 import { VortexError } from "../platform/errors.js";
@@ -667,6 +668,52 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     const activities = await stub.listAgentActivities(sessionId);
     return c.json(toSessionResponse(updated ?? session, activities));
   });
+
+  // Log ingest for runners: per-session HMAC token auth (middleware bypass
+  // in index.ts). Appended lines become session events and fan out over the
+  // SSE stream above — push-based, no sandbox file polling needed.
+  app.post(
+    "/workspaces/:organizationId/agent/sessions/:sessionId/logs",
+    async (c) => {
+      const { organizationId, sessionId } = c.req.param();
+      const expected = await agentLogToken(c.env, organizationId, sessionId);
+      const provided = (c.req.header("authorization") ?? "").replace(
+        /^Bearer\s+/i,
+        ""
+      );
+      if (!expected || !provided || !timingSafeEqualHex(provided, expected)) {
+        return c.json({ message: "Unauthorized" }, 401);
+      }
+
+      const stub = getWorkspaceStub(c.env, organizationId);
+      const session = await stub.getAgentSession(sessionId);
+      if (!session) {
+        return c.json({ message: "Session not found" }, 404);
+      }
+      if (["completed", "failed", "canceled"].includes(session.status)) {
+        return c.json({ message: "Session is terminal" }, 409);
+      }
+
+      const body: unknown = await c.req.json().catch(() => null);
+      const lines =
+        body !== null &&
+        typeof body === "object" &&
+        Array.isArray((body as Record<string, unknown>).lines)
+          ? ((body as Record<string, unknown>).lines as unknown[]).filter(
+              (l): l is string => typeof l === "string"
+            )
+          : [];
+      const capped = lines.slice(-100);
+      for (const line of capped) {
+        await stub.addAgentSessionEvent({
+          sessionId,
+          type: "log",
+          message: line.slice(0, 2000),
+        });
+      }
+      return c.json({ ok: true, appended: capped.length });
+    }
+  );
 
   // Server-sent event stream of agent session deltas. Supports Last-Event-ID
   // for reconnect/replay and emits one event per changed field/activity.

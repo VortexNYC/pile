@@ -1,3 +1,4 @@
+import { sha256Hex } from "../global/crypto.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { AgentProviderConfigRow } from "./daytona.js";
 
@@ -231,4 +232,33 @@ export async function decryptProviderConfigRow<
     }
   }
   return out;
+}
+/**
+ * Per-session bearer token the runner uses to push log lines back to Pile.
+ * Derived from the deployment dispatch secret — not stored anywhere, so it
+ * can't leak via the sessions API, and it only authorizes appending logs to
+ * the one session it was minted for.
+ */
+export async function agentLogToken(
+  env: WorkerEnv,
+  organizationId: string,
+  sessionId: string
+): Promise<string | null> {
+  const secret = env.DISPATCH_SECRET ?? env.BETTER_AUTH_SECRET;
+  if (!secret) return null;
+  return sha256Hex(`agent-logs:${organizationId}:${sessionId}:${secret}`);
+}
+
+/**
+ * Public base URL the runner calls back to for log ingest. Falls back to
+ * BETTER_AUTH_URL (the product origin) when PUBLIC_API_URL isn't set.
+ */
+export function agentLogUrl(
+  env: WorkerEnv,
+  organizationId: string,
+  sessionId: string
+): string | null {
+  const base = env.PUBLIC_API_URL ?? env.BETTER_AUTH_URL;
+  if (!base) return null;
+  return `${base.replace(/\/$/, "")}/workspaces/${organizationId}/agent/sessions/${sessionId}/logs`;
 }
