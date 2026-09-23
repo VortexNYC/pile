@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { agentLogToken } from "../agents/credentials.js";
 import { MockAgentProvider } from "../agents/harness.js";
 import { registerAgentProvider } from "../agents/index.js";
 import { createD1 } from "../global/db.js";
@@ -10,6 +11,7 @@ import { organization, user as userTable } from "../global/schema.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
+import type { WorkerEnv } from "../platform/middleware.js";
 import { createAdminHeaders } from "../platform/test-auth.js";
 
 const ORIGIN = "https://your-domain.com";
@@ -960,5 +962,74 @@ describe("agent sessions API", () => {
     expect(artifact?.payload?.url).toBe(
       "https://github.com/VortexNYC/pile/pull/999"
     );
+  });
+
+  it("serves the runner pnpm-store cache with per-session token auth", async () => {
+    const sessionId = crypto.randomUUID();
+    const cacheToken = await agentLogToken(
+      env as unknown as WorkerEnv,
+      organizationId,
+      sessionId
+    );
+    const hash = "ab".repeat(32);
+    const base = `/workspaces/${organizationId}/agent/sessions/${sessionId}/cache/pnpm-store/${hash}`;
+
+    // No credentials at all: rejected by CSRF middleware before the route.
+    const noAuth = await app.fetch(
+      request(base, { method: "PUT", body: "store-bytes" }),
+      env
+    );
+    expect([401, 403]).toContain(noAuth.status);
+
+    const badToken = await app.fetch(
+      request(base, {
+        method: "PUT",
+        body: "store-bytes",
+        headers: { Authorization: "Bearer wrong" },
+      }),
+      env
+    );
+    expect(badToken.status).toBe(401);
+
+    const badHash = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${sessionId}/cache/pnpm-store/nothex`,
+        {
+          method: "PUT",
+          body: "x",
+          headers: { Authorization: `Bearer ${cacheToken}` },
+        }
+      ),
+      env
+    );
+    expect(badHash.status).toBe(401);
+
+    const put = await app.fetch(
+      request(base, {
+        method: "PUT",
+        body: "store-bytes",
+        headers: { Authorization: `Bearer ${cacheToken}` },
+      }),
+      env
+    );
+    expect(put.status).toBe(200);
+
+    const get = await app.fetch(
+      request(base, {
+        headers: { Authorization: `Bearer ${cacheToken}` },
+      }),
+      env
+    );
+    expect(get.status).toBe(200);
+    expect(await get.text()).toBe("store-bytes");
+
+    const miss = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${sessionId}/cache/pnpm-store/${"cd".repeat(32)}`,
+        { headers: { Authorization: `Bearer ${cacheToken}` } }
+      ),
+      env
+    );
+    expect(miss.status).toBe(404);
   });
 });
