@@ -524,6 +524,9 @@ export function registerAgentProviderRoutes(app: OpenAPIHono<AppContext>) {
     const stub = getWorkspaceStub(c.env, organizationId);
     const d1 = createD1(c.env.D1);
     const installations = await listGithubInstallations(d1, organizationId);
+    // Installations are recorded per-repo on first use; the GitHub App env
+    // config alone also enables write-back, so either counts as connected.
+    const githubConnected = installations.length > 0 || !!c.env.GITHUB_APP_ID;
     const rows = await stub.listAgentProviderConfigs();
     const byAgent = new Map(rows.map((r) => [r.agentId, r]));
 
@@ -558,7 +561,7 @@ export function registerAgentProviderRoutes(app: OpenAPIHono<AppContext>) {
         const missing: string[] = [];
         if (credentials === "none") missing.push("credentials");
         if (computeCredentials === "none") missing.push("compute credentials");
-        if (installations.length === 0) missing.push("github installation");
+        if (!githubConnected) missing.push("github installation");
         return {
           agentId,
           credentials,
@@ -570,10 +573,7 @@ export function registerAgentProviderRoutes(app: OpenAPIHono<AppContext>) {
       })
     );
 
-    return c.json(
-      { githubConnected: installations.length > 0, providers },
-      200
-    );
+    return c.json({ githubConnected, providers }, 200);
   });
 
   app.openapi(upsertConfigRoute, async (c) => {
