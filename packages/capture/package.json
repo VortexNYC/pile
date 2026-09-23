@@ -1,0 +1,27 @@
+{
+  "name": "@vortex-api/capture",
+  "version": "0.1.0",
+  "description": "Pile support-capture SDK — records console, network, errors, breadcrumbs, screenshots, and screen video; uploads to a Pile workspace.",
+  "license": "MIT",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "prepack": "pnpm run build",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@pile/tsconfig": "workspace:*",
+    "vitest": "4.1.11"
+  }
+}
