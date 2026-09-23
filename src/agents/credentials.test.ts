@@ -53,7 +53,9 @@ describe("agent credentials at rest", () => {
     expect(isEncrypted(input.token)).toBe(true);
     expect(isEncrypted(input.computeApiKey)).toBe(true);
     expect(JSON.stringify(input.config)).not.toContain("whsec");
-    expect(JSON.stringify(input.config)).not.toContain("cursor-grok-4.6-medium");
+    expect(JSON.stringify(input.config)).not.toContain(
+      "cursor-grok-4.6-medium"
+    );
 
     const row = {
       agentId: "cursor-cli",

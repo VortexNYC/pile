@@ -2,7 +2,7 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 import type { InferSelectModel } from "drizzle-orm";
 
-import { loadProviderConfig } from "../agents/credentials.js";
+import { agentLogToken, loadProviderConfig } from "../agents/credentials.js";
 import { resolveAgentEnv } from "../agents/daytona.js";
 import { dispatchAgent, getAgentProvider } from "../agents/index.js";
 import { timingSafeEqualHex } from "../global/crypto.js";
