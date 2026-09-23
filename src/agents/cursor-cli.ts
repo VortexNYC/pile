@@ -217,7 +217,7 @@ const PYTHON_RUNNER = [
   "    try:",
   "        subprocess.run(['tar', '-czf', '/tmp/pnpm-store.tar.gz', '-C', STORE_DIR, '.'], check=True)",
   "        size = os.path.getsize('/tmp/pnpm-store.tar.gz')",
-  "        if size > 80 * 1024 * 1024:",
+  "        if size > 512 * 1024 * 1024:",
   "            print(f'[cache] store too large ({size // 1024 // 1024}MB), skipping upload')",
   "            return",
   "        with open('/tmp/pnpm-store.tar.gz', 'rb') as f:",

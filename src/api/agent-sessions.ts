@@ -780,7 +780,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       const body = c.req.raw.body;
       if (!body) return c.json({ message: "Missing body" }, 400);
       const length = Number(c.req.header("content-length") ?? 0);
-      if (length > 80 * 1024 * 1024) {
+      if (length > 512 * 1024 * 1024) {
         return c.json({ message: "Store too large" }, 413);
       }
       await c.env.ATTACHMENTS_BUCKET.put(
