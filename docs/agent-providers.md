@@ -91,6 +91,7 @@ deployment can set one compute provider for all workspaces; on a hosted
 deployment each workspace brings its own. Sandboxes are deleted when the
 session reaches a terminal state, with an `autoStopInterval` safety ceiling
 on Daytona (`sleepAfter` on Cloudflare).
+Daytona compute path verified live 2026-09-23 (ISS-92).
 
 ## Cursor Cloud Agents
 
