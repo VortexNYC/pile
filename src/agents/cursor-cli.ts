@@ -27,7 +27,7 @@ import type {
   AgentProviderState,
 } from "./provider.js";
 
-const DEFAULT_MODEL = "grok-4.6-medium";
+const DEFAULT_MODEL = "cursor-grok-4.6-medium";
 const RESULT_PATH = "/tmp/cursor-result.json";
 const NAME_PREFIX = "vortex-cursorcli";
 const AGENT_LABEL = "cursor-cli";

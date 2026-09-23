@@ -48,12 +48,12 @@ describe("agent credentials at rest", () => {
     const input = await encryptProviderConfigInput(wenv, {
       token: "provider-key",
       computeApiKey: "compute-key",
-      config: { model: "grok-4.6-medium", webhookSecret: "whsec" },
+      config: { model: "cursor-grok-4.6-medium", webhookSecret: "whsec" },
     });
     expect(isEncrypted(input.token)).toBe(true);
     expect(isEncrypted(input.computeApiKey)).toBe(true);
     expect(JSON.stringify(input.config)).not.toContain("whsec");
-    expect(JSON.stringify(input.config)).not.toContain("grok-4.6-medium");
+    expect(JSON.stringify(input.config)).not.toContain("cursor-grok-4.6-medium");
 
     const row = {
       agentId: "cursor-cli",
@@ -75,7 +75,7 @@ describe("agent credentials at rest", () => {
       string,
       unknown
     >;
-    expect(config.model).toBe("grok-4.6-medium");
+    expect(config.model).toBe("cursor-grok-4.6-medium");
     expect(config.webhookSecret).toBe("whsec");
   });
 });
@@ -123,7 +123,7 @@ describe("BYOK dispatch wiring", () => {
     await stub.setOrganizationId(actor.organizationId);
     const encrypted = await encryptProviderConfigInput(wenv, {
       token: "workspace-owned-token",
-      config: { model: "grok-4.6-medium" },
+      config: { model: "cursor-grok-4.6-medium" },
     });
     await stub.upsertAgentProviderConfig({
       agentId: "mock-byok",
@@ -144,6 +144,6 @@ describe("BYOK dispatch wiring", () => {
 
     expect(capturedEnv?.AGENT_PROVIDER_TOKEN).toBe("workspace-owned-token");
     expect(capturedEnv?.CURSOR_API_KEY).toBe("workspace-owned-token");
-    expect(capturedEnv?.CURSOR_CLI_MODEL).toBe("grok-4.6-medium");
+    expect(capturedEnv?.CURSOR_CLI_MODEL).toBe("cursor-grok-4.6-medium");
   });
 });
