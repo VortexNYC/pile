@@ -115,6 +115,19 @@ const PYTHON_RUNNER = [
   "import urllib.error",
   "import urllib.request",
   "",
+  "# Tee everything this runner prints (including the agent subprocess, whose",
+  "# output flows through sys.stdout) to a transcript file Pile can read live.",
+  "class _Tee:",
+  "    def __init__(self, *streams):",
+  "        self.streams = streams",
+  "    def write(self, s):",
+  "        for st in self.streams:",
+  "            st.write(s)",
+  "    def flush(self):",
+  "        for st in self.streams:",
+  "            st.flush()",
+  "sys.stdout = sys.stderr = _Tee(sys.__stdout__, open('/tmp/agent.log', 'a', buffering=1))",
+  "",
   "HOME = os.environ.get('HOME', '/tmp')",
   "CODEX_HOME = os.path.join(HOME, '.codex')",
   "CODEX_INSTALL_DIR = os.path.join(HOME, '.local', 'bin')",
@@ -320,7 +333,12 @@ const PYTHON_RUNNER = [
   "    if applied:",
   "        pr_url = find_pr() or create_pr()",
   "    summary = task.get('summary', {}) if isinstance(task.get('summary'), dict) else {}",
-  "    result_text = json.dumps({'status': task.get('status'), 'files_changed': summary.get('files_changed', 0), 'lines_added': summary.get('lines_added', 0), 'lines_removed': summary.get('lines_removed', 0)})",
+  "    try:",
+  "        with open('/tmp/agent.log') as f:",
+  "            transcript = f.read()[-65536:]",
+  "    except OSError:",
+  "        transcript = ''",
+  "    result_text = json.dumps({'status': task.get('status'), 'files_changed': summary.get('files_changed', 0), 'lines_added': summary.get('lines_added', 0), 'lines_removed': summary.get('lines_removed', 0), 'transcript': transcript})",
   "    with open('/tmp/codex-result.json', 'w') as f:",
   "        json.dump({'status': 'completed' if task.get('status') in ('ready', 'applied') else 'failed', 'prUrl': pr_url, 'branch': BRANCH, 'result': result_text}, f)",
   "    return 0",
@@ -703,8 +721,11 @@ export class CodexCliAgentProvider implements AgentProvider {
     );
     if (!sandbox) return null;
     const runner = await compute.runnerState(sandbox, providerSessionId);
+    const transcript = await compute.readFile(sandbox, "/tmp/agent.log");
     const logs =
-      (await compute.runnerLogs?.(sandbox, providerSessionId)) ?? null;
+      (transcript ? transcript.slice(-131072) : null) ??
+      (await compute.runnerLogs?.(sandbox, providerSessionId)) ??
+      null;
     return { provider: { state: runner, logs }, compute: sandbox };
   }
 
