@@ -6229,6 +6229,12 @@ export interface paths {
                         attachmentType?: "screenshot" | "video" | "debugger_json" | "log" | "network";
                         contentType?: string;
                         fileName?: string;
+                        artifacts?: {
+                            /** @enum {string} */
+                            attachmentType: "screenshot" | "video" | "debugger_json" | "log" | "network";
+                            fileName?: string;
+                            contentType?: string;
+                        }[];
                         /** @enum {string} */
                         visibility?: "public" | "private";
                         /** @default {} */
@@ -6252,6 +6258,13 @@ export interface paths {
                             uploadUrl: string;
                             r2Key: string;
                             sessionId: string;
+                            uploads?: {
+                                uploadUrl: string;
+                                r2Key: string;
+                                /** @enum {string} */
+                                attachmentType: "screenshot" | "video" | "debugger_json" | "log" | "network";
+                                fileName: string;
+                            }[];
                         };
                     };
                 };

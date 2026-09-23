@@ -64,17 +64,32 @@ const tokenResponseSchema = z.object({
   recordingUrl: z.string(),
 });
 
+const captureArtifactKindSchema = z.enum([
+  "screenshot",
+  "video",
+  "debugger_json",
+  "log",
+  "network",
+]);
+
 const uploadSessionBodySchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
   priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
   tags: z.array(z.string()).optional(),
   url: z.string().optional(),
-  attachmentType: z
-    .enum(["screenshot", "video", "debugger_json", "log", "network"])
-    .default("screenshot"),
+  attachmentType: captureArtifactKindSchema.default("screenshot"),
   contentType: z.string().optional(),
   fileName: z.string().optional(),
+  artifacts: z
+    .array(
+      z.object({
+        attachmentType: captureArtifactKindSchema,
+        fileName: z.string().optional(),
+        contentType: z.string().optional(),
+      })
+    )
+    .optional(),
   visibility: z.enum(["public", "private"]).optional(),
   metadata: z.record(z.string(), z.unknown()).default({}),
   deviceInfo: z.record(z.string(), z.unknown()).optional(),
@@ -84,6 +99,16 @@ const uploadSessionResponseSchema = z.object({
   uploadUrl: z.string(),
   r2Key: z.string(),
   sessionId: z.string(),
+  uploads: z
+    .array(
+      z.object({
+        uploadUrl: z.string(),
+        r2Key: z.string(),
+        attachmentType: captureArtifactKindSchema,
+        fileName: z.string(),
+      })
+    )
+    .optional(),
 });
 
 const uploadResponseSchema = z.object({
@@ -1099,33 +1124,60 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
 
     await updateCaptureSessionStatus(db, session.id, "uploading");
 
-    const attachmentType = body.attachmentType;
-    const contentType =
-      body.contentType ?? defaultContentTypeForAttachment(attachmentType);
-    const fileName =
-      typeof body.fileName === "string" && body.fileName.length > 0
-        ? body.fileName
-        : attachmentType;
-    const r2Key = buildCaptureArtifactKey(session.organizationId, session.id, {
-      attachmentType,
-      fileName,
-    });
-    const uploadUrl = `/support/capture/upload/${session.id}/${attachmentType}/${encodeURIComponent(fileName)}`;
+    // Batch mode declares every artifact in one write so parallel
+    // declarations cannot drop entries; the single-artifact shape stays
+    // for backward compatibility with older clients.
+    const declared =
+      body.artifacts && body.artifacts.length > 0
+        ? body.artifacts
+        : [
+            {
+              attachmentType: body.attachmentType,
+              contentType: body.contentType,
+              fileName: body.fileName,
+            },
+          ];
 
-    const existingUploads = uploadsFromSession(session);
-    const nextUploads = [
-      ...existingUploads.filter((u) => u.r2Key !== r2Key),
-      {
+    const seenKeys = new Set<string>();
+    const uploads = declared.map((artifact) => {
+      const attachmentType = artifact.attachmentType;
+      const contentType =
+        artifact.contentType ?? defaultContentTypeForAttachment(attachmentType);
+      const fileName =
+        typeof artifact.fileName === "string" && artifact.fileName.length > 0
+          ? artifact.fileName
+          : attachmentType;
+      const r2Key = buildCaptureArtifactKey(
+        session.organizationId,
+        session.id,
+        { attachmentType, fileName }
+      );
+      const deduped = seenKeys.has(r2Key);
+      seenKeys.add(r2Key);
+      return {
         attachmentType,
         contentType,
         fileName,
         r2Key,
         uploaded: false,
         size: null,
-      },
+        uploadUrl: `/support/capture/upload/${session.id}/${attachmentType}/${encodeURIComponent(fileName)}`,
+        deduped,
+      };
+    });
+
+    const existingUploads = uploadsFromSession(session);
+    const newUploads = uploads.filter((u) => !u.deduped);
+    const nextUploads = [
+      ...existingUploads.filter(
+        (u) => !newUploads.some((n) => n.r2Key === u.r2Key)
+      ),
+      ...newUploads.map(
+        ({ uploadUrl: _uploadUrl, deduped: _deduped, ...u }) => u
+      ),
     ];
 
-    const { metadata: customMetadata, ...rest } = body;
+    const { metadata: customMetadata, artifacts: _artifacts, ...rest } = body;
     const merged: Record<string, unknown> = {
       ...session.metadata,
       ...rest,
@@ -1136,7 +1188,25 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
     };
     await updateCaptureSessionMetadata(db, session.id, merged);
 
-    return c.json({ uploadUrl, r2Key, sessionId: session.id });
+    const first = uploads[0];
+    return c.json({
+      uploadUrl: first?.uploadUrl ?? "",
+      r2Key: first?.r2Key ?? "",
+      sessionId: session.id,
+      uploads: uploads.map(
+        ({ uploadUrl, r2Key, attachmentType, fileName }) => ({
+          uploadUrl,
+          r2Key,
+          attachmentType: attachmentType as
+            | "screenshot"
+            | "video"
+            | "debugger_json"
+            | "log"
+            | "network",
+          fileName,
+        })
+      ),
+    });
   });
 
   app.openapi(uploadRoute, async (c) => {
@@ -1172,28 +1242,21 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
 
     const contentType =
       c.req.header("content-type") ?? "application/octet-stream";
+    const contentEncoding = c.req.header("content-encoding");
     const arrayBuffer = await c.req.arrayBuffer();
     const r2Key = buildCaptureArtifactKey(session.organizationId, session.id, {
       attachmentType,
       fileName,
     });
+    // R2 object existence is the source of truth for "uploaded" —
+    // finalize verifies each declared artifact with bucket.head(), so no
+    // session-metadata write happens here and parallel uploads cannot
+    // clobber each other's marks.
     await bucket.put(r2Key, new Blob([arrayBuffer], { type: contentType }), {
-      httpMetadata: { contentType },
-    });
-
-    const existingUploads = uploadsFromSession(session);
-    const nextUploads = existingUploads.map((u) =>
-      u.r2Key === r2Key
-        ? (Object.assign({}, u, {
-            uploaded: true,
-            contentType,
-            size: arrayBuffer.byteLength,
-          }) as CaptureUploadRecord)
-        : u
-    );
-    await updateCaptureSessionMetadata(db, session.id, {
-      ...session.metadata,
-      uploads: nextUploads,
+      httpMetadata: {
+        contentType,
+        ...(contentEncoding ? { contentEncoding } : {}),
+      },
     });
 
     return c.json({ r2Key });
@@ -1321,7 +1384,20 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
     );
 
     const origin = new URL(c.req.url).origin;
-    const uploads = uploadsFromSession(session).filter((u) => u.uploaded);
+    const bucket = c.env.ATTACHMENTS_BUCKET;
+    const declaredUploads = uploadsFromSession(session);
+    // R2 object existence is the source of truth: a declared artifact only
+    // becomes a ticket attachment when its bytes actually landed.
+    const uploads = (
+      await Promise.all(
+        declaredUploads.map(async (upload) => {
+          if (!bucket || typeof upload.r2Key !== "string") return null;
+          const head = await bucket.head(upload.r2Key);
+          if (!head) return null;
+          return Object.assign({}, upload, { size: head.size });
+        })
+      )
+    ).filter((u): u is NonNullable<typeof u> => u !== null);
 
     await Promise.all(
       uploads.map((upload) => {
@@ -1440,9 +1516,13 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
         message: "Artifact not found",
       });
     }
-    return c.body(object.body, 200, {
+    const headers: Record<string, string> = {
       "Content-Type": contentType,
-    });
+    };
+    if (object.httpMetadata?.contentEncoding) {
+      headers["Content-Encoding"] = object.httpMetadata.contentEncoding;
+    }
+    return c.body(object.body, 200, headers);
   });
 
   app.openapi(captureSessionRoute, async (c) => {
@@ -1461,6 +1541,20 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
         ? session.metadata.reference
         : null;
     const uploads = uploadsFromSession(session);
+    const bucket = c.env.ATTACHMENTS_BUCKET;
+    const uploadedKeys = new Set(
+      bucket
+        ? (
+            await Promise.all(
+              uploads.map(async (u) =>
+                typeof u.r2Key === "string" && (await bucket.head(u.r2Key))
+                  ? u.r2Key
+                  : null
+              )
+            )
+          ).filter((k): k is string => k !== null)
+        : []
+    );
     return c.json({
       sessionId: session.id,
       status: session.status,
@@ -1471,7 +1565,7 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
         attachmentType: u.attachmentType,
         contentType: u.contentType ?? null,
         r2Key: u.r2Key,
-        uploaded: u.uploaded,
+        uploaded: uploadedKeys.has(u.r2Key),
       })),
     });
   });

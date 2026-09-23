@@ -12432,6 +12432,33 @@
                   "fileName": {
                     "type": "string"
                   },
+                  "artifacts": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "attachmentType": {
+                          "type": "string",
+                          "enum": [
+                            "screenshot",
+                            "video",
+                            "debugger_json",
+                            "log",
+                            "network"
+                          ]
+                        },
+                        "fileName": {
+                          "type": "string"
+                        },
+                        "contentType": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "attachmentType"
+                      ]
+                    }
+                  },
                   "visibility": {
                     "type": "string",
                     "enum": [
@@ -12476,6 +12503,39 @@
                     },
                     "sessionId": {
                       "type": "string"
+                    },
+                    "uploads": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "uploadUrl": {
+                            "type": "string"
+                          },
+                          "r2Key": {
+                            "type": "string"
+                          },
+                          "attachmentType": {
+                            "type": "string",
+                            "enum": [
+                              "screenshot",
+                              "video",
+                              "debugger_json",
+                              "log",
+                              "network"
+                            ]
+                          },
+                          "fileName": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "uploadUrl",
+                          "r2Key",
+                          "attachmentType",
+                          "fileName"
+                        ]
+                      }
                     }
                   },
                   "required": [

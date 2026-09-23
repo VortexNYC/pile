@@ -2849,6 +2849,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "file-name",
       },
       {
+        name: "artifacts",
+        flag: "artifacts",
+      },
+      {
         name: "visibility",
         flag: "visibility",
       },

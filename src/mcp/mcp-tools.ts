@@ -7017,7 +7017,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postSupportCaptureUploadsession",
-    "description": "Create support capture upload session (POST /support/capture/upload-session) Request body goes in the \"body\" object; fields: title*, description, priority, tags, url, attachmentType, contentType, fileName, visibility, metadata, deviceInfo (* = required).",
+    "description": "Create support capture upload session (POST /support/capture/upload-session) Request body goes in the \"body\" object; fields: title*, description, priority, tags, url, attachmentType, contentType, fileName, artifacts, visibility, metadata, deviceInfo (* = required).",
     "method": "POST",
     "path": "/support/capture/upload-session",
     "inputSchema": {
@@ -7067,6 +7067,33 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "fileName": {
               "type": "string"
+            },
+            "artifacts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "attachmentType": {
+                    "type": "string",
+                    "enum": [
+                      "screenshot",
+                      "video",
+                      "debugger_json",
+                      "log",
+                      "network"
+                    ]
+                  },
+                  "fileName": {
+                    "type": "string"
+                  },
+                  "contentType": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "attachmentType"
+                ]
+              }
             },
             "visibility": {
               "type": "string",
