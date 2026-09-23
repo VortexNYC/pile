@@ -653,6 +653,7 @@ export interface paths {
                         title: string;
                         externalRef?: string | null;
                         teamId?: string;
+                        teamKey?: string;
                         description?: string;
                         /** @enum {string} */
                         status?: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
@@ -1038,6 +1039,7 @@ export interface paths {
                         title?: string;
                         externalRef?: string | null;
                         teamId?: string;
+                        teamKey?: string;
                         description?: string;
                         /** @enum {string} */
                         status?: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
@@ -1142,6 +1144,7 @@ export interface paths {
                             title?: string;
                             externalRef?: string | null;
                             teamId?: string;
+                            teamKey?: string;
                             description?: string;
                             /** @enum {string} */
                             status?: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
@@ -1414,6 +1417,59 @@ export interface paths {
                                     durationMs: number | null;
                                     createdAt: string;
                                 }[];
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/agent/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List agent stats */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Aggregate agent session stats for the workspace: totals, per-provider breakdown, success rate, durations, and infra failures */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            total: number;
+                            byStatus: {
+                                [key: string]: number;
+                            };
+                            infraFailures: number;
+                            avgDurationSeconds: number | null;
+                            providers: {
+                                agentId: string;
+                                total: number;
+                                completed: number;
+                                failed: number;
+                                successRate: number | null;
+                                avgDurationSeconds: number | null;
                             }[];
                         };
                     };
@@ -2359,6 +2415,56 @@ export interface paths {
                             createdAt: string;
                             updatedAt: string;
                         }[];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/agent/setup-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List agent setup status */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Per-provider onboarding readiness: credentials source, compute backend, and what's still missing before first dispatch */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            githubConnected: boolean;
+                            providers: {
+                                agentId: string;
+                                /** @enum {string} */
+                                credentials: "workspace" | "deployment" | "none";
+                                computeProvider: string;
+                                /** @enum {string} */
+                                computeCredentials: "workspace" | "deployment" | "none";
+                                missing: string[];
+                                ready: boolean;
+                            }[];
+                        };
                     };
                 };
             };

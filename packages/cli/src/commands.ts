@@ -353,6 +353,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "team",
       },
       {
+        name: "teamKey",
+        flag: "team-key",
+      },
+      {
         name: "description",
         flag: "description",
       },
@@ -658,6 +662,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "team",
       },
       {
+        name: "teamKey",
+        flag: "team-key",
+      },
+      {
         name: "description",
         flag: "description",
       },
@@ -845,6 +853,18 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "limit",
       },
     ],
+    body: [],
+  },
+  "agent stats list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/agent/stats",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
     body: [],
   },
   "issues live": {
@@ -1127,6 +1147,18 @@ export const COMMANDS: Record<string, CommandDef> = {
   "agent providers list": {
     method: "GET",
     path: "/workspaces/{organizationId}/agent/providers",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "agent setup status list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/agent/setup-status",
     params: [
       {
         name: "organizationId",

@@ -1586,6 +1586,40 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdAgentSetupstatus",
+    "description": "List agent setup status (GET /workspaces/{organizationId}/agent/setup-status) Path params (top-level, required): organizationId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/agent/setup-status",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdAgentStats",
+    "description": "List agent stats (GET /workspaces/{organizationId}/agent/stats) Path params (top-level, required): organizationId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/agent/stats",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdAuditlog",
     "description": "List audit log (GET /workspaces/{organizationId}/audit-log) Path params (top-level, required): organizationId. Query params (top-level, optional): entityType, entityId, action, actorId, limit.",
     "method": "GET",
@@ -5580,7 +5614,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdIssuesId",
-    "description": "Update issue (PATCH /workspaces/{organizationId}/issues/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: title, externalRef, teamId, description, status, priority, resolution, parentId, subIssueSortOrder, estimate, isDraft, templateId, snoozedUntil, assigneeId, projectId, cycleId, labelIds, repo, branch.",
+    "description": "Update issue (PATCH /workspaces/{organizationId}/issues/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: title, externalRef, teamId, teamKey, description, status, priority, resolution, parentId, subIssueSortOrder, estimate, isDraft, templateId, snoozedUntil, assigneeId, projectId, cycleId, labelIds, repo, branch.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/issues/{id}",
     "inputSchema": {
@@ -5606,6 +5640,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "maxLength": 255
             },
             "teamId": {
+              "type": "string"
+            },
+            "teamKey": {
               "type": "string"
             },
             "description": {
@@ -9450,7 +9487,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdIssues",
-    "description": "Create issue (POST /workspaces/{organizationId}/issues) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: title*, externalRef, teamId, description, status, priority, resolution, parentId, subIssueSortOrder, estimate, isDraft, templateId, snoozedUntil, assigneeId, projectId, cycleId, labelIds, repo, branch (* = required).",
+    "description": "Create issue (POST /workspaces/{organizationId}/issues) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: title*, externalRef, teamId, teamKey, description, status, priority, resolution, parentId, subIssueSortOrder, estimate, isDraft, templateId, snoozedUntil, assigneeId, projectId, cycleId, labelIds, repo, branch (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/issues",
     "inputSchema": {
@@ -9473,6 +9510,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "maxLength": 255
             },
             "teamId": {
+              "type": "string"
+            },
+            "teamKey": {
               "type": "string"
             },
             "description": {
@@ -9604,6 +9644,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                   "maxLength": 255
                 },
                 "teamId": {
+                  "type": "string"
+                },
+                "teamKey": {
                   "type": "string"
                 },
                 "description": {
