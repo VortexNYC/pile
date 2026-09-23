@@ -31,20 +31,110 @@ export interface TransportResult {
   recordingUrl: string;
 }
 
-async function fetchCaptureToken(
-  config: TransportConfig
-): Promise<{ token: string; recordingUrl: string }> {
-  const response = await fetch(`${config.endpoint}/support/capture/token`, {
+const TURNSTILE_SCRIPT_URL =
+  "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+
+interface TurnstileGlobal {
+  render: (
+    container: HTMLElement,
+    options: {
+      sitekey: string;
+      size?: string;
+      callback: (token: string) => void;
+      "error-callback"?: () => void;
+    }
+  ) => string;
+  remove: (widgetId: string) => void;
+}
+
+function getTurnstile(): TurnstileGlobal | undefined {
+  const w = globalThis as { turnstile?: TurnstileGlobal };
+  return w.turnstile;
+}
+
+async function loadTurnstileScript(): Promise<TurnstileGlobal | undefined> {
+  if (typeof document === "undefined") {
+    return undefined;
+  }
+  const existing = getTurnstile();
+  if (existing) {
+    return existing;
+  }
+  return new Promise((resolve) => {
+    const script = document.createElement("script");
+    script.src = TURNSTILE_SCRIPT_URL;
+    script.async = true;
+    script.addEventListener("load", () => resolve(getTurnstile()));
+    script.addEventListener("error", () => resolve(undefined));
+    document.head.appendChild(script);
+  });
+}
+
+function runTurnstileChallenge(siteKey: string): Promise<string | undefined> {
+  return new Promise((resolve) => {
+    void (async () => {
+      const turnstile = await loadTurnstileScript();
+      if (!turnstile || typeof document === "undefined") {
+        resolve(undefined);
+        return;
+      }
+      const container = document.createElement("div");
+      container.style.display = "none";
+      document.body.appendChild(container);
+      const widgetId = turnstile.render(container, {
+        sitekey: siteKey,
+        size: "invisible",
+        callback: (token) => {
+          turnstile.remove(widgetId);
+          container.remove();
+          resolve(token);
+        },
+        "error-callback": () => {
+          turnstile.remove(widgetId);
+          container.remove();
+          resolve(undefined);
+        },
+      });
+    })();
+  });
+}
+
+async function postToken(
+  config: TransportConfig,
+  turnstileToken?: string
+): Promise<Response> {
+  return fetch(`${config.endpoint}/support/capture/token`, {
     method: "POST",
     headers: {
       "x-pile-capture-public-key": config.publicKey,
       ...(config.reference
         ? { "x-pile-capture-reference": config.reference }
         : {}),
+      ...(turnstileToken ? { "content-type": "application/json" } : {}),
     },
     credentials: "omit",
     mode: "cors",
+    ...(turnstileToken ? { body: JSON.stringify({ turnstileToken }) } : {}),
   });
+}
+
+async function fetchCaptureToken(
+  config: TransportConfig
+): Promise<{ token: string; recordingUrl: string }> {
+  let response = await postToken(config);
+  if (response.status === 403) {
+    const errorBody = (await response.json().catch(() => null)) as {
+      code?: string;
+      details?: { siteKey?: string };
+    } | null;
+    const siteKey = errorBody?.details?.siteKey;
+    if (errorBody?.code === "CAPTURE_CHALLENGE_REQUIRED" && siteKey) {
+      const challengeToken = await runTurnstileChallenge(siteKey);
+      if (challengeToken) {
+        response = await postToken(config, challengeToken);
+      }
+    }
+  }
   if (!response.ok) {
     throw new Error(`capture token failed: ${response.status}`);
   }

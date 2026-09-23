@@ -142,6 +142,11 @@ export interface CaptureStopOptions {
   metadata?: Record<string, unknown>;
 }
 
+/** `report()` options — screenshot may be a blob or "auto" (SDK takes it). */
+export type CaptureReportOptions = Omit<CaptureStopOptions, "screenshot"> & {
+  screenshot?: Blob | "auto";
+};
+
 export interface CaptureResult {
   ticketId: string;
   shareUrl?: string;

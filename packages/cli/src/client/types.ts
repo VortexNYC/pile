@@ -6165,7 +6165,13 @@ export interface paths {
                 path?: never;
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        turnstileToken?: string;
+                    };
+                };
+            };
             responses: {
                 /** @description Capture token */
                 200: {
@@ -6181,6 +6187,13 @@ export interface paths {
                 };
                 /** @description Invalid public key or origin */
                 401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description CAPTURE_CHALLENGE_REQUIRED — a Turnstile token is needed */
+                403: {
                     headers: {
                         [name: string]: unknown;
                     };

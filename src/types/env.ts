@@ -55,6 +55,10 @@ export interface AppEnv {
   SLACK_SIGNING_SECRET?: string;
   SLACK_ENCRYPTION_KEY?: string;
   SLACK_REDIRECT_URI?: string;
+  /** Cloudflare Turnstile: when set, capture token requests must pass siteverify. */
+  TURNSTILE_SECRET_KEY?: string;
+  /** Public Turnstile site key echoed to the SDK when a challenge is required. */
+  TURNSTILE_SITE_KEY?: string;
   // GitLab integration.
   GITLAB_WEBHOOK_SECRET?: string;
   GITLAB_API_URL?: string;

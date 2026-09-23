@@ -7007,12 +7007,21 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postSupportCaptureToken",
-    "description": "Create support capture token (POST /support/capture/token)",
+    "description": "Create support capture token (POST /support/capture/token) Request body goes in the \"body\" object; fields: turnstileToken.",
     "method": "POST",
     "path": "/support/capture/token",
     "inputSchema": {
       "type": "object",
-      "properties": {}
+      "properties": {
+        "body": {
+          "type": "object",
+          "properties": {
+            "turnstileToken": {
+              "type": "string"
+            }
+          }
+        }
+      }
     }
   },
   {

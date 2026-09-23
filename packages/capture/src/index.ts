@@ -31,15 +31,22 @@ import { gzipBlob, submitCaptureReport } from "./transport.js";
 import type {
   CaptureArtifact,
   CaptureInitOptions,
+  CaptureReportOptions,
   CaptureResult,
   CaptureStartOptions,
   CaptureStopOptions,
 } from "./types.js";
+import {
+  type CaptureMountOptions,
+  type CaptureWidgetHandle,
+  mountCaptureWidget,
+} from "./widget.js";
 
 export type {
   CaptureArtifact,
   CaptureInitOptions,
   CapturePriority,
+  CaptureReportOptions,
   CaptureResult,
   CaptureStartOptions,
   CaptureStopOptions,
@@ -47,6 +54,7 @@ export type {
   DebuggerEvent,
 } from "./types.js";
 export { captureScreenshot } from "./media.js";
+export type { CaptureMountOptions, CaptureWidgetHandle } from "./widget.js";
 
 interface ActiveSession {
   recording: RecordingController | null;
@@ -70,9 +78,7 @@ export interface Capture {
    * buffer, optionally takes a screenshot itself, uploads, and finalizes.
    * This is the primary Jam-style flow: bug happened, user clicks report.
    */
-  report(
-    options: CaptureStopOptions & { screenshot?: Blob | "auto" }
-  ): Promise<CaptureResult>;
+  report(options: CaptureReportOptions): Promise<CaptureResult>;
   /** Attach an arbitrary artifact to the next submission. */
   attach(
     blob: Blob,
@@ -81,6 +87,12 @@ export interface Capture {
   ): void;
   /** Take a screenshot of the current tab (prompts for the tab). */
   screenshot(): Promise<Blob>;
+  /**
+   * Mount a floating "Report a bug" launcher. The button opens a small
+   * email/description form and submits via `report({screenshot: "auto"})`.
+   * Returns a handle with `unmount()`.
+   */
+  mount(options?: CaptureMountOptions): CaptureWidgetHandle;
   /** Stop all instrumentation and discard buffered events. */
   destroy(): void;
 }
@@ -227,7 +239,7 @@ export function initCapture(options: CaptureInitOptions): Capture {
   };
 
   const submit = async (
-    stopOptions: CaptureStopOptions,
+    stopOptions: CaptureReportOptions,
     snapshot: ReturnType<EventRecorder["getRecentSnapshot"]>,
     extras: CaptureArtifact[]
   ): Promise<CaptureResult> => {
@@ -339,6 +351,10 @@ export function initCapture(options: CaptureInitOptions): Capture {
     },
 
     screenshot: () => captureScreenshot(),
+
+    mount(mountOptions) {
+      return mountCaptureWidget((opts) => this.report(opts), mountOptions);
+    },
 
     destroy() {
       instrumentation.dispose();

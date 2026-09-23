@@ -12,6 +12,10 @@ export const ERROR_CATALOG = {
   AGENT_ERROR: { status: 502, message: "Agent provider error" },
   CONFIG_ERROR: { status: 500, message: "Configuration error" },
   INTERNAL_ERROR: { status: 500, message: "Internal error" },
+  CAPTURE_CHALLENGE_REQUIRED: {
+    status: 403,
+    message: "A challenge token is required",
+  },
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_CATALOG;
@@ -21,18 +25,21 @@ export interface VortexErrorCode {
   status: number;
   message: string;
   hint?: string;
+  details?: Record<string, unknown>;
 }
 
 export class VortexError extends Error {
   readonly code: ErrorCode;
   readonly status: number;
   readonly hint: string | undefined;
+  readonly details: Record<string, unknown> | undefined;
 
-  constructor({ code, status, message, hint }: VortexErrorCode) {
+  constructor({ code, status, message, hint, details }: VortexErrorCode) {
     super(message);
     this.code = code;
     this.status = status;
     this.hint = hint;
+    this.details = details;
   }
 
   toJSON() {
@@ -40,6 +47,7 @@ export class VortexError extends Error {
       code: this.code,
       message: this.message,
       hint: this.hint,
+      details: this.details,
     };
   }
 

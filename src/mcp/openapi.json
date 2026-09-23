@@ -12339,6 +12339,21 @@
             "in": "header"
           }
         ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "turnstileToken": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Capture token",
@@ -12364,6 +12379,9 @@
           },
           "401": {
             "description": "Invalid public key or origin"
+          },
+          "403": {
+            "description": "CAPTURE_CHALLENGE_REQUIRED — a Turnstile token is needed"
           }
         },
         "summary": "Create support capture token"

@@ -18,13 +18,16 @@
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "prepack": "pnpm run build",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "rrweb": "2.1.4"
   },
   "devDependencies": {
     "@pile/tsconfig": "workspace:*",
+    "@playwright/test": "1.49.1",
+    "vite": "6.4.3",
     "vitest": "4.1.11"
   }
 }

@@ -4,7 +4,7 @@ import {
   cloudflareTest,
   readD1Migrations,
 } from "@cloudflare/vitest-pool-workers";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 const migrationsPath = path.join(import.meta.dirname ?? ".", "migrations");
 const migrations = await readD1Migrations(migrationsPath);
@@ -30,6 +30,8 @@ export default defineConfig({
     }),
   ],
   test: {
+    // Playwright specs live under packages/*/e2e — run via `pnpm test:e2e`.
+    exclude: [...configDefaults.exclude, "**/e2e/**"],
     globals: true,
     setupFiles: ["./src/test/apply-migrations.ts"],
   },

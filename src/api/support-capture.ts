@@ -201,6 +201,14 @@ const tokenRoute = createRoute({
       "x-pile-capture-reference": z.string().optional(),
       origin: z.string().optional(),
     }),
+    body: {
+      required: false,
+      content: {
+        "application/json": {
+          schema: z.object({ turnstileToken: z.string().optional() }),
+        },
+      },
+    },
   },
   responses: {
     200: {
@@ -212,8 +220,32 @@ const tokenRoute = createRoute({
     401: {
       description: "Invalid public key or origin",
     },
+    403: {
+      description: "CAPTURE_CHALLENGE_REQUIRED — a Turnstile token is needed",
+    },
   },
 });
+
+async function verifyTurnstile(
+  secretKey: string,
+  token: string,
+  remoteIp: string | undefined
+): Promise<boolean> {
+  const form = new URLSearchParams({
+    secret: secretKey,
+    response: token,
+    ...(remoteIp ? { remoteip: remoteIp } : {}),
+  });
+  const res = await fetch(
+    "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+    { method: "POST", body: form }
+  );
+  if (!res.ok) {
+    return false;
+  }
+  const payload = (await res.json()) as { success?: boolean };
+  return payload.success === true;
+}
 
 const uploadSessionRoute = createRoute({
   method: "post",
@@ -1091,6 +1123,29 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
     }
 
     assertOriginAllowed(publicKey, requestOrigin);
+
+    if (c.env.TURNSTILE_SECRET_KEY) {
+      const rawBody = await c.req.json().catch(() => null);
+      const turnstileToken =
+        isRecord(rawBody) && typeof rawBody.turnstileToken === "string"
+          ? rawBody.turnstileToken
+          : undefined;
+      const turnstileOk = turnstileToken
+        ? await verifyTurnstile(
+            c.env.TURNSTILE_SECRET_KEY,
+            turnstileToken,
+            c.req.header("cf-connecting-ip")
+          )
+        : false;
+      if (!turnstileOk) {
+        throw new VortexError({
+          status: 403,
+          code: "CAPTURE_CHALLENGE_REQUIRED",
+          message: "A Turnstile challenge token is required",
+          details: { siteKey: c.env.TURNSTILE_SITE_KEY ?? null },
+        });
+      }
+    }
 
     const reference = c.req.header("x-pile-capture-reference");
     const session = await createCaptureSession(

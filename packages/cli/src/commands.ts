@@ -2808,7 +2808,12 @@ export const COMMANDS: Record<string, CommandDef> = {
     path: "/support/capture/token",
     params: [],
     query: [],
-    body: [],
+    body: [
+      {
+        name: "turnstileToken",
+        flag: "turnstile-token",
+      },
+    ],
   },
   "support capture upload session create": {
     method: "POST",
