@@ -307,3 +307,5 @@ dispatch + poll through the tracker's provider interface — see
 Stream-json live events verified (ISS-99).
 
 Live transcript streaming verified (ISS-98).
+
+Agent logs stream to Pile via push-based ingest (ISS-100).
