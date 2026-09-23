@@ -181,7 +181,7 @@ const PYTHON_RUNNER = [
   "def _cache_request(method, url, data=None):",
   "    req = urllib.request.Request(url, data=data, method=method,",
   "        headers={'Authorization': 'Bearer ' + PILE_LOG_TOKEN, 'User-Agent': 'pile-runner/1.0'})",
-  "    return urllib.request.urlopen(req, timeout=120)",
+  "    return urllib.request.urlopen(req, timeout=900)",
   "",
   "def _lockfile_hash():",
   "    p = os.path.join(REPO_DIR, 'pnpm-lock.yaml')",
