@@ -1,6 +1,6 @@
 import type { Hono } from "hono";
 
-import type { WorkerEnv } from "../platform/middleware.js";
+import type { AppContext } from "../platform/middleware.js";
 
 const PAGE = `<!DOCTYPE html>
 <html lang="en">
@@ -218,6 +218,6 @@ boot();
 </body>
 </html>`;
 
-export function registerAppRoute(app: Hono<{ Bindings: WorkerEnv }>) {
+export function registerAppRoute(app: Hono<AppContext>) {
   app.get("/app", (c) => c.html(PAGE));
 }

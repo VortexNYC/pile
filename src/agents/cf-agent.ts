@@ -211,7 +211,10 @@ export class CfAgentProvider implements AgentProvider {
     };
   }
 
-  parseWebhook(body: unknown): {
+  parseWebhook(
+    body: unknown,
+    _headers?: Headers
+  ): {
     sessionId: string;
     session?: AgentProviderSession;
   } | null {

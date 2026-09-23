@@ -155,8 +155,12 @@ class DaytonaBackend implements ComputeBackend {
     }));
   }
 
-  private async waitForStarted(sandboxId: string): Promise<ComputeSandbox> {
-    const poll = async (i: number): Promise<ComputeSandbox> => {
+  private async waitForStarted(
+    sandboxId: string
+  ): Promise<z.infer<typeof daytonaSandboxSchema>> {
+    const poll = async (
+      i: number
+    ): Promise<z.infer<typeof daytonaSandboxSchema>> => {
       if (i >= MAX_START_POLLS) {
         throw computeError("Daytona sandbox did not start in time", 504);
       }

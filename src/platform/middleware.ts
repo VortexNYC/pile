@@ -54,16 +54,17 @@ export const workspaceAuthMiddleware = createMiddleware<{
       !("key" in result) ||
       !result.key
     ) {
+      const errObj =
+        result && typeof result === "object" && "error" in result
+          ? (result as { error?: unknown }).error
+          : undefined;
       const code =
-        "error" in result &&
-        result.error &&
-        typeof result.error === "object" &&
-        "code" in result.error
-          ? (result.error as { code?: string }).code
+        errObj && typeof errObj === "object" && "code" in errObj
+          ? (errObj as { code?: string }).code
           : undefined;
       if (code === "RATE_LIMITED" || code === "RATE_LIMIT_EXCEEDED") {
         throw new VortexError({
-          code: "RATE_LIMITED",
+          code: "TOO_MANY_REQUESTS",
           status: 429,
           message: "API key rate limit exceeded",
         });

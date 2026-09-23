@@ -9,7 +9,7 @@ import { timingSafeEqualHex } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
 import { createRepoBranch } from "../global/repo-branches.js";
 import { VortexError } from "../platform/errors.js";
-import type { AppContext } from "../platform/middleware.js";
+import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 import type { AgentSessionStatus } from "../types/workspace.js";
 import type {
@@ -497,24 +497,26 @@ const cacheJson = (body: unknown, status = 200) =>
   });
 
 const putStoreObject = async (
-  env: AppContext["env"],
+  env: WorkerEnv,
   req: Request,
   key: string
 ): Promise<Response> => {
+  const bucket = env.ATTACHMENTS_BUCKET;
+  if (!bucket) return cacheJson({ message: "Cache storage unavailable" }, 503);
   if (!req.body) return cacheJson({ message: "Missing body" }, 400);
   const length = Number(req.headers.get("content-length") ?? 0);
   // ~95MB stays comfortably under the worker request-body ceiling.
   if (length > 95 * 1024 * 1024) {
     return cacheJson({ message: "Part too large" }, 413);
   }
-  await env.ATTACHMENTS_BUCKET.put(key, req.body, {
+  await bucket.put(key, req.body, {
     httpMetadata: { contentType: "application/gzip" },
   });
   return cacheJson({ ok: true });
 };
 
 const verifySessionToken = async (
-  env: AppContext["env"],
+  env: WorkerEnv,
   authorization: string | undefined,
   organizationId: string,
   sessionId: string
@@ -775,7 +777,9 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       }
       // Multipart store: manifest lists ordered parts; parts are concatenated
       // on the way out. Falls back to a single-shot object for small stores.
-      const manifest = await c.env.ATTACHMENTS_BUCKET.get(
+      const bucket = c.env.ATTACHMENTS_BUCKET;
+      if (!bucket) return c.json({ message: "Cache storage unavailable" }, 503);
+      const manifest = await bucket.get(
         `${pnpmStoreKey(organizationId, hash)}.manifest.json`
       );
       if (manifest) {
@@ -784,7 +788,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         const stream = new ReadableStream<Uint8Array>({
           start: async (controller) => {
             for (let i = 0; i < parts; i++) {
-              const part = await c.env.ATTACHMENTS_BUCKET.get(
+              const part = await bucket.get(
                 `${pnpmStoreKey(organizationId, hash)}.part${i}`
               );
               if (part)
@@ -797,9 +801,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
           headers: { "content-type": "application/gzip" },
         });
       }
-      const obj = await c.env.ATTACHMENTS_BUCKET.get(
-        pnpmStoreKey(organizationId, hash)
-      );
+      const obj = await bucket.get(pnpmStoreKey(organizationId, hash));
       if (!obj) return c.json({ message: "Not found" }, 404);
       return new Response(obj.body, {
         headers: { "content-type": "application/gzip" },
@@ -884,7 +886,11 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       if (!parts || parts < 1 || parts > 100) {
         return c.json({ message: "Invalid manifest" }, 400);
       }
-      await c.env.ATTACHMENTS_BUCKET.put(
+      const manifestBucket = c.env.ATTACHMENTS_BUCKET;
+      if (!manifestBucket) {
+        return c.json({ message: "Cache storage unavailable" }, 503);
+      }
+      await manifestBucket.put(
         `${pnpmStoreKey(organizationId, hash)}.manifest.json`,
         JSON.stringify({ parts }),
         { httpMetadata: { contentType: "application/json" } }
