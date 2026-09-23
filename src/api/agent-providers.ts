@@ -10,6 +10,7 @@ import {
 import {
   decryptProviderConfigRow,
   encryptProviderConfigInput,
+  loadProviderConfig,
 } from "../agents/credentials.js";
 import { resolveAgentEnv } from "../agents/daytona.js";
 import { getAgentProvider } from "../agents/index.js";
@@ -398,10 +399,7 @@ async function applyInboundWebhook(
   headers: Headers
 ): Promise<{ ok: true; sessionId: string } | { notFound: true }> {
   const stub = getWorkspaceStub(env, organizationId);
-  const row = await decryptProviderConfigRow(
-    env,
-    await stub.getAgentProviderConfig(agentId)
-  );
+  const row = await loadProviderConfig(env, stub, agentId);
   const effectiveEnv = resolveAgentEnv(env, row ?? undefined);
   const provider = getAgentProvider(agentId, effectiveEnv);
   const parsed =
@@ -496,10 +494,7 @@ export function registerAgentProviderRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(healthRoute, async (c) => {
     const { organizationId, agentId } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
-    const row = await decryptProviderConfigRow(
-      c.env,
-      await stub.getAgentProviderConfig(agentId)
-    );
+    const row = await loadProviderConfig(c.env, stub, agentId);
     const effectiveEnv = resolveAgentEnv(c.env, row ?? undefined);
     const provider = getAgentProvider(agentId, effectiveEnv);
     if (!provider.health) {
@@ -539,10 +534,7 @@ export function registerAgentProviderRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(inboundWebhookRoute, async (c) => {
     const { organizationId, agentId } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
-    const row = await decryptProviderConfigRow(
-      c.env,
-      await stub.getAgentProviderConfig(agentId)
-    );
+    const row = await loadProviderConfig(c.env, stub, agentId);
     const expected = webhookSecretFromConfig(row?.config);
     if (!expected) {
       throw new VortexError({

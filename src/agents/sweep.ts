@@ -3,7 +3,7 @@ import { organization } from "../global/schema.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { AgentSession } from "../types/workspace.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
-import { decryptProviderConfigRow } from "./credentials.js";
+import { loadProviderConfig } from "./credentials.js";
 import { resolveAgentEnv } from "./daytona.js";
 import { dispatchAgent, getAgentProvider } from "./index.js";
 import type { AgentProvider, AgentProviderState } from "./provider.js";
@@ -107,10 +107,7 @@ async function retryInfraSession(
   try {
     const issue = await stub.getIssue(session.issueId);
     if (!issue) return;
-    const providerConfig = await decryptProviderConfigRow(
-      env,
-      await stub.getAgentProviderConfig(session.agentId)
-    );
+    const providerConfig = await loadProviderConfig(env, stub, session.agentId);
     const effectiveEnv = resolveAgentEnv(env, providerConfig ?? undefined);
     const retried = await dispatchAgent(
       effectiveEnv,
@@ -167,9 +164,10 @@ export async function sweepAgentSessions(
       ];
       if (sessions.length === 0) continue;
       for (const session of sessions) {
-        const providerConfig = await decryptProviderConfigRow(
+        const providerConfig = await loadProviderConfig(
           env,
-          await stub.getAgentProviderConfig(session.agentId)
+          stub,
+          session.agentId
         );
         const effectiveEnv = resolveAgentEnv(env, providerConfig ?? undefined);
         const { timeoutMinutes, inactivityMinutes } = parseAgentTimeouts(

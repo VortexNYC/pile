@@ -5,7 +5,7 @@ import type { AgentSession, Issue } from "../types/workspace.js";
 import { CfAgentProvider } from "./cf-agent.js";
 import { CodexCliAgentProvider } from "./codex-cli.js";
 import { CodexAgentProvider } from "./codex.js";
-import { decryptProviderConfigRow } from "./credentials.js";
+import { loadProviderConfig } from "./credentials.js";
 import { CursorCliAgentProvider } from "./cursor-cli.js";
 import { CursorAgentProvider } from "./cursor.js";
 import { resolveAgentEnv } from "./daytona.js";
@@ -94,7 +94,7 @@ export async function dispatchAgent(
   // BYOK: overlay the workspace's stored provider credentials/model onto the
   // deployment env before constructing the provider. Fields the workspace
   // hasn't set fall back to env, so self-host defaults still work.
-  const providerConfig = await decryptProviderConfigRow(env, storedConfig);
+  const providerConfig = await loadProviderConfig(env, stub, agentId);
   const provider = getAgentProvider(
     agentId,
     resolveAgentEnv(env, providerConfig ?? undefined)

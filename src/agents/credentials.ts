@@ -125,6 +125,85 @@ export async function encryptProviderConfigInput<
   return out;
 }
 
+function configIsEncrypted(configJson: string | null | undefined): boolean {
+  if (!configJson) return true;
+  try {
+    const parsed: unknown = JSON.parse(configJson);
+    return (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      typeof (parsed as Record<string, unknown>)[ENCRYPTED_CONFIG_KEY] ===
+        "string"
+    );
+  } catch {
+    return false;
+  }
+}
+
+function rowNeedsReencrypt(row: AgentProviderConfigRow): boolean {
+  if (
+    typeof row.token === "string" &&
+    row.token !== "" &&
+    !isEncrypted(row.token)
+  )
+    return true;
+  if (
+    typeof row.computeApiKey === "string" &&
+    row.computeApiKey !== "" &&
+    !isEncrypted(row.computeApiKey)
+  )
+    return true;
+  return !configIsEncrypted(row.config);
+}
+
+/**
+ * Read + decrypt a workspace's provider config, lazily upgrading any
+ * legacy plaintext fields to encrypted storage on first read.
+ */
+export async function loadProviderConfig<
+  T extends AgentProviderConfigRow & { agentId: string },
+>(
+  env: WorkerEnv,
+  stub: {
+    getAgentProviderConfig(agentId: string): Promise<T | null | undefined>;
+    upsertAgentProviderConfig(input: {
+      agentId: string;
+      token?: string | null;
+      computeApiKey?: string | null;
+      config?: Record<string, unknown> | null;
+    }): Promise<unknown>;
+  },
+  agentId: string
+): Promise<T | null> {
+  const row = await stub.getAgentProviderConfig(agentId);
+  if (!row) return null;
+  const decrypted = await decryptProviderConfigRow(env, row);
+  if (decrypted && rowNeedsReencrypt(row)) {
+    const encrypted = await encryptProviderConfigInput(env, {
+      token: decrypted.token,
+      computeApiKey: decrypted.computeApiKey,
+      config: decrypted.config
+        ? (JSON.parse(decrypted.config) as Record<string, unknown>)
+        : null,
+    });
+    // Fire-and-forget upgrade; callers proceed with the decrypted row.
+    void stub
+      .upsertAgentProviderConfig({
+        agentId,
+        token: encrypted.token,
+        computeApiKey: encrypted.computeApiKey,
+        config: encrypted.config,
+      })
+      .catch((err) =>
+        console.error("provider config re-encryption failed", {
+          agentId,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      );
+  }
+  return decrypted;
+}
+
 /** Decrypt a stored provider config row into its plaintext form. */
 export async function decryptProviderConfigRow<
   T extends AgentProviderConfigRow,
