@@ -18,6 +18,12 @@ export interface AgentProviderState {
   compute?: unknown;
 }
 
+export interface DispatchComment {
+  author: string;
+  createdAt?: string | null;
+  body: string;
+}
+
 export interface AgentDispatchContext {
   /** Tracker-side session id, pre-created so providers can hand it to the
    *  remote agent for write-back. */
@@ -27,6 +33,9 @@ export interface AgentDispatchContext {
   /** Optional Worker execution context waitUntil for background work
    *  that must not block the HTTP response. */
   waitUntil?: (promise: Promise<unknown>) => void;
+  /** Recent issue comments, chronological — folded into the prompt so
+   *  re-dispatches carry review feedback. */
+  comments?: DispatchComment[];
 }
 
 export interface AgentProviderHealth {
