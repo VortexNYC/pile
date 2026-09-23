@@ -490,6 +490,29 @@ const createChildSessionRoute = createRoute({
 const pnpmStoreKey = (organizationId: string, hash: string) =>
   `pnpm-store/${organizationId}/${hash}.tar.gz`;
 
+const cacheJson = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+
+const putStoreObject = async (
+  env: AppContext["env"],
+  req: Request,
+  key: string
+): Promise<Response> => {
+  if (!req.body) return cacheJson({ message: "Missing body" }, 400);
+  const length = Number(req.headers.get("content-length") ?? 0);
+  // ~95MB stays comfortably under the worker request-body ceiling.
+  if (length > 95 * 1024 * 1024) {
+    return cacheJson({ message: "Part too large" }, 413);
+  }
+  await env.ATTACHMENTS_BUCKET.put(key, req.body, {
+    httpMetadata: { contentType: "application/gzip" },
+  });
+  return cacheJson({ ok: true });
+};
+
 const verifySessionToken = async (
   env: AppContext["env"],
   authorization: string | undefined,
@@ -750,6 +773,30 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       ) {
         return c.json({ message: "Unauthorized" }, 401);
       }
+      // Multipart store: manifest lists ordered parts; parts are concatenated
+      // on the way out. Falls back to a single-shot object for small stores.
+      const manifest = await c.env.ATTACHMENTS_BUCKET.get(
+        `${pnpmStoreKey(organizationId, hash)}.manifest.json`
+      );
+      if (manifest) {
+        const meta = (await manifest.json()) as { parts?: number };
+        const parts = meta.parts ?? 0;
+        const stream = new ReadableStream<Uint8Array>({
+          start: async (controller) => {
+            for (let i = 0; i < parts; i++) {
+              const part = await c.env.ATTACHMENTS_BUCKET.get(
+                `${pnpmStoreKey(organizationId, hash)}.part${i}`
+              );
+              if (part)
+                controller.enqueue(new Uint8Array(await part.arrayBuffer()));
+            }
+            controller.close();
+          },
+        });
+        return new Response(stream, {
+          headers: { "content-type": "application/gzip" },
+        });
+      }
       const obj = await c.env.ATTACHMENTS_BUCKET.get(
         pnpmStoreKey(organizationId, hash)
       );
@@ -777,18 +824,70 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       ) {
         return c.json({ message: "Unauthorized" }, 401);
       }
-      const body = c.req.raw.body;
-      if (!body) return c.json({ message: "Missing body" }, 400);
-      const length = Number(c.req.header("content-length") ?? 0);
-      if (length > 512 * 1024 * 1024) {
-        return c.json({ message: "Store too large" }, 413);
+      return putStoreObject(
+        c.env,
+        c.req.raw,
+        pnpmStoreKey(organizationId, hash)
+      );
+    }
+  );
+
+  app.put(
+    "/workspaces/:organizationId/agent/sessions/:sessionId/cache/pnpm-store/:hash/parts/:index",
+    async (c) => {
+      const { organizationId, sessionId, hash, index } = c.req.param();
+      if (!/^[a-f0-9]{64}$/.test(hash) || !/^\d{1,3}$/.test(index)) {
+        return c.json({ message: "Invalid key" }, 400);
+      }
+      if (
+        !(await verifySessionToken(
+          c.env,
+          c.req.header("authorization"),
+          organizationId,
+          sessionId
+        ))
+      ) {
+        return c.json({ message: "Unauthorized" }, 401);
+      }
+      return putStoreObject(
+        c.env,
+        c.req.raw,
+        `${pnpmStoreKey(organizationId, hash)}.part${Number(index)}`
+      );
+    }
+  );
+
+  app.put(
+    "/workspaces/:organizationId/agent/sessions/:sessionId/cache/pnpm-store/:hash/manifest",
+    async (c) => {
+      const { organizationId, sessionId, hash } = c.req.param();
+      if (!/^[a-f0-9]{64}$/.test(hash)) {
+        return c.json({ message: "Invalid hash" }, 400);
+      }
+      if (
+        !(await verifySessionToken(
+          c.env,
+          c.req.header("authorization"),
+          organizationId,
+          sessionId
+        ))
+      ) {
+        return c.json({ message: "Unauthorized" }, 401);
+      }
+      const body: unknown = await c.req.json().catch(() => null);
+      const parts =
+        body !== null &&
+        typeof body === "object" &&
+        typeof (body as Record<string, unknown>).parts === "number"
+          ? (body as { parts: number }).parts
+          : null;
+      if (!parts || parts < 1 || parts > 100) {
+        return c.json({ message: "Invalid manifest" }, 400);
       }
       await c.env.ATTACHMENTS_BUCKET.put(
-        pnpmStoreKey(organizationId, hash),
-        body,
-        {
-          httpMetadata: { contentType: "application/gzip" },
-        }
+        `${pnpmStoreKey(organizationId, hash)}.manifest.json`,
+        JSON.stringify({ parts }),
+        { httpMetadata: { contentType: "application/json" } }
       );
       return c.json({ ok: true });
     }

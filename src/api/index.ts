@@ -118,7 +118,7 @@ app.use("/workspaces/:organizationId/*", async (c, next) => {
   // per-session HMAC token instead of a user/API-key identity — verified
   // inside the route handlers.
   if (
-    /\/agent\/sessions\/[^/]+\/(logs|cache\/pnpm-store\/[a-f0-9]{64})$/.test(
+    /\/agent\/sessions\/[^/]+\/(logs|cache\/pnpm-store\/[a-f0-9]{64}(\/parts\/\d+|\/manifest)?)$/.test(
       c.req.path
     ) &&
     (c.req.method === "POST" ||

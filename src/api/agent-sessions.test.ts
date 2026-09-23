@@ -1023,6 +1023,36 @@ describe("agent sessions API", () => {
     expect(get.status).toBe(200);
     expect(await get.text()).toBe("store-bytes");
 
+    // Multipart path: parts + manifest reassemble into one stream.
+    const mhash = "ef".repeat(32);
+    const mbase = `/workspaces/${organizationId}/agent/sessions/${sessionId}/cache/pnpm-store/${mhash}`;
+    for (const [i, chunk] of ["part-a-", "part-b"].entries()) {
+      const res = await app.fetch(
+        request(`${mbase}/parts/${i}`, {
+          method: "PUT",
+          body: chunk,
+          headers: { Authorization: `Bearer ${cacheToken}` },
+        }),
+        env
+      );
+      expect(res.status).toBe(200);
+    }
+    const man = await app.fetch(
+      request(`${mbase}/manifest`, {
+        method: "PUT",
+        body: JSON.stringify({ parts: 2 }),
+        headers: { Authorization: `Bearer ${cacheToken}` },
+      }),
+      env
+    );
+    expect(man.status).toBe(200);
+    const joined = await app.fetch(
+      request(mbase, { headers: { Authorization: `Bearer ${cacheToken}` } }),
+      env
+    );
+    expect(joined.status).toBe(200);
+    expect(await joined.text()).toBe("part-a-part-b");
+
     const miss = await app.fetch(
       request(
         `/workspaces/${organizationId}/agent/sessions/${sessionId}/cache/pnpm-store/${"cd".repeat(32)}`,
