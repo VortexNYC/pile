@@ -68,6 +68,8 @@ export interface IssueInput {
   id?: Id;
   externalRef?: string | null;
   teamId?: string;
+  /** Human-friendly alternative to teamId — resolved by team key (e.g. "ISS"). */
+  teamKey?: string;
   title: string;
   description?: string;
   status?: IssueStatus;

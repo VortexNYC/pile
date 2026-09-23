@@ -222,6 +222,7 @@ const createIssueSchema = z.object({
   title: z.string().min(1),
   externalRef: z.string().min(1).max(255).nullable().optional(),
   teamId: z.string().optional(),
+  teamKey: z.string().optional(),
   description: z.string().optional(),
   status: z.enum(ISSUE_STATUSES).optional(),
   priority: z.enum(ISSUE_PRIORITIES).optional(),
@@ -909,6 +910,20 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       }
       teamId ??= parent.teamId;
     }
+    if (!teamId && input.teamKey) {
+      const wanted = input.teamKey.toUpperCase();
+      const match = (await listTeams(db, organizationId)).find(
+        (team) => team.key.toUpperCase() === wanted
+      );
+      if (!match) {
+        throw new VortexError({
+          code: "NOT_FOUND",
+          status: 404,
+          message: "Team not found",
+        });
+      }
+      teamId = match.id;
+    }
     if (input.externalRef) {
       const existing = await stub.getIssueByExternalRef(input.externalRef);
       if (existing) {
@@ -933,7 +948,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       input.status ?? templateDefaults.status ?? "backlog",
       input.resolution
     );
-    const { templateId: _templateId, ...rest } = input;
+    const { templateId: _templateId, teamKey: _teamKey, ...rest } = input;
     const issue = await stub.createIssue(
       {
         ...rest,
