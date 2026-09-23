@@ -5,8 +5,8 @@ import {
   MAX_EVENT_COUNT,
   MAX_NETWORK_EVENT_COUNT,
   NETWORK_DEDUP_WINDOW_MS,
-} from "../constants";
-import type { DebuggerEvent } from "../types";
+} from "../constants.js";
+import type { DebuggerEvent } from "../types.js";
 
 const KIND_CAPS: Record<DebuggerEvent["kind"], number> = {
   action: MAX_ACTION_EVENT_COUNT,

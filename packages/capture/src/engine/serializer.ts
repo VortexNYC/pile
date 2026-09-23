@@ -2,9 +2,9 @@ import {
   MAX_SERIALIZE_ARRAY_ITEMS,
   MAX_SERIALIZE_DEPTH,
   MAX_SERIALIZE_KEYS,
-} from "../constants";
-import type { Reporter } from "./sanitize";
-import { getElementTarget, truncate } from "./sanitize";
+} from "../constants.js";
+import type { Reporter } from "./sanitize.js";
+import { getElementTarget, truncate } from "./sanitize.js";
 
 type SerializerState = {
   seen: WeakMap<object, string>;

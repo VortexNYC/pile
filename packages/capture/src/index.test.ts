@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { initCapture } from "./index";
+import { initCapture } from "./index.js";
 
 interface FetchCall {
   url: string;

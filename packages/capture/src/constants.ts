@@ -11,7 +11,6 @@ export const MAX_RECENT_EVENT_COUNT = 250;
 export const DEFAULT_LOOKBACK_MS = 60_000;
 
 export const MAX_TEXT_LENGTH = 2000;
-export const MAX_URL_LENGTH = 4096;
 export const MAX_BODY_LENGTH = 4000;
 export const MAX_HEADER_NAME_LENGTH = 120;
 export const MAX_HEADER_VALUE_LENGTH = 500;

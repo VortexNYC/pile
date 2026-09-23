@@ -1,10 +1,13 @@
-import { MAX_RECENT_EVENT_AGE_MS, MAX_RECENT_EVENT_COUNT } from "../constants";
-import type { DebuggerEvent, BugReportDebuggerPayload } from "../types";
+import {
+  MAX_RECENT_EVENT_AGE_MS,
+  MAX_RECENT_EVENT_COUNT,
+} from "../constants.js";
+import type { DebuggerEvent, BugReportDebuggerPayload } from "../types.js";
 import {
   appendActionEventWithDedup,
   appendEventWithRetentionPolicy,
   appendNetworkEventWithDedup,
-} from "./retention";
+} from "./retention.js";
 
 export interface CaptureSession {
   sessionId: string;

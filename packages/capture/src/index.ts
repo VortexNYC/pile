@@ -7,29 +7,29 @@
  * report includes what already happened — the bug comes first, the report
  * after. `start()`/`stop()` add screen recording on top for video sessions.
  */
-import { DEFAULT_ENDPOINT, DEFAULT_LOOKBACK_MS } from "./constants";
+import { DEFAULT_ENDPOINT, DEFAULT_LOOKBACK_MS } from "./constants.js";
 import {
   installInstrumentation,
   type Instrumentation,
-} from "./engine/instrument";
+} from "./engine/instrument.js";
 import {
   buildDebuggerSubmissionPayload,
   EventRecorder,
   hasDebuggerPayloadData,
-} from "./engine/recorder";
+} from "./engine/recorder.js";
 import {
   captureScreenshot,
   startDisplayRecording,
   type RecordingController,
-} from "./media";
-import { gzipBlob, submitCaptureReport } from "./transport";
+} from "./media.js";
+import { gzipBlob, submitCaptureReport } from "./transport.js";
 import type {
   CaptureArtifact,
   CaptureInitOptions,
   CaptureResult,
   CaptureStartOptions,
   CaptureStopOptions,
-} from "./types";
+} from "./types.js";
 
 export type {
   CaptureArtifact,
@@ -40,8 +40,8 @@ export type {
   CaptureStopOptions,
   CaptureVisibility,
   DebuggerEvent,
-} from "./types";
-export { captureScreenshot } from "./media";
+} from "./types.js";
+export { captureScreenshot } from "./media.js";
 
 interface ActiveSession {
   recording: RecordingController | null;

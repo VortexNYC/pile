@@ -2,9 +2,9 @@ import {
   MAX_BODY_LENGTH,
   MAX_HEADER_NAME_LENGTH,
   MAX_HEADER_VALUE_LENGTH,
-} from "../constants";
-import type { DebuggerEvent } from "../types";
-import type { EventRecorder } from "./recorder";
+} from "../constants.js";
+import type { DebuggerEvent } from "../types.js";
+import type { EventRecorder } from "./recorder.js";
 import {
   createNonFatalReporter,
   getElementTarget,
@@ -20,8 +20,8 @@ import {
   toHeaderRecord,
   truncate,
   type Reporter,
-} from "./sanitize";
-import { createStringifyValue } from "./serializer";
+} from "./sanitize.js";
+import { createStringifyValue } from "./serializer.js";
 
 export interface Instrumentation {
   dispose(): void;

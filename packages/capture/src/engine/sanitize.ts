@@ -3,7 +3,7 @@ import {
   MAX_HEADER_NAME_LENGTH,
   MAX_HEADER_VALUE_LENGTH,
   MAX_TEXT_LENGTH,
-} from "../constants";
+} from "../constants.js";
 
 export interface Reporter {
   reportNonFatalError: (context: string, error: unknown) => void;

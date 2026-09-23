@@ -1,4 +1,5 @@
-import type { CaptureArtifact, CaptureStopOptions } from "./types";
+import { MAX_REPORT_MEDIA_BYTES } from "./constants.js";
+import type { CaptureArtifact, CaptureStopOptions } from "./types.js";
 
 const ABSOLUTE_HTTP_URL_REGEX = /^https?:\/\//;
 const FILE_SIZE_LIMIT_MESSAGE =
@@ -61,9 +62,8 @@ export async function submitCaptureReport(
   config: TransportConfig,
   report: TransportReport
 ): Promise<TransportResult> {
-  const maxBytes = 95 * 1024 * 1024;
   for (const artifact of report.artifacts) {
-    if (artifact.blob.size > maxBytes) {
+    if (artifact.blob.size > MAX_REPORT_MEDIA_BYTES) {
       throw new Error(FILE_SIZE_LIMIT_MESSAGE);
     }
   }
