@@ -110,7 +110,7 @@ function buildPrompt(
     "",
     ...identityLines,
     "",
-    "Implement the requested change. Verify proportionate to the diff: always run the project's lint/typecheck (for example `pnpm run check`) when the toolchain exists; run the full test suite only when you changed code, and skip it when the diff is docs/config-only. Do not burn time on suites that need network egress the sandbox lacks — note the limitation and move on. Make commits with clear messages. Do not push and do not open a pull request — the runner handles that after you exit.",
+    "Implement the requested change. Verify proportionate to the diff: always run the project's lint/typecheck (for example `pnpm run check`) when the toolchain exists; when you change code, add or extend tests covering the change and run the relevant suites; skip tests entirely when the diff is docs/config-only. Do not burn time on suites that need network egress the sandbox lacks — note the limitation and move on. Make commits with clear messages. Do not push and do not open a pull request — the runner handles that after you exit.",
     "Do not attempt to update Pile yourself — an external system will poll your session and write the status back automatically.",
   ].join("\n");
 }
@@ -368,6 +368,9 @@ function buildSandboxEnv(
     ISSUE_IDENTIFIER: identifier,
     MODEL: model,
     PROMPT_B64: encodeBase64(prompt),
+    // Daytona mounts DAYTONA_VOLUME_ID at /home/daytona/cache; on CF sandboxes
+    // this is just a local dir — harmless, and keeps the path consistent.
+    npm_config_store_dir: "/home/daytona/cache/pnpm-store",
     RUNNER_PY_B64: encodeBase64(PYTHON_RUNNER),
   };
 }
