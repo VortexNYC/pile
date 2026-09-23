@@ -140,6 +140,49 @@ const listSessionsRoute = createRoute({
   },
 });
 
+function avgSeconds(durations: number[]): number | null {
+  if (durations.length === 0) return null;
+  return Math.round(
+    durations.reduce((a, b) => a + b, 0) / durations.length / 1000
+  );
+}
+
+const agentStatsRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/agent/stats",
+  tags: ["agent-sessions"],
+  middleware: [rls("read", "agent:read")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+  },
+  responses: {
+    200: {
+      description:
+        "Aggregate agent session stats for the workspace: totals, per-provider breakdown, success rate, durations, and infra failures",
+      content: {
+        "application/json": {
+          schema: z.object({
+            total: z.number(),
+            byStatus: z.record(z.string(), z.number()),
+            infraFailures: z.number(),
+            avgDurationSeconds: z.number().nullable(),
+            providers: z.array(
+              z.object({
+                agentId: z.string(),
+                total: z.number(),
+                completed: z.number(),
+                failed: z.number(),
+                successRate: z.number().nullable(),
+                avgDurationSeconds: z.number().nullable(),
+              })
+            ),
+          }),
+        },
+      },
+    },
+  },
+});
+
 const issueLiveRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/issues/{issueId}/live",
@@ -453,6 +496,65 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     return c.json({
       sessions: rows.map((row) => toSessionResponse(row, undefined)),
     });
+  });
+
+  app.openapi(agentStatsRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const rows = await stub.listAgentSessions({});
+
+    const TERMINAL = new Set(["completed", "failed", "canceled"]);
+    const byStatus: Record<string, number> = {};
+    const byAgent = new Map<
+      string,
+      { total: number; completed: number; failed: number; durations: number[] }
+    >();
+    let infraFailures = 0;
+    const durations: number[] = [];
+
+    for (const row of rows) {
+      byStatus[row.status] = (byStatus[row.status] ?? 0) + 1;
+      if (row.infraFailure) infraFailures += 1;
+      const agg = byAgent.get(row.agentId) ?? {
+        total: 0,
+        completed: 0,
+        failed: 0,
+        durations: [],
+      };
+      agg.total += 1;
+      if (row.status === "completed") agg.completed += 1;
+      if (row.status === "failed") agg.failed += 1;
+      if (TERMINAL.has(row.status)) {
+        const ms = Date.parse(row.updatedAt) - Date.parse(row.createdAt);
+        if (Number.isFinite(ms) && ms >= 0) {
+          agg.durations.push(ms);
+          durations.push(ms);
+        }
+      }
+      byAgent.set(row.agentId, agg);
+    }
+
+    return c.json(
+      {
+        total: rows.length,
+        byStatus,
+        infraFailures,
+        avgDurationSeconds: avgSeconds(durations),
+        providers: [...byAgent.entries()].map(([agentId, a]) => ({
+          agentId,
+          total: a.total,
+          completed: a.completed,
+          failed: a.failed,
+          successRate:
+            a.completed + a.failed === 0
+              ? null
+              : Math.round((a.completed / (a.completed + a.failed)) * 100) /
+                100,
+          avgDurationSeconds: avgSeconds(a.durations),
+        })),
+      },
+      200
+    );
   });
 
   app.openapi(issueLiveRoute, async (c) => {

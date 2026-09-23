@@ -16,12 +16,41 @@ import { resolveAgentEnv } from "../agents/daytona.js";
 import { getAgentProvider } from "../agents/index.js";
 import type { AgentProviderSession } from "../agents/provider.js";
 import { sha256Hex, timingSafeEqualHex } from "../global/crypto.js";
+import { createD1 } from "../global/db.js";
+import { listGithubInstallations } from "../global/github-installations.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 import type { AgentSessionStatus } from "../types/workspace.js";
 import { captureSessionPrArtifact } from "./agent-artifacts.js";
 import { getWorkspaceStub } from "./stub.js";
+
+const COMPUTE_PROVIDERS = new Set(["cloudflare", "daytona"]);
+
+/** Which deployment env var satisfies each provider's credential need. */
+const PROVIDER_ENV_CREDENTIALS: Record<string, (env: WorkerEnv) => boolean> = {
+  devin: (e) => !!e.DEVIN_TOKEN,
+  "devin-cli": (e) => !!e.DEVIN_CLI_CREDENTIALS_B64,
+  cursor: (e) => !!e.AGENT_PROVIDER_TOKEN,
+  "cursor-cli": (e) => !!(e.CURSOR_API_KEY ?? e.AGENT_PROVIDER_TOKEN),
+  codex: (e) => !!e.OPENAI_API_KEY,
+  "codex-cli": (e) => !!e.CODEX_AUTH_JSON_B64,
+  "cf-agent": () => true,
+  flue: () => true,
+};
+
+function configComputeProvider(
+  configJson: string | null | undefined
+): string | undefined {
+  if (!configJson) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(configJson);
+    const v = (parsed as Record<string, unknown> | null)?.computeProvider;
+    return typeof v === "string" ? v : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 const setupModeSchema = z.enum(AGENT_SETUP_MODES);
 
@@ -192,6 +221,39 @@ const listConfigsRoute = createRoute({
       description: "Agent provider configs (secrets redacted)",
       content: {
         "application/json": { schema: z.array(providerConfigSchema) },
+      },
+    },
+  },
+});
+
+const setupStatusRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/agent/setup-status",
+  tags: ["agent-providers"],
+  middleware: [rls("read", "agent:read")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+  },
+  responses: {
+    200: {
+      description:
+        "Per-provider onboarding readiness: credentials source, compute backend, and what's still missing before first dispatch",
+      content: {
+        "application/json": {
+          schema: z.object({
+            githubConnected: z.boolean(),
+            providers: z.array(
+              z.object({
+                agentId: z.string(),
+                credentials: z.enum(["workspace", "deployment", "none"]),
+                computeProvider: z.string(),
+                computeCredentials: z.enum(["workspace", "deployment", "none"]),
+                missing: z.array(z.string()),
+                ready: z.boolean(),
+              })
+            ),
+          }),
+        },
       },
     },
   },
@@ -457,6 +519,63 @@ export function registerAgentProviderRoutes(app: OpenAPIHono<AppContext>) {
     return c.json(await Promise.all(rows.map((r) => redact(c.env, r))), 200);
   });
 
+  app.openapi(setupStatusRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const d1 = createD1(c.env.D1);
+    const installations = await listGithubInstallations(d1, organizationId);
+    const rows = await stub.listAgentProviderConfigs();
+    const byAgent = new Map(rows.map((r) => [r.agentId, r]));
+
+    const providers = await Promise.all(
+      AGENT_PROVIDER_CATALOG.map(async (catalogEntry) => {
+        const agentId = catalogEntry.id;
+        const row = byAgent.get(agentId);
+        const decrypted = row
+          ? await decryptProviderConfigRow(c.env, row)
+          : null;
+        const hasWorkspaceToken = !!decrypted?.token;
+        const envCheck = PROVIDER_ENV_CREDENTIALS[agentId];
+        const credentials = hasWorkspaceToken
+          ? ("workspace" as const)
+          : envCheck?.(c.env)
+            ? ("deployment" as const)
+            : ("none" as const);
+
+        const computeProvider =
+          configComputeProvider(decrypted?.config) ??
+          c.env.COMPUTE_PROVIDER ??
+          "daytona";
+        const computeCredentials =
+          computeProvider === "cloudflare"
+            ? ("deployment" as const)
+            : decrypted?.computeApiKey
+              ? ("workspace" as const)
+              : c.env.DAYTONA_API_KEY
+                ? ("deployment" as const)
+                : ("none" as const);
+
+        const missing: string[] = [];
+        if (credentials === "none") missing.push("credentials");
+        if (computeCredentials === "none") missing.push("compute credentials");
+        if (installations.length === 0) missing.push("github installation");
+        return {
+          agentId,
+          credentials,
+          computeProvider,
+          computeCredentials,
+          missing,
+          ready: missing.length === 0,
+        };
+      })
+    );
+
+    return c.json(
+      { githubConnected: installations.length > 0, providers },
+      200
+    );
+  });
+
   app.openapi(upsertConfigRoute, async (c) => {
     const { organizationId, agentId } = c.req.valid("param");
     const body = c.req.valid("json");
@@ -467,6 +586,30 @@ export function registerAgentProviderRoutes(app: OpenAPIHono<AppContext>) {
     const config = mode
       ? applyCatalogMode(agentId, mode, fields.config ?? undefined)
       : fields.config;
+    const computeProvider = config?.computeProvider;
+    if (
+      computeProvider !== undefined &&
+      computeProvider !== null &&
+      (typeof computeProvider !== "string" ||
+        !COMPUTE_PROVIDERS.has(computeProvider))
+    ) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: `config.computeProvider must be one of: ${[...COMPUTE_PROVIDERS].join(", ")}`,
+      });
+    }
+    if (
+      fields.computeApiUrl !== undefined &&
+      fields.computeApiUrl !== null &&
+      !fields.computeApiUrl.startsWith("https://")
+    ) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: "computeApiUrl must be an https:// URL",
+      });
+    }
     const stub = getWorkspaceStub(c.env, organizationId);
     const encrypted = await encryptProviderConfigInput(c.env, {
       ...fields,

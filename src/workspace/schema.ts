@@ -781,6 +781,9 @@ export const workspaceAgentSessions = sqliteTable(
     retryCount: integer("retry_count" as string)
       .notNull()
       .default(0),
+    infraFailure: integer("infra_failure" as string)
+      .notNull()
+      .default(0),
   },
   (table) => [
     index("agent_sessions_organization_idx" as string).on(

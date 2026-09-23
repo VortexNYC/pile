@@ -2211,11 +2211,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     };
 
     if (!issue) {
-      const set: Record<string, string | null> = {
+      const set: Record<string, string | number | null> = {
         updatedAt: new Date().toISOString(),
         lastProgressAt: new Date().toISOString(),
       };
       if (result.status !== undefined) set.status = result.status;
+      if (result.infraFailure !== undefined)
+        set.infraFailure = result.infraFailure ? 1 : 0;
       if (result.result !== undefined) set.result = result.result;
       if (result.url !== undefined) set.url = result.url;
       if (result.providerSessionId !== undefined)
@@ -2240,11 +2242,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       return updatedSession;
     }
 
-    const set: Record<string, string | null> = {
+    const set: Record<string, string | number | null> = {
       updatedAt: new Date().toISOString(),
       lastProgressAt: new Date().toISOString(),
     };
     if (result.status !== undefined) set.status = result.status;
+    if (result.infraFailure !== undefined)
+      set.infraFailure = result.infraFailure ? 1 : 0;
     if (result.result !== undefined) set.result = result.result;
     if (result.url !== undefined) set.url = result.url;
     if (result.providerSessionId !== undefined)
