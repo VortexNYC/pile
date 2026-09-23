@@ -27,20 +27,23 @@ await capture.stop({ email: "reporter@example.com", title: "…" });
 - `fetch` and `XMLHttpRequest` — method, URL, status, duration, sanitized headers, text bodies
 - User actions — click, input (value _length_ only), change, submit, Enter/Escape
 - Navigation breadcrumbs — initial load, pushState/replaceState, popstate, hashchange
+- DOM session replay via rrweb — deterministic, no permission prompt; produces a self-contained `replay.html` artifact that plays back when the artifact URL is opened
 - Device/browser metadata, viewport, connection info
 
 All network capture is sanitized: sensitive headers (`authorization`, `cookie`, tokens…) are dropped, sensitive query params and body fields become `[REDACTED]`. The debugger payload is gzipped via `CompressionStream` when available.
 
 ## Options
 
-| Option          | Default            | Notes                                                                      |
-| --------------- | ------------------ | -------------------------------------------------------------------------- |
-| `publicKey`     | —                  | Required. Issued via `POST /workspaces/{org}/support/capture/public-keys`. |
-| `endpoint`      | `https://pile.nyc` | API origin.                                                                |
-| `reference`     | —                  | Caller-side reference echoed on the session.                               |
-| `lookbackMs`    | `60000`            | How much buffered history a report/session includes.                       |
-| `video`         | `false`            | Screen recording for `start()`/`stop()` sessions.                          |
-| `networkBodies` | `true`             | Capture sanitized text request/response bodies.                            |
+| Option             | Default            | Notes                                                                      |
+| ------------------ | ------------------ | -------------------------------------------------------------------------- |
+| `publicKey`        | —                  | Required. Issued via `POST /workspaces/{org}/support/capture/public-keys`. |
+| `endpoint`         | `https://pile.nyc` | API origin.                                                                |
+| `reference`        | —                  | Caller-side reference echoed on the session.                               |
+| `lookbackMs`       | `60000`            | How much buffered history a report/session includes.                       |
+| `video`            | `false`            | Screen recording for `start()`/`stop()` sessions.                          |
+| `replay`           | `false`            | DOM session replay via rrweb (lazy-loaded; no prompt).                     |
+| `replayMaskInputs` | `true`             | Mask input values in the DOM replay.                                       |
+| `networkBodies`    | `true`             | Capture sanitized text request/response bodies.                            |
 
 `capture.attach(blob, "name.json")` queues an extra artifact for the next submission. `capture.destroy()` removes all instrumentation.
 
