@@ -15,7 +15,7 @@ import { processGitlabWebhookPayload } from "./gitlab.js";
 env.WEBHOOK_QUEUE = null as unknown as typeof env.WEBHOOK_QUEUE;
 
 let organizationId: string;
-const projectPath = "vortexnyc/issuetracker";
+const projectPath = "vortexnyc/pile";
 
 beforeAll(async () => {
   const db = createD1(env.D1);
@@ -70,7 +70,7 @@ function makeIssuePayload(
       description: "A bug from GitLab",
       state: action === "open" ? "opened" : "closed",
       action,
-      url: "https://gitlab.com/vortexnyc/issuetracker/-/issues/1",
+      url: "https://gitlab.com/vortexnyc/pile/-/issues/1",
       created_at: updatedAt,
       updated_at: updatedAt,
       assignees: [],

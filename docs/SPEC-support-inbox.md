@@ -20,7 +20,7 @@ Define the seventh module of the customer support layer: the agent-facing queue 
 pnpm exec vp check --fix
 pnpm test
 pnpm run db:generate
-CLOUDFLARE_API_TOKEN=... pnpm exec wrangler d1 migrations apply issuetracker-global -e production --remote
+CLOUDFLARE_API_TOKEN=... pnpm exec wrangler d1 migrations apply pile-global -e production --remote
 CLOUDFLARE_API_TOKEN=... pnpm exec wrangler deploy -e production
 ```
 

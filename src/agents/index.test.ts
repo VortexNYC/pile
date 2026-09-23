@@ -178,7 +178,7 @@ describe("agent providers", () => {
       actor
     );
 
-    const prUrl = "https://github.com/vortexnyc/issuetracker/pull/42";
+    const prUrl = "https://github.com/vortexnyc/pile/pull/42";
     await stub.applyAgentSessionResult(session.id, {
       status: "completed",
       result: "Done",

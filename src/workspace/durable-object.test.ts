@@ -507,7 +507,7 @@ describe("WorkspaceDO", () => {
   it("returns the same issue for concurrent createIssue with the same id", async () => {
     const stub = getStub();
     await stub.setOrganizationId(WORKSPACE_ID);
-    const id = `repo:github:vortexnyc:issuetracker:race`;
+    const id = `repo:github:vortexnyc:pile:race`;
     const [a, b] = await Promise.all([
       stub.createIssue({ id, title: "Race A" }),
       stub.createIssue({ id, title: "Race B" }),
@@ -539,11 +539,11 @@ describe("WorkspaceDO", () => {
     await stub.setOrganizationId(WORKSPACE_ID);
     const [a, b] = await Promise.all([
       stub.createIssue({
-        id: `repo:github:vortexnyc:issuetracker:${crypto.randomUUID()}`,
+        id: `repo:github:vortexnyc:pile:${crypto.randomUUID()}`,
         title: "Concurrent A",
       }),
       stub.createIssue({
-        id: `repo:github:vortexnyc:issuetracker:${crypto.randomUUID()}`,
+        id: `repo:github:vortexnyc:pile:${crypto.randomUUID()}`,
         title: "Concurrent B",
       }),
     ]);

@@ -1,7 +1,7 @@
 # Default (self-host) configuration: `wrangler deploy` auto-provisions
 # D1 and R2 when IDs are omitted. The hosted Pile instance lives in
 # [env.production] and is deployed with `wrangler deploy -e production`.
-name = "pile"
+name = "pile-dev"
 main = "src/index.ts"
 compatibility_date = "2026-07-30"
 compatibility_flags = ["nodejs_compat"]
@@ -23,7 +23,7 @@ EMAIL_FROM = "notifications@example.com"
 
 [[d1_databases]]
 binding = "D1"
-database_name = "issuetracker-global"
+database_name = "pile-global"
 migrations_dir = "migrations"
 
 [[send_email]]
@@ -31,7 +31,7 @@ name = "EMAIL"
 
 [[r2_buckets]]
 binding = "ATTACHMENTS_BUCKET"
-bucket_name = "issuetracker-attachments"
+bucket_name = "pile-attachments"
 
 [[durable_objects.bindings]]
 name = "WORKSPACE_DURABLE_OBJECT"
@@ -103,7 +103,9 @@ tag = "v3"
 new_sqlite_classes = ["CursorSandbox", "DevinSandbox", "CodexSandbox"]
 
 [env.production]
-name = "issuetracker"
+name = "pile"
+
+routes = [{ pattern = "pile.nyc", custom_domain = true }]
 
 [env.production.vars]
 BETTER_AUTH_URL = "https://pile.nyc"
@@ -118,13 +120,14 @@ PUBLIC_API_URL = "https://pile.nyc"
 
 [[env.production.d1_databases]]
 binding = "D1"
-database_name = "issuetracker-global"
-database_id = "c28ece66-1af9-4a83-a8f6-e1eeb2124045"
+database_name = "pile-global"
+database_id = "c4f71628-3f93-4be1-ac11-48b5611f5934"
 migrations_dir = "migrations"
 
 [[env.production.r2_buckets]]
 binding = "ATTACHMENTS_BUCKET"
-bucket_name = "issuetracker-attachments"
+bucket_name = "pile-attachments"
+
 
 [[env.production.durable_objects.bindings]]
 name = "WORKSPACE_DURABLE_OBJECT"

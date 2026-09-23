@@ -27,7 +27,7 @@ pnpm test
 pnpm run db:generate
 
 # Apply D1 migration to production
-CLOUDFLARE_API_TOKEN=... pnpm exec wrangler d1 migrations apply issuetracker-global -e production --remote
+CLOUDFLARE_API_TOKEN=... pnpm exec wrangler d1 migrations apply pile-global -e production --remote
 
 # Deploy
 CLOUDFLARE_API_TOKEN=... pnpm exec wrangler deploy -e production

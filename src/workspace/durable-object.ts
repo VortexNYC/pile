@@ -4173,4 +4173,144 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         )
       );
   }
+
+  // Full-state export for worker-to-worker migration: every KV entry plus
+  // every SQL row, with binary values base64-tagged for JSON transport.
+  async exportState(): Promise<WorkspaceStateDump> {
+    await this.ready;
+    const kv: Record<string, StateJson> = {};
+    for (const [key, value] of await this.ctx.storage.list()) {
+      kv[key] = encodeStateValue(value);
+    }
+    const tables: Record<string, Record<string, StateJson>[]> = {};
+    const tableRows = this.ctx.storage.sql
+      .exec(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'"
+      )
+      .toArray();
+    for (const { name } of tableRows) {
+      if (typeof name !== "string") continue;
+      const rows = this.ctx.storage.sql
+        .exec(`SELECT * FROM "${name}"`)
+        .toArray();
+      tables[name] = rows.map((row) => encodeStateRow(row));
+    }
+    return { kv, tables };
+  }
+
+  async importState(dump: WorkspaceStateDump): Promise<void> {
+    await this.ready;
+    for (const [table, rows] of Object.entries(dump.tables)) {
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/u.test(table)) {
+        throw new VortexError({
+          code: "BAD_REQUEST",
+          status: 400,
+          message: `Invalid table name in dump: ${table}`,
+        });
+      }
+      for (const row of rows) {
+        const columns = Object.keys(row);
+        if (columns.length === 0) continue;
+        const columnList = columns.map((c) => `"${c}"`).join(", ");
+        const placeholders = columns.map(() => "?").join(", ");
+        const values = columns.map(
+          (c) => decodeStateValue(row[c]) as SqlStorageValue
+        );
+        this.ctx.storage.sql.exec(
+          `INSERT OR REPLACE INTO "${table}" (${columnList}) VALUES (${placeholders})`,
+          ...values
+        );
+      }
+    }
+    const kvEntries = Object.fromEntries(
+      Object.entries(dump.kv).map(([key, value]) => [
+        key,
+        decodeStateValue(value),
+      ])
+    );
+    if (Object.keys(kvEntries).length > 0) {
+      await this.ctx.storage.put(kvEntries);
+    }
+  }
+}
+
+const STATE_BLOB_TAG = "__pileStateBlob";
+
+type StateJson =
+  | string
+  | number
+  | boolean
+  | null
+  | StateJson[]
+  | { [key: string]: StateJson };
+
+export type WorkspaceStateDump = {
+  kv: Record<string, StateJson>;
+  tables: Record<string, Record<string, StateJson>[]>;
+};
+
+function encodeStateValue(value: unknown): StateJson {
+  if (value instanceof Uint8Array) {
+    let binary = "";
+    for (const byte of value) binary += String.fromCharCode(byte);
+    return { [STATE_BLOB_TAG]: btoa(binary) };
+  }
+  if (value instanceof ArrayBuffer) {
+    return encodeStateValue(new Uint8Array(value));
+  }
+  if (Array.isArray(value)) return value.map(encodeStateValue);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([k, v]) => [
+        k,
+        encodeStateValue(v),
+      ])
+    );
+  }
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean" ||
+    value === null ||
+    value === undefined
+  ) {
+    return value ?? null;
+  }
+  return String(value);
+}
+
+function encodeStateRow(
+  row: Record<string, unknown>
+): Record<string, StateJson> {
+  return Object.fromEntries(
+    Object.entries(row).map(([k, v]) => [k, encodeStateValue(v)])
+  );
+}
+
+function decodeStateValue(value: unknown): unknown {
+  if (
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    STATE_BLOB_TAG in value
+  ) {
+    const encoded = (value as Record<string, unknown>)[STATE_BLOB_TAG];
+    if (typeof encoded !== "string") return value;
+    const binary = atob(encoded);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes.buffer;
+  }
+  if (Array.isArray(value)) return value.map(decodeStateValue);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([k, v]) => [
+        k,
+        decodeStateValue(v),
+      ])
+    );
+  }
+  return value;
 }

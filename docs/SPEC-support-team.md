@@ -22,7 +22,7 @@ This module is the foundation for the `support-inbox` and `support-migration`.
 pnpm exec vp check --fix
 pnpm test
 pnpm run db:generate
-CLOUDFLARE_API_TOKEN=... pnpm exec wrangler d1 migrations apply issuetracker-global -e production --remote
+CLOUDFLARE_API_TOKEN=... pnpm exec wrangler d1 migrations apply pile-global -e production --remote
 CLOUDFLARE_API_TOKEN=... pnpm exec wrangler deploy -e production
 ```
 
