@@ -238,6 +238,7 @@ falling back to the generic parser:
   the workspace's `credentials.toml`; poll-only, no webhooks, and does not
   use the Devin organization sessions API. Verified live via Daytona sandbox
   dispatch (ISS-80).
+  Dedicated `DevinSandbox` per-provider image verified live end-to-end (ISS-90, 2026-09-23).
 - **cursor-cli** — runs `cursor-agent -p --force --trust` headlessly inside
   a Daytona sandbox using the workspace's Cursor API key; poll-only, does
   not use the Cursor cloud agents API.
