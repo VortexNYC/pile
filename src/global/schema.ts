@@ -2292,7 +2292,14 @@ export const supportTicketAttachments = sqliteTable(
       .notNull()
       .references(() => supportTicketEvents.id, { onDelete: "cascade" }),
     type: text("type" as string, {
-      enum: ["screenshot", "video", "debugger_json", "log", "network"] as const,
+      enum: [
+        "screenshot",
+        "video",
+        "debugger_json",
+        "log",
+        "network",
+        "replay",
+      ] as const,
     })
       .notNull()
       .default("screenshot"),

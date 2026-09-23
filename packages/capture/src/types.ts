@@ -3,7 +3,8 @@ export type CaptureAttachmentType =
   | "video"
   | "debugger_json"
   | "log"
-  | "network";
+  | "network"
+  | "replay";
 
 export type CapturePriority = "low" | "medium" | "high" | "urgent";
 export type CaptureVisibility = "public" | "private";
@@ -107,6 +108,14 @@ export interface CaptureInitOptions {
   lookbackMs?: number;
   /** Record the screen during start()/stop() sessions via getDisplayMedia. */
   video?: boolean;
+  /**
+   * Record the DOM via rrweb — deterministic session replay without a
+   * permission prompt. Lazily imports rrweb only when enabled. Default
+   * false.
+   */
+  replay?: boolean;
+  /** Mask all input values in the DOM replay. Default true. */
+  replayMaskInputs?: boolean;
   /** Capture text request/response bodies (sanitized). Default true. */
   networkBodies?: boolean;
 }
@@ -114,6 +123,8 @@ export interface CaptureInitOptions {
 export interface CaptureStartOptions {
   /** Record screen video for this session (prompts the user). */
   video?: boolean;
+  /** Record DOM replay for this session via rrweb. */
+  replay?: boolean;
   /** Override the configured lookback window for this session. */
   lookbackMs?: number;
 }

@@ -70,6 +70,7 @@ const captureArtifactKindSchema = z.enum([
   "debugger_json",
   "log",
   "network",
+  "replay",
 ]);
 
 const uploadSessionBodySchema = z.object({
@@ -254,6 +255,7 @@ const uploadRoute = createRoute({
         "debugger_json",
         "log",
         "network",
+        "replay",
       ]),
       fileName: z.string(),
     }),
@@ -402,6 +404,7 @@ const shareTicketRoute = createRoute({
                   "debugger_json",
                   "log",
                   "network",
+                  "replay",
                 ]),
                 contentType: z.string().optional(),
                 url: z.string().optional(),
@@ -782,6 +785,8 @@ function defaultContentTypeForAttachment(attachmentType: string): string {
     case "debugger_json":
     case "network":
       return "application/json";
+    case "replay":
+      return "text/html";
     case "log":
       return "text/plain";
     default:
@@ -1202,7 +1207,8 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
             | "video"
             | "debugger_json"
             | "log"
-            | "network",
+            | "network"
+            | "replay",
           fileName,
         })
       ),
@@ -1421,7 +1427,8 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
             | "video"
             | "debugger_json"
             | "log"
-            | "network",
+            | "network"
+            | "replay",
           contentType,
           r2Key,
           size,

@@ -22,6 +22,11 @@ import {
   startDisplayRecording,
   type RecordingController,
 } from "./media.js";
+import {
+  buildReplayHtml,
+  startDomRecording,
+  type ReplayRecorder,
+} from "./replay.js";
 import { gzipBlob, submitCaptureReport } from "./transport.js";
 import type {
   CaptureArtifact,
@@ -167,6 +172,26 @@ export function initCapture(options: CaptureInitOptions): Capture {
   });
   const pendingArtifacts: CaptureArtifact[] = [];
   let active: ActiveSession | null = null;
+  // DOM replay is always-on like the event buffer: rrweb buffers events so
+  // a report includes the session leading up to the bug, not after it.
+  let replayRecorder: ReplayRecorder | null = null;
+  let replayStarting: Promise<ReplayRecorder> | null = null;
+  const ensureReplay = (): Promise<ReplayRecorder> => {
+    if (replayRecorder?.active) {
+      return Promise.resolve(replayRecorder);
+    }
+    replayStarting ??= startDomRecording({
+      maskAllInputs: options.replayMaskInputs,
+    }).then((domRecorder) => {
+      replayRecorder = domRecorder;
+      return domRecorder;
+    });
+    return replayStarting;
+  };
+  if (options.replay) {
+    // Fire and forget — replay is best-effort and must never block init.
+    void ensureReplay().catch(() => {});
+  }
 
   const buildArtifacts = async (
     events: ReturnType<EventRecorder["getRecentSnapshot"]>,
@@ -187,6 +212,17 @@ export function initCapture(options: CaptureInitOptions): Capture {
       });
     }
     artifacts.push(...extras, ...pendingArtifacts.splice(0));
+
+    if (replayRecorder?.active) {
+      const replayEvents = replayRecorder.snapshot(lookbackMs);
+      if (replayEvents.length > 0) {
+        artifacts.push({
+          attachmentType: "replay",
+          fileName: "replay.html",
+          blob: buildReplayHtml(replayEvents, "Pile session replay"),
+        });
+      }
+    }
     return artifacts;
   };
 
@@ -235,6 +271,9 @@ export function initCapture(options: CaptureInitOptions): Capture {
       if (startOptions?.video ?? options.video) {
         recording = await startDisplayRecording();
         recorder.markRecordingStarted(recording.startedAt);
+      }
+      if (startOptions?.replay ?? options.replay) {
+        await ensureReplay().catch(() => null);
       }
       active = { recording, artifacts: [] };
       void session;
@@ -303,6 +342,8 @@ export function initCapture(options: CaptureInitOptions): Capture {
 
     destroy() {
       instrumentation.dispose();
+      replayRecorder?.stop();
+      replayRecorder = null;
       active = null;
       recorder.discardSession();
       pendingArtifacts.splice(0);

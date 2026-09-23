@@ -6226,12 +6226,12 @@ export interface paths {
                          * @default screenshot
                          * @enum {string}
                          */
-                        attachmentType?: "screenshot" | "video" | "debugger_json" | "log" | "network";
+                        attachmentType?: "screenshot" | "video" | "debugger_json" | "log" | "network" | "replay";
                         contentType?: string;
                         fileName?: string;
                         artifacts?: {
                             /** @enum {string} */
-                            attachmentType: "screenshot" | "video" | "debugger_json" | "log" | "network";
+                            attachmentType: "screenshot" | "video" | "debugger_json" | "log" | "network" | "replay";
                             fileName?: string;
                             contentType?: string;
                         }[];
@@ -6262,7 +6262,7 @@ export interface paths {
                                 uploadUrl: string;
                                 r2Key: string;
                                 /** @enum {string} */
-                                attachmentType: "screenshot" | "video" | "debugger_json" | "log" | "network";
+                                attachmentType: "screenshot" | "video" | "debugger_json" | "log" | "network" | "replay";
                                 fileName: string;
                             }[];
                         };
@@ -6301,7 +6301,7 @@ export interface paths {
                 };
                 path: {
                     sessionId: string;
-                    attachmentType: "screenshot" | "video" | "debugger_json" | "log" | "network";
+                    attachmentType: "screenshot" | "video" | "debugger_json" | "log" | "network" | "replay";
                     fileName: string;
                 };
                 cookie?: never;
@@ -6563,7 +6563,7 @@ export interface paths {
                             title: string;
                             attachments: {
                                 /** @enum {string} */
-                                type: "screenshot" | "video" | "debugger_json" | "log" | "network";
+                                type: "screenshot" | "video" | "debugger_json" | "log" | "network" | "replay";
                                 contentType?: string;
                                 url?: string;
                                 size?: number;

@@ -7058,7 +7058,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "video",
                 "debugger_json",
                 "log",
-                "network"
+                "network",
+                "replay"
               ],
               "default": "screenshot"
             },
@@ -7080,7 +7081,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                       "video",
                       "debugger_json",
                       "log",
-                      "network"
+                      "network",
+                      "replay"
                     ]
                   },
                   "fileName": {
@@ -7141,7 +7143,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "video",
             "debugger_json",
             "log",
-            "network"
+            "network",
+            "replay"
           ]
         },
         "fileName": {

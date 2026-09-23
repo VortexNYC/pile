@@ -20,6 +20,9 @@
     "prepack": "pnpm run build",
     "test": "vitest run"
   },
+  "dependencies": {
+    "rrweb": "2.1.4"
+  },
   "devDependencies": {
     "@pile/tsconfig": "workspace:*",
     "vitest": "4.1.11"

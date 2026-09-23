@@ -12422,7 +12422,8 @@
                       "video",
                       "debugger_json",
                       "log",
-                      "network"
+                      "network",
+                      "replay"
                     ],
                     "default": "screenshot"
                   },
@@ -12444,7 +12445,8 @@
                             "video",
                             "debugger_json",
                             "log",
-                            "network"
+                            "network",
+                            "replay"
                           ]
                         },
                         "fileName": {
@@ -12522,7 +12524,8 @@
                               "video",
                               "debugger_json",
                               "log",
-                              "network"
+                              "network",
+                              "replay"
                             ]
                           },
                           "fileName": {
@@ -12576,7 +12579,8 @@
                 "video",
                 "debugger_json",
                 "log",
-                "network"
+                "network",
+                "replay"
               ]
             },
             "required": true,
@@ -12869,7 +12873,8 @@
                               "video",
                               "debugger_json",
                               "log",
-                              "network"
+                              "network",
+                              "replay"
                             ]
                           },
                           "contentType": {
