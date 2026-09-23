@@ -1,6 +1,6 @@
 import { env } from "cloudflare:test";
 import { eq } from "drizzle-orm";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 env.WEBHOOK_QUEUE = null as unknown as typeof env.WEBHOOK_QUEUE;
@@ -575,7 +575,7 @@ describe("support-capture API", () => {
         name: "Reporter",
       },
       media: {
-        screenshotUrl: "https://media.jam.dev/screenshot.png",
+        screenshotUrl: "http://127.0.0.1:1/screenshot.png",
       },
       recordingLink: {
         reference: undefined,
@@ -632,7 +632,7 @@ describe("support-capture API", () => {
         email: "debug@example.com",
         name: "Debug Reporter",
       },
-      media: { screenshotUrl: "https://media.jam.dev/screenshot.png" },
+      media: { screenshotUrl: "https://shot.example.com/screenshot.png" },
       systemInfo: {
         browser: { name: "Chrome", version: "120.0" },
         os: { name: "macOS", version: "14.0" },
@@ -661,16 +661,33 @@ describe("support-capture API", () => {
       secret: publicKey.webhookSecret,
     });
 
-    const res = await captureFetch(`/support/webhooks/jam/${publicKey.id}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "svix-id": svixId,
-        "svix-timestamp": svixTimestamp,
-        "svix-signature": signature,
-      },
-      body: payload,
-    });
+    // Stub the remote media fetch so the test is hermetic — the capture code
+    // downloads remote attachments into R2 when a bucket is bound.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), {
+            status: 200,
+            headers: { "content-type": "image/png" },
+          })
+      )
+    );
+    let res: Response;
+    try {
+      res = await captureFetch(`/support/webhooks/jam/${publicKey.id}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "svix-id": svixId,
+          "svix-timestamp": svixTimestamp,
+          "svix-signature": signature,
+        },
+        body: payload,
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
     expect(res.status).toBe(200);
     const body = (await res.json()) as { ticketId: string };
 
@@ -679,7 +696,10 @@ describe("support-capture API", () => {
       .from(supportTicketAttachments)
       .where(eq(supportTicketAttachments.ticketId, body.ticketId));
     expect(attachments.length).toBe(5);
-    expect(attachments.some((a) => a.type === "screenshot")).toBe(true);
+    const screenshot = attachments.find((a) => a.type === "screenshot");
+    expect(screenshot).toBeTruthy();
+    expect(screenshot!.r2Key).not.toBeNull();
+    expect(screenshot!.url).toContain("/support/capture/artifacts/");
     expect(
       attachments.some((a) => a.type === "debugger_json" && a.r2Key !== null)
     ).toBe(true);
@@ -708,7 +728,7 @@ describe("support-capture API", () => {
         name: "Dedup Reporter",
       },
       media: {
-        screenshotUrl: "https://media.jam.dev/screenshot.png",
+        screenshotUrl: "http://127.0.0.1:1/screenshot.png",
       },
     });
     const svixId = "msg-dedup";
