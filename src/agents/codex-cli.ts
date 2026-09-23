@@ -20,6 +20,7 @@ import type { ActivitySpanOptions } from "./daytona.js";
 import type {
   AgentDispatchContext,
   AgentProvider,
+  DispatchComment,
   AgentProviderHealth,
   AgentProviderSession,
   AgentProviderState,
@@ -66,7 +67,11 @@ function parseRepo(repo: string): [string, string] {
   return [parts[0], parts[1]];
 }
 
-function buildPrompt(issue: Issue, gitIdentity?: GitIdentity | null): string {
+function buildPrompt(
+  issue: Issue,
+  gitIdentity?: GitIdentity | null,
+  comments?: DispatchComment[]
+): string {
   const repo = issue.repo ?? "this repository";
   const branch = issue.branch ?? `issue-${issue.id}`;
   const identityLines = gitIdentity
@@ -89,10 +94,21 @@ function buildPrompt(issue: Issue, gitIdentity?: GitIdentity | null): string {
     `Issue: ${issue.identifier ?? issue.id}`,
     "",
     issue.description ?? "",
+    ...(comments && comments.length > 0
+      ? [
+          "",
+          "## Follow-up comments",
+          "",
+          ...comments.map(
+            (c) =>
+              `- ${c.author}${c.createdAt ? ` (${c.createdAt})` : ""}: ${c.body}`
+          ),
+        ]
+      : []),
     "",
     ...identityLines,
     "",
-    "Implement the requested change. Run the project's dependency installation and test/lint commands (for example `pnpm install` and `pnpm run check`). Make commits with clear messages. Push your changes to the current branch and open a GitHub pull request. Include the full PR URL in your final message.",
+    "Implement the requested change. Verify proportionate to the diff: always run the project's lint/typecheck (for example `pnpm run check`) when the toolchain exists; run the full test suite only when you changed code, and skip it when the diff is docs/config-only. Do not burn time on suites that need network egress the sandbox lacks — note the limitation and move on. Make commits with clear messages. Push your changes to the current branch and open a GitHub pull request. Include the full PR URL in your final message.",
     "Do not attempt to update Pile yourself — an external system will poll your session and write the status back automatically.",
   ].join("\n");
 }
@@ -151,7 +167,7 @@ const PYTHON_RUNNER = [
   "    return result",
   "",
   "def ensure_codex():",
-  "    codex_bin = os.path.join(CODEX_INSTALL_DIR, 'codex')",
+  "    codex_bin = shutil.which('codex') or os.path.join(CODEX_INSTALL_DIR, 'codex')",
   "    if os.path.exists(codex_bin):",
   "        return codex_bin",
   "    os.makedirs(CODEX_INSTALL_DIR, exist_ok=True)",
@@ -364,12 +380,13 @@ function buildSandboxEnv(
   authB64: string,
   githubToken: string,
   gitIdentity: GitIdentity,
-  envId: string
+  envId: string,
+  comments?: DispatchComment[]
 ): Record<string, string> {
   const branch = issue.branch ?? `issue-${issue.id}`;
   const repo = issue.repo ?? "";
   const identifier = issue.identifier ?? issue.id;
-  const prompt = buildPrompt(issue, gitIdentity);
+  const prompt = buildPrompt(issue, gitIdentity, comments);
   return {
     CODEX_AUTH_JSON_B64: authB64,
     CODEX_CLI_ENV_ID: envId,
@@ -489,7 +506,8 @@ export class CodexCliAgentProvider implements AgentProvider {
     issue: Issue,
     model: string,
     sessionId: string,
-    gitIdentity: GitIdentity
+    gitIdentity: GitIdentity,
+    comments?: DispatchComment[]
   ) {
     const authB64 = this.requireAuth();
     const compute = this.requireCompute();
@@ -530,7 +548,8 @@ export class CodexCliAgentProvider implements AgentProvider {
         authB64,
         githubToken,
         gitIdentity,
-        envId
+        envId,
+        comments
       );
       const sandbox = await compute.createSandbox({
         name,
@@ -602,7 +621,8 @@ export class CodexCliAgentProvider implements AgentProvider {
       issue,
       effectiveModel,
       sessionId,
-      gitIdentity
+      gitIdentity,
+      sessionContext?.comments
     );
 
     if (sessionContext?.waitUntil) {

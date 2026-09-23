@@ -305,3 +305,5 @@ is the full surface. Registering a new provider is for agents that want
 dispatch + poll through the tracker's provider interface — see
 `src/agents/provider.ts`.
 Stream-json live events verified (ISS-99).
+
+Live transcript streaming verified (ISS-98).

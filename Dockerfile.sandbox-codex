@@ -4,6 +4,14 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends git python3 curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
+# Repo toolchain baked: agents routinely run `pnpm install`/`check`; without
+# this they bootstrap pnpm via npm/corepack on every run (~2-5 min wasted).
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/* \
+    && corepack enable \
+    && corepack prepare pnpm@9.15.4 --activate
+
 ENV HOME=/root
 RUN mkdir -p /root/.local/bin \
     && curl -fsSL https://raw.githubusercontent.com/openai/codex/main/scripts/install/install.sh \
