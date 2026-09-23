@@ -7,6 +7,10 @@ import {
   applyCatalogMode,
   validateProviderSetup,
 } from "../agents/catalog.js";
+import {
+  decryptProviderConfigRow,
+  encryptProviderConfigInput,
+} from "../agents/credentials.js";
 import { resolveAgentEnv } from "../agents/daytona.js";
 import { getAgentProvider } from "../agents/index.js";
 import type { AgentProviderSession } from "../agents/provider.js";
@@ -86,7 +90,8 @@ function webhookSecretFromConfig(
   }
 }
 
-function redact(row: ProviderConfigRow) {
+async function redact(env: WorkerEnv, row: ProviderConfigRow) {
+  row = (await decryptProviderConfigRow(env, row)) ?? row;
   let parsedConfig: Record<string, unknown> | null = null;
   if (row.config) {
     try {
@@ -393,7 +398,10 @@ async function applyInboundWebhook(
   headers: Headers
 ): Promise<{ ok: true; sessionId: string } | { notFound: true }> {
   const stub = getWorkspaceStub(env, organizationId);
-  const row = await stub.getAgentProviderConfig(agentId);
+  const row = await decryptProviderConfigRow(
+    env,
+    await stub.getAgentProviderConfig(agentId)
+  );
   const effectiveEnv = resolveAgentEnv(env, row ?? undefined);
   const provider = getAgentProvider(agentId, effectiveEnv);
   const parsed =
@@ -448,7 +456,7 @@ export function registerAgentProviderRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
     const rows = await stub.listAgentProviderConfigs();
-    return c.json(rows.map(redact), 200);
+    return c.json(await Promise.all(rows.map((r) => redact(c.env, r))), 200);
   });
 
   app.openapi(upsertConfigRoute, async (c) => {
@@ -462,11 +470,11 @@ export function registerAgentProviderRoutes(app: OpenAPIHono<AppContext>) {
       ? applyCatalogMode(agentId, mode, fields.config ?? undefined)
       : fields.config;
     const stub = getWorkspaceStub(c.env, organizationId);
-    await stub.upsertAgentProviderConfig({
-      agentId,
+    const encrypted = await encryptProviderConfigInput(c.env, {
       ...fields,
       config,
     });
+    await stub.upsertAgentProviderConfig({ agentId, ...encrypted });
     const row = await stub.getAgentProviderConfig(agentId);
     if (!row) {
       throw new VortexError({
@@ -475,7 +483,7 @@ export function registerAgentProviderRoutes(app: OpenAPIHono<AppContext>) {
         message: "Failed to save provider config",
       });
     }
-    return c.json(redact(row), 200);
+    return c.json(await redact(c.env, row), 200);
   });
 
   app.openapi(deleteConfigRoute, async (c) => {
@@ -488,7 +496,10 @@ export function registerAgentProviderRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(healthRoute, async (c) => {
     const { organizationId, agentId } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
-    const row = await stub.getAgentProviderConfig(agentId);
+    const row = await decryptProviderConfigRow(
+      c.env,
+      await stub.getAgentProviderConfig(agentId)
+    );
     const effectiveEnv = resolveAgentEnv(c.env, row ?? undefined);
     const provider = getAgentProvider(agentId, effectiveEnv);
     if (!provider.health) {
@@ -528,7 +539,10 @@ export function registerAgentProviderRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(inboundWebhookRoute, async (c) => {
     const { organizationId, agentId } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
-    const row = await stub.getAgentProviderConfig(agentId);
+    const row = await decryptProviderConfigRow(
+      c.env,
+      await stub.getAgentProviderConfig(agentId)
+    );
     const expected = webhookSecretFromConfig(row?.config);
     if (!expected) {
       throw new VortexError({

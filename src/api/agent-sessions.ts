@@ -2,6 +2,7 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 import type { InferSelectModel } from "drizzle-orm";
 
+import { decryptProviderConfigRow } from "../agents/credentials.js";
 import { resolveAgentEnv } from "../agents/daytona.js";
 import { dispatchAgent, getAgentProvider } from "../agents/index.js";
 import { createD1 } from "../global/db.js";
@@ -700,7 +701,10 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       return c.json(toSessionResponse(session, activities));
     }
 
-    const providerConfig = await stub.getAgentProviderConfig(session.agentId);
+    const providerConfig = await decryptProviderConfigRow(
+      c.env,
+      await stub.getAgentProviderConfig(session.agentId)
+    );
     const effectiveEnv = resolveAgentEnv(c.env, providerConfig ?? undefined);
     const provider = getAgentProvider(session.agentId, effectiveEnv);
     if (provider.cancel) {
@@ -729,7 +733,10 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       return c.json({ message: "Session not found" }, 404);
     }
 
-    const providerConfig = await stub.getAgentProviderConfig(session.agentId);
+    const providerConfig = await decryptProviderConfigRow(
+      c.env,
+      await stub.getAgentProviderConfig(session.agentId)
+    );
     const effectiveEnv = resolveAgentEnv(c.env, providerConfig ?? undefined);
     const provider = getAgentProvider(session.agentId, effectiveEnv);
     const polled = await provider.poll(session.providerSessionId ?? sessionId);
@@ -763,7 +770,10 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       return c.json({ message: "Session not found" }, 404);
     }
 
-    const providerConfig = await stub.getAgentProviderConfig(session.agentId);
+    const providerConfig = await decryptProviderConfigRow(
+      c.env,
+      await stub.getAgentProviderConfig(session.agentId)
+    );
     const effectiveEnv = resolveAgentEnv(c.env, providerConfig ?? undefined);
     const provider = getAgentProvider(session.agentId, effectiveEnv);
 
@@ -839,7 +849,10 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     );
 
     const resolvedAgentId = body.agentId ?? "devin";
-    const providerConfig = await stub.getAgentProviderConfig(resolvedAgentId);
+    const providerConfig = await decryptProviderConfigRow(
+      c.env,
+      await stub.getAgentProviderConfig(resolvedAgentId)
+    );
     const effectiveEnv = resolveAgentEnv(c.env, providerConfig ?? undefined);
 
     const childSession = await dispatchAgent(

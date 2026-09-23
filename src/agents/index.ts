@@ -5,8 +5,10 @@ import type { AgentSession, Issue } from "../types/workspace.js";
 import { CfAgentProvider } from "./cf-agent.js";
 import { CodexCliAgentProvider } from "./codex-cli.js";
 import { CodexAgentProvider } from "./codex.js";
+import { decryptProviderConfigRow } from "./credentials.js";
 import { CursorCliAgentProvider } from "./cursor-cli.js";
 import { CursorAgentProvider } from "./cursor.js";
+import { resolveAgentEnv } from "./daytona.js";
 import { DevinCliAgentProvider } from "./devin-cli.js";
 import { DevinAgentProvider } from "./devin.js";
 import type { AgentProvider } from "./provider.js";
@@ -74,14 +76,13 @@ export async function dispatchAgent(
   model?: string,
   ctx?: { waitUntil: (promise: Promise<unknown>) => void }
 ): Promise<AgentSession> {
-  const provider = getAgentProvider(agentId, env);
   const stub = env.WORKSPACE_DURABLE_OBJECT.get(
     env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
   );
   await stub.setOrganizationId(organizationId);
 
-  const providerConfig = await stub.getAgentProviderConfig(agentId);
-  const allowedTeamIds = parseAgentProviderTeamIds(providerConfig?.teamIds);
+  const storedConfig = await stub.getAgentProviderConfig(agentId);
+  const allowedTeamIds = parseAgentProviderTeamIds(storedConfig?.teamIds);
   if (allowedTeamIds && !allowedTeamIds.includes(issue.teamId)) {
     throw new VortexError({
       code: "FORBIDDEN",
@@ -89,6 +90,15 @@ export async function dispatchAgent(
       message: `Agent provider ${agentId} is not enabled for this team`,
     });
   }
+
+  // BYOK: overlay the workspace's stored provider credentials/model onto the
+  // deployment env before constructing the provider. Fields the workspace
+  // hasn't set fall back to env, so self-host defaults still work.
+  const providerConfig = await decryptProviderConfigRow(env, storedConfig);
+  const provider = getAgentProvider(
+    agentId,
+    resolveAgentEnv(env, providerConfig ?? undefined)
+  );
 
   const gitIdentity = issue.repo
     ? ((await stub.getGitIdentityByRepo(issue.repo)) ?? null)

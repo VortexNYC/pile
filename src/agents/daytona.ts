@@ -94,6 +94,8 @@ export function resolveAgentEnv(
     AGENT_PROVIDER_TOKEN: config.token ?? env.AGENT_PROVIDER_TOKEN,
     CODEX_AUTH_JSON_B64: config.token ?? env.CODEX_AUTH_JSON_B64,
     CODEX_CLI_MODEL: parseConfigModel(config.config) ?? env.CODEX_CLI_MODEL,
+    CURSOR_API_KEY: config.token ?? env.CURSOR_API_KEY,
+    CURSOR_CLI_MODEL: parseConfigModel(config.config) ?? env.CURSOR_CLI_MODEL,
     CODEX_CLI_ENV_ID: parseConfigEnvId(config.config) ?? env.CODEX_CLI_ENV_ID,
     DEVIN_CLI_CREDENTIALS_B64: config.token ?? env.DEVIN_CLI_CREDENTIALS_B64,
     DEVIN_CLI_MODEL: parseConfigModel(config.config) ?? env.DEVIN_CLI_MODEL,

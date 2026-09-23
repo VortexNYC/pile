@@ -2,6 +2,7 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 import { eq, and } from "drizzle-orm";
 
+import { decryptProviderConfigRow } from "../agents/credentials.js";
 import { resolveAgentEnv } from "../agents/daytona.js";
 import { dispatchAgent, getAgentProvider } from "../agents/index.js";
 import { createD1 } from "../global/db.js";
@@ -1369,7 +1370,10 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     }
 
     const resolvedAgentId = agentId ?? provider ?? "devin";
-    const providerConfig = await stub.getAgentProviderConfig(resolvedAgentId);
+    const providerConfig = await decryptProviderConfigRow(
+      c.env,
+      await stub.getAgentProviderConfig(resolvedAgentId)
+    );
     const effectiveEnv = resolveAgentEnv(c.env, providerConfig ?? undefined);
 
     const session = await dispatchAgent(
@@ -1444,7 +1448,10 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
             message: "Missing permission: agent:write",
           });
         }
-        const providerConfig = await stub.getAgentProviderConfig(assigneeId);
+        const providerConfig = await decryptProviderConfigRow(
+          c.env,
+          await stub.getAgentProviderConfig(assigneeId)
+        );
         const effectiveEnv = resolveAgentEnv(
           c.env,
           providerConfig ?? undefined
