@@ -158,7 +158,7 @@ const PYTHON_RUNNER = [
   "        req = urllib.request.Request(",
   "            PILE_LOG_URL,",
   "            data=json.dumps({'lines': lines[-100:]}).encode(),",
-  "            headers={'Authorization': 'Bearer ' + PILE_LOG_TOKEN, 'Content-Type': 'application/json'})",
+  "            headers={'Authorization': 'Bearer ' + PILE_LOG_TOKEN, 'Content-Type': 'application/json', 'User-Agent': 'pile-runner/1.0'})",
   "        urllib.request.urlopen(req, timeout=10)",
   "    except Exception as _e:",
   "        print('[log-ship] post failed: %r' % (_e,))",
