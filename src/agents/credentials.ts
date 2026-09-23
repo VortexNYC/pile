@@ -262,3 +262,17 @@ export function agentLogUrl(
   if (!base) return null;
   return `${base.replace(/\/$/, "")}/workspaces/${organizationId}/agent/sessions/${sessionId}/logs`;
 }
+
+/**
+ * Base URL for the runner's pnpm-store cache (GET/PUT keyed by lockfile hash
+ * appended as a path segment). Same per-session token auth as agentLogUrl.
+ */
+export function agentCacheUrl(
+  env: WorkerEnv,
+  organizationId: string,
+  sessionId: string
+): string | null {
+  const base = env.PUBLIC_API_URL ?? env.BETTER_AUTH_URL;
+  if (!base) return null;
+  return `${base.replace(/\/$/, "")}/workspaces/${organizationId}/agent/sessions/${sessionId}/cache/pnpm-store`;
+}

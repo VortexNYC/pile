@@ -11,7 +11,7 @@ import type {
 } from "../types/workspace.js";
 import { computeBackend } from "./compute.js";
 import type { ComputeBackend } from "./compute.js";
-import { agentLogToken, agentLogUrl } from "./credentials.js";
+import { agentCacheUrl, agentLogToken, agentLogUrl } from "./credentials.js";
 import {
   writeAgentSessionActivity,
   openAgentSessionSpan,
@@ -112,6 +112,7 @@ function sanitizeEnv(value: string): string {
 
 const PYTHON_RUNNER = [
   "import base64",
+  "import hashlib",
   "import json",
   "import os",
   "import re",
@@ -170,6 +171,58 @@ const PYTHON_RUNNER = [
   "",
   "if PILE_LOG_URL and PILE_LOG_TOKEN:",
   "    threading.Thread(target=_ship_loop, daemon=True).start()",
+  "",
+  "# Warm pnpm store cache: the runner downloads a tarball of the pnpm store",
+  "# keyed by the repo's lockfile hash before the agent starts, and uploads it",
+  "# back after — turns cold monorepo installs into a single R2 fetch.",
+  "PILE_CACHE_URL = os.environ.get('PILE_CACHE_URL')",
+  "STORE_DIR = os.environ.get('npm_config_store_dir')",
+  "",
+  "def _cache_request(method, url, data=None):",
+  "    req = urllib.request.Request(url, data=data, method=method,",
+  "        headers={'Authorization': 'Bearer ' + PILE_LOG_TOKEN, 'User-Agent': 'pile-runner/1.0'})",
+  "    return urllib.request.urlopen(req, timeout=120)",
+  "",
+  "def _lockfile_hash():",
+  "    p = os.path.join(REPO_DIR, 'pnpm-lock.yaml')",
+  "    if not os.path.exists(p):",
+  "        return None",
+  "    return hashlib.sha256(open(p, 'rb').read()).hexdigest()",
+  "",
+  "def warm_pnpm_store():",
+  "    if not (PILE_CACHE_URL and PILE_LOG_TOKEN and STORE_DIR):",
+  "        return",
+  "    h = _lockfile_hash()",
+  "    if not h:",
+  "        return",
+  "    try:",
+  "        resp = _cache_request('GET', f'{PILE_CACHE_URL}/{h}')",
+  "        os.makedirs(STORE_DIR, exist_ok=True)",
+  "        subprocess.run(['tar', '-xzf', '-', '-C', STORE_DIR], input=resp.read(), check=True)",
+  "        print(f'[cache] pnpm store warm hit {h[:12]}')",
+  "    except urllib.error.HTTPError as e:",
+  "        if e.code != 404:",
+  "            print(f'[cache] warm fetch failed: {e}')",
+  "    except Exception as e:",
+  "        print(f'[cache] warm fetch failed: {e}')",
+  "",
+  "def save_pnpm_store():",
+  "    if not (PILE_CACHE_URL and PILE_LOG_TOKEN and STORE_DIR):",
+  "        return",
+  "    h = _lockfile_hash()",
+  "    if not h or not os.path.isdir(STORE_DIR):",
+  "        return",
+  "    try:",
+  "        subprocess.run(['tar', '-czf', '/tmp/pnpm-store.tar.gz', '-C', STORE_DIR, '.'], check=True)",
+  "        size = os.path.getsize('/tmp/pnpm-store.tar.gz')",
+  "        if size > 80 * 1024 * 1024:",
+  "            print(f'[cache] store too large ({size // 1024 // 1024}MB), skipping upload')",
+  "            return",
+  "        with open('/tmp/pnpm-store.tar.gz', 'rb') as f:",
+  "            _cache_request('PUT', f'{PILE_CACHE_URL}/{h}', f.read())",
+  "        print(f'[cache] pnpm store saved {h[:12]} ({size // 1024}KB)')",
+  "    except Exception as e:",
+  "        print(f'[cache] store save failed: {e}')",
   "",
   "HOME = os.environ.get('HOME', '/tmp')",
   "CURSOR_INSTALL_DIR = os.path.join(HOME, '.local', 'bin')",
@@ -376,6 +429,7 @@ const PYTHON_RUNNER = [
   "    agent_bin = ensure_cursor()",
   "    create_branch()",
   "    clone_repo()",
+  "    warm_pnpm_store()",
   "    output = run_cursor(agent_bin)",
   "    pushed = commit_and_push()",
   "    pr_url = ''",
@@ -389,6 +443,7 @@ const PYTHON_RUNNER = [
   "    result_text = json.dumps({'output_tail': output, 'transcript': transcript, 'pr_errors': PR_ERRORS})",
   "    with open('/tmp/cursor-result.json', 'w') as f:",
   "        json.dump({'status': 'completed', 'prUrl': pr_url, 'branch': BRANCH, 'result': result_text}, f)",
+  "    save_pnpm_store()",
   "    _ship_stop.set()",
   "    _ship_logs()",
   "    return 0",
@@ -399,6 +454,7 @@ const PYTHON_RUNNER = [
   "    except Exception as e:",
   "        with open('/tmp/cursor-result.json', 'w') as f:",
   "            json.dump({'status': 'failed', 'prUrl': '', 'branch': BRANCH, 'result': str(e)}, f)",
+  "        save_pnpm_store()",
   "        _ship_stop.set()",
   "        _ship_logs()",
   "        sys.exit(1)",
@@ -412,7 +468,8 @@ function buildSandboxEnv(
   gitIdentity: GitIdentity,
   comments?: DispatchComment[],
   logUrl?: string | null,
-  logToken?: string | null
+  logToken?: string | null,
+  cacheUrl?: string | null
 ): Record<string, string> {
   const branch = issue.branch ?? `issue-${issue.id}`;
   const repo = issue.repo ?? "";
@@ -422,6 +479,7 @@ function buildSandboxEnv(
     ...(logUrl && logToken
       ? { PILE_LOG_URL: logUrl, PILE_LOG_TOKEN: logToken }
       : {}),
+    ...(cacheUrl ? { PILE_CACHE_URL: cacheUrl } : {}),
     CURSOR_API_KEY: apiKey,
     GITHUB_TOKEN: githubToken,
     GIT_AUTHOR_NAME: sanitizeEnv(gitIdentity.name),
@@ -574,7 +632,8 @@ export class CursorCliAgentProvider implements AgentProvider {
         gitIdentity,
         comments,
         agentLogUrl(workerEnv, organizationId, sessionId),
-        await agentLogToken(workerEnv, organizationId, sessionId)
+        await agentLogToken(workerEnv, organizationId, sessionId),
+        agentCacheUrl(workerEnv, organizationId, sessionId)
       );
       const sandbox = await compute.createSandbox({
         name,

@@ -114,11 +114,16 @@ app.use("/workspaces/:organizationId/*", async (c, next) => {
     await next();
     return;
   }
-  // Agent runners push log lines with a per-session HMAC token instead of a
-  // user/API-key identity — verified inside the route handler.
+  // Agent runners push log lines and fetch/upload the pnpm store cache with a
+  // per-session HMAC token instead of a user/API-key identity — verified
+  // inside the route handlers.
   if (
-    c.req.method === "POST" &&
-    /\/agent\/sessions\/[^/]+\/logs$/.test(c.req.path)
+    /\/agent\/sessions\/[^/]+\/(logs|cache\/pnpm-store\/[a-f0-9]{64})$/.test(
+      c.req.path
+    ) &&
+    (c.req.method === "POST" ||
+      c.req.method === "GET" ||
+      c.req.method === "PUT")
   ) {
     await next();
     return;

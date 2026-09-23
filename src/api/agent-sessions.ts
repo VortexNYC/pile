@@ -485,6 +485,22 @@ const createChildSessionRoute = createRoute({
   },
 });
 
+// Runner pnpm-store cache: warm install artifact keyed by lockfile hash,
+// stored in R2. Same per-session token auth + middleware bypass as /logs.
+const pnpmStoreKey = (organizationId: string, hash: string) =>
+  `pnpm-store/${organizationId}/${hash}.tar.gz`;
+
+const verifySessionToken = async (
+  env: AppContext["env"],
+  authorization: string | undefined,
+  organizationId: string,
+  sessionId: string
+) => {
+  const expected = await agentLogToken(env, organizationId, sessionId);
+  const provided = (authorization ?? "").replace(/^Bearer\s+/i, "");
+  return !!expected && !!provided && timingSafeEqualHex(provided, expected);
+};
+
 export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listSessionsRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
@@ -704,14 +720,77 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
             )
           : [];
       const capped = lines.slice(-100);
-      for (const line of capped) {
-        await stub.addAgentSessionEvent({
-          sessionId,
-          type: "log",
-          message: line.slice(0, 2000),
-        });
-      }
+      await Promise.all(
+        capped.map((line) =>
+          stub.addAgentSessionEvent({
+            sessionId,
+            type: "log",
+            message: line.slice(0, 2000),
+          })
+        )
+      );
       return c.json({ ok: true, appended: capped.length });
+    }
+  );
+
+  app.get(
+    "/workspaces/:organizationId/agent/sessions/:sessionId/cache/pnpm-store/:hash",
+    async (c) => {
+      const { organizationId, sessionId, hash } = c.req.param();
+      if (!/^[a-f0-9]{64}$/.test(hash)) {
+        return c.json({ message: "Invalid hash" }, 400);
+      }
+      if (
+        !(await verifySessionToken(
+          c.env,
+          c.req.header("authorization"),
+          organizationId,
+          sessionId
+        ))
+      ) {
+        return c.json({ message: "Unauthorized" }, 401);
+      }
+      const obj = await c.env.ATTACHMENTS_BUCKET.get(
+        pnpmStoreKey(organizationId, hash)
+      );
+      if (!obj) return c.json({ message: "Not found" }, 404);
+      return new Response(obj.body, {
+        headers: { "content-type": "application/gzip" },
+      });
+    }
+  );
+
+  app.put(
+    "/workspaces/:organizationId/agent/sessions/:sessionId/cache/pnpm-store/:hash",
+    async (c) => {
+      const { organizationId, sessionId, hash } = c.req.param();
+      if (!/^[a-f0-9]{64}$/.test(hash)) {
+        return c.json({ message: "Invalid hash" }, 400);
+      }
+      if (
+        !(await verifySessionToken(
+          c.env,
+          c.req.header("authorization"),
+          organizationId,
+          sessionId
+        ))
+      ) {
+        return c.json({ message: "Unauthorized" }, 401);
+      }
+      const body = c.req.raw.body;
+      if (!body) return c.json({ message: "Missing body" }, 400);
+      const length = Number(c.req.header("content-length") ?? 0);
+      if (length > 80 * 1024 * 1024) {
+        return c.json({ message: "Store too large" }, 413);
+      }
+      await c.env.ATTACHMENTS_BUCKET.put(
+        pnpmStoreKey(organizationId, hash),
+        body,
+        {
+          httpMetadata: { contentType: "application/gzip" },
+        }
+      );
+      return c.json({ ok: true });
     }
   );
 
