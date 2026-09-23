@@ -35,7 +35,9 @@ export async function storeJamCaptureArtifacts(
       let r2Stored: string | null = null;
       if (bucket) {
         try {
-          const resp = await fetch(input.url);
+          const resp = await fetch(input.url, {
+            signal: AbortSignal.timeout(10_000),
+          });
           if (resp.ok) {
             const buffer = await resp.arrayBuffer();
             const contentType =

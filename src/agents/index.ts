@@ -122,11 +122,25 @@ export async function dispatchAgent(
   });
 
   try {
+    const comments = (await stub.listComments(issue.id))
+      .filter((c) => !c.internal)
+      .slice(-20)
+      .map((c) => ({
+        author: c.externalAuthor ?? c.authorId ?? "unknown",
+        createdAt: c.createdAt ?? null,
+        body: c.body,
+      }));
+
     const providerSession = await provider.dispatch(
       organizationId,
       issue,
       model,
-      { sessionId: session.id, gitIdentity, waitUntil: ctx?.waitUntil }
+      {
+        sessionId: session.id,
+        gitIdentity,
+        waitUntil: ctx?.waitUntil,
+        comments,
+      }
     );
 
     const updated = await stub.applyAgentSessionResult(
