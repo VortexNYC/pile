@@ -42,4 +42,40 @@ describe("public meta routes", () => {
     const body = await res.text();
     expect(body).toContain("openapi.json");
   });
+
+  it("agent-docs eval gate: the public docs surface teaches the core loop", async () => {
+    // The contract a fresh agent needs to succeed without help:
+    // sign up → onboard → capture link → support ticket → issue.
+    const openapi = await fetch("/openapi.json");
+    expect(openapi.status).toBe(200);
+    const spec = (await openapi.json()) as { paths: Record<string, unknown> };
+    for (const path of [
+      "/api/auth/sign-up/email",
+      "/api/auth/sign-in/email",
+      "/workspaces/onboard",
+      "/support/incoming/{channelId}",
+    ]) {
+      expect(spec.paths[path], `missing path ${path}`).toBeDefined();
+    }
+
+    const llms = await fetch("/llms.txt");
+    const llmsBody = await llms.text();
+    expect(llmsBody).toContain("/openapi.json");
+    expect(llmsBody).toContain("@vortex-api/pile");
+
+    // Every doc linked from llms.txt must actually resolve — dangling links
+    // are exactly what breaks a docs-driven agent.
+    const docLinks = [...llmsBody.matchAll(/\((\/docs\/[^)]+)\)/g)].map(
+      (m) => m[1]!
+    );
+    expect(docLinks.length).toBeGreaterThan(0);
+    const results = await Promise.all(
+      docLinks.map(async (link) => ({ link, res: await fetch(link) }))
+    );
+    for (const { link, res } of results) {
+      expect(res.status, `dangling doc link ${link}`).toBe(200);
+      const body = await res.text();
+      expect(body.length, `empty doc ${link}`).toBeGreaterThan(100);
+    }
+  });
 });

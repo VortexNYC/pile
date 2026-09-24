@@ -1,12 +1,18 @@
 import { createD1 } from "../global/db.js";
+import { scrubCaptureText } from "../global/redact.js";
 import { organization } from "../global/schema.js";
+import { processIncomingMessage } from "../global/support-channels.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { AgentSession } from "../types/workspace.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
 import { loadProviderConfig } from "./credentials.js";
 import { resolveAgentEnv } from "./daytona.js";
 import { dispatchAgent, getAgentProvider } from "./index.js";
-import type { AgentProvider, AgentProviderState } from "./provider.js";
+import type {
+  AgentProvider,
+  AgentProviderSession,
+  AgentProviderState,
+} from "./provider.js";
 
 export const DEFAULT_TIMEOUT_MINUTES = 60;
 export const DEFAULT_INACTIVITY_MINUTES = 20;
@@ -89,6 +95,53 @@ async function cancelSession(
     },
     undefined
   );
+}
+
+// Provider-reported task failures land in the workspace support inbox as a
+// ticket keyed on the session id — dedup'd by externalTicketId, scrubbed of
+// credentials, and deliberately NOT auto-escalated to an issue.
+export async function ingestFailedAgentSession(
+  env: WorkerEnv,
+  organizationId: string,
+  session: AgentSession,
+  polled: AgentProviderSession
+): Promise<void> {
+  try {
+    const db = createD1(env.D1);
+    const detail = scrubCaptureText(
+      [
+        `Session: ${session.id}`,
+        `Agent: ${session.agentId}`,
+        `Provider: ${session.provider}`,
+        polled.providerSessionId
+          ? `Provider session: ${polled.providerSessionId}`
+          : null,
+        session.issueId ? `Issue: ${session.issueId}` : null,
+        polled.url ? `Provider URL: ${polled.url}` : null,
+        polled.infraFailure ? `Infra failure: yes` : null,
+        "",
+        polled.result ?? "Provider reported failure with no details.",
+      ]
+        .filter((line): line is string => line !== null)
+        .join("\n")
+    );
+    await processIncomingMessage(db, organizationId, {
+      channel: "api",
+      externalSource: "api",
+      fromEmail: "agent-sessions@pile.internal",
+      fromName: "Pile Agents",
+      subject: `Agent session failed: ${session.agentId} (${session.id.slice(0, 8)})`,
+      text: detail,
+      externalTicketId: `agent-session-${session.id}`,
+      externalMessageId: `agent-session-${session.id}-failed`,
+      subType: "agent-failure",
+    });
+  } catch (err) {
+    console.error("failed-session ingest failed", {
+      session: session.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 const MAX_INFRA_RETRIES = 1;
@@ -198,8 +251,11 @@ export async function sweepAgentSessions(
             polled.status === "canceled"
           ) {
             await stub.applyAgentSessionResult(session.id, polled);
-            if (polled.status === "failed" && polled.infraFailure) {
-              await retryInfraSession(env, stub, id, session, ctx);
+            if (polled.status === "failed") {
+              await ingestFailedAgentSession(env, id, session, polled);
+              if (polled.infraFailure) {
+                await retryInfraSession(env, stub, id, session, ctx);
+              }
             }
             continue;
           }
