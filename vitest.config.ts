@@ -25,6 +25,7 @@ export default defineConfig({
             "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
           SLACK_REDIRECT_URI: "http://localhost/slack/oauth",
           INTERCOM_CLIENT_SECRET: "test-intercom-client-secret",
+          FEEDBACK_CHANNEL_ID: "test-feedback-channel",
         },
       },
     }),

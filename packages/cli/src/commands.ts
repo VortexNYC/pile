@@ -3661,6 +3661,30 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "support feedback create": {
+    method: "POST",
+    path: "/support/feedback",
+    params: [],
+    query: [],
+    body: [
+      {
+        name: "subject",
+        flag: "subject",
+      },
+      {
+        name: "text",
+        flag: "text",
+      },
+      {
+        name: "fromEmail",
+        flag: "from-email",
+      },
+      {
+        name: "fromName",
+        flag: "from-name",
+      },
+    ],
+  },
   "support channels send create": {
     method: "POST",
     path: "/workspaces/{organizationId}/support/channels/{channelId}/send",

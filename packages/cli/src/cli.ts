@@ -577,11 +577,7 @@ async function initCommand(
   return 0;
 }
 
-const CLI_VERSION = "0.1.3";
-const FEEDBACK_CHANNEL_ID = "cc2f808d-007e-48a1-870f-bd4c68ae0cd6";
-const FEEDBACK_CHANNEL_SECRET =
-  process.env.PILE_FEEDBACK_SECRET ??
-  "def1ccf1580e644a926ab305492b9c27b6df5184ee99ec65";
+const CLI_VERSION = "0.1.4";
 
 async function feedbackCommand(
   flags: Readonly<Record<string, string | boolean>>,
@@ -619,22 +615,16 @@ async function feedbackCommand(
     .filter((line) => line.length > 0)
     .join("\n");
 
-  const res = await doFetch(
-    `${baseUrl}/support/incoming/${FEEDBACK_CHANNEL_ID}`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-pile-channel-secret": FEEDBACK_CHANNEL_SECRET,
-      },
-      body: JSON.stringify({
-        fromEmail: email,
-        fromName: flagString(flags, "name") ?? "pile CLI",
-        subject,
-        text: context,
-      }),
-    }
-  );
+  const res = await doFetch(`${baseUrl}/support/feedback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      fromEmail: email,
+      fromName: flagString(flags, "name") ?? "pile CLI",
+      subject,
+      text: context,
+    }),
+  });
   const text = await res.text();
   if (!res.ok) {
     throw new Error(`Feedback failed: ${res.status} ${text}`);

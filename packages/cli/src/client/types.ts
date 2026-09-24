@@ -8580,6 +8580,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/support/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** File product feedback into the configured feedback channel */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @default  */
+                        subject?: string;
+                        text: string;
+                        /** Format: email */
+                        fromEmail?: string;
+                        fromName?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Feedback filed */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                            ticketId: string;
+                            ticketNumber: number;
+                        };
+                    };
+                };
+                /** @description Feedback channel not configured */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/support/channels/{channelId}/send": {
         parameters: {
             query?: never;

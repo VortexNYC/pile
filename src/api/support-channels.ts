@@ -439,6 +439,96 @@ export function registerSupportChannelRoutes(app: OpenAPIHono<AppContext>) {
     }
   );
 
+  // Public product feedback intake — no secret. The client can't be trusted
+  // to hold one (the CLI ships to npm), so the protection is a strict
+  // per-IP hourly cap plus a server-side channel pinned by env.
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/support/feedback",
+      tags: ["support-channels"],
+      summary: "File product feedback into the configured feedback channel",
+      middleware: [
+        publicRateLimit({
+          bucket: "support-feedback",
+          max: 10,
+          windowMs: 3_600_000,
+        }),
+      ],
+      request: {
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({
+                subject: z.string().max(200).default(""),
+                text: z.string().min(1).max(4000),
+                fromEmail: z.string().email().optional(),
+                fromName: z.string().max(200).optional(),
+              }),
+            },
+          },
+        },
+      },
+      responses: {
+        201: {
+          description: "Feedback filed",
+          content: {
+            "application/json": {
+              schema: z.object({
+                ok: z.boolean(),
+                ticketId: z.string(),
+                ticketNumber: z.number(),
+              }),
+            },
+          },
+        },
+        404: { description: "Feedback channel not configured" },
+      },
+    }),
+    async (c) => {
+      const channelId = c.env.FEEDBACK_CHANNEL_ID;
+      if (!channelId) {
+        throw new VortexError({
+          code: "NOT_FOUND",
+          status: 404,
+          message: "Feedback channel not configured",
+        });
+      }
+      const input = c.req.valid("json");
+      const db = createD1(c.env.D1);
+      const [channel] = await db
+        .select()
+        .from(supportChannels)
+        .where(
+          and(
+            eq(supportChannels.id, channelId),
+            eq(supportChannels.isActive, true)
+          )
+        )
+        .limit(1);
+      if (!channel) {
+        throw new VortexError({
+          code: "NOT_FOUND",
+          status: 404,
+          message: "Feedback channel not configured",
+        });
+      }
+      const ticket = await processIncomingMessage(db, channel.organizationId, {
+        channel: "api",
+        externalSource: "api",
+        fromEmail: input.fromEmail ?? "feedback@pile.dev",
+        fromName: input.fromName ?? null,
+        subject: input.subject,
+        text: input.text,
+        subType: "product-feedback",
+      });
+      return c.json(
+        { ok: true, ticketId: ticket.id, ticketNumber: ticket.number },
+        201
+      );
+    }
+  );
+
   app.openapi(
     createRoute({
       method: "post",

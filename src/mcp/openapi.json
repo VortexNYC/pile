@@ -16861,6 +16861,77 @@
         }
       }
     },
+    "/support/feedback": {
+      "post": {
+        "tags": [
+          "support-channels"
+        ],
+        "summary": "File product feedback into the configured feedback channel",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "subject": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "default": ""
+                  },
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  },
+                  "fromEmail": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "fromName": {
+                    "type": "string",
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "text"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Feedback filed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "ticketId": {
+                      "type": "string"
+                    },
+                    "ticketNumber": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "ticketId",
+                    "ticketNumber"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Feedback channel not configured"
+          }
+        }
+      }
+    },
     "/workspaces/{organizationId}/support/channels/{channelId}/send": {
       "post": {
         "tags": [

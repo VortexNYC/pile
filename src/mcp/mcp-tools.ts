@@ -7395,6 +7395,43 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postSupportFeedback",
+    "description": "File product feedback into the configured feedback channel (POST /support/feedback) Request body goes in the \"body\" object; fields: subject, text*, fromEmail, fromName (* = required).",
+    "method": "POST",
+    "path": "/support/feedback",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "type": "object",
+          "properties": {
+            "subject": {
+              "type": "string",
+              "maxLength": 200,
+              "default": ""
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000
+            },
+            "fromEmail": {
+              "type": "string",
+              "format": "email"
+            },
+            "fromName": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          "required": [
+            "text"
+          ]
+        }
+      }
+    }
+  },
+  {
     "name": "postSupportIncomingChannelId",
     "description": "Receive a generic incoming support message (POST /support/incoming/{channelId}) Path params (top-level, required): channelId. Request body goes in the \"body\" object; fields: fromEmail*, fromName, subject, text*, html, externalTicketId, externalMessageId, subType, createdAt (* = required).",
     "method": "POST",

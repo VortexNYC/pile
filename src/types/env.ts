@@ -34,6 +34,7 @@ export interface AppEnv {
   AGENT_SETTINGS_KEK?: string;
   /** Public API origin agents call back to (log ingest). Defaults to BETTER_AUTH_URL. */
   PUBLIC_API_URL?: string;
+  FEEDBACK_CHANNEL_ID?: string;
   /** Days before capture artifacts (R2 objects + attachment rows) are swept by the cron. Defaults to 30. */
   CAPTURE_ARTIFACT_RETENTION_DAYS?: string;
   /** Base64-encoded `~/.codex/auth.json` for the `codex-cli` provider. */

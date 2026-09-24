@@ -121,6 +121,7 @@ DEVIN_MODEL = "swe-2"
 EMAIL_FROM = "notifications@pile.nyc"
 COMPUTE_PROVIDER = "cloudflare"
 PUBLIC_API_URL = "https://pile.nyc"
+FEEDBACK_CHANNEL_ID = "cc2f808d-007e-48a1-870f-bd4c68ae0cd6"
 
 [[env.production.d1_databases]]
 binding = "D1"

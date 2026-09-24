@@ -758,7 +758,7 @@ describe("CLI integration", () => {
       string,
       { method: string; headers: Record<string, string>; body: string },
     ];
-    expect(new URL(url).pathname).toContain("/support/incoming/");
+    expect(new URL(url).pathname).toBe("/support/feedback");
     expect(init.method).toBe("POST");
     const body = JSON.parse(init.body) as { subject: string; text: string };
     expect(body.subject).toBe("the init flow rocks");
