@@ -67,17 +67,16 @@ const contextSchema = z.object({
   updatedAt: z.string(),
 });
 
-function auth(token: string): Record<string, string> {
+function bearer(token: string): Record<string, string> {
   return { authorization: `Bearer ${token}` };
 }
 
 describe("workspace agent context", () => {
   it("serves the default AGENTS.md after workspace creation", async () => {
     const { organizationId, token } = await seedWorkspace("user-ctx-default");
-    const res = await ctxFetch(
-      `/workspaces/${organizationId}/agent-context`,
-      { headers: auth(token) }
-    );
+    const res = await ctxFetch(`/workspaces/${organizationId}/agent-context`, {
+      headers: bearer(token),
+    });
     expect(res.status).toBe(200);
     const ctx = contextSchema.parse(await res.json());
     expect(ctx.agentsMd).toContain("Agent operating notes");
@@ -88,34 +87,30 @@ describe("workspace agent context", () => {
 
   it("gets and puts context", async () => {
     const { organizationId, token } = await seedWorkspace("user-ctx-put");
-    const put = await ctxFetch(
-      `/workspaces/${organizationId}/agent-context`,
-      {
-        method: "PUT",
-        headers: { ...auth(token), "content-type": "application/json" },
-        body: JSON.stringify({
-          agentsMd: "# Custom rules\n\nUse pnpm.",
-          rules: [{ name: "pnpm-only", content: "Use pnpm only." }],
-          skills: [
-            {
-              name: "triage",
-              description: "Triage tickets",
-              content: "---\nname: triage\n---\nTriage.",
-            },
-          ],
-        }),
-      }
-    );
+    const put = await ctxFetch(`/workspaces/${organizationId}/agent-context`, {
+      method: "PUT",
+      headers: { ...bearer(token), "content-type": "application/json" },
+      body: JSON.stringify({
+        agentsMd: "# Custom rules\n\nUse pnpm.",
+        rules: [{ name: "pnpm-only", content: "Use pnpm only." }],
+        skills: [
+          {
+            name: "triage",
+            description: "Triage tickets",
+            content: "---\nname: triage\n---\nTriage.",
+          },
+        ],
+      }),
+    });
     expect(put.status).toBe(200);
     const ctx = contextSchema.parse(await put.json());
     expect(ctx.agentsMd).toBe("# Custom rules\n\nUse pnpm.");
     expect(ctx.rules[0].name).toBe("pnpm-only");
     expect(ctx.skills[0].name).toBe("triage");
 
-    const get = await ctxFetch(
-      `/workspaces/${organizationId}/agent-context`,
-      { headers: auth(token) }
-    );
+    const get = await ctxFetch(`/workspaces/${organizationId}/agent-context`, {
+      headers: bearer(token),
+    });
     expect(contextSchema.parse(await get.json()).skills).toHaveLength(1);
   });
 
@@ -123,7 +118,7 @@ describe("workspace agent context", () => {
     const { organizationId, token } = await seedWorkspace("user-ctx-sub");
     await ctxFetch(`/workspaces/${organizationId}/agent-context`, {
       method: "PUT",
-      headers: { ...auth(token), "content-type": "application/json" },
+      headers: { ...bearer(token), "content-type": "application/json" },
       body: JSON.stringify({
         rules: [{ name: "r1", content: "rule one" }],
         skills: [{ name: "s1", description: "", content: "skill one" }],
@@ -132,7 +127,7 @@ describe("workspace agent context", () => {
 
     const rules = await ctxFetch(
       `/workspaces/${organizationId}/agent-context/rules`,
-      { headers: auth(token) }
+      { headers: bearer(token) }
     );
     expect(
       z
@@ -143,7 +138,7 @@ describe("workspace agent context", () => {
 
     const skills = await ctxFetch(
       `/workspaces/${organizationId}/agent-context/skills`,
-      { headers: auth(token) }
+      { headers: bearer(token) }
     );
     expect(
       z
@@ -161,21 +156,18 @@ describe("workspace agent context", () => {
     const other = await seedWorkspace("user-ctx-other");
     const cross = await ctxFetch(
       `/workspaces/${organizationId}/agent-context`,
-      { headers: auth(other.token) }
+      { headers: bearer(other.token) }
     );
     expect([401, 403, 404]).toContain(cross.status);
   });
 
   it("rejects invalid payloads", async () => {
     const { organizationId, token } = await seedWorkspace("user-ctx-bad");
-    const res = await ctxFetch(
-      `/workspaces/${organizationId}/agent-context`,
-      {
-        method: "PUT",
-        headers: { ...auth(token), "content-type": "application/json" },
-        body: JSON.stringify({ rules: [{ name: "", content: "x" }] }),
-      }
-    );
+    const res = await ctxFetch(`/workspaces/${organizationId}/agent-context`, {
+      method: "PUT",
+      headers: { ...bearer(token), "content-type": "application/json" },
+      body: JSON.stringify({ rules: [{ name: "", content: "x" }] }),
+    });
     expect(res.status).toBe(400);
   });
 });
