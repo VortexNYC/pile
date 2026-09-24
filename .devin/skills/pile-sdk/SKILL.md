@@ -90,6 +90,23 @@ if (error) {
   ```
 - List support tickets: `client.GET("/workspaces/{organizationId}/support/tickets", { params: { path: { organizationId: "org-1" } } })`
 
+## Search before you create (dedup)
+
+Before `POST /issues`, search for the distinctive phrase from the title — duplicates are the main source of tracker noise:
+
+```typescript
+const { data } = await client.GET("/workspaces/{organizationId}/issues", {
+  params: {
+    path: { organizationId: "org-1" },
+    query: { search: "key phrase from the title" },
+  },
+});
+```
+
+- If a strong match exists, comment or update that issue instead of creating a new one.
+- Create only when the search is empty or matches are clearly different work.
+- Scripted imports must set `externalRef` — create is idempotent on it, so re-runs return the existing issue instead of duplicating.
+
 ## Verification
 
 - `client.GET("/workspaces", {})` returns `{ data, error, response }`.

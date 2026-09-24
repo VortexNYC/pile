@@ -7,6 +7,7 @@ const generated = [
   "packages/cli/src/client/types.ts",
   "packages/cli/src/commands.ts",
   "src/assets/capture.iife.ts",
+  "src/assets/chat.iife.ts",
 ];
 
 function run(label: string, command: string): void {
@@ -19,6 +20,7 @@ try {
   run("regenerating client types", "pnpm run client:generate");
   run("regenerating CLI commands", "pnpm run cli:generate");
   run("regenerating capture bundle", "pnpm run capture:bundle");
+  run("regenerating chat bundle", "pnpm run chat:bundle");
 
   console.log("[contract-check] verifying generated artifacts are committed");
   const diff = execSync(`git diff -- ${generated.join(" ")}`, {

@@ -1164,6 +1164,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdSupportWidgetkeysKeyId",
+    "description": "Delete support widget key (DELETE /workspaces/{organizationId}/support/widget-keys/{keyId}) Path params (top-level, required): organizationId, keyId.",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/support/widget-keys/{keyId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "keyId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "keyId",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdTeamsId",
     "description": "Delete team (DELETE /workspaces/{organizationId}/teams/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
@@ -1404,6 +1425,26 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "sessionId"
+      ]
+    }
+  },
+  {
+    "name": "getSupportWidgetKeyMessages",
+    "description": "List support widget messages (GET /support/widget/{key}/messages) Path params (top-level, required): key. Query params (top-level, optional): after.",
+    "method": "GET",
+    "path": "/support/widget/{key}/messages",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "after": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "key"
       ]
     }
   },
@@ -4582,6 +4623,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "organizationId",
         "tierId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportWidgetkeys",
+    "description": "List support widget keys (GET /workspaces/{organizationId}/support/widget-keys) Path params (top-level, required): organizationId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/widget-keys",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
       ]
     }
   },
@@ -7813,6 +7871,83 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "body",
         "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postSupportWidgetKeyMessages",
+    "description": "Create support widget message (POST /support/widget/{key}/messages) Path params (top-level, required): key. Request body goes in the \"body\" object; fields: text*, email, name (* = required).",
+    "method": "POST",
+    "path": "/support/widget/{key}/messages",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "minLength": 1
+            },
+            "email": {
+              "type": "string",
+              "format": "email"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "text"
+          ]
+        }
+      },
+      "required": [
+        "key"
+      ]
+    }
+  },
+  {
+    "name": "postSupportWidgetKeySession",
+    "description": "Create support widget session (POST /support/widget/{key}/session) Path params (top-level, required): key. Request body goes in the \"body\" object; fields: sessionToken, externalId, email, name, identifierHash, turnstileToken.",
+    "method": "POST",
+    "path": "/support/widget/{key}/session",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "sessionToken": {
+              "type": "string"
+            },
+            "externalId": {
+              "type": "string"
+            },
+            "email": {
+              "type": "string",
+              "format": "email"
+            },
+            "name": {
+              "type": "string"
+            },
+            "identifierHash": {
+              "type": "string"
+            },
+            "turnstileToken": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "key"
       ]
     }
   },
@@ -13113,6 +13248,56 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "organizationId",
         "userId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSupportWidgetkeys",
+    "description": "Create support widget key (POST /workspaces/{organizationId}/support/widget-keys) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name, allowedOrigins, greeting, brandColor, requireEmail, requireChallenge.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/widget-keys",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "default": "Chat widget"
+            },
+            "allowedOrigins": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": []
+            },
+            "greeting": {
+              "type": "string",
+              "nullable": true
+            },
+            "brandColor": {
+              "type": "string",
+              "nullable": true
+            },
+            "requireEmail": {
+              "type": "boolean",
+              "default": false
+            },
+            "requireChallenge": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        }
+      },
+      "required": [
+        "organizationId"
       ]
     }
   },

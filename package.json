@@ -26,6 +26,7 @@
     "client:generate": "openapi-typescript src/mcp/openapi.json -o packages/cli/src/client/types.ts",
     "cli:generate": "tsx scripts/generate-cli.ts",
     "capture:bundle": "pnpm -C packages/capture run build && node -e \"const fs=require('fs');fs.writeFileSync('src/assets/capture.iife.ts','export default '+JSON.stringify(fs.readFileSync('packages/capture/dist/capture.iife.js','utf8'))+'\\n')\"",
+    "chat:bundle": "pnpm -C packages/widget run build && node -e \"const fs=require('fs');fs.writeFileSync('src/assets/chat.iife.ts','export default '+JSON.stringify(fs.readFileSync('packages/widget/dist/chat.iife.js','utf8'))+'\\n')\"",
     "cli": "pnpm -C packages/cli run cli",
     "contract:check": "tsx scripts/contract-check.ts",
     "knip": "knip",

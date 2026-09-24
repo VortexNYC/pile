@@ -1,0 +1,13 @@
+{
+  "name": "@vortex-api/widget",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pile support chat widget — the Intercom/Plain-style embeddable bubble that posts into the native support inbox.",
+  "type": "module",
+  "scripts": {
+    "build": "vite build --config vite.iife.config.ts"
+  },
+  "devDependencies": {
+    "vite": "^7.1.11"
+  }
+}

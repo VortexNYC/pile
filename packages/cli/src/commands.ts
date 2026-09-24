@@ -3302,6 +3302,150 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "support widget keys list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/widget-keys",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support widget keys create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/widget-keys",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "allowedOrigins",
+        flag: "allowed-origins",
+      },
+      {
+        name: "greeting",
+        flag: "greeting",
+      },
+      {
+        name: "brandColor",
+        flag: "brand-color",
+      },
+      {
+        name: "requireEmail",
+        flag: "require-email",
+      },
+      {
+        name: "requireChallenge",
+        flag: "require-challenge",
+      },
+    ],
+  },
+  "support widget keys delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/support/widget-keys/{keyId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "keyId",
+        flag: "key-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support widget session create": {
+    method: "POST",
+    path: "/support/widget/{key}/session",
+    params: [
+      {
+        name: "key",
+        flag: "key",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "sessionToken",
+        flag: "session-token",
+      },
+      {
+        name: "externalId",
+        flag: "external-id",
+      },
+      {
+        name: "email",
+        flag: "email",
+      },
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "identifierHash",
+        flag: "identifier-hash",
+      },
+      {
+        name: "turnstileToken",
+        flag: "turnstile-token",
+      },
+    ],
+  },
+  "support widget messages list": {
+    method: "GET",
+    path: "/support/widget/{key}/messages",
+    params: [
+      {
+        name: "key",
+        flag: "key",
+      },
+    ],
+    query: [
+      {
+        name: "after",
+        flag: "after",
+      },
+    ],
+    body: [],
+  },
+  "support widget messages create": {
+    method: "POST",
+    path: "/support/widget/{key}/messages",
+    params: [
+      {
+        name: "key",
+        flag: "key",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "text",
+        flag: "text",
+      },
+      {
+        name: "email",
+        flag: "email",
+      },
+      {
+        name: "name",
+        flag: "name",
+      },
+    ],
+  },
   "support channels list": {
     method: "GET",
     path: "/workspaces/{organizationId}/support-channels",

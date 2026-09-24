@@ -7427,6 +7427,323 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/support/widget-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List support widget keys */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Widget keys */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            widgetKeys: {
+                                id: string;
+                                organizationId: string;
+                                key: string;
+                                hmacSecret: string;
+                                name: string;
+                                allowedOrigins: string[];
+                                greeting: string | null;
+                                brandColor: string | null;
+                                requireEmail: boolean;
+                                requireChallenge: boolean;
+                                isActive: boolean;
+                                createdBy: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create support widget key */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @default Chat widget */
+                        name?: string;
+                        /** @default [] */
+                        allowedOrigins?: string[];
+                        greeting?: string | null;
+                        brandColor?: string | null;
+                        /** @default false */
+                        requireEmail?: boolean;
+                        /** @default false */
+                        requireChallenge?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description Widget key created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            key: string;
+                            hmacSecret: string;
+                            name: string;
+                            allowedOrigins: string[];
+                            greeting: string | null;
+                            brandColor: string | null;
+                            requireEmail: boolean;
+                            requireChallenge: boolean;
+                            isActive: boolean;
+                            createdBy: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/support/widget-keys/{keyId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete support widget key */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    keyId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Widget key revoked */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            key: string;
+                            hmacSecret: string;
+                            name: string;
+                            allowedOrigins: string[];
+                            greeting: string | null;
+                            brandColor: string | null;
+                            requireEmail: boolean;
+                            requireChallenge: boolean;
+                            isActive: boolean;
+                            createdBy: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/support/widget/{key}/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create support widget session */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    key: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        sessionToken?: string;
+                        externalId?: string;
+                        /** Format: email */
+                        email?: string;
+                        name?: string;
+                        identifierHash?: string;
+                        turnstileToken?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Widget session created or resumed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            sessionToken: string;
+                            ticketId: string | null;
+                            identityVerified: boolean;
+                            config: {
+                                greeting: string | null;
+                                brandColor: string | null;
+                                requireEmail: boolean;
+                            };
+                            customer: {
+                                email: string | null;
+                                fullName: string | null;
+                            } | null;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/support/widget/{key}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List support widget messages */
+        get: {
+            parameters: {
+                query?: {
+                    after?: string;
+                };
+                header: {
+                    "x-pile-widget-session": string;
+                };
+                path: {
+                    key: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Messages for the session's conversation */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            messages: {
+                                id: string;
+                                /** @enum {string} */
+                                direction: "inbound" | "outbound";
+                                text: string;
+                                createdAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create support widget message */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "x-pile-widget-session": string;
+                };
+                path: {
+                    key: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        text: string;
+                        /** Format: email */
+                        email?: string;
+                        name?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Message appended */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            messageId: string;
+                            ticketId: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/support-channels": {
         parameters: {
             query?: never;

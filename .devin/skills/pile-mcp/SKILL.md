@@ -167,6 +167,24 @@ Create a support ticket:
 }
 ```
 
+## Search before you create (dedup)
+
+Before calling `create_issue`, search for the distinctive phrase from the title — duplicates are the main source of tracker noise:
+
+```json
+{
+  "name": "list_issues",
+  "arguments": {
+    "organizationId": "org_vortex_main",
+    "search": "key phrase from the title"
+  }
+}
+```
+
+- If a strong match exists, use `create_issue_comment` or `update_issue` on it instead of creating a new issue.
+- Create only when the search is empty or matches are clearly different work.
+- Scripted imports must set `externalRef` in the body — `create_issue` is idempotent on it, so re-runs return the existing issue rather than duplicating.
+
 ## Common mistakes
 
 - Putting body fields at the top level instead of inside `body`.

@@ -2714,6 +2714,82 @@ export const supportCaptureLinks = sqliteTable(
   ]
 );
 
+export const supportWidgetKeys = sqliteTable(
+  "support_widget_keys" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    key: text("key" as string).notNull(),
+    hmacSecret: text("hmac_secret" as string).notNull(),
+    name: text("name" as string).notNull(),
+    allowedOrigins: text("allowed_origins" as string)
+      .notNull()
+      .default("[]"),
+    greeting: text("greeting" as string),
+    brandColor: text("brand_color" as string),
+    requireEmail: integer("require_email" as string, { mode: "boolean" })
+      .notNull()
+      .default(false),
+    requireChallenge: integer("require_challenge" as string, {
+      mode: "boolean",
+    })
+      .notNull()
+      .default(false),
+    isActive: integer("is_active" as string, { mode: "boolean" })
+      .notNull()
+      .default(true),
+    createdBy: text("created_by" as string),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("support_widget_keys_key_idx" as string).on(table.key),
+    index("support_widget_keys_org_idx" as string).on(table.organizationId),
+  ]
+);
+
+export const supportWidgetSessions = sqliteTable(
+  "support_widget_sessions" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    widgetKeyId: text("widget_key_id" as string)
+      .notNull()
+      .references(() => supportWidgetKeys.id),
+    token: text("token" as string).notNull(),
+    customerId: text("customer_id" as string).references(
+      () => supportCustomers.id
+    ),
+    ticketId: text("ticket_id" as string).references(() => supportTickets.id),
+    externalId: text("external_id" as string),
+    identityVerified: integer("identity_verified" as string, {
+      mode: "boolean",
+    })
+      .notNull()
+      .default(false),
+    expiresAt: text("expires_at" as string).notNull(),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("support_widget_sessions_token_idx" as string).on(table.token),
+    index("support_widget_sessions_org_idx" as string).on(table.organizationId),
+    index("support_widget_sessions_ticket_idx" as string).on(table.ticketId),
+  ]
+);
+
 export const supportCaptureSessions = sqliteTable(
   "support_capture_sessions" as string,
   {

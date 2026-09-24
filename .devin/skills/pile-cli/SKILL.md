@@ -30,6 +30,18 @@ The `pile` CLI is a generated, OpenAPI-backed command-line client for Pile. It s
 - Create a support ticket: `pile support tickets create --workspace <org> --customer-id ... --title "..."`
 - Make an arbitrary request: `pile request GET /workspaces/<org>/issues`
 
+## Search before you create (dedup)
+
+Never create an issue blind — duplicate titles are the main source of tracker noise. Before `issues create`, run a search for the distinctive phrase:
+
+```bash
+pile request GET "/workspaces/<org>/issues?search=<key phrase from the title>"
+```
+
+- If a strong match exists, comment or update that issue instead of creating a new one.
+- Create only when the search comes back empty or the matches are clearly different work.
+- For scripted imports, always set `externalRef` — create is idempotent on it, so re-runs return the existing issue instead of duplicating.
+
 ## Verification
 
 - `pile issues list --workspace <org>` prints a JSON array.

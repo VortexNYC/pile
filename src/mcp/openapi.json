@@ -14333,6 +14333,625 @@
         "summary": "List support capture metadata"
       }
     },
+    "/workspaces/{organizationId}/support/widget-keys": {
+      "post": {
+        "tags": [
+          "support-widget"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "default": "Chat widget"
+                  },
+                  "allowedOrigins": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "default": []
+                  },
+                  "greeting": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "brandColor": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "requireEmail": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "requireChallenge": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Widget key created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "hmacSecret": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "allowedOrigins": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "greeting": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "brandColor": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "requireEmail": {
+                      "type": "boolean"
+                    },
+                    "requireChallenge": {
+                      "type": "boolean"
+                    },
+                    "isActive": {
+                      "type": "boolean"
+                    },
+                    "createdBy": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "key",
+                    "hmacSecret",
+                    "name",
+                    "allowedOrigins",
+                    "greeting",
+                    "brandColor",
+                    "requireEmail",
+                    "requireChallenge",
+                    "isActive",
+                    "createdBy",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create support widget key"
+      },
+      "get": {
+        "tags": [
+          "support-widget"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Widget keys",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "widgetKeys": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "key": {
+                            "type": "string"
+                          },
+                          "hmacSecret": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "allowedOrigins": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "greeting": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "brandColor": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "requireEmail": {
+                            "type": "boolean"
+                          },
+                          "requireChallenge": {
+                            "type": "boolean"
+                          },
+                          "isActive": {
+                            "type": "boolean"
+                          },
+                          "createdBy": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "key",
+                          "hmacSecret",
+                          "name",
+                          "allowedOrigins",
+                          "greeting",
+                          "brandColor",
+                          "requireEmail",
+                          "requireChallenge",
+                          "isActive",
+                          "createdBy",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "widgetKeys"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List support widget keys"
+      }
+    },
+    "/workspaces/{organizationId}/support/widget-keys/{keyId}": {
+      "delete": {
+        "tags": [
+          "support-widget"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "keyId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Widget key revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "hmacSecret": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "allowedOrigins": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "greeting": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "brandColor": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "requireEmail": {
+                      "type": "boolean"
+                    },
+                    "requireChallenge": {
+                      "type": "boolean"
+                    },
+                    "isActive": {
+                      "type": "boolean"
+                    },
+                    "createdBy": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "key",
+                    "hmacSecret",
+                    "name",
+                    "allowedOrigins",
+                    "greeting",
+                    "brandColor",
+                    "requireEmail",
+                    "requireChallenge",
+                    "isActive",
+                    "createdBy",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "summary": "Delete support widget key"
+      }
+    },
+    "/support/widget/{key}/session": {
+      "post": {
+        "tags": [
+          "support-widget"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "key",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sessionToken": {
+                    "type": "string"
+                  },
+                  "externalId": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "identifierHash": {
+                    "type": "string"
+                  },
+                  "turnstileToken": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Widget session created or resumed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sessionToken": {
+                      "type": "string"
+                    },
+                    "ticketId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "identityVerified": {
+                      "type": "boolean"
+                    },
+                    "config": {
+                      "type": "object",
+                      "properties": {
+                        "greeting": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "brandColor": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "requireEmail": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "greeting",
+                        "brandColor",
+                        "requireEmail"
+                      ]
+                    },
+                    "customer": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "email": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "fullName": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "email",
+                        "fullName"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "sessionToken",
+                    "ticketId",
+                    "identityVerified",
+                    "config",
+                    "customer"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create support widget session"
+      }
+    },
+    "/support/widget/{key}/messages": {
+      "post": {
+        "tags": [
+          "support-widget"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "key",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "x-pile-widget-session",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "text"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Message appended",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "messageId": {
+                      "type": "string"
+                    },
+                    "ticketId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "messageId",
+                    "ticketId"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create support widget message"
+      },
+      "get": {
+        "tags": [
+          "support-widget"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "key",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "after",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "x-pile-widget-session",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Messages for the session's conversation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "direction": {
+                            "type": "string",
+                            "enum": [
+                              "inbound",
+                              "outbound"
+                            ]
+                          },
+                          "text": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "direction",
+                          "text",
+                          "createdAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "messages"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List support widget messages"
+      }
+    },
     "/workspaces/{organizationId}/support-channels": {
       "get": {
         "tags": [
