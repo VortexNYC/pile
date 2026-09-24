@@ -165,9 +165,26 @@ export async function dispatchAgent(
       const parsed = z.object({ key: z.string() }).safeParse(created);
       if (parsed.success && env.PUBLIC_API_URL) {
         pileApi = { url: env.PUBLIC_API_URL, key: parsed.data.key };
+      } else {
+        await stub
+          .addAgentActivity({
+            sessionId: session.id,
+            actorId: actor.id,
+            type: "error",
+            message: `Pile API credential unavailable: ${!parsed.success ? "unexpected createApiKey response" : "PUBLIC_API_URL unset"}`,
+          })
+          .catch(() => {});
       }
-    } catch {
+    } catch (err) {
       pileApi = undefined;
+      await stub
+        .addAgentActivity({
+          sessionId: session.id,
+          actorId: actor.id,
+          type: "error",
+          message: `Pile API credential mint failed: ${err instanceof Error ? err.message : String(err)}`,
+        })
+        .catch(() => {});
     }
 
     const providerSession = await provider.dispatch(
