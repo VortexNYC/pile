@@ -1,6 +1,6 @@
 {
   "name": "@vortex-api/pile",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "TypeScript SDK and CLI for Pile.",
   "license": "MIT",
   "bin": {
@@ -30,5 +30,8 @@
   "devDependencies": {
     "@pile/tsconfig": "workspace:*",
     "tsx": "4.23.13"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
