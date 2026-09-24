@@ -1,7 +1,7 @@
 {
   "name": "pile",
   "version": "0.1.1",
-  "description": "Pile — an open-source, agent-native issue tracker on Cloudflare Workers.",
+  "description": "Pile \u2014 an open-source, agent-native issue tracker on Cloudflare Workers.",
   "keywords": [
     "agent",
     "cloudflare",
@@ -44,7 +44,8 @@
     "entire:blame": "entire blame",
     "entire:experts": "entire experts",
     "entire:tokens": "entire tokens",
-    "entire:tokens:profile": "entire tokens profile"
+    "entire:tokens:profile": "entire tokens profile",
+    "docs:bundle": "tsx scripts/generate-docs-bundle.ts"
   },
   "dependencies": {
     "@better-auth/api-key": "1.7.2",

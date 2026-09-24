@@ -1,7 +1,8 @@
 {
   "name": "@vortex-api/capture",
   "version": "0.1.1",
-  "description": "Pile support-capture SDK \u2014 records console, network, errors, breadcrumbs, screenshots, and screen video; uploads to a Pile workspace.",
+  "private": true,
+  "description": "Pile support-capture SDK — records console, network, errors, breadcrumbs, screenshots, and screen video; uploads to a Pile workspace.",
   "license": "MIT",
   "files": [
     "dist"
@@ -29,6 +30,5 @@
     "@playwright/test": "1.49.1",
     "vite": "6.4.3",
     "vitest": "4.1.11"
-  },
-  "private": true
+  }
 }

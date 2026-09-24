@@ -45,6 +45,7 @@ import { createAuth } from "../platform/auth.js";
 import { VortexError } from "../platform/errors.js";
 import { toApiKeyWorkspaceIdentity } from "../platform/identity.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
+import { publicRateLimit } from "../platform/rate-limit.js";
 import { rls } from "../platform/rls.js";
 import { renderCaptureLinkPage } from "./capture-link-page.js";
 import { getWorkspaceStub } from "./stub.js";
@@ -223,7 +224,9 @@ const createCaptureLinkBodySchema = z.object({
   name: z.string().min(1).default("Capture link"),
   expiresAt: z.string().nullable().optional(),
   maxSessions: z.number().int().positive().nullable().optional(),
-  requireChallenge: z.boolean().default(false),
+  // Defaults on for human actors (dashboard users sharing links with
+  // customers), off for agent actors — a challenge would block automation.
+  requireChallenge: z.boolean().optional(),
 });
 
 const createCaptureLinkRoute = createRoute({
@@ -296,6 +299,7 @@ const tokenRoute = createRoute({
   method: "post",
   path: "/support/capture/token",
   tags: ["support-capture"],
+  middleware: [publicRateLimit({ bucket: "capture-token", max: 30 })],
   request: {
     headers: z.object({
       "x-pile-capture-public-key": z.string().optional(),
@@ -353,6 +357,7 @@ const uploadSessionRoute = createRoute({
   method: "post",
   path: "/support/capture/upload-session",
   tags: ["support-capture"],
+  middleware: [publicRateLimit({ bucket: "capture-upload-session", max: 30 })],
   request: {
     headers: z.object({
       "x-pile-capture-token": z.string(),
@@ -380,6 +385,7 @@ const uploadRoute = createRoute({
   method: "post",
   path: "/support/capture/upload/{sessionId}/{attachmentType}/{fileName}",
   tags: ["support-capture"],
+  middleware: [publicRateLimit({ bucket: "capture-upload", max: 120 })],
   request: {
     params: z.object({
       sessionId: z.string(),
@@ -414,6 +420,7 @@ const finalizeRoute = createRoute({
   method: "post",
   path: "/support/capture/finalize",
   tags: ["support-capture"],
+  middleware: [publicRateLimit({ bucket: "capture-finalize", max: 30 })],
   request: {
     headers: z.object({
       "x-pile-capture-token": z.string(),
@@ -436,6 +443,7 @@ const metadataRoute = createRoute({
   method: "post",
   path: "/support/capture/metadata",
   tags: ["support-capture"],
+  middleware: [publicRateLimit({ bucket: "capture-metadata", max: 60 })],
   request: {
     headers: z.object({
       "x-pile-capture-token": z.string(),
@@ -1226,7 +1234,7 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
       name: body.name,
       expiresAt: body.expiresAt ?? null,
       maxSessions: body.maxSessions ?? null,
-      requireChallenge: body.requireChallenge,
+      requireChallenge: body.requireChallenge ?? identity?.type !== "agent",
       createdBy: identity?.id ?? null,
     });
     const origin = new URL(c.req.url).origin;

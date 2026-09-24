@@ -25,6 +25,9 @@
     "./capture.iife.js": "./dist/capture/capture.iife.js",
     "./chat.js": "./dist/widget/chat.iife.js"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json && pnpm -C ../capture run build && pnpm -C ../widget run build && mkdir -p dist/capture dist/widget && cp -R ../capture/dist/ dist/capture/ && cp ../widget/dist/chat.iife.js dist/widget/chat.iife.js",
     "prepack": "pnpm run build",
@@ -37,8 +40,5 @@
   "devDependencies": {
     "@pile/tsconfig": "workspace:*",
     "tsx": "4.23.13"
-  },
-  "publishConfig": {
-    "access": "public"
   }
 }

@@ -28,6 +28,7 @@ import {
 } from "../global/support-widget.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
+import { publicRateLimit } from "../platform/rate-limit.js";
 import { rls } from "../platform/rls.js";
 
 const widgetKeySchema = z.object({
@@ -148,6 +149,7 @@ const widgetSessionRoute = createRoute({
   method: "post",
   path: "/support/widget/{key}/session",
   tags: ["support-widget"],
+  middleware: [publicRateLimit({ bucket: "widget-session", max: 20 })],
   request: {
     params: z.object({ key: z.string() }),
     body: {
@@ -177,6 +179,7 @@ const widgetMessageRoute = createRoute({
   method: "post",
   path: "/support/widget/{key}/messages",
   tags: ["support-widget"],
+  middleware: [publicRateLimit({ bucket: "widget-message", max: 60 })],
   request: {
     params: z.object({ key: z.string() }),
     headers: z.object({ "x-pile-widget-session": z.string() }),
@@ -206,6 +209,7 @@ const widgetMessagesRoute = createRoute({
   method: "get",
   path: "/support/widget/{key}/messages",
   tags: ["support-widget"],
+  middleware: [publicRateLimit({ bucket: "widget-poll", max: 120 })],
   request: {
     params: z.object({ key: z.string() }),
     headers: z.object({ "x-pile-widget-session": z.string() }),

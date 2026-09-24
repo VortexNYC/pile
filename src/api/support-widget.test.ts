@@ -309,4 +309,36 @@ describe("support widget", () => {
     );
     expect(wrongSession.status).toBe(401);
   });
+
+  it("rate-limits anonymous session creation per IP", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const key = await createKey(organizationId, token);
+    const ip = `10.${Date.now() % 255}.${crypto.randomUUID().slice(0, 2)}.1`;
+
+    const statuses: number[] = [];
+    for (let i = 0; i < 21; i += 1) {
+      const res = await widgetFetch(`/support/widget/${key.key}/session`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "cf-connecting-ip": ip,
+        },
+        body: JSON.stringify({}),
+      });
+      statuses.push(res.status);
+    }
+    expect(statuses.slice(0, 20).every((s) => s === 200)).toBe(true);
+    expect(statuses[20]).toBe(429);
+
+    // A different IP is unaffected.
+    const other = await widgetFetch(`/support/widget/${key.key}/session`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "cf-connecting-ip": "192.0.2.99",
+      },
+      body: JSON.stringify({}),
+    });
+    expect(other.status).toBe(200);
+  });
 });

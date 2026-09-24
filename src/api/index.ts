@@ -312,6 +312,87 @@ app.all("/api/auth/*", (c) => {
   return createAuth(c.env).handler(c.req.raw);
 });
 
+app.get("/", (c) => {
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pile — agent-native issue tracker + support</title>
+<style>
+  body { font-family: ui-monospace, SFMono-Regular, monospace; max-width: 640px; margin: 4rem auto; padding: 0 1.5rem; line-height: 1.6; color: #1a1a1a; }
+  h1 { font-size: 1.4rem; } code { background: #f0f0f0; padding: 0.1em 0.35em; }
+  pre { background: #f6f6f6; padding: 1rem; overflow-x: auto; font-size: 0.85rem; }
+  a { color: inherit; }
+</style>
+</head>
+<body>
+<h1>Pile</h1>
+<p>Agent-native issue tracker and support desk. Your coding agent is a
+first-class user: it can record a bug, read the capture artifacts
+(replay, console, network, debugger state), and open the fix PR — the
+support ticket and the engineering issue are the same object.</p>
+<pre>npm i @vortex-api/pile
+pile auth login
+pile issues create --title "…"</pre>
+<p>
+<a href="/openapi.json">openapi.json</a> ·
+<a href="/llms.txt">llms.txt</a> ·
+<a href="/llms-full.txt">llms-full.txt</a> ·
+<a href="/mcp">mcp</a>
+</p>
+</body>
+</html>`;
+  return c.html(html);
+});
+
+app.get("/llms.txt", (c) => {
+  const body = `# Pile
+
+> Agent-native issue tracker + support desk on Cloudflare. The support ticket
+> and the engineering issue are the same object; coding agents are first-class
+> users that can record bugs, read capture artifacts, and open fix PRs.
+
+## Surfaces
+
+- API (OpenAPI): /openapi.json — every surface is API-first
+- MCP: /mcp — issue/ticket/workspace tools for agents
+- CLI + SDK + capture + widget: npm i @vortex-api/pile
+  - ./capture — browser capture SDK (initCapture)
+  - ./chat.js — embeddable support widget bundle
+  - ./capture.iife.js — one-tag capture script
+
+## Docs
+
+${Object.keys(docsBundle)
+  .map((f) => `- [${f.replace(/\.md$/, "")}](/docs/${f})`)
+  .join("\n")}
+
+## Quickstart
+
+1. Sign up: POST /api/auth/sign-up/email {email, password, name}
+2. Onboard: POST /workspaces/onboard {name, slug, key} → returns admin API key
+3. Use: Authorization: Bearer <key> on /workspaces/{org}/...
+`;
+  return c.text(body);
+});
+
+app.get("/llms-full.txt", (c) => {
+  const body = Object.entries(docsBundle)
+    .map(([name, md]) => `\n\n# ===== docs/${name} =====\n\n${md}`)
+    .join("");
+  return c.text(`# Pile — full documentation\n${body}`);
+});
+
+app.get("/docs/:name", (c) => {
+  const name = c.req.param("name");
+  const doc = docsBundle[name];
+  if (!doc || !name.endsWith(".md")) {
+    return c.text("Not found", 404);
+  }
+  return c.text(doc, 200, { "Content-Type": "text/markdown; charset=utf-8" });
+});
+
 app.doc("/openapi.json", {
   openapi: "3.0.0",
   info: {
