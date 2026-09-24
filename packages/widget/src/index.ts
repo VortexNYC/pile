@@ -246,12 +246,16 @@ function boot(settings: WidgetSettings): void {
     }
     textInput.value = "";
     try {
-      await api(`/support/widget/${key}/messages`, {
+      const sent = (await api(`/support/widget/${key}/messages`, {
         method: "POST",
         body: JSON.stringify({ text, email, name }),
-      });
+      })) as { createdAt?: string };
       addMsg("inbound", text);
-      lastSeen = lastSeen || new Date(0).toISOString();
+      // Advance the poll cursor past the message we just rendered so the next
+      // poll doesn't fetch (and re-render) our own send.
+      if (sent.createdAt && sent.createdAt > lastSeen) {
+        lastSeen = sent.createdAt;
+      }
     } catch {
       textInput.value = text;
     }

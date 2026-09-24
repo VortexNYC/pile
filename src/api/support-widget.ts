@@ -7,6 +7,7 @@ import {
   createCustomer,
   findCustomerByExternalId,
   findOrCreateCustomerByEmail,
+  getCustomerById,
 } from "../global/support-contacts.js";
 import {
   addTicketMessage,
@@ -192,6 +193,7 @@ const widgetMessageRoute = createRoute({
           schema: z.object({
             messageId: z.string(),
             ticketId: z.string(),
+            createdAt: z.string(),
           }),
         },
       },
@@ -253,7 +255,12 @@ function assertOriginAllowed(
   origin: string | undefined
 ) {
   if (widgetKey.allowedOrigins.length === 0) return;
-  if (!origin || !widgetKey.allowedOrigins.includes(origin)) {
+  // Browsers always send Origin on cross-origin requests, so an Origin that is
+  // present must match the allowlist. A missing Origin means a non-browser
+  // client (curl, MCP, an agent) — the allowlist governs website embedding,
+  // not API clients, so those are allowed through.
+  if (!origin) return;
+  if (!widgetKey.allowedOrigins.includes(origin)) {
     throw new VortexError({
       status: 401,
       code: "UNAUTHORIZED",
@@ -387,6 +394,13 @@ export function registerSupportWidgetRoutes(app: OpenAPIHono<AppContext>) {
     if (body.sessionToken) {
       const session = await findWidgetSessionByToken(db, body.sessionToken);
       if (session && session.widgetKeyId === widgetKey.id) {
+        const customer = session.customerId
+          ? await getCustomerById(
+              db,
+              widgetKey.organizationId,
+              session.customerId
+            )
+          : null;
         return c.json(
           widgetSessionResponseSchema.parse({
             sessionToken: session.token,
@@ -397,7 +411,9 @@ export function registerSupportWidgetRoutes(app: OpenAPIHono<AppContext>) {
               brandColor: widgetKey.brandColor,
               requireEmail: widgetKey.requireEmail,
             },
-            customer: null,
+            customer: customer
+              ? { email: customer.email, fullName: customer.fullName }
+              : null,
           })
         );
       }
@@ -538,7 +554,11 @@ export function registerSupportWidgetRoutes(app: OpenAPIHono<AppContext>) {
       await updateWidgetSession(db, session.id, { customerId, ticketId });
     }
 
-    return c.json({ messageId: message.id, ticketId });
+    return c.json({
+      messageId: message.id,
+      ticketId,
+      createdAt: message.createdAt,
+    });
   });
 
   app.openapi(widgetMessagesRoute, async (c) => {

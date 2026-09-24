@@ -7733,6 +7733,7 @@ export interface paths {
                         "application/json": {
                             messageId: string;
                             ticketId: string;
+                            createdAt: string;
                         };
                     };
                 };

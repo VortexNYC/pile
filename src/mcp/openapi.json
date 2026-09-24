@@ -14859,11 +14859,15 @@
                     },
                     "ticketId": {
                       "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
                     }
                   },
                   "required": [
                     "messageId",
-                    "ticketId"
+                    "ticketId",
+                    "createdAt"
                   ]
                 }
               }
