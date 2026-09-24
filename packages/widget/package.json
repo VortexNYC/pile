@@ -9,11 +9,5 @@
   "devDependencies": {
     "vite": "^7.1.11"
   },
-  "publishConfig": {
-    "access": "public"
-  },
-  "files": [
-    "dist"
-  ],
-  "main": "./dist/chat.iife.js"
+  "private": true
 }

@@ -1,4 +1,4 @@
-# @vortex-api/capture
+# @vortex-api/pile — capture
 
 Pile support-capture SDK. Follows the Jam/crikket model: instrumentation installs at `init()` and continuously buffers console output, errors, network activity, user actions, and navigation — so a report submitted _after_ a bug still includes what happened. Uploads go through Pile's `/support/capture/*` protocol and finalize into a support ticket.
 
@@ -22,7 +22,7 @@ Recording links need no embed at all: `POST /workspaces/{org}/support/capture-li
 ## Programmatic install
 
 ```ts
-import { initCapture } from "@vortex-api/capture";
+import { initCapture } from "@vortex-api/pile/capture";
 
 const capture = initCapture({ publicKey: "pil_…" });
 // … the user does things; the buffer records the last 60s …

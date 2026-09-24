@@ -1,7 +1,7 @@
 {
   "name": "@vortex-api/pile",
-  "version": "0.1.2",
-  "description": "TypeScript SDK and CLI for Pile.",
+  "version": "0.1.3",
+  "description": "Pile SDK + CLI + capture + widget — one package for the whole Pile surface.",
   "license": "MIT",
   "bin": {
     "pile": "./bin/pile.js"
@@ -17,15 +17,22 @@
     ".": {
       "types": "./dist/client/index.d.ts",
       "default": "./dist/client/index.js"
-    }
+    },
+    "./capture": {
+      "types": "./dist/capture/index.d.ts",
+      "default": "./dist/capture/index.js"
+    },
+    "./capture.iife.js": "./dist/capture/capture.iife.js",
+    "./chat.js": "./dist/widget/chat.iife.js"
   },
   "scripts": {
-    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && pnpm -C ../capture run build && pnpm -C ../widget run build && mkdir -p dist/capture dist/widget && cp -R ../capture/dist/ dist/capture/ && cp ../widget/dist/chat.iife.js dist/widget/chat.iife.js",
     "prepack": "pnpm run build",
     "cli": "tsx src/index.ts"
   },
   "dependencies": {
-    "openapi-fetch": "0.17.0"
+    "openapi-fetch": "0.17.0",
+    "rrweb": "2.1.4"
   },
   "devDependencies": {
     "@pile/tsconfig": "workspace:*",
