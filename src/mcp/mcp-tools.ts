@@ -1486,6 +1486,57 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdAgentcontext",
+    "description": "List agent context (GET /workspaces/{organizationId}/agent-context) Path params (top-level, required): organizationId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/agent-context",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdAgentcontextRules",
+    "description": "List agent context rules (GET /workspaces/{organizationId}/agent-context/rules) Path params (top-level, required): organizationId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/agent-context/rules",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdAgentcontextSkills",
+    "description": "List agent context skills (GET /workspaces/{organizationId}/agent-context/skills) Path params (top-level, required): organizationId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/agent-context/skills",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdAgentEnvironment",
     "description": "List agent environment (GET /workspaces/{organizationId}/agent/environment) Path params (top-level, required): organizationId.",
     "method": "GET",
@@ -4521,6 +4572,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "description": "Get support ticket (GET /workspaces/{organizationId}/support/tickets/{ticketId}) Path params (top-level, required): organizationId, ticketId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/support/tickets/{ticketId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "ticketId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "ticketId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportTicketsTicketIdArtifacts",
+    "description": "List support ticket artifacts (GET /workspaces/{organizationId}/support/tickets/{ticketId}/artifacts) Path params (top-level, required): organizationId, ticketId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/tickets/{ticketId}/artifacts",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -13596,6 +13668,73 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "required": [
             "url"
           ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "putWorkspacesOrganizationIdAgentcontext",
+    "description": "Update agent context (PUT /workspaces/{organizationId}/agent-context) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: agentsMd, rules, skills.",
+    "method": "PUT",
+    "path": "/workspaces/{organizationId}/agent-context",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "agentsMd": {
+              "type": "string"
+            },
+            "rules": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "content": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name",
+                  "content"
+                ]
+              }
+            },
+            "skills": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "description": {
+                    "type": "string",
+                    "default": ""
+                  },
+                  "content": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name",
+                  "content"
+                ]
+              }
+            }
+          }
         }
       },
       "required": [

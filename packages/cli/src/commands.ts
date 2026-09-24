@@ -2754,6 +2754,67 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "agent context list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/agent-context",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "agent context update": {
+    method: "PUT",
+    path: "/workspaces/{organizationId}/agent-context",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "agentsMd",
+        flag: "agents-md",
+      },
+      {
+        name: "rules",
+        flag: "rules",
+      },
+      {
+        name: "skills",
+        flag: "skills",
+      },
+    ],
+  },
+  "agent context rules list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/agent-context/rules",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "agent context skills list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/agent-context/skills",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "support capture public keys list": {
     method: "GET",
     path: "/workspaces/{organizationId}/support/capture/public-keys",
@@ -6002,6 +6063,22 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "actor",
       },
     ],
+  },
+  "support tickets artifacts list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/tickets/{ticketId}/artifacts",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "ticketId",
+        flag: "ticket-id",
+      },
+    ],
+    query: [],
+    body: [],
   },
   "support tickets messages create": {
     method: "POST",

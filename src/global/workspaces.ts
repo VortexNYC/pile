@@ -3,8 +3,9 @@ import { z } from "zod";
 
 import { createAuth } from "../platform/auth.js";
 import type { AppEnv } from "../platform/env.js";
+import { DEFAULT_AGENTS_MD } from "./agent-context.js";
 import type { D1Client } from "./db.js";
-import { member, organization } from "./schema.js";
+import { member, organization, workspaceAgentContext } from "./schema.js";
 import { safeJSON } from "./team-metadata.js";
 import { createState } from "./workspace-entities.js";
 
@@ -133,6 +134,10 @@ export async function createWorkspace(
   await Promise.all(
     defaultStates.map((state) => createState(db, orgId, state))
   );
+
+  await db
+    .insert(workspaceAgentContext)
+    .values({ organizationId: orgId, agentsMd: DEFAULT_AGENTS_MD });
 
   const row = await db
     .select()

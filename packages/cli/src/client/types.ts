@@ -6001,6 +6001,200 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/agent-context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List agent context */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Workspace agent context: AGENTS.md content, always-on rules, and the skill catalog. Served to agents and harnesses as the workspace's source of truth. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            organizationId: string;
+                            agentsMd: string;
+                            rules: {
+                                name: string;
+                                content: string;
+                            }[];
+                            skills: {
+                                name: string;
+                                /** @default  */
+                                description: string;
+                                content: string;
+                            }[];
+                            updatedBy: string | null;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        /** Update agent context */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        agentsMd?: string;
+                        rules?: {
+                            name: string;
+                            content: string;
+                        }[];
+                        skills?: {
+                            name: string;
+                            /** @default  */
+                            description?: string;
+                            content: string;
+                        }[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Agent context updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            organizationId: string;
+                            agentsMd: string;
+                            rules: {
+                                name: string;
+                                content: string;
+                            }[];
+                            skills: {
+                                name: string;
+                                /** @default  */
+                                description: string;
+                                content: string;
+                            }[];
+                            updatedBy: string | null;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/agent-context/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List agent context rules */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Workspace always-on agent rules */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            rules: {
+                                name: string;
+                                content: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/agent-context/skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List agent context skills */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Workspace agent skill catalog */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            skills: {
+                                name: string;
+                                /** @default  */
+                                description: string;
+                                content: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/support/capture/public-keys": {
         parameters: {
             query?: never;
@@ -14169,6 +14363,62 @@ export interface paths {
                 };
             };
         };
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/support/tickets/{ticketId}/artifacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List support ticket artifacts */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    ticketId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Ticket artifacts — attachments with inline content for text/JSON payloads (debugger.json, network logs, replay HTML). One call gives an agent the full capture bundle for debugging. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            artifacts: {
+                                id: string;
+                                type: string;
+                                fileName: string | null;
+                                contentType: string | null;
+                                size: number | null;
+                                url: string | null;
+                                content?: unknown;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Ticket not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/workspaces/{organizationId}/support/tickets/{ticketId}/messages": {

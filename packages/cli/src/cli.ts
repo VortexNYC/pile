@@ -763,6 +763,8 @@ function printUsage(): void {
     "config set",
     "request <METHOD> <path>",
     "capture run",
+    "agent context pull --workspace <org> [--dir .]",
+    "agent context push --workspace <org> [--dir .]",
     "agent sessions watch <sessionId> --workspace <org>",
   ]) {
     console.log(`  ${cmd}`);
@@ -774,6 +776,127 @@ function printUsage(): void {
   console.log(
     "\nConfig: PILE_BASE_URL, PILE_API_KEY, or `pile config set --base-url <url> --api-key <key>`"
   );
+}
+
+// `pile agent context pull|push --workspace <org> [--dir .]` — syncs the
+// workspace agent context to/from local files: AGENTS.md, .devin/rules/*.md,
+// .devin/skills/<name>/SKILL.md.
+async function agentContextCommand(
+  direction: "pull" | "push",
+  flags: Readonly<Record<string, string | boolean>>,
+  deps: CliDeps = {}
+): Promise<number> {
+  const workspace =
+    flagString(flags, "workspace") ?? flagString(flags, "workspace-id");
+  if (workspace === undefined || workspace.length === 0) {
+    throw new Error("Missing --workspace. Use --workspace <org>.");
+  }
+  const dir = flagString(flags, "dir") ?? ".";
+
+  const config = resolveConfig();
+  if (config.apiKey === undefined || config.apiKey.length === 0) {
+    throw new Error(
+      "Missing API key. Set PILE_API_KEY or run `pile config set --api-key <key>`."
+    );
+  }
+
+  const baseUrl = config.baseUrl.replace(/\/$/u, "");
+  const url = `${baseUrl}/workspaces/${workspace}/agent-context`;
+  const headers = new Headers({ Authorization: `Bearer ${config.apiKey}` });
+  const doFetch = deps.fetch ?? fetch;
+
+  if (direction === "pull") {
+    const response = await doFetch(url, { method: "GET", headers });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(
+        `Failed to pull agent context: ${response.status} ${text}`
+      );
+    }
+    const parsed: unknown = JSON.parse(await response.text());
+    if (!isJsonObject(parsed)) {
+      throw new Error("Unexpected agent context response");
+    }
+    const written: string[] = [];
+
+    if (typeof parsed.agentsMd === "string" && parsed.agentsMd.length > 0) {
+      const path = join(dir, "AGENTS.md");
+      writeFileSync(path, parsed.agentsMd);
+      written.push(path);
+    }
+
+    const writeEntries = (
+      entries: unknown,
+      baseDir: string,
+      fileName: (name: string) => string
+    ) => {
+      if (!Array.isArray(entries)) return;
+      for (const entry of entries) {
+        if (!isJsonObject(entry)) continue;
+        const name = entry.name;
+        const content = entry.content;
+        if (typeof name !== "string" || typeof content !== "string") continue;
+        mkdirSync(baseDir, { recursive: true });
+        const path = join(baseDir, fileName(name));
+        mkdirSync(dirname(path), { recursive: true });
+        writeFileSync(path, content);
+        written.push(path);
+      }
+    };
+
+    writeEntries(parsed.rules, join(dir, ".devin", "rules"), (n) => `${n}.md`);
+    writeEntries(parsed.skills, join(dir, ".devin", "skills"), (n) =>
+      join(n, "SKILL.md")
+    );
+
+    console.log(JSON.stringify({ ok: true, written }, null, 2));
+    return 0;
+  }
+
+  const body: Record<string, unknown> = {};
+
+  const agentsPath = join(dir, "AGENTS.md");
+  if (existsSync(agentsPath)) {
+    body.agentsMd = readFileSync(agentsPath, "utf8");
+  }
+
+  const rulesDir = join(dir, ".devin", "rules");
+  if (existsSync(rulesDir)) {
+    body.rules = readdirSync(rulesDir)
+      .filter((f) => f.endsWith(".md"))
+      .map((f) => ({
+        name: f.slice(0, -".md".length),
+        content: readFileSync(join(rulesDir, f), "utf8"),
+      }));
+  }
+
+  const skillsDir = join(dir, ".devin", "skills");
+  if (existsSync(skillsDir)) {
+    body.skills = readdirSync(skillsDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => {
+        const skillPath = join(skillsDir, entry.name, "SKILL.md");
+        return {
+          name: entry.name,
+          description: "",
+          content: existsSync(skillPath) ? readFileSync(skillPath, "utf8") : "",
+        };
+      });
+  }
+
+  headers.set("Content-Type", "application/json");
+  const response = await doFetch(url, {
+    method: "PUT",
+    headers,
+    body: JSON.stringify(body),
+  });
+  const text = await response.text();
+  try {
+    console.log(JSON.stringify(parseJson(text), null, 2));
+  } catch {
+    console.log(text);
+  }
+  return response.ok ? 0 : 1;
 }
 
 const TERMINAL_SESSION_STATUSES = new Set(["completed", "failed", "canceled"]);
@@ -922,6 +1045,14 @@ export async function runCli(
 
     if (scope === "capture" && positionals[1] === "run") {
       return await captureRunCommand(flags, deps);
+    }
+
+    if (
+      scope === "agent" &&
+      positionals[1] === "context" &&
+      (positionals[2] === "pull" || positionals[2] === "push")
+    ) {
+      return await agentContextCommand(positionals[2], flags, deps);
     }
 
     if (

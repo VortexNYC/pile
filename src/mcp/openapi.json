@@ -12056,6 +12056,362 @@
         "summary": "Delete email inboxe"
       }
     },
+    "/workspaces/{organizationId}/agent-context": {
+      "get": {
+        "tags": [
+          "agent-context"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workspace agent context: AGENTS.md content, always-on rules, and the skill catalog. Served to agents and harnesses as the workspace's source of truth.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "agentsMd": {
+                      "type": "string"
+                    },
+                    "rules": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "content": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "content"
+                        ]
+                      }
+                    },
+                    "skills": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "description": {
+                            "type": "string",
+                            "default": ""
+                          },
+                          "content": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "content"
+                        ]
+                      }
+                    },
+                    "updatedBy": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "organizationId",
+                    "agentsMd",
+                    "rules",
+                    "skills",
+                    "updatedBy",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List agent context"
+      },
+      "put": {
+        "tags": [
+          "agent-context"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "agentsMd": {
+                    "type": "string"
+                  },
+                  "rules": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "content": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "content"
+                      ]
+                    }
+                  },
+                  "skills": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "description": {
+                          "type": "string",
+                          "default": ""
+                        },
+                        "content": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "content"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Agent context updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "agentsMd": {
+                      "type": "string"
+                    },
+                    "rules": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "content": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "content"
+                        ]
+                      }
+                    },
+                    "skills": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "description": {
+                            "type": "string",
+                            "default": ""
+                          },
+                          "content": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "content"
+                        ]
+                      }
+                    },
+                    "updatedBy": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "organizationId",
+                    "agentsMd",
+                    "rules",
+                    "skills",
+                    "updatedBy",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Update agent context"
+      }
+    },
+    "/workspaces/{organizationId}/agent-context/rules": {
+      "get": {
+        "tags": [
+          "agent-context"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workspace always-on agent rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "rules": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "content": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "content"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "rules"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List agent context rules"
+      }
+    },
+    "/workspaces/{organizationId}/agent-context/skills": {
+      "get": {
+        "tags": [
+          "agent-context"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workspace agent skill catalog",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "skills": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "description": {
+                            "type": "string",
+                            "default": ""
+                          },
+                          "content": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "content"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "skills"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List agent context skills"
+      }
+    },
     "/workspaces/{organizationId}/support/capture/public-keys": {
       "post": {
         "tags": [
@@ -28202,6 +28558,93 @@
           }
         },
         "summary": "Update support ticket"
+      }
+    },
+    "/workspaces/{organizationId}/support/tickets/{ticketId}/artifacts": {
+      "get": {
+        "tags": [
+          "support-tickets"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "ticketId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ticket artifacts — attachments with inline content for text/JSON payloads (debugger.json, network logs, replay HTML). One call gives an agent the full capture bundle for debugging.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "artifacts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "fileName": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "contentType": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "size": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "url": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "content": {
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "type",
+                          "fileName",
+                          "contentType",
+                          "size",
+                          "url"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "artifacts"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Ticket not found"
+          }
+        },
+        "summary": "List support ticket artifacts"
       }
     },
     "/workspaces/{organizationId}/support/tickets/{ticketId}/messages": {

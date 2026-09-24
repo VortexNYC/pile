@@ -1,6 +1,7 @@
 import {
   fromJsonSchema,
   McpServer,
+  ResourceTemplate,
   WebStandardStreamableHTTPServerTransport,
 } from "@modelcontextprotocol/server";
 import { CfWorkerJsonSchemaValidator } from "@modelcontextprotocol/server/validators/cf-worker";
@@ -129,6 +130,98 @@ export async function handleMcpRequest(
       }
     );
   }
+
+  const proxyResource = async (
+    section: "agent-context" | "agent-context/rules" | "agent-context/skills",
+    organizationId: string,
+    mimeType: string
+  ) => {
+    const url = new URL(request.url);
+    const headers = new Headers();
+    const auth = request.headers.get("authorization");
+    if (auth !== null) headers.set("authorization", auth);
+    const workspaceHeader = request.headers.get("x-workspace-id");
+    if (workspaceHeader !== null)
+      headers.set("x-workspace-id", workspaceHeader);
+
+    const proxyReq = new Request(
+      `${url.origin}/workspaces/${encodeURIComponent(organizationId)}/${section}`,
+      { method: "GET", headers }
+    );
+    const response = await app.fetch(proxyReq, env);
+    const text = await response.text();
+    if (!response.ok) {
+      throw new Error(`Agent context request failed: ${response.status}`);
+    }
+    let body = text;
+    if (section === "agent-context") {
+      const parsed = JSON.parse(text) as { agentsMd?: string };
+      body = parsed.agentsMd ?? "";
+    }
+    return {
+      contents: [
+        {
+          uri: `pile://workspaces/${organizationId}/${section}`,
+          mimeType,
+          text: body,
+        },
+      ],
+    };
+  };
+
+  server.registerResource(
+    "agent-context",
+    new ResourceTemplate("pile://workspaces/{organizationId}/agent-context", {
+      list: undefined,
+    }),
+    {
+      description:
+        "Workspace agent context (AGENTS.md) — the workspace's agent operating notes.",
+      mimeType: "text/markdown",
+    },
+    async (_uri, variables) =>
+      proxyResource(
+        "agent-context",
+        String(variables.organizationId),
+        "text/markdown"
+      )
+  );
+
+  server.registerResource(
+    "agent-context-rules",
+    new ResourceTemplate(
+      "pile://workspaces/{organizationId}/agent-context/rules",
+      { list: undefined }
+    ),
+    {
+      description: "Workspace always-on agent rules (.devin/rules equivalent).",
+      mimeType: "application/json",
+    },
+    async (_uri, variables) =>
+      proxyResource(
+        "agent-context/rules",
+        String(variables.organizationId),
+        "application/json"
+      )
+  );
+
+  server.registerResource(
+    "agent-context-skills",
+    new ResourceTemplate(
+      "pile://workspaces/{organizationId}/agent-context/skills",
+      { list: undefined }
+    ),
+    {
+      description: "Workspace agent skill catalog (.devin/skills equivalent).",
+      mimeType: "application/json",
+    },
+    async (_uri, variables) =>
+      proxyResource(
+        "agent-context/skills",
+        String(variables.organizationId),
+        "application/json"
+      )
+  );
 
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,

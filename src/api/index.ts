@@ -17,6 +17,7 @@ import {
 import { observabilityMiddleware } from "../platform/observability.js";
 import { securityMiddleware } from "../platform/security.js";
 import { registerActivityRoutes } from "./activities.js";
+import { registerAgentContextRoutes } from "./agent-context.js";
 import { registerAgentEnvironmentRoutes } from "./agent-environment.js";
 import { registerAgentProviderRoutes } from "./agent-providers.js";
 import { registerAgentSessionRoutes } from "./agent-sessions.js";
@@ -147,6 +148,7 @@ registerProjectDetailRoutes(app);
 registerPrRoutes(app);
 registerProjectMemberRoutes(app);
 registerEmailInboxRoutes(app);
+registerAgentContextRoutes(app);
 registerSupportCaptureRoutes(app);
 registerSupportWidgetRoutes(app);
 registerSupportChannelRoutes(app);

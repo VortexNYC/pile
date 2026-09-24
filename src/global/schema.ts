@@ -2790,6 +2790,31 @@ export const supportWidgetSessions = sqliteTable(
   ]
 );
 
+export const workspaceAgentContext = sqliteTable(
+  "workspace_agent_context" as string,
+  {
+    organizationId: text("organization_id" as string)
+      .primaryKey()
+      .references(() => organization.id),
+    agentsMd: text("agents_md" as string)
+      .notNull()
+      .default(""),
+    rules: text("rules" as string)
+      .notNull()
+      .default("[]"),
+    skills: text("skills" as string)
+      .notNull()
+      .default("[]"),
+    updatedBy: text("updated_by" as string),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  }
+);
+
 export const supportCaptureSessions = sqliteTable(
   "support_capture_sessions" as string,
   {

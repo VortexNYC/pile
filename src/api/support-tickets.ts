@@ -1,7 +1,9 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
+import { and, eq } from "drizzle-orm";
 
 import { createD1 } from "../global/db.js";
+import { supportTicketAttachments } from "../global/schema.js";
 import { getCustomerById } from "../global/support-contacts.js";
 import { maybeEscalate } from "../global/support-escalation.js";
 import {
@@ -366,6 +368,38 @@ const getTicketRoute = createRoute({
   },
 });
 
+const ticketArtifactSchema = z.object({
+  id: z.string(),
+  type: z.string(),
+  fileName: z.string().nullable(),
+  contentType: z.string().nullable(),
+  size: z.number().nullable(),
+  url: z.string().nullable(),
+  content: z.unknown().optional(),
+});
+
+const listTicketArtifactsRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/support/tickets/{ticketId}/artifacts",
+  tags: ["support-tickets"],
+  middleware: [rls("read")],
+  request: {
+    params: ticketIdParam,
+  },
+  responses: {
+    200: {
+      description:
+        "Ticket artifacts — attachments with inline content for text/JSON payloads (debugger.json, network logs, replay HTML). One call gives an agent the full capture bundle for debugging.",
+      content: {
+        "application/json": {
+          schema: z.object({ artifacts: z.array(ticketArtifactSchema) }),
+        },
+      },
+    },
+    404: { description: "Ticket not found" },
+  },
+});
+
 const updateTicketRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/support/tickets/{ticketId}",
@@ -669,6 +703,58 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
       ticketNotFound();
     }
     return c.json({ ticket });
+  });
+
+  app.openapi(listTicketArtifactsRoute, async (c) => {
+    const { organizationId, ticketId } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const ticket = await getTicketById(db, organizationId, ticketId);
+    if (!ticket) {
+      ticketNotFound();
+    }
+
+    const rows = await db
+      .select()
+      .from(supportTicketAttachments)
+      .where(
+        and(
+          eq(supportTicketAttachments.organizationId, organizationId),
+          eq(supportTicketAttachments.ticketId, ticketId)
+        )
+      );
+
+    const INLINE_TYPES = new Set(["debugger_json", "log", "network", "replay"]);
+    const MAX_INLINE_BYTES = 512 * 1024;
+    const artifacts = await Promise.all(
+      rows.map(async (row) => {
+        const artifact: z.infer<typeof ticketArtifactSchema> = {
+          id: row.id,
+          type: row.type,
+          fileName: row.fileName,
+          contentType: row.contentType,
+          size: row.size,
+          url: row.url,
+        };
+        if (
+          row.r2Key &&
+          INLINE_TYPES.has(row.type) &&
+          (row.size === null || row.size <= MAX_INLINE_BYTES)
+        ) {
+          const object = await c.env.ATTACHMENTS_BUCKET.get(row.r2Key);
+          if (object) {
+            const text = await object.text();
+            try {
+              artifact.content = JSON.parse(text) as unknown;
+            } catch {
+              artifact.content = text;
+            }
+          }
+        }
+        return artifact;
+      })
+    );
+
+    return c.json({ artifacts });
   });
 
   app.openapi(updateTicketRoute, async (c) => {
