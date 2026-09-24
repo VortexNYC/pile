@@ -36,6 +36,9 @@ export interface AgentDispatchContext {
   /** Recent issue comments, chronological — folded into the prompt so
    *  re-dispatches carry review feedback. */
   comments?: DispatchComment[];
+  /** Scoped read-only Pile API credential minted for this dispatch, so the
+   *  agent can fetch linked support tickets and capture artifacts. */
+  pileApi?: { url: string; key: string };
 }
 
 export interface AgentProviderHealth {

@@ -13,16 +13,16 @@ Blume 2.0 shipped 2026-09-24. We run `blume ^1.6.0` in `packages/docs` with the 
 
 ## New capabilities and whether we want them
 
-| Feature | Verdict | Why |
-|---|---|---|
-| `llms.txt` + `llms-full.txt` | **Adopt** | Already on via our config; 2.0 makes it first-class. Agents reading docs is our whole story. |
-| Raw Markdown at `.md` URLs | **Adopt** | Free agent-consumable docs; zero work beyond upgrade. |
-| `blume eval` | **Adopt** | Tests whether an agent can answer questions using only our docs. That's a regression gate for the agent-native claim — add evals for "how do I pull ticket artifacts" / "how do I drive the widget protocol headless". |
-| Hosted docs MCP server | **Evaluate** | We already run our own MCP at `pile.nyc`. Docs-MCP would expose docs *content* to agents — different surface, possibly complementary. Don't duplicate tool surfaces. |
-| Ask AI adapters (`gateway`, `openrouter`, `openaiCompatible`, …) | **Skip for now** | Token spend on doc Q&A competes with our own MCP/agent surfaces; revisit only if docs-search questions are actually failing. |
-| Analytics adapters | **Skip** | Minimalism — no analytics until we need funnel data on docs. |
-| Content-derived navigation | **Adopt** | Removes hand-maintained nav drift. |
-| Migration from Mintlify/Docusaurus/etc. | N/A | We're already on Blume. |
+| Feature                                                          | Verdict          | Why                                                                                                                                                                                                                    |
+| ---------------------------------------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `llms.txt` + `llms-full.txt`                                     | **Adopt**        | Already on via our config; 2.0 makes it first-class. Agents reading docs is our whole story.                                                                                                                           |
+| Raw Markdown at `.md` URLs                                       | **Adopt**        | Free agent-consumable docs; zero work beyond upgrade.                                                                                                                                                                  |
+| `blume eval`                                                     | **Adopt**        | Tests whether an agent can answer questions using only our docs. That's a regression gate for the agent-native claim — add evals for "how do I pull ticket artifacts" / "how do I drive the widget protocol headless". |
+| Hosted docs MCP server                                           | **Evaluate**     | We already run our own MCP at `pile.nyc`. Docs-MCP would expose docs _content_ to agents — different surface, possibly complementary. Don't duplicate tool surfaces.                                                   |
+| Ask AI adapters (`gateway`, `openrouter`, `openaiCompatible`, …) | **Skip for now** | Token spend on doc Q&A competes with our own MCP/agent surfaces; revisit only if docs-search questions are actually failing.                                                                                           |
+| Analytics adapters                                               | **Skip**         | Minimalism — no analytics until we need funnel data on docs.                                                                                                                                                           |
+| Content-derived navigation                                       | **Adopt**        | Removes hand-maintained nav drift.                                                                                                                                                                                     |
+| Migration from Mintlify/Docusaurus/etc.                          | N/A              | We're already on Blume.                                                                                                                                                                                                |
 
 ## Recommended path
 

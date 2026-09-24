@@ -162,6 +162,74 @@ describe("CursorCliAgentProvider", () => {
     expect(body.labels["vortex.agent"]).toBe("cursor-cli");
   });
 
+  it("injects the scoped Pile credential and artifact hint when pileApi is provided", async () => {
+    const sandboxId = "sb-pile";
+    const toolboxBase = `https://proxy.app.daytona.io/toolbox/${sandboxId}`;
+    const fetchSpy = mockFetch([
+      {
+        url: "https://app.daytona.io/api/sandbox",
+        method: "GET",
+        response: () => ({ items: [] }),
+      },
+      {
+        url: "https://app.daytona.io/api/sandbox",
+        method: "POST",
+        response: () => ({
+          id: sandboxId,
+          name: "vortex-cursorcli-sess2",
+          state: "creating",
+          toolboxProxyUrl: "https://proxy.app.daytona.io/toolbox",
+        }),
+      },
+      {
+        url: `https://app.daytona.io/api/sandbox/${sandboxId}`,
+        method: "GET",
+        response: () => ({
+          id: sandboxId,
+          name: "vortex-cursorcli-sess2",
+          state: "started",
+          toolboxProxyUrl: "https://proxy.app.daytona.io/toolbox",
+        }),
+      },
+      {
+        url: `${toolboxBase}/process/session`,
+        method: "POST",
+        response: () => ({ sessionId: "sess-2" }),
+      },
+      {
+        url: `${toolboxBase}/process/session/sess-2/exec`,
+        method: "POST",
+        response: () => ({ cmdId: "cmd-1" }),
+      },
+    ]);
+
+    const provider = new CursorCliAgentProvider(cliEnv());
+    (
+      provider as unknown as { githubToken: (repo: string) => Promise<string> }
+    ).githubToken = vi.fn().mockResolvedValue("gh-token");
+
+    const waitUntilCalls: Promise<unknown>[] = [];
+    await provider.dispatch("org-1", issueFixture(), "auto", {
+      sessionId: "sess-2",
+      gitIdentity: gitIdentityFixture(),
+      waitUntil: (p) => waitUntilCalls.push(p),
+      pileApi: { url: "https://pile.nyc", key: "pil_readonly" },
+    });
+    await Promise.all(waitUntilCalls);
+
+    const createCall = fetchSpy.mock.calls.find(
+      ([input, init]) =>
+        String(input) === "https://app.daytona.io/api/sandbox" &&
+        (init as RequestInit | undefined)?.method === "POST"
+    );
+    const body = JSON.parse((createCall![1] as RequestInit).body as string);
+    expect(body.env.PILE_API_URL).toBe("https://pile.nyc");
+    expect(body.env.PILE_API_KEY).toBe("pil_readonly");
+    const prompt = atob(body.env.PROMPT_B64);
+    expect(prompt).toContain("$PILE_API_KEY");
+    expect(prompt).toContain("/support/tickets/<ticketId>/artifacts");
+  });
+
   it("polls running while command is in progress", async () => {
     const sandboxId = "sb-1";
     const toolboxBase = `https://proxy.app.daytona.io/toolbox/${sandboxId}`;

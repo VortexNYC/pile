@@ -60,7 +60,8 @@ function parseRepo(repo: string): [string, string] {
 function buildPrompt(
   issue: Issue,
   gitIdentity?: GitIdentity | null,
-  comments?: DispatchComment[]
+  comments?: DispatchComment[],
+  pileApi?: { url: string; key: string } | null
 ): string {
   const repo = issue.repo ?? "this repository";
   const branch = issue.branch ?? `issue-${issue.id}`;
@@ -100,6 +101,14 @@ function buildPrompt(
     "",
     "Implement the requested change. Verify proportionate to the diff: always run the project's lint/typecheck (for example `pnpm run check`) when the toolchain exists; when you change code, add or extend tests covering the change and run the relevant suites; skip tests entirely when the diff is docs/config-only. Do not burn time on suites that need network egress the sandbox lacks — note the limitation and move on. Make commits with clear messages. Do not push and do not open a pull request — the runner handles that after you exit.",
     "Do not attempt to update Pile yourself — an external system will poll your session and write the status back automatically.",
+    ...(pileApi
+      ? [
+          "",
+          "Pile API: a scoped read-only credential is in the environment as $PILE_API_KEY (base URL $PILE_API_URL). If this issue references a support ticket or capture artifacts, fetch them first:",
+          '  curl -s "$PILE_API_URL/workspaces/<org>/support/tickets/<ticketId>/artifacts" -H "Authorization: Bearer $PILE_API_KEY"',
+          "Text artifacts (debugger_json, network, log, replay) come back inline; screenshots/video come back as URLs with an available flag.",
+        ]
+      : []),
   ].join("\n");
 }
 
@@ -480,13 +489,17 @@ function buildSandboxEnv(
   comments?: DispatchComment[],
   logUrl?: string | null,
   logToken?: string | null,
-  cacheUrl?: string | null
+  cacheUrl?: string | null,
+  pileApi?: { url: string; key: string } | null
 ): Record<string, string> {
   const branch = issue.branch ?? `issue-${issue.id}`;
   const repo = issue.repo ?? "";
   const identifier = issue.identifier ?? issue.id;
-  const prompt = buildPrompt(issue, gitIdentity, comments);
+  const prompt = buildPrompt(issue, gitIdentity, comments, pileApi);
   return {
+    ...(pileApi
+      ? { PILE_API_URL: pileApi.url, PILE_API_KEY: pileApi.key }
+      : {}),
     ...(logUrl && logToken
       ? { PILE_LOG_URL: logUrl, PILE_LOG_TOKEN: logToken }
       : {}),
@@ -600,7 +613,8 @@ export class CursorCliAgentProvider implements AgentProvider {
     model: string,
     sessionId: string,
     gitIdentity: GitIdentity,
-    comments?: DispatchComment[]
+    comments?: DispatchComment[],
+    pileApi?: { url: string; key: string }
   ) {
     const apiKey = this.requireAuth();
     const compute = this.requireCompute();
@@ -644,7 +658,8 @@ export class CursorCliAgentProvider implements AgentProvider {
         comments,
         agentLogUrl(workerEnv, organizationId, sessionId),
         await agentLogToken(workerEnv, organizationId, sessionId),
-        agentCacheUrl(workerEnv, organizationId, sessionId)
+        agentCacheUrl(workerEnv, organizationId, sessionId),
+        pileApi ?? null
       );
       const sandbox = await compute.createSandbox({
         name,
@@ -717,7 +732,8 @@ export class CursorCliAgentProvider implements AgentProvider {
       effectiveModel,
       sessionId,
       gitIdentity,
-      sessionContext?.comments
+      sessionContext?.comments,
+      sessionContext?.pileApi
     );
 
     if (sessionContext?.waitUntil) {

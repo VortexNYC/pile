@@ -1,3 +1,6 @@
+import { z } from "zod";
+
+import { createAuth } from "../platform/auth.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { WorkerEnv } from "../platform/middleware.js";
@@ -141,6 +144,32 @@ export async function dispatchAgent(
         body: c.body,
       }));
 
+    // Mint a scoped read-only credential so the dispatched agent can read
+    // linked support tickets and capture artifacts through the API. If minting
+    // fails the dispatch proceeds — the agent just lacks Pile access.
+    let pileApi: { url: string; key: string } | undefined;
+    try {
+      const auth = createAuth(env);
+      const created = await auth.api.createApiKey({
+        body: {
+          userId: actor.id,
+          name: `agent-session-${session.id}`,
+          rateLimitEnabled: false,
+          metadata: {
+            organizationId,
+            permissions: "read",
+            actorType: "agent",
+          },
+        },
+      });
+      const parsed = z.object({ key: z.string() }).safeParse(created);
+      if (parsed.success && env.PUBLIC_API_URL) {
+        pileApi = { url: env.PUBLIC_API_URL, key: parsed.data.key };
+      }
+    } catch {
+      pileApi = undefined;
+    }
+
     const providerSession = await provider.dispatch(
       organizationId,
       issue,
@@ -150,6 +179,7 @@ export async function dispatchAgent(
         gitIdentity,
         waitUntil: ctx?.waitUntil,
         comments,
+        pileApi,
       }
     );
 
