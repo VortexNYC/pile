@@ -1,5 +1,6 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 
+import { docsBundle } from "../assets/docs-bundle.js";
 import { githubWebhookRoute, processGithubWebhook } from "../agents/github.js";
 import { gitlabWebhookRoute, processGitlabWebhook } from "../agents/gitlab.js";
 import {
