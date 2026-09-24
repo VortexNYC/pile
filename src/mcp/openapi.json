@@ -12751,8 +12751,7 @@
                     "exclusiveMinimum": true
                   },
                   "requireChallenge": {
-                    "type": "boolean",
-                    "default": false
+                    "type": "boolean"
                   }
                 },
                 "required": [

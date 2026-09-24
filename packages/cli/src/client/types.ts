@@ -6442,7 +6442,6 @@ export interface paths {
                         name?: string;
                         expiresAt?: string | null;
                         maxSessions?: number | null;
-                        /** @default false */
                         requireChallenge?: boolean;
                     };
                 };

@@ -11518,8 +11518,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "exclusiveMinimum": true
             },
             "requireChallenge": {
-              "type": "boolean",
-              "default": false
+              "type": "boolean"
             }
           },
           "required": [
