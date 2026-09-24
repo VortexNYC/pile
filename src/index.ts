@@ -9,7 +9,10 @@ import app from "./api/index.js";
 import { handleIncomingEmail } from "./channels/email.js";
 import { createD1 } from "./global/db.js";
 import { cycles } from "./global/schema.js";
-import { expireStaleCaptureSessions } from "./global/support-capture.js";
+import {
+  expireStaleCaptureSessions,
+  sweepExpiredCaptureArtifacts,
+} from "./global/support-capture.js";
 import { webhookProcessors } from "./global/webhook-processors.js";
 import {
   processWebhookQueueBatch,
@@ -41,6 +44,17 @@ async function scheduled(
     (async () => {
       const d1 = createD1(env.D1);
       await expireStaleCaptureSessions(d1);
+      const retentionDays = Number(env.CAPTURE_ARTIFACT_RETENTION_DAYS ?? "30");
+      if (Number.isFinite(retentionDays) && retentionDays > 0) {
+        const { removed } = await sweepExpiredCaptureArtifacts(
+          d1,
+          env.ATTACHMENTS_BUCKET,
+          retentionDays
+        );
+        if (removed > 0) {
+          console.log("capture artifact retention sweep", { removed });
+        }
+      }
       await reprocessStuckDeliveries(d1, env);
     })().catch((err) => console.error("capture session sweep failed", err))
   );

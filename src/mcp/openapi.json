@@ -369,6 +369,52 @@
           }
         },
         "summary": "Get workspace"
+      },
+      "delete": {
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workspace permanently deleted — every org-scoped D1 row, all R2 attachment objects, and the workspace Durable Object's storage.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deleted": {
+                      "type": "boolean"
+                    },
+                    "r2Objects": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "deleted",
+                    "r2Objects"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Requires owner or admin role in the workspace"
+          },
+          "404": {
+            "description": "Workspace not found"
+          }
+        },
+        "summary": "Delete workspace"
       }
     },
     "/workspaces/slug/{slug}": {
@@ -25840,6 +25886,57 @@
           }
         },
         "summary": "Update support customer"
+      },
+      "delete": {
+        "tags": [
+          "support-contacts"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "customerId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Customer PII scrubbed — email/name/phone/externalId anonymized, widget sessions removed. Ticket history is kept.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "anonymized": {
+                      "type": "boolean"
+                    },
+                    "sessionsRemoved": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "anonymized",
+                    "sessionsRemoved"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Customer not found"
+          }
+        },
+        "summary": "Delete support customer"
       }
     },
     "/workspaces/{organizationId}/support/customers/{customerId}/companies": {
@@ -31553,6 +31650,124 @@
           }
         },
         "summary": "Update support ticket labels"
+      }
+    },
+    "/workspaces/{organizationId}/support/trace/{id}": {
+      "get": {
+        "tags": [
+          "support-tickets"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Correlated trace — resolves any of {ticket id, capture session id, widget session id} and returns the full picture: ticket, timeline events, attachments with R2 availability, capture session, widget session, escalated issue, and agent sessions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "resolvedAs": {
+                      "type": "string",
+                      "enum": [
+                        "ticket",
+                        "capture_session",
+                        "widget_session"
+                      ]
+                    },
+                    "ticket": {
+                      "nullable": true
+                    },
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    },
+                    "attachments": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "fileName": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "size": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "r2Key": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "available": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "type",
+                          "fileName",
+                          "size",
+                          "r2Key",
+                          "available"
+                        ]
+                      }
+                    },
+                    "captureSession": {
+                      "nullable": true
+                    },
+                    "widgetSession": {
+                      "nullable": true
+                    },
+                    "issue": {
+                      "nullable": true
+                    },
+                    "agentSessions": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "resolvedAs",
+                    "events",
+                    "attachments",
+                    "agentSessions"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No ticket, capture session, or widget session with this id"
+          }
+        },
+        "summary": "Get support trace"
       }
     },
     "/workspaces/{organizationId}/support/snippets": {

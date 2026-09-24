@@ -1,7 +1,10 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
+import { and, eq } from "drizzle-orm";
 
 import { createD1 } from "../global/db.js";
+import { deleteWorkspaceData } from "../global/deletion.js";
+import { member } from "../global/schema.js";
 import { createTeam } from "../global/teams.js";
 import {
   createWorkspace,
@@ -106,6 +109,32 @@ const getWorkspaceBySlugRoute = createRoute({
   },
 });
 
+const deleteWorkspaceRoute = createRoute({
+  method: "delete",
+  path: "/workspaces/{id}",
+  tags: ["workspaces"],
+  middleware: [requireHumanSession],
+  request: {
+    params: z.object({ id: z.string() }),
+  },
+  responses: {
+    200: {
+      description:
+        "Workspace permanently deleted — every org-scoped D1 row, all R2 attachment objects, and the workspace Durable Object's storage.",
+      content: {
+        "application/json": {
+          schema: z.object({
+            deleted: z.boolean(),
+            r2Objects: z.number(),
+          }),
+        },
+      },
+    },
+    403: { description: "Requires owner or admin role in the workspace" },
+    404: { description: "Workspace not found" },
+  },
+});
+
 const teamSchema = z.object({
   id: z.string(),
   organizationId: z.string(),
@@ -203,6 +232,41 @@ export function registerWorkspaceRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
     return c.json(item);
+  });
+
+  app.openapi(deleteWorkspaceRoute, async (c) => {
+    const { id } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const userId = c.get("userId");
+    if (!userId) {
+      throw new VortexError({
+        code: "UNAUTHORIZED",
+        status: 401,
+        message: "Authentication required",
+      });
+    }
+    const workspace = await getWorkspaceById(db, id);
+    if (!workspace) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Workspace not found",
+      });
+    }
+    const membership = await db
+      .select({ role: member.role })
+      .from(member)
+      .where(and(eq(member.organizationId, id), eq(member.userId, userId)))
+      .get();
+    if (!membership || !["owner", "admin"].includes(membership.role)) {
+      throw new VortexError({
+        code: "FORBIDDEN",
+        status: 403,
+        message: "Requires owner or admin role in the workspace",
+      });
+    }
+    const result = await deleteWorkspaceData(db, c.env, id);
+    return c.json({ deleted: true, r2Objects: result.r2Objects });
   });
 
   app.openapi(getWorkspaceBySlugRoute, async (c) => {

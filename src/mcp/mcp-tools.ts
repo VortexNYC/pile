@@ -119,6 +119,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesId",
+    "description": "Delete workspace (DELETE /workspaces/{id}) Path params (top-level, required): id.",
+    "method": "DELETE",
+    "path": "/workspaces/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdAgentEnvironmentFile",
     "description": "Delete agent environment file (DELETE /workspaces/{organizationId}/agent/environment/file) Path params (top-level, required): organizationId. Query params (top-level, optional): path.",
     "method": "DELETE",
@@ -1092,6 +1109,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "keyId",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "deleteWorkspacesOrganizationIdSupportCustomersCustomerId",
+    "description": "Delete support customer (DELETE /workspaces/{organizationId}/support/customers/{customerId}) Path params (top-level, required): organizationId, customerId.",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/support/customers/{customerId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "customerId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "customerId",
         "organizationId"
       ]
     }
@@ -4695,6 +4733,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "organizationId",
         "tierId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportTraceId",
+    "description": "Get support trace (GET /workspaces/{organizationId}/support/trace/{id}) Path params (top-level, required): organizationId, id.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/trace/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
       ]
     }
   },

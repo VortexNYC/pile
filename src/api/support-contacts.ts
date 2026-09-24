@@ -2,6 +2,7 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
 import { createD1 } from "../global/db.js";
+import { anonymizeCustomer } from "../global/deletion.js";
 import {
   createCompany,
   createCustomer,
@@ -273,6 +274,31 @@ const updateCustomerRoute = createRoute({
   },
 });
 
+const deleteCustomerRoute = createRoute({
+  method: "delete",
+  path: "/workspaces/{organizationId}/support/customers/{customerId}",
+  tags: ["support-contacts"],
+  middleware: [rls("write")],
+  request: {
+    params: customerIdParam,
+  },
+  responses: {
+    200: {
+      description:
+        "Customer PII scrubbed — email/name/phone/externalId anonymized, widget sessions removed. Ticket history is kept.",
+      content: {
+        "application/json": {
+          schema: z.object({
+            anonymized: z.boolean(),
+            sessionsRemoved: z.number(),
+          }),
+        },
+      },
+    },
+    404: { description: "Customer not found" },
+  },
+});
+
 const setCustomerCompaniesRoute = createRoute({
   method: "put",
   path: "/workspaces/{organizationId}/support/customers/{customerId}/companies",
@@ -490,6 +516,17 @@ export function registerSupportContactRoutes(app: OpenAPIHono<AppContext>) {
       (await getCustomerById(db, organizationId, customerId)) ??
       customerNotFound();
     return c.json({ customer });
+  });
+
+  app.openapi(deleteCustomerRoute, async (c) => {
+    const { organizationId, customerId } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const customer = await getCustomerById(db, organizationId, customerId);
+    if (!customer) {
+      customerNotFound();
+    }
+    const result = await anonymizeCustomer(db, organizationId, customerId);
+    return c.json({ anonymized: true, ...result });
   });
 
   app.openapi(setCustomerCompaniesRoute, async (c) => {

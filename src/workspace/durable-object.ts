@@ -187,6 +187,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     this.ready = this.initialize();
   }
 
+  /** Wipes all workspace state (issues, sessions, config). Called only by the
+   *  workspace-deletion path after the D1 rows are gone. */
+  async destroy() {
+    await this.ready;
+    await this.ctx.storage.deleteAll();
+  }
+
   private async initialize() {
     const [stored, , backfilled] = await Promise.all([
       this.ctx.storage.get<string>("organizationId"),

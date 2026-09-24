@@ -1,4 +1,4 @@
-import { and, count, eq, lt, ne } from "drizzle-orm";
+import { and, count, eq, inArray, like, lt, ne } from "drizzle-orm";
 
 import { VortexError } from "../platform/errors.js";
 import type { D1Client } from "./db.js";
@@ -6,6 +6,7 @@ import {
   supportCaptureLinks,
   supportCapturePublicKeys,
   supportCaptureSessions,
+  supportTicketAttachments,
 } from "./schema.js";
 
 export type CapturePublicKeyInput = {
@@ -343,6 +344,55 @@ export async function expireStaleCaptureSessions(
         lt(supportCaptureSessions.expiresAt, before)
       )
     );
+}
+
+const ARTIFACT_SWEEP_BATCH = 100;
+
+/**
+ * Retention sweep for capture artifacts: removes the R2 object and the
+ * attachment row for capture-uploaded artifacts older than `retentionDays`.
+ * The ticket, events, and session rows are kept — only the heavy payloads
+ * expire. Runs in bounded batches from the scheduled handler.
+ */
+export async function sweepExpiredCaptureArtifacts(
+  db: D1Client,
+  bucket: R2Bucket,
+  retentionDays: number,
+  batchSize = ARTIFACT_SWEEP_BATCH
+): Promise<{ removed: number }> {
+  const cutoff = new Date(
+    Date.now() - retentionDays * 24 * 60 * 60 * 1000
+  ).toISOString();
+  const stale = await db
+    .select({
+      id: supportTicketAttachments.id,
+      r2Key: supportTicketAttachments.r2Key,
+    })
+    .from(supportTicketAttachments)
+    .where(
+      and(
+        like(supportTicketAttachments.r2Key, "%/capture/%"),
+        lt(supportTicketAttachments.createdAt, cutoff)
+      )
+    )
+    .limit(batchSize)
+    .all();
+
+  if (stale.length > 0) {
+    const keys = stale
+      .map((r) => r.r2Key)
+      .filter((k): k is string => typeof k === "string");
+    if (keys.length > 0) {
+      await bucket.delete(keys);
+    }
+    await db.delete(supportTicketAttachments).where(
+      inArray(
+        supportTicketAttachments.id,
+        stale.map((r) => r.id)
+      )
+    );
+  }
+  return { removed: stale.length };
 }
 
 export async function finalizeCaptureSession(

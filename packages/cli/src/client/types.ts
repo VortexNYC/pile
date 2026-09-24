@@ -126,7 +126,46 @@ export interface paths {
         };
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete workspace */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Workspace permanently deleted — every org-scoped D1 row, all R2 attachment objects, and the workspace Durable Object's storage. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            deleted: boolean;
+                            r2Objects: number;
+                        };
+                    };
+                };
+                /** @description Requires owner or admin role in the workspace */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Workspace not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         options?: never;
         head?: never;
         patch?: never;
@@ -13469,7 +13508,40 @@ export interface paths {
         };
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete support customer */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    customerId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Customer PII scrubbed — email/name/phone/externalId anonymized, widget sessions removed. Ticket history is kept. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            anonymized: boolean;
+                            sessionsRemoved: number;
+                        };
+                    };
+                };
+                /** @description Customer not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         options?: never;
         head?: never;
         /** Update support customer */
@@ -15300,6 +15372,69 @@ export interface paths {
                 };
             };
         };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/support/trace/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get support trace */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Correlated trace — resolves any of {ticket id, capture session id, widget session id} and returns the full picture: ticket, timeline events, attachments with R2 availability, capture session, widget session, escalated issue, and agent sessions. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            resolvedAs: "ticket" | "capture_session" | "widget_session";
+                            ticket?: unknown;
+                            events: unknown[];
+                            attachments: {
+                                id: string;
+                                type: string;
+                                fileName: string | null;
+                                size: number | null;
+                                r2Key: string | null;
+                                available: boolean;
+                            }[];
+                            captureSession?: unknown;
+                            widgetSession?: unknown;
+                            issue?: unknown;
+                            agentSessions: unknown[];
+                        };
+                    };
+                };
+                /** @description No ticket, capture session, or widget session with this id */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;

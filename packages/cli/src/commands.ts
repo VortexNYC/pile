@@ -49,6 +49,18 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "workspaces delete": {
+    method: "DELETE",
+    path: "/workspaces/{id}",
+    params: [
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "workspaces slug": {
     method: "GET",
     path: "/workspaces/slug/{slug}",
@@ -5797,6 +5809,22 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "support customers delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/support/customers/{customerId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "customerId",
+        flag: "customer-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "support customers companies update": {
     method: "PUT",
     path: "/workspaces/{organizationId}/support/customers/{customerId}/companies",
@@ -6309,6 +6337,22 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "labels",
       },
     ],
+  },
+  "support trace get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/trace/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
   },
   "support snippets list": {
     method: "GET",
