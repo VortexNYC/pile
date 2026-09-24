@@ -153,7 +153,7 @@ export async function dispatchAgent(
       const created = await auth.api.createApiKey({
         body: {
           userId: actor.id,
-          name: `agent-session-${session.id}`,
+          name: `agent-${session.id.slice(0, 13)}`,
           rateLimitEnabled: false,
           metadata: {
             organizationId,
