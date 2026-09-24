@@ -7911,6 +7911,7 @@ export interface paths {
                 content: {
                     "application/json": {
                         text: string;
+                        externalId?: string;
                         /** Format: email */
                         email?: string;
                         name?: string;
@@ -14399,6 +14400,7 @@ export interface paths {
                                 contentType: string | null;
                                 size: number | null;
                                 url: string | null;
+                                available: boolean;
                                 content?: unknown;
                             }[];
                         };

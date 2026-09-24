@@ -375,6 +375,7 @@ const ticketArtifactSchema = z.object({
   contentType: z.string().nullable(),
   size: z.number().nullable(),
   url: z.string().nullable(),
+  available: z.boolean(),
   content: z.unknown().optional(),
 });
 
@@ -727,6 +728,9 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
     const MAX_INLINE_BYTES = 512 * 1024;
     const artifacts = await Promise.all(
       rows.map(async (row) => {
+        const object = row.r2Key
+          ? await c.env.ATTACHMENTS_BUCKET.get(row.r2Key)
+          : null;
         const artifact: z.infer<typeof ticketArtifactSchema> = {
           id: row.id,
           type: row.type,
@@ -734,20 +738,18 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
           contentType: row.contentType,
           size: row.size,
           url: row.url,
+          available: row.r2Key === null || object !== null,
         };
         if (
-          row.r2Key &&
+          object &&
           INLINE_TYPES.has(row.type) &&
           (row.size === null || row.size <= MAX_INLINE_BYTES)
         ) {
-          const object = await c.env.ATTACHMENTS_BUCKET.get(row.r2Key);
-          if (object) {
-            const text = await object.text();
-            try {
-              artifact.content = JSON.parse(text) as unknown;
-            } catch {
-              artifact.content = text;
-            }
+          const text = await object.text();
+          try {
+            artifact.content = JSON.parse(text) as unknown;
+          } catch {
+            artifact.content = text;
           }
         }
         return artifact;

@@ -168,6 +168,7 @@ const widgetSessionRoute = createRoute({
 
 const widgetMessageBodySchema = z.object({
   text: z.string().min(1),
+  externalId: z.string().optional(),
   email: z.string().email().optional(),
   name: z.string().optional(),
 });
@@ -529,6 +530,8 @@ export function registerSupportWidgetRoutes(app: OpenAPIHono<AppContext>) {
           title,
           sourceChannel: "chat",
           externalSource: "chat",
+          externalId: `widget-session:${session.id}`,
+          ifExists: "return",
         },
         c.env as WorkerEnv
       );
@@ -546,6 +549,7 @@ export function registerSupportWidgetRoutes(app: OpenAPIHono<AppContext>) {
         customerId,
         actorType: "customer",
         actorId: customerId,
+        externalId: body.externalId ?? null,
       },
       c.env as WorkerEnv
     );

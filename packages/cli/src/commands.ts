@@ -3498,6 +3498,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "text",
       },
       {
+        name: "externalId",
+        flag: "external-id",
+      },
+      {
         name: "email",
         flag: "email",
       },

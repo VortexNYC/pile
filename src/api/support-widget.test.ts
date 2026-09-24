@@ -199,6 +199,52 @@ describe("support widget", () => {
     expect(none).toHaveLength(0);
   });
 
+  it("dedupes retried messages on externalId", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const key = await createKey(organizationId, token);
+    const { data: session } = await startSession(key.key);
+
+    const headers = {
+      "content-type": "application/json",
+      "x-pile-widget-session": session!.sessionToken,
+    };
+    const body = JSON.stringify({
+      text: "payment failed twice",
+      externalId: "client-msg-1",
+    });
+    const first = await widgetFetch(`/support/widget/${key.key}/messages`, {
+      method: "POST",
+      headers,
+      body,
+    });
+    const second = await widgetFetch(`/support/widget/${key.key}/messages`, {
+      method: "POST",
+      headers,
+      body,
+    });
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    const a = z
+      .object({ messageId: z.string(), ticketId: z.string() })
+      .parse(await first.json());
+    const b = z
+      .object({ messageId: z.string(), ticketId: z.string() })
+      .parse(await second.json());
+    expect(b.messageId).toBe(a.messageId);
+    expect(b.ticketId).toBe(a.ticketId);
+
+    const db = createD1(env.D1);
+    const events = await db
+      .select()
+      .from(supportTicketEvents)
+      .where(eq(supportTicketEvents.ticketId, a.ticketId));
+    expect(
+      events.filter(
+        (e) => e.type === "message" && e.externalId === "client-msg-1"
+      )
+    ).toHaveLength(1);
+  });
+
   it("verifies identifierHash and dedupes the contact on externalId", async () => {
     const { organizationId, token } = await seedWorkspace();
     const key = await createKey(organizationId, token);

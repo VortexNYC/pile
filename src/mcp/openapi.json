@@ -15187,6 +15187,9 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "externalId": {
+                    "type": "string"
+                  },
                   "email": {
                     "type": "string",
                     "format": "email"
@@ -28618,6 +28621,9 @@
                             "type": "string",
                             "nullable": true
                           },
+                          "available": {
+                            "type": "boolean"
+                          },
                           "content": {
                             "nullable": true
                           }
@@ -28628,7 +28634,8 @@
                           "fileName",
                           "contentType",
                           "size",
-                          "url"
+                          "url",
+                          "available"
                         ]
                       }
                     }

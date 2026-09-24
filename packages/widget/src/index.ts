@@ -248,7 +248,12 @@ function boot(settings: WidgetSettings): void {
     try {
       const sent = (await api(`/support/widget/${key}/messages`, {
         method: "POST",
-        body: JSON.stringify({ text, email, name }),
+        body: JSON.stringify({
+          text,
+          email,
+          name,
+          externalId: crypto.randomUUID(),
+        }),
       })) as { createdAt?: string };
       addMsg("inbound", text);
       // Advance the poll cursor past the message we just rendered so the next

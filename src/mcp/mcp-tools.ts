@@ -7948,7 +7948,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postSupportWidgetKeyMessages",
-    "description": "Create support widget message (POST /support/widget/{key}/messages) Path params (top-level, required): key. Request body goes in the \"body\" object; fields: text*, email, name (* = required).",
+    "description": "Create support widget message (POST /support/widget/{key}/messages) Path params (top-level, required): key. Request body goes in the \"body\" object; fields: text*, externalId, email, name (* = required).",
     "method": "POST",
     "path": "/support/widget/{key}/messages",
     "inputSchema": {
@@ -7963,6 +7963,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "text": {
               "type": "string",
               "minLength": 1
+            },
+            "externalId": {
+              "type": "string"
             },
             "email": {
               "type": "string",
