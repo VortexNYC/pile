@@ -117,7 +117,17 @@ export interface BugReportDebuggerPayload {
 }
 
 export interface CaptureInitOptions {
-  publicKey: string;
+  /**
+   * Publishable capture key (pil_…) provisioned via the workspace API.
+   * Required unless `linkToken` is set.
+   */
+  publicKey?: string;
+  /**
+   * Recording-link token (capl_…) — mints capture sessions under the link's
+   * constraints (expiry, session cap, optional challenge). Sessions minted
+   * this way are always public so the recorder gets a share URL back.
+   */
+  linkToken?: string;
   endpoint?: string;
   reference?: string;
   /**

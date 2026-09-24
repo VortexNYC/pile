@@ -6144,6 +6144,168 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/support/capture-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List support capture links */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Capture links */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            links: {
+                                id: string;
+                                organizationId: string;
+                                publicKeyId: string;
+                                token: string;
+                                name: string;
+                                url: string;
+                                expiresAt: string | null;
+                                maxSessions: number | null;
+                                requireChallenge: boolean;
+                                isActive: boolean;
+                                createdBy: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create support capture link */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        publicKeyId: string;
+                        /** @default Capture link */
+                        name?: string;
+                        expiresAt?: string | null;
+                        maxSessions?: number | null;
+                        /** @default false */
+                        requireChallenge?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description Capture link created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            publicKeyId: string;
+                            token: string;
+                            name: string;
+                            url: string;
+                            expiresAt: string | null;
+                            maxSessions: number | null;
+                            requireChallenge: boolean;
+                            isActive: boolean;
+                            createdBy: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/support/capture-links/{linkId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete support capture link */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    linkId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Capture link revoked */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            publicKeyId: string;
+                            token: string;
+                            name: string;
+                            url: string;
+                            expiresAt: string | null;
+                            maxSessions: number | null;
+                            requireChallenge: boolean;
+                            isActive: boolean;
+                            createdBy: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/support/capture/token": {
         parameters: {
             query?: never;
@@ -6157,8 +6319,9 @@ export interface paths {
         post: {
             parameters: {
                 query?: never;
-                header: {
-                    "x-pile-capture-public-key": string;
+                header?: {
+                    "x-pile-capture-public-key"?: string;
+                    "x-pile-capture-link"?: string;
                     "x-pile-capture-reference"?: string;
                     origin?: string;
                 };

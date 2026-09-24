@@ -12308,7 +12308,7 @@
         "summary": "Delete support capture public key"
       }
     },
-    "/support/capture/token": {
+    "/workspaces/{organizationId}/support/capture-links": {
       "post": {
         "tags": [
           "support-capture"
@@ -12319,7 +12319,339 @@
               "type": "string"
             },
             "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "publicKeyId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "default": "Capture link"
+                  },
+                  "expiresAt": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "maxSessions": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0,
+                    "exclusiveMinimum": true
+                  },
+                  "requireChallenge": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                },
+                "required": [
+                  "publicKeyId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Capture link created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "publicKeyId": {
+                      "type": "string"
+                    },
+                    "token": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "maxSessions": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "requireChallenge": {
+                      "type": "boolean"
+                    },
+                    "isActive": {
+                      "type": "boolean"
+                    },
+                    "createdBy": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "publicKeyId",
+                    "token",
+                    "name",
+                    "url",
+                    "expiresAt",
+                    "maxSessions",
+                    "requireChallenge",
+                    "isActive",
+                    "createdBy",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create support capture link"
+      },
+      "get": {
+        "tags": [
+          "support-capture"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Capture links",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "links": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "publicKeyId": {
+                            "type": "string"
+                          },
+                          "token": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          },
+                          "expiresAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "maxSessions": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "requireChallenge": {
+                            "type": "boolean"
+                          },
+                          "isActive": {
+                            "type": "boolean"
+                          },
+                          "createdBy": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "publicKeyId",
+                          "token",
+                          "name",
+                          "url",
+                          "expiresAt",
+                          "maxSessions",
+                          "requireChallenge",
+                          "isActive",
+                          "createdBy",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "links"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List support capture links"
+      }
+    },
+    "/workspaces/{organizationId}/support/capture-links/{linkId}": {
+      "delete": {
+        "tags": [
+          "support-capture"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "linkId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Capture link revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "publicKeyId": {
+                      "type": "string"
+                    },
+                    "token": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "maxSessions": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "requireChallenge": {
+                      "type": "boolean"
+                    },
+                    "isActive": {
+                      "type": "boolean"
+                    },
+                    "createdBy": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "publicKeyId",
+                    "token",
+                    "name",
+                    "url",
+                    "expiresAt",
+                    "maxSessions",
+                    "requireChallenge",
+                    "isActive",
+                    "createdBy",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "summary": "Delete support capture link"
+      }
+    },
+    "/support/capture/token": {
+      "post": {
+        "tags": [
+          "support-capture"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
             "name": "x-pile-capture-public-key",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "x-pile-capture-link",
             "in": "header"
           },
           {

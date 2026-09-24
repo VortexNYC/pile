@@ -1373,4 +1373,190 @@ describe("support-capture API", () => {
     );
     expect(res.status).toBe(404);
   });
+
+  describe("capture links", () => {
+    async function createLink(
+      body: Record<string, unknown> = {}
+    ): Promise<{ id: string; token: string; url: string }> {
+      const publicKey = await createPublicKey();
+      const res = await captureFetch(
+        `/workspaces/${organizationId}/support/capture-links`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            publicKeyId: publicKey.id,
+            name: "Customer recording link",
+            ...body,
+          }),
+        }
+      );
+      expect(res.status).toBe(201);
+      return (await res.json()) as {
+        id: string;
+        token: string;
+        url: string;
+      };
+    }
+
+    function linkToken(tokenValue: string): Promise<Response> {
+      return captureFetch("/support/capture/token", {
+        method: "POST",
+        headers: { "x-pile-capture-link": tokenValue },
+      });
+    }
+
+    it("creates, lists, and revokes a capture link", async () => {
+      const link = await createLink();
+      expect(link.token).toMatch(/^capl_/);
+      expect(link.url).toContain(`/cap/${link.token}`);
+
+      const listRes = await captureFetch(
+        `/workspaces/${organizationId}/support/capture-links`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      expect(listRes.status).toBe(200);
+      const { links } = (await listRes.json()) as {
+        links: { id: string }[];
+      };
+      expect(links.some((l) => l.id === link.id)).toBe(true);
+
+      const revokeRes = await captureFetch(
+        `/workspaces/${organizationId}/support/capture-links/${link.id}`,
+        { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }
+      );
+      expect(revokeRes.status).toBe(200);
+      expect((await linkToken(link.token)).status).toBe(401);
+    });
+
+    it("mints a link session stamped public + link-attributed", async () => {
+      const link = await createLink();
+      const res = await linkToken(link.token);
+      expect(res.status).toBe(200);
+      const { token: sessionToken } = (await res.json()) as {
+        token: string;
+      };
+
+      const db = createD1(env.D1);
+      const session = await db
+        .select()
+        .from(supportCaptureSessions)
+        .where(eq(supportCaptureSessions.id, sessionToken))
+        .get();
+      expect(session?.linkId).toBe(link.id);
+      const meta = JSON.parse(session?.metadata ?? "{}") as Record<
+        string,
+        unknown
+      >;
+      expect(meta.source).toBe("capture-link");
+      expect(meta.visibility).toBe("public");
+    });
+
+    it("enforces maxSessions", async () => {
+      const link = await createLink({ maxSessions: 1 });
+      expect((await linkToken(link.token)).status).toBe(200);
+      expect((await linkToken(link.token)).status).toBe(429);
+    });
+
+    it("rejects expired links but allows null expiry", async () => {
+      const expired = await createLink({
+        expiresAt: new Date(Date.now() - 1000).toISOString(),
+      });
+      expect((await linkToken(expired.token)).status).toBe(401);
+
+      const forever = await createLink({ expiresAt: null });
+      expect((await linkToken(forever.token)).status).toBe(200);
+    });
+
+    it("serves the public record page at /cap/{token}", async () => {
+      const link = await createLink();
+      const res = await captureFetch(`/cap/${link.token}`);
+      expect(res.status).toBe(200);
+      const html = await res.text();
+      expect(html).toContain("Start recording");
+      expect(html).toContain("Customer recording link");
+      expect(html).toContain(link.token);
+
+      const bad = await captureFetch("/cap/capl_doesnotexist");
+      expect(bad.status).toBe(200);
+      expect(await bad.text()).toContain(
+        "invalid, expired, or has been revoked"
+      );
+    });
+
+    it("link capture flow lands a public shareable ticket", async () => {
+      const link = await createLink();
+      const tokenRes = await linkToken(link.token);
+      const { token: sessionToken } = (await tokenRes.json()) as {
+        token: string;
+      };
+
+      const sessionRes = await captureFetch("/support/capture/upload-session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-pile-capture-token": sessionToken,
+        },
+        body: JSON.stringify({
+          title: "Customer found a bug",
+          metadata: { email: "customer@theircompany.com" },
+          artifacts: [
+            {
+              attachmentType: "video",
+              fileName: "recording.webm",
+              contentType: "video/webm",
+            },
+          ],
+        }),
+      });
+      expect(sessionRes.status).toBe(200);
+      const { uploads } = (await sessionRes.json()) as {
+        uploads: { uploadUrl: string }[];
+      };
+
+      const uploadRes = await captureFetch(uploads[0]!.uploadUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "video/webm",
+          "x-pile-capture-token": sessionToken,
+        },
+        body: new TextEncoder().encode("fake-webm-bytes"),
+      });
+      expect(uploadRes.status).toBe(200);
+
+      const finalizeRes = await captureFetch("/support/capture/finalize", {
+        method: "POST",
+        headers: { "x-pile-capture-token": sessionToken },
+      });
+      expect(finalizeRes.status).toBe(200);
+      const { ticketId, shareUrl } = (await finalizeRes.json()) as {
+        ticketId: string;
+        shareUrl: string;
+      };
+      expect(shareUrl).toContain(`/support/capture/public/${ticketId}`);
+
+      // Recorder watches back anonymously — JSON manifest for API clients,
+      // HTML watch page for browsers.
+      const shareRes = await captureFetch(
+        `/support/capture/public/${ticketId}`
+      );
+      expect(shareRes.status).toBe(200);
+      const manifest = (await shareRes.json()) as {
+        attachments: { type: string; url: string }[];
+      };
+      expect(manifest.attachments[0]?.type).toBe("video");
+      const videoRes = await captureFetch(manifest.attachments[0]!.url);
+      expect(videoRes.status).toBe(200);
+
+      const htmlRes = await captureFetch(
+        `/support/capture/public/${ticketId}`,
+        { headers: { Accept: "text/html" } }
+      );
+      expect(htmlRes.status).toBe(200);
+      expect(await htmlRes.text()).toContain("<video controls");
+    });
+  });
 });

@@ -1055,6 +1055,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdSupportCapturelinksLinkId",
+    "description": "Delete support capture link (DELETE /workspaces/{organizationId}/support/capture-links/{linkId}) Path params (top-level, required): organizationId, linkId.",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/support/capture-links/{linkId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "linkId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "linkId",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdSupportCapturePublickeysKeyId",
     "description": "Delete support capture public key (DELETE /workspaces/{organizationId}/support/capture/public-keys/{keyId}) Path params (top-level, required): organizationId, keyId.",
     "method": "DELETE",
@@ -3797,6 +3818,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "description": "List support autoresponders (GET /workspaces/{organizationId}/support/autoresponders) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/support/autoresponders",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportCapturelinks",
+    "description": "List support capture links (GET /workspaces/{organizationId}/support/capture-links) Path params (top-level, required): organizationId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/capture-links",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -11169,6 +11207,54 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "name",
             "trigger",
             "order"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSupportCapturelinks",
+    "description": "Create support capture link (POST /workspaces/{organizationId}/support/capture-links) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: publicKeyId*, name, expiresAt, maxSessions, requireChallenge (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/capture-links",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "publicKeyId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "default": "Capture link"
+            },
+            "expiresAt": {
+              "type": "string",
+              "nullable": true
+            },
+            "maxSessions": {
+              "type": "integer",
+              "nullable": true,
+              "minimum": 0,
+              "exclusiveMinimum": true
+            },
+            "requireChallenge": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          "required": [
+            "publicKeyId"
           ]
         }
       },

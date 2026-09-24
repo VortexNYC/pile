@@ -1,8 +1,12 @@
-import { and, eq, lt, ne } from "drizzle-orm";
+import { and, count, eq, lt, ne } from "drizzle-orm";
 
 import { VortexError } from "../platform/errors.js";
 import type { D1Client } from "./db.js";
-import { supportCapturePublicKeys, supportCaptureSessions } from "./schema.js";
+import {
+  supportCaptureLinks,
+  supportCapturePublicKeys,
+  supportCaptureSessions,
+} from "./schema.js";
 
 export type CapturePublicKeyInput = {
   name: string;
@@ -121,12 +125,118 @@ export async function findCapturePublicKeyByKey(db: D1Client, key: string) {
   return row ? parseCapturePublicKey(row) : null;
 }
 
+export type CaptureLinkInput = {
+  publicKeyId: string;
+  name: string;
+  expiresAt?: string | null;
+  maxSessions?: number | null;
+  requireChallenge?: boolean;
+  createdBy?: string | null;
+};
+
+export async function createCaptureLink(
+  db: D1Client,
+  organizationId: string,
+  input: CaptureLinkInput
+) {
+  const id = crypto.randomUUID();
+  const token = `capl_${crypto.randomUUID().replace(/-/g, "")}`;
+  const now = new Date().toISOString();
+  await db.insert(supportCaptureLinks).values({
+    id,
+    organizationId,
+    publicKeyId: input.publicKeyId,
+    token,
+    name: input.name,
+    expiresAt: input.expiresAt ?? null,
+    maxSessions: input.maxSessions ?? null,
+    requireChallenge: input.requireChallenge ?? false,
+    isActive: true,
+    createdBy: input.createdBy ?? null,
+    createdAt: now,
+    updatedAt: now,
+  });
+  const row = await db
+    .select()
+    .from(supportCaptureLinks)
+    .where(eq(supportCaptureLinks.id, id))
+    .get();
+  if (!row) {
+    throw new VortexError({
+      status: 500,
+      code: "INTERNAL_ERROR",
+      message: "Failed to create capture link",
+    });
+  }
+  return parseCaptureLink(row);
+}
+
+export async function listCaptureLinks(db: D1Client, organizationId: string) {
+  const rows = await db
+    .select()
+    .from(supportCaptureLinks)
+    .where(eq(supportCaptureLinks.organizationId, organizationId))
+    .orderBy(supportCaptureLinks.createdAt)
+    .all();
+  return rows.map(parseCaptureLink);
+}
+
+export async function findCaptureLinkByToken(db: D1Client, token: string) {
+  const row = await db
+    .select()
+    .from(supportCaptureLinks)
+    .where(
+      and(
+        eq(supportCaptureLinks.token, token),
+        eq(supportCaptureLinks.isActive, true)
+      )
+    )
+    .get();
+  return row ? parseCaptureLink(row) : null;
+}
+
+export async function revokeCaptureLink(
+  db: D1Client,
+  organizationId: string,
+  id: string
+) {
+  const now = new Date().toISOString();
+  const [row] = await db
+    .update(supportCaptureLinks)
+    .set({ isActive: false, updatedAt: now })
+    .where(
+      and(
+        eq(supportCaptureLinks.id, id),
+        eq(supportCaptureLinks.organizationId, organizationId)
+      )
+    )
+    .returning();
+  if (!row) {
+    throw new VortexError({
+      status: 404,
+      code: "NOT_FOUND",
+      message: "Capture link not found",
+    });
+  }
+  return parseCaptureLink(row);
+}
+
+export async function countCaptureLinkSessions(db: D1Client, linkId: string) {
+  const row = await db
+    .select({ value: count() })
+    .from(supportCaptureSessions)
+    .where(eq(supportCaptureSessions.linkId, linkId))
+    .get();
+  return row?.value ?? 0;
+}
+
 export async function createCaptureSession(
   db: D1Client,
   publicKeyId: string,
   organizationId: string,
   expiresMinutes = 30,
-  metadata: Record<string, unknown> = {}
+  metadata: Record<string, unknown> = {},
+  linkId?: string
 ) {
   const id = crypto.randomUUID();
   const now = new Date();
@@ -137,6 +247,7 @@ export async function createCaptureSession(
     id,
     organizationId,
     publicKeyId,
+    linkId: linkId ?? null,
     customerId: null,
     ticketId: null,
     status: "pending",
@@ -292,10 +403,41 @@ function parseCapturePublicKey(row: {
   };
 }
 
+function parseCaptureLink(row: {
+  id: string;
+  organizationId: string;
+  publicKeyId: string;
+  token: string;
+  name: string;
+  expiresAt: string | null;
+  maxSessions: number | null;
+  requireChallenge: number | boolean;
+  isActive: number | boolean;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}) {
+  return {
+    id: row.id,
+    organizationId: row.organizationId,
+    publicKeyId: row.publicKeyId,
+    token: row.token,
+    name: row.name,
+    expiresAt: row.expiresAt,
+    maxSessions: row.maxSessions,
+    requireChallenge: Boolean(row.requireChallenge),
+    isActive: Boolean(row.isActive),
+    createdBy: row.createdBy,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
 function parseCaptureSession(row: {
   id: string;
   organizationId: string;
   publicKeyId: string;
+  linkId: string | null;
   customerId: string | null;
   ticketId: string | null;
   status: string;
@@ -308,6 +450,7 @@ function parseCaptureSession(row: {
     id: row.id,
     organizationId: row.organizationId,
     publicKeyId: row.publicKeyId,
+    linkId: row.linkId,
     customerId: row.customerId,
     ticketId: row.ticketId,
     status: row.status as CaptureSessionStatus,

@@ -2678,6 +2678,42 @@ export const supportCapturePublicKeys = sqliteTable(
   ]
 );
 
+export const supportCaptureLinks = sqliteTable(
+  "support_capture_links" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    publicKeyId: text("public_key_id" as string)
+      .notNull()
+      .references(() => supportCapturePublicKeys.id),
+    token: text("token" as string).notNull(),
+    name: text("name" as string).notNull(),
+    expiresAt: text("expires_at" as string),
+    maxSessions: integer("max_sessions" as string),
+    requireChallenge: integer("require_challenge" as string, {
+      mode: "boolean",
+    })
+      .notNull()
+      .default(false),
+    isActive: integer("is_active" as string, { mode: "boolean" })
+      .notNull()
+      .default(true),
+    createdBy: text("created_by" as string),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("support_capture_links_token_idx" as string).on(table.token),
+    index("support_capture_links_org_idx" as string).on(table.organizationId),
+  ]
+);
+
 export const supportCaptureSessions = sqliteTable(
   "support_capture_sessions" as string,
   {
@@ -2688,6 +2724,7 @@ export const supportCaptureSessions = sqliteTable(
     publicKeyId: text("public_key_id" as string)
       .notNull()
       .references(() => supportCapturePublicKeys.id),
+    linkId: text("link_id" as string).references(() => supportCaptureLinks.id),
     customerId: text("customer_id" as string).references(
       () => supportCustomers.id
     ),

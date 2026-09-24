@@ -180,6 +180,9 @@ const collectDeviceInfo = (): Record<string, unknown> => {
 };
 
 export function initCapture(options: CaptureInitOptions): Capture {
+  if (!options.publicKey && !options.linkToken) {
+    throw new Error("initCapture requires publicKey or linkToken");
+  }
   const endpoint = (options.endpoint ?? DEFAULT_ENDPOINT).replace(/\/+$/, "");
   const lookbackMs = options.lookbackMs ?? DEFAULT_LOOKBACK_MS;
   const recorder = new EventRecorder();
@@ -277,6 +280,7 @@ export function initCapture(options: CaptureInitOptions): Capture {
       {
         endpoint,
         publicKey: options.publicKey,
+        linkToken: options.linkToken,
         reference: options.reference,
       },
       {

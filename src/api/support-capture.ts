@@ -11,13 +11,18 @@ import {
   supportTickets,
 } from "../global/schema.js";
 import {
+  countCaptureLinkSessions,
+  createCaptureLink,
   createCapturePublicKey,
   createCaptureSession,
   finalizeCaptureSession,
+  findCaptureLinkByToken,
   getCapturePublicKeyById,
   findCapturePublicKeyByKey,
   getCaptureSession,
+  listCaptureLinks,
   listCapturePublicKeys,
+  revokeCaptureLink,
   revokeCapturePublicKey,
   updateCaptureSessionMetadata,
   updateCaptureSessionStatus,
@@ -36,6 +41,7 @@ import { VortexError } from "../platform/errors.js";
 import { toApiKeyWorkspaceIdentity } from "../platform/identity.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
+import { renderCaptureLinkPage } from "./capture-link-page.js";
 import { getWorkspaceStub } from "./stub.js";
 
 const capturePublicKeySchema = z.object({
@@ -191,13 +197,104 @@ const revokePublicKeyRoute = createRoute({
   },
 });
 
+const captureLinkSchema = z.object({
+  id: z.string(),
+  organizationId: z.string(),
+  publicKeyId: z.string(),
+  token: z.string(),
+  name: z.string(),
+  url: z.string(),
+  expiresAt: z.string().nullable(),
+  maxSessions: z.number().nullable(),
+  requireChallenge: z.boolean(),
+  isActive: z.boolean(),
+  createdBy: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+const createCaptureLinkBodySchema = z.object({
+  publicKeyId: z.string().min(1),
+  name: z.string().min(1).default("Capture link"),
+  expiresAt: z.string().nullable().optional(),
+  maxSessions: z.number().int().positive().nullable().optional(),
+  requireChallenge: z.boolean().default(false),
+});
+
+const createCaptureLinkRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/support/capture-links",
+  tags: ["support-capture"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+    body: {
+      content: {
+        "application/json": { schema: createCaptureLinkBodySchema },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "Capture link created",
+      content: {
+        "application/json": { schema: captureLinkSchema },
+      },
+    },
+  },
+});
+
+const listCaptureLinksRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/support/capture-links",
+  tags: ["support-capture"],
+  middleware: [rls("read")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Capture links",
+      content: {
+        "application/json": {
+          schema: z.object({
+            links: z.array(captureLinkSchema),
+          }),
+        },
+      },
+    },
+  },
+});
+
+const revokeCaptureLinkRoute = createRoute({
+  method: "delete",
+  path: "/workspaces/{organizationId}/support/capture-links/{linkId}",
+  tags: ["support-capture"],
+  middleware: [rls("write")],
+  request: {
+    params: z.object({ organizationId: z.string(), linkId: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Capture link revoked",
+      content: {
+        "application/json": { schema: captureLinkSchema },
+      },
+    },
+    404: {
+      description: "Not found",
+    },
+  },
+});
+
 const tokenRoute = createRoute({
   method: "post",
   path: "/support/capture/token",
   tags: ["support-capture"],
   request: {
     headers: z.object({
-      "x-pile-capture-public-key": z.string(),
+      "x-pile-capture-public-key": z.string().optional(),
+      "x-pile-capture-link": z.string().optional(),
       "x-pile-capture-reference": z.string().optional(),
       origin: z.string().optional(),
     }),
@@ -1071,6 +1168,11 @@ async function requireArtifactAuthorization(
   }
 }
 
+const linkToResponse = (
+  link: Awaited<ReturnType<typeof createCaptureLink>>,
+  origin: string
+) => ({ ...link, url: `${origin}/cap/${link.token}` });
+
 export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(createPublicKeyRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
@@ -1101,19 +1203,134 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
     return c.json(publicCapturePublicKeySchema.parse(publicKey));
   });
 
+  app.openapi(createCaptureLinkRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const db = createD1(c.env.D1);
+    const publicKey = await getCapturePublicKeyById(db, body.publicKeyId);
+    if (!publicKey || publicKey.organizationId !== organizationId) {
+      throw new VortexError({
+        status: 404,
+        code: "NOT_FOUND",
+        message: "Capture public key not found",
+      });
+    }
+    const identity = c.get("workspaceIdentity");
+    const link = await createCaptureLink(db, organizationId, {
+      publicKeyId: body.publicKeyId,
+      name: body.name,
+      expiresAt: body.expiresAt ?? null,
+      maxSessions: body.maxSessions ?? null,
+      requireChallenge: body.requireChallenge,
+      createdBy: identity?.id ?? null,
+    });
+    const origin = new URL(c.req.url).origin;
+    return c.json(captureLinkSchema.parse(linkToResponse(link, origin)), 201);
+  });
+
+  app.openapi(listCaptureLinksRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const links = await listCaptureLinks(db, organizationId);
+    const origin = new URL(c.req.url).origin;
+    return c.json({
+      links: links.map((link) =>
+        captureLinkSchema.parse(linkToResponse(link, origin))
+      ),
+    });
+  });
+
+  app.openapi(revokeCaptureLinkRoute, async (c) => {
+    const { organizationId, linkId } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const link = await revokeCaptureLink(db, organizationId, linkId);
+    const origin = new URL(c.req.url).origin;
+    return c.json(captureLinkSchema.parse(linkToResponse(link, origin)));
+  });
+
   app.openapi(tokenRoute, async (c) => {
     const publicKeyValue = c.req.header("x-pile-capture-public-key");
+    const linkTokenValue = c.req.header("x-pile-capture-link");
     const requestOrigin = c.req.header("origin") ?? c.req.header("Origin");
-    if (!publicKeyValue) {
+    if (!publicKeyValue && !linkTokenValue) {
       throw new VortexError({
         status: 401,
         code: "UNAUTHORIZED",
-        message: "x-pile-capture-public-key is required",
+        message: "x-pile-capture-public-key or x-pile-capture-link is required",
       });
     }
 
     const db = createD1(c.env.D1);
-    const publicKey = await findCapturePublicKeyByKey(db, publicKeyValue);
+    const reference = c.req.header("x-pile-capture-reference");
+
+    // Recording-link path: the link token stands in for a public key but
+    // carries its own constraints — expiry, session cap, optional Turnstile —
+    // and stamps the session with link attribution + public visibility so the
+    // recorder (and the team) get a watchable share URL back.
+    if (linkTokenValue) {
+      const link = await findCaptureLinkByToken(db, linkTokenValue);
+      if (
+        !link ||
+        (link.expiresAt !== null && link.expiresAt <= new Date().toISOString())
+      ) {
+        throw new VortexError({
+          status: 401,
+          code: "UNAUTHORIZED",
+          message: "Invalid or expired capture link",
+        });
+      }
+      if (link.maxSessions !== null) {
+        const used = await countCaptureLinkSessions(db, link.id);
+        if (used >= link.maxSessions) {
+          throw new VortexError({
+            status: 429,
+            code: "RATE_LIMITED",
+            message: "Capture link session limit reached",
+          });
+        }
+      }
+      if (link.requireChallenge && c.env.TURNSTILE_SECRET_KEY) {
+        const rawBody = await c.req.json().catch(() => null);
+        const turnstileToken =
+          isRecord(rawBody) && typeof rawBody.turnstileToken === "string"
+            ? rawBody.turnstileToken
+            : undefined;
+        const turnstileOk = turnstileToken
+          ? await verifyTurnstile(
+              c.env.TURNSTILE_SECRET_KEY,
+              turnstileToken,
+              c.req.header("cf-connecting-ip")
+            )
+          : false;
+        if (!turnstileOk) {
+          throw new VortexError({
+            status: 403,
+            code: "CAPTURE_CHALLENGE_REQUIRED",
+            message: "A Turnstile challenge token is required",
+            details: { siteKey: c.env.TURNSTILE_SITE_KEY ?? null },
+          });
+        }
+      }
+      const session = await createCaptureSession(
+        db,
+        link.publicKeyId,
+        link.organizationId,
+        30,
+        {
+          source: "capture-link",
+          linkId: link.id,
+          linkName: link.name,
+          visibility: "public",
+          ...(reference ? { reference } : {}),
+        },
+        link.id
+      );
+      const origin = new URL(c.req.url).origin;
+      const recordingUrl = `${origin}/support/capture/sessions/${session.id}`;
+      return c.json({ token: session.id, recordingUrl });
+    }
+
+    const publicKey = await findCapturePublicKeyByKey(db, publicKeyValue!);
     if (!publicKey) {
       throw new VortexError({
         status: 401,
@@ -1147,7 +1364,6 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
       }
     }
 
-    const reference = c.req.header("x-pile-capture-reference");
     const session = await createCaptureSession(
       db,
       publicKey.id,
@@ -1246,6 +1462,11 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
         : {}),
       uploads: nextUploads,
     };
+    // Recording-link sessions always publish: the recorder must get a
+    // shareable view URL back, which requires public artifact access.
+    if (session.linkId) {
+      merged.visibility = "public";
+    }
     await updateCaptureSessionMetadata(db, session.id, merged);
 
     const first = uploads[0];
@@ -1675,6 +1896,38 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
       .from(supportTicketAttachments)
       .where(eq(supportTicketAttachments.ticketId, ticketId));
 
+    // Browsers get a minimal watch page (video player + artifact links);
+    // API/agent clients get the JSON artifact manifest.
+    if (c.req.header("accept")?.includes("text/html")) {
+      const blocks = attachments
+        .map((a) => {
+          const href = a.url ?? "";
+          if (!href) {
+            return "";
+          }
+          if (a.type === "video") {
+            return `<video controls src="${href}" style="width:100%;max-height:70vh;border-radius:8px"></video>`;
+          }
+          if (a.type === "replay") {
+            return `<p><a href="${href}" style="color:#7ee787">Watch DOM session replay</a></p>`;
+          }
+          if (a.type === "screenshot") {
+            return `<img src="${href}" style="max-width:100%;border-radius:8px">`;
+          }
+          return "";
+        })
+        .join("");
+      const title = ticket.title
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+      return c.html(
+        `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title>` +
+          `<style>body{font-family:system-ui,sans-serif;max-width:860px;margin:40px auto;padding:0 16px;background:#0a0a0a;color:#eee}h1{font-size:20px;font-weight:600}</style>` +
+          `</head><body><h1>${title}</h1>${blocks || "<p>No attachments.</p>"}</body></html>`
+      );
+    }
+
     return c.json({
       ticketId: ticket.id,
       title: ticket.title,
@@ -1685,6 +1938,28 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
         size: a.size,
       })),
     });
+  });
+
+  // Public zero-install recording page — the link token is the credential.
+  // Agents skip this page entirely and drive the protocol API directly.
+  app.get("/cap/:token", async (c) => {
+    const token = c.req.param("token");
+    const db = createD1(c.env.D1);
+    const link = await findCaptureLinkByToken(db, token);
+    const valid =
+      link !== null &&
+      (link.expiresAt === null || link.expiresAt > new Date().toISOString());
+    return c.html(
+      renderCaptureLinkPage({
+        token,
+        linkName: link?.name ?? "Capture link",
+        valid,
+        requireChallenge: Boolean(
+          link?.requireChallenge && c.env.TURNSTILE_SITE_KEY
+        ),
+        siteKey: c.env.TURNSTILE_SITE_KEY,
+      })
+    );
   });
 
   app.openapi(jamWebhookRoute, async (c) => {

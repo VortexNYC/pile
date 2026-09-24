@@ -2803,6 +2803,67 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "support capture links list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/capture-links",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support capture links create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/capture-links",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "publicKeyId",
+        flag: "public-key-id",
+      },
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "expiresAt",
+        flag: "expires-at",
+      },
+      {
+        name: "maxSessions",
+        flag: "max-sessions",
+      },
+      {
+        name: "requireChallenge",
+        flag: "require-challenge",
+      },
+    ],
+  },
+  "support capture links delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/support/capture-links/{linkId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "linkId",
+        flag: "link-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "support capture token create": {
     method: "POST",
     path: "/support/capture/token",

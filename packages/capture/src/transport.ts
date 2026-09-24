@@ -7,7 +7,8 @@ const FILE_SIZE_LIMIT_MESSAGE =
 
 export interface TransportConfig {
   endpoint: string;
-  publicKey: string;
+  publicKey?: string;
+  linkToken?: string;
   reference?: string;
 }
 
@@ -106,7 +107,9 @@ async function postToken(
   return fetch(`${config.endpoint}/support/capture/token`, {
     method: "POST",
     headers: {
-      "x-pile-capture-public-key": config.publicKey,
+      ...(config.linkToken
+        ? { "x-pile-capture-link": config.linkToken }
+        : { "x-pile-capture-public-key": config.publicKey ?? "" }),
       ...(config.reference
         ? { "x-pile-capture-reference": config.reference }
         : {}),
