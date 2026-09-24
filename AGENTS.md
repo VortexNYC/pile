@@ -57,6 +57,16 @@ For every non-trivial chunk of work:
 4. Verify the change through the product API before reporting completion.
 5. Actively look for opportunities to use the Pile API, CLI, SDK, or MCP for issue lifecycle (status, comments, assignments, branch/PR metadata) instead of `gh`, `git`, or external trackers. Default to the product for updates, verification, and triage.
 
+### Agent session notes
+
+Durable notes live in Pile documents — not in repo files (`NOTES.md`, `.agent-notes/`, ad-hoc scratch files). Any agent that produces investigation notes, decisions, or handoff context for an issue writes them via `POST /workspaces/org_vortex_main/documents` with:
+
+- `contentFormat: "markdown"`
+- `issueId` (and `projectId` when relevant) — this is the index; `GET /workspaces/{org}/documents?issueId=...` returns every note for a ticket
+- Title convention: `ISS-N — <what the note covers>`
+
+CLI (`pile document create`) and MCP (`create_document`) surfaces expose the same route. Repo-committed notes are acceptable only when the note _is_ project documentation meant for humans cloning the repo (e.g. this file) — session context, triage findings, and handoffs go to Pile.
+
 ## Where things live
 
 - `src/api/index.ts` — main Hono/OpenAPIHono app, serves `/openapi.json`.

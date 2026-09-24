@@ -48,3 +48,23 @@ All network capture is sanitized: sensitive headers (`authorization`, `cookie`, 
 `capture.attach(blob, "name.json")` queues an extra artifact for the next submission. `capture.destroy()` removes all instrumentation.
 
 The SDK also runs in non-DOM environments (Node, workers): DOM-dependent capture degrades gracefully and the same protocol calls work.
+
+## Headless / automation environments
+
+Agents running in sandboxes (Daytona, Cloudflare Containers, CI) have no display surface, so `getDisplayMedia`-backed features — `screenshot: "auto"`, `capture.screenshot()`, `video: true` — are unavailable there. Everything else works: console/network/action capture, error tracking, and **DOM replay** (rrweb needs a DOM, not a display — it is the right "video" for automation).
+
+For stills and video, the contract is: **whoever runs the browser provides the media** — attach it as an artifact:
+
+```ts
+// Playwright / Puppeteer / CDP harness
+const capture = initCapture({ publicKey, replay: true });
+// ... run the flow ...
+const png = await page.screenshot({ type: "png" });
+capture.attach(
+  new Blob([png], { type: "image/png" }),
+  "harness-screenshot.png"
+);
+await capture.report({ email: "agent@team.com", title: "agent hit a bug" });
+```
+
+`context.recordVideo()` output can be attached the same way (`video/*.webm` → `video` artifact). Verified end-to-end in `pnpm test:e2e`, which drives a real headless Chromium page and asserts the harness screenshot arrives as a `screenshot` artifact.

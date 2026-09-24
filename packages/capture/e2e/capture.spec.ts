@@ -50,6 +50,19 @@ test("real browser captures console, network, actions, and DOM replay", async ({
     await page.click("#target-btn");
     await page.fill("#secret-input", "hunter2");
 
+    // Headless environments can't getDisplayMedia — the harness provides the
+    // pixels instead (Playwright page.screenshot → attach). This is the
+    // contract for agents running without a display surface.
+    const png = await page.screenshot({ type: "png" });
+    await page.evaluate((bytes) => {
+      const blob = new Blob([new Uint8Array(bytes)], { type: "image/png" });
+      (
+        window as unknown as {
+          capture: { attach: (b: Blob, name: string) => void };
+        }
+      ).capture.attach(blob, "harness-screenshot.png");
+    }, Array.from(png));
+
     const result = (await page.evaluate(() =>
       (
         window as unknown as { doReport: () => Promise<ReportResult> }
@@ -99,6 +112,18 @@ test("real browser captures console, network, actions, and DOM replay", async ({
     const inputAction = payload.actions?.find((a) => a.type === "input");
     expect(inputAction).toBeDefined();
     expect(inputAction?.metadata?.value).toBeUndefined();
+
+    // Harness-provided screenshot uploaded as a first-class artifact.
+    const shot = server.artifacts.find(
+      (a) => a.attachmentType === "screenshot"
+    );
+    expect(shot).toBeDefined();
+    expect(shot?.fileName).toBe("harness-screenshot.png");
+    expect(shot?.contentType).toBe("image/png");
+    expect(shot?.body.length).toBeGreaterThan(100);
+    expect(shot?.body.subarray(0, 4)).toEqual(
+      Buffer.from([0x89, 0x50, 0x4e, 0x47])
+    );
 
     // DOM replay artifact: self-contained HTML with rrweb events embedded.
     const replay = server.artifacts.find((a) => a.attachmentType === "replay");
