@@ -3,7 +3,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { and, eq } from "drizzle-orm";
 import type { Context } from "hono";
 
-import captureSdkBundle from "../assets/capture.iife.txt";
+import captureSdkBundle from "../assets/capture.iife.js";
 import { createD1, type D1Client } from "../global/db.js";
 import { storeJamCaptureArtifacts } from "../global/jam-capture.js";
 import {

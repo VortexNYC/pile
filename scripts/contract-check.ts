@@ -6,7 +6,7 @@ const generated = [
   "src/mcp/mcp-tools.ts",
   "packages/cli/src/client/types.ts",
   "packages/cli/src/commands.ts",
-  "src/assets/capture.iife.txt",
+  "src/assets/capture.iife.ts",
 ];
 
 function run(label: string, command: string): void {
