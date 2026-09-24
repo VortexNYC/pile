@@ -2,6 +2,25 @@
 
 Pile support-capture SDK. Follows the Jam/crikket model: instrumentation installs at `init()` and continuously buffers console output, errors, network activity, user actions, and navigation — so a report submitted _after_ a bug still includes what happened. Uploads go through Pile's `/support/capture/*` protocol and finalize into a support ticket.
 
+## One-tag embed
+
+The fastest install — one script tag, no bundler:
+
+```html
+<script
+  src="https://pile.nyc/capture.js"
+  data-pile-key="pil_…"
+  data-pile-widget="true"
+  data-pile-replay="true"
+></script>
+```
+
+That's it: capture is live with a floating "Report a bug" button. Attributes: `data-pile-key` (public key) or `data-pile-link` (recording-link token), `data-pile-widget`, `data-pile-replay`, `data-pile-endpoint`, `data-pile-lookback`. The instance is exposed as `window.pileCapture` — e.g. `pileCapture.report({email, title})` from the console or your own UI.
+
+Recording links need no embed at all: `POST /workspaces/{org}/support/capture-links` → hand out `https://pile.nyc/cap/{token}` — or drive the same protocol headlessly with `initCapture({linkToken})`.
+
+## Programmatic install
+
 ```ts
 import { initCapture } from "@vortex-api/capture";
 

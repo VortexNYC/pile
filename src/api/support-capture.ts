@@ -3,6 +3,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { and, eq } from "drizzle-orm";
 import type { Context } from "hono";
 
+import captureSdkBundle from "../assets/capture.iife.txt";
 import { createD1, type D1Client } from "../global/db.js";
 import { storeJamCaptureArtifacts } from "../global/jam-capture.js";
 import {
@@ -1938,6 +1939,15 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
         size: a.size,
       })),
     });
+  });
+
+  // The capture SDK's browser bundle — the one-tag embed:
+  // <script src="https://pile.nyc/capture.js" data-pile-key="pil_…" data-pile-widget>
+  app.get("/capture.js", (c) => {
+    c.header("content-type", "application/javascript; charset=utf-8");
+    c.header("cache-control", "public, max-age=300");
+    c.header("access-control-allow-origin", "*");
+    return c.body(captureSdkBundle);
   });
 
   // Public zero-install recording page — the link token is the credential.

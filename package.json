@@ -25,6 +25,7 @@
     "mcp:generate": "tsx scripts/generate-openapi.ts && tsx scripts/generate-mcp-tools.ts",
     "client:generate": "openapi-typescript src/mcp/openapi.json -o packages/cli/src/client/types.ts",
     "cli:generate": "tsx scripts/generate-cli.ts",
+    "capture:bundle": "pnpm -C packages/capture run build && cp packages/capture/dist/capture.iife.js src/assets/capture.iife.txt",
     "cli": "pnpm -C packages/cli run cli",
     "contract:check": "tsx scripts/contract-check.ts",
     "knip": "knip",

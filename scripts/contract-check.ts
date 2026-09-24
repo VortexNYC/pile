@@ -6,6 +6,7 @@ const generated = [
   "src/mcp/mcp-tools.ts",
   "packages/cli/src/client/types.ts",
   "packages/cli/src/commands.ts",
+  "src/assets/capture.iife.txt",
 ];
 
 function run(label: string, command: string): void {
@@ -17,6 +18,7 @@ try {
   run("regenerating MCP artifacts", "pnpm run mcp:generate");
   run("regenerating client types", "pnpm run client:generate");
   run("regenerating CLI commands", "pnpm run cli:generate");
+  run("regenerating capture bundle", "pnpm run capture:bundle");
 
   console.log("[contract-check] verifying generated artifacts are committed");
   const diff = execSync(`git diff -- ${generated.join(" ")}`, {

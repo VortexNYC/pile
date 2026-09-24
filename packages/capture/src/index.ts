@@ -398,3 +398,43 @@ export function initCapture(options: CaptureInitOptions): Capture {
     },
   };
 }
+
+/**
+ * Script-tag embed — Jam-style zero-config install. Dropping
+ * `<script src="https://pile.nyc/capture.js" data-pile-key="pil_…"
+ * data-pile-widget></script>` on a page auto-initializes capture and mounts
+ * the report widget. Attributes: `data-pile-key` (public key) or
+ * `data-pile-link` (recording-link token), `data-pile-endpoint`,
+ * `data-pile-replay`, `data-pile-widget`, `data-pile-lookback`. The instance
+ * is exposed as `window.pileCapture` and `initCapture` stays available for
+ * programmatic use.
+ */
+function autoInitFromScriptTag(): void {
+  if (typeof document === "undefined") {
+    return;
+  }
+  const script = document.currentScript as HTMLScriptElement | null;
+  if (!script) {
+    return;
+  }
+  const publicKey = script.dataset.pileKey;
+  const linkToken = script.dataset.pileLink;
+  if (!publicKey && !linkToken) {
+    return;
+  }
+  const lookback = Number(script.dataset.pileLookback);
+  const capture = initCapture({
+    publicKey,
+    linkToken,
+    endpoint: script.dataset.pileEndpoint,
+    replay: script.dataset.pileReplay === "true",
+    lookbackMs:
+      Number.isFinite(lookback) && lookback > 0 ? lookback : undefined,
+  });
+  (globalThis as { pileCapture?: Capture }).pileCapture = capture;
+  if (script.dataset.pileWidget === "true") {
+    capture.mount();
+  }
+}
+
+autoInitFromScriptTag();
