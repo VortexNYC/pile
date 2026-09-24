@@ -19,6 +19,12 @@ interface DebuggerPayload {
     requestHeaders?: Record<string, string>;
     requestBody?: string;
     responseBody?: string;
+    timing?: { ttfb?: number; download?: number };
+    graphql?: {
+      operationName?: string;
+      operationType?: string;
+      hasErrors?: boolean;
+    };
   }[];
   actions?: {
     type: string;
@@ -34,18 +40,34 @@ test("real browser captures console, network, actions, and DOM replay", async ({
 }) => {
   const bundleDir = join(import.meta.dirname, ".bundle");
   await build({
-    configFile: join(import.meta.dirname, "vite.config.ts"),
+    configFile: false,
+    root: join(import.meta.dirname, ".."),
     logLevel: "silent",
+    build: {
+      emptyOutDir: true,
+      lib: {
+        entry: "src/index.ts",
+        name: "PileCapture",
+        formats: ["iife"],
+        fileName: () => "capture.js",
+      },
+      outDir: "e2e/.bundle",
+      minify: false,
+    },
   });
   const server = await startMockServer(join(bundleDir, "capture.js"));
   try {
     const dataResponse = page.waitForResponse((r) =>
       r.url().includes("/api/data")
     );
+    const gqlResponse = page.waitForResponse((r) =>
+      r.url().includes("/api/graphql")
+    );
     await page.goto(server.url);
     await page.waitForFunction(() => typeof window.capture === "object");
     // Let the initial fetch + rrweb full snapshot land.
     await dataResponse;
+    await gqlResponse;
 
     await page.click("#target-btn");
     await page.fill("#secret-input", "hunter2");
@@ -103,6 +125,25 @@ test("real browser captures console, network, actions, and DOM replay", async ({
     expect(dataReq?.requestBody).not.toContain("hunter2");
     expect(dataReq?.responseBody).toContain('"ok":true');
 
+    // DevTools-grade timing phases captured via PerformanceResourceTiming.
+    expect(dataReq?.timing?.ttfb).toBeGreaterThanOrEqual(0);
+    expect(dataReq?.timing?.download).toBeGreaterThanOrEqual(0);
+
+    // GraphQL: operation name/type extracted, errors-in-200 flagged.
+    const gqlReq = payload.networkRequests?.find((r) =>
+      r.url.includes("/api/graphql")
+    );
+    expect(gqlReq?.graphql?.operationName).toBe("GetUser");
+    expect(gqlReq?.graphql?.operationType).toBe("query");
+    expect(gqlReq?.graphql?.hasErrors).toBe(true);
+
+    // jam.metadata() parity: live callback values landed in report metadata.
+    const submittedMetadata = server.sessionBody?.metadata as
+      | Record<string, unknown>
+      | undefined;
+    expect(submittedMetadata?.plan).toBe("enterprise");
+    expect(submittedMetadata?.userId).toBe(42);
+
     // Click action captured; input action must never carry the value.
     expect(
       payload.actions?.some(
@@ -134,6 +175,10 @@ test("real browser captures console, network, actions, and DOM replay", async ({
     expect(replayHtml).toContain('"type":2');
     // Masked input: the typed password must not appear in the replay events.
     expect(replayHtml).not.toContain("hunter2");
+    // Auto-blur: data-pile-blur blocked, industry .fs-mask masked — the
+    // sensitive text must not appear in the replay event stream.
+    expect(replayHtml).not.toContain("PILE_BLUR_SECRET");
+    expect(replayHtml).not.toContain("FS_MASK_SECRET");
   } finally {
     await server.close();
   }

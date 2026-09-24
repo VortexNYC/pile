@@ -79,6 +79,13 @@ export interface Capture {
    * This is the primary Jam-style flow: bug happened, user clicks report.
    */
   report(options: CaptureReportOptions): Promise<CaptureResult>;
+  /**
+   * Register a live-metadata callback (Jam-style `jam.metadata()`). The
+   * function is invoked at submit time, so the values are always live —
+   * user IDs, feature flags, app state. Multiple registrations merge.
+   * Throwing callbacks are skipped, never fatal.
+   */
+  metadata(fn: () => Record<string, unknown>): void;
   /** Attach an arbitrary artifact to the next submission. */
   attach(
     blob: Blob,
@@ -183,6 +190,7 @@ export function initCapture(options: CaptureInitOptions): Capture {
     excludeUrlPrefixes: [`${endpoint}/support/capture`],
   });
   const pendingArtifacts: CaptureArtifact[] = [];
+  const metadataCallbacks: Array<() => Record<string, unknown>> = [];
   let active: ActiveSession | null = null;
   // DOM replay is always-on like the event buffer: rrweb buffers events so
   // a report includes the session leading up to the bug, not after it.
@@ -194,6 +202,7 @@ export function initCapture(options: CaptureInitOptions): Capture {
     }
     replayStarting ??= startDomRecording({
       maskAllInputs: options.replayMaskInputs,
+      blurSelectors: options.blurSelectors,
     }).then((domRecorder) => {
       replayRecorder = domRecorder;
       return domRecorder;
@@ -247,8 +256,23 @@ export function initCapture(options: CaptureInitOptions): Capture {
     const metadata: Record<string, unknown> = {
       email: stopOptions.email,
       ...(stopOptions.fullName ? { fullName: stopOptions.fullName } : {}),
-      ...stopOptions.metadata,
     };
+    // Live-metadata callbacks (jam.metadata() parity): evaluated now, at
+    // submit time, so the values reflect the current app state.
+    for (const fn of metadataCallbacks) {
+      try {
+        const result = fn();
+        if (result && typeof result === "object") {
+          Object.assign(metadata, result);
+        }
+      } catch {
+        // A throwing metadata callback must never lose the report.
+      }
+    }
+    if (replayRecorder?.degraded) {
+      metadata.replayDegraded = true;
+    }
+    Object.assign(metadata, stopOptions.metadata);
     return submitCaptureReport(
       {
         endpoint,
@@ -340,6 +364,10 @@ export function initCapture(options: CaptureInitOptions): Capture {
       }
       const snapshot = recorder.getRecentSnapshot(lookbackMs);
       return submit(reportOptions, snapshot, extras);
+    },
+
+    metadata(fn) {
+      metadataCallbacks.push(fn);
     },
 
     attach(blob, fileName, attachmentType) {

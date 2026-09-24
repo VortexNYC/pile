@@ -33,6 +33,20 @@ export interface DebuggerConsoleEvent {
   metadata?: Record<string, unknown>;
 }
 
+export interface DebuggerNetworkTiming {
+  dns?: number;
+  connect?: number;
+  tls?: number;
+  ttfb?: number;
+  download?: number;
+}
+
+export interface DebuggerGraphqlInfo {
+  operationName?: string;
+  operationType?: "query" | "mutation" | "subscription";
+  hasErrors?: boolean;
+}
+
 export interface DebuggerNetworkEvent {
   kind: "network";
   timestamp: number;
@@ -44,6 +58,10 @@ export interface DebuggerNetworkEvent {
   responseHeaders?: Record<string, string>;
   requestBody?: string;
   responseBody?: string;
+  /** DevTools-grade timing phases from PerformanceResourceTiming. */
+  timing?: DebuggerNetworkTiming;
+  /** GraphQL detection: operation name/type + errors-in-200 flag. */
+  graphql?: DebuggerGraphqlInfo;
 }
 
 export interface DebuggerErrorEvent {
@@ -84,6 +102,8 @@ export interface BugReportDebuggerPayload {
     responseHeaders?: Record<string, string>;
     requestBody?: string;
     responseBody?: string;
+    timing?: DebuggerNetworkTiming;
+    graphql?: DebuggerGraphqlInfo;
     timestamp: string;
     offset: number | null;
   }>;
@@ -116,6 +136,13 @@ export interface CaptureInitOptions {
   replay?: boolean;
   /** Mask all input values in the DOM replay. Default true. */
   replayMaskInputs?: boolean;
+  /**
+   * Extra CSS selectors to blur in DOM replay — string, list, or a function
+   * evaluated at recorder start (Jam-style `blurSelectors`). Industry
+   * privacy selectors (FullStory/Hotjar/Sentry/LogRocket/Clarity/rrweb/…)
+   * and `[data-pile-blur]` are always honored.
+   */
+  blurSelectors?: string | string[] | (() => string | string[]);
   /** Capture text request/response bodies (sanitized). Default true. */
   networkBodies?: boolean;
 }

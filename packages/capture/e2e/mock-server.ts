@@ -20,6 +20,7 @@ export interface ReceivedArtifact {
 export interface MockServer {
   url: string;
   artifacts: ReceivedArtifact[];
+  sessionBody: Record<string, unknown> | null;
   finalized: boolean;
   close: () => Promise<void>;
 }
@@ -30,6 +31,8 @@ const PAGE_HTML = `<!doctype html>
 <body>
   <button id="target-btn">click me</button>
   <input id="secret-input" type="password" value="" />
+  <div data-pile-blur id="blurred">PILE_BLUR_SECRET</div>
+  <div class="fs-mask" id="fsmasked">FS_MASK_SECRET</div>
   <script src="/capture.js"></script>
   <script>
     window.capture = PileCapture.initCapture({
@@ -37,12 +40,21 @@ const PAGE_HTML = `<!doctype html>
       endpoint: location.origin,
       replay: true,
     });
+    window.capture.metadata(() => ({ plan: "enterprise", userId: 42 }));
     console.log("e2e repro log");
     console.error("e2e repro error");
     fetch("/api/data", {
       method: "POST",
       headers: { "content-type": "application/json", authorization: "Bearer sekret" },
       body: JSON.stringify({ password: "hunter2", ok: true }),
+    });
+    fetch("/api/graphql", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        operationName: "GetUser",
+        query: "query GetUser { user { id } }",
+      }),
     });
     window.doReport = () =>
       window.capture.report({ email: "e2e@pile.dev", title: "E2E report" });
@@ -59,6 +71,7 @@ const readBody = (req: import("node:http").IncomingMessage) =>
 
 export async function startMockServer(bundlePath: string): Promise<MockServer> {
   const artifacts: ReceivedArtifact[] = [];
+  let sessionBody: Record<string, unknown> | null = null;
   let finalized = false;
   const bundle = await readFile(bundlePath);
 
@@ -79,6 +92,15 @@ export async function startMockServer(bundlePath: string): Promise<MockServer> {
         .end(JSON.stringify({ ok: true }));
       return;
     }
+    if (url.pathname === "/api/graphql") {
+      res.setHeader("content-type", "application/json").end(
+        JSON.stringify({
+          data: null,
+          errors: [{ message: "field blew up" }],
+        })
+      );
+      return;
+    }
     if (url.pathname === "/support/capture/token" && req.method === "POST") {
       res.setHeader("content-type", "application/json").end(
         JSON.stringify({
@@ -95,6 +117,7 @@ export async function startMockServer(bundlePath: string): Promise<MockServer> {
       const body = JSON.parse((await readBody(req)).toString()) as {
         artifacts: { attachmentType: string; fileName: string }[];
       };
+      sessionBody = body as unknown as Record<string, unknown>;
       const uploads = body.artifacts.map((a) => ({
         attachmentType: a.attachmentType,
         fileName: a.fileName,
@@ -144,6 +167,9 @@ export async function startMockServer(bundlePath: string): Promise<MockServer> {
   return {
     url: `http://localhost:${port}`,
     artifacts,
+    get sessionBody() {
+      return sessionBody;
+    },
     get finalized() {
       return finalized;
     },

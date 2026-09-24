@@ -159,6 +159,8 @@ export function buildDebuggerSubmissionPayload(
       responseHeaders: event.responseHeaders,
       requestBody: event.requestBody,
       responseBody: event.responseBody,
+      timing: event.timing,
+      graphql: event.graphql,
       timestamp,
       offset,
     });

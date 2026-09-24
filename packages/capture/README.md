@@ -24,26 +24,41 @@ await capture.stop({ email: "reporter@example.com", title: "…" });
 
 - Console (`log`/`info`/`warn`/`error`/`debug`) with deep serialization
 - Uncaught errors and unhandled rejections
-- `fetch` and `XMLHttpRequest` — method, URL, status, duration, sanitized headers, text bodies
+- `fetch` and `XMLHttpRequest` — method, URL, status, duration, sanitized headers, text bodies, per-request timing phases (`dns`, `connect`, `tls`, `ttfb`, `download` via `PerformanceResourceTiming`), and GraphQL annotations (`operationName`, `operationType`, `hasErrors` — including `errors[]` in HTTP 200 responses)
+- `WebSocket` — open/close/send/message with text previews and binary lengths
 - User actions — click, input (value _length_ only), change, submit, Enter/Escape
 - Navigation breadcrumbs — initial load, pushState/replaceState, popstate, hashchange
 - DOM session replay via rrweb — deterministic, no permission prompt; produces a self-contained `replay.html` artifact that plays back when the artifact URL is opened
 - Device/browser metadata, viewport, connection info
 
-All network capture is sanitized: sensitive headers (`authorization`, `cookie`, tokens…) are dropped, sensitive query params and body fields become `[REDACTED]`. The debugger payload is gzipped via `CompressionStream` when available.
+All network capture is sanitized: sensitive headers (`authorization`, `cookie`, tokens…) are dropped, sensitive query params and body fields become `[REDACTED]`, and binary payloads are recorded as compact placeholders (`[binary: N bytes]`) rather than contents. The debugger payload is gzipped via `CompressionStream` when available.
 
 ## Options
 
-| Option             | Default            | Notes                                                                      |
-| ------------------ | ------------------ | -------------------------------------------------------------------------- |
-| `publicKey`        | —                  | Required. Issued via `POST /workspaces/{org}/support/capture/public-keys`. |
-| `endpoint`         | `https://pile.nyc` | API origin.                                                                |
-| `reference`        | —                  | Caller-side reference echoed on the session.                               |
-| `lookbackMs`       | `60000`            | How much buffered history a report/session includes.                       |
-| `video`            | `false`            | Screen recording for `start()`/`stop()` sessions.                          |
-| `replay`           | `false`            | DOM session replay via rrweb (lazy-loaded; no prompt).                     |
-| `replayMaskInputs` | `true`             | Mask input values in the DOM replay.                                       |
-| `networkBodies`    | `true`             | Capture sanitized text request/response bodies.                            |
+| Option             | Default            | Notes                                                                               |
+| ------------------ | ------------------ | ----------------------------------------------------------------------------------- |
+| `publicKey`        | —                  | Required. Issued via `POST /workspaces/{org}/support/capture/public-keys`.          |
+| `endpoint`         | `https://pile.nyc` | API origin.                                                                         |
+| `reference`        | —                  | Caller-side reference echoed on the session.                                        |
+| `lookbackMs`       | `60000`            | How much buffered history a report/session includes.                                |
+| `video`            | `false`            | Screen recording for `start()`/`stop()` sessions.                                   |
+| `replay`           | `false`            | DOM session replay via rrweb (lazy-loaded; no prompt).                              |
+| `replayMaskInputs` | `true`             | Mask input values in the DOM replay.                                                |
+| `blurSelectors`    | —                  | Extra selectors blocked from replay — string, array, or `() => string \| string[]`. |
+| `networkBodies`    | `true`             | Capture sanitized text request/response bodies.                                     |
+
+Replay always honors the standard privacy markup — `[data-pile-blur]`, `[data-jam-blur]`, FullStory `.fs-exclude`/`.fs-block`/`.fs-mask`, Hotjar `[data-hj-suppress]`/`[data-hj-masked]`, LogRocket `[data-private]`, Sentry `.sentry-block`/`.sentry-mask`, Clarity `[data-clarity-mask]`, Highlight `.highlight-*`, OpenReplay `[data-openreplay-*]`, Heap `[data-heap-redact]`, ContentSquare `[data-cs-*]`, Matomo `[data-matomo-mask]` — plus card/identity autocomplete attributes (`cc-number`, `cc-csc`, `tel`, `email`) and SSN/card/routing/passport name patterns. A replay event-rate circuit breaker stops recording if the page floods the recorder (live dashboards, tickers) so the host app is never degraded.
+
+`capture.metadata(fn)` registers a callback evaluated at submission time — Jam-style live app state:
+
+```ts
+capture.metadata(() => ({
+  userId: currentUser.id,
+  featureFlags: flags.snapshot(),
+}));
+```
+
+Callbacks merge into report metadata; a throwing callback never loses a report, and explicit `report({ metadata })` wins on conflicts.
 
 `capture.attach(blob, "name.json")` queues an extra artifact for the next submission. `capture.destroy()` removes all instrumentation.
 

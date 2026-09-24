@@ -29,6 +29,112 @@ export interface Instrumentation {
 
 const CONSOLE_LEVELS = ["log", "info", "warn", "error", "debug"] as const;
 
+/** DevTools-grade timing phases via PerformanceResourceTiming. */
+function getResourceTiming(
+  url: string,
+  startedAt: number
+): import("../types.js").DebuggerNetworkTiming | undefined {
+  if (typeof performance === "undefined") {
+    return undefined;
+  }
+  try {
+    const entries = performance.getEntriesByName(
+      url
+    ) as PerformanceResourceTiming[];
+    const entry = entries
+      .filter((e) => e.startTime <= Date.now() - performance.timeOrigin + 100)
+      .toSorted((a, b) => b.startTime - a.startTime)
+      .find((e) => e.startTime >= startedAt - performance.timeOrigin - 500);
+    if (!entry) {
+      return undefined;
+    }
+    const timing: import("../types.js").DebuggerNetworkTiming = {};
+    if (entry.domainLookupEnd > entry.domainLookupStart) {
+      timing.dns = Math.round(entry.domainLookupEnd - entry.domainLookupStart);
+    }
+    if (entry.connectEnd > entry.connectStart) {
+      const secure = entry.secureConnectionStart > 0;
+      timing.connect = Math.round(
+        (secure ? entry.secureConnectionStart : entry.connectEnd) -
+          entry.connectStart
+      );
+      if (secure) {
+        timing.tls = Math.round(entry.connectEnd - entry.secureConnectionStart);
+      }
+    }
+    if (entry.responseStart > 0 && entry.requestStart > 0) {
+      timing.ttfb = Math.round(entry.responseStart - entry.requestStart);
+    }
+    if (entry.responseEnd > entry.responseStart) {
+      timing.download = Math.round(entry.responseEnd - entry.responseStart);
+    }
+    return Object.keys(timing).length > 0 ? timing : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * GraphQL detection (Jam parity): operation name/type from the request body
+ * plus errors-in-200 flagging from the response body.
+ */
+function detectGraphql(
+  url: string,
+  requestBody: string | undefined,
+  responseBody: string | undefined
+): import("../types.js").DebuggerGraphqlInfo | undefined {
+  let operationName: string | undefined;
+  let operationType: "query" | "mutation" | "subscription" | undefined;
+  try {
+    const parsed = requestBody ? JSON.parse(requestBody) : null;
+    const payload = Array.isArray(parsed) ? parsed[0] : parsed;
+    if (payload && typeof payload === "object") {
+      const body = payload as Record<string, unknown>;
+      if (typeof body.operationName === "string" && body.operationName) {
+        operationName = body.operationName;
+      }
+      if (typeof body.query === "string") {
+        const match = body.query.match(/^\s*(query|mutation|subscription)/);
+        operationType = (match?.[1] ?? "query") as typeof operationType;
+      }
+    }
+  } catch {
+    // Not JSON — check URL fallback below.
+  }
+  const looksGraphql =
+    operationName !== undefined ||
+    operationType !== undefined ||
+    /graphql/i.test(url);
+  if (!looksGraphql) {
+    return undefined;
+  }
+  const info: import("../types.js").DebuggerGraphqlInfo = {
+    operationName,
+    operationType,
+  };
+  if (responseBody) {
+    try {
+      const parsed = JSON.parse(responseBody) as Record<string, unknown>;
+      if (Array.isArray(parsed?.errors) && parsed.errors.length > 0) {
+        info.hasErrors = true;
+      }
+    } catch {
+      // Non-JSON response — leave flag unset.
+    }
+  }
+  return info;
+}
+
+/** Jam-style binary placeholder from the content-length header. */
+function binaryPlaceholder(
+  responseHeaders: Record<string, string>
+): string | undefined {
+  const length = Number(responseHeaders["content-length"]);
+  return Number.isFinite(length) && length > 0
+    ? `[binary: ${length} bytes]`
+    : undefined;
+}
+
 export function installInstrumentation(
   recorder: EventRecorder,
   options: { networkBodies: boolean; excludeUrlPrefixes?: string[] }
@@ -43,6 +149,7 @@ export function installInstrumentation(
   restores.push(installConsole(recorder, reporter, stringifyValue));
   restores.push(installErrors(recorder, reporter));
   restores.push(installActions(recorder, reporter));
+  restores.push(installWebSocket(recorder, reporter, isExcluded));
   if (options.networkBodies) {
     restores.push(
       installNetwork(recorder, reporter, stringifyValue, isExcluded)
@@ -445,7 +552,12 @@ function installFetch(
   let isInsidePatchedFetch = false;
 
   const patchedFetch = (async (...args: Parameters<typeof fetch>) => {
-    if (isInsidePatchedFetch) {
+    // Re-entry guard: only needed when another library re-wrapped fetch (the
+    // accessor setter pointed delegateFetch at their wrapper, which calls
+    // globalThis.fetch → patchedFetch → their wrapper → loop). With the raw
+    // baseFetch there is no loop, so concurrent in-flight fetches must not
+    // bypass instrumentation.
+    if (isInsidePatchedFetch && delegateFetch !== baseFetch) {
       return baseFetch(...args);
     }
     isInsidePatchedFetch = true;
@@ -502,6 +614,10 @@ function installFetch(
             error
           );
         }
+        const sanitizedResponseBody = sanitizeCapturedBody(
+          responseBody ?? binaryPlaceholder(responseHeaders),
+          contentType
+        );
         postNetworkEvent(recorder, {
           method: context.method,
           url: context.normalizedUrl,
@@ -513,7 +629,13 @@ function installFetch(
             requestBody,
             context.requestContentType
           ),
-          responseBody: sanitizeCapturedBody(responseBody, contentType),
+          responseBody: sanitizedResponseBody,
+          timing: getResourceTiming(context.normalizedUrl, startedAt),
+          graphql: detectGraphql(
+            context.normalizedUrl,
+            requestBody,
+            responseBody
+          ),
         });
       });
       return response;
@@ -658,9 +780,10 @@ function installXhr(
         error
       );
     }
+    const normalizedUrl = redactSensitiveQueryParams(absoluteUrl);
     return {
       method: meta.method,
-      url: redactSensitiveQueryParams(absoluteUrl),
+      url: normalizedUrl,
       status: xhr.status,
       duration: Date.now() - meta.startedAt,
       requestHeaders: meta.requestHeaders,
@@ -669,7 +792,21 @@ function installXhr(
         requestBody,
         meta.requestHeaders["content-type"] ?? ""
       ),
-      responseBody: sanitizeCapturedBody(responseBody, responseContentType),
+      responseBody: sanitizeCapturedBody(
+        responseBody ??
+          (xhr.responseType === "arraybuffer" || xhr.responseType === "blob"
+            ? `[binary: ${
+                xhr.response instanceof ArrayBuffer
+                  ? xhr.response.byteLength
+                  : xhr.response instanceof Blob
+                    ? xhr.response.size
+                    : 0
+              } bytes]`
+            : binaryPlaceholder(responseHeaders)),
+        responseContentType
+      ),
+      timing: getResourceTiming(normalizedUrl, meta.startedAt),
+      graphql: detectGraphql(normalizedUrl, requestBody, responseBody),
     };
   };
 
@@ -775,6 +912,118 @@ function installNetwork(
   return () => {
     restoreFetch();
     restoreXhr();
+  };
+}
+
+const MAX_WS_PREVIEW = 500;
+
+/**
+ * WebSocket capture (Jam parity): open/close/send/message as action events.
+ * Text frames get a truncated sanitized preview; binary frames record
+ * length only.
+ */
+function installWebSocket(
+  recorder: EventRecorder,
+  reporter: Reporter,
+  isExcluded: (url: string) => boolean
+): () => void {
+  const NativeWebSocket = (globalThis as { WebSocket?: typeof WebSocket })
+    .WebSocket;
+  if (typeof NativeWebSocket !== "function") {
+    return () => {};
+  }
+
+  const post = (
+    url: string,
+    event: string,
+    extra?: Record<string, unknown>
+  ) => {
+    recorder.push({
+      kind: "action",
+      timestamp: Date.now(),
+      actionType: "websocket",
+      target: url,
+      metadata: { event, ...extra },
+    });
+  };
+
+  const describeData = (data: unknown): Record<string, unknown> => {
+    if (typeof data === "string") {
+      return {
+        payloadLength: data.length,
+        preview: truncate(data, MAX_WS_PREVIEW),
+      };
+    }
+    if (data instanceof ArrayBuffer) {
+      return { payloadLength: data.byteLength, binary: true };
+    }
+    if (ArrayBuffer.isView(data)) {
+      return { payloadLength: data.byteLength, binary: true };
+    }
+    if (typeof Blob !== "undefined" && data instanceof Blob) {
+      return { payloadLength: data.size, binary: true };
+    }
+    return {};
+  };
+
+  class PatchedWebSocket extends NativeWebSocket {
+    constructor(url: string | URL, protocols?: string | string[]) {
+      super(url, protocols);
+      const normalizedUrl = (() => {
+        try {
+          return redactSensitiveQueryParams(String(url));
+        } catch {
+          return String(url);
+        }
+      })();
+      const excluded = isExcluded(normalizedUrl);
+      if (excluded) {
+        return;
+      }
+      post(normalizedUrl, "open");
+      this.addEventListener("close", (event) => {
+        post(normalizedUrl, "close", { code: event.code });
+      });
+      this.addEventListener("message", (event) => {
+        try {
+          post(normalizedUrl, "message", describeData(event.data));
+        } catch (error) {
+          reporter.reportNonFatalError(
+            "Failed to record websocket message",
+            error
+          );
+        }
+      });
+    }
+
+    override send(data: string | ArrayBufferLike | Blob | ArrayBufferView) {
+      const normalizedUrl = (() => {
+        try {
+          return redactSensitiveQueryParams(this.url);
+        } catch {
+          return this.url;
+        }
+      })();
+      if (!isExcluded(normalizedUrl)) {
+        post(normalizedUrl, "send", describeData(data));
+      }
+      return super.send(data);
+    }
+  }
+
+  try {
+    Object.assign(PatchedWebSocket, NativeWebSocket);
+  } catch (error) {
+    reporter.reportNonFatalError(
+      "Failed to mirror WebSocket properties",
+      error
+    );
+  }
+  (globalThis as { WebSocket?: typeof WebSocket }).WebSocket =
+    PatchedWebSocket as typeof WebSocket;
+  return () => {
+    (globalThis as { WebSocket?: typeof WebSocket }).WebSocket =
+      NativeWebSocket;
   };
 }
 
