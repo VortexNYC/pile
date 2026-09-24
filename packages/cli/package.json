@@ -2,7 +2,7 @@
   "name": "@vortex-api/pile",
   "version": "0.1.3",
   "description": "Pile SDK + CLI + capture + widget — one package for the whole Pile surface.",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "bin": {
     "pile": "./bin/pile.js"
   },

@@ -1,12 +1,12 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 
-import { docsBundle } from "../assets/docs-bundle.js";
 import { githubWebhookRoute, processGithubWebhook } from "../agents/github.js";
 import { gitlabWebhookRoute, processGitlabWebhook } from "../agents/gitlab.js";
 import {
   intercomWebhookRoute,
   processIntercomWebhook,
 } from "../agents/intercom.js";
+import { docsBundle } from "../assets/docs-bundle.js";
 import { handleMcpRequest } from "../mcp/server.js";
 import { createAuth } from "../platform/auth.js";
 import { toErrorResponse, VortexError } from "../platform/errors.js";
@@ -384,6 +384,14 @@ app.get("/llms-full.txt", (c) => {
     .join("");
   return c.text(`# Pile — full documentation\n${body}`);
 });
+
+app.get("/.well-known/security.txt", (c) =>
+  c.text(
+    "Contact: mailto:security@vortexnyc.com\nPreferred-Languages: en\nCanonical: https://pile.nyc/.well-known/security.txt\n"
+  )
+);
+
+app.get("/status", (c) => c.redirect("/health", 308));
 
 app.get("/docs/:name", (c) => {
   const name = c.req.param("name");

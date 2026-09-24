@@ -28,6 +28,7 @@ import {
 } from "../global/support-channels.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
+import { publicRateLimit } from "../platform/rate-limit.js";
 import { rls } from "../platform/rls.js";
 import { slackIngestionModeSchema } from "../slack/ingestion.js";
 
@@ -349,7 +350,7 @@ export function registerSupportChannelRoutes(app: OpenAPIHono<AppContext>) {
       path: "/support/incoming/{channelId}",
       tags: ["support-channels"],
       summary: "Receive a generic incoming support message",
-      middleware: [],
+      middleware: [publicRateLimit({ bucket: "support-incoming", max: 30 })],
       request: {
         params: channelIdParamSchema,
         body: {

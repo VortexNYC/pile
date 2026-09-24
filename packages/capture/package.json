@@ -3,7 +3,7 @@
   "version": "0.1.1",
   "private": true,
   "description": "Pile support-capture SDK — records console, network, errors, breadcrumbs, screenshots, and screen video; uploads to a Pile workspace.",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "files": [
     "dist"
   ],

@@ -637,6 +637,140 @@ describe("CLI integration", () => {
     expect(exitCode).toBe(1);
   });
 
+  it("init signs up, onboards a workspace, and stores config", async () => {
+    process.env.HOME = home;
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("no account", { status: 401 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ user: { id: "u-1" } }), { status: 200 })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ session: {} }), {
+          status: 200,
+          headers: {
+            "set-cookie":
+              "__Secure-better-auth.session_token=tok123; Path=/; HttpOnly",
+          },
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            workspace: { id: "org-new" },
+            team: { id: "team-1" },
+            token: "pil_test",
+          }),
+          { status: 201 }
+        )
+      );
+    const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    const exitCode = await runCli(
+      [
+        "init",
+        "--email",
+        "new@co.dev",
+        "--password",
+        "hunter2hunter2",
+        "--name",
+        "New Co",
+      ],
+      { fetch: mockFetch }
+    );
+
+    expect(exitCode).toBe(0);
+    expect(mockFetch).toHaveBeenCalledTimes(4);
+    const [onboardUrl, onboardInit] = mockFetch.mock.calls[3] as [
+      string,
+      { method: string; headers: Record<string, string> },
+    ];
+    expect(new URL(onboardUrl).pathname).toBe("/workspaces/onboard");
+    expect(onboardInit.method).toBe("POST");
+    expect(onboardInit.headers.Cookie).toContain("session_token=tok123");
+    const config = JSON.parse(
+      readFileSync(join(home, ".pile", "config.json"), "utf8")
+    ) as { apiKey?: string; workspace?: string };
+    expect(config.apiKey).toBe("pil_test");
+    expect(config.workspace).toBe("org-new");
+    spy.mockRestore();
+  });
+
+  it("init reuses an existing account without signing up", async () => {
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ session: {} }), {
+          status: 200,
+          headers: {
+            "set-cookie": "__Secure-better-auth.session_token=tok9; Path=/",
+          },
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            workspace: { id: "org-ex" },
+            team: { id: "team-1" },
+            token: "pil_ex",
+          }),
+          { status: 201 }
+        )
+      );
+    const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    const exitCode = await runCli(
+      [
+        "init",
+        "--email",
+        "existing@co.dev",
+        "--password",
+        "hunter2hunter2",
+        "--name",
+        "Acme",
+      ],
+      { fetch: mockFetch }
+    );
+
+    expect(exitCode).toBe(0);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    spy.mockRestore();
+  });
+
+  it("feedback files a ticket into the Pile workspace", async () => {
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({ ok: true, ticketId: "t-1", ticketNumber: 42 }),
+          { status: 201 }
+        )
+      );
+    const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    const exitCode = await runCli(
+      ["feedback", "--message", "the init flow rocks"],
+      { fetch: mockFetch }
+    );
+
+    expect(exitCode).toBe(0);
+    const [url, init] = mockFetch.mock.calls[0] as [
+      string,
+      { method: string; headers: Record<string, string>; body: string },
+    ];
+    expect(new URL(url).pathname).toContain("/support/incoming/");
+    expect(init.method).toBe("POST");
+    const body = JSON.parse(init.body) as { subject: string; text: string };
+    expect(body.subject).toBe("the init flow rocks");
+    expect(body.text).toContain("os:");
+    spy.mockRestore();
+  });
+
+  it("feedback rejects a missing message", async () => {
+    const exitCode = await runCli(["feedback"], { fetch: vi.fn() });
+    expect(exitCode).toBe(1);
+  });
+
   it("rejects an unknown command", async () => {
     const mockFetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ issues: [] }), {

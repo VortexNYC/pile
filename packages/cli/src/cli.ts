@@ -135,6 +135,7 @@ type CliConfig = {
   readonly apiKey?: string;
   readonly capturePublicKey?: string;
   readonly session?: string;
+  readonly workspace?: string;
 };
 
 function configPath(): string {
@@ -158,6 +159,8 @@ function readStoredConfig(): CliConfig {
         ? parsed.capturePublicKey
         : undefined,
     session: typeof parsed.session === "string" ? parsed.session : undefined,
+    workspace:
+      typeof parsed.workspace === "string" ? parsed.workspace : undefined,
   };
 }
 
@@ -444,6 +447,208 @@ async function authLoginCommand(
     session: cookie,
   });
   console.log(JSON.stringify({ ok: true, workspace }, null, 2));
+  return 0;
+}
+
+async function initCommand(
+  flags: Readonly<Record<string, string | boolean>>,
+  deps: CliDeps = {}
+): Promise<number> {
+  const email = flagString(flags, "email") ?? process.env.PILE_EMAIL;
+  const password = flagString(flags, "password") ?? process.env.PILE_PASSWORD;
+  const name = flagString(flags, "name") ?? flagString(flags, "workspace-name");
+  if (email === undefined || email.length === 0) {
+    throw new Error("Missing email. Set PILE_EMAIL or use --email <email>.");
+  }
+  if (password === undefined || password.length === 0) {
+    throw new Error(
+      "Missing password. Set PILE_PASSWORD or use --password <password>."
+    );
+  }
+  if (name === undefined || name.length === 0) {
+    throw new Error(
+      "Missing workspace name. Use --name <name> (e.g. --name Acme)."
+    );
+  }
+
+  const stored = readStoredConfig();
+  const baseUrl = (
+    process.env.PILE_BASE_URL ??
+    stored.baseUrl ??
+    defaultBaseUrl
+  ).replace(/\/$/u, "");
+  const doFetch = deps.fetch ?? fetch;
+  const origin = baseUrl;
+  const jsonHeaders = { "Content-Type": "application/json", Origin: origin };
+
+  // Sign in; if the account does not exist yet, create it and retry.
+  let signInRes = await doFetch(`${baseUrl}/api/auth/sign-in/email`, {
+    method: "POST",
+    headers: jsonHeaders,
+    body: JSON.stringify({ email, password, rememberMe: true }),
+  });
+  if (!signInRes.ok) {
+    const signUpRes = await doFetch(`${baseUrl}/api/auth/sign-up/email`, {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify({ email, password, name: email.split("@")[0] }),
+    });
+    if (!signUpRes.ok) {
+      const text = await signUpRes.text();
+      throw new Error(
+        `Sign in failed and sign up failed: ${signUpRes.status} ${text}`
+      );
+    }
+    signInRes = await doFetch(`${baseUrl}/api/auth/sign-in/email`, {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify({ email, password, rememberMe: true }),
+    });
+    if (!signInRes.ok) {
+      const text = await signInRes.text();
+      throw new Error(
+        `Sign in failed after sign up: ${signInRes.status} ${text}`
+      );
+    }
+  }
+  const cookies = getSetCookie(signInRes.headers);
+  const sessionCookie = cookies.find((c) => c.includes("session_token="));
+  if (sessionCookie === undefined) {
+    throw new Error("Sign in succeeded but no session cookie returned");
+  }
+  const cookie = sessionCookie.split(";")[0]?.trim();
+  if (cookie === undefined || cookie.length === 0) {
+    throw new Error("Sign in succeeded but no session cookie returned");
+  }
+
+  const slug =
+    flagString(flags, "slug") ??
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "");
+  const key =
+    flagString(flags, "key") ??
+    name
+      .replace(/[^a-zA-Z]/g, "")
+      .slice(0, 3)
+      .toUpperCase();
+
+  const onboardRes = await doFetch(`${baseUrl}/workspaces/onboard`, {
+    method: "POST",
+    headers: { ...jsonHeaders, Cookie: cookie },
+    body: JSON.stringify({ name, slug, key }),
+  });
+  const onboardText = await onboardRes.text();
+  if (!onboardRes.ok) {
+    throw new Error(`Onboard failed: ${onboardRes.status} ${onboardText}`);
+  }
+  const onboard = parseJson(onboardText);
+  if (
+    !isJsonObject(onboard) ||
+    !isJsonObject(onboard.workspace) ||
+    typeof onboard.workspace.id !== "string" ||
+    typeof onboard.token !== "string"
+  ) {
+    throw new Error("Onboard returned an unexpected response");
+  }
+
+  writeStoredConfig({
+    ...stored,
+    baseUrl,
+    apiKey: onboard.token,
+    session: cookie,
+    workspace: onboard.workspace.id,
+  });
+
+  console.log(`Signed in as ${email}`);
+  console.log(
+    `Workspace "${name}" ready — ${onboard.workspace.id} (slug ${slug})`
+  );
+  console.log(`API key saved to ${configPath()}`);
+  console.log("");
+  console.log("Next:");
+  console.log(
+    `  pile issues create --workspace ${onboard.workspace.id} --title "First issue" --team-id ${(onboard.team as { id?: string })?.id ?? "<team>"}`
+  );
+  console.log(
+    `  pile support capture links create --workspace ${onboard.workspace.id}`
+  );
+  return 0;
+}
+
+const CLI_VERSION = "0.1.3";
+const FEEDBACK_CHANNEL_ID = "cc2f808d-007e-48a1-870f-bd4c68ae0cd6";
+const FEEDBACK_CHANNEL_SECRET =
+  process.env.PILE_FEEDBACK_SECRET ??
+  "def1ccf1580e644a926ab305492b9c27b6df5184ee99ec65";
+
+async function feedbackCommand(
+  flags: Readonly<Record<string, string | boolean>>,
+  deps: CliDeps = {}
+): Promise<number> {
+  const message = flagString(flags, "message") ?? flagString(flags, "m");
+  if (message === undefined || message.length === 0) {
+    throw new Error(
+      'Missing message. Use --message "…" to describe the feedback.'
+    );
+  }
+  const subject = flagString(flags, "subject") ?? message.slice(0, 80);
+  const email =
+    flagString(flags, "email") ??
+    process.env.PILE_EMAIL ??
+    "cli-feedback@pile.dev";
+
+  const stored = readStoredConfig();
+  const baseUrl = (
+    process.env.PILE_BASE_URL ??
+    stored.baseUrl ??
+    defaultBaseUrl
+  ).replace(/\/$/u, "");
+  const doFetch = deps.fetch ?? fetch;
+
+  const context = [
+    message,
+    "",
+    `---`,
+    `cli: ${CLI_VERSION}`,
+    `os: ${process.platform} ${process.arch}`,
+    `node: ${process.version}`,
+    stored.workspace !== undefined ? `workspace: ${stored.workspace}` : "",
+  ]
+    .filter((line) => line.length > 0)
+    .join("\n");
+
+  const res = await doFetch(
+    `${baseUrl}/support/incoming/${FEEDBACK_CHANNEL_ID}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-pile-channel-secret": FEEDBACK_CHANNEL_SECRET,
+      },
+      body: JSON.stringify({
+        fromEmail: email,
+        fromName: flagString(flags, "name") ?? "pile CLI",
+        subject,
+        text: context,
+      }),
+    }
+  );
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`Feedback failed: ${res.status} ${text}`);
+  }
+  const body = parseJson(text);
+  const ticketNumber =
+    isJsonObject(body) && typeof body.ticketNumber === "number"
+      ? body.ticketNumber
+      : undefined;
+  console.log(
+    ticketNumber !== undefined
+      ? `Thanks — filed as ticket #${ticketNumber} in the Pile workspace.`
+      : "Thanks — feedback filed."
+  );
   return 0;
 }
 
@@ -757,6 +962,8 @@ function printUsage(): void {
   console.log("Usage: pile <command> [flags]\n");
   console.log("Core commands:");
   for (const cmd of [
+    "init --email <email> --password <pw> --name <workspace>",
+    "feedback --message <text>",
     "auth login",
     "auth status",
     "auth logout",
@@ -1025,6 +1232,14 @@ export async function runCli(
 
     if (scope === "request") {
       return await requestCommand(positionals, flags, deps);
+    }
+
+    if (scope === "init") {
+      return await initCommand(flags, deps);
+    }
+
+    if (scope === "feedback") {
+      return await feedbackCommand(flags, deps);
     }
 
     if (scope === "auth" && positionals[1] === "login") {
