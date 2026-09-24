@@ -7396,7 +7396,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postSupportFeedback",
-    "description": "File product feedback into the configured feedback channel (POST /support/feedback) Request body goes in the \"body\" object; fields: subject, text*, fromEmail, fromName (* = required).",
+    "description": "File product feedback into the configured feedback channel (POST /support/feedback) Request body goes in the \"body\" object; fields: subject*, text*, fromEmail*, fromName*, context* (* = required).",
     "method": "POST",
     "path": "/support/feedback",
     "inputSchema": {
@@ -7407,12 +7407,12 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "properties": {
             "subject": {
               "type": "string",
-              "maxLength": 200,
-              "default": ""
+              "minLength": 5,
+              "maxLength": 200
             },
             "text": {
               "type": "string",
-              "minLength": 1,
+              "minLength": 20,
               "maxLength": 4000
             },
             "fromEmail": {
@@ -7421,11 +7421,45 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "fromName": {
               "type": "string",
+              "minLength": 1,
               "maxLength": 200
+            },
+            "context": {
+              "type": "object",
+              "properties": {
+                "client": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "version": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 50
+                },
+                "os": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "workspace": {
+                  "type": "string",
+                  "maxLength": 100
+                }
+              },
+              "required": [
+                "client",
+                "version",
+                "os"
+              ]
             }
           },
           "required": [
-            "text"
+            "subject",
+            "text",
+            "fromEmail",
+            "fromName",
+            "context"
           ]
         }
       }

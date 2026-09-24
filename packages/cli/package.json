@@ -1,6 +1,6 @@
 {
   "name": "@vortex-api/pile",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Pile SDK + CLI + capture + widget \u2014 one package for the whole Pile surface.",
   "license": "Apache-2.0",
   "bin": {

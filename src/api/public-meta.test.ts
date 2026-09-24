@@ -88,13 +88,34 @@ describe("public meta routes", () => {
           "Content-Type": "application/json",
           "cf-connecting-ip": "10.9.9.9",
         },
-        body: JSON.stringify({ text: "love it", subject: "feedback test" }),
+        body: JSON.stringify({
+          subject: "feedback test",
+          text: "love it — genuinely great product",
+          fromEmail: "reporter@co.dev",
+          fromName: "Reporter",
+          context: { client: "pile-cli", version: "0.1.5", os: "darwin arm64" },
+        }),
       }),
       env
     );
     expect(res.status).toBe(201);
     const body = (await res.json()) as { ticketNumber: number };
     expect(body.ticketNumber).toBeGreaterThan(0);
+  });
+
+  it("POST /support/feedback rejects thin submissions", async () => {
+    const res = await app.fetch(
+      new Request("https://example.com/support/feedback", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "cf-connecting-ip": "10.9.9.10",
+        },
+        body: JSON.stringify({ text: "spam" }),
+      }),
+      env
+    );
+    expect(res.status).toBe(400);
   });
 
   it("agent-docs eval gate: the public docs surface teaches the core loop", async () => {

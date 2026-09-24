@@ -8600,12 +8600,17 @@ export interface paths {
             requestBody?: {
                 content: {
                     "application/json": {
-                        /** @default  */
-                        subject?: string;
+                        subject: string;
                         text: string;
                         /** Format: email */
-                        fromEmail?: string;
-                        fromName?: string;
+                        fromEmail: string;
+                        fromName: string;
+                        context: {
+                            client: string;
+                            version: string;
+                            os: string;
+                            workspace?: string;
+                        };
                     };
                 };
             };

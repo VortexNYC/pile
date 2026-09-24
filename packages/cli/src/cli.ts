@@ -577,23 +577,25 @@ async function initCommand(
   return 0;
 }
 
-const CLI_VERSION = "0.1.4";
+const CLI_VERSION = "0.1.6";
 
 async function feedbackCommand(
   flags: Readonly<Record<string, string | boolean>>,
   deps: CliDeps = {}
 ): Promise<number> {
   const message = flagString(flags, "message") ?? flagString(flags, "m");
-  if (message === undefined || message.length === 0) {
+  if (message === undefined || message.length < 20) {
     throw new Error(
-      'Missing message. Use --message "…" to describe the feedback.'
+      'Feedback needs at least 20 characters. Use --message "…" with enough detail to act on.'
     );
   }
   const subject = flagString(flags, "subject") ?? message.slice(0, 80);
-  const email =
-    flagString(flags, "email") ??
-    process.env.PILE_EMAIL ??
-    "cli-feedback@pile.dev";
+  const email = flagString(flags, "email") ?? process.env.PILE_EMAIL;
+  if (email === undefined || email.length === 0) {
+    throw new Error(
+      "Missing email. Use --email <you@co> or set PILE_EMAIL so we can follow up."
+    );
+  }
 
   const stored = readStoredConfig();
   const baseUrl = (
@@ -603,26 +605,20 @@ async function feedbackCommand(
   ).replace(/\/$/u, "");
   const doFetch = deps.fetch ?? fetch;
 
-  const context = [
-    message,
-    "",
-    `---`,
-    `cli: ${CLI_VERSION}`,
-    `os: ${process.platform} ${process.arch}`,
-    `node: ${process.version}`,
-    stored.workspace !== undefined ? `workspace: ${stored.workspace}` : "",
-  ]
-    .filter((line) => line.length > 0)
-    .join("\n");
-
   const res = await doFetch(`${baseUrl}/support/feedback`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      fromEmail: email,
-      fromName: flagString(flags, "name") ?? "pile CLI",
       subject,
-      text: context,
+      text: `${message}\n\nnode: ${process.version}`,
+      fromEmail: email,
+      fromName: flagString(flags, "name") ?? "pile CLI user",
+      context: {
+        client: "pile-cli",
+        version: CLI_VERSION,
+        os: `${process.platform} ${process.arch}`,
+        workspace: stored.workspace,
+      },
     }),
   });
   const text = await res.text();

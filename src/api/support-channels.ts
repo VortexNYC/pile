@@ -460,10 +460,16 @@ export function registerSupportChannelRoutes(app: OpenAPIHono<AppContext>) {
           content: {
             "application/json": {
               schema: z.object({
-                subject: z.string().max(200).default(""),
-                text: z.string().min(1).max(4000),
-                fromEmail: z.string().email().optional(),
-                fromName: z.string().max(200).optional(),
+                subject: z.string().min(5).max(200),
+                text: z.string().min(20).max(4000),
+                fromEmail: z.string().email(),
+                fromName: z.string().min(1).max(200),
+                context: z.object({
+                  client: z.string().min(1).max(100),
+                  version: z.string().min(1).max(50),
+                  os: z.string().min(1).max(100),
+                  workspace: z.string().max(100).optional(),
+                }),
               }),
             },
           },
@@ -513,13 +519,32 @@ export function registerSupportChannelRoutes(app: OpenAPIHono<AppContext>) {
           message: "Feedback channel not configured",
         });
       }
+      // Server-stamped fields the sender cannot spoof — IP, ASN, country,
+      // user-agent. Appended after a marker so the reporter's own context
+      // block is visually distinct from what we observed.
+      const cf = (c.req.raw as unknown as { cf?: Record<string, unknown> }).cf;
+      const observed = [
+        "--- observed ---",
+        `ip: ${c.req.header("cf-connecting-ip") ?? "unknown"}`,
+        `asn: ${cf?.asn ?? "unknown"}`,
+        `country: ${cf?.country ?? "unknown"}`,
+        `user-agent: ${c.req.header("user-agent") ?? "unknown"}`,
+        `client: ${input.context.client}@${input.context.version}`,
+        `os: ${input.context.os}`,
+        input.context.workspace
+          ? `workspace: ${input.context.workspace}`
+          : null,
+      ]
+        .filter((line): line is string => line !== null)
+        .join("\n");
+
       const ticket = await processIncomingMessage(db, channel.organizationId, {
         channel: "api",
         externalSource: "api",
-        fromEmail: input.fromEmail ?? "feedback@pile.dev",
-        fromName: input.fromName ?? null,
+        fromEmail: input.fromEmail,
+        fromName: input.fromName,
         subject: input.subject,
-        text: input.text,
+        text: `${input.text}\n\n${observed}`,
         subType: "product-feedback",
       });
       return c.json(

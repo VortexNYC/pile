@@ -3683,6 +3683,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "fromName",
         flag: "from-name",
       },
+      {
+        name: "context",
+        flag: "context",
+      },
     ],
   },
   "support channels send create": {

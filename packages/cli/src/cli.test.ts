@@ -749,7 +749,13 @@ describe("CLI integration", () => {
     const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
 
     const exitCode = await runCli(
-      ["feedback", "--message", "the init flow rocks"],
+      [
+        "feedback",
+        "--message",
+        "the init flow rocks and onboarding was smooth",
+        "--email",
+        "reporter@co.dev",
+      ],
       { fetch: mockFetch }
     );
 
@@ -760,14 +766,32 @@ describe("CLI integration", () => {
     ];
     expect(new URL(url).pathname).toBe("/support/feedback");
     expect(init.method).toBe("POST");
-    const body = JSON.parse(init.body) as { subject: string; text: string };
-    expect(body.subject).toBe("the init flow rocks");
-    expect(body.text).toContain("os:");
+    const body = JSON.parse(init.body) as {
+      subject: string;
+      text: string;
+      fromEmail: string;
+      context: { client: string; version: string; os: string };
+    };
+    expect(body.subject).toBe("the init flow rocks and onboarding was smooth");
+    expect(body.fromEmail).toBe("reporter@co.dev");
+    expect(body.context.client).toBe("pile-cli");
+    expect(body.context.os).toBeTruthy();
     spy.mockRestore();
   });
 
   it("feedback rejects a missing message", async () => {
     const exitCode = await runCli(["feedback"], { fetch: vi.fn() });
+    expect(exitCode).toBe(1);
+  });
+
+  it("feedback rejects a missing email", async () => {
+    const prev = process.env.PILE_EMAIL;
+    delete process.env.PILE_EMAIL;
+    const exitCode = await runCli(
+      ["feedback", "--message", "this is long enough but has no email"],
+      { fetch: vi.fn() }
+    );
+    process.env.PILE_EMAIL = prev;
     expect(exitCode).toBe(1);
   });
 
