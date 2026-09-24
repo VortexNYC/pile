@@ -1559,4 +1559,97 @@ describe("support-capture API", () => {
       expect(await htmlRes.text()).toContain("<video controls");
     });
   });
+
+  it("scrubs credentials from text artifacts at upload time", async () => {
+    const publicKey = await createPublicKey();
+    const { token: sessionToken } = await issueCaptureToken(publicKey);
+
+    const sessionRes = await captureFetch("/support/capture/upload-session", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-pile-capture-token": sessionToken,
+      },
+      body: JSON.stringify({
+        title: "Scrub test",
+        metadata: { email: "scrub@example.com" },
+      }),
+    });
+    expect(sessionRes.status).toBe(200);
+
+    const upload = async (
+      attachmentType: string,
+      fileName: string,
+      body: string,
+      contentType = "application/json"
+    ) => {
+      const res = await captureFetch(
+        `/support/capture/upload/${sessionToken}/${attachmentType}/${fileName}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": contentType,
+            "x-pile-capture-token": sessionToken,
+          },
+          body,
+        }
+      );
+      expect(res.status).toBe(200);
+      const { r2Key } = (await res.json()) as { r2Key: string };
+      const stored = await env.ATTACHMENTS_BUCKET.get(r2Key);
+      expect(stored).not.toBeNull();
+      return stored!.text();
+    };
+
+    const network = await upload(
+      "network",
+      "network.jsonl",
+      JSON.stringify({
+        kind: "fetch",
+        url: "https://api.example.com/data?access_token=secret-token-value",
+        headers: {
+          authorization:
+            "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
+          cookie: "session=abc123secret",
+          "x-api-key": "sk-livekey123456789abcd",
+          "content-type": "application/json",
+        },
+        requestBody: { password: "hunter2", note: "ok" },
+      })
+    );
+    expect(network).not.toContain("hunter2");
+    expect(network).not.toContain("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9");
+    expect(network).not.toContain("abc123secret");
+    expect(network).not.toContain("sk-livekey123456789abcd");
+    expect(network).not.toContain("secret-token-value");
+    expect(network).toContain("[REDACTED]");
+    expect(network).toContain("application/json");
+
+    const log = await upload(
+      "log",
+      "console.jsonl",
+      'logged in with wgs_0123456789abcdefzz and pil_abcdef0123456789zz plus "set-cookie": "sid=xyz789"'
+    );
+    expect(log).not.toContain("wgs_0123456789abcdefzz");
+    expect(log).not.toContain("pil_abcdef0123456789zz");
+    expect(log).not.toContain("sid=xyz789");
+
+    // Binary artifacts pass through untouched — scrubbing text would corrupt
+    // them, and they cannot carry headers.
+    const png = new Uint8Array([137, 80, 78, 71, 66, 105, 110]);
+    const binRes = await captureFetch(
+      `/support/capture/upload/${sessionToken}/screenshot/shot.png`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "image/png",
+          "x-pile-capture-token": sessionToken,
+        },
+        body: png,
+      }
+    );
+    const { r2Key: binKey } = (await binRes.json()) as { r2Key: string };
+    const storedBin = await env.ATTACHMENTS_BUCKET.get(binKey);
+    expect(new Uint8Array(await storedBin!.arrayBuffer())).toEqual(png);
+  });
 });

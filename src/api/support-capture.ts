@@ -7,6 +7,10 @@ import captureSdkBundle from "../assets/capture.iife.js";
 import { createD1, type D1Client } from "../global/db.js";
 import { storeJamCaptureArtifacts } from "../global/jam-capture.js";
 import {
+  SCRUBBABLE_ATTACHMENT_TYPES,
+  scrubCaptureText,
+} from "../global/redact.js";
+import {
   supportCaptureSessions,
   supportTicketAttachments,
   supportTickets,
@@ -1526,7 +1530,16 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
     const contentType =
       c.req.header("content-type") ?? "application/octet-stream";
     const contentEncoding = c.req.header("content-encoding");
-    const arrayBuffer = await c.req.arrayBuffer();
+    let arrayBuffer = await c.req.arrayBuffer();
+
+    // Server-side credential scrubbing for text artifacts. Skipped when the
+    // payload is content-encoded (e.g. gzip) since we cannot scrub without
+    // decoding — the SDK's client-side sanitize still applies there.
+    if (!contentEncoding && SCRUBBABLE_ATTACHMENT_TYPES.has(attachmentType)) {
+      const scrubbed = scrubCaptureText(new TextDecoder().decode(arrayBuffer));
+      arrayBuffer = new TextEncoder().encode(scrubbed).buffer as ArrayBuffer;
+    }
+
     const r2Key = buildCaptureArtifactKey(session.organizationId, session.id, {
       attachmentType,
       fileName,
