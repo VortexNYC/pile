@@ -1,5 +1,7 @@
 import { and, eq } from "drizzle-orm";
 
+import { encryptSecret } from "../agents/credentials.js";
+import type { WorkerEnv } from "../platform/middleware.js";
 import type { D1Client } from "./db.js";
 import { gitlabInstallations } from "./schema.js";
 
@@ -41,6 +43,7 @@ export function listGitlabInstallations(db: D1Client, organizationId: string) {
 
 export async function createGitlabInstallation(
   db: D1Client,
+  env: WorkerEnv,
   organizationId: string,
   projectId: string,
   projectPath: string,
@@ -53,7 +56,7 @@ export async function createGitlabInstallation(
     organizationId,
     projectId,
     projectPath,
-    token,
+    token: await encryptSecret(env, token),
     webhookSecret: webhookSecret ?? null,
   });
   return db

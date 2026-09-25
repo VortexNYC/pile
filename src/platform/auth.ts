@@ -55,6 +55,9 @@ export function createAuth(env: AppEnv) {
     database: drizzleAdapter(db, { provider: "sqlite", schema }),
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.BETTER_AUTH_URL,
+    account: {
+      encryptOAuthTokens: true,
+    },
     emailAndPassword: {
       enabled: true,
       sendResetPassword: async (data) => {

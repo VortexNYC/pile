@@ -224,6 +224,7 @@ export function registerGitlabRoutes(app: OpenAPIHono<AppContext>) {
 
     const installation = await createGitlabInstallation(
       db,
+      c.env,
       organizationId,
       String(parsed.data.id),
       projectPath,

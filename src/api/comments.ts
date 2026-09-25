@@ -1,6 +1,7 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
+import { decryptSecret } from "../agents/credentials.js";
 import { createD1 } from "../global/db.js";
 import { getInstallationToken } from "../global/github-auth.js";
 import { findGithubInstallation } from "../global/github-installations.js";
@@ -324,7 +325,7 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
         if (installation) {
           const response = await gitlabFetch(
             c.env,
-            installation.token,
+            (await decryptSecret(c.env, installation.token)) ?? "",
             `/projects/${encodeURIComponent(mapping.repo)}/issues/${mapping.issueNumber}/notes`,
             {
               method: "POST",
