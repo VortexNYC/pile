@@ -673,6 +673,13 @@
       "when": 1790346517371,
       "tag": "0096_warm_shocker",
       "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "6",
+      "when": 1790351707691,
+      "tag": "0097_tough_excalibur",
+      "breakpoints": true
     }
   ]
 }

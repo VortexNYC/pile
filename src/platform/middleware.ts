@@ -1,7 +1,11 @@
 import { createMiddleware } from "hono/factory";
 
 import { createD1 } from "../global/db.js";
-import { getWorkspaceMembership } from "../global/workspaces.js";
+import {
+  getWorkspaceMembership,
+  hasSSOAccountForWorkspace,
+  isSSOEnforced,
+} from "../global/workspaces.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
 import { createAuth } from "./auth.js";
 import type { AppEnv } from "./env.js";
@@ -112,6 +116,22 @@ export const workspaceAuthMiddleware = createMiddleware<{
       code: "FORBIDDEN",
       status: 403,
       message: "User is not a member of this workspace",
+    });
+  }
+
+  // PATCH /workspaces/{id} is the ssoEnforced toggle — exempt it so a
+  // workspace owner can always recover access if the IdP is misconfigured.
+  const isSSOToggleRoute =
+    c.req.method === "PATCH" && c.req.path === `/workspaces/${organizationId}`;
+  if (
+    !isSSOToggleRoute &&
+    (await isSSOEnforced(db, organizationId)) &&
+    !(await hasSSOAccountForWorkspace(db, organizationId, userId))
+  ) {
+    throw new VortexError({
+      code: "SSO_REQUIRED",
+      status: 403,
+      message: "Workspace requires SSO sign-in",
     });
   }
 

@@ -1,6 +1,8 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
+import { createD1 } from "../global/db.js";
+import { member, ssoProvider } from "../global/schema.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
 
@@ -189,5 +191,122 @@ describe("workspaces API", () => {
       env
     );
     expect(foreignSlug.status).toBe(403);
+  });
+
+  it("toggles ssoEnforced via PATCH and enforces it on member sessions", async () => {
+    const cookie = await getSessionCookie();
+    const res = await app.fetch(
+      new Request(onboardUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: cookie,
+          Origin: origin,
+        },
+        body: JSON.stringify({
+          name: "SSO Org",
+          slug: `sso-${crypto.randomUUID()}`,
+        }),
+      }),
+      env
+    );
+    const onboarded = (await res.json()) as {
+      workspace: { id: string };
+      token: string;
+    };
+    const orgId = onboarded.workspace.id;
+
+    const patch = await app.fetch(
+      new Request(new URL(`/workspaces/${orgId}`, origin).toString(), {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: cookie,
+          Origin: origin,
+        },
+        body: JSON.stringify({ ssoEnforced: true }),
+      }),
+      env
+    );
+    expect(patch.status).toBe(200);
+
+    // Second member with a plain (non-SSO) session gets rejected.
+    const memberCookie = await getSessionCookie();
+    const db = createD1(env.D1);
+    const auth = createAuth(env);
+    const sessionData = await auth.api.getSession({
+      headers: new Headers({ Cookie: memberCookie }),
+    });
+    const memberUserId = sessionData?.user?.id;
+    if (!memberUserId) {
+      throw new Error("member session not established");
+    }
+    await db.insert(member).values({
+      id: crypto.randomUUID(),
+      organizationId: orgId,
+      userId: memberUserId,
+      role: "member",
+      createdAt: new Date(),
+    });
+
+    await db.insert(ssoProvider).values({
+      id: crypto.randomUUID(),
+      issuer: "https://idp.example.com",
+      providerId: `sso-${crypto.randomUUID()}`,
+      organizationId: orgId,
+      domain: "example.com",
+    });
+
+    const issues = await app.fetch(
+      new Request(new URL(`/workspaces/${orgId}/issues`, origin).toString(), {
+        headers: { Cookie: memberCookie, Origin: origin },
+      }),
+      env
+    );
+    expect(issues.status).toBe(403);
+    const body = (await issues.json()) as { code?: string };
+    expect(body.code).toBe("SSO_REQUIRED");
+
+    // Workspace API tokens are machine credentials — unaffected.
+    const tokenRes = await app.fetch(
+      new Request(new URL(`/workspaces/${orgId}/issues`, origin).toString(), {
+        headers: { Authorization: `Bearer ${onboarded.token}` },
+      }),
+      env
+    );
+    expect(tokenRes.status).toBe(200);
+
+    // The org owner without an SSO-linked account is also rejected.
+    const ownerRes = await app.fetch(
+      new Request(new URL(`/workspaces/${orgId}/issues`, origin).toString(), {
+        headers: { Cookie: cookie, Origin: origin },
+      }),
+      env
+    );
+    expect(ownerRes.status).toBe(403);
+
+    // PATCH /workspaces/{id} is owner/admin-gated but not org-scoped
+    // middleware, so an owner can always unenforce — the lockout escape hatch.
+    const unpatch = await app.fetch(
+      new Request(new URL(`/workspaces/${orgId}`, origin).toString(), {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: cookie,
+          Origin: origin,
+        },
+        body: JSON.stringify({ ssoEnforced: false }),
+      }),
+      env
+    );
+    expect(unpatch.status).toBe(200);
+
+    const restored = await app.fetch(
+      new Request(new URL(`/workspaces/${orgId}/issues`, origin).toString(), {
+        headers: { Cookie: memberCookie, Origin: origin },
+      }),
+      env
+    );
+    expect(restored.status).toBe(200);
   });
 });

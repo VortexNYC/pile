@@ -49,6 +49,23 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "workspaces update": {
+    method: "PATCH",
+    path: "/workspaces/{id}",
+    params: [
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "ssoEnforced",
+        flag: "sso-enforced",
+      },
+    ],
+  },
   "workspaces delete": {
     method: "DELETE",
     path: "/workspaces/{id}",

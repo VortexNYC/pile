@@ -17,6 +17,10 @@ export const ERROR_CATALOG = {
     status: 403,
     message: "A challenge token is required",
   },
+  SSO_REQUIRED: {
+    status: 403,
+    message: "Workspace requires SSO sign-in",
+  },
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_CATALOG;

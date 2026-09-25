@@ -5,7 +5,8 @@ import { createMiddleware } from "hono/factory";
 
 import { createD1 } from "../global/db.js";
 import { deleteWorkspaceData } from "../global/deletion.js";
-import { member } from "../global/schema.js";
+import { member, organization } from "../global/schema.js";
+import { safeJSON } from "../global/team-metadata.js";
 import { createTeam } from "../global/teams.js";
 import {
   createWorkspace,
@@ -218,6 +219,35 @@ const deleteWorkspaceRoute = createRoute({
   },
 });
 
+const updateWorkspaceRoute = createRoute({
+  method: "patch",
+  path: "/workspaces/{id}",
+  tags: ["workspaces"],
+  middleware: [requireHumanSession],
+  request: {
+    params: z.object({ id: z.string() }),
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            ssoEnforced: z.boolean().optional(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Workspace updated",
+      content: {
+        "application/json": { schema: workspaceSchema },
+      },
+    },
+    403: { description: "Requires owner or admin role in the workspace" },
+    404: { description: "Workspace not found" },
+  },
+});
+
 const teamSchema = z.object({
   id: z.string(),
   organizationId: z.string(),
@@ -325,6 +355,68 @@ export function registerWorkspaceRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
     return c.json(item);
+  });
+
+  app.openapi(updateWorkspaceRoute, async (c) => {
+    const { id } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const db = createD1(c.env.D1);
+    const userId = c.get("userId");
+    if (!userId) {
+      throw new VortexError({
+        code: "UNAUTHORIZED",
+        status: 401,
+        message: "Authentication required",
+      });
+    }
+    const workspace = await getWorkspaceById(db, id);
+    if (!workspace) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Workspace not found",
+      });
+    }
+    const membership = await db
+      .select({ role: member.role })
+      .from(member)
+      .where(and(eq(member.organizationId, id), eq(member.userId, userId)))
+      .get();
+    if (!membership || !["owner", "admin"].includes(membership.role)) {
+      throw new VortexError({
+        code: "FORBIDDEN",
+        status: 403,
+        message: "Requires owner or admin role in the workspace",
+      });
+    }
+    if (input.ssoEnforced !== undefined) {
+      const row = await db
+        .select({ metadata: organization.metadata })
+        .from(organization)
+        .where(eq(organization.id, id))
+        .get();
+      const existing = safeJSON(row?.metadata ?? null);
+      const metadata =
+        existing && typeof existing === "object" && !Array.isArray(existing)
+          ? { ...existing, ssoEnforced: input.ssoEnforced }
+          : { ssoEnforced: input.ssoEnforced };
+      await db
+        .update(organization)
+        .set({ metadata: JSON.stringify(metadata) })
+        .where(eq(organization.id, id));
+      await emitWorkspaceAudit(c, id, "workspace.updated", "workspace", id, {
+        ssoEnforced: { from: !input.ssoEnforced, to: input.ssoEnforced },
+      });
+    }
+    const updated = await getWorkspaceById(db, id);
+    if (!updated) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Workspace not found",
+      });
+    }
+    return c.json(updated);
   });
 
   app.openapi(deleteWorkspaceRoute, async (c) => {

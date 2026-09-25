@@ -1,4 +1,5 @@
 import { apiKey } from "@better-auth/api-key";
+import { sso } from "@better-auth/sso";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { betterAuth } from "better-auth/minimal";
 import { admin, organization } from "better-auth/plugins";
@@ -114,6 +115,14 @@ export function createAuth(env: AppEnv) {
               .map((id) => id.trim())
               .filter(Boolean)
           : [],
+      }),
+      sso({
+        // SSO sign-ins provision membership on the provider's organization.
+        // The plugin already restricts provider register/update/delete to
+        // organization owners and admins.
+        organizationProvisioning: {
+          defaultRole: "member",
+        },
       }),
       organization({
         ...organizationOptions,

@@ -5455,6 +5455,31 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "patchWorkspacesId",
+    "description": "Update workspace (PATCH /workspaces/{id}) Path params (top-level, required): id. Request body goes in the \"body\" object; fields: ssoEnforced.",
+    "method": "PATCH",
+    "path": "/workspaces/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "ssoEnforced": {
+              "type": "boolean"
+            }
+          }
+        }
+      },
+      "required": [
+        "id"
+      ]
+    }
+  },
+  {
     "name": "patchWorkspacesOrganizationIdAgentSessionsSessionId",
     "description": "Update agent session (PATCH /workspaces/{organizationId}/agent/sessions/{sessionId}) Path params (top-level, required): organizationId, sessionId. Request body goes in the \"body\" object; fields: status, result, url, prUrl, prState, branch.",
     "method": "PATCH",

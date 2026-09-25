@@ -168,7 +168,57 @@ export interface paths {
         };
         options?: never;
         head?: never;
-        patch?: never;
+        /** Update workspace */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        ssoEnforced?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description Workspace updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            name: string;
+                            slug: string;
+                            key: string | null;
+                            ownerId: string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Requires owner or admin role in the workspace */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Workspace not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         trace?: never;
     };
     "/workspaces/slug/{slug}": {

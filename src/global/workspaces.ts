@@ -1,11 +1,17 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import { createAuth } from "../platform/auth.js";
 import type { AppEnv } from "../platform/env.js";
 import { DEFAULT_AGENTS_MD } from "./agent-context.js";
 import type { D1Client } from "./db.js";
-import { member, organization, workspaceAgentContext } from "./schema.js";
+import {
+  account,
+  member,
+  organization,
+  ssoProvider,
+  workspaceAgentContext,
+} from "./schema.js";
 import { safeJSON } from "./team-metadata.js";
 import { createState } from "./workspace-entities.js";
 
@@ -160,4 +166,55 @@ export function getWorkspaceMembership(
       and(eq(member.organizationId, organizationId), eq(member.userId, userId))
     )
     .get();
+}
+
+const ssoEnforcedMetadataSchema = z
+  .object({ ssoEnforced: z.boolean().optional() })
+  .passthrough();
+
+// Workspace owners may set metadata.ssoEnforced to require that
+// session-authenticated members signed in through the workspace's SSO
+// provider. Workspace API tokens are machine credentials and bypass it.
+export async function isSSOEnforced(
+  db: D1Client,
+  organizationId: string
+): Promise<boolean> {
+  const row = await db
+    .select({ metadata: organization.metadata })
+    .from(organization)
+    .where(eq(organization.id, organizationId))
+    .get();
+  const parsed = ssoEnforcedMetadataSchema.safeParse(
+    safeJSON(row?.metadata ?? null)
+  );
+  return parsed.success && parsed.data.ssoEnforced === true;
+}
+
+// SSO sign-ins link an account row keyed by the SSO provider's providerId,
+// so membership in the enforced org plus a matching account proves the
+// session holder authenticated through the workspace's IdP.
+export async function hasSSOAccountForWorkspace(
+  db: D1Client,
+  organizationId: string,
+  userId: string
+): Promise<boolean> {
+  const providers = await db
+    .select({ providerId: ssoProvider.providerId })
+    .from(ssoProvider)
+    .where(eq(ssoProvider.organizationId, organizationId));
+  if (providers.length === 0) return false;
+  const linked = await db
+    .select({ id: account.id })
+    .from(account)
+    .where(
+      and(
+        eq(account.userId, userId),
+        inArray(
+          account.providerId,
+          providers.map((p) => p.providerId)
+        )
+      )
+    )
+    .get();
+  return !!linked;
 }

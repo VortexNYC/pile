@@ -2977,3 +2977,18 @@ export const billingAccounts = sqliteTable("billing_accounts" as string, {
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),
 });
+
+export const ssoProvider = sqliteTable("ssoProvider" as string, {
+  id: text("id" as string).primaryKey(),
+  issuer: text("issuer" as string).notNull(),
+  oidcConfig: text("oidc_config" as string),
+  samlConfig: text("saml_config" as string),
+  userId: text("user_id" as string).references(() => user.id, {
+    onDelete: "cascade",
+  }),
+  providerId: text("provider_id" as string)
+    .notNull()
+    .unique(),
+  organizationId: text("organization_id" as string),
+  domain: text("domain" as string).notNull(),
+});

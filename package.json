@@ -50,6 +50,7 @@
   },
   "dependencies": {
     "@better-auth/api-key": "1.7.2",
+    "@better-auth/sso": "1.7.6",
     "@chat-adapter/slack": "^4.40.0",
     "@cloudflare/sandbox": "0.12.9",
     "@hono/zod-openapi": "1.6.2",
@@ -57,7 +58,7 @@
     "@orama/orama": "3.1.18",
     "@react-email/components": "1.0.12",
     "@react-email/render": "2.1.0",
-    "better-auth": "^1.7.2",
+    "better-auth": "^1.7.6",
     "chat": "^4.40.0",
     "drizzle-orm": "^0.45.2",
     "emoji-regex": "10.6.0",
