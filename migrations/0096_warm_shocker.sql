@@ -1,0 +1,1 @@
+ALTER TABLE `billing_accounts` ADD `vortex_billing_account_id` text;

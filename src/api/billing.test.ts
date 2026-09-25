@@ -251,7 +251,10 @@ describe("billing webhook", () => {
     expect(bad.status).toBe(401);
 
     const headers = {
-      "Vortex-Signature": await signWebhook(env.BILLING_WEBHOOK_SECRET, body),
+      "Vortex-Signature": await signWebhook(
+        String(env.BILLING_WEBHOOK_SECRET),
+        body
+      ),
       "Vortex-Event-Id": "evt_test_dedup_1",
     };
     const ok = await fetch("/billing/webhook", {

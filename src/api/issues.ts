@@ -894,7 +894,10 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       organizationId,
       "issues",
       "create",
-      Number(c.env.FREE_USE_CAP ?? 0)
+      Number(c.env.FREE_USE_CAP ?? 0),
+      1,
+      c.env,
+      c.executionCtx
     );
     const stub = await getStub(c.env, organizationId);
     let teamId = input.teamId;
@@ -1378,7 +1381,10 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       organizationId,
       "agents",
       "dispatch",
-      Number(c.env.FREE_USE_CAP ?? 0)
+      Number(c.env.FREE_USE_CAP ?? 0),
+      1,
+      c.env,
+      c.executionCtx
     );
     const stub = await getStub(c.env, organizationId);
     const issue = await stub.getIssue(id);

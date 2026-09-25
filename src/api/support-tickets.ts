@@ -789,7 +789,10 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
       organizationId,
       "tickets",
       "create",
-      Number(c.env.FREE_USE_CAP ?? 0)
+      Number(c.env.FREE_USE_CAP ?? 0),
+      1,
+      c.env,
+      c.executionCtx
     );
 
     const ticket = await createTicket(

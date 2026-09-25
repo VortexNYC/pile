@@ -1,8 +1,10 @@
 import { eq, sql } from "drizzle-orm";
 
 import { VortexError } from "../platform/errors.js";
+import type { AppEnv } from "../types/env.js";
 import type { D1Client } from "./db.js";
 import { billingAccounts, usageRecords } from "./schema.js";
+import { submitUsageEvent } from "./vortex-billing.js";
 
 export function currentPeriod(): string {
   const now = new Date();
@@ -33,13 +35,31 @@ export async function consumeUsage(
   resource: string,
   action: string,
   freeUseCap: number,
-  count = 1
+  count = 1,
+  env?: AppEnv,
+  ctx?: { waitUntil(promise: Promise<unknown>): void }
 ): Promise<void> {
+  // Pile counts + enforces locally; Vortex owns recording/rating. Submitted
+  // fire-and-forget after the gate passes — failure must never block a request.
+  const submit = () => {
+    if (!env) {
+      return;
+    }
+    const p = submitUsageEvent(env, db, organizationId, { resource, action });
+    const safe = p.catch(() => {});
+    if (ctx) {
+      ctx.waitUntil(safe);
+    } else {
+      void safe;
+    }
+  };
   if (freeUseCap <= 0) {
+    submit();
     return;
   }
   const plan = await getBillingPlan(db, organizationId);
   if (plan !== "free") {
+    submit();
     return;
   }
   const period = currentPeriod();
@@ -72,4 +92,5 @@ export async function consumeUsage(
         "Free tier usage limit reached for this period. Subscribe to continue.",
     });
   }
+  submit();
 }

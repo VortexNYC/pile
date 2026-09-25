@@ -5,3 +5,18 @@ ALLOWED_ORIGINS=http://localhost:8787,http://127.0.0.1:8787
 # Only BETTER_AUTH_SECRET is required locally — it also backs credential
 # encryption (AGENT_SETTINGS_KEK / DISPATCH_SECRET fall back to it).
 BETTER_AUTH_SECRET=local-dev-secret-change-me
+
+# Billing (Vortex) — all optional; unset disables metering/submit.
+# FREE_USE_CAP: monthly op cap for free plan (0/unset = off)
+# VORTEX_BILLING_*: api.sandbox.vortex.nyc + sandbox vp_ key for dev
+# VORTEX_BILLING_METER_ID: create via POST /v1/meters (eventName "usage")
+# BILLING_WEBHOOK_SECRET: whsec_ from the Vortex webhook endpoint
+# BILLING_UPGRADE_URL: hosted subscribe page returned by /billing/subscribe
+FREE_USE_CAP=0
+VORTEX_BILLING_API_URL=
+VORTEX_BILLING_API_KEY=
+VORTEX_BILLING_MERCHANT_ID=
+VORTEX_BILLING_ENV=
+VORTEX_BILLING_METER_ID=
+BILLING_WEBHOOK_SECRET=
+BILLING_UPGRADE_URL=

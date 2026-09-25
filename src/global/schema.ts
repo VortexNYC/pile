@@ -2968,6 +2968,7 @@ export const billingAccounts = sqliteTable("billing_accounts" as string, {
     .notNull()
     .default("active"),
   vortexCustomerId: text("vortex_customer_id" as string),
+  vortexBillingAccountId: text("vortex_billing_account_id" as string),
   currentPeriodEnd: text("current_period_end" as string),
   createdAt: text("created_at" as string)
     .notNull()
