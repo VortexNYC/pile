@@ -76,7 +76,7 @@ export async function ensureBillingCustomer(
         environment: env.VORTEX_BILLING_ENV ?? "production",
         merchantAccountId: env.VORTEX_BILLING_MERCHANT_ID,
         name: organizationId,
-        defaultCurrency: "usd",
+        defaultCurrency: "USD",
         externalCustomerRef: organizationId,
         metadata: { source: "pile", orgId: organizationId },
       }),
