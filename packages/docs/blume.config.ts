@@ -1,23 +1,22 @@
 import { defineConfig } from "blume";
+import { cloudflare } from "blume/deploy";
+import { openapi } from "blume/reference";
 
 export default defineConfig({
   title: "Pile",
   description:
     "Pile issue tracker — open-source, agent-native, Linear alternative.",
-  openapi: {
-    enabled: true,
-    route: "/api",
-    sources: [{ label: "HTTP API", spec: "../../src/mcp/openapi.json" }],
-  },
-  ai: {
+  reference: [
+    openapi({
+      route: "/api",
+      sources: [{ label: "HTTP API", spec: "../../src/mcp/openapi.json" }],
+    }),
+  ],
+  agents: {
     llmsTxt: true,
     mcp: {
       enabled: true,
     },
   },
-  deployment: {
-    site: "https://docs.pile.nyc",
-    output: "server",
-    adapter: "cloudflare",
-  },
+  deployment: cloudflare({ site: "https://docs.pile.nyc" }),
 });

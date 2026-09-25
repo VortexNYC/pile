@@ -1,0 +1,19 @@
+version: 1
+questions:
+  - id: connect-agent-mcp
+    question: "How do I connect a coding agent to Pile with MCP?"
+    routes: ["/agents"]
+    expected:
+      - "An MCP server endpoint or pile mcp command exists"
+  - id: pull-ticket-artifacts
+    question: "How does an agent pull a support ticket's artifacts?"
+    expected:
+      - "Support ticket API under /workspaces/{organizationId}/support"
+  - id: widget-headless
+    question: "How do I drive the embedded support widget protocol headlessly?"
+    expected:
+      - "Widget session endpoints under /support/widget/{key}"
+  - id: agent-context-pull
+    question: "How does agent context pull work?"
+    expected:
+      - "The agent-context endpoint or agent context pull command"
