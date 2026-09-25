@@ -147,6 +147,12 @@ export async function createAuth(env: AppEnv) {
         organizationProvisioning: {
           defaultRole: "member",
         },
+        saml: {
+          // IdP-initiated (Okta/Entra dashboard chiclet) sign-in; assertions
+          // are still signature-validated, only InResponseTo is relaxed.
+          allowIdpInitiated: true,
+          idpInitiatedCallbackUrl: `${env.BETTER_AUTH_URL ?? ""}/api/auth/get-session`,
+        },
       }),
       scim({
         // No code-defined connections — workspace admins mint managed
