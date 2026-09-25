@@ -254,4 +254,83 @@ describe("support-contacts API", () => {
     );
     expect(getRes.status).toBe(200);
   });
+
+  it("tracks email opt-out via PATCH and the public unsubscribe route", async () => {
+    const createRes = await fetch(
+      `/workspaces/${organizationId}/support/customers`,
+      {
+        method: "POST",
+        body: JSON.stringify({ email: "optout@example.com" }),
+      }
+    );
+    expect(createRes.status).toBe(201);
+    const { customer } = (await createRes.json()) as {
+      customer: {
+        id: string;
+        emailOptOut: boolean;
+        emailOptOutAt: string | null;
+      };
+    };
+    expect(customer.emailOptOut).toBe(false);
+    expect(customer.emailOptOutAt).toBeNull();
+
+    // Staff-side PATCH sets the flag + timestamp.
+    const patchRes = await fetch(
+      `/workspaces/${organizationId}/support/customers/${customer.id}`,
+      { method: "PATCH", body: JSON.stringify({ emailOptOut: true }) }
+    );
+    expect(patchRes.status).toBe(200);
+    const patched = (await patchRes.json()) as {
+      customer: { emailOptOut: boolean; emailOptOutAt: string | null };
+    };
+    expect(patched.customer.emailOptOut).toBe(true);
+    expect(patched.customer.emailOptOutAt).toBeTruthy();
+
+    // Clearing resets the timestamp.
+    const clearRes = await fetch(
+      `/workspaces/${organizationId}/support/customers/${customer.id}`,
+      { method: "PATCH", body: JSON.stringify({ emailOptOut: false }) }
+    );
+    const cleared = (await clearRes.json()) as {
+      customer: { emailOptOut: boolean; emailOptOutAt: string | null };
+    };
+    expect(cleared.customer.emailOptOut).toBe(false);
+    expect(cleared.customer.emailOptOutAt).toBeNull();
+
+    // Public unsubscribe — no auth, always ok.
+    const unsubRes = await app.fetch(
+      new Request(`${ORIGIN}/support/unsubscribe`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          organizationId,
+          email: "optout@example.com",
+        }),
+      }),
+      env
+    );
+    expect(unsubRes.status).toBe(200);
+
+    const checkRes = await fetch(
+      `/workspaces/${organizationId}/support/customers/${customer.id}`
+    );
+    const checked = (await checkRes.json()) as {
+      customer: { emailOptOut: boolean };
+    };
+    expect(checked.customer.emailOptOut).toBe(true);
+
+    // Unknown email — still ok, no existence oracle.
+    const unknownRes = await app.fetch(
+      new Request(`${ORIGIN}/support/unsubscribe`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          organizationId,
+          email: "ghost@example.com",
+        }),
+      }),
+      env
+    );
+    expect(unknownRes.status).toBe(200);
+  });
 });

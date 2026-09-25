@@ -25127,6 +25127,56 @@
         "summary": "Delete customer need"
       }
     },
+    "/support/unsubscribe": {
+      "post": {
+        "tags": [
+          "support-contacts"
+        ],
+        "summary": "Opt a customer email out of outbound notifications",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "organizationId": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  }
+                },
+                "required": [
+                  "organizationId",
+                  "email"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Opt-out recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/workspaces/{organizationId}/support/customers": {
       "post": {
         "tags": [
@@ -25269,6 +25319,13 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "emailOptOut": {
+                          "type": "boolean"
+                        },
+                        "emailOptOutAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -25370,6 +25427,8 @@
                         "email",
                         "fullName",
                         "phone",
+                        "emailOptOut",
+                        "emailOptOutAt",
                         "createdAt",
                         "updatedAt",
                         "companies",
@@ -25477,6 +25536,13 @@
                             "type": "string",
                             "nullable": true
                           },
+                          "emailOptOut": {
+                            "type": "boolean"
+                          },
+                          "emailOptOutAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "createdAt": {
                             "type": "string"
                           },
@@ -25578,6 +25644,8 @@
                           "email",
                           "fullName",
                           "phone",
+                          "emailOptOut",
+                          "emailOptOutAt",
                           "createdAt",
                           "updatedAt",
                           "companies",
@@ -25664,6 +25732,13 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "emailOptOut": {
+                          "type": "boolean"
+                        },
+                        "emailOptOutAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -25765,6 +25840,8 @@
                         "email",
                         "fullName",
                         "phone",
+                        "emailOptOut",
+                        "emailOptOutAt",
                         "createdAt",
                         "updatedAt",
                         "companies",
@@ -25828,6 +25905,9 @@
                   },
                   "externalSource": {
                     "type": "string"
+                  },
+                  "emailOptOut": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -25870,6 +25950,13 @@
                           "nullable": true
                         },
                         "phone": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "emailOptOut": {
+                          "type": "boolean"
+                        },
+                        "emailOptOutAt": {
                           "type": "string",
                           "nullable": true
                         },
@@ -25974,6 +26061,8 @@
                         "email",
                         "fullName",
                         "phone",
+                        "emailOptOut",
+                        "emailOptOutAt",
                         "createdAt",
                         "updatedAt",
                         "companies",
@@ -26137,6 +26226,13 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "emailOptOut": {
+                          "type": "boolean"
+                        },
+                        "emailOptOutAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -26238,6 +26334,8 @@
                         "email",
                         "fullName",
                         "phone",
+                        "emailOptOut",
+                        "emailOptOutAt",
                         "createdAt",
                         "updatedAt",
                         "companies",
@@ -26369,6 +26467,13 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "emailOptOut": {
+                          "type": "boolean"
+                        },
+                        "emailOptOutAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -26470,6 +26575,8 @@
                         "email",
                         "fullName",
                         "phone",
+                        "emailOptOut",
+                        "emailOptOutAt",
                         "createdAt",
                         "updatedAt",
                         "companies",
@@ -32170,6 +32277,853 @@
           }
         },
         "summary": "List support ticket votes"
+      }
+    },
+    "/workspaces/{organizationId}/changelog": {
+      "get": {
+        "tags": [
+          "changelog"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "boolean",
+              "nullable": true,
+              "default": false
+            },
+            "required": false,
+            "name": "includeDrafts",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Published changelog entries — anonymous public read. Drafts require a workspace token (includeDrafts).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "entries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "body": {
+                            "type": "string"
+                          },
+                          "labels": {
+                            "type": "string"
+                          },
+                          "publishedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          },
+                          "links": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "entryId": {
+                                  "type": "string"
+                                },
+                                "ticketId": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "issueId": {
+                                  "type": "string",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "entryId",
+                                "ticketId",
+                                "issueId"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "title",
+                          "body",
+                          "labels",
+                          "publishedAt",
+                          "createdAt",
+                          "updatedAt",
+                          "links"
+                        ]
+                      }
+                    },
+                    "nextCursor": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "entries",
+                    "nextCursor"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List changelog"
+      },
+      "post": {
+        "tags": [
+          "changelog"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300
+                  },
+                  "body": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20000
+                  },
+                  "labels": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 50
+                    },
+                    "maxItems": 10
+                  },
+                  "links": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "ticketId": {
+                          "type": "string"
+                        },
+                        "issueId": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "maxItems": 100
+                  },
+                  "publish": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "title",
+                  "body"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Changelog entry created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "entry": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "body": {
+                          "type": "string"
+                        },
+                        "labels": {
+                          "type": "string"
+                        },
+                        "publishedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        },
+                        "links": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "entryId": {
+                                "type": "string"
+                              },
+                              "ticketId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "issueId": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "entryId",
+                              "ticketId",
+                              "issueId"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "title",
+                        "body",
+                        "labels",
+                        "publishedAt",
+                        "createdAt",
+                        "updatedAt",
+                        "links"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "entry"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create changelog"
+      }
+    },
+    "/workspaces/{organizationId}/changelog/{entryId}": {
+      "get": {
+        "tags": [
+          "changelog"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "entryId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Changelog entry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "entry": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "body": {
+                          "type": "string"
+                        },
+                        "labels": {
+                          "type": "string"
+                        },
+                        "publishedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        },
+                        "links": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "entryId": {
+                                "type": "string"
+                              },
+                              "ticketId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "issueId": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "entryId",
+                              "ticketId",
+                              "issueId"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "title",
+                        "body",
+                        "labels",
+                        "publishedAt",
+                        "createdAt",
+                        "updatedAt",
+                        "links"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "entry"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "summary": "Get changelog"
+      },
+      "patch": {
+        "tags": [
+          "changelog"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "entryId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300
+                  },
+                  "body": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20000
+                  },
+                  "labels": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 50
+                    },
+                    "maxItems": 10
+                  },
+                  "links": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "ticketId": {
+                          "type": "string"
+                        },
+                        "issueId": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "maxItems": 100
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Changelog entry updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "entry": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "body": {
+                          "type": "string"
+                        },
+                        "labels": {
+                          "type": "string"
+                        },
+                        "publishedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        },
+                        "links": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "entryId": {
+                                "type": "string"
+                              },
+                              "ticketId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "issueId": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "entryId",
+                              "ticketId",
+                              "issueId"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "title",
+                        "body",
+                        "labels",
+                        "publishedAt",
+                        "createdAt",
+                        "updatedAt",
+                        "links"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "entry"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "summary": "Update changelog"
+      },
+      "delete": {
+        "tags": [
+          "changelog"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "entryId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Changelog entry deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deleted": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "deleted"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete changelog"
+      }
+    },
+    "/workspaces/{organizationId}/changelog/{entryId}/publish": {
+      "post": {
+        "tags": [
+          "changelog"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "entryId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Entry published — notifies voters on linked tickets (opt-outs honored)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "entry": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "body": {
+                          "type": "string"
+                        },
+                        "labels": {
+                          "type": "string"
+                        },
+                        "publishedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        },
+                        "links": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "entryId": {
+                                "type": "string"
+                              },
+                              "ticketId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "issueId": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "entryId",
+                              "ticketId",
+                              "issueId"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "title",
+                        "body",
+                        "labels",
+                        "publishedAt",
+                        "createdAt",
+                        "updatedAt",
+                        "links"
+                      ]
+                    },
+                    "notified": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "entry",
+                    "notified"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "summary": "Create changelog publish"
+      }
+    },
+    "/workspaces/{organizationId}/changelog/{entryId}/unpublish": {
+      "post": {
+        "tags": [
+          "changelog"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "entryId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Entry unpublished",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "entry": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "body": {
+                          "type": "string"
+                        },
+                        "labels": {
+                          "type": "string"
+                        },
+                        "publishedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        },
+                        "links": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "entryId": {
+                                "type": "string"
+                              },
+                              "ticketId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "issueId": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "entryId",
+                              "ticketId",
+                              "issueId"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "title",
+                        "body",
+                        "labels",
+                        "publishedAt",
+                        "createdAt",
+                        "updatedAt",
+                        "links"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "entry"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "summary": "Create changelog unpublish"
       }
     },
     "/workspaces/{organizationId}/support/trace/{id}": {

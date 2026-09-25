@@ -28,6 +28,8 @@ export type SupportCustomer = {
   email: string;
   fullName: string | null;
   phone: string | null;
+  emailOptOut: boolean;
+  emailOptOutAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -123,9 +125,36 @@ export async function createCustomer(
     email: input.email,
     fullName: input.fullName ?? null,
     phone: input.phone ?? null,
+    emailOptOut: false,
+    emailOptOutAt: null,
     createdAt: now,
     updatedAt: now,
   };
+}
+
+export async function setEmailOptOutByEmail(
+  db: D1Client,
+  organizationId: string,
+  email: string,
+  optOut: boolean
+): Promise<boolean> {
+  const normalized = email.trim().toLowerCase();
+  const now = new Date().toISOString();
+  const rows = await db
+    .update(supportCustomers)
+    .set({
+      emailOptOut: optOut,
+      emailOptOutAt: optOut ? now : null,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(supportCustomers.organizationId, organizationId),
+        eq(supportCustomers.email, normalized)
+      )
+    )
+    .returning({ id: supportCustomers.id });
+  return rows.length > 0;
 }
 
 export async function findOrCreateCustomerByEmail(
@@ -328,7 +357,7 @@ export async function updateCustomer(
       | "externalId"
       | "externalSource"
     >
-  >
+  > & { emailOptOut?: boolean }
 ): Promise<SupportCustomer | null> {
   const existing = await getCustomerById(db, organizationId, id);
   if (!existing) {
@@ -349,6 +378,10 @@ export async function updateCustomer(
       }),
       ...(input.externalSource !== undefined && {
         externalSource: input.externalSource,
+      }),
+      ...(input.emailOptOut !== undefined && {
+        emailOptOut: input.emailOptOut,
+        emailOptOutAt: input.emailOptOut ? now : null,
       }),
       updatedAt: now,
     })

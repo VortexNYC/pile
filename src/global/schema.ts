@@ -1961,6 +1961,10 @@ export const supportCustomers = sqliteTable(
     email: text("email" as string).notNull(),
     fullName: text("full_name" as string),
     phone: text("phone" as string),
+    emailOptOut: integer("email_opt_out" as string, { mode: "boolean" })
+      .notNull()
+      .default(false),
+    emailOptOutAt: text("email_opt_out_at" as string),
     createdAt: text("created_at" as string)
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
@@ -2477,6 +2481,56 @@ export const supportTicketVotes = sqliteTable(
       table.ticketId
     ),
     index("support_ticket_votes_customer_idx" as string).on(table.customerId),
+  ]
+);
+
+export const changelogEntries = sqliteTable(
+  "changelog_entries" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    title: text("title" as string).notNull(),
+    body: text("body" as string).notNull(),
+    labels: text("labels" as string)
+      .notNull()
+      .default("[]"),
+    publishedAt: text("published_at" as string),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("changelog_entries_org_published_idx" as string).on(
+      table.organizationId,
+      table.publishedAt
+    ),
+  ]
+);
+
+export const changelogEntryLinks = sqliteTable(
+  "changelog_entry_links" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    entryId: text("entry_id" as string)
+      .notNull()
+      .references(() => changelogEntries.id, { onDelete: "cascade" }),
+    ticketId: text("ticket_id" as string).references(() => supportTickets.id, {
+      onDelete: "cascade",
+    }),
+    issueId: text("issue_id" as string),
+  },
+  (table) => [
+    index("changelog_entry_links_entry_idx" as string).on(table.entryId),
+    index("changelog_entry_links_ticket_idx" as string).on(table.ticketId),
+    check(
+      "changelog_entry_links_target_check" as string,
+      sql`(${table.ticketId} IS NOT NULL OR ${table.issueId} IS NOT NULL)`
+    ),
   ]
 );
 

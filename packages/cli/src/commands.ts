@@ -5706,6 +5706,22 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "support unsubscribe create": {
+    method: "POST",
+    path: "/support/unsubscribe",
+    params: [],
+    query: [],
+    body: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "email",
+        flag: "email",
+      },
+    ],
+  },
   "support customers list": {
     method: "GET",
     path: "/workspaces/{organizationId}/support/customers",
@@ -5834,6 +5850,10 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "externalSource",
         flag: "external-source",
+      },
+      {
+        name: "emailOptOut",
+        flag: "email-opt-out",
       },
     ],
   },
@@ -6463,6 +6483,161 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "email",
       },
     ],
+    body: [],
+  },
+  "changelog list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/changelog",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "limit",
+        flag: "limit",
+      },
+      {
+        name: "cursor",
+        flag: "cursor",
+      },
+      {
+        name: "includeDrafts",
+        flag: "include-drafts",
+      },
+    ],
+    body: [],
+  },
+  "changelog create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/changelog",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "title",
+        flag: "title",
+      },
+      {
+        name: "body",
+        flag: "body",
+      },
+      {
+        name: "labels",
+        flag: "labels",
+      },
+      {
+        name: "links",
+        flag: "links",
+      },
+      {
+        name: "publish",
+        flag: "publish",
+      },
+    ],
+  },
+  "changelog get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/changelog/{entryId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "entryId",
+        flag: "entry-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "changelog update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/changelog/{entryId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "entryId",
+        flag: "entry-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "title",
+        flag: "title",
+      },
+      {
+        name: "body",
+        flag: "body",
+      },
+      {
+        name: "labels",
+        flag: "labels",
+      },
+      {
+        name: "links",
+        flag: "links",
+      },
+    ],
+  },
+  "changelog delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/changelog/{entryId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "entryId",
+        flag: "entry-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "changelog publish create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/changelog/{entryId}/publish",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "entryId",
+        flag: "entry-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "changelog unpublish create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/changelog/{entryId}/unpublish",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "entryId",
+        flag: "entry-id",
+      },
+    ],
+    query: [],
     body: [],
   },
   "support trace get": {

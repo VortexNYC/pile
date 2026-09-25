@@ -13353,6 +13353,52 @@ export interface paths {
         };
         trace?: never;
     };
+    "/support/unsubscribe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Opt a customer email out of outbound notifications */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        organizationId: string;
+                        /** Format: email */
+                        email: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Opt-out recorded */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/support/customers": {
         parameters: {
             query?: never;
@@ -13393,6 +13439,8 @@ export interface paths {
                                 email: string;
                                 fullName: string | null;
                                 phone: string | null;
+                                emailOptOut: boolean;
+                                emailOptOutAt: string | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 companies: {
@@ -13474,6 +13522,8 @@ export interface paths {
                                 email: string;
                                 fullName: string | null;
                                 phone: string | null;
+                                emailOptOut: boolean;
+                                emailOptOutAt: string | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 companies: {
@@ -13542,6 +13592,8 @@ export interface paths {
                                 email: string;
                                 fullName: string | null;
                                 phone: string | null;
+                                emailOptOut: boolean;
+                                emailOptOutAt: string | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 companies: {
@@ -13627,6 +13679,7 @@ export interface paths {
                         userId?: string;
                         externalId?: string;
                         externalSource?: string;
+                        emailOptOut?: boolean;
                     };
                 };
             };
@@ -13647,6 +13700,8 @@ export interface paths {
                                 email: string;
                                 fullName: string | null;
                                 phone: string | null;
+                                emailOptOut: boolean;
+                                emailOptOutAt: string | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 companies: {
@@ -13722,6 +13777,8 @@ export interface paths {
                                 email: string;
                                 fullName: string | null;
                                 phone: string | null;
+                                emailOptOut: boolean;
+                                emailOptOutAt: string | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 companies: {
@@ -13805,6 +13862,8 @@ export interface paths {
                                 email: string;
                                 fullName: string | null;
                                 phone: string | null;
+                                emailOptOut: boolean;
+                                emailOptOutAt: string | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 companies: {
@@ -15623,6 +15682,392 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/changelog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List changelog */
+        get: {
+            parameters: {
+                query?: {
+                    limit?: number;
+                    cursor?: string;
+                    includeDrafts?: boolean | null;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Published changelog entries — anonymous public read. Drafts require a workspace token (includeDrafts). */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            entries: {
+                                id: string;
+                                organizationId: string;
+                                title: string;
+                                body: string;
+                                labels: string;
+                                publishedAt: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                links: {
+                                    id: string;
+                                    entryId: string;
+                                    ticketId: string | null;
+                                    issueId: string | null;
+                                }[];
+                            }[];
+                            nextCursor: string | null;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create changelog */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        title: string;
+                        body: string;
+                        labels?: string[];
+                        links?: {
+                            ticketId?: string;
+                            issueId?: string;
+                        }[];
+                        publish?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description Changelog entry created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            entry: {
+                                id: string;
+                                organizationId: string;
+                                title: string;
+                                body: string;
+                                labels: string;
+                                publishedAt: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                links: {
+                                    id: string;
+                                    entryId: string;
+                                    ticketId: string | null;
+                                    issueId: string | null;
+                                }[];
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/changelog/{entryId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get changelog */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    entryId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Changelog entry */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            entry: {
+                                id: string;
+                                organizationId: string;
+                                title: string;
+                                body: string;
+                                labels: string;
+                                publishedAt: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                links: {
+                                    id: string;
+                                    entryId: string;
+                                    ticketId: string | null;
+                                    issueId: string | null;
+                                }[];
+                            };
+                        };
+                    };
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        /** Delete changelog */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    entryId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Changelog entry deleted */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            deleted: boolean;
+                        };
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /** Update changelog */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    entryId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        title?: string;
+                        body?: string;
+                        labels?: string[];
+                        links?: {
+                            ticketId?: string;
+                            issueId?: string;
+                        }[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Changelog entry updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            entry: {
+                                id: string;
+                                organizationId: string;
+                                title: string;
+                                body: string;
+                                labels: string;
+                                publishedAt: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                links: {
+                                    id: string;
+                                    entryId: string;
+                                    ticketId: string | null;
+                                    issueId: string | null;
+                                }[];
+                            };
+                        };
+                    };
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/changelog/{entryId}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create changelog publish */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    entryId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Entry published — notifies voters on linked tickets (opt-outs honored) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            entry: {
+                                id: string;
+                                organizationId: string;
+                                title: string;
+                                body: string;
+                                labels: string;
+                                publishedAt: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                links: {
+                                    id: string;
+                                    entryId: string;
+                                    ticketId: string | null;
+                                    issueId: string | null;
+                                }[];
+                            };
+                            notified: string[];
+                        };
+                    };
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/changelog/{entryId}/unpublish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create changelog unpublish */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    entryId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Entry unpublished */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            entry: {
+                                id: string;
+                                organizationId: string;
+                                title: string;
+                                body: string;
+                                labels: string;
+                                publishedAt: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                links: {
+                                    id: string;
+                                    entryId: string;
+                                    ticketId: string | null;
+                                    issueId: string | null;
+                                }[];
+                            };
+                        };
+                    };
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;

@@ -179,6 +179,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdChangelogEntryId",
+    "description": "Delete changelog (DELETE /workspaces/{organizationId}/changelog/{entryId}) Path params (top-level, required): organizationId, entryId.",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/changelog/{entryId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "entryId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "entryId",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdCustomerneedsId",
     "description": "Delete customer need (DELETE /workspaces/{organizationId}/customer-needs/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
@@ -1913,6 +1934,58 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdChangelog",
+    "description": "List changelog (GET /workspaces/{organizationId}/changelog) Path params (top-level, required): organizationId. Query params (top-level, optional): limit, cursor, includeDrafts.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/changelog",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "default": 50
+        },
+        "cursor": {
+          "type": "string"
+        },
+        "includeDrafts": {
+          "type": "boolean",
+          "nullable": true,
+          "default": false
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdChangelogEntryId",
+    "description": "Get changelog (GET /workspaces/{organizationId}/changelog/{entryId}) Path params (top-level, required): organizationId, entryId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/changelog/{entryId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "entryId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "entryId",
         "organizationId"
       ]
     }
@@ -5379,6 +5452,65 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "patchWorkspacesOrganizationIdChangelogEntryId",
+    "description": "Update changelog (PATCH /workspaces/{organizationId}/changelog/{entryId}) Path params (top-level, required): organizationId, entryId. Request body goes in the \"body\" object; fields: title, body, labels, links.",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/changelog/{entryId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "entryId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            },
+            "body": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 20000
+            },
+            "labels": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 50
+              },
+              "maxItems": 10
+            },
+            "links": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "ticketId": {
+                    "type": "string"
+                  },
+                  "issueId": {
+                    "type": "string"
+                  }
+                }
+              },
+              "maxItems": 100
+            }
+          }
+        }
+      },
+      "required": [
+        "entryId",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "patchWorkspacesOrganizationIdCustomerneedsId",
     "description": "Update customer need (PATCH /workspaces/{organizationId}/customer-needs/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: customerId, issueId, projectId, priority, note.",
     "method": "PATCH",
@@ -6711,7 +6843,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdSupportCustomersCustomerId",
-    "description": "Update support customer (PATCH /workspaces/{organizationId}/support/customers/{customerId}) Path params (top-level, required): organizationId, customerId. Request body goes in the \"body\" object; fields: email, fullName, phone, userId, externalId, externalSource.",
+    "description": "Update support customer (PATCH /workspaces/{organizationId}/support/customers/{customerId}) Path params (top-level, required): organizationId, customerId. Request body goes in the \"body\" object; fields: email, fullName, phone, userId, externalId, externalSource, emailOptOut.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/support/customers/{customerId}",
     "inputSchema": {
@@ -6744,6 +6876,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "externalSource": {
               "type": "string"
+            },
+            "emailOptOut": {
+              "type": "boolean"
             }
           }
         }
@@ -7597,6 +7732,33 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "channelId"
       ]
+    }
+  },
+  {
+    "name": "postSupportUnsubscribe",
+    "description": "Opt a customer email out of outbound notifications (POST /support/unsubscribe) Request body goes in the \"body\" object; fields: organizationId*, email* (* = required).",
+    "method": "POST",
+    "path": "/support/unsubscribe",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "type": "object",
+          "properties": {
+            "organizationId": {
+              "type": "string"
+            },
+            "email": {
+              "type": "string",
+              "format": "email"
+            }
+          },
+          "required": [
+            "organizationId",
+            "email"
+          ]
+        }
+      }
     }
   },
   {
@@ -8658,6 +8820,110 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdChangelog",
+    "description": "Create changelog (POST /workspaces/{organizationId}/changelog) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: title*, body*, labels, links, publish (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/changelog",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            },
+            "body": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 20000
+            },
+            "labels": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 50
+              },
+              "maxItems": 10
+            },
+            "links": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "ticketId": {
+                    "type": "string"
+                  },
+                  "issueId": {
+                    "type": "string"
+                  }
+                }
+              },
+              "maxItems": 100
+            },
+            "publish": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "title",
+            "body"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdChangelogEntryIdPublish",
+    "description": "Create changelog publish (POST /workspaces/{organizationId}/changelog/{entryId}/publish) Path params (top-level, required): organizationId, entryId.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/changelog/{entryId}/publish",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "entryId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "entryId",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdChangelogEntryIdUnpublish",
+    "description": "Create changelog unpublish (POST /workspaces/{organizationId}/changelog/{entryId}/unpublish) Path params (top-level, required): organizationId, entryId.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/changelog/{entryId}/unpublish",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "entryId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "entryId",
         "organizationId"
       ]
     }

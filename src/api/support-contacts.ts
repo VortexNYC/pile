@@ -14,10 +14,12 @@ import {
   resolveCompanyByDomain,
   setCustomerCompanies,
   setCustomerIdentities,
+  setEmailOptOutByEmail,
   updateCustomer,
 } from "../global/support-contacts.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
+import { publicRateLimit } from "../platform/rate-limit.js";
 import { rls } from "../platform/rls.js";
 
 const identityTypeEnum = z.enum([
@@ -61,6 +63,8 @@ const supportCustomerSchema = z.object({
   email: z.string(),
   fullName: z.string().nullable(),
   phone: z.string().nullable(),
+  emailOptOut: z.boolean(),
+  emailOptOutAt: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
   companies: z.array(supportCustomerCompanySchema),
@@ -112,6 +116,7 @@ const updateCustomerBodySchema = z.object({
   userId: z.string().optional(),
   externalId: z.string().optional(),
   externalSource: z.string().optional(),
+  emailOptOut: z.boolean().optional(),
 });
 
 const setCustomerCompaniesBodySchema = z.object({
@@ -419,6 +424,52 @@ const getCompanyRoute = createRoute({
 });
 
 export function registerSupportContactRoutes(app: OpenAPIHono<AppContext>) {
+  // Public unsubscribe — always returns ok whether or not the email exists
+  // (no existence oracle). Per-IP hourly cap.
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/support/unsubscribe",
+      tags: ["support-contacts"],
+      summary: "Opt a customer email out of outbound notifications",
+      middleware: [
+        publicRateLimit({
+          bucket: "support-unsubscribe",
+          max: 30,
+          windowMs: 3_600_000,
+        }),
+      ],
+      request: {
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({
+                organizationId: z.string(),
+                email: z.string().trim().email(),
+              }),
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: "Opt-out recorded",
+          content: {
+            "application/json": {
+              schema: z.object({ ok: z.boolean() }),
+            },
+          },
+        },
+      },
+    }),
+    async (c) => {
+      const { organizationId, email } = c.req.valid("json");
+      const db = createD1(c.env.D1);
+      await setEmailOptOutByEmail(db, organizationId, email, true);
+      return c.json({ ok: true }, 200);
+    }
+  );
+
   app.openapi(createCustomerRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
     const body = c.req.valid("json");

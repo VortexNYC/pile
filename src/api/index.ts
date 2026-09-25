@@ -28,6 +28,7 @@ import { registerAttachmentRoutes } from "./attachments.js";
 import { registerAuditRoutes } from "./audit.js";
 import { registerAuthRoutes } from "./auth-routes.js";
 import { registerBillingRoutes } from "./billing.js";
+import { registerChangelogRoutes } from "./changelog.js";
 import { registerClipperRoutes } from "./clipper.js";
 import { registerCommentRoutes } from "./comments.js";
 import { registerCsvExportRoutes } from "./csv-export.js";
@@ -119,7 +120,22 @@ app.use("/workspaces/:organizationId/*", async (c, next) => {
     return;
   }
   // Public roadmap board — anonymous read of public-flagged tickets only.
-  if (c.req.path.endsWith('/board') && c.req.method === "GET") {
+  if (c.req.path.endsWith("/board") && c.req.method === "GET") {
+    await next();
+    return;
+  }
+  // Changelog RSS — anonymous feed readers carry no credentials.
+  if (c.req.path.endsWith("/changelog.rss") && c.req.method === "GET") {
+    await next();
+    return;
+  }
+  // Changelog list — anonymous gets published only; a presented token goes
+  // through normal auth so includeDrafts stays staff-only.
+  if (
+    c.req.path.endsWith("/changelog") &&
+    c.req.method === "GET" &&
+    !c.req.header("Authorization")
+  ) {
     await next();
     return;
   }
@@ -176,6 +192,7 @@ registerAuditRoutes(app);
 registerCustomerRoutes(app);
 registerSupportContactRoutes(app);
 registerSupportTicketRoutes(app);
+registerChangelogRoutes(app);
 registerSupportTraceRoutes(app);
 registerSupportContentRoutes(app);
 registerSupportEscalationRoutes(app);
