@@ -1,5 +1,7 @@
 import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
 
+import { sendEmail } from "../email/send.js";
+import { renderChangelogShipped } from "../email/templates.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { D1Client } from "./db.js";
 import {
@@ -283,15 +285,19 @@ export async function notifyVotersOfChangelogEntry(
 ): Promise<string[]> {
   if (!env.EMAIL || !env.EMAIL_FROM) return [];
   const recipients = await changelogNotifyRecipients(db, organizationId, entry);
+  const unsubscribeUrl = `${env.PUBLIC_API_URL ?? ""}/support/unsubscribe`;
+  const text = `${entry.body}\n\n---\nYou asked for this. Unsubscribe: ${unsubscribeUrl}`;
+  const html = await renderChangelogShipped(entry.title, entry.body);
 
   const notified: string[] = [];
   for (const to of recipients) {
     try {
-      await env.EMAIL.send({
+      await sendEmail(env, {
         from: env.EMAIL_FROM,
         to,
         subject: `Shipped: ${entry.title}`,
-        text: `${entry.body}\n\n---\nYou asked for this. Unsubscribe: ${env.PUBLIC_API_URL ?? ""}/support/unsubscribe`,
+        text,
+        html,
       });
       notified.push(to);
     } catch {

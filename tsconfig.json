@@ -6,5 +6,12 @@
     "src/types/cloudflare-test.d.ts",
     "worker-configuration.d.ts"
   ],
-  "include": ["src/**/*.ts", "packages/*/src/**/*.ts", "scripts/**/*.ts"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "packages/*/src/**/*.ts",
+    "packages/*/src/**/*.tsx",
+    "scripts/**/*.ts",
+    "scripts/**/*.tsx"
+  ]
 }

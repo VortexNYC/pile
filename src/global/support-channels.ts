@@ -1,14 +1,20 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 
 import { sendIntercomMessage } from "../channels/intercom.js";
 import { sendPlainMessage } from "../channels/plain.js";
 import { sendSlackMessage } from "../channels/slack.js";
 import { sendZendeskMessage } from "../channels/zendesk.js";
+import { sendEmail } from "../email/send.js";
+import { renderTicketReply } from "../email/templates.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { D1Client } from "./db.js";
-import { supportChannels, supportTicketEvents } from "./schema.js";
+import {
+  supportChannels,
+  supportTicketEvents,
+  supportTicketMessages,
+} from "./schema.js";
 import {
   findOrCreateCustomerByEmail,
   getCustomerById,
@@ -267,12 +273,35 @@ export async function processOutgoingMessage(
   if (event.isNew) {
     if (channel.type === "email" && env.EMAIL) {
       try {
-        await env.EMAIL.send({
+        // Thread onto the customer's last inbound email so the reply lands
+        // in the same conversation in their mail client.
+        const [lastInbound] = await db
+          .select({ externalId: supportTicketEvents.externalId })
+          .from(supportTicketMessages)
+          .innerJoin(
+            supportTicketEvents,
+            eq(supportTicketMessages.eventId, supportTicketEvents.id)
+          )
+          .where(
+            and(
+              eq(supportTicketEvents.ticketId, ticket.id),
+              eq(supportTicketMessages.direction, "inbound"),
+              eq(supportTicketMessages.channel, "email"),
+              isNotNull(supportTicketEvents.externalId)
+            )
+          )
+          .orderBy(desc(supportTicketEvents.createdAt))
+          .limit(1);
+        const inReplyTo = lastInbound?.externalId ?? null;
+        const subject = (input.subject ?? ticket.title).replace(/^re:\s*/i, "");
+        const html = await renderTicketReply(input.textContent);
+        await sendEmail(env, {
           from: channel.name,
           to: customer.email,
-          subject: input.subject ?? ticket.title,
+          subject: `Re: ${subject}`,
           text: input.textContent,
-          html: input.markdownContent ?? undefined,
+          html,
+          inReplyTo,
         });
         sent = true;
       } catch {
