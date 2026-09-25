@@ -29,13 +29,64 @@ async function findCustomerByRef(
     return null;
   }
   const body = (await res.json()) as {
-    data?: VortexCustomer[] | VortexCustomer;
+    // List responses nest under data.items; a bare object is a single record.
+    data?: { items?: VortexCustomer[] } | VortexCustomer[];
   };
   const data = body.data;
   if (Array.isArray(data)) {
     return data[0] ?? null;
   }
-  return data ?? null;
+  return data?.items?.[0] ?? null;
+}
+
+async function ensureBillingAccountId(
+  env: AppEnv,
+  customerId: string,
+  organizationId: string
+): Promise<string | null> {
+  const base = env.VORTEX_BILLING_API_URL;
+  const headers = {
+    Authorization: `Bearer ${env.VORTEX_BILLING_API_KEY}`,
+    "Content-Type": "application/json",
+  };
+  const envParam = `environment=${env.VORTEX_BILLING_ENV ?? "production"}&merchantAccountId=${env.VORTEX_BILLING_MERCHANT_ID}`;
+  const list = await fetch(
+    `${base}/v1/customers/${customerId}/billing-accounts?${envParam}`,
+    { headers }
+  );
+  if (list.ok) {
+    const body = (await list.json()) as {
+      data?: { items?: Array<{ billingAccountId?: string }> };
+    };
+    const id = body.data?.items?.[0]?.billingAccountId;
+    if (id) {
+      return id;
+    }
+  }
+  // None exists yet — create a minimal manual-collection account so usage
+  // events have a billingAccountId to hang off.
+  const res = await fetch(
+    `${base}/v1/customers/${customerId}/billing-accounts`,
+    {
+      method: "POST",
+      headers: { ...headers, "Idempotency-Key": `pile-ba-${organizationId}` },
+      body: JSON.stringify({
+        environment: env.VORTEX_BILLING_ENV ?? "production",
+        merchantAccountId: env.VORTEX_BILLING_MERCHANT_ID,
+        customerId,
+        invoiceDeliveryMode: "api_only",
+        collectionMode: "manual",
+        autoCollectionEnabled: false,
+      }),
+    }
+  );
+  if (!res.ok) {
+    return null;
+  }
+  const body = (await res.json()) as {
+    data?: { billingAccountId?: string };
+  };
+  return body.data?.billingAccountId ?? null;
 }
 
 /**
@@ -95,13 +146,21 @@ export async function ensureBillingCustomer(
     throw new Error("vortex customers: empty customerId");
   }
 
+  // The customer payload doesn't carry a billing account — resolve one
+  // separately so usage events can satisfy the contract.
+  const billingAccountId = await ensureBillingAccountId(
+    env,
+    customerId,
+    organizationId
+  );
+
   const ts = new Date().toISOString();
   await db
     .insert(billingAccounts)
     .values({
       organizationId,
       vortexCustomerId: customerId,
-      vortexBillingAccountId: customer?.billingAccountId ?? null,
+      vortexBillingAccountId: billingAccountId,
       createdAt: ts,
       updatedAt: ts,
     })
@@ -109,7 +168,7 @@ export async function ensureBillingCustomer(
       target: billingAccounts.organizationId,
       set: {
         vortexCustomerId: customerId,
-        vortexBillingAccountId: customer?.billingAccountId ?? null,
+        vortexBillingAccountId: billingAccountId,
         updatedAt: ts,
       },
     });
