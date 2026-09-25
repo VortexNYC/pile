@@ -2991,6 +2991,9 @@ export const ssoProvider = sqliteTable("ssoProvider" as string, {
     .unique(),
   organizationId: text("organization_id" as string),
   domain: text("domain" as string).notNull(),
+  domainVerified: integer("domain_verified" as string, {
+    mode: "boolean",
+  }),
 });
 
 export const scimManagedConnection = sqliteTable(

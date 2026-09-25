@@ -1,0 +1,1 @@
+ALTER TABLE `ssoProvider` ADD `domain_verified` integer;

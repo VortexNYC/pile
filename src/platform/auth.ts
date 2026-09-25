@@ -147,6 +147,12 @@ export async function createAuth(env: AppEnv) {
         organizationProvisioning: {
           defaultRole: "member",
         },
+        // Enterprise model: a provider must prove domain ownership (DNS TXT)
+        // before sign-in; verified-domain SSO then links to existing accounts
+        // by email.
+        domainVerification: {
+          enabled: true,
+        },
         saml: {
           // IdP-initiated (Okta/Entra dashboard chiclet) sign-in; assertions
           // are still signature-validated, only InResponseTo is relaxed.
