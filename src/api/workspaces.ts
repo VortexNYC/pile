@@ -1,6 +1,7 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 import { and, eq } from "drizzle-orm";
+import { createMiddleware } from "hono/factory";
 
 import { createD1 } from "../global/db.js";
 import { deleteWorkspaceData } from "../global/deletion.js";
@@ -10,14 +11,17 @@ import {
   createWorkspace,
   getWorkspaceById,
   getWorkspaceBySlug,
+  getWorkspaceMembership,
   listWorkspacesForUser,
 } from "../global/workspaces.js";
 import { createAuth } from "../platform/auth.js";
 import { VortexError } from "../platform/errors.js";
+import { toApiKeyWorkspaceIdentity } from "../platform/identity.js";
 import {
   requireHumanSession,
   type AppContext,
 } from "../platform/middleware.js";
+import { getSessionUserId } from "../platform/session.js";
 
 const workspaceSchema = z.object({
   id: z.string(),
@@ -28,6 +32,82 @@ const workspaceSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
 });
+
+// The global workspace auth middleware mounts on /workspaces/:organizationId/*,
+// which does not match /workspaces/{id} or /workspaces/slug/{slug} — those reads
+// were public. Apply the same Bearer-token-or-session-membership rule here.
+const workspaceReadAccess = (param: "id" | "slug") =>
+  createMiddleware<{
+    Bindings: AppContext["Bindings"];
+    Variables: AppContext["Variables"];
+  }>(async (c, next) => {
+    const db = createD1(c.env.D1);
+    let organizationId = c.req.param(param) as string;
+    if (param === "slug") {
+      const workspace = await getWorkspaceBySlug(db, organizationId);
+      if (!workspace) {
+        throw new VortexError({
+          code: "NOT_FOUND",
+          status: 404,
+          message: "Workspace not found",
+        });
+      }
+      organizationId = workspace.id;
+    }
+
+    const token = (c.req.header("Authorization") ?? "")
+      .replace(/^Bearer\s+/i, "")
+      .trim();
+    if (token) {
+      const auth = createAuth(c.env);
+      const result: unknown = await auth.api
+        .verifyApiKey({ body: { key: token } })
+        .catch(() => null);
+      if (
+        !result ||
+        typeof result !== "object" ||
+        !("valid" in result) ||
+        !result.valid ||
+        !("key" in result) ||
+        !result.key
+      ) {
+        throw new VortexError({
+          code: "UNAUTHORIZED",
+          status: 401,
+          message: "Invalid or expired token",
+        });
+      }
+      const identity = toApiKeyWorkspaceIdentity(result.key);
+      if (identity.organizationId !== organizationId) {
+        throw new VortexError({
+          code: "FORBIDDEN",
+          status: 403,
+          message: "Token does not belong to this workspace",
+        });
+      }
+      c.set("workspaceIdentity", identity);
+      await next();
+      return;
+    }
+
+    const userId = await getSessionUserId(c.env, c.req.raw);
+    if (!userId) {
+      throw new VortexError({
+        code: "UNAUTHORIZED",
+        status: 401,
+        message: "Authentication required",
+      });
+    }
+    const membership = await getWorkspaceMembership(db, organizationId, userId);
+    if (!membership) {
+      throw new VortexError({
+        code: "FORBIDDEN",
+        status: 403,
+        message: "User is not a member of this workspace",
+      });
+    }
+    await next();
+  });
 
 const createWorkspaceRoute = createRoute({
   method: "post",
@@ -79,6 +159,7 @@ const getWorkspaceRoute = createRoute({
   method: "get",
   path: "/workspaces/{id}",
   tags: ["workspaces"],
+  middleware: [workspaceReadAccess("id")],
   request: {
     params: z.object({ id: z.string() }),
   },
@@ -96,6 +177,7 @@ const getWorkspaceBySlugRoute = createRoute({
   method: "get",
   path: "/workspaces/slug/{slug}",
   tags: ["workspaces"],
+  middleware: [workspaceReadAccess("slug")],
   request: {
     params: z.object({ slug: z.string() }),
   },

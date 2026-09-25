@@ -120,6 +120,12 @@ app.use("/workspaces/:organizationId/*", async (c, next) => {
     await next();
     return;
   }
+  // Slug lookup carries its own workspaceReadAccess gate — "slug" is not a
+  // real organizationId, so the generic middleware would 403 everything.
+  if (c.req.path.startsWith("/workspaces/slug/")) {
+    await next();
+    return;
+  }
   // Public roadmap board — anonymous read of public-flagged tickets only.
   if (c.req.path.endsWith("/board") && c.req.method === "GET") {
     await next();

@@ -96,4 +96,98 @@ describe("workspaces API", () => {
     expect(body.team.key).toBe("general");
     expect(body.token).toBeDefined();
   });
+
+  it("requires auth and matching scope to read a workspace", async () => {
+    const cookie = await getSessionCookie();
+    const onboard = async () => {
+      const res = await app.fetch(
+        new Request(onboardUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Cookie: cookie,
+            Origin: origin,
+          },
+          body: JSON.stringify({
+            name: "Scoped",
+            slug: `scoped-${crypto.randomUUID()}`,
+          }),
+        }),
+        env
+      );
+      return (await res.json()) as {
+        workspace: { id: string; slug: string };
+        token: string;
+      };
+    };
+    const ws1 = await onboard();
+    const ws2 = await onboard();
+
+    const anon = await app.fetch(
+      new Request(
+        new URL(`/workspaces/${ws1.workspace.id}`, origin).toString()
+      ),
+      env
+    );
+    expect(anon.status).toBe(401);
+
+    const own = await app.fetch(
+      new Request(
+        new URL(`/workspaces/${ws1.workspace.id}`, origin).toString(),
+        {
+          headers: { Authorization: `Bearer ${ws1.token}` },
+        }
+      ),
+      env
+    );
+    expect(own.status).toBe(200);
+
+    const foreign = await app.fetch(
+      new Request(
+        new URL(`/workspaces/${ws1.workspace.id}`, origin).toString(),
+        {
+          headers: { Authorization: `Bearer ${ws2.token}` },
+        }
+      ),
+      env
+    );
+    expect(foreign.status).toBe(403);
+
+    const memberSession = await app.fetch(
+      new Request(
+        new URL(`/workspaces/${ws1.workspace.id}`, origin).toString(),
+        {
+          headers: { Cookie: cookie },
+        }
+      ),
+      env
+    );
+    expect(memberSession.status).toBe(200);
+
+    const anonSlug = await app.fetch(
+      new Request(
+        new URL(`/workspaces/slug/${ws1.workspace.slug}`, origin).toString()
+      ),
+      env
+    );
+    expect(anonSlug.status).toBe(401);
+
+    const memberSlug = await app.fetch(
+      new Request(
+        new URL(`/workspaces/slug/${ws1.workspace.slug}`, origin).toString(),
+        { headers: { Cookie: cookie } }
+      ),
+      env
+    );
+    expect(memberSlug.status).toBe(200);
+
+    const foreignSlug = await app.fetch(
+      new Request(
+        new URL(`/workspaces/slug/${ws1.workspace.slug}`, origin).toString(),
+        { headers: { Authorization: `Bearer ${ws2.token}` } }
+      ),
+      env
+    );
+    expect(foreignSlug.status).toBe(403);
+  });
 });
