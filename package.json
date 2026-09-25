@@ -82,6 +82,7 @@
     "drizzle-kit": "^0.31.10",
     "knip": "^6.34.0",
     "openapi-typescript": "^7.13.0",
+    "samlify": "2.13.1",
     "secretlint": "^13.0.5",
     "simple-git-hooks": "^2.14.0",
     "tsx": "^4.23.13",

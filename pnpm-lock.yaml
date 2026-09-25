@@ -105,6 +105,9 @@ importers:
       openapi-typescript:
         specifier: ^7.13.0
         version: 7.13.0(typescript@5.9.3)
+      samlify:
+        specifier: 2.13.1
+        version: 2.13.1
       secretlint:
         specifier: ^13.0.5
         version: 13.0.5
