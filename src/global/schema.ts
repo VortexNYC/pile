@@ -2992,3 +2992,259 @@ export const ssoProvider = sqliteTable("ssoProvider" as string, {
   organizationId: text("organization_id" as string),
   domain: text("domain" as string).notNull(),
 });
+
+export const scimManagedConnection = sqliteTable(
+  "scimManagedConnection" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    creationRequestId: text("creation_request_id" as string)
+      .notNull()
+      .unique(),
+    connectionId: text("connection_id" as string)
+      .notNull()
+      .unique(),
+    provisioningDomainId: text("provisioning_domain_id" as string).notNull(),
+    status: text("status" as string).notNull(),
+    revision: integer("revision" as string).notNull(),
+    createdAt: integer("created_at" as string, {
+      mode: "timestamp_ms",
+    }).notNull(),
+    createdBy: text("created_by" as string).notNull(),
+    decommissionStartedAt: integer("decommission_started_at" as string, {
+      mode: "timestamp_ms",
+    }),
+    decommissionStartedBy: text("decommission_started_by" as string),
+    decommissionedAt: integer("decommissioned_at" as string, {
+      mode: "timestamp_ms",
+    }),
+    decommissionedBy: text("decommissioned_by" as string),
+  }
+);
+
+export const scimManagedCredential = sqliteTable(
+  "scimManagedCredential" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    connectionRecordId: text("connection_record_id" as string)
+      .notNull()
+      .references(() => scimManagedConnection.id, { onDelete: "cascade" }),
+    credentialId: text("credential_id" as string)
+      .notNull()
+      .unique(),
+    tokenDigest: text("token_digest" as string).notNull(),
+    hashVersion: text("hash_version" as string).notNull(),
+    activeSlotKey: text("active_slot_key" as string)
+      .notNull()
+      .unique(),
+    status: text("status" as string).notNull(),
+    serializedScopes: text("serialized_scopes" as string).notNull(),
+    expiresAt: integer("expires_at" as string, {
+      mode: "timestamp_ms",
+    }).notNull(),
+    createdAt: integer("created_at" as string, {
+      mode: "timestamp_ms",
+    }).notNull(),
+    createdBy: text("created_by" as string).notNull(),
+    lastUsedAt: integer("last_used_at" as string, { mode: "timestamp_ms" }),
+    revokedAt: integer("revoked_at" as string, { mode: "timestamp_ms" }),
+    revokedBy: text("revoked_by" as string),
+    decommissionedAt: integer("decommissioned_at" as string, {
+      mode: "timestamp_ms",
+    }),
+  }
+);
+
+export const scimManagedConnectionEvent = sqliteTable(
+  "scimManagedConnectionEvent" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    connectionRecordId: text("connection_record_id" as string)
+      .notNull()
+      .references(() => scimManagedConnection.id, { onDelete: "cascade" }),
+    eventKey: text("event_key" as string)
+      .notNull()
+      .unique(),
+    sequence: integer("sequence" as string).notNull(),
+    type: text("type" as string).notNull(),
+    actorId: text("actor_id" as string).notNull(),
+    credentialId: text("credential_id" as string),
+    createdAt: integer("created_at" as string, {
+      mode: "timestamp_ms",
+    }).notNull(),
+  }
+);
+
+export const scimConnectionBinding = sqliteTable(
+  "scimConnectionBinding" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    connectionId: text("connection_id" as string).notNull(),
+    connectionKey: text("connection_key" as string)
+      .notNull()
+      .unique(),
+    provisioningDomainId: text("provisioning_domain_id" as string).notNull(),
+    createdAt: integer("created_at" as string, {
+      mode: "timestamp_ms",
+    }).notNull(),
+    decommissionedAt: integer("decommissioned_at" as string, {
+      mode: "timestamp_ms",
+    }),
+    decommissionStatus: text("decommission_status" as string).notNull(),
+    decommissionCursorUserId: text("decommission_cursor_user_id" as string),
+    decommissionReconciledUserCount: integer(
+      "decommission_reconciled_user_count" as string
+    ).notNull(),
+    decommissionBatchCount: integer(
+      "decommission_batch_count" as string
+    ).notNull(),
+    decommissionRevision: integer("decommission_revision" as string).notNull(),
+    decommissionCompletedAt: integer("decommission_completed_at" as string, {
+      mode: "timestamp_ms",
+    }),
+    decommissionLeaseId: text("decommission_lease_id" as string),
+    decommissionLeaseExpiresAt: integer(
+      "decommission_lease_expires_at" as string,
+      { mode: "timestamp_ms" }
+    ),
+  }
+);
+
+export const scimIdentityTombstone = sqliteTable(
+  "scimIdentityTombstone" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    connectionId: text("connection_id" as string).notNull(),
+    provisioningDomainId: text("provisioning_domain_id" as string).notNull(),
+    externalId: text("external_id" as string).notNull(),
+    externalIdKey: text("external_id_key" as string)
+      .notNull()
+      .unique(),
+    userId: text("user_id" as string)
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    profile: text("profile" as string).notNull(),
+    deletedAt: integer("deleted_at" as string, {
+      mode: "timestamp_ms",
+    }).notNull(),
+  }
+);
+
+export const scimSubject = sqliteTable("scimSubject" as string, {
+  id: text("id" as string).primaryKey(),
+  userId: text("user_id" as string)
+    .notNull()
+    .unique()
+    .references(() => user.id, { onDelete: "cascade" }),
+  profileSourceId: text("profile_source_id" as string),
+  revision: integer("revision" as string).notNull(),
+  createdAt: integer("created_at" as string, {
+    mode: "timestamp_ms",
+  }).notNull(),
+  updatedAt: integer("updated_at" as string, {
+    mode: "timestamp_ms",
+  }).notNull(),
+});
+
+export const scimUser = sqliteTable("scimUser" as string, {
+  id: text("id" as string).primaryKey(),
+  connectionId: text("connection_id" as string).notNull(),
+  provisioningDomainId: text("provisioning_domain_id" as string).notNull(),
+  userId: text("user_id" as string)
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  connectionUserKey: text("connection_user_key" as string)
+    .notNull()
+    .unique(),
+  userName: text("user_name" as string).notNull(),
+  userNameKey: text("user_name_key" as string)
+    .notNull()
+    .unique(),
+  primaryEmail: text("primary_email" as string).notNull(),
+  workEmailValueIndex: text("work_email_value_index" as string).notNull(),
+  emailValueIndex: text("email_value_index" as string).notNull(),
+  displayName: text("display_name" as string).notNull(),
+  formattedName: text("formatted_name" as string).notNull(),
+  givenName: text("given_name" as string),
+  familyName: text("family_name" as string),
+  serializedEmails: text("serialized_emails" as string).notNull(),
+  serializedAttributes: text("serialized_attributes" as string),
+  externalId: text("external_id" as string),
+  externalIdKey: text("external_id_key" as string).unique(),
+  active: integer("active" as string, { mode: "boolean" }).notNull(),
+  orderKey: text("order_key" as string)
+    .notNull()
+    .unique(),
+  createdAt: integer("created_at" as string, {
+    mode: "timestamp_ms",
+  }).notNull(),
+  updatedAt: integer("updated_at" as string, {
+    mode: "timestamp_ms",
+  }).notNull(),
+});
+
+export const scimProjectionGrant = sqliteTable(
+  "scimProjectionGrant" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    connectionId: text("connection_id" as string).notNull(),
+    provisioningDomainId: text("provisioning_domain_id" as string).notNull(),
+    scimUserId: text("scim_user_id" as string)
+      .notNull()
+      .references(() => scimUser.id, { onDelete: "cascade" }),
+    userId: text("user_id" as string)
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    sourceKind: text("source_kind" as string).notNull(),
+    sourceId: text("source_id" as string).notNull(),
+    sourceValue: text("source_value" as string),
+    role: text("role" as string).notNull(),
+    grantKey: text("grant_key" as string)
+      .notNull()
+      .unique(),
+    createdAt: integer("created_at" as string, {
+      mode: "timestamp_ms",
+    }).notNull(),
+    updatedAt: integer("updated_at" as string, {
+      mode: "timestamp_ms",
+    }).notNull(),
+  }
+);
+
+export const scimGroup = sqliteTable("scimGroup" as string, {
+  id: text("id" as string).primaryKey(),
+  connectionId: text("connection_id" as string).notNull(),
+  provisioningDomainId: text("provisioning_domain_id" as string).notNull(),
+  revision: integer("revision" as string).notNull(),
+  displayName: text("display_name" as string).notNull(),
+  displayNameKey: text("display_name_key" as string)
+    .notNull()
+    .unique(),
+  externalId: text("external_id" as string),
+  externalIdKey: text("external_id_key" as string).unique(),
+  orderKey: text("order_key" as string)
+    .notNull()
+    .unique(),
+  createdAt: integer("created_at" as string, {
+    mode: "timestamp_ms",
+  }).notNull(),
+  updatedAt: integer("updated_at" as string, {
+    mode: "timestamp_ms",
+  }).notNull(),
+});
+
+export const scimGroupMember = sqliteTable("scimGroupMember" as string, {
+  id: text("id" as string).primaryKey(),
+  connectionId: text("connection_id" as string).notNull(),
+  groupId: text("group_id" as string)
+    .notNull()
+    .references(() => scimGroup.id, { onDelete: "cascade" }),
+  scimUserId: text("scim_user_id" as string)
+    .notNull()
+    .references(() => scimUser.id, { onDelete: "cascade" }),
+  membershipKey: text("membership_key" as string)
+    .notNull()
+    .unique(),
+  createdAt: integer("created_at" as string, {
+    mode: "timestamp_ms",
+  }).notNull(),
+});

@@ -84,6 +84,7 @@ export interface AppEnv {
   VORTEX_BILLING_METER_ID?: string;
   VORTEX_BILLING_PRICE_ID?: string;
   BILLING_WEBHOOK_SECRET?: string;
+  SCIM_CREDENTIAL_SECRET?: string;
   BILLING_UPGRADE_URL?: string;
   // Cloudflare Queue for async webhook processing.
   WEBHOOK_QUEUE?: Queue;

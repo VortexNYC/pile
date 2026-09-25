@@ -4054,6 +4054,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdScimConnections",
+    "description": "List scim connections (GET /workspaces/{organizationId}/scim/connections) Path params (top-level, required): organizationId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/scim/connections",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdSlack",
     "description": "List slack (GET /workspaces/{organizationId}/slack) Path params (top-level, required): organizationId.",
     "method": "GET",
@@ -11957,6 +11974,47 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdScimConnections",
+    "description": "Create scim connection (POST /workspaces/{organizationId}/scim/connections) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: scopes, expiresInDays.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/scim/connections",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "scopes": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "scim.users.read",
+                  "scim.users.write",
+                  "scim.groups.read",
+                  "scim.groups.write"
+                ]
+              },
+              "minItems": 1
+            },
+            "expiresInDays": {
+              "type": "integer",
+              "minimum": 0,
+              "exclusiveMinimum": true,
+              "maximum": 365
+            }
+          }
+        }
+      },
+      "required": [
         "organizationId"
       ]
     }

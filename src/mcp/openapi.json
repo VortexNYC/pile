@@ -714,6 +714,147 @@
         "summary": "Create workspace onboard"
       }
     },
+    "/workspaces/{organizationId}/scim/connections": {
+      "post": {
+        "tags": [
+          "scim"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "scopes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "scim.users.read",
+                        "scim.users.write",
+                        "scim.groups.read",
+                        "scim.groups.write"
+                      ]
+                    },
+                    "minItems": 1
+                  },
+                  "expiresInDays": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 365
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "SCIM connection created — the bearer token is returned once and is not recoverable later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "connectionId": {
+                      "type": "string"
+                    },
+                    "provisioningDomainId": {
+                      "type": "string"
+                    },
+                    "token": {
+                      "type": "string"
+                    },
+                    "baseUrl": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "connectionId",
+                    "provisioningDomainId",
+                    "token",
+                    "baseUrl"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Requires owner or admin role in the workspace"
+          }
+        },
+        "summary": "Create scim connection"
+      },
+      "get": {
+        "tags": [
+          "scim"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SCIM connections for the workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "connections": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "connectionId": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "connectionId",
+                          "status",
+                          "createdAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "connections"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Requires owner or admin role in the workspace"
+          }
+        },
+        "summary": "List scim connections"
+      }
+    },
     "/workspaces/{organizationId}/tokens": {
       "get": {
         "tags": [

@@ -110,6 +110,39 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "scim connections list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/scim/connections",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "scim connections create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/scim/connections",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "scopes",
+        flag: "scopes",
+      },
+      {
+        name: "expiresInDays",
+        flag: "expires-in-days",
+      },
+    ],
+  },
   "tokens list": {
     method: "GET",
     path: "/workspaces/{organizationId}/tokens",

@@ -680,6 +680,13 @@
       "when": 1790351707691,
       "tag": "0097_tough_excalibur",
       "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "6",
+      "when": 1790353974932,
+      "tag": "0098_even_absorbing_man",
+      "breakpoints": true
     }
   ]
 }

@@ -337,6 +337,98 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/scim/connections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List scim connections */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description SCIM connections for the workspace */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            connections: {
+                                connectionId: string;
+                                status: string;
+                                createdAt: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Requires owner or admin role in the workspace */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        /** Create scim connection */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        scopes?: ("scim.users.read" | "scim.users.write" | "scim.groups.read" | "scim.groups.write")[];
+                        expiresInDays?: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description SCIM connection created — the bearer token is returned once and is not recoverable later. */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            connectionId: string;
+                            provisioningDomainId: string;
+                            token: string;
+                            baseUrl: string;
+                        };
+                    };
+                };
+                /** @description Requires owner or admin role in the workspace */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/tokens": {
         parameters: {
             query?: never;

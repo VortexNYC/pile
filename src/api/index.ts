@@ -67,6 +67,7 @@ import { registerReactionRoutes } from "./reactions.js";
 import { registerRealtimeRoutes } from "./realtime.js";
 import { registerReleaseRoutes } from "./releases.js";
 import { registerSavedViewRoutes } from "./saved-views.js";
+import { registerSCIMRoutes } from "./scim.js";
 import { registerSearchRoutes } from "./search.js";
 import {
   handleSlackEvents,
@@ -164,6 +165,7 @@ app.use("/workspaces/:organizationId/*", async (c, next) => {
   await workspaceAuthMiddleware(c, next);
 });
 registerWorkspaceRoutes(app);
+registerSCIMRoutes(app);
 registerTokenRoutes(app);
 registerClipperRoutes(app);
 registerOAuthClientRoutes(app);

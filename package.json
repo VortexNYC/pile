@@ -50,6 +50,7 @@
   },
   "dependencies": {
     "@better-auth/api-key": "1.7.2",
+    "@better-auth/scim": "1.7.6",
     "@better-auth/sso": "1.7.6",
     "@chat-adapter/slack": "^4.40.0",
     "@cloudflare/sandbox": "0.12.9",
