@@ -3,7 +3,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { eq } from "drizzle-orm";
 
 import { createD1 } from "../global/db.js";
-import { billingAccounts } from "../global/schema.js";
+import { billingAccounts, webhookDeliveries } from "../global/schema.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 
@@ -93,7 +93,7 @@ export function registerBillingWebhookRoutes(app: OpenAPIHono<AppContext>) {
         message: "Billing webhooks not configured",
       });
     }
-    const raw = new Uint8Array(await c.req.raw.arrayBuffer());
+    const raw = new TextEncoder().encode(await c.req.text());
     const header = c.req.header("Vortex-Signature") ?? "";
     if (!(await verifySignature(secret, header, raw))) {
       throw new VortexError({
@@ -105,10 +105,29 @@ export function registerBillingWebhookRoutes(app: OpenAPIHono<AppContext>) {
     const event = webhookEventSchema.parse(
       JSON.parse(new TextDecoder().decode(raw))
     );
+    const db = createD1(c.env.D1);
+
+    // Dedup on Vortex-Event-Id — every delivery carries it and retries share it.
+    const eventId = c.req.header("Vortex-Event-Id");
+    if (eventId) {
+      const dup = await db
+        .insert(webhookDeliveries)
+        .values({
+          deliveryId: `vortex:${eventId}`,
+          source: "vortex-billing",
+          event: event.type,
+          status: "completed",
+        })
+        .onConflictDoNothing({ target: webhookDeliveries.deliveryId })
+        .returning({ id: webhookDeliveries.deliveryId });
+      if (dup.length === 0) {
+        return c.json({ ok: true }, 200);
+      }
+    }
+
     const organizationId = event.data.externalCustomerRef;
     if (!organizationId) return c.json({ ok: true }, 200);
 
-    const db = createD1(c.env.D1);
     const ts = new Date().toISOString();
     const grant =
       event.type.startsWith("entitlement.granted") ||

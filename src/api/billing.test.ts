@@ -250,14 +250,30 @@ describe("billing webhook", () => {
     });
     expect(bad.status).toBe(401);
 
+    const headers = {
+      "Vortex-Signature": await signWebhook(env.BILLING_WEBHOOK_SECRET, body),
+      "Vortex-Event-Id": "evt_test_dedup_1",
+    };
     const ok = await fetch("/billing/webhook", {
       method: "POST",
-      headers: {
-        "Vortex-Signature": await signWebhook(env.BILLING_WEBHOOK_SECRET, body),
-      },
+      headers,
       body,
     });
     expect(ok.status).toBe(200);
+
+    // replayed delivery with same event id must not reprocess
+    const dup = await fetch("/billing/webhook", {
+      method: "POST",
+      headers,
+      body,
+    });
+    expect(dup.status).toBe(200);
+    const db2 = createD1(env.D1);
+    const { webhookDeliveries } = await import("../global/schema.js");
+    const rows = await db2.select().from(webhookDeliveries).all();
+    expect(
+      rows.filter((r) => r.deliveryId === "vortex:evt_test_dedup_1")
+    ).toHaveLength(1);
 
     const res = await fetch(
       `/workspaces/${seeded.organizationId}/billing`,

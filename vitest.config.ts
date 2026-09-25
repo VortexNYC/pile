@@ -26,6 +26,8 @@ export default defineConfig({
           SLACK_REDIRECT_URI: "http://localhost/slack/oauth",
           INTERCOM_CLIENT_SECRET: "test-intercom-client-secret",
           FEEDBACK_CHANNEL_ID: "test-feedback-channel",
+          BILLING_WEBHOOK_SECRET: "test-billing-webhook-secret-do-not-use",
+          FREE_USE_CAP: "0",
         },
       },
     }),
