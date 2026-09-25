@@ -1537,6 +1537,40 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getSupportWidgetKeyBoard",
+    "description": "List support widget board (GET /support/widget/{key}/board) Path params (top-level, required): key.",
+    "method": "GET",
+    "path": "/support/widget/{key}/board",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "key"
+      ]
+    }
+  },
+  {
+    "name": "getSupportWidgetKeyChangelog",
+    "description": "List support widget changelog (GET /support/widget/{key}/changelog) Path params (top-level, required): key.",
+    "method": "GET",
+    "path": "/support/widget/{key}/changelog",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "key"
+      ]
+    }
+  },
+  {
     "name": "getSupportWidgetKeyMessages",
     "description": "List support widget messages (GET /support/widget/{key}/messages) Path params (top-level, required): key. Query params (top-level, optional): after.",
     "method": "GET",
@@ -8334,6 +8368,40 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "body",
         "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postSupportWidgetKeyIdeas",
+    "description": "Create support widget idea (POST /support/widget/{key}/ideas) Path params (top-level, required): key. Request body goes in the \"body\" object; fields: title*, text (* = required).",
+    "method": "POST",
+    "path": "/support/widget/{key}/ideas",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 200
+            },
+            "text": {
+              "type": "string",
+              "maxLength": 5000
+            }
+          },
+          "required": [
+            "title"
+          ]
+        }
+      },
+      "required": [
+        "key"
       ]
     }
   },

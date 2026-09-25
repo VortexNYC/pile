@@ -40,6 +40,22 @@ type SessionResponse = {
     brandColor: string | null;
     requireEmail: boolean;
   };
+  customer: { email: string; fullName: string | null } | null;
+};
+
+type BoardItem = {
+  id: string;
+  title: string;
+  status: string;
+  voteCount: number;
+  voted: boolean;
+};
+
+type ChangelogEntry = {
+  id: string;
+  title: string;
+  body: string;
+  publishedAt: string;
 };
 
 type WidgetMessage = {
@@ -129,6 +145,32 @@ function boot(settings: WidgetSettings): void {
       .email-gate { padding: 10px; border-top: 1px solid ${dark ? "#2a2b31" : "#e5e5ea"}; display: none; gap: 8px; }
       .email-gate input { flex: 1; border: 1px solid ${dark ? "#3a3b42" : "#d5d5db"}; border-radius: 8px; padding: 8px 10px;
         font-size: 13px; background: ${dark ? "#1e1f24" : "#fff"}; color: inherit; }
+      .tabs { display: flex; border-bottom: 1px solid ${dark ? "#2a2b31" : "#e5e5ea"}; }
+      .tab { flex: 1; padding: 9px 0; text-align: center; font-size: 12px; font-weight: 600; cursor: pointer;
+        background: none; border: none; color: ${dark ? "#9a9aa2" : "#666"}; border-bottom: 2px solid transparent; }
+      .tab.active { color: inherit; border-bottom-color: ${brand}; }
+      .view { flex: 1; overflow-y: auto; display: none; flex-direction: column; }
+      .view.active { display: flex; }
+      .idea { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid ${dark ? "#2a2b31" : "#eeeef2"}; }
+      .vote { display: flex; flex-direction: column; align-items: center; min-width: 40px; padding: 5px 0;
+        border: 1px solid ${dark ? "#3a3b42" : "#d5d5db"}; border-radius: 8px; background: none; cursor: pointer;
+        color: inherit; font-size: 11px; line-height: 1.2; }
+      .vote .arrow { font-size: 10px; }
+      .vote.voted { border-color: ${brand}; color: ${brand}; }
+      .idea-title { font-size: 13px; font-weight: 500; }
+      .idea-status { font-size: 11px; color: ${dark ? "#9a9aa2" : "#888"}; text-transform: capitalize; }
+      .empty { padding: 24px; text-align: center; font-size: 13px; color: ${dark ? "#9a9aa2" : "#888"}; }
+      .idea-form { display: none; flex-direction: column; gap: 8px; padding: 12px; }
+      .idea-form input, .idea-form textarea { border: 1px solid ${dark ? "#3a3b42" : "#d5d5db"}; border-radius: 8px;
+        padding: 8px 10px; font-size: 13px; font-family: inherit; background: ${dark ? "#1e1f24" : "#fff"}; color: inherit; }
+      .idea-form textarea { min-height: 70px; resize: vertical; }
+      .idea-form button, .new-idea-btn { background: ${brand}; color: #fff; border: none; border-radius: 8px;
+        padding: 8px 14px; font-size: 13px; cursor: pointer; }
+      .new-idea-btn { margin: 10px 12px; }
+      .news-item { padding: 12px; border-bottom: 1px solid ${dark ? "#2a2b31" : "#eeeef2"}; }
+      .news-title { font-size: 13px; font-weight: 600; }
+      .news-date { font-size: 11px; color: ${dark ? "#9a9aa2" : "#888"}; margin: 2px 0 6px; }
+      .news-body { font-size: 13px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
     </style>
     <button class="launcher" aria-label="Chat with us">
       <svg viewBox="0 0 24 24"><path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z"/></svg>
@@ -136,15 +178,33 @@ function boot(settings: WidgetSettings): void {
     </button>
     <div class="panel">
       <div class="header">Chat with us<small></small></div>
-      <div class="msgs"></div>
-      <div class="email-gate">
-        <input class="email" type="email" placeholder="Your email" />
-        <button class="save-email">Start</button>
+      <div class="tabs">
+        <button class="tab active" data-view="chat">Chat</button>
+        <button class="tab" data-view="ideas">Ideas</button>
+        <button class="tab" data-view="news">News</button>
       </div>
-      <div class="composer">
-        <input class="text" type="text" placeholder="Write a message…" />
-        <button class="send">Send</button>
+      <div class="view active" data-view="chat">
+        <div class="msgs"></div>
+        <div class="email-gate">
+          <input class="email" type="email" placeholder="Your email" />
+          <button class="save-email">Start</button>
+        </div>
+        <div class="composer">
+          <input class="text" type="text" placeholder="Write a message…" />
+          <button class="send">Send</button>
+        </div>
       </div>
+      <div class="view" data-view="ideas">
+        <div class="ideas-list"></div>
+        <button class="new-idea-btn">Suggest an idea</button>
+        <div class="idea-form">
+          <input class="idea-title-in" type="text" placeholder="Title" maxlength="200" />
+          <textarea class="idea-text-in" placeholder="Tell us more (optional)" maxlength="5000"></textarea>
+          <input class="idea-email-in" type="email" placeholder="Your email" style="display:none" />
+          <button class="idea-submit">Submit</button>
+        </div>
+      </div>
+      <div class="view" data-view="news"><div class="news-list"></div></div>
     </div>`;
 
   const launcher = root.querySelector<HTMLButtonElement>(".launcher")!;
@@ -157,6 +217,18 @@ function boot(settings: WidgetSettings): void {
   const emailInput = root.querySelector<HTMLInputElement>(".email")!;
   const saveEmailBtn = root.querySelector<HTMLButtonElement>(".save-email")!;
   const headerSub = root.querySelector<HTMLElement>(".header small")!;
+  const ideasList = root.querySelector<HTMLDivElement>(".ideas-list")!;
+  const newsList = root.querySelector<HTMLDivElement>(".news-list")!;
+  const newIdeaBtn = root.querySelector<HTMLButtonElement>(".new-idea-btn")!;
+  const ideaForm = root.querySelector<HTMLDivElement>(".idea-form")!;
+  const ideaTitleIn = root.querySelector<HTMLInputElement>(".idea-title-in")!;
+  const ideaTextIn = root.querySelector<HTMLTextAreaElement>(".idea-text-in")!;
+  const ideaEmailIn = root.querySelector<HTMLInputElement>(".idea-email-in")!;
+  const ideaSubmit = root.querySelector<HTMLButtonElement>(".idea-submit")!;
+
+  let identified = false;
+  let ideasLoaded = false;
+  let newsLoaded = false;
 
   if (settings.hideLauncher) launcher.style.display = "none";
 
@@ -203,6 +275,8 @@ function boot(settings: WidgetSettings): void {
     sessionToken = data.sessionToken;
     localStorage.setItem(storageKey, sessionToken);
     requireEmail = data.config.requireEmail;
+    identified = data.customer !== null;
+    ideaEmailIn.style.display = identified ? "none" : "block";
     if (data.config.greeting && msgs.childElementCount === 0) {
       const g = document.createElement("div");
       g.className = "greeting";
@@ -265,6 +339,159 @@ function boot(settings: WidgetSettings): void {
       textInput.value = text;
     }
   }
+
+  function switchTab(view: string): void {
+    for (const t of root.querySelectorAll<HTMLElement>(".tab")) {
+      t.classList.toggle("active", t.dataset.view === view);
+    }
+    for (const v of root.querySelectorAll<HTMLElement>(".view")) {
+      v.classList.toggle("active", v.dataset.view === view);
+    }
+    if (view === "ideas" && !ideasLoaded) void loadIdeas();
+    if (view === "news" && !newsLoaded) void loadNews();
+  }
+
+  async function ensureIdentity(candidate?: string): Promise<boolean> {
+    if (identified) return true;
+    const value = (candidate ?? email ?? "").trim();
+    if (!value.includes("@")) return false;
+    email = value;
+    // Re-call session with the stored token + email — the server upgrades the
+    // anonymous session to an identified customer.
+    await startSession();
+    return identified;
+  }
+
+  async function loadIdeas(): Promise<void> {
+    ideasLoaded = true;
+    try {
+      const data = (await api(`/support/widget/${key}/board`)) as {
+        items: BoardItem[];
+      };
+      renderIdeas(data.items);
+    } catch {
+      ideasList.innerHTML = `<div class="empty">Couldn't load ideas</div>`;
+    }
+  }
+
+  function renderIdeas(items: BoardItem[]): void {
+    ideasList.innerHTML = "";
+    if (items.length === 0) {
+      ideasList.innerHTML = `<div class="empty">No ideas yet — be the first</div>`;
+      return;
+    }
+    for (const item of items) {
+      const row = document.createElement("div");
+      row.className = "idea";
+      const vote = document.createElement("button");
+      vote.className = `vote${item.voted ? " voted" : ""}`;
+      vote.innerHTML = `<span class="arrow">▲</span><span>${item.voteCount}</span>`;
+      vote.addEventListener("click", () => void toggleVote(item, vote));
+      const meta = document.createElement("div");
+      meta.innerHTML = `<div class="idea-title"></div><div class="idea-status">${item.status.replace("_", " ")}</div>`;
+      meta.querySelector(".idea-title")!.textContent = item.title;
+      row.append(vote, meta);
+      ideasList.appendChild(row);
+    }
+  }
+
+  async function toggleVote(
+    item: BoardItem,
+    btn: HTMLButtonElement
+  ): Promise<void> {
+    if (!(await ensureIdentity())) {
+      switchTab("ideas");
+      ideaForm.style.display = "flex";
+      ideaEmailIn.style.display = "block";
+      ideaEmailIn.placeholder = "Email required to vote";
+      ideaEmailIn.focus();
+      return;
+    }
+    try {
+      if (item.voted) {
+        const res = (await api(`/support/widget/${key}/votes/${item.id}`, {
+          method: "DELETE",
+        })) as { voteCount: number };
+        item.voted = false;
+        item.voteCount = res.voteCount;
+      } else {
+        const res = (await api(`/support/widget/${key}/votes`, {
+          method: "POST",
+          body: JSON.stringify({ ticketId: item.id }),
+        })) as { voteCount: number };
+        item.voted = true;
+        item.voteCount = res.voteCount;
+      }
+      btn.classList.toggle("voted", item.voted);
+      btn.querySelector("span:last-child")!.textContent = String(
+        item.voteCount
+      );
+    } catch {
+      // transient — leave the toggle as-is
+    }
+  }
+
+  async function loadNews(): Promise<void> {
+    newsLoaded = true;
+    try {
+      const data = (await api(`/support/widget/${key}/changelog`)) as {
+        entries: ChangelogEntry[];
+      };
+      newsList.innerHTML = "";
+      if (data.entries.length === 0) {
+        newsList.innerHTML = `<div class="empty">Nothing shipped yet</div>`;
+        return;
+      }
+      for (const e of data.entries) {
+        const div = document.createElement("div");
+        div.className = "news-item";
+        const date = new Date(e.publishedAt).toLocaleDateString();
+        div.innerHTML = `<div class="news-title"></div><div class="news-date">${date}</div><div class="news-body"></div>`;
+        div.querySelector(".news-title")!.textContent = e.title;
+        div.querySelector(".news-body")!.textContent = e.body;
+        newsList.appendChild(div);
+      }
+    } catch {
+      newsList.innerHTML = `<div class="empty">Couldn't load updates</div>`;
+    }
+  }
+
+  async function submitIdea(): Promise<void> {
+    const title = ideaTitleIn.value.trim();
+    if (title.length < 3) return;
+    if (!(await ensureIdentity(ideaEmailIn.value))) {
+      ideaEmailIn.style.display = "block";
+      ideaEmailIn.focus();
+      return;
+    }
+    try {
+      await api(`/support/widget/${key}/ideas`, {
+        method: "POST",
+        body: JSON.stringify({
+          title,
+          text: ideaTextIn.value.trim() || undefined,
+        }),
+      });
+      ideaTitleIn.value = "";
+      ideaTextIn.value = "";
+      ideaForm.style.display = "none";
+      newIdeaBtn.style.display = "block";
+      ideasLoaded = false;
+      await loadIdeas();
+    } catch {
+      // transient — form stays populated for retry
+    }
+  }
+
+  for (const t of root.querySelectorAll<HTMLButtonElement>(".tab")) {
+    t.addEventListener("click", () => switchTab(t.dataset.view!));
+  }
+  newIdeaBtn.addEventListener("click", () => {
+    newIdeaBtn.style.display = "none";
+    ideaForm.style.display = "flex";
+    ideaTitleIn.focus();
+  });
+  ideaSubmit.addEventListener("click", () => void submitIdea());
 
   function setOpen(next: boolean): void {
     open = next;

@@ -3560,6 +3560,51 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "support widget board list": {
+    method: "GET",
+    path: "/support/widget/{key}/board",
+    params: [
+      {
+        name: "key",
+        flag: "key",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support widget changelog list": {
+    method: "GET",
+    path: "/support/widget/{key}/changelog",
+    params: [
+      {
+        name: "key",
+        flag: "key",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support widget ideas create": {
+    method: "POST",
+    path: "/support/widget/{key}/ideas",
+    params: [
+      {
+        name: "key",
+        flag: "key",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "title",
+        flag: "title",
+      },
+      {
+        name: "text",
+        flag: "text",
+      },
+    ],
+  },
   "support channels list": {
     method: "GET",
     path: "/workspaces/{organizationId}/support-channels",

@@ -468,4 +468,100 @@ describe("support widget", () => {
       .parse(await unvote.json());
     expect(unvoteBody).toEqual({ removed: true, voteCount: 0 });
   });
+
+  it("serves board + changelog to the widget and upgrades session identity", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const key = await createKey(organizationId, token);
+    const authHeaders = {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    };
+
+    // Anonymous session — no customer.
+    const { data: anon } = await startSession(key.key);
+    const anonHeaders = {
+      "content-type": "application/json",
+      "x-pile-widget-session": anon!.sessionToken,
+    };
+
+    // Idea submit requires identity → 401 anonymous.
+    const denied = await widgetFetch(`/support/widget/${key.key}/ideas`, {
+      method: "POST",
+      headers: anonHeaders,
+      body: JSON.stringify({ title: "Dark mode please" }),
+    });
+    expect(denied.status).toBe(401);
+
+    // Upgrade the same session by supplying an email on resume.
+    const { data: upgraded } = await startSession(key.key, {
+      sessionToken: anon!.sessionToken,
+      email: "upgraded@example.com",
+    });
+    expect(upgraded!.sessionToken).toBe(anon!.sessionToken);
+
+    // Now the same session can submit an idea → public ticket + auto-vote.
+    const idea = await widgetFetch(`/support/widget/${key.key}/ideas`, {
+      method: "POST",
+      headers: anonHeaders,
+      body: JSON.stringify({
+        title: "Dark mode please",
+        text: "My eyes hurt",
+      }),
+    });
+    expect(idea.status).toBe(201);
+    const ideaBody = z
+      .object({ ticketId: z.string(), voteCount: z.number() })
+      .parse(await idea.json());
+    expect(ideaBody.voteCount).toBe(1);
+
+    // Widget board shows the idea flagged voted=true for this session.
+    const board = await widgetFetch(`/support/widget/${key.key}/board`, {
+      headers: anonHeaders,
+    });
+    const boardBody = z
+      .object({
+        items: z.array(
+          z.object({
+            id: z.string(),
+            voted: z.boolean(),
+            voteCount: z.number(),
+          })
+        ),
+      })
+      .parse(await board.json());
+    const item = boardBody.items.find((i) => i.id === ideaBody.ticketId);
+    expect(item).toMatchObject({ voted: true, voteCount: 1 });
+
+    // And the same ticket is on the anonymous public board.
+    const pub = await widgetFetch(`/workspaces/${organizationId}/board`);
+    const pubBody = z
+      .object({
+        columns: z.record(z.string(), z.array(z.object({ id: z.string() }))),
+      })
+      .parse(await pub.json());
+    expect(
+      Object.values(pubBody.columns)
+        .flat()
+        .some((i) => i.id === ideaBody.ticketId)
+    ).toBe(true);
+
+    // Widget changelog — published entries only.
+    const entry = await widgetFetch(`/workspaces/${organizationId}/changelog`, {
+      method: "POST",
+      headers: authHeaders,
+      body: JSON.stringify({ title: "v1 shipped", body: "stuff" }),
+    });
+    const { entry: e } = z
+      .object({ entry: z.object({ id: z.string() }) })
+      .parse(await entry.json());
+    await widgetFetch(
+      `/workspaces/${organizationId}/changelog/${e.id}/publish`,
+      { method: "POST", headers: authHeaders }
+    );
+    const changelog = await widgetFetch(`/support/widget/${key.key}/changelog`);
+    const changelogBody = z
+      .object({ entries: z.array(z.object({ title: z.string() })) })
+      .parse(await changelog.json());
+    expect(changelogBody.entries.map((en) => en.title)).toContain("v1 shipped");
+  });
 });

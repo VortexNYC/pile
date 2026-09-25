@@ -1,8 +1,11 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import type { OpenAPIHono } from "@hono/zod-openapi";
+import { and, eq, inArray } from "drizzle-orm";
 
 import chatWidgetBundle from "../assets/chat.iife.js";
+import { listChangelogEntries } from "../global/changelog.js";
 import { createD1, type D1Client } from "../global/db.js";
+import { supportTicketVotes } from "../global/schema.js";
 import {
   createCustomer,
   findCustomerByExternalId,
@@ -14,9 +17,11 @@ import {
   addTicketVote,
   createTicket,
   getTicketById,
+  listPublicBoard,
   listTicketEvents,
   listTicketVotes,
   removeTicketVote,
+  updateTicket,
 } from "../global/support-tickets.js";
 import {
   createWidgetKey,
@@ -293,6 +298,100 @@ const widgetUnvoteRoute = createRoute({
   },
 });
 
+const widgetBoardItemSchema = z.object({
+  id: z.string(),
+  number: z.number(),
+  title: z.string(),
+  status: z.string(),
+  priority: z.string(),
+  voteCount: z.number(),
+  voted: z.boolean(),
+  createdAt: z.string(),
+});
+
+const widgetBoardRoute = createRoute({
+  method: "get",
+  path: "/support/widget/{key}/board",
+  tags: ["support-widget"],
+  middleware: [publicRateLimit({ bucket: "widget-poll", max: 120 })],
+  request: {
+    params: z.object({ key: z.string() }),
+    headers: z.object({ "x-pile-widget-session": z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Public board items with the session customer's vote flags",
+      content: {
+        "application/json": {
+          schema: z.object({
+            items: z.array(widgetBoardItemSchema),
+            nextCursor: z.string().nullable(),
+          }),
+        },
+      },
+    },
+  },
+});
+
+const widgetChangelogRoute = createRoute({
+  method: "get",
+  path: "/support/widget/{key}/changelog",
+  tags: ["support-widget"],
+  middleware: [publicRateLimit({ bucket: "widget-poll", max: 120 })],
+  request: {
+    params: z.object({ key: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Published changelog entries for the workspace",
+      content: {
+        "application/json": {
+          schema: z.object({
+            entries: z.array(
+              z.object({
+                id: z.string(),
+                title: z.string(),
+                body: z.string(),
+                labels: z.array(z.string()),
+                publishedAt: z.string(),
+              })
+            ),
+          }),
+        },
+      },
+    },
+  },
+});
+
+const widgetIdeaBodySchema = z.object({
+  title: z.string().min(3).max(200),
+  text: z.string().max(5000).optional(),
+});
+
+const widgetIdeaRoute = createRoute({
+  method: "post",
+  path: "/support/widget/{key}/ideas",
+  tags: ["support-widget"],
+  middleware: [publicRateLimit({ bucket: "widget-idea", max: 10 })],
+  request: {
+    params: z.object({ key: z.string() }),
+    headers: z.object({ "x-pile-widget-session": z.string() }),
+    body: {
+      content: { "application/json": { schema: widgetIdeaBodySchema } },
+    },
+  },
+  responses: {
+    201: {
+      description: "Public idea ticket created and auto-voted by the author",
+      content: {
+        "application/json": {
+          schema: z.object({ ticketId: z.string(), voteCount: z.number() }),
+        },
+      },
+    },
+  },
+});
+
 async function verifyTurnstile(
   secretKey: string,
   token: string,
@@ -497,8 +596,42 @@ export function registerSupportWidgetRoutes(app: OpenAPIHono<AppContext>) {
 
     // Resume: a stored session token is sufficient — no re-verification.
     if (body.sessionToken) {
-      const session = await findWidgetSessionByToken(db, body.sessionToken);
+      let session = await findWidgetSessionByToken(db, body.sessionToken);
       if (session && session.widgetKeyId === widgetKey.id) {
+        // Late identity upgrade — an anonymous session that later supplies
+        // email/externalId (+identifierHash) adopts that customer so votes
+        // and ideas attribute correctly.
+        if (!session.customerId && (body.email ?? body.externalId)) {
+          let upgradedVerified = session.identityVerified;
+          if (body.identifierHash) {
+            const identifier = body.externalId ?? body.email;
+            if (identifier) {
+              upgradedVerified = await verifyWidgetIdentityHash(
+                widgetKey,
+                identifier,
+                body.identifierHash
+              );
+            }
+          }
+          const resolved = await resolveWidgetCustomer(db, widgetKey, {
+            externalId: body.externalId,
+            email: body.email,
+            name: body.name,
+            identityVerified: upgradedVerified,
+          });
+          if (resolved) {
+            await updateWidgetSession(db, session.id, {
+              customerId: resolved.id,
+              externalId: body.externalId ?? session.externalId,
+              identityVerified: upgradedVerified,
+            });
+            session = {
+              ...session,
+              customerId: resolved.id,
+              identityVerified: upgradedVerified,
+            };
+          }
+        }
         const customer = session.customerId
           ? await getCustomerById(
               db,
@@ -754,6 +887,134 @@ export function registerSupportWidgetRoutes(app: OpenAPIHono<AppContext>) {
       ticket.id
     );
     return c.json({ removed, voteCount: votes.length }, 200);
+  });
+
+  // Board/changelog/ideas — the Ideas tab surfaces. Board items carry a
+  // per-session `voted` flag so the widget renders the toggle correctly.
+  app.openapi(widgetBoardRoute, async (c) => {
+    const { key } = c.req.valid("param");
+    const { "x-pile-widget-session": sessionToken } = c.req.valid("header");
+    const db = createD1(c.env.D1);
+    const widgetKey = await requireWidgetKey(db, key, c.req.header("origin"));
+    const session = await requireWidgetSession(db, widgetKey, sessionToken);
+
+    const { items, nextCursor } = await listPublicBoard(
+      db,
+      widgetKey.organizationId,
+      { limit: 100 }
+    );
+
+    let votedIds = new Set<string>();
+    const customer = session.customerId
+      ? await getCustomerById(db, widgetKey.organizationId, session.customerId)
+      : null;
+    if (customer && items.length > 0) {
+      const rows = await db
+        .select({ ticketId: supportTicketVotes.ticketId })
+        .from(supportTicketVotes)
+        .where(
+          and(
+            eq(supportTicketVotes.organizationId, widgetKey.organizationId),
+            eq(supportTicketVotes.voterEmail, customer.email),
+            inArray(
+              supportTicketVotes.ticketId,
+              items.map((i) => i.id)
+            )
+          )
+        );
+      votedIds = new Set(rows.map((r) => r.ticketId));
+    }
+
+    const flagged = items.map((i) =>
+      Object.assign(i, { voted: votedIds.has(i.id) })
+    );
+    return c.json({ items: flagged, nextCursor }, 200);
+  });
+
+  app.openapi(widgetChangelogRoute, async (c) => {
+    const { key } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const widgetKey = await requireWidgetKey(db, key, c.req.header("origin"));
+    const { entries } = await listChangelogEntries(
+      db,
+      widgetKey.organizationId,
+      { publishedOnly: true, limit: 50 }
+    );
+    return c.json(
+      {
+        entries: entries.map((e) => ({
+          id: e.id,
+          title: e.title,
+          body: e.body,
+          labels: JSON.parse(e.labels) as string[],
+          publishedAt: e.publishedAt,
+        })),
+      },
+      200
+    );
+  });
+
+  app.openapi(widgetIdeaRoute, async (c) => {
+    const { key } = c.req.valid("param");
+    const { "x-pile-widget-session": sessionToken } = c.req.valid("header");
+    const body = c.req.valid("json");
+    const db = createD1(c.env.D1);
+    const widgetKey = await requireWidgetKey(db, key, c.req.header("origin"));
+    const session = await requireWidgetSession(db, widgetKey, sessionToken);
+    const customer = await requireSessionCustomer(db, widgetKey, session);
+
+    const ticket = await createTicket(
+      db,
+      {
+        organizationId: widgetKey.organizationId,
+        customerId: customer.id,
+        title: body.title,
+        sourceChannel: "chat",
+        externalSource: "chat",
+      },
+      c.env as WorkerEnv
+    );
+    await updateTicket(
+      db,
+      widgetKey.organizationId,
+      ticket.id,
+      { isPublic: true, actorType: "customer", actorId: customer.id },
+      c.env as WorkerEnv
+    );
+    if (body.text) {
+      await addTicketMessage(
+        db,
+        widgetKey.organizationId,
+        ticket.id,
+        {
+          direction: "inbound",
+          textContent: body.text,
+          channel: "chat",
+          customerId: customer.id,
+          actorType: "customer",
+          actorId: customer.id,
+        },
+        c.env as WorkerEnv
+      );
+    }
+    // Authors implicitly vote for their own idea.
+    const { vote } = await addTicketVote(
+      db,
+      widgetKey.organizationId,
+      ticket.id,
+      {
+        voterEmail: customer.email,
+        customerId: customer.id,
+        castByActorType: "customer",
+        castByActorId: customer.id,
+      }
+    );
+    const votes = await listTicketVotes(
+      db,
+      widgetKey.organizationId,
+      ticket.id
+    );
+    return c.json({ ticketId: vote.ticketId, voteCount: votes.length }, 201);
   });
 
   // The widget bundle — the one-tag embed:

@@ -15494,6 +15494,237 @@
         "summary": "Delete support widget vote"
       }
     },
+    "/support/widget/{key}/board": {
+      "get": {
+        "tags": [
+          "support-widget"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "key",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "x-pile-widget-session",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Public board items with the session customer's vote flags",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "number": {
+                            "type": "number"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "priority": {
+                            "type": "string"
+                          },
+                          "voteCount": {
+                            "type": "number"
+                          },
+                          "voted": {
+                            "type": "boolean"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "number",
+                          "title",
+                          "status",
+                          "priority",
+                          "voteCount",
+                          "voted",
+                          "createdAt"
+                        ]
+                      }
+                    },
+                    "nextCursor": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "nextCursor"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List support widget board"
+      }
+    },
+    "/support/widget/{key}/changelog": {
+      "get": {
+        "tags": [
+          "support-widget"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "key",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Published changelog entries for the workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "entries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "body": {
+                            "type": "string"
+                          },
+                          "labels": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "publishedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "title",
+                          "body",
+                          "labels",
+                          "publishedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "entries"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List support widget changelog"
+      }
+    },
+    "/support/widget/{key}/ideas": {
+      "post": {
+        "tags": [
+          "support-widget"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "key",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "x-pile-widget-session",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 200
+                  },
+                  "text": {
+                    "type": "string",
+                    "maxLength": 5000
+                  }
+                },
+                "required": [
+                  "title"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Public idea ticket created and auto-voted by the author",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ticketId": {
+                      "type": "string"
+                    },
+                    "voteCount": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "ticketId",
+                    "voteCount"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create support widget idea"
+      }
+    },
     "/workspaces/{organizationId}/support-channels": {
       "get": {
         "tags": [
