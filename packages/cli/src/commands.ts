@@ -3523,6 +3523,43 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "support widget votes create": {
+    method: "POST",
+    path: "/support/widget/{key}/votes",
+    params: [
+      {
+        name: "key",
+        flag: "key",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "ticketId",
+        flag: "ticket-id",
+      },
+      {
+        name: "priority",
+        flag: "priority",
+      },
+    ],
+  },
+  "support widget votes delete": {
+    method: "DELETE",
+    path: "/support/widget/{key}/votes/{ticketId}",
+    params: [
+      {
+        name: "key",
+        flag: "key",
+      },
+      {
+        name: "ticketId",
+        flag: "ticket-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "support channels list": {
     method: "GET",
     path: "/workspaces/{organizationId}/support-channels",

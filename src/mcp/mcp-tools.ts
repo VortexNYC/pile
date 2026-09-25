@@ -101,6 +101,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteSupportWidgetKeyVotesTicketId",
+    "description": "Delete support widget vote (DELETE /support/widget/{key}/votes/{ticketId}) Path params (top-level, required): key, ticketId.",
+    "method": "DELETE",
+    "path": "/support/widget/{key}/votes/{ticketId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "ticketId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "ticketId"
+      ]
+    }
+  },
+  {
     "name": "deleteUser",
     "description": "Create api auth delete user (POST /api/auth/delete-user) Request body goes in the \"body\" object.",
     "method": "POST",
@@ -8389,6 +8410,43 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string"
             }
           }
+        }
+      },
+      "required": [
+        "key"
+      ]
+    }
+  },
+  {
+    "name": "postSupportWidgetKeyVotes",
+    "description": "Create support widget vote (POST /support/widget/{key}/votes) Path params (top-level, required): key. Request body goes in the \"body\" object; fields: ticketId*, priority (* = required).",
+    "method": "POST",
+    "path": "/support/widget/{key}/votes",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "ticketId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "priority": {
+              "type": "string",
+              "enum": [
+                "nice_to_have",
+                "important",
+                "must_have"
+              ]
+            }
+          },
+          "required": [
+            "ticketId"
+          ]
         }
       },
       "required": [

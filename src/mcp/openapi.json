@@ -15360,6 +15360,140 @@
         "summary": "List support widget messages"
       }
     },
+    "/support/widget/{key}/votes": {
+      "post": {
+        "tags": [
+          "support-widget"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "key",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "x-pile-widget-session",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ticketId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "priority": {
+                    "type": "string",
+                    "enum": [
+                      "nice_to_have",
+                      "important",
+                      "must_have"
+                    ]
+                  }
+                },
+                "required": [
+                  "ticketId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Vote recorded (idempotent per ticket + session customer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "created": {
+                      "type": "boolean"
+                    },
+                    "voteCount": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "created",
+                    "voteCount"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create support widget vote"
+      }
+    },
+    "/support/widget/{key}/votes/{ticketId}": {
+      "delete": {
+        "tags": [
+          "support-widget"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "key",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "ticketId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "x-pile-widget-session",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Vote removed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "removed": {
+                      "type": "boolean"
+                    },
+                    "voteCount": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "removed",
+                    "voteCount"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete support widget vote"
+      }
+    },
     "/workspaces/{organizationId}/support-channels": {
       "get": {
         "tags": [

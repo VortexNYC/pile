@@ -341,4 +341,131 @@ describe("support widget", () => {
     });
     expect(other.status).toBe(200);
   });
+
+  it("lets a session customer vote on public tickets and refuses private ones", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const key = await createKey(organizationId, token);
+    const authHeaders = {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    };
+
+    // Staff create a customer + a public ticket and a private ticket.
+    const customerRes = await widgetFetch(
+      `/workspaces/${organizationId}/support/customers`,
+      {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify({ email: "voter@example.com" }),
+      }
+    );
+    const { customer } = z
+      .object({ customer: z.object({ id: z.string() }) })
+      .parse(await customerRes.json());
+
+    const mkTicket = async (isPublic: boolean) => {
+      const res = await widgetFetch(
+        `/workspaces/${organizationId}/support/tickets`,
+        {
+          method: "POST",
+          headers: authHeaders,
+          body: JSON.stringify({
+            customerId: customer.id,
+            title: `Idea ${crypto.randomUUID().slice(0, 8)}`,
+            sourceChannel: "chat",
+          }),
+        }
+      );
+      const { ticket } = z
+        .object({ ticket: z.object({ id: z.string() }) })
+        .parse(await res.json());
+      await widgetFetch(
+        `/workspaces/${organizationId}/support/tickets/${ticket.id}`,
+        {
+          method: "PATCH",
+          headers: authHeaders,
+          body: JSON.stringify({ isPublic }),
+        }
+      );
+      return ticket.id;
+    };
+    const publicTicketId = await mkTicket(true);
+    const privateTicketId = await mkTicket(false);
+
+    // Session identified by email → votes as that customer.
+    const { data: session } = await startSession(key.key, {
+      email: "voter@example.com",
+    });
+    const sessionHeaders = {
+      "content-type": "application/json",
+      "x-pile-widget-session": session!.sessionToken,
+    };
+
+    const vote = await widgetFetch(`/support/widget/${key.key}/votes`, {
+      method: "POST",
+      headers: sessionHeaders,
+      body: JSON.stringify({ ticketId: publicTicketId, priority: "must_have" }),
+    });
+    expect(vote.status).toBe(200);
+    const voteBody = z
+      .object({ created: z.boolean(), voteCount: z.number() })
+      .parse(await vote.json());
+    expect(voteBody).toEqual({ created: true, voteCount: 1 });
+
+    // Idempotent — a repeat vote updates, doesn't duplicate.
+    const revote = await widgetFetch(`/support/widget/${key.key}/votes`, {
+      method: "POST",
+      headers: sessionHeaders,
+      body: JSON.stringify({ ticketId: publicTicketId }),
+    });
+    const revoteBody = z
+      .object({ created: z.boolean(), voteCount: z.number() })
+      .parse(await revote.json());
+    expect(revoteBody).toEqual({ created: false, voteCount: 1 });
+
+    // The public board reflects the vote.
+    const board = await widgetFetch(`/workspaces/${organizationId}/board`);
+    const boardBody = z
+      .object({
+        columns: z.record(
+          z.string(),
+          z.array(z.object({ id: z.string(), voteCount: z.number() }))
+        ),
+      })
+      .parse(await board.json());
+    const boardItem = Object.values(boardBody.columns)
+      .flat()
+      .find((i) => i.id === publicTicketId);
+    expect(boardItem?.voteCount).toBe(1);
+
+    // Private tickets are invisible to the widget vote path.
+    const privateVote = await widgetFetch(`/support/widget/${key.key}/votes`, {
+      method: "POST",
+      headers: sessionHeaders,
+      body: JSON.stringify({ ticketId: privateTicketId }),
+    });
+    expect(privateVote.status).toBe(404);
+
+    // Anonymous session (no customer) can't vote.
+    const { data: anon } = await startSession(key.key);
+    const anonVote = await widgetFetch(`/support/widget/${key.key}/votes`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-pile-widget-session": anon!.sessionToken,
+      },
+      body: JSON.stringify({ ticketId: publicTicketId }),
+    });
+    expect(anonVote.status).toBe(401);
+
+    // Unvote.
+    const unvote = await widgetFetch(
+      `/support/widget/${key.key}/votes/${publicTicketId}`,
+      { method: "DELETE", headers: sessionHeaders }
+    );
+    const unvoteBody = z
+      .object({ removed: z.boolean(), voteCount: z.number() })
+      .parse(await unvote.json());
+    expect(unvoteBody).toEqual({ removed: true, voteCount: 0 });
+  });
 });

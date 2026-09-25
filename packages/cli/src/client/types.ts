@@ -7978,6 +7978,101 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/support/widget/{key}/votes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create support widget vote */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "x-pile-widget-session": string;
+                };
+                path: {
+                    key: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        ticketId: string;
+                        /** @enum {string} */
+                        priority?: "nice_to_have" | "important" | "must_have";
+                    };
+                };
+            };
+            responses: {
+                /** @description Vote recorded (idempotent per ticket + session customer) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            created: boolean;
+                            voteCount: number;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/support/widget/{key}/votes/{ticketId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete support widget vote */
+        delete: {
+            parameters: {
+                query?: never;
+                header: {
+                    "x-pile-widget-session": string;
+                };
+                path: {
+                    key: string;
+                    ticketId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Vote removed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            removed: boolean;
+                            voteCount: number;
+                        };
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/support-channels": {
         parameters: {
             query?: never;

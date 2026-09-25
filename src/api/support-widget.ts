@@ -11,8 +11,12 @@ import {
 } from "../global/support-contacts.js";
 import {
   addTicketMessage,
+  addTicketVote,
   createTicket,
+  getTicketById,
   listTicketEvents,
+  listTicketVotes,
+  removeTicketVote,
 } from "../global/support-tickets.js";
 import {
   createWidgetKey,
@@ -236,6 +240,59 @@ const widgetMessagesRoute = createRoute({
   },
 });
 
+const widgetVoteBodySchema = z.object({
+  ticketId: z.string().min(1),
+  priority: z.enum(["nice_to_have", "important", "must_have"]).optional(),
+});
+
+const widgetVoteRoute = createRoute({
+  method: "post",
+  path: "/support/widget/{key}/votes",
+  tags: ["support-widget"],
+  middleware: [publicRateLimit({ bucket: "widget-vote", max: 30 })],
+  request: {
+    params: z.object({ key: z.string() }),
+    headers: z.object({ "x-pile-widget-session": z.string() }),
+    body: {
+      content: { "application/json": { schema: widgetVoteBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Vote recorded (idempotent per ticket + session customer)",
+      content: {
+        "application/json": {
+          schema: z.object({
+            created: z.boolean(),
+            voteCount: z.number(),
+          }),
+        },
+      },
+    },
+  },
+});
+
+const widgetUnvoteRoute = createRoute({
+  method: "delete",
+  path: "/support/widget/{key}/votes/{ticketId}",
+  tags: ["support-widget"],
+  middleware: [publicRateLimit({ bucket: "widget-vote", max: 30 })],
+  request: {
+    params: z.object({ key: z.string(), ticketId: z.string() }),
+    headers: z.object({ "x-pile-widget-session": z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Vote removed",
+      content: {
+        "application/json": {
+          schema: z.object({ removed: z.boolean(), voteCount: z.number() }),
+        },
+      },
+    },
+  },
+});
+
 async function verifyTurnstile(
   secretKey: string,
   token: string,
@@ -305,6 +362,49 @@ async function requireWidgetSession(
     });
   }
   return session;
+}
+
+async function requireSessionCustomer(
+  db: D1Client,
+  widgetKey: SupportWidgetKey,
+  session: SupportWidgetSession
+) {
+  if (!session.customerId) {
+    throw new VortexError({
+      status: 401,
+      code: "UNAUTHORIZED",
+      message: "An identified session is required to vote",
+    });
+  }
+  const customer = await getCustomerById(
+    db,
+    widgetKey.organizationId,
+    session.customerId
+  );
+  if (!customer) {
+    throw new VortexError({
+      status: 401,
+      code: "UNAUTHORIZED",
+      message: "An identified session is required to vote",
+    });
+  }
+  return customer;
+}
+
+async function requirePublicTicket(
+  db: D1Client,
+  widgetKey: SupportWidgetKey,
+  ticketId: string
+) {
+  const ticket = await getTicketById(db, widgetKey.organizationId, ticketId);
+  if (!ticket || !ticket.isPublic) {
+    throw new VortexError({
+      status: 404,
+      code: "NOT_FOUND",
+      message: "Ticket not found",
+    });
+  }
+  return ticket;
 }
 
 async function resolveWidgetCustomer(
@@ -598,6 +698,62 @@ export function registerSupportWidgetRoutes(app: OpenAPIHono<AppContext>) {
       }));
 
     return c.json({ messages });
+  });
+
+  // Voting through the widget session — the customer's email comes from the
+  // verified session, never from the request body, so identity is the
+  // anonymous → soft-claims → identifierHash ladder all the way down.
+  app.openapi(widgetVoteRoute, async (c) => {
+    const { key } = c.req.valid("param");
+    const { "x-pile-widget-session": sessionToken } = c.req.valid("header");
+    const body = c.req.valid("json");
+    const db = createD1(c.env.D1);
+    const widgetKey = await requireWidgetKey(db, key, c.req.header("origin"));
+    const session = await requireWidgetSession(db, widgetKey, sessionToken);
+    const customer = await requireSessionCustomer(db, widgetKey, session);
+    const ticket = await requirePublicTicket(db, widgetKey, body.ticketId);
+
+    const { created } = await addTicketVote(
+      db,
+      widgetKey.organizationId,
+      ticket.id,
+      {
+        voterEmail: customer.email,
+        customerId: customer.id,
+        priority: body.priority,
+        castByActorType: "customer",
+        castByActorId: customer.id,
+      }
+    );
+    const votes = await listTicketVotes(
+      db,
+      widgetKey.organizationId,
+      ticket.id
+    );
+    return c.json({ created, voteCount: votes.length }, 200);
+  });
+
+  app.openapi(widgetUnvoteRoute, async (c) => {
+    const { key, ticketId } = c.req.valid("param");
+    const { "x-pile-widget-session": sessionToken } = c.req.valid("header");
+    const db = createD1(c.env.D1);
+    const widgetKey = await requireWidgetKey(db, key, c.req.header("origin"));
+    const session = await requireWidgetSession(db, widgetKey, sessionToken);
+    const customer = await requireSessionCustomer(db, widgetKey, session);
+    const ticket = await requirePublicTicket(db, widgetKey, ticketId);
+
+    const removed = await removeTicketVote(
+      db,
+      widgetKey.organizationId,
+      ticket.id,
+      { email: customer.email }
+    );
+    const votes = await listTicketVotes(
+      db,
+      widgetKey.organizationId,
+      ticket.id
+    );
+    return c.json({ removed, voteCount: votes.length }, 200);
   });
 
   // The widget bundle — the one-tag embed:
