@@ -3932,6 +3932,18 @@ export const COMMANDS: Record<string, CommandDef> = {
     ],
     body: [],
   },
+  "billing subscribe create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/billing/subscribe",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "billing plan create": {
     method: "POST",
     path: "/workspaces/{organizationId}/billing/plan",

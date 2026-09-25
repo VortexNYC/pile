@@ -268,3 +268,26 @@ describe("billing webhook", () => {
     expect(billing.plan).toBe("paid");
   });
 });
+
+describe("subscribe", () => {
+  it("returns 503 when billing envs are unconfigured", async () => {
+    const seeded = await seedWorkspace();
+    const res = await fetch(
+      `/workspaces/${seeded.organizationId}/billing/subscribe`,
+      { method: "POST", body: "{}" },
+      seeded.adminToken
+    );
+    // Test env has no VORTEX_BILLING_* vars
+    expect(res.status).toBe(503);
+  });
+
+  it("requires admin permission", async () => {
+    const seeded = await seedWorkspace();
+    const res = await fetch(
+      `/workspaces/${seeded.organizationId}/billing/subscribe`,
+      { method: "POST", body: "{}" },
+      seeded.readToken
+    );
+    expect(res.status).toBe(403);
+  });
+});

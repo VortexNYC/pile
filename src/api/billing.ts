@@ -4,6 +4,10 @@ import { and, eq, sql } from "drizzle-orm";
 
 import { createD1 } from "../global/db.js";
 import { billingAccounts, usageRecords } from "../global/schema.js";
+import {
+  billingConfigured,
+  ensureBillingCustomer,
+} from "../global/vortex-billing.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 
@@ -57,6 +61,36 @@ const setPlanRoute = createRoute({
     200: {
       description: "Updated billing account",
       content: { "application/json": { schema: billingAccountSchema } },
+    },
+  },
+});
+
+const subscribeRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/billing/subscribe",
+  tags: ["billing"],
+  middleware: [rls("admin")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Subscribe to the paid plan",
+      content: {
+        "application/json": {
+          schema: z.object({
+            organizationId: z.string(),
+            customerId: z.string().nullable(),
+            upgradeUrl: z.string().nullable(),
+          }),
+        },
+      },
+    },
+    503: {
+      description: "Billing not configured",
+      content: {
+        "application/json": { schema: z.object({ error: z.string() }) },
+      },
     },
   },
 });
@@ -141,6 +175,30 @@ export function registerBillingRoutes(app: OpenAPIHono<AppContext>) {
       usage,
       total,
     });
+  });
+
+  app.openapi(subscribeRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+
+    // Provisions (idempotently) the Vortex billing customer and links it
+    // locally. Checkout sessions are pending on the Vortex side (VOR-577) —
+    // until then the client follows upgradeUrl to the hosted subscribe page.
+    const customerId = await ensureBillingCustomer(c.env, db, organizationId);
+    if (!billingConfigured(c.env) && !customerId) {
+      return c.json(
+        { error: "Billing is not configured on this deployment" },
+        503
+      );
+    }
+    return c.json(
+      {
+        organizationId,
+        customerId,
+        upgradeUrl: c.env.BILLING_UPGRADE_URL ?? null,
+      },
+      200
+    );
   });
 
   app.openapi(setPlanRoute, async (c) => {

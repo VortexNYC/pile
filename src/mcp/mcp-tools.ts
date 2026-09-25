@@ -8951,6 +8951,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdBillingSubscribe",
+    "description": "Create billing subscribe (POST /workspaces/{organizationId}/billing/subscribe) Path params (top-level, required): organizationId.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/billing/subscribe",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdCapture",
     "description": "Create capture (POST /workspaces/{organizationId}/capture) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: url*, title, selection, source, teamId, teamKey, projectId, labelIds, pageText, includeFullText, summarize, screenshot (* = required).",
     "method": "POST",

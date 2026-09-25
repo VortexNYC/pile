@@ -17949,6 +17949,72 @@
         "summary": "List billing"
       }
     },
+    "/workspaces/{organizationId}/billing/subscribe": {
+      "post": {
+        "tags": [
+          "billing"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Subscribe to the paid plan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "customerId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "upgradeUrl": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "organizationId",
+                    "customerId",
+                    "upgradeUrl"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Billing not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create billing subscribe"
+      }
+    },
     "/workspaces/{organizationId}/billing/plan": {
       "post": {
         "tags": [
