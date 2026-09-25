@@ -2138,6 +2138,9 @@ export const supportTickets = sqliteTable(
       ] as const,
     }).notNull(),
     issueId: text("issue_id" as string),
+    isPublic: integer("is_public" as string, { mode: "boolean" })
+      .notNull()
+      .default(false),
     snoozedUntil: text("snoozed_until" as string),
     lastCustomerMessageAt: text("last_customer_message_at" as string),
     lastAgentMessageAt: text("last_agent_message_at" as string),

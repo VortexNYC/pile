@@ -724,6 +724,7 @@ export async function updateTicket(
     priority?: SupportTicketPriority;
     snoozedUntil?: string | null;
     issueId?: string | null;
+    isPublic?: boolean;
     actorType?: SupportTicketActorType;
     actorId?: string | null;
   },
@@ -763,6 +764,7 @@ export async function updateTicket(
   };
 
   if (input.title !== undefined) updates.title = input.title;
+  if (input.isPublic !== undefined) updates.isPublic = input.isPublic;
 
   const eventsToCreate: (typeof supportTicketEvents.$inferInsert)[] = [];
 
@@ -2543,4 +2545,71 @@ export async function listTicketVotes(
       )
     )
     .orderBy(asc(supportTicketVotes.createdAt));
+}
+
+export type PublicBoardItem = {
+  id: string;
+  number: number;
+  title: string;
+  status: string;
+  priority: string;
+  voteCount: number;
+  issueId: string | null;
+  createdAt: string;
+};
+
+/**
+ * Public roadmap board: tickets flagged `is_public`, ranked by weighted
+ * vote score (must_have=3, important=2, nice_to_have=1, unprioritized=1).
+ * Derived view — status is the column, votes are the ranking. No customer
+ * PII is exposed: items carry no email/name fields.
+ */
+export async function listPublicBoard(
+  db: D1Client,
+  organizationId: string,
+  options: { limit: number; cursor?: string }
+): Promise<{ items: PublicBoardItem[]; nextCursor: string | null }> {
+  const limit = Math.max(1, Math.min(options.limit, 200));
+  const offset = options.cursor ? Number.parseInt(options.cursor, 10) : 0;
+  const safeOffset = Number.isNaN(offset) || offset < 0 ? 0 : offset;
+
+  const voteScore = sql<number>`coalesce(sum(case ${supportTicketVotes.priority} when 'must_have' then 3 when 'important' then 2 when 'nice_to_have' then 1 else 1 end), 0)`;
+
+  const rows = await db
+    .select({
+      id: supportTickets.id,
+      number: supportTickets.number,
+      title: supportTickets.title,
+      status: supportTickets.status,
+      priority: supportTickets.priority,
+      issueId: supportTickets.issueId,
+      createdAt: supportTickets.createdAt,
+      voteCount: sql<number>`count(${supportTicketVotes.id})`,
+      voteScore,
+    })
+    .from(supportTickets)
+    .leftJoin(
+      supportTicketVotes,
+      eq(supportTicketVotes.ticketId, supportTickets.id)
+    )
+    .where(
+      and(
+        eq(supportTickets.organizationId, organizationId),
+        eq(supportTickets.isPublic, true)
+      )
+    )
+    .groupBy(supportTickets.id)
+    .orderBy(sql`${voteScore} desc`, desc(supportTickets.createdAt))
+    .limit(limit + 1)
+    .offset(safeOffset);
+
+  const hasMore = rows.length > limit;
+  const sliced = hasMore ? rows.slice(0, -1) : rows;
+  const items: PublicBoardItem[] = sliced.map(
+    ({ voteScore: _score, ...row }) => row
+  );
+  return {
+    items,
+    nextCursor: hasMore ? String(safeOffset + limit) : null,
+  };
 }

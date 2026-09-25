@@ -5965,6 +5965,27 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "board list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/board",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "limit",
+        flag: "limit",
+      },
+      {
+        name: "cursor",
+        flag: "cursor",
+      },
+    ],
+    body: [],
+  },
   "support tickets list": {
     method: "GET",
     path: "/workspaces/{organizationId}/support/tickets",
@@ -6113,6 +6134,10 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "issueId",
         flag: "issue",
+      },
+      {
+        name: "isPublic",
+        flag: "is-public",
       },
       {
         name: "actorType",

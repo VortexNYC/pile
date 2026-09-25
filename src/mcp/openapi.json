@@ -26784,6 +26784,111 @@
         "summary": "Get support company"
       }
     },
+    "/workspaces/{organizationId}/board": {
+      "get": {
+        "tags": [
+          "support-tickets"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 100
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Public roadmap board — tickets flagged public, grouped by status, ranked by weighted vote score. No authentication; exposes no customer PII.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "columns": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "number": {
+                              "type": "number"
+                            },
+                            "title": {
+                              "type": "string"
+                            },
+                            "status": {
+                              "type": "string"
+                            },
+                            "priority": {
+                              "type": "string"
+                            },
+                            "voteCount": {
+                              "type": "number"
+                            },
+                            "issueId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "createdAt": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "number",
+                            "title",
+                            "status",
+                            "priority",
+                            "voteCount",
+                            "issueId",
+                            "createdAt"
+                          ]
+                        }
+                      }
+                    },
+                    "nextCursor": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "columns",
+                    "nextCursor"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List board"
+      }
+    },
     "/workspaces/{organizationId}/support/tickets": {
       "post": {
         "tags": [
@@ -28339,6 +28444,9 @@
                   "issueId": {
                     "type": "string",
                     "nullable": true
+                  },
+                  "isPublic": {
+                    "type": "boolean"
                   },
                   "actorType": {
                     "type": "string",

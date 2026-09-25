@@ -118,6 +118,11 @@ app.use("/workspaces/:organizationId/*", async (c, next) => {
     await next();
     return;
   }
+  // Public roadmap board — anonymous read of public-flagged tickets only.
+  if (c.req.path.endsWith('/board') && c.req.method === "GET") {
+    await next();
+    return;
+  }
   // Agent runners push log lines and fetch/upload the pnpm store cache with a
   // per-session HMAC token instead of a user/API-key identity — verified
   // inside the route handlers.

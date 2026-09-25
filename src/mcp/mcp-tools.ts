@@ -1892,6 +1892,32 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdBoard",
+    "description": "List board (GET /workspaces/{organizationId}/board) Path params (top-level, required): organizationId. Query params (top-level, optional): limit, cursor.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/board",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "default": 100
+        },
+        "cursor": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdCommentsCommentIdReactions",
     "description": "List comment reactions (GET /workspaces/{organizationId}/comments/{commentId}/reactions) Path params (top-level, required): organizationId, commentId.",
     "method": "GET",
@@ -6922,7 +6948,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdSupportTicketsTicketId",
-    "description": "Update support ticket (PATCH /workspaces/{organizationId}/support/tickets/{ticketId}) Path params (top-level, required): organizationId, ticketId. Request body goes in the \"body\" object; fields: title, status, priority, snoozedUntil, issueId, actorType, actorId.",
+    "description": "Update support ticket (PATCH /workspaces/{organizationId}/support/tickets/{ticketId}) Path params (top-level, required): organizationId, ticketId. Request body goes in the \"body\" object; fields: title, status, priority, snoozedUntil, issueId, isPublic, actorType, actorId.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/support/tickets/{ticketId}",
     "inputSchema": {
@@ -6966,6 +6992,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "issueId": {
               "type": "string",
               "nullable": true
+            },
+            "isPublic": {
+              "type": "boolean"
             },
             "actorType": {
               "type": "string",

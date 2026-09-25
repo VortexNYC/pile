@@ -63,7 +63,8 @@ function isPublicPath(pathname: string): boolean {
     pathname.startsWith("/support/incoming/") ||
     pathname.startsWith("/support/capture/") ||
     pathname.startsWith("/support/widget/") ||
-    pathname.startsWith("/webhooks/agent/")
+    pathname.startsWith("/webhooks/agent/") ||
+    (pathname.startsWith("/workspaces/") && pathname.endsWith("/board"))
   );
 }
 

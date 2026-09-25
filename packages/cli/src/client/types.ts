@@ -13984,6 +13984,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/board": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List board */
+        get: {
+            parameters: {
+                query?: {
+                    limit?: number;
+                    cursor?: string;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Public roadmap board — tickets flagged public, grouped by status, ranked by weighted vote score. No authentication; exposes no customer PII. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            columns: {
+                                [key: string]: {
+                                    id: string;
+                                    number: number;
+                                    title: string;
+                                    status: string;
+                                    priority: string;
+                                    voteCount: number;
+                                    issueId: string | null;
+                                    createdAt: string;
+                                }[];
+                            };
+                            nextCursor: string | null;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/support/tickets": {
         parameters: {
             query?: never;
@@ -14397,6 +14452,7 @@ export interface paths {
                         /** Format: date-time */
                         snoozedUntil?: string | null;
                         issueId?: string | null;
+                        isPublic?: boolean;
                         /** @enum {string} */
                         actorType?: "customer" | "user" | "agent" | "automation";
                         actorId?: string | null;

@@ -1185,4 +1185,67 @@ describe("support-tickets API", () => {
       false
     );
   });
+
+  it("serves the public board anonymously, vote-ranked, without PII", async () => {
+    const customerId = await createCustomer({
+      email: "board-owner@example.com",
+      fullName: "Board Owner",
+    });
+
+    async function makeTicket(title: string, isPublic: boolean) {
+      const res = await fetch(`/workspaces/${organizationId}/support/tickets`, {
+        method: "POST",
+        body: JSON.stringify({ customerId, title, sourceChannel: "api" }),
+      });
+      const { ticket } = (await res.json()) as { ticket: { id: string } };
+      if (isPublic) {
+        const patch = await fetch(
+          `/workspaces/${organizationId}/support/tickets/${ticket.id}`,
+          { method: "PATCH", body: JSON.stringify({ isPublic: true }) }
+        );
+        expect(patch.status).toBe(200);
+      }
+      return ticket.id;
+    }
+
+    const lowVotes = await makeTicket("Low demand idea", true);
+    const highVotes = await makeTicket("High demand idea", true);
+    const secretTicket = await makeTicket("Internal only", false);
+
+    for (const email of ["a@x.com", "b@x.com", "c@x.com"]) {
+      await fetch(
+        `/workspaces/${organizationId}/support/tickets/${highVotes}/votes`,
+        { method: "POST", body: JSON.stringify({ email }) }
+      );
+    }
+    await fetch(
+      `/workspaces/${organizationId}/support/tickets/${lowVotes}/votes`,
+      { method: "POST", body: JSON.stringify({ email: "solo@x.com" }) }
+    );
+
+    // Anonymous — no Authorization header at all.
+    const boardRes = await app.fetch(
+      new Request(`${ORIGIN}/workspaces/${organizationId}/board`),
+      env
+    );
+    expect(boardRes.status).toBe(200);
+    const board = (await boardRes.json()) as {
+      columns: Record<
+        string,
+        { id: string; title: string; voteCount: number }[]
+      >;
+      nextCursor: string | null;
+    };
+
+    const todo = board.columns.todo ?? [];
+    const ids = todo.map((t) => t.id);
+    expect(ids).toContain(highVotes);
+    expect(ids).toContain(lowVotes);
+    expect(ids).not.toContain(secretTicket);
+    // Vote-ranked: high-demand first.
+    expect(ids.indexOf(highVotes)).toBeLessThan(ids.indexOf(lowVotes));
+    expect(todo.find((t) => t.id === highVotes)?.voteCount).toBe(3);
+    // No customer PII leaks onto the public board.
+    expect(JSON.stringify(board)).not.toContain("board-owner@example.com");
+  });
 });

@@ -15,6 +15,7 @@ import {
   hydrateTicketRelations,
   listTicketEvents,
   listTicketVotes,
+  listPublicBoard,
   listTickets,
   removeTicketVote,
   setTicketAssignees,
@@ -24,6 +25,7 @@ import {
 import { VortexError } from "../platform/errors.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { AppContext } from "../platform/middleware.js";
+import { publicRateLimit } from "../platform/rate-limit.js";
 import { rls } from "../platform/rls.js";
 
 const supportTicketStatusEnum = z.enum(["todo", "done", "snoozed"]);
@@ -200,6 +202,7 @@ const updateTicketBodySchema = z.object({
   priority: supportTicketPriorityEnum.optional(),
   snoozedUntil: z.string().datetime().nullable().optional(),
   issueId: z.string().nullable().optional(),
+  isPublic: z.boolean().optional(),
   actorType: supportTicketActorTypeEnum.optional(),
   actorId: z.string().nullable().optional(),
 });
@@ -721,7 +724,61 @@ const listVotesRoute = createRoute({
   },
 });
 
+const publicBoardItemSchema = z.object({
+  id: z.string(),
+  number: z.number(),
+  title: z.string(),
+  status: z.string(),
+  priority: z.string(),
+  voteCount: z.number(),
+  issueId: z.string().nullable(),
+  createdAt: z.string(),
+});
+
+const publicBoardRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/board",
+  tags: ["support-tickets"],
+  middleware: [publicRateLimit({ bucket: "board", max: 120 })],
+  request: {
+    params: orgParam,
+    query: z.object({
+      limit: z.coerce.number().int().min(1).max(200).default(100),
+      cursor: z.string().optional(),
+    }),
+  },
+  responses: {
+    200: {
+      description:
+        "Public roadmap board — tickets flagged public, grouped by status, ranked by weighted vote score. No authentication; exposes no customer PII.",
+      content: {
+        "application/json": {
+          schema: z.object({
+            columns: z.record(z.string(), z.array(publicBoardItemSchema)),
+            nextCursor: z.string().nullable(),
+          }),
+        },
+      },
+    },
+  },
+});
+
 export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
+  app.openapi(publicBoardRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const query = c.req.valid("query");
+    const db = createD1(c.env.D1);
+    const { items, nextCursor } = await listPublicBoard(db, organizationId, {
+      limit: query.limit,
+      cursor: query.cursor,
+    });
+    const columns: Record<string, typeof items> = {};
+    for (const item of items) {
+      (columns[item.status] ??= []).push(item);
+    }
+    return c.json({ columns, nextCursor });
+  });
+
   app.openapi(createTicketRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
     const body = c.req.valid("json");
