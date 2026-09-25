@@ -176,6 +176,59 @@ export async function ensureBillingCustomer(
 }
 
 /**
+ * Create a Vortex checkout session for a subscription to the configured plan
+ * price. Returns the hosted checkout URL, or null when the org isn't linked
+ * or the call fails — callers fall back to a static upgrade URL.
+ */
+export async function createCheckoutSession(
+  env: AppEnv,
+  db: D1Client,
+  organizationId: string
+): Promise<string | null> {
+  const priceId = env.VORTEX_BILLING_PRICE_ID;
+  if (!billingConfigured(env) || !priceId) {
+    return null;
+  }
+  const account = await db
+    .select({
+      vortexCustomerId: billingAccounts.vortexCustomerId,
+      vortexBillingAccountId: billingAccounts.vortexBillingAccountId,
+    })
+    .from(billingAccounts)
+    .where(eq(billingAccounts.organizationId, organizationId))
+    .get();
+  if (!account?.vortexCustomerId || !account.vortexBillingAccountId) {
+    return null;
+  }
+  const res = await fetch(
+    `${env.VORTEX_BILLING_API_URL}/v1/checkout/sessions`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.VORTEX_BILLING_API_KEY}`,
+        "Content-Type": "application/json",
+        "Idempotency-Key": `pile-checkout-${organizationId}-${crypto.randomUUID()}`,
+      },
+      body: JSON.stringify({
+        environment: env.VORTEX_BILLING_ENV ?? "production",
+        merchantAccountId: env.VORTEX_BILLING_MERCHANT_ID,
+        mode: "subscription",
+        customerId: account.vortexCustomerId,
+        billingAccountId: account.vortexBillingAccountId,
+        items: [{ priceId, quantity: 1 }],
+      }),
+    }
+  );
+  if (!res.ok) {
+    return null;
+  }
+  const body = (await res.json()) as {
+    data?: { checkoutSession?: { checkoutUrl?: string } };
+  };
+  return body.data?.checkoutSession?.checkoutUrl ?? null;
+}
+
+/**
  * Submit one metered usage event to Vortex's /v1/usage-events. Fire-and-forget
  * — callers pass executionCtx so the request outlives the response. No-ops
  * unless billing envs + a meter id are configured and the org has a linked

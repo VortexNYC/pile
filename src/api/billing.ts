@@ -6,6 +6,7 @@ import { createD1 } from "../global/db.js";
 import { billingAccounts, usageRecords } from "../global/schema.js";
 import {
   billingConfigured,
+  createCheckoutSession,
   ensureBillingCustomer,
 } from "../global/vortex-billing.js";
 import type { AppContext } from "../platform/middleware.js";
@@ -182,8 +183,8 @@ export function registerBillingRoutes(app: OpenAPIHono<AppContext>) {
     const db = createD1(c.env.D1);
 
     // Provisions (idempotently) the Vortex billing customer and links it
-    // locally. Checkout sessions are pending on the Vortex side (VOR-577) —
-    // until then the client follows upgradeUrl to the hosted subscribe page.
+    // locally. When a plan price is configured we mint a real hosted checkout
+    // session; otherwise the client follows the static upgradeUrl.
     const customerId = await ensureBillingCustomer(c.env, db, organizationId);
     if (!billingConfigured(c.env) && !customerId) {
       return c.json(
@@ -191,11 +192,12 @@ export function registerBillingRoutes(app: OpenAPIHono<AppContext>) {
         503
       );
     }
+    const checkoutUrl = await createCheckoutSession(c.env, db, organizationId);
     return c.json(
       {
         organizationId,
         customerId,
-        upgradeUrl: c.env.BILLING_UPGRADE_URL ?? null,
+        upgradeUrl: checkoutUrl ?? c.env.BILLING_UPGRADE_URL ?? null,
       },
       200
     );
