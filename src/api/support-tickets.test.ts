@@ -1081,4 +1081,108 @@ describe("support-tickets API", () => {
     );
     expect(emptyNoteRes.status).toBe(400);
   });
+
+  it("adds, lists, dedupes, and removes votes on a ticket", async () => {
+    const customerId = await createCustomer({
+      email: "voter-owner@example.com",
+      fullName: "Vote Owner",
+    });
+    const createRes = await fetch(
+      `/workspaces/${organizationId}/support/tickets`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          customerId,
+          title: "Add dark mode",
+          sourceChannel: "api",
+        }),
+      }
+    );
+    expect(createRes.status).toBe(201);
+    const { ticket } = (await createRes.json()) as { ticket: { id: string } };
+    const votesPath = `/workspaces/${organizationId}/support/tickets/${ticket.id}/votes`;
+
+    // Staff adds a vote on behalf of a customer — castBy attribution recorded.
+    const addRes = await fetch(votesPath, {
+      method: "POST",
+      body: JSON.stringify({
+        email: "voter@example.com",
+        priority: "important",
+      }),
+    });
+    expect(addRes.status).toBe(201);
+    const added = (await addRes.json()) as {
+      vote: {
+        id: string;
+        voterEmail: string;
+        priority: string | null;
+        castByActorType: string | null;
+      };
+      created: boolean;
+    };
+    expect(added.created).toBe(true);
+    expect(added.vote.voterEmail).toBe("voter@example.com");
+    expect(added.vote.priority).toBe("important");
+    expect(added.vote.castByActorType).toBe("user");
+
+    // Second vote from a different voter.
+    const addRes2 = await fetch(votesPath, {
+      method: "POST",
+      body: JSON.stringify({ email: "voter2@example.com" }),
+    });
+    expect(addRes2.status).toBe(201);
+
+    // Idempotent: same email updates priority instead of duplicating.
+    const dupRes = await fetch(votesPath, {
+      method: "POST",
+      body: JSON.stringify({
+        email: "Voter@Example.com ",
+        priority: "must_have",
+      }),
+    });
+    expect(dupRes.status).toBe(201);
+    const dup = (await dupRes.json()) as {
+      vote: { id: string; priority: string | null };
+      created: boolean;
+    };
+    expect(dup.created).toBe(false);
+    expect(dup.vote.id).toBe(added.vote.id);
+    expect(dup.vote.priority).toBe("must_have");
+
+    const listRes = await fetch(votesPath);
+    expect(listRes.status).toBe(200);
+    const listed = (await listRes.json()) as {
+      votes: { voterEmail: string }[];
+      count: number;
+    };
+    expect(listed.count).toBe(2);
+
+    // Remove by email, then by voteId.
+    const delRes = await fetch(`${votesPath}?email=voter@example.com`, {
+      method: "DELETE",
+    });
+    expect(delRes.status).toBe(200);
+    expect(((await delRes.json()) as { removed: boolean }).removed).toBe(true);
+
+    const relist = (await (await fetch(votesPath)).json()) as {
+      votes: { id: string }[];
+      count: number;
+    };
+    expect(relist.count).toBe(1);
+
+    const delRes2 = await fetch(`${votesPath}?voteId=${relist.votes[0].id}`, {
+      method: "DELETE",
+    });
+    expect(((await delRes2.json()) as { removed: boolean }).removed).toBe(true);
+
+    // Missing both params → 400; unknown vote → removed:false.
+    const badRes = await fetch(votesPath, { method: "DELETE" });
+    expect(badRes.status).toBe(400);
+    const missRes = await fetch(`${votesPath}?email=nobody@example.com`, {
+      method: "DELETE",
+    });
+    expect(((await missRes.json()) as { removed: boolean }).removed).toBe(
+      false
+    );
+  });
 });

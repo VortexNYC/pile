@@ -6366,6 +6366,80 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "support tickets votes list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/tickets/{ticketId}/votes",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "ticketId",
+        flag: "ticket-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support tickets votes create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/tickets/{ticketId}/votes",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "ticketId",
+        flag: "ticket-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "email",
+        flag: "email",
+      },
+      {
+        name: "customerId",
+        flag: "customer-id",
+      },
+      {
+        name: "priority",
+        flag: "priority",
+      },
+      {
+        name: "sourceTicketId",
+        flag: "source-ticket-id",
+      },
+    ],
+  },
+  "support tickets votes delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/support/tickets/{ticketId}/votes",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "ticketId",
+        flag: "ticket-id",
+      },
+    ],
+    query: [
+      {
+        name: "voteId",
+        flag: "vote-id",
+      },
+      {
+        name: "email",
+        flag: "email",
+      },
+    ],
+    body: [],
+  },
   "support trace get": {
     method: "GET",
     path: "/workspaces/{organizationId}/support/trace/{id}",

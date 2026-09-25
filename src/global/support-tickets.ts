@@ -30,6 +30,7 @@ import {
   supportTicketMessages,
   supportTicketNotes,
   supportTickets,
+  supportTicketVotes,
   team,
   user,
   member,
@@ -2440,4 +2441,106 @@ function isWithinBusinessHours(timeData: string | null, now: Date): boolean {
   } catch {
     return true;
   }
+}
+
+export type TicketVoteInput = {
+  voterEmail: string;
+  customerId?: string | null;
+  priority?: "nice_to_have" | "important" | "must_have" | null;
+  castByActorType?: "user" | "agent" | null;
+  castByActorId?: string | null;
+  sourceTicketId?: string | null;
+};
+
+export type TicketVote = typeof supportTicketVotes.$inferSelect;
+
+export async function addTicketVote(
+  db: D1Client,
+  organizationId: string,
+  ticketId: string,
+  input: TicketVoteInput
+): Promise<{ vote: TicketVote; created: boolean }> {
+  const voterEmail = input.voterEmail.trim().toLowerCase();
+  const [existing] = await db
+    .select()
+    .from(supportTicketVotes)
+    .where(
+      and(
+        eq(supportTicketVotes.ticketId, ticketId),
+        eq(supportTicketVotes.voterEmail, voterEmail)
+      )
+    )
+    .limit(1);
+
+  const fields = {
+    customerId: input.customerId ?? null,
+    priority: input.priority ?? null,
+    castByActorType: input.castByActorType ?? null,
+    castByActorId: input.castByActorId ?? null,
+    sourceTicketId: input.sourceTicketId ?? null,
+  };
+
+  if (existing) {
+    const [vote] = await db
+      .update(supportTicketVotes)
+      .set(fields)
+      .where(eq(supportTicketVotes.id, existing.id))
+      .returning();
+    return { vote, created: false };
+  }
+
+  const [vote] = await db
+    .insert(supportTicketVotes)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId,
+      ticketId,
+      voterEmail,
+      ...fields,
+    })
+    .returning();
+  return { vote, created: true };
+}
+
+export async function removeTicketVote(
+  db: D1Client,
+  organizationId: string,
+  ticketId: string,
+  filter: { voteId?: string; email?: string }
+): Promise<boolean> {
+  const conditions = [
+    eq(supportTicketVotes.organizationId, organizationId),
+    eq(supportTicketVotes.ticketId, ticketId),
+  ];
+  if (filter.voteId) {
+    conditions.push(eq(supportTicketVotes.id, filter.voteId));
+  } else if (filter.email) {
+    conditions.push(
+      eq(supportTicketVotes.voterEmail, filter.email.trim().toLowerCase())
+    );
+  } else {
+    return false;
+  }
+  const rows = await db
+    .delete(supportTicketVotes)
+    .where(and(...conditions))
+    .returning({ id: supportTicketVotes.id });
+  return rows.length > 0;
+}
+
+export async function listTicketVotes(
+  db: D1Client,
+  organizationId: string,
+  ticketId: string
+): Promise<TicketVote[]> {
+  return db
+    .select()
+    .from(supportTicketVotes)
+    .where(
+      and(
+        eq(supportTicketVotes.organizationId, organizationId),
+        eq(supportTicketVotes.ticketId, ticketId)
+      )
+    )
+    .orderBy(asc(supportTicketVotes.createdAt));
 }

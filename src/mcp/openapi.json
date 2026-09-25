@@ -31756,6 +31756,314 @@
         "summary": "Update support ticket labels"
       }
     },
+    "/workspaces/{organizationId}/support/tickets/{ticketId}/votes": {
+      "post": {
+        "tags": [
+          "support-tickets"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "ticketId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "customerId": {
+                    "type": "string"
+                  },
+                  "priority": {
+                    "type": "string",
+                    "nullable": true,
+                    "enum": [
+                      "nice_to_have",
+                      "important",
+                      "must_have",
+                      null
+                    ]
+                  },
+                  "sourceTicketId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "email"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Vote added — idempotent per (ticket, email); repeat calls update priority/provenance. When the caller is staff or an agent, the vote is recorded as cast on behalf of the voter.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "vote": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "ticketId": {
+                          "type": "string"
+                        },
+                        "customerId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "voterEmail": {
+                          "type": "string"
+                        },
+                        "priority": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "nice_to_have",
+                            "important",
+                            "must_have",
+                            null
+                          ]
+                        },
+                        "castByActorType": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "user",
+                            "agent",
+                            null
+                          ]
+                        },
+                        "castByActorId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "sourceTicketId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "ticketId",
+                        "customerId",
+                        "voterEmail",
+                        "priority",
+                        "castByActorType",
+                        "castByActorId",
+                        "sourceTicketId",
+                        "createdAt"
+                      ]
+                    },
+                    "created": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "vote",
+                    "created"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create support ticket vote"
+      },
+      "delete": {
+        "tags": [
+          "support-tickets"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "ticketId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "voteId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "email"
+            },
+            "required": false,
+            "name": "email",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Vote removed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "removed": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "removed"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete support ticket vote"
+      },
+      "get": {
+        "tags": [
+          "support-tickets"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "ticketId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Votes on the ticket, oldest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "votes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "ticketId": {
+                            "type": "string"
+                          },
+                          "customerId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "voterEmail": {
+                            "type": "string"
+                          },
+                          "priority": {
+                            "type": "string",
+                            "nullable": true,
+                            "enum": [
+                              "nice_to_have",
+                              "important",
+                              "must_have",
+                              null
+                            ]
+                          },
+                          "castByActorType": {
+                            "type": "string",
+                            "nullable": true,
+                            "enum": [
+                              "user",
+                              "agent",
+                              null
+                            ]
+                          },
+                          "castByActorId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "sourceTicketId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "ticketId",
+                          "customerId",
+                          "voterEmail",
+                          "priority",
+                          "castByActorType",
+                          "castByActorId",
+                          "sourceTicketId",
+                          "createdAt"
+                        ]
+                      }
+                    },
+                    "count": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "votes",
+                    "count"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List support ticket votes"
+      }
+    },
     "/workspaces/{organizationId}/support/trace/{id}": {
       "get": {
         "tags": [

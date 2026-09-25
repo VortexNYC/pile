@@ -1156,6 +1156,34 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdSupportTicketsTicketIdVotes",
+    "description": "Delete support ticket vote (DELETE /workspaces/{organizationId}/support/tickets/{ticketId}/votes) Path params (top-level, required): organizationId, ticketId. Query params (top-level, optional): voteId, email.",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/support/tickets/{ticketId}/votes",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "ticketId": {
+          "type": "string"
+        },
+        "voteId": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string",
+          "format": "email"
+        }
+      },
+      "required": [
+        "organizationId",
+        "ticketId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdSupportTiersTierId",
     "description": "Delete support tier (DELETE /workspaces/{organizationId}/support/tiers/{tierId}) Path params (top-level, required): organizationId, tierId.",
     "method": "DELETE",
@@ -4668,6 +4696,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "default": 20
         },
         "cursor": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "ticketId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdSupportTicketsTicketIdVotes",
+    "description": "List support ticket votes (GET /workspaces/{organizationId}/support/tickets/{ticketId}/votes) Path params (top-level, required): organizationId, ticketId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/tickets/{ticketId}/votes",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "ticketId": {
           "type": "string"
         }
       },
@@ -13340,6 +13389,55 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         },
         "ticketId": {
           "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "ticketId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSupportTicketsTicketIdVotes",
+    "description": "Create support ticket vote (POST /workspaces/{organizationId}/support/tickets/{ticketId}/votes) Path params (top-level, required): organizationId, ticketId. Request body goes in the \"body\" object; fields: email*, customerId, priority, sourceTicketId (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/tickets/{ticketId}/votes",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "ticketId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "email": {
+              "type": "string",
+              "format": "email"
+            },
+            "customerId": {
+              "type": "string"
+            },
+            "priority": {
+              "type": "string",
+              "nullable": true,
+              "enum": [
+                "nice_to_have",
+                "important",
+                "must_have",
+                null
+              ]
+            },
+            "sourceTicketId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "email"
+          ]
         }
       },
       "required": [

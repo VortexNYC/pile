@@ -15441,6 +15441,137 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/support/tickets/{ticketId}/votes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List support ticket votes */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    ticketId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Votes on the ticket, oldest first */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            votes: {
+                                id: string;
+                                ticketId: string;
+                                customerId: string | null;
+                                voterEmail: string;
+                                /** @enum {string|null} */
+                                priority: "nice_to_have" | "important" | "must_have" | null;
+                                /** @enum {string|null} */
+                                castByActorType: "user" | "agent" | null;
+                                castByActorId: string | null;
+                                sourceTicketId: string | null;
+                                createdAt: string;
+                            }[];
+                            count: number;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create support ticket vote */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    ticketId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** Format: email */
+                        email: string;
+                        customerId?: string;
+                        /** @enum {string|null} */
+                        priority?: "nice_to_have" | "important" | "must_have" | null;
+                        sourceTicketId?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Vote added — idempotent per (ticket, email); repeat calls update priority/provenance. When the caller is staff or an agent, the vote is recorded as cast on behalf of the voter. */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            vote: {
+                                id: string;
+                                ticketId: string;
+                                customerId: string | null;
+                                voterEmail: string;
+                                /** @enum {string|null} */
+                                priority: "nice_to_have" | "important" | "must_have" | null;
+                                /** @enum {string|null} */
+                                castByActorType: "user" | "agent" | null;
+                                castByActorId: string | null;
+                                sourceTicketId: string | null;
+                                createdAt: string;
+                            };
+                            created: boolean;
+                        };
+                    };
+                };
+            };
+        };
+        /** Delete support ticket vote */
+        delete: {
+            parameters: {
+                query?: {
+                    voteId?: string;
+                    email?: string;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                    ticketId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Vote removed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            removed: boolean;
+                        };
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/support/trace/{id}": {
         parameters: {
             query?: never;

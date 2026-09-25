@@ -9,11 +9,14 @@ import { maybeEscalate } from "../global/support-escalation.js";
 import {
   addTicketMessage,
   addTicketNote,
+  addTicketVote,
   createTicket,
   getTicketById,
   hydrateTicketRelations,
   listTicketEvents,
+  listTicketVotes,
   listTickets,
+  removeTicketVote,
   setTicketAssignees,
   setTicketLabels,
   updateTicket,
@@ -615,6 +618,109 @@ const setLabelsRoute = createRoute({
   },
 });
 
+const votePriorityEnum = z.enum(["nice_to_have", "important", "must_have"]);
+
+const ticketVoteSchema = z.object({
+  id: z.string(),
+  ticketId: z.string(),
+  customerId: z.string().nullable(),
+  voterEmail: z.string(),
+  priority: votePriorityEnum.nullable(),
+  castByActorType: z.enum(["user", "agent"]).nullable(),
+  castByActorId: z.string().nullable(),
+  sourceTicketId: z.string().nullable(),
+  createdAt: z.string(),
+});
+
+const addVoteBodySchema = z.object({
+  email: z.string().trim().email(),
+  customerId: z.string().optional(),
+  priority: votePriorityEnum.nullish(),
+  sourceTicketId: z.string().optional(),
+});
+
+const removeVoteQuerySchema = z
+  .object({
+    voteId: z.string().optional(),
+    email: z.string().trim().email().optional(),
+  })
+  .refine((v) => v.voteId !== undefined || v.email !== undefined, {
+    message: "voteId or email is required",
+  });
+
+const addVoteRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/support/tickets/{ticketId}/votes",
+  tags: ["support-tickets"],
+  middleware: [rls("write")],
+  request: {
+    params: ticketIdParam,
+    body: {
+      content: {
+        "application/json": { schema: addVoteBodySchema },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description:
+        "Vote added — idempotent per (ticket, email); repeat calls update priority/provenance. When the caller is staff or an agent, the vote is recorded as cast on behalf of the voter.",
+      content: {
+        "application/json": {
+          schema: z.object({
+            vote: ticketVoteSchema,
+            created: z.boolean(),
+          }),
+        },
+      },
+    },
+  },
+});
+
+const removeVoteRoute = createRoute({
+  method: "delete",
+  path: "/workspaces/{organizationId}/support/tickets/{ticketId}/votes",
+  tags: ["support-tickets"],
+  middleware: [rls("write")],
+  request: {
+    params: ticketIdParam,
+    query: removeVoteQuerySchema,
+  },
+  responses: {
+    200: {
+      description: "Vote removed",
+      content: {
+        "application/json": {
+          schema: z.object({ removed: z.boolean() }),
+        },
+      },
+    },
+  },
+});
+
+const listVotesRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/support/tickets/{ticketId}/votes",
+  tags: ["support-tickets"],
+  middleware: [rls("read")],
+  request: {
+    params: ticketIdParam,
+  },
+  responses: {
+    200: {
+      description: "Votes on the ticket, oldest first",
+      content: {
+        "application/json": {
+          schema: z.object({
+            votes: z.array(ticketVoteSchema),
+            count: z.number(),
+          }),
+        },
+      },
+    },
+  },
+});
+
 export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(createTicketRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
@@ -933,5 +1039,54 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
     const full =
       (await getTicketById(db, organizationId, ticketId)) ?? ticketNotFound();
     return c.json({ ticket: full });
+  });
+
+  app.openapi(addVoteRoute, async (c) => {
+    const { organizationId, ticketId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const db = createD1(c.env.D1);
+    const ticket = await getTicketById(db, organizationId, ticketId);
+    if (!ticket) {
+      ticketNotFound();
+    }
+
+    const identity = c.get("workspaceIdentity");
+    const onBehalf = identity.type === "user" || identity.type === "agent";
+    const { vote, created } = await addTicketVote(
+      db,
+      organizationId,
+      ticketId,
+      {
+        voterEmail: body.email,
+        customerId: body.customerId ?? null,
+        priority: body.priority ?? null,
+        castByActorType: onBehalf ? identity.type : null,
+        castByActorId: onBehalf ? identity.id : null,
+        sourceTicketId: body.sourceTicketId ?? null,
+      }
+    );
+    return c.json({ vote, created }, 201);
+  });
+
+  app.openapi(removeVoteRoute, async (c) => {
+    const { organizationId, ticketId } = c.req.valid("param");
+    const query = c.req.valid("query");
+    const db = createD1(c.env.D1);
+    const removed = await removeTicketVote(db, organizationId, ticketId, {
+      voteId: query.voteId,
+      email: query.email,
+    });
+    return c.json({ removed });
+  });
+
+  app.openapi(listVotesRoute, async (c) => {
+    const { organizationId, ticketId } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const ticket = await getTicketById(db, organizationId, ticketId);
+    if (!ticket) {
+      ticketNotFound();
+    }
+    const votes = await listTicketVotes(db, organizationId, ticketId);
+    return c.json({ votes, count: votes.length });
   });
 }

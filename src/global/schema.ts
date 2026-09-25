@@ -2434,6 +2434,49 @@ export const supportTicketLabels = sqliteTable(
   ]
 );
 
+export const supportTicketVotes = sqliteTable(
+  "support_ticket_votes" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    ticketId: text("ticket_id" as string)
+      .notNull()
+      .references(() => supportTickets.id, { onDelete: "cascade" }),
+    customerId: text("customer_id" as string).references(
+      () => supportCustomers.id,
+      { onDelete: "set null" }
+    ),
+    voterEmail: text("voter_email" as string).notNull(),
+    priority: text("priority" as string, {
+      enum: ["nice_to_have", "important", "must_have"] as const,
+    }),
+    castByActorType: text("cast_by_actor_type" as string, {
+      enum: ["user", "agent"] as const,
+    }),
+    castByActorId: text("cast_by_actor_id" as string),
+    sourceTicketId: text("source_ticket_id" as string).references(
+      () => supportTickets.id,
+      { onDelete: "set null" }
+    ),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("support_ticket_votes_ticket_voter_idx" as string).on(
+      table.ticketId,
+      table.voterEmail
+    ),
+    index("support_ticket_votes_org_ticket_idx" as string).on(
+      table.organizationId,
+      table.ticketId
+    ),
+    index("support_ticket_votes_customer_idx" as string).on(table.customerId),
+  ]
+);
+
 export const supportChannels = sqliteTable(
   "support_channels",
   {
