@@ -6,46 +6,28 @@ import { admin, organization } from "better-auth/plugins";
 import { createD1 } from "../global/db.js";
 import * as schema from "../global/schema.js";
 import { organizationOptions } from "./access.js";
+import { sendEmail } from "../email/send.js";
 import type { AppEnv } from "./env.js";
 
-async function sendEmail(
+// Auth emails (verify, password reset) are user-blocking — a missing EMAIL
+// binding used to log a warning and let the request succeed silently, which
+// locked users out with no signal. Delegate to the shared sender and let
+// failures propagate so the caller sees an error instead.
+async function sendAuthEmail(
   env: AppEnv,
-  kind: string,
   to: string,
   subject: string,
   text: string
-) {
-  if (!env.EMAIL || !env.EMAIL_FROM) {
-    console.warn(
-      JSON.stringify({
-        event: "email_skipped",
-        kind,
-        reason: "no EMAIL binding or EMAIL_FROM",
-      })
-    );
-    return;
+): Promise<void> {
+  if (!env.EMAIL_FROM) {
+    throw new Error("EMAIL_FROM not configured");
   }
-  try {
-    const { EmailMessage } = await import("cloudflare:email");
-    const raw = [
-      `From: ${env.EMAIL_FROM}`,
-      `To: ${to}`,
-      `Subject: ${subject}`,
-      "MIME-Version: 1.0",
-      'Content-Type: text/plain; charset="utf-8"',
-      "",
-      text,
-    ].join("\r\n");
-    await env.EMAIL.send(new EmailMessage(env.EMAIL_FROM, to, raw));
-  } catch (error) {
-    console.error(
-      JSON.stringify({
-        event: "email_send_failed",
-        kind,
-        error: error instanceof Error ? error.message : String(error),
-      })
-    );
-  }
+  await sendEmail(env, {
+    from: env.EMAIL_FROM,
+    to,
+    subject,
+    text,
+  });
 }
 
 export function createAuth(env: AppEnv) {
@@ -61,9 +43,8 @@ export function createAuth(env: AppEnv) {
     emailAndPassword: {
       enabled: true,
       sendResetPassword: async (data) => {
-        await sendEmail(
+        await sendAuthEmail(
           env,
-          "password_reset",
           data.user.email,
           "Reset your Pile password",
           `Reset your Pile password: ${data.url}`
@@ -73,9 +54,8 @@ export function createAuth(env: AppEnv) {
     },
     emailVerification: {
       sendVerificationEmail: async (data) => {
-        await sendEmail(
+        await sendAuthEmail(
           env,
-          "email_verification",
           data.user.email,
           "Verify your Pile email",
           `Verify your Pile email: ${data.url}`
@@ -154,9 +134,8 @@ export function createAuth(env: AppEnv) {
             return;
           }
           const url = `${env.BETTER_AUTH_URL}/api/auth/organization/accept-invitation?id=${encodeURIComponent(data.id)}`;
-          await sendEmail(
+          await sendAuthEmail(
             env,
-            "invitation",
             data.email,
             "Invitation to join the workspace",
             `You have been invited to join the workspace. Accept here: ${url}`

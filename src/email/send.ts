@@ -1,6 +1,6 @@
 import { createMimeMessage } from "mimetext";
 
-import type { WorkerEnv } from "../platform/middleware.js";
+import type { AppEnv } from "../types/env.js";
 
 export type OutboundEmail = {
   from: string;
@@ -40,7 +40,7 @@ export function buildMime(input: OutboundEmail): string {
 
 /** Send a MIME email through the EMAIL binding. */
 export async function sendEmail(
-  env: WorkerEnv,
+  env: AppEnv,
   input: OutboundEmail
 ): Promise<void> {
   if (!env.EMAIL) {
