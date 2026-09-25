@@ -49,7 +49,7 @@ const authorizeSchema = z.object({
 });
 
 async function createSignedInUser(name: string) {
-  const auth = createAuth(env);
+  const auth = await createAuth(env);
   const email = `clipper-${crypto.randomUUID()}@example.com`;
   const password = "password123";
   await auth.api.signUpEmail({

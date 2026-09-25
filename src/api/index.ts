@@ -340,8 +340,8 @@ app.get("/api/auth/organization/accept-invitation", (c) => {
 
 registerAppRoute(app);
 
-app.all("/api/auth/*", (c) => {
-  return createAuth(c.env).handler(c.req.raw);
+app.all("/api/auth/*", async (c) => {
+  return (await createAuth(c.env)).handler(c.req.raw);
 });
 
 app.get("/", (c) => {

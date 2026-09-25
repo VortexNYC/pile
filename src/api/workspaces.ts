@@ -61,7 +61,7 @@ const workspaceReadAccess = (param: "id" | "slug") =>
       .replace(/^Bearer\s+/i, "")
       .trim();
     if (token) {
-      const auth = createAuth(c.env);
+      const auth = await createAuth(c.env);
       const result: unknown = await auth.api
         .verifyApiKey({ body: { key: token } })
         .catch(() => null);
@@ -495,7 +495,7 @@ export function registerWorkspaceRoutes(app: OpenAPIHono<AppContext>) {
       ownerId,
       isDefault: true,
     });
-    const auth = createAuth(c.env);
+    const auth = await createAuth(c.env);
     const keyResult = await auth.api.createApiKey({
       body: {
         userId: ownerId,

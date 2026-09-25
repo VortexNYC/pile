@@ -193,7 +193,7 @@ export function registerOAuthClientRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId } = c.req.valid("param");
     const input = c.req.valid("json");
     const identity = c.get("workspaceIdentity");
-    const auth = createAuth(c.env);
+    const auth = await createAuth(c.env);
 
     const result = await auth.api.createApiKey({
       body: {

@@ -16,7 +16,7 @@ export async function getSessionUserId(
   }
 
   try {
-    const auth = createAuth(env);
+    const auth = await createAuth(env);
     const result = await auth.api.getSession({
       headers: request.headers,
     });

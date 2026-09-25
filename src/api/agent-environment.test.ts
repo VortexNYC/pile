@@ -64,7 +64,7 @@ describe("agent environment API", () => {
         metadata: JSON.stringify({ key: workspace?.key ?? null }),
       })
       .where(eq(organization.id, organizationId));
-    const auth = createAuth(env);
+    const auth = await createAuth(env);
     const result = await auth.api.createApiKey({
       body: {
         userId: "user-env",

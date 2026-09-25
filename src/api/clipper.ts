@@ -100,7 +100,7 @@ export function registerClipperRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
 
-    const auth = createAuth(c.env);
+    const auth = await createAuth(c.env);
     const result = await auth.api.createApiKey({
       body: {
         userId,

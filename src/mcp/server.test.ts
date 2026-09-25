@@ -62,7 +62,7 @@ async function workspaceAdminHeaders(
   organizationId: string,
   userId: string
 ): Promise<Headers> {
-  const auth = createAuth(env);
+  const auth = await createAuth(env);
   const result = await auth.api.createApiKey({
     body: {
       userId,

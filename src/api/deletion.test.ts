@@ -37,7 +37,7 @@ async function getSessionCookie(): Promise<{
   cookie: string;
   userId: string;
 }> {
-  const auth = createAuth(env);
+  const auth = await createAuth(env);
   const email = `del-${crypto.randomUUID()}@example.com`;
   const password = "password123";
   const signUp = await auth.api.signUpEmail({
@@ -80,7 +80,7 @@ async function seedWorkspace(userId = "user-del") {
     ownerId: userId,
   });
 
-  const auth = createAuth(env);
+  const auth = await createAuth(env);
   const result = await auth.api.createApiKey({
     body: {
       userId,

@@ -36,7 +36,7 @@ export const workspaceAuthMiddleware = createMiddleware<{
   const token = header.replace(/^Bearer\s+/i, "").trim();
 
   if (token) {
-    const auth = createAuth(c.env);
+    const auth = await createAuth(c.env);
     let result: unknown;
     try {
       result = await auth.api.verifyApiKey({

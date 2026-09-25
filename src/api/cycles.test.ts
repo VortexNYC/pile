@@ -33,7 +33,7 @@ async function seedWorkspace() {
     ownerId: "user-cycles",
   });
 
-  const auth = createAuth(env);
+  const auth = await createAuth(env);
   const result = await auth.api.createApiKey({
     body: {
       userId: "user-cycles",

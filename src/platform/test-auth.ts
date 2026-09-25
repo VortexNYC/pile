@@ -12,7 +12,7 @@ export async function createAdminHeaders(
   env: AppEnv,
   userId: string
 ): Promise<Headers> {
-  const auth = createAuth(env);
+  const auth = await createAuth(env);
   const result = await auth.api.createApiKey({
     body: {
       userId,

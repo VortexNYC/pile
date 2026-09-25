@@ -1,5 +1,4 @@
 import { apiKey } from "@better-auth/api-key";
-import { sso } from "@better-auth/sso";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { betterAuth } from "better-auth/minimal";
 import { admin, organization } from "better-auth/plugins";
@@ -31,7 +30,10 @@ async function sendAuthEmail(
   });
 }
 
-export function createAuth(env: AppEnv) {
+export async function createAuth(env: AppEnv) {
+  // samlify + @xmldom are heavy; lazy-importing keeps the SSO plugin out of
+  // worker startup CPU (deploy validation) — it parses on first auth use.
+  const { sso } = await import("@better-auth/sso");
   const db = createD1(env.D1);
 
   return betterAuth({

@@ -6,7 +6,7 @@ import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
 
 async function getSessionCookie(): Promise<string> {
-  const auth = createAuth(env);
+  const auth = await createAuth(env);
   const email = `client-${crypto.randomUUID()}@example.com`;
   const password = "password123";
   await auth.api.signUpEmail({

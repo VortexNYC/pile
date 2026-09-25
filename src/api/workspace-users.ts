@@ -153,7 +153,7 @@ export function registerWorkspaceUserRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(leaveOrganizationRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
-    const auth = createAuth(c.env);
+    const auth = await createAuth(c.env);
     try {
       await auth.api.leaveOrganization({
         headers: c.req.raw.headers,
@@ -193,7 +193,7 @@ export function registerWorkspaceUserRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
 
-    const auth = createAuth(c.env);
+    const auth = await createAuth(c.env);
     let result: unknown;
     try {
       result = await auth.api.createInvitation({

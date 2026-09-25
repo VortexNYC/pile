@@ -149,7 +149,7 @@ export async function dispatchAgent(
     // fails the dispatch proceeds — the agent just lacks Pile access.
     let pileApi: { url: string; key: string } | undefined;
     try {
-      const auth = createAuth(env);
+      const auth = await createAuth(env);
       const created = await auth.api.createApiKey({
         body: {
           userId: actor.id,

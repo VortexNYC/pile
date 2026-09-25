@@ -447,7 +447,7 @@ export async function createMembership(
   if (existing) {
     return mapMember(existing);
   }
-  const auth = createAuth(env);
+  const auth = await createAuth(env);
   const result = await auth.api.addMember({
     body: { userId, role, organizationId },
   });

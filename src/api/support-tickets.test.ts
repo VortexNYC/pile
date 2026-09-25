@@ -67,7 +67,7 @@ async function seedWorkspace() {
 }
 
 async function createAdminTokenRecord(organizationId: string) {
-  const auth = createAuth(env);
+  const auth = await createAuth(env);
   const result = await auth.api.createApiKey({
     body: {
       userId: "user-1",

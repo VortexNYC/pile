@@ -118,7 +118,7 @@ export async function createWorkspace(
     ownerId: string;
   }
 ): Promise<WorkspaceRecord> {
-  const auth = createAuth(env);
+  const auth = await createAuth(env);
   const orgResult = await auth.api.createOrganization({
     body: {
       name: values.name,

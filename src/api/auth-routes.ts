@@ -164,7 +164,7 @@ export function registerAuthRoutes(app: OpenAPIHono<AppContext>) {
   for (const endpoint of endpoints) {
     const route = buildRoute(endpoint);
     app.openapi(route, async (c) => {
-      const auth = createAuth(c.env);
+      const auth = await createAuth(c.env);
 
       const body =
         endpoint.method === "post"

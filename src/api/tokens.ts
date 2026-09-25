@@ -150,7 +150,7 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
     const identity = c.get("workspaceIdentity");
     const db = createD1(c.env.D1);
 
-    const auth = createAuth(c.env);
+    const auth = await createAuth(c.env);
     const permissions = input.permissions ?? "read";
     const actorType = input.actorType ?? "user";
     let userId = identity.id;

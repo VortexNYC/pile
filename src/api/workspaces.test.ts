@@ -17,7 +17,7 @@ const origin = (
 const onboardUrl = new URL("/workspaces/onboard", origin).toString();
 
 async function getSessionCookie(): Promise<string> {
-  const auth = createAuth(env);
+  const auth = await createAuth(env);
   const email = `onboard-${crypto.randomUUID()}@example.com`;
   const password = "password123";
   await auth.api.signUpEmail({
@@ -233,7 +233,7 @@ describe("workspaces API", () => {
     // Second member with a plain (non-SSO) session gets rejected.
     const memberCookie = await getSessionCookie();
     const db = createD1(env.D1);
-    const auth = createAuth(env);
+    const auth = await createAuth(env);
     const sessionData = await auth.api.getSession({
       headers: new Headers({ Cookie: memberCookie }),
     });
