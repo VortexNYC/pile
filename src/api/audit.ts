@@ -15,6 +15,9 @@ const auditEntrySchema = z.object({
   entityType: z.string(),
   entityId: z.string(),
   changes: z.record(z.string(), z.unknown()).nullable(),
+  ip: z.string().nullable(),
+  country: z.string().nullable(),
+  userAgent: z.string().nullable(),
   createdAt: z.string(),
 });
 
@@ -89,6 +92,9 @@ export function registerAuditRoutes(app: OpenAPIHono<AppContext>) {
         changes: r.changes
           ? (JSON.parse(r.changes) as Record<string, unknown>)
           : null,
+        ip: r.ip,
+        country: r.country,
+        userAgent: r.userAgent,
         createdAt: r.createdAt,
       })),
     });
@@ -116,6 +122,9 @@ export function registerAuditRoutes(app: OpenAPIHono<AppContext>) {
       changes: row.changes
         ? (JSON.parse(row.changes) as Record<string, unknown>)
         : null,
+      ip: row.ip,
+      country: row.country,
+      userAgent: row.userAgent,
       createdAt: row.createdAt,
     });
   });

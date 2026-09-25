@@ -1516,6 +1516,7 @@ describe("API integration", () => {
     const projectPath = "vortex/gitlab-test";
     await createGitlabInstallation(
       db,
+      env,
       organizationId,
       "123",
       projectPath,
@@ -1767,6 +1768,7 @@ describe("API integration", () => {
     const projectPath = "vortex/gitlab-mr";
     await createGitlabInstallation(
       db,
+      env,
       organizationId,
       "456",
       projectPath,
@@ -1959,6 +1961,7 @@ describe("API integration", () => {
     const projectPath = "vortex/gitlab-attrs";
     await createGitlabInstallation(
       db,
+      env,
       organizationId,
       "789",
       projectPath,
@@ -2086,6 +2089,7 @@ describe("API integration", () => {
     const projectPath = "vortex/gitlab-diff";
     await createGitlabInstallation(
       db,
+      env,
       organizationId,
       "900",
       projectPath,

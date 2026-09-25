@@ -10,6 +10,7 @@ import { VortexError } from "../platform/errors.js";
 import { workspaceRoleSchema } from "../platform/identity.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
+import { emitWorkspaceAudit } from "./audit-emit.js";
 
 function mapAuthError(error: unknown): never {
   if (isAPIError(error)) {
@@ -161,6 +162,13 @@ export function registerWorkspaceUserRoutes(app: OpenAPIHono<AppContext>) {
     } catch (error) {
       mapAuthError(error);
     }
+    await emitWorkspaceAudit(
+      c,
+      organizationId,
+      "member.left",
+      "member",
+      c.var.workspaceIdentity?.id ?? "unknown"
+    );
     return c.body(null, 204);
   });
 

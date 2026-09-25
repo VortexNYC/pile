@@ -12807,6 +12807,9 @@ export interface paths {
                                 changes: {
                                     [key: string]: unknown;
                                 } | null;
+                                ip: string | null;
+                                country: string | null;
+                                userAgent: string | null;
                                 createdAt: string;
                             }[];
                         };
@@ -12859,6 +12862,9 @@ export interface paths {
                             changes: {
                                 [key: string]: unknown;
                             } | null;
+                            ip: string | null;
+                            country: string | null;
+                            userAgent: string | null;
                             createdAt: string;
                         };
                     };

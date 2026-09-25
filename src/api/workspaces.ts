@@ -22,6 +22,7 @@ import {
   type AppContext,
 } from "../platform/middleware.js";
 import { getSessionUserId } from "../platform/session.js";
+import { emitWorkspaceAudit } from "./audit-emit.js";
 
 const workspaceSchema = z.object({
   id: z.string(),
@@ -285,6 +286,16 @@ export function registerWorkspaceRoutes(app: OpenAPIHono<AppContext>) {
       key: input.key,
       ownerId,
     });
+    await emitWorkspaceAudit(
+      c,
+      item.id,
+      "workspace.created",
+      "workspace",
+      item.id,
+      {
+        name: { from: null, to: item.name },
+      }
+    );
     return c.json(item, 201);
   });
 
@@ -348,6 +359,9 @@ export function registerWorkspaceRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
     const result = await deleteWorkspaceData(db, c.env, id);
+    await emitWorkspaceAudit(c, id, "workspace.deleted", "workspace", id, {
+      name: { from: workspace.name, to: null },
+    });
     return c.json({ deleted: true, r2Objects: result.r2Objects });
   });
 

@@ -38,6 +38,7 @@ import { registerDocsSiteRoutes } from "./docs-site.js";
 import { registerDocumentRoutes } from "./documents.js";
 import { registerEmailInboxRoutes } from "./email-inboxes.js";
 import { registerEmojiRoutes } from "./emojis.js";
+import { getExecutionCtx } from "./execution-ctx.js";
 import { registerExternalLinkRoutes } from "./external-links.js";
 import { registerFileRoutes } from "./files.js";
 import { registerGitAutomationRoutes } from "./git-automation.js";
@@ -250,7 +251,7 @@ app.post(
     await handleSlackEvents({
       env: c.env,
       req: c.req,
-      waitUntil: (task) => c.executionCtx.waitUntil(task),
+      waitUntil: (task) => getExecutionCtx(c)?.waitUntil(task),
     })
 );
 

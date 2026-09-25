@@ -3,10 +3,10 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { betterAuth } from "better-auth/minimal";
 import { admin, organization } from "better-auth/plugins";
 
+import { sendEmail } from "../email/send.js";
 import { createD1 } from "../global/db.js";
 import * as schema from "../global/schema.js";
 import { organizationOptions } from "./access.js";
-import { sendEmail } from "../email/send.js";
 import type { AppEnv } from "./env.js";
 
 // Auth emails (verify, password reset) are user-blocking — a missing EMAIL

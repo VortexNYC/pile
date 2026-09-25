@@ -2620,19 +2620,75 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     entityType: string,
     entityId: string,
     actorId?: string | null,
-    changes?: Record<string, { from: unknown; to: unknown }> | null
+    changes?: Record<string, { from: unknown; to: unknown }> | null,
+    meta?: {
+      actorType?: string | null;
+      ip?: string | null;
+      country?: string | null;
+      userAgent?: string | null;
+    }
   ) {
-    data.recordAuditEntry(this.db, {
+    const entry = data.recordAuditEntry(this.db, {
       organizationId: this.organizationId,
       actorId,
+      actorType: meta?.actorType ?? null,
       action,
       entityType,
       entityId,
       changes: changes ?? null,
+      ip: meta?.ip ?? null,
+      country: meta?.country ?? null,
+      userAgent: meta?.userAgent ?? null,
     });
+    // SIEM fanout: deliver to webhook subscribers only (not websockets —
+    // the audit stream must not broadcast to every connected client).
+    this.ctx.waitUntil(
+      this.sendWebhookEvent({
+        type: "audit.entry",
+        organizationId: this.organizationId,
+        entry: {
+          id: entry.id,
+          actorId: entry.actorId,
+          actorType: entry.actorType,
+          action: entry.action,
+          entityType: entry.entityType,
+          entityId: entry.entityId,
+          changes: entry.changes
+            ? (JSON.parse(entry.changes) as Record<
+                string,
+                { from: unknown; to: unknown }
+              >)
+            : null,
+          ip: entry.ip,
+          country: entry.country,
+          userAgent: entry.userAgent,
+          createdAt: entry.createdAt,
+        },
+      })
+    );
+    return entry;
   }
 
-  listAuditLog(
+  // Public RPC for API-layer events (token create/revoke, member changes,
+  // workspace settings) that live outside the DO.
+  async recordAudit(
+    action: string,
+    entityType: string,
+    entityId: string,
+    actorId?: string | null,
+    changes?: Record<string, { from: unknown; to: unknown }> | null,
+    meta?: {
+      actorType?: string | null;
+      ip?: string | null;
+      country?: string | null;
+      userAgent?: string | null;
+    }
+  ) {
+    await this.ready;
+    return this.audit(action, entityType, entityId, actorId, changes, meta);
+  }
+
+  async listAuditLog(
     args: {
       entityType?: string;
       entityId?: string;
@@ -2641,10 +2697,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       limit?: number;
     } = {}
   ) {
+    await this.ready;
     return data.listAuditLog(this.db, this.organizationId, args);
   }
 
-  getAuditLogEntry(id: string) {
+  async getAuditLogEntry(id: string) {
+    await this.ready;
     return data.getAuditLogEntry(this.db, this.organizationId, id);
   }
 

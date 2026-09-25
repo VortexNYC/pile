@@ -33,11 +33,11 @@ the Vortex-operated service at `pile.nyc`.
 
 ## Subprocessors
 
-| Vendor | Role |
-|---|---|
-| Cloudflare | compute, storage (D1/Durable Objects/R2), email routing, DNS |
-| Vortex | billing (customers, subscriptions, usage rating) |
-| GitHub / GitLab | only if you connect them; scoped tokens, encrypted at rest |
+| Vendor          | Role                                                         |
+| --------------- | ------------------------------------------------------------ |
+| Cloudflare      | compute, storage (D1/Durable Objects/R2), email routing, DNS |
+| Vortex          | billing (customers, subscriptions, usage rating)             |
+| GitHub / GitLab | only if you connect them; scoped tokens, encrypted at rest   |
 
 ## Your rights
 

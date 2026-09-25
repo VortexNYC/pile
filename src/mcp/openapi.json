@@ -24063,6 +24063,18 @@
                               "nullable": true
                             }
                           },
+                          "ip": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "country": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "userAgent": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "createdAt": {
                             "type": "string"
                           }
@@ -24076,6 +24088,9 @@
                           "entityType",
                           "entityId",
                           "changes",
+                          "ip",
+                          "country",
+                          "userAgent",
                           "createdAt"
                         ]
                       }
@@ -24153,6 +24168,18 @@
                         "nullable": true
                       }
                     },
+                    "ip": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "country": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "userAgent": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "createdAt": {
                       "type": "string"
                     }
@@ -24166,6 +24193,9 @@
                     "entityType",
                     "entityId",
                     "changes",
+                    "ip",
+                    "country",
+                    "userAgent",
                     "createdAt"
                   ]
                 }

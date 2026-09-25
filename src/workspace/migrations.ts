@@ -733,6 +733,12 @@ ALTER TABLE agent_sessions ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0`;
 
 const v40 = `ALTER TABLE agent_sessions ADD COLUMN infra_failure INTEGER NOT NULL DEFAULT 0`;
 
+const v41 = `ALTER TABLE audit_log ADD COLUMN ip TEXT
+--> statement-breakpoint
+ALTER TABLE audit_log ADD COLUMN country TEXT
+--> statement-breakpoint
+ALTER TABLE audit_log ADD COLUMN user_agent TEXT`;
+
 export const workspaceMigrations = {
   journal: {
     entries: [
@@ -776,6 +782,7 @@ export const workspaceMigrations = {
       { idx: 37, when: 37, tag: "v38", breakpoints: true },
       { idx: 38, when: 38, tag: "v39", breakpoints: true },
       { idx: 39, when: 39, tag: "v40", breakpoints: true },
+      { idx: 40, when: 40, tag: "v41", breakpoints: true },
     ],
   },
   migrations: {
@@ -819,5 +826,6 @@ export const workspaceMigrations = {
     m0037: v38,
     m0038: v39,
     m0039: v40,
+    m0040: v41,
   },
 } satisfies Parameters<typeof migrate>[1];

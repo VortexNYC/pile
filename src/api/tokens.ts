@@ -10,6 +10,7 @@ import { createAuth } from "../platform/auth.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
+import { emitWorkspaceAudit } from "./audit-emit.js";
 
 const tokenSchema = z.object({
   id: z.string(),
@@ -199,6 +200,18 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
     });
     const parsed = resultSchema.parse(result);
 
+    await emitWorkspaceAudit(
+      c,
+      organizationId,
+      "token.created",
+      "token",
+      parsed.id,
+      {
+        name: { from: null, to: input.name },
+        permissions: { from: null, to: permissions },
+      }
+    );
+
     return c.json(
       {
         id: parsed.id,
@@ -228,6 +241,9 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
     await db.delete(apikey).where(eq(apikey.id, id));
+    await emitWorkspaceAudit(c, organizationId, "token.deleted", "token", id, {
+      name: { from: row.name ?? null, to: null },
+    });
     return c.body(null, 204);
   });
 }

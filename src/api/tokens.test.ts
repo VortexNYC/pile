@@ -178,4 +178,48 @@ describe("tokens API", () => {
     );
     expect(res.status).toBe(403);
   });
+
+  it("records token lifecycle in the workspace audit log", async () => {
+    const createRes = await fetch(
+      `/workspaces/${organizationId}/tokens`,
+      {
+        method: "POST",
+        body: JSON.stringify({ name: "audited", permissions: "read" }),
+      },
+      adminToken
+    );
+    expect(createRes.status).toBe(201);
+    const { id } = await createRes.json<{ id: string }>();
+
+    const deleteRes = await fetch(
+      `/workspaces/${organizationId}/tokens/${id}`,
+      { method: "DELETE" },
+      adminToken
+    );
+    expect(deleteRes.status).toBe(204);
+
+    const auditRes = await fetch(
+      `/workspaces/${organizationId}/audit-log?entityType=token&entityId=${id}`,
+      {},
+      adminToken
+    );
+    expect(auditRes.status).toBe(200);
+    const { entries } = await auditRes.json<{
+      entries: Array<{
+        action: string;
+        actorType: string | null;
+        userAgent: string | null;
+        changes: Record<string, { from: unknown; to: unknown }> | null;
+      }>;
+    }>();
+    const actions = entries.map((e) => e.action);
+    expect(actions).toContain("token.created");
+    expect(actions).toContain("token.deleted");
+    expect(entries[0]!.actorType).toBe("user");
+    expect(entries.find((e) => e.action === "token.created")!.changes).toEqual(
+      expect.objectContaining({
+        name: { from: null, to: "audited" },
+      })
+    );
+  });
 });

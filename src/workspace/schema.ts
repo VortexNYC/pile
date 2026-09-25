@@ -579,6 +579,10 @@ export const workspaceAuditLog = sqliteTable(
     entityId: text("entity_id" as string).notNull(),
     // JSON: { field: { from, to } } for updates, or the created payload.
     changes: text("changes" as string),
+    // Request context for API-layer emitters; null for internal writes.
+    ip: text("ip" as string),
+    country: text("country" as string),
+    userAgent: text("user_agent" as string),
     createdAt: text("created_at" as string).notNull(),
   },
   (table) => [

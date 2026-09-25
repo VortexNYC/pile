@@ -283,4 +283,21 @@ export type RealtimeEvent =
       organizationId: string;
       ticketId: Id;
       noteId: Id;
+    }
+  | {
+      type: "audit.entry";
+      organizationId: string;
+      entry: {
+        id: string;
+        actorId: string | null;
+        actorType: string | null;
+        action: string;
+        entityType: string;
+        entityId: string;
+        changes: Record<string, { from: unknown; to: unknown }> | null;
+        ip: string | null;
+        country: string | null;
+        userAgent: string | null;
+        createdAt: string;
+      };
     };

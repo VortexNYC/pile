@@ -5,11 +5,11 @@ who tells whom, and what a clean incident looks like.
 
 ## Severity ladder
 
-| Sev | Definition | Examples | Response |
-|---|---|---|---|
+| Sev    | Definition                                                 | Examples                                                                                                                                    | Response                                                                                                                                                                                               |
+| ------ | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **S1** | Secrets exposed, data lost, or auth/tenant boundary broken | `BETTER_AUTH_SECRET`/KEK leaked; cross-workspace issue or ticket data readable (rls bypass); webhook secret forged; billing state corrupted | Stop the bleed first (revoke tokens, rotate secret, roll back deploy). Comms within **24h** to affected workspaces — what happened, what leaked, what we did, what they must do. Postmortem mandatory. |
-| **S2** | Control broken, no confirmed exposure | Backup script silently failing; queue backlog growing; email binding dead so users never get replies; DO migration drift | Fix inside a day. Comms only if customer-visible. Postmortem if the cause wasn't obvious. |
-| **S3** | Degraded but correct | Elevated 5xx on `pile.nyc`; cron sweep late; R2 upload failed but state intact | Fix on the normal track. Log it. |
+| **S2** | Control broken, no confirmed exposure                      | Backup script silently failing; queue backlog growing; email binding dead so users never get replies; DO migration drift                    | Fix inside a day. Comms only if customer-visible. Postmortem if the cause wasn't obvious.                                                                                                              |
+| **S3** | Degraded but correct                                       | Elevated 5xx on `pile.nyc`; cron sweep late; R2 upload failed but state intact                                                              | Fix on the normal track. Log it.                                                                                                                                                                       |
 
 When unsure between S1 and S2, treat as S1 for 30 minutes while you
 prove which it is. Downgrading later is free; upgrading late is not.
@@ -61,10 +61,15 @@ you must do" line is a rotation list per token/key.
 # Postmortem — <date>
 
 ## What happened
+
 ## Timeline (detected / contained / resolved)
+
 ## Root cause
+
 ## What worked
+
 ## What didn't
+
 ## Action items (each: owner, due)
 ```
 

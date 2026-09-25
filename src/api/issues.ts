@@ -41,30 +41,17 @@ import {
 } from "../types/workspace.js";
 import { filterConditionSchema } from "../workspace/filter.js";
 import { agentSessionSchema } from "./agent-sessions.js";
-import {
-  cleanPageText,
-  fetchReadablePage,
-  summarizeText,
-} from "./page-summary.js";
-
-function getExecutionCtx(c: {
-  executionCtx?: { waitUntil: (promise: Promise<unknown>) => void };
-}): { waitUntil: (promise: Promise<unknown>) => void } | undefined {
-  try {
-    const ctx = c.executionCtx;
-    if (!ctx) return undefined;
-    return {
-      waitUntil: (promise: Promise<unknown>) => ctx.waitUntil(promise),
-    };
-  } catch {
-    return undefined;
-  }
-}
+import { getExecutionCtx } from "./execution-ctx.js";
 import {
   encodeCursor,
   listIssuesQuerySchema,
   toListArgs,
 } from "./list-args.js";
+import {
+  cleanPageText,
+  fetchReadablePage,
+  summarizeText,
+} from "./page-summary.js";
 
 const templateDataSchema = z
   .object({
@@ -897,7 +884,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       Number(c.env.FREE_USE_CAP ?? 0),
       1,
       c.env,
-      c.executionCtx
+      getExecutionCtx(c)
     );
     const stub = await getStub(c.env, organizationId);
     let teamId = input.teamId;
@@ -1384,7 +1371,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       Number(c.env.FREE_USE_CAP ?? 0),
       1,
       c.env,
-      c.executionCtx
+      getExecutionCtx(c)
     );
     const stub = await getStub(c.env, organizationId);
     const issue = await stub.getIssue(id);

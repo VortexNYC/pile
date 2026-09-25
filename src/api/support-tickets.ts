@@ -28,6 +28,7 @@ import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { AppContext } from "../platform/middleware.js";
 import { publicRateLimit } from "../platform/rate-limit.js";
 import { rls } from "../platform/rls.js";
+import { getExecutionCtx } from "./execution-ctx.js";
 
 const supportTicketStatusEnum = z.enum(["todo", "done", "snoozed"]);
 const supportTicketPriorityEnum = z.enum(["low", "medium", "high", "urgent"]);
@@ -792,7 +793,7 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
       Number(c.env.FREE_USE_CAP ?? 0),
       1,
       c.env,
-      c.executionCtx
+      getExecutionCtx(c)
     );
 
     const ticket = await createTicket(

@@ -17,17 +17,8 @@ import type {
   workspaceAgentSessions,
 } from "../workspace/schema.js";
 import { captureSessionPrArtifact } from "./agent-artifacts.js";
+import { getExecutionCtx } from "./execution-ctx.js";
 import { getWorkspaceStub } from "./stub.js";
-
-function getExecutionCtx(c: {
-  executionCtx?: { waitUntil: (promise: Promise<unknown>) => void };
-}): { waitUntil: (promise: Promise<unknown>) => void } | undefined {
-  try {
-    return c.executionCtx;
-  } catch {
-    return undefined;
-  }
-}
 
 const agentActivityTypeSchema = z.enum([
   "thought",

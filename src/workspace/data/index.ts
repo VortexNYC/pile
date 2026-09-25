@@ -1928,6 +1928,9 @@ export interface AuditEntryInput {
   entityType: string;
   entityId: string;
   changes?: Record<string, { from: unknown; to: unknown }> | null;
+  ip?: string | null;
+  country?: string | null;
+  userAgent?: string | null;
 }
 
 export function recordAuditEntry(db: WorkspaceDb, input: AuditEntryInput) {
@@ -1942,6 +1945,9 @@ export function recordAuditEntry(db: WorkspaceDb, input: AuditEntryInput) {
       entityType: input.entityType,
       entityId: input.entityId,
       changes: input.changes ? JSON.stringify(input.changes) : null,
+      ip: input.ip ?? null,
+      country: input.country ?? null,
+      userAgent: input.userAgent ?? null,
       createdAt: new Date().toISOString(),
     })
     .returning()
