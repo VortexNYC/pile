@@ -36,6 +36,9 @@ jobs:
       - name: Check
         run: vp run check
 
+      - name: Secrets
+        run: vp run scan:secrets
+
       - name: Knip
         run: vp run knip
 

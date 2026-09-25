@@ -148,9 +148,6 @@ importers:
       openapi-fetch:
         specifier: 0.17.0
         version: 0.17.0
-      rrweb:
-        specifier: 2.1.4
-        version: 2.1.4
     devDependencies:
       '@pile/tsconfig':
         specifier: workspace:*
@@ -7980,7 +7977,7 @@ snapshots:
       ajv-errors: 3.0.0(ajv@8.20.0)
       ajv-formats: 2.1.1(ajv@8.20.0)
       avsc: 5.7.9
-      js-yaml: 4.3.1
+      js-yaml: 4.3.2
       jsonpath-plus: 10.4.0
       node-fetch: 2.6.7
     transitivePeerDependencies:
