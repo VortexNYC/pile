@@ -203,6 +203,25 @@ export async function submitUsageEvent(
   if (!account?.vortexCustomerId) {
     return;
   }
+  // Billing account can lag customer link (rows written before account
+  // resolution existed) — resolve lazily and persist.
+  let billingAccountId = account.vortexBillingAccountId;
+  if (!billingAccountId) {
+    billingAccountId = await ensureBillingAccountId(
+      env,
+      account.vortexCustomerId,
+      organizationId
+    );
+    if (billingAccountId) {
+      await db
+        .update(billingAccounts)
+        .set({
+          vortexBillingAccountId: billingAccountId,
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(billingAccounts.organizationId, organizationId));
+    }
+  }
   const idempotencyKey = `pile-usage-${crypto.randomUUID()}`;
   const res = await fetch(`${env.VORTEX_BILLING_API_URL}/v1/usage-events`, {
     method: "POST",
@@ -215,7 +234,7 @@ export async function submitUsageEvent(
       environment: env.VORTEX_BILLING_ENV ?? "production",
       merchantAccountId: env.VORTEX_BILLING_MERCHANT_ID,
       customerId: account.vortexCustomerId,
-      billingAccountId: account.vortexBillingAccountId ?? undefined,
+      billingAccountId: billingAccountId ?? undefined,
       meterId: env.VORTEX_BILLING_METER_ID,
       eventName: "usage",
       quantity: 1,
