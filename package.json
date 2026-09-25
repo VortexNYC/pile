@@ -37,6 +37,7 @@
     "check": "vp check",
     "build:packages": "pnpm --filter @vortex-api/pile build",
     "selfhost": "bash scripts/selfhost.sh",
+    "seed:local": "tsx scripts/seed-local.ts",
     "scan:secrets": "secretlint . --no-gitignore --secretlintignore .secretlintignore",
     "entire:review": "entire review",
     "entire:investigate": "entire investigate",

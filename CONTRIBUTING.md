@@ -7,9 +7,15 @@ on Cloudflare Workers.
 
 ```bash
 pnpm install
-pnpm dev          # wrangler dev
-pnpm run test     # vitest (workerd pool)
+cp .dev.vars.example .dev.vars                        # local secrets (BETTER_AUTH_SECRET)
+pnpm exec wrangler d1 migrations apply D1 --local     # create the local D1 schema
+pnpm dev                                              # wrangler dev → http://127.0.0.1:8787
+pnpm run test                                         # vitest (workerd pool)
 ```
+
+`pnpm run seed:local` (while `pnpm dev` is running) creates a demo workspace,
+team, issues, and a voted-on public ticket — and prints an API key you can use
+with `PILE_BASE_URL=http://127.0.0.1:8787`.
 
 Self-host your own instance with `pnpm run selfhost` — see README for details.
 
