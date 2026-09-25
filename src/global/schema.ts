@@ -2954,3 +2954,25 @@ export const supportCaptureSessions = sqliteTable(
     ),
   ]
 );
+
+export const billingAccounts = sqliteTable("billing_accounts" as string, {
+  organizationId: text("organization_id" as string)
+    .primaryKey()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  plan: text("plan" as string, { enum: ["free", "paid"] })
+    .notNull()
+    .default("free"),
+  status: text("status" as string, {
+    enum: ["active", "past_due", "canceled"],
+  })
+    .notNull()
+    .default("active"),
+  vortexCustomerId: text("vortex_customer_id" as string),
+  currentPeriodEnd: text("current_period_end" as string),
+  createdAt: text("created_at" as string)
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at" as string)
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});

@@ -1,4 +1,3 @@
-import { EmailMessage } from "cloudflare:email";
 import { createMimeMessage } from "mimetext";
 
 import type { WorkerEnv } from "../platform/middleware.js";
@@ -47,6 +46,7 @@ export async function sendEmail(
   if (!env.EMAIL) {
     throw new Error("EMAIL binding not configured");
   }
+  const { EmailMessage } = await import("cloudflare:email");
   await env.EMAIL.send(
     new EmailMessage(input.from, input.to, buildMime(input))
   );

@@ -2,12 +2,12 @@
 
 Pile state lives in four places:
 
-| Store | What's in it | Backup |
-|---|---|---|
-| `pile-global` (D1) | Orgs, members, auth, tickets, votes, changelog, channels | `wrangler d1 export` (schema + data) |
-| `WorkspaceDO` (DO SQLite) | Issues, comments, history, attachments refs, notifications | `GET /workspaces/{org}/export` |
-| `pile-attachments` (R2) | Upload/capture blobs | object manifest; objects are content-addressed |
-| Config/secrets | `wrangler.toml` (committed) + `wrangler secret` values | secrets live in Veil/1Password, not the dump |
+| Store                     | What's in it                                               | Backup                                         |
+| ------------------------- | ---------------------------------------------------------- | ---------------------------------------------- |
+| `pile-global` (D1)        | Orgs, members, auth, tickets, votes, changelog, channels   | `wrangler d1 export` (schema + data)           |
+| `WorkspaceDO` (DO SQLite) | Issues, comments, history, attachments refs, notifications | `GET /workspaces/{org}/export`                 |
+| `pile-attachments` (R2)   | Upload/capture blobs                                       | object manifest; objects are content-addressed |
+| Config/secrets            | `wrangler.toml` (committed) + `wrangler secret` values     | secrets live in Veil/1Password, not the dump   |
 
 ## Cadence
 

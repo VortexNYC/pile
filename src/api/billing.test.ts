@@ -151,3 +151,120 @@ describe("billing API", () => {
     expect(res.status).toBe(403);
   });
 });
+
+describe("free tier cap", () => {
+  it("enforces the cap and releases on paid plan", async () => {
+    const seeded = await seedWorkspace();
+    const org = seeded.organizationId;
+    const db = createD1(env.D1);
+
+    const { consumeUsage } = await import("../global/billing.js");
+    // under cap: 3 creates
+    await consumeUsage(db, org, "issues", "create", 3);
+    await consumeUsage(db, org, "issues", "create", 3);
+    await consumeUsage(db, org, "issues", "create", 3);
+    // 4th crosses the cap
+    await expect(
+      consumeUsage(db, org, "issues", "create", 3)
+    ).rejects.toMatchObject({ code: "USAGE_LIMIT", status: 402 });
+
+    // different resource shares the same window total
+    await expect(
+      consumeUsage(db, org, "tickets", "create", 3)
+    ).rejects.toMatchObject({ status: 402 });
+
+    // paid plan uncaps
+    const res = await fetch(
+      `/workspaces/${org}/billing/plan`,
+      { method: "POST", body: JSON.stringify({ plan: "paid" }) },
+      seeded.adminToken
+    );
+    expect(res.status).toBe(200);
+    await consumeUsage(db, org, "issues", "create", 3); // no throw
+
+    // cap 0 disables metering entirely
+    await consumeUsage(db, org, "issues", "create", 0);
+  });
+
+  it("billing view exposes plan, cap, and upgradeRequired", async () => {
+    const seeded = await seedWorkspace();
+    const res = await fetch(
+      `/workspaces/${seeded.organizationId}/billing`,
+      {},
+      seeded.adminToken
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json<{
+      plan: string;
+      status: string;
+      cap: number;
+      used: number;
+      upgradeRequired: boolean;
+    }>();
+    expect(body.plan).toBe("free");
+    expect(body.status).toBe("active");
+    expect(body.cap).toBe(0); // FREE_USE_CAP unset in test env
+    expect(body.upgradeRequired).toBe(false);
+  });
+});
+
+async function signWebhook(secret: string, body: string, t = Date.now()) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const signed = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(`${t}.${body}`)
+  );
+  const hex = [...new Uint8Array(signed)]
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+  return `t=${t},v1=${hex}`;
+}
+describe("billing webhook", () => {
+  it("rejects bad signatures and grants entitlements", async () => {
+    if (!env.BILLING_WEBHOOK_SECRET) {
+      // webhook 404s when unconfigured — assert and skip grant path
+      const res = await fetch("/billing/webhook", {
+        method: "POST",
+        body: JSON.stringify({ type: "entitlement.granted", data: {} }),
+      });
+      expect([401, 404]).toContain(res.status);
+      return;
+    }
+    const seeded = await seedWorkspace();
+    const body = JSON.stringify({
+      type: "entitlement.granted",
+      data: { externalCustomerRef: seeded.organizationId },
+    });
+
+    const bad = await fetch("/billing/webhook", {
+      method: "POST",
+      headers: { "Vortex-Signature": "t=1,v1=deadbeef" },
+      body,
+    });
+    expect(bad.status).toBe(401);
+
+    const ok = await fetch("/billing/webhook", {
+      method: "POST",
+      headers: {
+        "Vortex-Signature": await signWebhook(env.BILLING_WEBHOOK_SECRET, body),
+      },
+      body,
+    });
+    expect(ok.status).toBe(200);
+
+    const res = await fetch(
+      `/workspaces/${seeded.organizationId}/billing`,
+      {},
+      seeded.adminToken
+    );
+    const billing = await res.json<{ plan: string }>();
+    expect(billing.plan).toBe("paid");
+  });
+});

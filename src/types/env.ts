@@ -74,6 +74,15 @@ export interface AppEnv {
   // Cloudflare Email Service send binding.
   EMAIL?: SendEmail;
   EMAIL_FROM?: string;
+  /** Free-tier monthly usage allowance per org. "0"/unset = metering off. */
+  FREE_USE_CAP?: string;
+  /** Vortex Billing: merchant key (vp_), merchant account id, environment, webhook secret, upgrade URL. */
+  VORTEX_BILLING_API_URL?: string;
+  VORTEX_BILLING_API_KEY?: string;
+  VORTEX_BILLING_MERCHANT_ID?: string;
+  VORTEX_BILLING_ENV?: string;
+  BILLING_WEBHOOK_SECRET?: string;
+  BILLING_UPGRADE_URL?: string;
   // Cloudflare Queue for async webhook processing.
   WEBHOOK_QUEUE?: Queue;
 

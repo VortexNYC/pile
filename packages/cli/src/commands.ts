@@ -3932,6 +3932,43 @@ export const COMMANDS: Record<string, CommandDef> = {
     ],
     body: [],
   },
+  "billing plan create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/billing/plan",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "plan",
+        flag: "plan",
+      },
+      {
+        name: "status",
+        flag: "status",
+      },
+    ],
+  },
+  "billing webhook create": {
+    method: "POST",
+    path: "/billing/webhook",
+    params: [],
+    query: [],
+    body: [
+      {
+        name: "type",
+        flag: "type",
+      },
+      {
+        name: "data",
+        flag: "data",
+      },
+    ],
+  },
   "view preferences list": {
     method: "GET",
     path: "/workspaces/{organizationId}/view-preferences",

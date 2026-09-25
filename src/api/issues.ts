@@ -5,6 +5,7 @@ import { eq, and } from "drizzle-orm";
 import { loadProviderConfig } from "../agents/credentials.js";
 import { resolveAgentEnv } from "../agents/daytona.js";
 import { dispatchAgent, getAgentProvider } from "../agents/index.js";
+import { consumeUsage } from "../global/billing.js";
 import { createD1 } from "../global/db.js";
 import { deleteIssueReferences } from "../global/issue-data.js";
 import {
@@ -888,6 +889,13 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId } = c.req.valid("param");
     const identity = c.get("workspaceIdentity");
     const db = createD1(c.env.D1);
+    await consumeUsage(
+      db,
+      organizationId,
+      "issues",
+      "create",
+      Number(c.env.FREE_USE_CAP ?? 0)
+    );
     const stub = await getStub(c.env, organizationId);
     let teamId = input.teamId;
     if (input.parentId) {
@@ -1365,6 +1373,13 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId, id } = c.req.valid("param");
     const identity = c.get("workspaceIdentity");
     const db = createD1(c.env.D1);
+    await consumeUsage(
+      db,
+      organizationId,
+      "agents",
+      "dispatch",
+      Number(c.env.FREE_USE_CAP ?? 0)
+    );
     const stub = await getStub(c.env, organizationId);
     const issue = await stub.getIssue(id);
     if (!issue) {

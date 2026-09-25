@@ -9277,6 +9277,15 @@ export interface paths {
                         "application/json": {
                             organizationId: string;
                             period: string;
+                            /** @enum {string} */
+                            plan: "free" | "paid";
+                            /** @enum {string} */
+                            status: "active" | "past_due" | "canceled";
+                            cap: number;
+                            used: number;
+                            remaining: number;
+                            upgradeRequired: boolean;
+                            upgradeUrl?: string;
                             usage: {
                                 resource: string;
                                 action: string;
@@ -9290,6 +9299,112 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/billing/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create billing plan */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        plan: "free" | "paid";
+                        /** @enum {string} */
+                        status?: "active" | "past_due" | "canceled";
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated billing account */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            organizationId: string;
+                            /** @enum {string} */
+                            plan: "free" | "paid";
+                            /** @enum {string} */
+                            status: "active" | "past_due" | "canceled";
+                            vortexCustomerId: string | null;
+                            currentPeriodEnd: string | null;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/billing/webhook": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create billing webhook */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        type: string;
+                        data: {
+                            externalCustomerRef?: string;
+                            status?: string;
+                            currentPeriodEnd?: string;
+                        } & {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Webhook processed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                        };
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;

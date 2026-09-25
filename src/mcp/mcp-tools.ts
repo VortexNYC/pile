@@ -7414,6 +7414,46 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postBillingWebhook",
+    "description": "Create billing webhook (POST /billing/webhook) Request body goes in the \"body\" object; fields: type*, data* (* = required).",
+    "method": "POST",
+    "path": "/billing/webhook",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "externalCustomerRef": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "currentPeriodEnd": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": {
+                "nullable": true
+              }
+            }
+          },
+          "required": [
+            "type",
+            "data"
+          ]
+        }
+      }
+    }
+  },
+  {
     "name": "postGitlab",
     "description": "Create gitlab (POST /gitlab)",
     "method": "POST",
@@ -8866,6 +8906,46 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdBillingPlan",
+    "description": "Create billing plan (POST /workspaces/{organizationId}/billing/plan) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: plan*, status (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/billing/plan",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "plan": {
+              "type": "string",
+              "enum": [
+                "free",
+                "paid"
+              ]
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "active",
+                "past_due",
+                "canceled"
+              ]
+            }
+          },
+          "required": [
+            "plan"
+          ]
+        }
+      },
+      "required": [
         "organizationId"
       ]
     }

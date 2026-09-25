@@ -8,7 +8,7 @@ Pile sends and receives email through Cloudflare Email Routing + the
 Email Routing isn't covered by the wrangler OAuth token used for deploys;
 do this once in the dashboard (or with an `Email Routing:Edit` API token):
 
-1. **Enable Email Routing** — zone → Email → Email Routing → *Get started*.
+1. **Enable Email Routing** — zone → Email → Email Routing → _Get started_.
    Cloudflare adds MX + SPF records automatically.
 2. **Catch-all rule** → destination: worker `pile`. The worker's `email()`
    handler parses with `postal-mime`, maps the recipient to an active

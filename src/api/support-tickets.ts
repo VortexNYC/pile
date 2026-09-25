@@ -2,6 +2,7 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 import { and, eq } from "drizzle-orm";
 
+import { consumeUsage } from "../global/billing.js";
 import { createD1 } from "../global/db.js";
 import { supportTicketAttachments } from "../global/schema.js";
 import { getCustomerById } from "../global/support-contacts.js";
@@ -783,6 +784,13 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId } = c.req.valid("param");
     const body = c.req.valid("json");
     const db = createD1(c.env.D1);
+    await consumeUsage(
+      db,
+      organizationId,
+      "tickets",
+      "create",
+      Number(c.env.FREE_USE_CAP ?? 0)
+    );
 
     const ticket = await createTicket(
       db,

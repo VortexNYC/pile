@@ -7,6 +7,7 @@ export const ERROR_CATALOG = {
   FORBIDDEN: { status: 403, message: "Forbidden" },
   NOT_FOUND: { status: 404, message: "Not found" },
   CONFLICT: { status: 409, message: "Conflict" },
+  USAGE_LIMIT: { status: 402, message: "Usage limit reached" },
   UNPROCESSABLE_CONTENT: { status: 422, message: "Unprocessable content" },
   TOO_MANY_REQUESTS: { status: 429, message: "Too many requests" },
   AGENT_ERROR: { status: 502, message: "Agent provider error" },

@@ -17873,6 +17873,36 @@
                     "period": {
                       "type": "string"
                     },
+                    "plan": {
+                      "type": "string",
+                      "enum": [
+                        "free",
+                        "paid"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "active",
+                        "past_due",
+                        "canceled"
+                      ]
+                    },
+                    "cap": {
+                      "type": "integer"
+                    },
+                    "used": {
+                      "type": "integer"
+                    },
+                    "remaining": {
+                      "type": "integer"
+                    },
+                    "upgradeRequired": {
+                      "type": "boolean"
+                    },
+                    "upgradeUrl": {
+                      "type": "string"
+                    },
                     "usage": {
                       "type": "array",
                       "items": {
@@ -17902,6 +17932,12 @@
                   "required": [
                     "organizationId",
                     "period",
+                    "plan",
+                    "status",
+                    "cap",
+                    "used",
+                    "remaining",
+                    "upgradeRequired",
                     "usage",
                     "total"
                   ]
@@ -17911,6 +17947,163 @@
           }
         },
         "summary": "List billing"
+      }
+    },
+    "/workspaces/{organizationId}/billing/plan": {
+      "post": {
+        "tags": [
+          "billing"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "plan": {
+                    "type": "string",
+                    "enum": [
+                      "free",
+                      "paid"
+                    ]
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "past_due",
+                      "canceled"
+                    ]
+                  }
+                },
+                "required": [
+                  "plan"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated billing account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "plan": {
+                      "type": "string",
+                      "enum": [
+                        "free",
+                        "paid"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "active",
+                        "past_due",
+                        "canceled"
+                      ]
+                    },
+                    "vortexCustomerId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "currentPeriodEnd": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "organizationId",
+                    "plan",
+                    "status",
+                    "vortexCustomerId",
+                    "currentPeriodEnd"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create billing plan"
+      }
+    },
+    "/billing/webhook": {
+      "post": {
+        "tags": [
+          "billing"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string"
+                  },
+                  "data": {
+                    "type": "object",
+                    "properties": {
+                      "externalCustomerRef": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string"
+                      },
+                      "currentPeriodEnd": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": {
+                      "nullable": true
+                    }
+                  }
+                },
+                "required": [
+                  "type",
+                  "data"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook processed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create billing webhook"
       }
     },
     "/workspaces/{organizationId}/view-preferences": {
