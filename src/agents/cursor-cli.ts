@@ -60,7 +60,8 @@ function parseRepo(repo: string): [string, string] {
 function buildPrompt(
   issue: Issue,
   gitIdentity?: GitIdentity | null,
-  comments?: DispatchComment[]
+  comments?: DispatchComment[],
+  instructions?: string
 ): string {
   const repo = issue.repo ?? "this repository";
   const branch = issue.branch ?? `issue-${issue.id}`;
@@ -97,6 +98,7 @@ function buildPrompt(
       : []),
     "",
     ...identityLines,
+    ...(instructions ? ["", "## Dispatch instructions", "", instructions] : []),
     "",
     "Implement the requested change. Verify proportionate to the diff: always run the project's lint/typecheck (for example `pnpm run check`) when the toolchain exists; when you change code, add or extend tests covering the change and run the relevant suites; skip tests entirely when the diff is docs/config-only. Do not burn time on suites that need network egress the sandbox lacks — note the limitation and move on. Make commits with clear messages. Do not push and do not open a pull request — the runner handles that after you exit.",
     "Do not attempt to update Pile yourself — an external system will poll your session and write the status back automatically.",
@@ -478,6 +480,7 @@ function buildSandboxEnv(
   githubToken: string,
   gitIdentity: GitIdentity,
   comments?: DispatchComment[],
+  instructions?: string,
   logUrl?: string | null,
   logToken?: string | null,
   cacheUrl?: string | null
@@ -485,7 +488,7 @@ function buildSandboxEnv(
   const branch = issue.branch ?? `issue-${issue.id}`;
   const repo = issue.repo ?? "";
   const identifier = issue.identifier ?? issue.id;
-  const prompt = buildPrompt(issue, gitIdentity, comments);
+  const prompt = buildPrompt(issue, gitIdentity, comments, instructions);
   return {
     ...(logUrl && logToken
       ? { PILE_LOG_URL: logUrl, PILE_LOG_TOKEN: logToken }
@@ -600,7 +603,8 @@ export class CursorCliAgentProvider implements AgentProvider {
     model: string,
     sessionId: string,
     gitIdentity: GitIdentity,
-    comments?: DispatchComment[]
+    comments?: DispatchComment[],
+    instructions?: string
   ) {
     const apiKey = this.requireAuth();
     const compute = this.requireCompute();
@@ -642,6 +646,7 @@ export class CursorCliAgentProvider implements AgentProvider {
         githubToken,
         gitIdentity,
         comments,
+        instructions,
         agentLogUrl(workerEnv, organizationId, sessionId),
         await agentLogToken(workerEnv, organizationId, sessionId),
         agentCacheUrl(workerEnv, organizationId, sessionId)
@@ -717,7 +722,8 @@ export class CursorCliAgentProvider implements AgentProvider {
       effectiveModel,
       sessionId,
       gitIdentity,
-      sessionContext?.comments
+      sessionContext?.comments,
+      sessionContext?.instructions
     );
 
     if (sessionContext?.waitUntil) {

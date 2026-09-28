@@ -195,6 +195,123 @@ describe("agent sessions API", () => {
     expect(badRes.status).toBe(400);
   });
 
+  it("accepts repo/branch/instructions overrides without mutating the issue", async () => {
+    let captured:
+      | {
+          issue: { repo?: string | null; branch?: string | null };
+          context?: { instructions?: string };
+        }
+      | undefined;
+    registerAgentProvider(
+      "mock-override",
+      () =>
+        new MockAgentProvider("mock-override", {
+          dispatch: (_org, dispatchedIssue, _model, ctx) => {
+            captured = { issue: dispatchedIssue, context: ctx };
+            return {
+              id: "override-1",
+              agentId: "mock-override",
+              status: "created",
+            };
+          },
+        })
+    );
+
+    const issueRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ title: "Override dispatch" }),
+      }),
+      env
+    );
+    expect(issueRes.status).toBe(201);
+    const issue = await issueRes.json<{ id: string }>();
+
+    const missingRepo = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${issue.id}/dispatch`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ agentId: "mock-override" }),
+      }),
+      env
+    );
+    expect(missingRepo.status).toBe(400);
+
+    const dispatchRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${issue.id}/dispatch`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          agentId: "mock-override",
+          repo: "VortexNYC/other",
+          branch: "feat/override",
+          instructions: "Stay inside src/api",
+        }),
+      }),
+      env
+    );
+    expect(dispatchRes.status).toBe(201);
+    expect(captured?.issue.repo).toBe("VortexNYC/other");
+    expect(captured?.issue.branch).toBe("feat/override");
+    expect(captured?.context?.instructions).toBe("Stay inside src/api");
+
+    const getRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${issue.id}`, { token }),
+      env
+    );
+    const stored = await getRes.json<{
+      repo: string | null;
+      branch: string | null;
+    }>();
+    expect(stored.repo).toBeNull();
+    expect(stored.branch).toBeNull();
+  });
+
+  it("prefers stored repo/branch when no overrides are given", async () => {
+    let captured: { repo?: string | null; branch?: string | null } | undefined;
+    registerAgentProvider(
+      "mock-stored",
+      () =>
+        new MockAgentProvider("mock-stored", {
+          dispatch: (_org, dispatchedIssue) => {
+            captured = dispatchedIssue;
+            return {
+              id: "stored-1",
+              agentId: "mock-stored",
+              status: "created",
+            };
+          },
+        })
+    );
+
+    const issueRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          title: "Stored repo",
+          repo: "VortexNYC/pile",
+          branch: "iss-42",
+        }),
+      }),
+      env
+    );
+    const issue = await issueRes.json<{ id: string }>();
+
+    const dispatchRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${issue.id}/dispatch`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ agentId: "mock-stored" }),
+      }),
+      env
+    );
+    expect(dispatchRes.status).toBe(201);
+    expect(captured?.repo).toBe("VortexNYC/pile");
+    expect(captured?.branch).toBe("iss-42");
+  });
+
   it("appends an activity and updates session state", async () => {
     const stub = env.WORKSPACE_DURABLE_OBJECT.get(
       env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)

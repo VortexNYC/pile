@@ -41,6 +41,11 @@ export interface GitIdentity {
   updatedAt: string;
 }
 
+/** Sentinel `repo` value for a workspace-default git identity — the fallback
+ *  when no repo-bound identity exists. Real GitHub repos can't be named `*`,
+ *  so the row is unambiguous and needs no schema change. */
+export const DEFAULT_GIT_IDENTITY_REPO = "*";
+
 export const ISSUE_STATUSES = [
   "triage",
   "backlog",
