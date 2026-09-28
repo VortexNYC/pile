@@ -17,28 +17,6 @@ type VortexCustomer = {
   billingAccountId?: string;
 };
 
-async function findCustomerByRef(
-  env: AppEnv,
-  externalCustomerRef: string
-): Promise<VortexCustomer | null> {
-  const url = `${env.VORTEX_BILLING_API_URL}/v1/customers?externalCustomerRef=${encodeURIComponent(externalCustomerRef)}`;
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${env.VORTEX_BILLING_API_KEY}` },
-  });
-  if (!res.ok) {
-    return null;
-  }
-  const body = (await res.json()) as {
-    // List responses nest under data.items; a bare object is a single record.
-    data?: { items?: VortexCustomer[] } | VortexCustomer[];
-  };
-  const data = body.data;
-  if (Array.isArray(data)) {
-    return data[0] ?? null;
-  }
-  return data?.items?.[0] ?? null;
-}
-
 async function ensureBillingAccountId(
   env: AppEnv,
   customerId: string,
@@ -91,8 +69,8 @@ async function ensureBillingAccountId(
 
 /**
  * Provision the Vortex billing customer keyed by Pile org id
- * (externalCustomerRef is the join key). Vortex has no upsert — create 409s
- * on collision — so we look up by ref first and again on conflict. Returns
+ * (externalCustomerRef is the join key). PUT /v1/customers is an
+ * ensure-upsert — repeat calls return the same customer. Returns
  * the Vortex customerId, or null when billing envs aren't configured.
  */
 export async function ensureBillingCustomer(
@@ -114,32 +92,30 @@ export async function ensureBillingCustomer(
     return null;
   }
 
-  let customer = await findCustomerByRef(env, organizationId);
-  if (!customer?.customerId) {
-    const res = await fetch(`${env.VORTEX_BILLING_API_URL}/v1/customers`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${env.VORTEX_BILLING_API_KEY}`,
-        "Content-Type": "application/json",
-        "Idempotency-Key": `pile-customer-${organizationId}`,
-      },
-      body: JSON.stringify({
-        environment: env.VORTEX_BILLING_ENV ?? "production",
-        merchantAccountId: env.VORTEX_BILLING_MERCHANT_ID,
-        name: organizationId,
-        defaultCurrency: "USD",
-        externalCustomerRef: organizationId,
-        metadata: { source: "pile", orgId: organizationId },
-      }),
-    });
-    if (res.status === 409) {
-      customer = await findCustomerByRef(env, organizationId);
-    } else if (res.ok) {
-      const body = (await res.json()) as { data?: VortexCustomer };
-      customer = body.data ?? null;
-    } else {
-      throw new Error(`vortex customers: ${res.status}`);
-    }
+  // PUT /v1/customers is the ensure-upsert: dedupes on externalCustomerRef
+  // first, returns the same customerId on repeat calls (VOR-610).
+  const res = await fetch(`${env.VORTEX_BILLING_API_URL}/v1/customers`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${env.VORTEX_BILLING_API_KEY}`,
+      "Content-Type": "application/json",
+      "Idempotency-Key": `pile-customer-${organizationId}`,
+    },
+    body: JSON.stringify({
+      environment: env.VORTEX_BILLING_ENV ?? "production",
+      merchantAccountId: env.VORTEX_BILLING_MERCHANT_ID,
+      name: organizationId,
+      defaultCurrency: "USD",
+      externalCustomerRef: organizationId,
+      metadata: { source: "pile", orgId: organizationId },
+    }),
+  });
+  let customer: VortexCustomer | null = null;
+  if (res.ok) {
+    const body = (await res.json()) as { data?: VortexCustomer };
+    customer = body.data ?? null;
+  } else {
+    throw new Error(`vortex customers: ${res.status}`);
   }
   const customerId = customer?.customerId;
   if (!customerId) {
