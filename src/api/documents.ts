@@ -113,6 +113,33 @@ function notFound(): never {
   });
 }
 
+// `issueId` inputs accept the issue UUID or its identifier (`ISS-123`) —
+// agent callers know the identifier, not the internal id. Returns the UUID,
+// or null when nothing matches.
+async function resolveIssueId(
+  stub: ReturnType<typeof getWorkspaceStub>,
+  ref: string
+): Promise<string | null> {
+  const issue =
+    (await stub.getIssue(ref)) ?? (await stub.getIssueByIdentifier(ref));
+  return issue ? issue.id : null;
+}
+
+async function requireIssueId(
+  stub: ReturnType<typeof getWorkspaceStub>,
+  ref: string
+): Promise<string> {
+  const id = await resolveIssueId(stub, ref);
+  if (!id) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Issue not found",
+    });
+  }
+  return id;
+}
+
 // Per-doc grants: when a doc has any permission rows, only listed actors
 // (+ workspace admins, + members of granted Better Auth teams) get in.
 // Default-open otherwise.
@@ -773,9 +800,13 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId } = c.req.valid("param");
     const query = c.req.valid("query");
     const stub = getWorkspaceStub(c.env, organizationId);
+    const issueId =
+      query.issueId === undefined
+        ? undefined
+        : ((await resolveIssueId(stub, query.issueId)) ?? query.issueId);
     const rows = await stub.listDocuments({
       projectId: query.projectId,
-      issueId: query.issueId,
+      issueId,
       initiativeId: query.initiativeId,
       parentDocumentId: query.parentDocumentId,
       spaceId: query.spaceId,
@@ -792,6 +823,10 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
     const stub = getWorkspaceStub(c.env, organizationId);
     const doc = await stub.createDocument({
       ...input,
+      issueId:
+        input.issueId === undefined
+          ? undefined
+          : await requireIssueId(stub, input.issueId),
       createdById: identity.id,
     });
     return c.json(toResponse(doc), 201);
@@ -812,7 +847,13 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
     const identity = c.get("workspaceIdentity");
     const stub = getWorkspaceStub(c.env, organizationId);
     await assertDocAccess(c, stub, id, "edit");
-    const doc = await stub.updateDocument(id, input, identity.id);
+    const doc = await stub.updateDocument(
+      id,
+      typeof input.issueId === "string"
+        ? { ...input, issueId: await requireIssueId(stub, input.issueId) }
+        : input,
+      identity.id
+    );
     if (!doc) return notFound();
     return c.json(toResponse(doc));
   });
@@ -1058,11 +1099,12 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(issueDocumentsRoute, async (c) => {
     const { organizationId, issueId } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
+    const resolved = (await resolveIssueId(stub, issueId)) ?? issueId;
     const links = await stub.listDocumentLinks({
       targetType: "issue",
-      targetId: issueId,
+      targetId: resolved,
     });
-    const direct = await stub.listDocuments({ issueId });
+    const direct = await stub.listDocuments({ issueId: resolved });
     const linked = await Promise.all(
       links.map((l) => stub.getDocument(l.documentId))
     );

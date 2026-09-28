@@ -57,6 +57,15 @@ For every non-trivial chunk of work:
 4. Verify the change through the product API before reporting completion.
 5. Actively look for opportunities to use the Pile API, CLI, SDK, or MCP for issue lifecycle (status, comments, assignments, branch/PR metadata) instead of `gh`, `git`, or external trackers. Default to the product for updates, verification, and triage.
 
+### Agent session notes
+
+Durable session notes live in Pile documents — never in repo files. Do not create `NOTES.md` or other scratch-note files, and never commit them.
+
+- Write a note with `POST /workspaces/org_vortex_main/documents` — `contentFormat: "markdown"`, `issueId` set to the issue (the `ISS-N` identifier works; the UUID does too), plus `projectId` when relevant. CLI equivalent: `pile documents create --workspace org_vortex_main --title "ISS-N — topic" --content-format markdown --issue ISS-N --content ...`.
+- Retrieve every note for a ticket with `GET /workspaces/org_vortex_main/documents?issueId=ISS-N`, `GET /workspaces/org_vortex_main/issues/ISS-N/documents`, or `pile documents list --workspace org_vortex_main --issue ISS-N`.
+- Title convention: `ISS-N — topic`.
+- Before finishing a chunk of work, write non-obvious findings (decisions, dead ends, verification output) to a linked note so the next session can pick them up.
+
 ## Where things live
 
 - `src/api/index.ts` — main Hono/OpenAPIHono app, serves `/openapi.json`.
