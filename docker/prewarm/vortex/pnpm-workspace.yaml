@@ -1,0 +1,59 @@
+packages:
+  - "packages/*"
+  - "apps/*"
+  - "sdks/typescript"
+minimumReleaseAgeExclude:
+  - blume@1.3.1
+  - miniflare@5.20260804.0-alpha || 5.20260804.1-alpha
+  - "@cloudflare/vitest-plugin@1.0.0"
+  # apps/landing (Astro) — fresh transitive pins under 24h minimumReleaseAge
+  - "@astrojs/language-server@2.16.14"
+  - "@testing-library/user-event@14.6.4"
+  - electron-to-chromium@1.5.405
+  - smol-toml@1.8.0
+  - '@better-auth/api-key@1.7.1'
+  - '@better-auth/core@1.7.1'
+  - '@better-auth/drizzle-adapter@1.7.1'
+  - '@better-auth/kysely-adapter@1.7.1'
+  - '@better-auth/memory-adapter@1.7.1'
+  - '@better-auth/mongo-adapter@1.7.1'
+  - '@better-auth/prisma-adapter@1.7.1'
+  - '@better-auth/telemetry@1.7.1'
+  - better-auth@1.7.1
+  - '@shadcn/lint@0.1.0'
+  - '@vortex-api/better-auth-ui@0.1.5 || 0.1.7 || 0.1.8 || 0.1.9 || 0.2.0 || 0.2.1'
+linkWorkspacePackages: true
+preferWorkspacePackages: true
+# Approve build scripts for trusted deps that legitimately need them, so a fresh
+# `pnpm install --frozen-lockfile` in CI doesn't hard-fail with ERR_PNPM_IGNORED_BUILDS.
+# pnpm 11 renamed onlyBuiltDependencies -> allowBuilds (the old key is silently ignored).
+allowBuilds:
+  esbuild: true
+  "@openapitools/openapi-generator-cli": true
+  # core-js's postinstall only prints a funding banner; nothing is compiled.
+  core-js: false
+  workerd: true
+  sharp: true
+
+overrides:
+  vite: npm:@voidzero-dev/vite-plus-core@0.2.4
+  vitest: 4.1.10
+  # One Node types graph for the whole monorepo. Landing must not introduce
+  # @types/node@20 (or a parallel vite-plus peer graph) that breaks root vp check.
+  "@types/node": "26.1.1"
+  # @simplewebauthn/server (agent-auth) resolved @peculiar/asn1-*@2.9.0
+  # published inside the 24h window. 2.8.0 is in range (^2.6.x) and aged.
+  "@peculiar/asn1-android": "2.8.0"
+  "@peculiar/asn1-cms": "2.8.0"
+  "@peculiar/asn1-csr": "2.8.0"
+  "@peculiar/asn1-ecc": "2.8.0"
+  "@peculiar/asn1-pfx": "2.8.0"
+  "@peculiar/asn1-pkcs8": "2.8.0"
+  "@peculiar/asn1-pkcs9": "2.8.0"
+  "@peculiar/asn1-rsa": "2.8.0"
+  "@peculiar/asn1-schema": "2.8.0"
+  "@peculiar/asn1-x509-attr": "2.8.0"
+  "@peculiar/asn1-x509": "2.8.0"
+
+patchedDependencies:
+  postgres@3.4.9: patches/postgres@3.4.9.patch

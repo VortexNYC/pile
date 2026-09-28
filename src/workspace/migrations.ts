@@ -739,6 +739,8 @@ ALTER TABLE audit_log ADD COLUMN country TEXT
 --> statement-breakpoint
 ALTER TABLE audit_log ADD COLUMN user_agent TEXT`;
 
+const v42 = `ALTER TABLE agent_sessions ADD COLUMN started_at TEXT`;
+
 export const workspaceMigrations = {
   journal: {
     entries: [
@@ -783,6 +785,7 @@ export const workspaceMigrations = {
       { idx: 38, when: 38, tag: "v39", breakpoints: true },
       { idx: 39, when: 39, tag: "v40", breakpoints: true },
       { idx: 40, when: 40, tag: "v41", breakpoints: true },
+      { idx: 41, when: 41, tag: "v42", breakpoints: true },
     ],
   },
   migrations: {
@@ -827,5 +830,6 @@ export const workspaceMigrations = {
     m0038: v39,
     m0039: v40,
     m0040: v41,
+    m0041: v42,
   },
 } satisfies Parameters<typeof migrate>[1];

@@ -932,6 +932,10 @@ export interface AgentSessionInput {
   result?: string | null;
   url?: string | null;
   providerSessionId?: string | null;
+  createdAt?: string;
+  startedAt?: string | null;
+  prUrl?: string | null;
+  prState?: string | null;
 }
 
 export async function createAgentSession(
@@ -952,7 +956,10 @@ export async function createAgentSession(
     result: input.result ?? null,
     url: input.url ?? null,
     providerSessionId: input.providerSessionId ?? null,
-    createdAt: ts,
+    createdAt: input.createdAt ?? ts,
+    startedAt: input.startedAt ?? null,
+    prUrl: input.prUrl ?? null,
+    prState: input.prState ?? null,
     updatedAt: ts,
   });
   const row = await db
@@ -1006,6 +1013,7 @@ export function listAgentSessions(
   options: {
     issueId?: string;
     status?: AgentSessionStatus;
+    openPr?: boolean;
     limit?: number;
   } = {}
 ) {
@@ -1017,6 +1025,10 @@ export function listAgentSessions(
   }
   if (options.status) {
     conditions.push(eq(workspaceAgentSessions.status, options.status));
+  }
+  if (options.openPr) {
+    conditions.push(isNotNull(workspaceAgentSessions.prUrl));
+    conditions.push(eq(workspaceAgentSessions.prState, "open"));
   }
   return db
     .select()
@@ -1049,6 +1061,10 @@ export async function updateAgentSession(
     lastStateHash: string | null;
     retryOf: string | null;
     retryCount: number;
+    startedAt: string | null;
+    prUrl: string | null;
+    prState: string | null;
+    branch: string | null;
   }>
 ) {
   const existing = await getAgentSession(db, organizationId, id);
@@ -1067,6 +1083,10 @@ export async function updateAgentSession(
     set.lastStateHash = input.lastStateHash;
   if (input.retryOf !== undefined) set.retryOf = input.retryOf;
   if (input.retryCount !== undefined) set.retryCount = input.retryCount;
+  if (input.startedAt !== undefined) set.startedAt = input.startedAt;
+  if (input.prUrl !== undefined) set.prUrl = input.prUrl;
+  if (input.prState !== undefined) set.prState = input.prState;
+  if (input.branch !== undefined) set.branch = input.branch;
   await db
     .update(workspaceAgentSessions)
     .set(set)

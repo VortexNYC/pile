@@ -1,18 +1,49 @@
 FROM docker.io/cloudflare/sandbox:0.12.9
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git python3 curl ca-certificates \
+    && apt-get install -y --no-install-recommends git python3 curl ca-certificates gnupg lsb-release \
     && rm -rf /var/lib/apt/lists/*
 
+# Postgres 16 from PGDG — debian stable ships 15, but lane targets (vortex)
+# test against 16. `pg_createcluster` bakes the cluster so the runner's
+# `pg_ctlcluster 16 main start` just starts it (ensure_postgres in
+# src/agents/devin-cli.ts).
+RUN install -d /usr/share/postgresql-common/pgdg \
+    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+        -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+    && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] http://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo "$VERSION_CODENAME")-pgdg main" \
+        > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends postgresql-16 \
+    && rm -rf /var/lib/apt/lists/* \
+    && pg_createcluster 16 main
+
 # Repo toolchain baked: agents routinely run `pnpm install`/`check`; without
-# this they bootstrap pnpm via npm/corepack on every run (~2-5 min wasted).
-RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+# this they bootstrap pnpm via npm/corepack on every run. Node 24 and pnpm
+# 11.13.1 match vortex's .nvmrc/packageManager — corepack still resolves the
+# per-repo version for repos that pin something else.
+RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/* \
     && corepack enable \
-    && corepack prepare pnpm@9.15.4 --activate
+    && corepack prepare pnpm@11.13.1 --activate
 
 ENV HOME=/root
+
+# Prewarm the pnpm store. Lanes extract a branch tarball into a fresh dir and
+# run `pnpm install` — with the store baked, install only fetches lockfile
+# drift instead of the whole tree. Seeds are vendored lockfile snapshots
+# (docker/prewarm/); refresh them occasionally — drift is fine, it's a cache.
+# `pnpm fetch` needs package.json (+workspace manifest) next to the lockfile
+# or it no-ops. This repo's own files COPY from the root; lane targets are
+# vendored snapshots under docker/prewarm/.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml /prewarm/pile/
+COPY docker/prewarm/ /prewarm/
+RUN cd /prewarm/pile && pnpm fetch \
+    && cd /prewarm/vortex && pnpm fetch \
+    && cd /prewarm/seal && pnpm fetch \
+    && rm -rf /prewarm
+
 # The devin installer exits non-zero when its interactive wizard bails
 # without a TTY; verify the binary directly.
 RUN mkdir -p /root/.local/bin \

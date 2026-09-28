@@ -397,4 +397,42 @@ describe("DevinCliAgentProvider", () => {
     );
     expect(deleteCall).toBeDefined();
   });
+
+  it("fails provision when sandbox compute hangs instead of stalling forever", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      // Only Daytona calls hang — session activity writes go through the DO
+      // binding (absent here) and no-op.
+      vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+        if (String(input).includes("app.daytona.io")) {
+          return new Promise<Response>(() => {});
+        }
+        return Promise.resolve(new Response("{}", { status: 200 }));
+      });
+
+      const provider = new DevinCliAgentProvider(cliEnv());
+      (
+        provider as unknown as {
+          githubToken: (repo: string) => Promise<string>;
+        }
+      ).githubToken = vi.fn().mockResolvedValue("gh-token");
+
+      const waitUntilCalls: Promise<unknown>[] = [];
+      const result = await provider.dispatch("org-1", issueFixture(), "swe-2", {
+        sessionId: "sess-hang",
+        gitIdentity: gitIdentityFixture(),
+        waitUntil: (p) => waitUntilCalls.push(p),
+      });
+      expect(result.status).toBe("created");
+      expect(waitUntilCalls).toHaveLength(1);
+
+      const assertion = expect(waitUntilCalls[0]).rejects.toThrow(
+        "devin-cli provision timed out"
+      );
+      await vi.advanceTimersByTimeAsync(6 * 60 * 1000);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

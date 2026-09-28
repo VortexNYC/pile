@@ -9,7 +9,7 @@ const outputPath = resolve(repoRoot, "src/assets/docs-bundle.ts");
 
 const files = readdirSync(docsDir)
   .filter((f) => f.endsWith(".md"))
-  .sort();
+  .toSorted();
 
 const entries = files.map(
   (f) =>

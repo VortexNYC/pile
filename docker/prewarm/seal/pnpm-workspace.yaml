@@ -1,0 +1,84 @@
+nodeLinker: isolated
+strictPeerDependencies: false
+autoInstallPeers: true
+
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "tooling/*"
+
+catalog:
+  "@types/node": "^25.9.7"
+  "@types/react": "^19.3.0"
+  "@types/react-dom": "^19.3.0"
+  "react": "^19.3.0"
+  "react-dom": "^19.3.0"
+  "typescript": "~7.0.2"
+  "vite": "^8.3.0"
+  "vite-node": "^6.0.0"
+  "vitest": "^4.1.11"
+  "zod": "^4.6.5"
+
+allowBuilds:
+  "@scarf/scarf": false
+  "@playwright/browser-chromium": true
+  "@swc/core": true
+  core-js: true
+  core-js-pure: true
+  esbuild: true
+  onnxruntime-node: true
+  protobufjs: true
+  sharp: true
+  simple-git-hooks: true
+  workerd: true
+
+onlyBuiltDependencies:
+  - "@playwright/browser-chromium"
+  - "@swc/core"
+  - core-js
+  - core-js-pure
+  - esbuild
+  - onnxruntime-node
+  - protobufjs
+  - sharp
+  - simple-git-hooks
+  - workerd
+
+minimumReleaseAgeExclude:
+  - "@tanstack/react-router-devtools@1.167.1"
+  - "@tanstack/router-devtools-core@1.168.1"
+  - "@tanstack/react-router@1.170.19"
+  - "@tanstack/router-core@1.171.16"
+  - "@tanstack/router-generator@1.167.22"
+  - "@tanstack/router-plugin@1.168.24"
+  - '@ai-sdk/gateway@4.0.78'
+  - '@ai-sdk/mcp@2.0.48'
+  - '@ai-sdk/provider-utils@5.0.39'
+  - '@ai-sdk/provider@4.0.13'
+  - '@ai-sdk/react@4.0.100'
+  - ai@7.0.97
+  - '@shadcn/lint@0.1.0'
+  - blume@1.6.6
+  - '@cloudflare/workerd-darwin-64@1.20260915.1 || 1.20260916.1'
+  - '@cloudflare/workerd-darwin-arm64@1.20260915.1 || 1.20260916.1'
+  - '@cloudflare/workerd-linux-64@1.20260915.1 || 1.20260916.1'
+  - '@cloudflare/workerd-linux-arm64@1.20260915.1 || 1.20260916.1'
+  - '@cloudflare/workerd-windows-64@1.20260915.1 || 1.20260916.1'
+  - miniflare@5.20260915.0-alpha || 5.20260916.0-alpha
+  - workerd@1.20260915.1 || 1.20260916.1
+  - wrangler@4.132.0 || 4.133.0
+  - '@cloudflare/vite-plugin@1.54.11'
+  - '@cloudflare/workers-types@5.20260916.1'
+  - '@astrojs/cloudflare@14.3.3'
+  - '@astrojs/react@6.0.6'
+  - astro@7.3.3
+  - '@vortex-api/better-auth-ui@0.1.4 || 0.2.1 || 0.2.2 || 0.2.3'
+
+overrides:
+  "wrangler": "^4.133.0"
+  "react": "19.3.0"
+  "react-dom": "19.3.0"
+  "adm-zip": ">=0.6.1"
+  "@tanstack/router-core": "1.171.16"
+  "@tanstack/react-router@1.163.2>@tanstack/router-core": "1.163.2"
+  "@modelcontextprotocol/sdk": "1.30.1"

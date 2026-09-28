@@ -30,6 +30,30 @@ const DEFAULT_MODEL = "swe-2";
 const RESULT_PATH = "/tmp/devin-result.json";
 const NAME_PREFIX = "vortex-devin";
 const AGENT_LABEL = "devin-cli";
+// Sandbox compute calls (findSandbox/createSandbox/startRunner) hang
+// indefinitely when a container wedges — leaving the session `created`
+// forever and holding the `waitUntil` thread. Bound the whole provision
+// step; the failure propagates and the sweep's infra-retry re-drives it.
+const PROVISION_TIMEOUT_MS = 5 * 60 * 1000;
+
+async function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  label: string
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`${label} timed out after ${ms}ms`)),
+      ms
+    );
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
 
 const devinResultSchema = z.object({
   status: z.enum(["completed", "failed"]).optional(),
@@ -266,7 +290,7 @@ const PYTHON_RUNNER = [
   "            'title': os.environ['ISSUE_TITLE'],",
   "            'head': BRANCH,",
   "            'base': default_branch(),",
-  "            'body': f'Closes {os.environ[\"ISSUE_IDENTIFIER\"]}\\n\\nGenerated with Devin CLI',",
+  "            'body': f'Closes {os.environ[\"ISSUE_IDENTIFIER\"]}',",
   "        }",
   "        pr = github_api('POST', '/pulls', body)",
   "        return pr['html_url']",
@@ -317,12 +341,26 @@ const PYTHON_RUNNER = [
   "    run(['git', '-C', REPO_DIR, 'push', 'origin', BRANCH], env=env, check=True)",
   "    return True",
   "",
+  "def ensure_postgres():",
+  "    # Images with a baked Postgres (Dockerfile.sandbox-devin) get a running",
+  "    # cluster + the vortex_dev test database. Best-effort: images without it",
+  "    # skip silently and suites that need PG fail with their own error.",
+  "    if not shutil.which('pg_ctlcluster'):",
+  "        return",
+  "    t0 = time.time()",
+  "    run(['pg_ctlcluster', '16', 'main', 'start'], check=False)",
+  "    run(['pg_isready', '-h', '127.0.0.1', '-p', '5432', '-t', '30'], check=False)",
+  "    run(['su', 'postgres', '-c', \"psql -c \\\"ALTER USER postgres PASSWORD 'postgres'\\\"\"], check=False)",
+  "    run(['su', 'postgres', '-c', 'createdb vortex_dev'], check=False)",
+  "    print(f'[timing] postgres up: {time.time() - t0:.0f}s')",
+  "",
   "def main():",
   "    creds_b64 = os.environ['DEVIN_CREDENTIALS_B64']",
   "    write_devin_home(creds_b64)",
   "    devin_bin = ensure_devin()",
   "    create_branch()",
   "    clone_repo()",
+  "    ensure_postgres()",
   "    output = run_devin(devin_bin)",
   "    pushed = commit_and_push()",
   "    pr_url = ''",
@@ -492,51 +530,61 @@ export class DevinCliAgentProvider implements AgentProvider {
       { session: sessionId }
     );
     try {
-      const existing = await compute.findSandbox(sessionId, name);
-      if (existing) {
-        await this.note(
-          organizationId,
-          sessionId,
-          "status",
-          "devin-cli sandbox exists, recreating",
-          { sandbox: existing.id, state: existing.state },
-          { parentId: spanId }
-        );
-        await compute.deleteSandbox(existing);
-      }
+      await withTimeout(
+        (async () => {
+          const existing = await compute.findSandbox(sessionId, name);
+          if (existing) {
+            await this.note(
+              organizationId,
+              sessionId,
+              "status",
+              "devin-cli sandbox exists, recreating",
+              { sandbox: existing.id, state: existing.state },
+              { parentId: spanId }
+            );
+            await compute.deleteSandbox(existing);
+          }
 
-      const sandboxEnv = buildSandboxEnv(
-        issue,
-        model,
-        credentialsB64,
-        githubToken,
-        gitIdentity,
-        comments,
-        instructions
-      );
-      const sandbox = await compute.createSandbox({
-        name,
-        sessionId,
-        organizationId,
-        agentLabel: AGENT_LABEL,
-        env: sandboxEnv,
-      });
-      await this.note(
-        organizationId,
-        sessionId,
-        "status",
-        "devin-cli sandbox started",
-        { sandbox: sandbox.id, state: sandbox.state, backend: compute.kind },
-        { parentId: spanId }
-      );
-      await compute.startRunner(sandbox, sessionId, buildRunnerCommand());
-      await this.note(
-        organizationId,
-        sessionId,
-        "action",
-        "devin-cli runner started",
-        { sandbox: sandbox.id },
-        { parentId: spanId }
+          const sandboxEnv = buildSandboxEnv(
+            issue,
+            model,
+            credentialsB64,
+            githubToken,
+            gitIdentity,
+            comments,
+            instructions
+          );
+          const sandbox = await compute.createSandbox({
+            name,
+            sessionId,
+            organizationId,
+            agentLabel: AGENT_LABEL,
+            env: sandboxEnv,
+          });
+          await this.note(
+            organizationId,
+            sessionId,
+            "status",
+            "devin-cli sandbox started",
+            {
+              sandbox: sandbox.id,
+              state: sandbox.state,
+              backend: compute.kind,
+            },
+            { parentId: spanId }
+          );
+          await compute.startRunner(sandbox, sessionId, buildRunnerCommand());
+          await this.note(
+            organizationId,
+            sessionId,
+            "action",
+            "devin-cli runner started",
+            { sandbox: sandbox.id },
+            { parentId: spanId }
+          );
+        })(),
+        PROVISION_TIMEOUT_MS,
+        "devin-cli provision"
       );
     } catch (err) {
       await this.note(

@@ -1944,6 +1944,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     options: {
       issueId?: string;
       status?: AgentSessionStatus;
+      openPr?: boolean;
       limit?: number;
     } = {}
   ) {

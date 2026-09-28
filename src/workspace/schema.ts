@@ -777,6 +777,7 @@ export const workspaceAgentSessions = sqliteTable(
     prUrl: text("pr_url" as string),
     prState: text("pr_state" as string),
     branch: text("branch" as string),
+    startedAt: text("started_at" as string),
     createdAt: text("created_at" as string).notNull(),
     updatedAt: text("updated_at" as string).notNull(),
     lastProgressAt: text("last_progress_at" as string),

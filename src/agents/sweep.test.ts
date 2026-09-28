@@ -1,18 +1,25 @@
 import { env } from "cloudflare:test";
 import { eq } from "drizzle-orm";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import { createD1 } from "../global/db.js";
 import { supportTickets, user as userTable } from "../global/schema.js";
 import { createWorkspace } from "../global/workspaces.js";
 import { createAdminHeaders } from "../platform/test-auth.js";
+import { MockAgentProvider } from "./harness.js";
+import { registerAgentProvider } from "./index.js";
 import {
   DEFAULT_INACTIVITY_MINUTES,
+  DEFAULT_PROVISION_TIMEOUT_MINUTES,
   DEFAULT_TIMEOUT_MINUTES,
   hashAgentState,
   ingestFailedAgentSession,
   parseAgentTimeouts,
   progressIsStale,
+  prStateFromPull,
+  summarizeCheckRuns,
+  sweepAgentSessions,
+  syncOpenPrSessions,
 } from "./sweep.js";
 
 describe("parseAgentTimeouts", () => {
@@ -20,17 +27,29 @@ describe("parseAgentTimeouts", () => {
     expect(parseAgentTimeouts(null)).toEqual({
       timeoutMinutes: DEFAULT_TIMEOUT_MINUTES,
       inactivityMinutes: DEFAULT_INACTIVITY_MINUTES,
+      provisionTimeoutMinutes: DEFAULT_PROVISION_TIMEOUT_MINUTES,
     });
     expect(parseAgentTimeouts("not-json")).toEqual({
       timeoutMinutes: DEFAULT_TIMEOUT_MINUTES,
       inactivityMinutes: DEFAULT_INACTIVITY_MINUTES,
+      provisionTimeoutMinutes: DEFAULT_PROVISION_TIMEOUT_MINUTES,
     });
   });
 
-  it("reads timeout and inactivityTimeout", () => {
+  it("reads timeout, inactivityTimeout, and provisionTimeout", () => {
     expect(
-      parseAgentTimeouts(JSON.stringify({ timeout: 90, inactivityTimeout: 10 }))
-    ).toEqual({ timeoutMinutes: 90, inactivityMinutes: 10 });
+      parseAgentTimeouts(
+        JSON.stringify({
+          timeout: 90,
+          inactivityTimeout: 10,
+          provisionTimeout: 5,
+        })
+      )
+    ).toEqual({
+      timeoutMinutes: 90,
+      inactivityMinutes: 10,
+      provisionTimeoutMinutes: 5,
+    });
   });
 });
 
@@ -122,6 +141,7 @@ describe("ingestFailedAgentSession", () => {
       retryOf: null,
       retryCount: 0,
       infraFailure: 0,
+      startedAt: null,
     };
     const polled = {
       id: "prov-1",
@@ -148,5 +168,355 @@ describe("ingestFailedAgentSession", () => {
       .from(supportTickets)
       .where(eq(supportTickets.organizationId, organizationId));
     expect(after).toHaveLength(1);
+  });
+});
+
+describe("prStateFromPull", () => {
+  it("maps GitHub pull fields to PR state", () => {
+    expect(prStateFromPull({ merged_at: "2026-09-28T18:00:00Z" })).toBe(
+      "merged"
+    );
+    expect(prStateFromPull({ state: "closed", merged_at: null })).toBe(
+      "closed"
+    );
+    expect(prStateFromPull({ state: "open", draft: true })).toBe("draft");
+    expect(prStateFromPull({ state: "open", draft: false })).toBe("open");
+  });
+});
+
+describe("summarizeCheckRuns", () => {
+  it("maps check-run sets to an aggregate state", () => {
+    expect(summarizeCheckRuns(undefined)).toBeNull();
+    expect(summarizeCheckRuns([])).toBeNull();
+    expect(
+      summarizeCheckRuns([{ status: "completed", conclusion: "success" }])
+    ).toBe("passing");
+    expect(
+      summarizeCheckRuns([
+        { status: "completed", conclusion: "success" },
+        { status: "in_progress", conclusion: null },
+      ])
+    ).toBe("pending");
+    expect(
+      summarizeCheckRuns([
+        { status: "completed", conclusion: "success" },
+        { status: "completed", conclusion: "failure" },
+      ])
+    ).toBe("failing");
+  });
+});
+
+function registerMock(
+  agentId: string,
+  options: ConstructorParameters<typeof MockAgentProvider>[1]
+) {
+  registerAgentProvider(agentId, () => new MockAgentProvider(agentId, options));
+}
+
+async function ghFetchStub(input: RequestInfo | URL) {
+  const url = String(input);
+  if (url.endsWith("/pulls/210")) {
+    return new Response(
+      JSON.stringify({
+        state: "closed",
+        merged_at: "2026-09-28T18:17:22Z",
+        head: { sha: "abc123" },
+      }),
+      { status: 200 }
+    );
+  }
+  if (url.includes("/commits/abc123/check-runs")) {
+    return new Response(
+      JSON.stringify({
+        check_runs: [{ status: "completed", conclusion: "success" }],
+      }),
+      { status: 200 }
+    );
+  }
+  return new Response("not found", { status: 404 });
+}
+
+describe("sweepAgentSessions", () => {
+  const userId = "user-sweep-loop";
+  let organizationId = "";
+  let stub: ReturnType<typeof env.WORKSPACE_DURABLE_OBJECT.get>;
+
+  beforeAll(async () => {
+    const db = createD1(env.D1);
+    const now = new Date();
+    await db
+      .insert(userTable)
+      .values({
+        id: userId,
+        name: "Sweep Loop",
+        email: `${userId}@example.com`,
+        emailVerified: false,
+        image: null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing({ target: [userTable.email] });
+    const headers = await createAdminHeaders(env, userId);
+    const workspace = await createWorkspace(db, env, headers, {
+      name: "Sweep loop",
+      slug: `sweep-loop-${crypto.randomUUID()}`,
+      key: `SL${crypto.randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase()}`,
+      ownerId: userId,
+    });
+    organizationId = workspace!.id;
+    stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+  });
+
+  it("stamps startedAt when a session first reports running", async () => {
+    const agentId = `mock-run-${crypto.randomUUID().slice(0, 8)}`;
+    registerMock(agentId, {
+      poll: (id) => ({ id, agentId, status: "running" }),
+    });
+    const issue = await stub.createIssue({ title: "startedAt stamp" });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "created",
+    });
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    const after = await stub.getAgentSession(session.id);
+    expect(after?.status).toBe("running");
+    expect(after?.startedAt).not.toBeNull();
+  });
+
+  it("fails a session stuck in created past the provision cap and retries once", async () => {
+    const agentId = `mock-prov-${crypto.randomUUID().slice(0, 8)}`;
+    registerMock(agentId, {
+      dispatch: () => ({ id: "retried", agentId, status: "created" }),
+      poll: (id) => ({ id, agentId, status: "created" }),
+    });
+    await stub.upsertAgentProviderConfig({
+      agentId,
+      config: { provisionTimeout: 0 },
+    });
+    const issue = await stub.createIssue({ title: "Provision stall" });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "created",
+    });
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    const after = await stub.getAgentSession(session.id);
+    expect(after?.status).toBe("failed");
+    expect(after?.result).toContain("provision timed out");
+
+    const siblings = await stub.listAgentSessions({ issueId: issue.id });
+    const retried = siblings.find((s) => s.retryOf === session.id);
+    expect(retried).toBeDefined();
+    expect(retried?.retryCount).toBe(1);
+  });
+
+  it("measures the run clock from startedAt, not createdAt", async () => {
+    const agentId = `mock-clock-${crypto.randomUUID().slice(0, 8)}`;
+    registerMock(agentId, {
+      poll: (id) => ({ id, agentId, status: "running" }),
+    });
+    const issue = await stub.createIssue({ title: "Run clock" });
+    const twoHoursAgo = new Date(Date.now() - 2 * 3600 * 1000).toISOString();
+
+    // Queued for 2h but only running for seconds — under the 60m cap.
+    const queuedThenStarted = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+      createdAt: twoHoursAgo,
+      startedAt: new Date().toISOString(),
+    });
+    // Running since creation 2h ago — over the 60m default cap.
+    const longRunning = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+      createdAt: twoHoursAgo,
+      startedAt: twoHoursAgo,
+    });
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    expect((await stub.getAgentSession(queuedThenStarted.id))?.status).toBe(
+      "running"
+    );
+    expect((await stub.getAgentSession(longRunning.id))?.status).toBe(
+      "canceled"
+    );
+  });
+
+  it("a hung provider poll does not stall the sweep for other sessions", async () => {
+    const hungAgent = `mock-hung-${crypto.randomUUID().slice(0, 8)}`;
+    const okAgent = `mock-ok-${crypto.randomUUID().slice(0, 8)}`;
+    registerMock(hungAgent, {
+      poll: () => new Promise<never>(() => {}),
+    });
+    registerMock(okAgent, {
+      poll: (id) => ({ id, agentId: okAgent, status: "running" }),
+    });
+    const issue = await stub.createIssue({ title: "Hung probe" });
+    // Newer createdAt sorts first — the hung session is probed first.
+    const hung = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: hungAgent,
+      provider: hungAgent,
+      actorId: userId,
+      actorType: "user",
+      status: "created",
+      createdAt: new Date().toISOString(),
+    });
+    const healthy = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: okAgent,
+      provider: okAgent,
+      actorId: userId,
+      actorType: "user",
+      status: "created",
+      createdAt: new Date(Date.now() - 1000).toISOString(),
+    });
+
+    // 10ms probe cap: the hung poll times out almost immediately.
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    // The hung lane is untouched — no verdict without data.
+    expect((await stub.getAgentSession(hung.id))?.status).toBe("created");
+    // And the lane behind it still got polled this sweep.
+    const healthyAfter = await stub.getAgentSession(healthy.id);
+    expect(healthyAfter?.status).toBe("running");
+    expect(healthyAfter?.startedAt).not.toBeNull();
+  });
+
+  it("captures telemetry via getState once progress goes stale", async () => {
+    const agentId = `mock-state-${crypto.randomUUID().slice(0, 8)}`;
+    registerMock(agentId, {
+      poll: (id) => ({ id, agentId, status: "running" }),
+      getState: () => ({
+        provider: { state: "running", logs: "grinding" },
+        compute: { lastSeen: new Date().toISOString() },
+      }),
+    });
+    await stub.upsertAgentProviderConfig({
+      agentId,
+      config: { inactivityTimeout: 30 },
+    });
+    const issue = await stub.createIssue({ title: "Telemetry" });
+    const staleCreated = new Date(Date.now() - 40 * 60 * 1000).toISOString();
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+      createdAt: staleCreated,
+      startedAt: staleCreated,
+    });
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    const after = await stub.getAgentSession(session.id);
+    expect(after?.status).toBe("running");
+    expect(after?.lastStateHash).not.toBeNull();
+    expect(after?.lastProgressAt).not.toBeNull();
+  });
+});
+
+describe("syncOpenPrSessions", () => {
+  const userId = "user-sweep-prs";
+  let organizationId = "";
+  let stub: ReturnType<typeof env.WORKSPACE_DURABLE_OBJECT.get>;
+
+  beforeAll(async () => {
+    const db = createD1(env.D1);
+    const now = new Date();
+    await db
+      .insert(userTable)
+      .values({
+        id: userId,
+        name: "Sweep PRs",
+        email: `${userId}@example.com`,
+        emailVerified: false,
+        image: null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing({ target: [userTable.email] });
+    const headers = await createAdminHeaders(env, userId);
+    const workspace = await createWorkspace(db, env, headers, {
+      name: "Sweep PR sync",
+      slug: `sweep-prs-${crypto.randomUUID()}`,
+      key: `SP${crypto.randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase()}`,
+      ownerId: userId,
+    });
+    organizationId = workspace!.id;
+    stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+  });
+
+  it("reconciles a merged PR into session + issue state", async () => {
+    const issue = await stub.createIssue({ title: "PR reconcile" });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "mock-prs",
+      provider: "mock-prs",
+      actorId: userId,
+      actorType: "user",
+      status: "completed",
+      prUrl: "https://github.com/vortexnyc/pile/pull/210",
+      prState: "open",
+    });
+
+    await syncOpenPrSessions(env, stub, organizationId, {
+      tokenForRepo: async () => "gh-test-token",
+      fetch: ghFetchStub as typeof fetch,
+    });
+
+    const sessionAfter = await stub.getAgentSession(session.id);
+    expect(sessionAfter?.prState).toBe("merged");
+    const issueAfter = await stub.getIssue(issue.id);
+    expect(issueAfter?.prState).toBe("merged");
+    expect(issueAfter?.prCheckState).toBe("passing");
+  });
+
+  it("leaves sessions alone when the repo has no installation", async () => {
+    const issue = await stub.createIssue({ title: "No installation" });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "mock-prs",
+      provider: "mock-prs",
+      actorId: userId,
+      actorType: "user",
+      status: "completed",
+      prUrl: "https://github.com/vortexnyc/pile/pull/999",
+      prState: "open",
+    });
+
+    await syncOpenPrSessions(env, stub, organizationId, {
+      tokenForRepo: async () => undefined,
+    });
+
+    expect((await stub.getAgentSession(session.id))?.prState).toBe("open");
   });
 });
