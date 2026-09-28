@@ -240,3 +240,118 @@ describe("documents API", () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe("issue-linked documents", () => {
+  async function createIssue(organizationId: string, token: string) {
+    const res = await fetch(
+      `/workspaces/${organizationId}/issues`,
+      { method: "POST", body: JSON.stringify({ title: "Notes target" }) },
+      token
+    );
+    expect(res.status).toBe(201);
+    return z
+      .object({ id: z.string(), identifier: z.string() })
+      .parse(await res.json());
+  }
+
+  it("creates and retrieves a markdown note by issue id or identifier", async () => {
+    const seeded = await seedWorkspace();
+    const issue = await createIssue(seeded.organizationId, seeded.token);
+
+    const createRes = await fetch(
+      `/workspaces/${seeded.organizationId}/documents`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          title: `${issue.identifier} — session findings`,
+          content: "## Findings\n\nNotes live here.",
+          contentFormat: "markdown",
+          issueId: issue.identifier,
+        }),
+      },
+      seeded.token
+    );
+    expect(createRes.status).toBe(201);
+    const doc = z
+      .object({
+        id: z.string(),
+        issueId: z.string(),
+        contentFormat: z.string(),
+      })
+      .parse(await createRes.json());
+    expect(doc.issueId).toBe(issue.id);
+    expect(doc.contentFormat).toBe("markdown");
+
+    const listSchema = z.object({
+      documents: z.array(z.object({ id: z.string() })),
+    });
+
+    for (const ref of [issue.id, issue.identifier]) {
+      const res = await fetch(
+        `/workspaces/${seeded.organizationId}/documents?issueId=${ref}`,
+        {},
+        seeded.token
+      );
+      expect(res.status).toBe(200);
+      const listed = listSchema.parse(await res.json());
+      expect(listed.documents.map((d) => d.id)).toContain(doc.id);
+
+      const scoped = await fetch(
+        `/workspaces/${seeded.organizationId}/issues/${ref}/documents`,
+        {},
+        seeded.token
+      );
+      expect(scoped.status).toBe(200);
+      const scopedDocs = listSchema.parse(await scoped.json());
+      expect(scopedDocs.documents.map((d) => d.id)).toContain(doc.id);
+    }
+  });
+
+  it("rejects an unresolvable issueId on create", async () => {
+    const seeded = await seedWorkspace();
+    const res = await fetch(
+      `/workspaces/${seeded.organizationId}/documents`,
+      {
+        method: "POST",
+        body: JSON.stringify({ title: "Orphan note", issueId: "ZZZ-99999" }),
+      },
+      seeded.token
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("resolves identifiers when updating issueId", async () => {
+    const seeded = await seedWorkspace();
+    const issue = await createIssue(seeded.organizationId, seeded.token);
+
+    const createRes = await fetch(
+      `/workspaces/${seeded.organizationId}/documents`,
+      { method: "POST", body: JSON.stringify({ title: "Floating note" }) },
+      seeded.token
+    );
+    expect(createRes.status).toBe(201);
+    const doc = z.object({ id: z.string() }).parse(await createRes.json());
+
+    const badRes = await fetch(
+      `/workspaces/${seeded.organizationId}/documents/${doc.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ issueId: "ZZZ-99999" }),
+      },
+      seeded.token
+    );
+    expect(badRes.status).toBe(400);
+
+    const res = await fetch(
+      `/workspaces/${seeded.organizationId}/documents/${doc.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ issueId: issue.identifier }),
+      },
+      seeded.token
+    );
+    expect(res.status).toBe(200);
+    const updated = z.object({ issueId: z.string() }).parse(await res.json());
+    expect(updated.issueId).toBe(issue.id);
+  });
+});
