@@ -39,6 +39,10 @@ export interface AgentDispatchContext {
   /** Scoped read-only Pile API credential minted for this dispatch, so the
    *  agent can fetch linked support tickets and capture artifacts. */
   pileApi?: { url: string; key: string };
+  /** Extra operating rules for this dispatch, appended to the prompt's
+   *  context section — lets an orchestrator pass constraints without
+   *  posting an issue comment. */
+  instructions?: string;
 }
 
 export interface AgentProviderHealth {

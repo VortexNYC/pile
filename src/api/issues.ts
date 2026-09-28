@@ -649,6 +649,12 @@ const dispatchRoute = createRoute({
               // dispatches to fall back to the default agent.
               provider: z.string().optional(),
               model: z.string().optional(),
+              // Dispatch-time overrides: repo/branch win over the issue's
+              // stored fields for this run only; instructions are appended
+              // to the prompt's context section.
+              repo: z.string().optional(),
+              branch: z.string().optional(),
+              instructions: z.string().optional(),
             })
             .strict(),
         },
@@ -1359,7 +1365,8 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(dispatchRoute, async (c) => {
-    const { agentId, provider, model } = c.req.valid("json");
+    const { agentId, provider, model, repo, branch, instructions } =
+      c.req.valid("json");
     const { organizationId, id } = c.req.valid("param");
     const identity = c.get("workspaceIdentity");
     const db = createD1(c.env.D1);
@@ -1384,7 +1391,12 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     }
     await assertIssueAccess(db, issue, identity);
 
-    if (!issue.repo) {
+    const target: Issue = {
+      ...issue,
+      repo: repo ?? issue.repo,
+      branch: branch ?? issue.branch,
+    };
+    if (!target.repo) {
       throw new VortexError({
         code: "BAD_REQUEST",
         status: 400,
@@ -1404,19 +1416,20 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       effectiveEnv,
       resolvedAgentId,
       organizationId,
-      issue,
+      target,
       identity,
       model,
-      getExecutionCtx(c)
+      getExecutionCtx(c),
+      { instructions }
     );
 
-    if (issue.repo && issue.branch) {
+    if (target.repo && target.branch) {
       await createRepoBranch(
         db,
         organizationId,
-        issue.repo,
-        issue.branch,
-        issue.id
+        target.repo,
+        target.branch,
+        target.id
       );
     }
 

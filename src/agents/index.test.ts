@@ -6,6 +6,7 @@ import { user as userTable } from "../global/schema.js";
 import { createWorkspace } from "../global/workspaces.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
 import { createAdminHeaders } from "../platform/test-auth.js";
+import { DEFAULT_GIT_IDENTITY_REPO } from "../types/workspace.js";
 import { MockAgentProvider } from "./harness.js";
 import {
   dispatchAgent,
@@ -373,6 +374,87 @@ describe("agent providers", () => {
     await dispatchAgent(env, "mock-gitid", actor.organizationId, issue, actor);
 
     expect(captured?.gitIdentity).toEqual(identity);
+  });
+
+  it("falls back to the workspace-default git identity", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)
+    );
+    await stub.setOrganizationId(actor.organizationId);
+    const issue = await stub.createIssue({
+      title: "Default git identity test",
+      repo: "VortexNYC/no-bound-identity",
+    });
+    const fallback = await stub.upsertGitIdentity({
+      repo: DEFAULT_GIT_IDENTITY_REPO,
+      name: "Workspace Agent",
+      email: "workspace-agent@example.com",
+      githubUsername: null,
+      signingKeyRef: null,
+    });
+
+    let captured: AgentDispatchContext | undefined;
+    const provider = new MockAgentProvider("mock", {
+      dispatch: (_1, _2, _3, ctx) => {
+        captured = ctx;
+        return { id: "gitid-default-1", agentId: "mock", status: "created" };
+      },
+    });
+    registerAgentProvider("mock-gitid-default", () => provider);
+
+    await dispatchAgent(
+      env,
+      "mock-gitid-default",
+      actor.organizationId,
+      issue,
+      actor
+    );
+
+    expect(captured?.gitIdentity).toEqual(fallback);
+  });
+
+  it("prefers the repo-bound identity over the workspace default", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)
+    );
+    await stub.setOrganizationId(actor.organizationId);
+    const issue = await stub.createIssue({
+      title: "Repo identity precedence test",
+      repo: "VortexNYC/bound-precedence",
+    });
+    const bound = await stub.upsertGitIdentity({
+      repo: "VortexNYC/bound-precedence",
+      name: "Repo Agent",
+      email: "repo-agent@example.com",
+      githubUsername: null,
+      signingKeyRef: null,
+    });
+    await stub.upsertGitIdentity({
+      repo: DEFAULT_GIT_IDENTITY_REPO,
+      name: "Workspace Agent",
+      email: "workspace-agent@example.com",
+      githubUsername: null,
+      signingKeyRef: null,
+    });
+
+    let captured: AgentDispatchContext | undefined;
+    const provider = new MockAgentProvider("mock", {
+      dispatch: (_1, _2, _3, ctx) => {
+        captured = ctx;
+        return { id: "gitid-bound-1", agentId: "mock", status: "created" };
+      },
+    });
+    registerAgentProvider("mock-gitid-bound", () => provider);
+
+    await dispatchAgent(
+      env,
+      "mock-gitid-bound",
+      actor.organizationId,
+      issue,
+      actor
+    );
+
+    expect(captured?.gitIdentity).toEqual(bound);
   });
 
   it("rejects all teams when teamIds is an empty array", async () => {

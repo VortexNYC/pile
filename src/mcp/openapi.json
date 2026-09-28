@@ -2805,6 +2805,15 @@
                   },
                   "model": {
                     "type": "string"
+                  },
+                  "repo": {
+                    "type": "string"
+                  },
+                  "branch": {
+                    "type": "string"
+                  },
+                  "instructions": {
+                    "type": "string"
                   }
                 },
                 "additionalProperties": false

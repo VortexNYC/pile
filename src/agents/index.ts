@@ -4,7 +4,11 @@ import { createAuth } from "../platform/auth.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { WorkerEnv } from "../platform/middleware.js";
-import type { AgentSession, Issue } from "../types/workspace.js";
+import {
+  DEFAULT_GIT_IDENTITY_REPO,
+  type AgentSession,
+  type Issue,
+} from "../types/workspace.js";
 import { CfAgentProvider } from "./cf-agent.js";
 import { CodexCliAgentProvider } from "./codex-cli.js";
 import { CodexAgentProvider } from "./codex.js";
@@ -77,7 +81,8 @@ export async function dispatchAgent(
   issue: Issue,
   actor: WorkspaceIdentity,
   model?: string,
-  ctx?: { waitUntil: (promise: Promise<unknown>) => void }
+  ctx?: { waitUntil: (promise: Promise<unknown>) => void },
+  options?: { instructions?: string }
 ): Promise<AgentSession> {
   const stub = env.WORKSPACE_DURABLE_OBJECT.get(
     env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
@@ -104,7 +109,9 @@ export async function dispatchAgent(
   );
 
   const gitIdentity = issue.repo
-    ? ((await stub.getGitIdentityByRepo(issue.repo)) ?? null)
+    ? ((await stub.getGitIdentityByRepo(issue.repo)) ??
+      (await stub.getGitIdentityByRepo(DEFAULT_GIT_IDENTITY_REPO)) ??
+      null)
     : null;
 
   const active = await stub.getActiveAgentSessionForIssue(issue.id);
@@ -203,6 +210,7 @@ export async function dispatchAgent(
           : undefined,
         comments,
         pileApi,
+        instructions: options?.instructions,
       }
     );
 

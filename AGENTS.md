@@ -59,13 +59,14 @@ For every non-trivial chunk of work:
 
 ### Agent session notes
 
-Durable notes live in Pile documents — not in repo files (`NOTES.md`, `.agent-notes/`, ad-hoc scratch files). Any agent that produces investigation notes, decisions, or handoff context for an issue writes them via `POST /workspaces/org_vortex_main/documents` with:
+Durable notes live in Pile documents — never in repo files (`NOTES.md`, `.agent-notes/`, ad-hoc scratch files). Any agent that produces investigation notes, decisions, or handoff context for an issue writes them via `POST /workspaces/org_vortex_main/documents` with:
 
-- `contentFormat: "markdown"`
-- `issueId` (and `projectId` when relevant) — this is the index; `GET /workspaces/{org}/documents?issueId=...` returns every note for a ticket
+- `contentFormat: "markdown"`, `issueId` (the `ISS-N` identifier or UUID), plus `projectId` when relevant — `GET /workspaces/{org}/documents?issueId=...` and `GET /workspaces/{org}/issues/ISS-N/documents` return every note for a ticket
 - Title convention: `ISS-N — <what the note covers>`
+- CLI equivalent: `pile documents create --workspace org_vortex_main --title "ISS-N — topic" --content-format markdown --issue ISS-N --content ...`; MCP: `create_document`
+- Before finishing a chunk of work, write non-obvious findings (decisions, dead ends, verification output) to a linked note so the next session can pick them up
 
-CLI (`pile document create`) and MCP (`create_document`) surfaces expose the same route. Repo-committed notes are acceptable only when the note _is_ project documentation meant for humans cloning the repo (e.g. this file) — session context, triage findings, and handoffs go to Pile.
+Repo-committed notes are acceptable only when the note _is_ project documentation meant for humans cloning the repo (e.g. this file) — session context, triage findings, and handoffs go to Pile.
 
 ## Where things live
 

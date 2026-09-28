@@ -1395,6 +1395,9 @@ export interface paths {
                         agentId?: string;
                         provider?: string;
                         model?: string;
+                        repo?: string;
+                        branch?: string;
+                        instructions?: string;
                     };
                 };
             };

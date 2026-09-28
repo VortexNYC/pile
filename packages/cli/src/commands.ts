@@ -873,6 +873,18 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "model",
         flag: "model",
       },
+      {
+        name: "repo",
+        flag: "repo",
+      },
+      {
+        name: "branch",
+        flag: "branch",
+      },
+      {
+        name: "instructions",
+        flag: "instructions",
+      },
     ],
   },
   "issues assign create": {
