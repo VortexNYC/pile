@@ -5,8 +5,8 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Postgres 16 from PGDG — debian stable ships 15, but lane targets (vortex)
-# test against 16. `pg_createcluster` bakes the cluster so the runner's
-# `pg_ctlcluster 16 main start` just starts it (ensure_postgres in
+# test against 16. The deb postinst already creates cluster `16/main`, so the
+# runner's `pg_ctlcluster 16 main start` just starts it (ensure_postgres in
 # src/agents/devin-cli.ts).
 RUN install -d /usr/share/postgresql-common/pgdg \
     && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
@@ -15,8 +15,7 @@ RUN install -d /usr/share/postgresql-common/pgdg \
         > /etc/apt/sources.list.d/pgdg.list \
     && apt-get update \
     && apt-get install -y --no-install-recommends postgresql-16 \
-    && rm -rf /var/lib/apt/lists/* \
-    && pg_createcluster 16 main
+    && rm -rf /var/lib/apt/lists/*
 
 # Repo toolchain baked: agents routinely run `pnpm install`/`check`; without
 # this they bootstrap pnpm via npm/corepack on every run. Node 24 and pnpm

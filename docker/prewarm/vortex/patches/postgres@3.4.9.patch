@@ -1,0 +1,18 @@
+diff --git a/cf/polyfills.js b/cf/polyfills.js
+index 53c5203dd5b057d741d14d708ba83b27751b527c..322d82deb5b40dc13e38a757cb373aad6f15d8ae 100644
+--- a/cf/polyfills.js
++++ b/cf/polyfills.js
+@@ -211,7 +211,12 @@ function Socket() {
+   }
+ 
+   function error(err) {
+-    tcp.emit('error', err)
++    // Swallow errors when no listener is attached (e.g. the runtime has already
++    // closed the socket). Emitting 'error' on an EventEmitter with no listener
++    // throws synchronously, and since `read()` is not awaited its promise
++    // becomes an unhandled rejection.
++    if (tcp.listenerCount && tcp.listenerCount('error') > 0)
++      tcp.emit('error', err)
+     tcp.emit('close')
+   }
+ }

@@ -154,27 +154,33 @@ class_name = "DevinSandbox"
 name = "SANDBOX_CODEX"
 class_name = "CodexSandbox"
 
+# Production pins registry digests so `wrangler deploy` never needs a Docker
+# daemon (cloudflare-ci's sandbox has none). The Dockerfiles remain the source
+# of truth for image contents; releasing a new image is a docker-host step:
+#   wrangler containers build -p -t <name>:<tag> -f Dockerfile.sandbox-* .
+# then update the digest here. `wrangler containers info <app-id>` shows the
+# digest a pushed tag landed on.
 [[env.production.containers]]
 class_name = "Sandbox"
-image = "./Dockerfile.sandbox"
+image = "registry.cloudflare.com/31bfc2c14a28e0a39e8b9e3c556a18be/pile-sandbox-production@sha256:177e408e62062b025a6e9a75a659eb88bd271a4dcd0e4a8e8d40bdaaa5fae5b4"
 max_instances = 20
 instance_type = "standard-1"
 
 [[env.production.containers]]
 class_name = "CursorSandbox"
-image = "./Dockerfile.sandbox-cursor"
+image = "registry.cloudflare.com/31bfc2c14a28e0a39e8b9e3c556a18be/pile-cursorsandbox-production@sha256:28a55370d583c03721d6dc9b52e7b908c27e148cf860ca5ba63000e99cc4a87c"
 max_instances = 20
 instance_type = "standard-1"
 
 [[env.production.containers]]
 class_name = "DevinSandbox"
-image = "./Dockerfile.sandbox-devin"
+image = "registry.cloudflare.com/31bfc2c14a28e0a39e8b9e3c556a18be/pile-devinsandbox-production@sha256:1f85dccd4e3660ce38a1ef82dd4a3c8e4101790658d918a7def871d531e52498"
 max_instances = 20
 instance_type = "standard-1"
 
 [[env.production.containers]]
 class_name = "CodexSandbox"
-image = "./Dockerfile.sandbox-codex"
+image = "registry.cloudflare.com/31bfc2c14a28e0a39e8b9e3c556a18be/pile-codexsandbox-production@sha256:a88dcb498f92a2cdb53b7f9480a83cbd4be92966a05c0fb133bc63204596e4c6"
 max_instances = 20
 instance_type = "standard-1"
 
