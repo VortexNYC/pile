@@ -888,7 +888,9 @@ export const workspaceAgentAutomations = sqliteTable(
       enum: ["cron", "event"],
     }).notNull(),
     triggerValue: text("trigger_value" as string).notNull(),
-    enabled: integer("enabled" as string).notNull().default(1),
+    enabled: integer("enabled" as string)
+      .notNull()
+      .default(1),
     lastFiredAt: text("last_fired_at" as string),
     createdBy: text("created_by" as string),
     createdAt: text("created_at" as string).notNull(),

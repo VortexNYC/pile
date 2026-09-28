@@ -1128,10 +1128,7 @@ export function listQueuedAgentSessions(
         eq(workspaceAgentSessions.status, "waiting")
       )
     )
-    .orderBy(
-      workspaceAgentSessions.createdAt,
-      workspaceAgentSessions.id
-    )
+    .orderBy(workspaceAgentSessions.createdAt, workspaceAgentSessions.id)
     .all();
 }
 
@@ -1162,7 +1159,11 @@ export async function countActiveDescendantSessions(
   organizationId: string,
   rootSessionId: string
 ): Promise<number> {
-  const terminal: AgentSessionStatus[] = ["completed", "failed", "canceled"];
+  const terminal = new Set<AgentSessionStatus>([
+    "completed",
+    "failed",
+    "canceled",
+  ]);
   const rows = await db
     .select({
       id: workspaceAgentSessions.id,
@@ -1187,7 +1188,7 @@ export async function countActiveDescendantSessions(
     if (!parent || seen.has(parent)) continue;
     seen.add(parent);
     for (const child of childrenByParent.get(parent) ?? []) {
-      if (!terminal.includes(child.status as AgentSessionStatus)) active += 1;
+      if (!terminal.has(child.status as AgentSessionStatus)) active += 1;
       queue.push(child.id);
     }
   }
@@ -1457,10 +1458,7 @@ export function getAgentAutomation(
     .get();
 }
 
-export async function markAgentAutomationFired(
-  db: WorkspaceDb,
-  id: string
-) {
+export async function markAgentAutomationFired(db: WorkspaceDb, id: string) {
   await db
     .update(workspaceAgentAutomations)
     .set({ lastFiredAt: new Date().toISOString() })

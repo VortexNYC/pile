@@ -157,6 +157,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdAgentAutomationsAutomationId",
+    "description": "Delete agent automation (DELETE /workspaces/{organizationId}/agent/automations/{automationId}) Path params (top-level, required): organizationId, automationId.",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/agent/automations/{automationId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "automationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "automationId",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdAgentEnvironmentFile",
     "description": "Delete agent environment file (DELETE /workspaces/{organizationId}/agent/environment/file) Path params (top-level, required): organizationId. Query params (top-level, optional): path.",
     "method": "DELETE",
@@ -1624,6 +1645,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdAgentAutomations",
+    "description": "List agent automations (GET /workspaces/{organizationId}/agent/automations) Path params (top-level, required): organizationId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/agent/automations",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
       ]
     }
   },
@@ -8667,6 +8705,64 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdAgentAutomations",
+    "description": "Create agent automation (POST /workspaces/{organizationId}/agent/automations) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, prompt*, agentId*, teamId, issueId, triggerKind*, triggerValue* (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/agent/automations",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "prompt": {
+              "type": "string",
+              "minLength": 1
+            },
+            "agentId": {
+              "type": "string"
+            },
+            "teamId": {
+              "type": "string"
+            },
+            "issueId": {
+              "type": "string"
+            },
+            "triggerKind": {
+              "type": "string",
+              "enum": [
+                "cron",
+                "event"
+              ]
+            },
+            "triggerValue": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "name",
+            "prompt",
+            "agentId",
+            "triggerKind",
+            "triggerValue"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdAgentProvidersAgentIdHealth",
     "description": "Health agent provider (POST /workspaces/{organizationId}/agent/providers/{agentId}/health) Path params (top-level, required): organizationId, agentId.",
     "method": "POST",
@@ -8908,6 +9004,76 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         },
         "sessionId": {
           "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "sessionId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdAgentSessionsSessionIdPrompt",
+    "description": "Create agent session prompt (POST /workspaces/{organizationId}/agent/sessions/{sessionId}/prompt) Path params (top-level, required): organizationId, sessionId. Request body goes in the \"body\" object; fields: prompt* (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/agent/sessions/{sessionId}/prompt",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "prompt": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "prompt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "organizationId",
+        "sessionId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdAgentSessionsSessionIdRetry",
+    "description": "Create agent session retry (POST /workspaces/{organizationId}/agent/sessions/{sessionId}/retry) Path params (top-level, required): organizationId, sessionId. Request body goes in the \"body\" object; fields: context, agentId, model.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/agent/sessions/{sessionId}/retry",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "context": {
+              "type": "string"
+            },
+            "agentId": {
+              "type": "string"
+            },
+            "model": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
         }
       },
       "required": [

@@ -1429,6 +1429,8 @@ export interface paths {
                             updatedAt: string;
                             lastProgressAt?: string | null;
                             lastStateHash?: string | null;
+                            /** @enum {string|null} */
+                            derivedStatus?: "stalled" | "needs_input" | null;
                             activities?: {
                                 id: string;
                                 sessionId: string;
@@ -1511,6 +1513,8 @@ export interface paths {
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
                                 lastStateHash?: string | null;
+                                /** @enum {string|null} */
+                                derivedStatus?: "stalled" | "needs_input" | null;
                                 activities?: {
                                     id: string;
                                     sessionId: string;
@@ -1587,6 +1591,8 @@ export interface paths {
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
                                 lastStateHash?: string | null;
+                                /** @enum {string|null} */
+                                derivedStatus?: "stalled" | "needs_input" | null;
                                 activities?: {
                                     id: string;
                                     sessionId: string;
@@ -1716,6 +1722,8 @@ export interface paths {
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
                                 lastStateHash?: string | null;
+                                /** @enum {string|null} */
+                                derivedStatus?: "stalled" | "needs_input" | null;
                                 activities?: {
                                     id: string;
                                     sessionId: string;
@@ -1805,6 +1813,8 @@ export interface paths {
                             updatedAt: string;
                             lastProgressAt?: string | null;
                             lastStateHash?: string | null;
+                            /** @enum {string|null} */
+                            derivedStatus?: "stalled" | "needs_input" | null;
                             activities?: {
                                 id: string;
                                 sessionId: string;
@@ -1888,6 +1898,8 @@ export interface paths {
                             updatedAt: string;
                             lastProgressAt?: string | null;
                             lastStateHash?: string | null;
+                            /** @enum {string|null} */
+                            derivedStatus?: "stalled" | "needs_input" | null;
                             activities?: {
                                 id: string;
                                 sessionId: string;
@@ -2173,6 +2185,8 @@ export interface paths {
                             updatedAt: string;
                             lastProgressAt?: string | null;
                             lastStateHash?: string | null;
+                            /** @enum {string|null} */
+                            derivedStatus?: "stalled" | "needs_input" | null;
                             activities?: {
                                 id: string;
                                 sessionId: string;
@@ -2254,6 +2268,8 @@ export interface paths {
                             updatedAt: string;
                             lastProgressAt?: string | null;
                             lastStateHash?: string | null;
+                            /** @enum {string|null} */
+                            derivedStatus?: "stalled" | "needs_input" | null;
                             activities?: {
                                 id: string;
                                 sessionId: string;
@@ -2334,6 +2350,8 @@ export interface paths {
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
                                 lastStateHash?: string | null;
+                                /** @enum {string|null} */
+                                derivedStatus?: "stalled" | "needs_input" | null;
                                 activities?: {
                                     id: string;
                                     sessionId: string;
@@ -2438,6 +2456,8 @@ export interface paths {
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
                                 lastStateHash?: string | null;
+                                /** @enum {string|null} */
+                                derivedStatus?: "stalled" | "needs_input" | null;
                                 activities?: {
                                     id: string;
                                     sessionId: string;
@@ -2493,6 +2513,353 @@ export interface paths {
             };
         };
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/agent/sessions/{sessionId}/prompt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create agent session prompt */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    sessionId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        prompt: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Follow-up delivered to the live sandbox */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            issueId: string;
+                            agentId: string;
+                            provider: string;
+                            actorId: string;
+                            /** @enum {string} */
+                            actorType: "user" | "agent";
+                            /** @enum {string} */
+                            status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                            result: string | null;
+                            url: string | null;
+                            providerSessionId: string | null;
+                            prUrl: string | null;
+                            prState: string | null;
+                            branch: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                            lastProgressAt?: string | null;
+                            lastStateHash?: string | null;
+                            /** @enum {string|null} */
+                            derivedStatus?: "stalled" | "needs_input" | null;
+                            activities?: {
+                                id: string;
+                                sessionId: string;
+                                actorId: string | null;
+                                /** @enum {string} */
+                                type: "thought" | "response" | "error" | "elicitation" | "action" | "status" | "artifact";
+                                message: string;
+                                payload?: unknown;
+                                parentId: string | null;
+                                startedAt: string | null;
+                                endedAt: string | null;
+                                durationMs: number | null;
+                                createdAt: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Session not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Sandbox gone or busy — use the retry route for a cold dispatch */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/agent/sessions/{sessionId}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create agent session retry */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    sessionId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        context?: string;
+                        agentId?: string;
+                        model?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description New session dispatched with retry context */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            issueId: string;
+                            agentId: string;
+                            provider: string;
+                            actorId: string;
+                            /** @enum {string} */
+                            actorType: "user" | "agent";
+                            /** @enum {string} */
+                            status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                            result: string | null;
+                            url: string | null;
+                            providerSessionId: string | null;
+                            prUrl: string | null;
+                            prState: string | null;
+                            branch: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                            lastProgressAt?: string | null;
+                            lastStateHash?: string | null;
+                            /** @enum {string|null} */
+                            derivedStatus?: "stalled" | "needs_input" | null;
+                            activities?: {
+                                id: string;
+                                sessionId: string;
+                                actorId: string | null;
+                                /** @enum {string} */
+                                type: "thought" | "response" | "error" | "elicitation" | "action" | "status" | "artifact";
+                                message: string;
+                                payload?: unknown;
+                                parentId: string | null;
+                                startedAt: string | null;
+                                endedAt: string | null;
+                                durationMs: number | null;
+                                createdAt: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Session or issue not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description An active session already exists for this issue */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/agent/automations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List agent automations */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Automations for the workspace */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            automations: {
+                                id: string;
+                                organizationId: string;
+                                name: string;
+                                prompt: string;
+                                agentId: string;
+                                teamId: string | null;
+                                issueId: string | null;
+                                /** @enum {string} */
+                                triggerKind: "cron" | "event";
+                                triggerValue: string;
+                                enabled: number;
+                                lastFiredAt: string | null;
+                                createdBy: string | null;
+                                createdAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create agent automation */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        name: string;
+                        prompt: string;
+                        agentId: string;
+                        teamId?: string;
+                        issueId?: string;
+                        /** @enum {string} */
+                        triggerKind: "cron" | "event";
+                        triggerValue: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Automation created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            name: string;
+                            prompt: string;
+                            agentId: string;
+                            teamId: string | null;
+                            issueId: string | null;
+                            /** @enum {string} */
+                            triggerKind: "cron" | "event";
+                            triggerValue: string;
+                            enabled: number;
+                            lastFiredAt: string | null;
+                            createdBy: string | null;
+                            createdAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/agent/automations/{automationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete agent automation */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    automationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Automation deleted */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                        };
+                    };
+                };
+                /** @description Automation not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         options?: never;
         head?: never;
         patch?: never;

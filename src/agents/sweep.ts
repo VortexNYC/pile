@@ -4,11 +4,12 @@ import { scrubCaptureText } from "../global/redact.js";
 import { organization } from "../global/schema.js";
 import { processIncomingMessage } from "../global/support-channels.js";
 import type { WorkerEnv } from "../platform/middleware.js";
-import type { AgentSession } from "../types/workspace.js";
+import type { AgentSession, AgentSessionStatus } from "../types/workspace.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
 import { loadProviderConfig } from "./credentials.js";
 import { resolveAgentEnv } from "./daytona.js";
 import { dispatchAgent, getAgentProvider } from "./index.js";
+import { getLaneDbProvider, type LaneDbRef } from "./lane-db.js";
 import type {
   AgentProvider,
   AgentProviderSession,
@@ -21,6 +22,18 @@ export const DEFAULT_PROVISION_TIMEOUT_MINUTES = 30;
 // A provider call that hangs must never stall the whole org's sweep — the
 // loop is serial, so one wedged sandbox otherwise starves every session.
 const DEFAULT_PROBE_TIMEOUT_MS = 90_000;
+// Follow-up prompts (PILE-210) can land while a terminal session's sandbox is
+// parked. Past this window the sweep destroys the sandbox and cold dispatch
+// takes over.
+const SANDBOX_RESUME_WINDOW_MS = 4 * 60 * 60 * 1000;
+// The reaper only scans terminal sessions inside a bounded window — anything
+// older was reaped already or died of natural causes.
+const SANDBOX_REAP_MAX_AGE_MS = 48 * 60 * 60 * 1000;
+const TERMINAL_STATUSES = new Set<AgentSessionStatus>([
+  "completed",
+  "failed",
+  "canceled",
+]);
 
 export function parseAgentTimeouts(configJson: string | null | undefined): {
   timeoutMinutes: number;
@@ -230,6 +243,302 @@ async function retryInfraSession(
   }
 }
 
+// ---------------------------------------------------------------------------
+// PILE-214/211/212/210 — sweep-time maintenance
+// ---------------------------------------------------------------------------
+
+/** A `waiting` session parked behind a blocker lane (queuedAfter) gets
+ *  promoted to a real dispatch once the blocker goes terminal or vanishes. */
+async function promoteQueuedSessions(
+  env: WorkerEnv,
+  stub: DurableObjectStub<WorkspaceDO>,
+  organizationId: string,
+  ctx?: { waitUntil: (promise: Promise<unknown>) => void }
+): Promise<void> {
+  const queued = await stub.listQueuedAgentSessions();
+  for (const session of queued) {
+    if (!session.queuedAfter) {
+      await stub
+        .updateAgentSession(session.id, { status: "created" })
+        .catch(() => null);
+      continue;
+    }
+    const blocker = await stub
+      .getAgentSession(session.queuedAfter)
+      .catch(() => null);
+    if (blocker && !TERMINAL_STATUSES.has(blocker.status)) continue;
+    try {
+      const issue = await stub.getIssue(session.issueId);
+      if (!issue) continue;
+      const providerConfig = await loadProviderConfig(
+        env,
+        stub,
+        session.agentId
+      );
+      const effectiveEnv = resolveAgentEnv(env, providerConfig ?? undefined);
+      await dispatchAgent(
+        effectiveEnv,
+        session.agentId,
+        organizationId,
+        issue,
+        {
+          id: session.actorId,
+          organizationId,
+          type: session.actorType,
+          permissions: [],
+        },
+        undefined,
+        ctx,
+        { promoteSessionId: session.id }
+      );
+    } catch (err) {
+      console.error("queued session promotion failed", {
+        session: session.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+}
+
+/** Tear down a lane-scoped DB once the session lands terminal, then clear the
+ *  ref so the reaper doesn't re-attempt. */
+async function teardownLaneDbForSession(
+  env: WorkerEnv,
+  stub: DurableObjectStub<WorkspaceDO>,
+  session: AgentSession
+): Promise<void> {
+  if (!session.laneDbRef) return;
+  try {
+    const ref = JSON.parse(session.laneDbRef) as LaneDbRef;
+    const provider = getLaneDbProvider(env);
+    if (provider && ref.provider === provider.name) {
+      await provider.teardown(ref);
+    }
+    await stub.updateAgentSession(session.id, { laneDbRef: null });
+  } catch (err) {
+    console.error("lane-db teardown failed", {
+      session: session.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+/** Orphan reaper: any terminal session still holding a laneDbRef, plus
+ *  kept-alive sandboxes past the resume window (pile-210). Bounded window so
+ *  the sweep doesn't rescan the whole session table. */
+async function reapTerminalArtifacts(
+  env: WorkerEnv,
+  stub: DurableObjectStub<WorkspaceDO>,
+  organizationId: string,
+  now: number
+): Promise<void> {
+  const recent = await stub.listAgentSessions({ limit: 200 });
+  for (const session of recent) {
+    if (!TERMINAL_STATUSES.has(session.status)) continue;
+    await teardownLaneDbForSession(env, stub, session);
+    const updated = Date.parse(session.updatedAt);
+    if (
+      !Number.isFinite(updated) ||
+      now - updated < SANDBOX_RESUME_WINDOW_MS ||
+      now - updated > SANDBOX_REAP_MAX_AGE_MS
+    ) {
+      continue;
+    }
+    try {
+      const providerConfig = await loadProviderConfig(
+        env,
+        stub,
+        session.agentId
+      );
+      const provider = getAgentProvider(
+        session.agentId,
+        resolveAgentEnv(env, providerConfig ?? undefined)
+      );
+      if (provider.cancel) {
+        await provider.cancel(session.providerSessionId ?? session.id);
+      }
+      // Push updatedAt past the reap window so this session isn't retried
+      // every sweep.
+      await stub.updateAgentSession(session.id, { lastStateHash: "reaped" });
+    } catch (err) {
+      console.error("terminal sandbox reap failed", {
+        session: session.id,
+        organizationId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+}
+
+function cronFieldMatches(field: string, value: number): boolean {
+  for (const part of field.split(",")) {
+    if (part === "*") return true;
+    const stepMatch = /^(.+)\/(\d+)$/.exec(part);
+    const base = stepMatch ? stepMatch[1] : part;
+    const step = stepMatch ? Number(stepMatch[2]) : 1;
+    if (!Number.isInteger(step) || step < 1) continue;
+    let start: number;
+    let end: number;
+    if (base === "*") {
+      start = 0;
+      end = Number.MAX_SAFE_INTEGER;
+    } else {
+      const range = /^(\d+)-(\d+)$/.exec(base);
+      if (range) {
+        start = Number(range[1]);
+        end = Number(range[2]);
+      } else if (/^\d+$/.test(base)) {
+        // A bare number with a step ("5/10") means N-max/step; without a
+        // step it's an exact match.
+        start = Number(base);
+        end = stepMatch ? Number.MAX_SAFE_INTEGER : start;
+      } else {
+        continue;
+      }
+    }
+    if (value >= start && value <= end && (value - start) % step === 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Minimal 5-field cron matcher: `m h dom mon dow`. Enough for automation
+ *  schedules — no names/aliases, matches against the current UTC minute. */
+export function cronMatchesNow(expr: string, date: Date): boolean {
+  const fields = expr.trim().split(/\s+/);
+  if (fields.length !== 5) return false;
+  const [min, hour, dom, mon, dow] = fields;
+  return (
+    cronFieldMatches(min, date.getUTCMinutes()) &&
+    cronFieldMatches(hour, date.getUTCHours()) &&
+    cronFieldMatches(dom, date.getUTCDate()) &&
+    cronFieldMatches(mon, date.getUTCMonth() + 1) &&
+    cronFieldMatches(dow, date.getUTCDay())
+  );
+}
+
+/** Fire enabled automations whose cron expression matches this minute —
+ *  deduped by lastFiredAt so a matching minute fires at most once. Event
+ *  automations fire from syncOpenPrSessions instead. */
+async function fireDueAutomations(
+  env: WorkerEnv,
+  stub: DurableObjectStub<WorkspaceDO>,
+  organizationId: string,
+  now: Date,
+  ctx?: { waitUntil: (promise: Promise<unknown>) => void }
+): Promise<void> {
+  const automations = await stub.listAgentAutomations({
+    enabledOnly: true,
+    triggerKind: "cron",
+  });
+  const minuteStart = Math.floor(now.getTime() / 60_000) * 60_000;
+  for (const automation of automations) {
+    if (!cronMatchesNow(automation.triggerValue, now)) continue;
+    const last = automation.lastFiredAt
+      ? Date.parse(automation.lastFiredAt)
+      : 0;
+    if (Number.isFinite(last) && last >= minuteStart) continue;
+    await stub.markAgentAutomationFired(automation.id).catch(() => {});
+    await fireAutomation(env, stub, organizationId, automation, ctx);
+  }
+}
+
+/** Shared by cron and event triggers: dispatch a lane for the automation's
+ *  issue (or a fresh issue when none is bound). */
+async function fireAutomation(
+  env: WorkerEnv,
+  stub: DurableObjectStub<WorkspaceDO>,
+  organizationId: string,
+  automation: {
+    id: string;
+    agentId: string;
+    prompt: string;
+    issueId: string | null;
+    teamId: string | null;
+    createdBy: string | null;
+    name: string;
+  },
+  ctx?: { waitUntil: (promise: Promise<unknown>) => void },
+  context?: string
+): Promise<void> {
+  try {
+    const issue = automation.issueId
+      ? await stub.getIssue(automation.issueId)
+      : null;
+    const targetIssue =
+      issue ??
+      (await stub.createIssue(
+        {
+          title: `Automation: ${automation.name}`,
+          description: automation.prompt,
+          teamId: automation.teamId ?? undefined,
+          status: "backlog",
+        },
+        automation.createdBy ?? undefined
+      ));
+    const providerConfig = await loadProviderConfig(
+      env,
+      stub,
+      automation.agentId
+    );
+    const effectiveEnv = resolveAgentEnv(env, providerConfig ?? undefined);
+    await dispatchAgent(
+      effectiveEnv,
+      automation.agentId,
+      organizationId,
+      targetIssue,
+      {
+        id: automation.createdBy ?? "automation",
+        organizationId,
+        type: "agent",
+        permissions: [],
+      },
+      undefined,
+      ctx,
+      { instructions: context ?? automation.prompt }
+    );
+  } catch (err) {
+    console.error("automation dispatch failed", {
+      automation: automation.id,
+      organizationId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+/** Event automations (PILE-211): trigger_value is the event name —
+ *  pr.ci_failed, issue.assigned, issue.commented. */
+async function fireEventAutomations(
+  env: WorkerEnv,
+  stub: DurableObjectStub<WorkspaceDO>,
+  organizationId: string,
+  eventName: string,
+  session: AgentSession,
+  context?: string,
+  ctx?: { waitUntil: (promise: Promise<unknown>) => void }
+): Promise<void> {
+  const automations = await stub.listAgentAutomations({
+    enabledOnly: true,
+    triggerKind: "event",
+  });
+  for (const automation of automations) {
+    if (automation.triggerValue !== eventName) continue;
+    // concurrency_key = issueId — the one-active-session-per-issue guard in
+    // dispatchAgent already prevents a second lane on the same issue.
+    await fireAutomation(
+      env,
+      stub,
+      organizationId,
+      automation.issueId
+        ? automation
+        : { ...automation, issueId: session.issueId },
+      ctx,
+      context
+    );
+  }
+}
+
 export async function sweepAgentSessions(
   env: WorkerEnv,
   ctx?: { waitUntil: (promise: Promise<unknown>) => void },
@@ -256,6 +565,9 @@ export async function sweepAgentSessions(
       // reconcile session.prState and the issue's PR fields from GitHub so a
       // merged PR doesn't sit displayed as "open" forever.
       await syncOpenPrSessions(env, stub, id, { probeTimeoutMs });
+      await promoteQueuedSessions(env, stub, id, ctx);
+      await fireDueAutomations(env, stub, id, new Date(now), ctx);
+      await reapTerminalArtifacts(env, stub, id, now);
       if (sessions.length === 0) continue;
       for (const session of sessions) {
         const providerConfig = await loadProviderConfig(
@@ -321,6 +633,7 @@ export async function sweepAgentSessions(
             polled.status === "canceled"
           ) {
             await stub.applyAgentSessionResult(session.id, polled);
+            await teardownLaneDbForSession(env, stub, session);
             if (polled.status === "failed") {
               await ingestFailedAgentSession(env, id, session, polled);
               if (polled.infraFailure) {
@@ -493,15 +806,16 @@ export async function syncOpenPrSessions(
         "github-pr"
       )) as Record<string, unknown>;
       const state = prStateFromPull(pr);
+      const head = pr.head as Record<string, unknown> | undefined;
+      const headSha = typeof head?.sha === "string" ? head.sha : null;
 
       let checkState: string | null = null;
-      const head = pr.head as Record<string, unknown> | undefined;
-      if (typeof head?.sha === "string") {
+      if (headSha) {
         const checks = (await withTimeout(
           githubApiGet(
             ghFetch,
             token,
-            `/repos/${owner}/${repo}/commits/${head.sha}/check-runs?per_page=100`
+            `/repos/${owner}/${repo}/commits/${headSha}/check-runs?per_page=100`
           ),
           probeTimeoutMs,
           "github-checks"
@@ -511,10 +825,69 @@ export async function syncOpenPrSessions(
         checkState = summarizeCheckRuns(checks.check_runs);
       }
 
+      const issue = await stub.getIssue(session.issueId);
+
+      // SCM-observer events (PILE-209): orchestrators read PR transitions as
+      // session events, not just refreshed fields.
+      const priorCheckState = issue?.prCheckState ?? null;
+      if (state !== session.prState && state !== "open") {
+        await stub
+          .addAgentSessionEvent({
+            sessionId: session.id,
+            type: `pr.${state}`,
+            message: `PR ${prUrl} is now ${state}`,
+            payload: { prUrl, prState: state, headSha },
+          })
+          .catch(() => {});
+      }
+      if (checkState === "failing" && priorCheckState !== "failing") {
+        await stub
+          .addAgentSessionEvent({
+            sessionId: session.id,
+            type: "pr.ci_failed",
+            message: `CI failing on ${prUrl}`,
+            payload: { prUrl, headSha, checkState },
+          })
+          .catch(() => {});
+        await fireEventAutomations(
+          env,
+          stub,
+          organizationId,
+          "pr.ci_failed",
+          session,
+          `CI is failing on ${prUrl}${headSha ? ` (sha ${headSha})` : ""}. Fetch the failing check runs, fix, and push.`
+        );
+      }
+      const reviewers = pr.requested_reviewers;
+      if (
+        Array.isArray(reviewers) &&
+        reviewers.length > 0 &&
+        state === "open"
+      ) {
+        const seen = await stub
+          .listAgentSessionEvents(session.id, { limit: 100 })
+          .catch(() => []);
+        const alreadyNoted = seen.some(
+          (e) =>
+            e.type === "pr.review_requested" &&
+            typeof e.payload === "string" &&
+            e.payload.includes(headSha ?? "")
+        );
+        if (!alreadyNoted) {
+          await stub
+            .addAgentSessionEvent({
+              sessionId: session.id,
+              type: "pr.review_requested",
+              message: `Review requested on ${prUrl}`,
+              payload: { prUrl, headSha, reviewers: reviewers.length },
+            })
+            .catch(() => {});
+        }
+      }
+
       if (state !== session.prState) {
         await stub.updateAgentSession(session.id, { prState: state });
       }
-      const issue = await stub.getIssue(session.issueId);
       if (
         issue &&
         (issue.prState !== state ||

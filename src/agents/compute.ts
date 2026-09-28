@@ -513,10 +513,9 @@ export class CloudflareBackend implements ComputeBackend {
     path: string,
     content: string
   ): Promise<void> {
-    const res = await (await this.sandbox(sandbox.name)).writeFile(
-      path,
-      content
-    );
+    const res = await (
+      await this.sandbox(sandbox.name)
+    ).writeFile(path, content);
     if (!res.success) {
       throw computeError(`Cloudflare writeFile failed: ${path}`);
     }

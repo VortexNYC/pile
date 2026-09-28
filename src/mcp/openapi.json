@@ -2903,6 +2903,15 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "derivedStatus": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "stalled",
+                        "needs_input",
+                        null
+                      ]
+                    },
                     "activities": {
                       "type": "array",
                       "items": {
@@ -3126,6 +3135,15 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "derivedStatus": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "stalled",
+                            "needs_input",
+                            null
+                          ]
+                        },
                         "activities": {
                           "type": "array",
                           "items": {
@@ -3342,6 +3360,15 @@
                           "lastStateHash": {
                             "type": "string",
                             "nullable": true
+                          },
+                          "derivedStatus": {
+                            "type": "string",
+                            "nullable": true,
+                            "enum": [
+                              "stalled",
+                              "needs_input",
+                              null
+                            ]
                           },
                           "activities": {
                             "type": "array",
@@ -3643,6 +3670,15 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "derivedStatus": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "stalled",
+                            "needs_input",
+                            null
+                          ]
+                        },
                         "activities": {
                           "type": "array",
                           "items": {
@@ -3915,6 +3951,15 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "derivedStatus": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "stalled",
+                        "needs_input",
+                        null
+                      ]
+                    },
                     "activities": {
                       "type": "array",
                       "items": {
@@ -4151,6 +4196,15 @@
                     "lastStateHash": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "derivedStatus": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "stalled",
+                        "needs_input",
+                        null
+                      ]
                     },
                     "activities": {
                       "type": "array",
@@ -4770,6 +4824,15 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "derivedStatus": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "stalled",
+                        "needs_input",
+                        null
+                      ]
+                    },
                     "activities": {
                       "type": "array",
                       "items": {
@@ -4971,6 +5034,15 @@
                     "lastStateHash": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "derivedStatus": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "stalled",
+                        "needs_input",
+                        null
+                      ]
                     },
                     "activities": {
                       "type": "array",
@@ -5176,6 +5248,15 @@
                         "lastStateHash": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "derivedStatus": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "stalled",
+                            "needs_input",
+                            null
+                          ]
                         },
                         "activities": {
                           "type": "array",
@@ -5426,6 +5507,15 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "derivedStatus": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "stalled",
+                            "needs_input",
+                            null
+                          ]
+                        },
                         "activities": {
                           "type": "array",
                           "items": {
@@ -5589,6 +5679,767 @@
           }
         },
         "summary": "Create agent session children"
+      }
+    },
+    "/workspaces/{organizationId}/agent/sessions/{sessionId}/prompt": {
+      "post": {
+        "tags": [
+          "agent-sessions"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "sessionId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "prompt": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "prompt"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Follow-up delivered to the live sandbox",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "issueId": {
+                      "type": "string"
+                    },
+                    "agentId": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    },
+                    "actorId": {
+                      "type": "string"
+                    },
+                    "actorType": {
+                      "type": "string",
+                      "enum": [
+                        "user",
+                        "agent"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "created",
+                        "running",
+                        "waiting",
+                        "completed",
+                        "failed",
+                        "canceled"
+                      ]
+                    },
+                    "result": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "url": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "providerSessionId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "prUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "prState": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "branch": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    },
+                    "lastProgressAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "lastStateHash": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "derivedStatus": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "stalled",
+                        "needs_input",
+                        null
+                      ]
+                    },
+                    "activities": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "sessionId": {
+                            "type": "string"
+                          },
+                          "actorId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "thought",
+                              "response",
+                              "error",
+                              "elicitation",
+                              "action",
+                              "status",
+                              "artifact"
+                            ]
+                          },
+                          "message": {
+                            "type": "string"
+                          },
+                          "payload": {
+                            "nullable": true
+                          },
+                          "parentId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "startedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "endedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "durationMs": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "sessionId",
+                          "actorId",
+                          "type",
+                          "message",
+                          "parentId",
+                          "startedAt",
+                          "endedAt",
+                          "durationMs",
+                          "createdAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "issueId",
+                    "agentId",
+                    "provider",
+                    "actorId",
+                    "actorType",
+                    "status",
+                    "result",
+                    "url",
+                    "providerSessionId",
+                    "prUrl",
+                    "prState",
+                    "branch",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found"
+          },
+          "409": {
+            "description": "Sandbox gone or busy — use the retry route for a cold dispatch"
+          }
+        },
+        "summary": "Create agent session prompt"
+      }
+    },
+    "/workspaces/{organizationId}/agent/sessions/{sessionId}/retry": {
+      "post": {
+        "tags": [
+          "agent-sessions"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "sessionId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "context": {
+                    "type": "string"
+                  },
+                  "agentId": {
+                    "type": "string"
+                  },
+                  "model": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "New session dispatched with retry context",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "issueId": {
+                      "type": "string"
+                    },
+                    "agentId": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    },
+                    "actorId": {
+                      "type": "string"
+                    },
+                    "actorType": {
+                      "type": "string",
+                      "enum": [
+                        "user",
+                        "agent"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "created",
+                        "running",
+                        "waiting",
+                        "completed",
+                        "failed",
+                        "canceled"
+                      ]
+                    },
+                    "result": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "url": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "providerSessionId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "prUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "prState": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "branch": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    },
+                    "lastProgressAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "lastStateHash": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "derivedStatus": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "stalled",
+                        "needs_input",
+                        null
+                      ]
+                    },
+                    "activities": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "sessionId": {
+                            "type": "string"
+                          },
+                          "actorId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "thought",
+                              "response",
+                              "error",
+                              "elicitation",
+                              "action",
+                              "status",
+                              "artifact"
+                            ]
+                          },
+                          "message": {
+                            "type": "string"
+                          },
+                          "payload": {
+                            "nullable": true
+                          },
+                          "parentId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "startedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "endedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "durationMs": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "sessionId",
+                          "actorId",
+                          "type",
+                          "message",
+                          "parentId",
+                          "startedAt",
+                          "endedAt",
+                          "durationMs",
+                          "createdAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "issueId",
+                    "agentId",
+                    "provider",
+                    "actorId",
+                    "actorType",
+                    "status",
+                    "result",
+                    "url",
+                    "providerSessionId",
+                    "prUrl",
+                    "prState",
+                    "branch",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session or issue not found"
+          },
+          "409": {
+            "description": "An active session already exists for this issue"
+          }
+        },
+        "summary": "Create agent session retry"
+      }
+    },
+    "/workspaces/{organizationId}/agent/automations": {
+      "get": {
+        "tags": [
+          "agent-sessions"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Automations for the workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "automations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "prompt": {
+                            "type": "string"
+                          },
+                          "agentId": {
+                            "type": "string"
+                          },
+                          "teamId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "issueId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "triggerKind": {
+                            "type": "string",
+                            "enum": [
+                              "cron",
+                              "event"
+                            ]
+                          },
+                          "triggerValue": {
+                            "type": "string"
+                          },
+                          "enabled": {
+                            "type": "number"
+                          },
+                          "lastFiredAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdBy": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "name",
+                          "prompt",
+                          "agentId",
+                          "teamId",
+                          "issueId",
+                          "triggerKind",
+                          "triggerValue",
+                          "enabled",
+                          "lastFiredAt",
+                          "createdBy",
+                          "createdAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "automations"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List agent automations"
+      },
+      "post": {
+        "tags": [
+          "agent-sessions"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "prompt": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "agentId": {
+                    "type": "string"
+                  },
+                  "teamId": {
+                    "type": "string"
+                  },
+                  "issueId": {
+                    "type": "string"
+                  },
+                  "triggerKind": {
+                    "type": "string",
+                    "enum": [
+                      "cron",
+                      "event"
+                    ]
+                  },
+                  "triggerValue": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "name",
+                  "prompt",
+                  "agentId",
+                  "triggerKind",
+                  "triggerValue"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Automation created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "prompt": {
+                      "type": "string"
+                    },
+                    "agentId": {
+                      "type": "string"
+                    },
+                    "teamId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "issueId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "triggerKind": {
+                      "type": "string",
+                      "enum": [
+                        "cron",
+                        "event"
+                      ]
+                    },
+                    "triggerValue": {
+                      "type": "string"
+                    },
+                    "enabled": {
+                      "type": "number"
+                    },
+                    "lastFiredAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdBy": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "name",
+                    "prompt",
+                    "agentId",
+                    "teamId",
+                    "issueId",
+                    "triggerKind",
+                    "triggerValue",
+                    "enabled",
+                    "lastFiredAt",
+                    "createdBy",
+                    "createdAt"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create agent automation"
+      }
+    },
+    "/workspaces/{organizationId}/agent/automations/{automationId}": {
+      "delete": {
+        "tags": [
+          "agent-sessions"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "automationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Automation deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Automation not found"
+          }
+        },
+        "summary": "Delete agent automation"
       }
     },
     "/workspaces/{organizationId}/agent/providers/catalog": {

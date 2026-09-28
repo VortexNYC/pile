@@ -86,6 +86,8 @@ export interface AppEnv {
   BILLING_WEBHOOK_SECRET?: string;
   SCIM_CREDENTIAL_SECRET?: string;
   BILLING_UPGRADE_URL?: string;
+  /** PlanetScale service token for lane-scoped preview DBs (PILE-212). Unset = in-image local pg only. */
+  PSCALE_SERVICE_TOKEN?: string;
   // Cloudflare Queue for async webhook processing.
   WEBHOOK_QUEUE?: Queue;
 

@@ -1,7 +1,9 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
-import { decryptSecret } from "../agents/credentials.js";
+import { decryptSecret, loadProviderConfig } from "../agents/credentials.js";
+import { resolveAgentEnv } from "../agents/daytona.js";
+import { getAgentProvider } from "../agents/index.js";
 import { createD1 } from "../global/db.js";
 import { getInstallationToken } from "../global/github-auth.js";
 import { findGithubInstallation } from "../global/github-installations.js";
@@ -354,6 +356,59 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
     }
 
     await issueStub.emitCommentCreated(item, issue, identity.id);
+
+    // PILE-211 — a comment on an issue with a live lane becomes a follow-up
+    // prompt when the sandbox is still warm; else it's just a comment the
+    // lane never sees (orchestrators use /prompt or /retry explicitly).
+    if (identity.type === "user") {
+      const active = await issueStub
+        .getActiveAgentSessionForIssue(issueId)
+        .catch(() => null);
+      if (active && active.session.status === "running") {
+        try {
+          const providerConfig = await loadProviderConfig(
+            c.env,
+            issueStub,
+            active.session.agentId
+          );
+          const provider = getAgentProvider(
+            active.session.agentId,
+            resolveAgentEnv(c.env, providerConfig ?? undefined)
+          );
+          if (provider.sendPrompt) {
+            const gitIdentity = issue.repo
+              ? ((await issueStub.getGitIdentityByRepo(issue.repo)) ?? null)
+              : null;
+            const delivered = await provider.sendPrompt(
+              active.session.providerSessionId ?? active.session.id,
+              `${identity.id} commented on ${issue.identifier ?? issueId}:\n\n${body}`,
+              issue,
+              gitIdentity
+            );
+            if (delivered) {
+              await issueStub
+                .addAgentSessionEvent({
+                  sessionId: active.session.id,
+                  type: "prompt.followup",
+                  message: "Issue comment delivered as follow-up prompt",
+                  payload: { commentId: item.id },
+                })
+                .catch(() => {});
+              await issueStub.applyAgentSessionResult(
+                active.session.id,
+                { status: "running", result: null },
+                identity.id
+              );
+            }
+          }
+        } catch (err) {
+          console.error("comment follow-up prompt failed", {
+            issueId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+    }
 
     return c.json(item, 201);
   });

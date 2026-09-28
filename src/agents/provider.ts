@@ -89,7 +89,8 @@ export interface AgentProvider {
   sendPrompt?(
     trackerSessionId: string,
     prompt: string,
-    issue: Issue
+    issue: Issue,
+    gitIdentity?: GitIdentity | null
   ): Promise<boolean>;
   /**
    * Optional live state for the provider and underlying compute. Used by the

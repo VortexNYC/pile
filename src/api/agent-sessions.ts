@@ -11,7 +11,10 @@ import { createRepoBranch } from "../global/repo-branches.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
-import type { AgentSessionStatus } from "../types/workspace.js";
+import {
+  DEFAULT_GIT_IDENTITY_REPO,
+  type AgentSessionStatus,
+} from "../types/workspace.js";
 import type {
   workspaceAgentActivities,
   workspaceAgentSessions,
@@ -61,6 +64,9 @@ export const agentSessionSchema = z.object({
   updatedAt: z.string(),
   lastProgressAt: z.string().nullable().optional(),
   lastStateHash: z.string().nullable().optional(),
+  /** Read-time derivation (PILE-209): `stalled` = running, stale progress,
+   *  no PR; `needs_input` = latest activity is an elicitation. Never stored. */
+  derivedStatus: z.enum(["stalled", "needs_input"]).nullable().optional(),
   activities: z
     .array(
       z.object({
@@ -101,9 +107,32 @@ function toActivityResponse(row: AgentActivity) {
   };
 }
 
+const STALLED_PROGRESS_MS = 15 * 60 * 1000;
+
+/** Durable fields only are stored; display status is derived at read —
+ *  same rule as AO: never mark dead, just surface ambiguity. */
+function deriveSessionStatus(
+  row: AgentSession,
+  activities?: AgentActivity[]
+): "stalled" | "needs_input" | null {
+  if (row.status !== "running") return null;
+  const last = activities?.[activities.length - 1];
+  if (last?.type === "elicitation") return "needs_input";
+  if (row.prUrl) return null;
+  const progressed = row.lastProgressAt ? Date.parse(row.lastProgressAt) : NaN;
+  if (
+    Number.isFinite(progressed) &&
+    Date.now() - progressed > STALLED_PROGRESS_MS
+  ) {
+    return "stalled";
+  }
+  return null;
+}
+
 function toSessionResponse(row: AgentSession, activities?: AgentActivity[]) {
   return {
     ...row,
+    derivedStatus: deriveSessionStatus(row, activities),
     activities: activities?.map(toActivityResponse),
   };
 }
@@ -473,6 +502,156 @@ const createChildSessionRoute = createRoute({
     400: { description: "Bad request" },
     404: { description: "Session or parent issue not found" },
     429: { description: "Too many active child sessions" },
+  },
+});
+
+const promptSessionRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/prompt",
+  tags: ["agent-sessions"],
+  middleware: [rls("write", "agent:write")],
+  request: {
+    params: z.object({ organizationId: z.string(), sessionId: z.string() }),
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({ prompt: z.string().min(1) }).strict(),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Follow-up delivered to the live sandbox",
+      content: { "application/json": { schema: agentSessionSchema } },
+    },
+    404: { description: "Session not found" },
+    409: {
+      description:
+        "Sandbox gone or busy — use the retry route for a cold dispatch",
+    },
+  },
+});
+
+const retrySessionRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/retry",
+  tags: ["agent-sessions"],
+  middleware: [rls("write", "agent:write")],
+  request: {
+    params: z.object({ organizationId: z.string(), sessionId: z.string() }),
+    body: {
+      content: {
+        "application/json": {
+          schema: z
+            .object({
+              context: z.string().optional(),
+              agentId: z.string().optional(),
+              model: z.string().optional(),
+            })
+            .strict(),
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "New session dispatched with retry context",
+      content: { "application/json": { schema: agentSessionSchema } },
+    },
+    404: { description: "Session or issue not found" },
+    409: { description: "An active session already exists for this issue" },
+  },
+});
+
+const automationSchema = z.object({
+  id: z.string(),
+  organizationId: z.string(),
+  name: z.string(),
+  prompt: z.string(),
+  agentId: z.string(),
+  teamId: z.string().nullable(),
+  issueId: z.string().nullable(),
+  triggerKind: z.enum(["cron", "event"]),
+  triggerValue: z.string(),
+  enabled: z.number(),
+  lastFiredAt: z.string().nullable(),
+  createdBy: z.string().nullable(),
+  createdAt: z.string(),
+});
+
+const listAutomationsRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/agent/automations",
+  tags: ["agent-sessions"],
+  middleware: [rls("read", "agent:read")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Automations for the workspace",
+      content: {
+        "application/json": {
+          schema: z.object({ automations: z.array(automationSchema) }),
+        },
+      },
+    },
+  },
+});
+
+const createAutomationRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/agent/automations",
+  tags: ["agent-sessions"],
+  middleware: [rls("write", "agent:write")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+    body: {
+      content: {
+        "application/json": {
+          schema: z
+            .object({
+              name: z.string().min(1),
+              prompt: z.string().min(1),
+              agentId: z.string(),
+              teamId: z.string().optional(),
+              issueId: z.string().optional(),
+              triggerKind: z.enum(["cron", "event"]),
+              triggerValue: z.string().min(1),
+            })
+            .strict(),
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "Automation created",
+      content: { "application/json": { schema: automationSchema } },
+    },
+  },
+});
+
+const deleteAutomationRoute = createRoute({
+  method: "delete",
+  path: "/workspaces/{organizationId}/agent/automations/{automationId}",
+  tags: ["agent-sessions"],
+  middleware: [rls("write", "agent:write")],
+  request: {
+    params: z.object({
+      organizationId: z.string(),
+      automationId: z.string(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Automation deleted",
+      content: {
+        "application/json": { schema: z.object({ ok: z.boolean() }) },
+      },
+    },
+    404: { description: "Automation not found" },
   },
 });
 
@@ -1162,6 +1341,35 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
 
+    // PILE-211 spawn guardrails: bound chain depth and total live descendants
+    // of the whole spawn tree, not just direct children.
+    const spawnLimits = await stub.getAgentSpawnLimits();
+    const nextDepth = session.spawnDepth + 1;
+    if (nextDepth > spawnLimits.maxSpawnDepth) {
+      throw new VortexError({
+        code: "TOO_MANY_REQUESTS",
+        status: 429,
+        message: `Maximum spawn depth (${spawnLimits.maxSpawnDepth}) reached`,
+      });
+    }
+    // Root of the tree = walk up parentSessionId until null (depth ≤
+    // maxSpawnDepth, so this is at most a couple of lookups).
+    let rootId = session.id;
+    let cursor: typeof session | null | undefined = session;
+    while (cursor?.parentSessionId) {
+      cursor = await stub.getAgentSession(cursor.parentSessionId);
+      if (!cursor) break;
+      rootId = cursor.id;
+    }
+    const descendants = await stub.countActiveDescendantSessions(rootId);
+    if (descendants >= spawnLimits.maxActiveDescendants) {
+      throw new VortexError({
+        code: "TOO_MANY_REQUESTS",
+        status: 429,
+        message: `Maximum active descendant sessions (${spawnLimits.maxActiveDescendants}) reached`,
+      });
+    }
+
     const child = await stub.createIssue(
       {
         title: body.title,
@@ -1190,7 +1398,8 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       child,
       identity,
       body.model,
-      getExecutionCtx(c)
+      getExecutionCtx(c),
+      { parentSessionId: session.id, spawnDepth: nextDepth }
     );
 
     const childAfter = await stub.getIssue(child.id);
@@ -1205,5 +1414,149 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     }
 
     return c.json({ session: childSession, issue: childAfter ?? child }, 201);
+  });
+
+  app.openapi(promptSessionRoute, async (c) => {
+    const { organizationId, sessionId } = c.req.valid("param");
+    const { prompt } = c.req.valid("json");
+    const identity = c.var.workspaceIdentity;
+    const stub = getWorkspaceStub(c.env, organizationId);
+
+    const session = await stub.getAgentSession(sessionId);
+    if (!session) {
+      return c.json({ message: "Session not found" }, 404);
+    }
+    const issue = await stub.getIssue(session.issueId);
+    if (!issue) {
+      return c.json({ message: "Issue not found" }, 404);
+    }
+
+    const providerConfig = await loadProviderConfig(
+      c.env,
+      stub,
+      session.agentId
+    );
+    const effectiveEnv = resolveAgentEnv(c.env, providerConfig ?? undefined);
+    const provider = getAgentProvider(session.agentId, effectiveEnv);
+
+    // Live follow-up needs both provider support and a kept sandbox — else
+    // the caller should hit /retry for a cold dispatch with context.
+    const gitIdentity = issue.repo
+      ? ((await stub.getGitIdentityByRepo(issue.repo)) ??
+        (await stub.getGitIdentityByRepo(DEFAULT_GIT_IDENTITY_REPO)) ??
+        null)
+      : null;
+    const delivered = provider.sendPrompt
+      ? await provider.sendPrompt(
+          session.providerSessionId ?? sessionId,
+          prompt,
+          issue,
+          gitIdentity
+        )
+      : false;
+    if (!delivered) {
+      return c.json(
+        {
+          message:
+            "Session sandbox is gone or busy — retry for a cold dispatch with context",
+        },
+        409
+      );
+    }
+
+    await stub
+      .addAgentSessionEvent({
+        sessionId,
+        type: "prompt.followup",
+        message: `Follow-up prompt delivered (${prompt.length} chars)`,
+        payload: { prompt: prompt.slice(0, 2000) },
+      })
+      .catch(() => {});
+    const updated = await stub.applyAgentSessionResult(
+      sessionId,
+      { status: "running", result: null },
+      identity.id
+    );
+    const activities = await stub.listAgentActivities(sessionId);
+    return c.json(toSessionResponse(updated ?? session, activities), 200);
+  });
+
+  app.openapi(retrySessionRoute, async (c) => {
+    const { organizationId, sessionId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const identity = c.var.workspaceIdentity;
+    const stub = getWorkspaceStub(c.env, organizationId);
+
+    const session = await stub.getAgentSession(sessionId);
+    if (!session) {
+      return c.json({ message: "Session not found" }, 404);
+    }
+    const issue = await stub.getIssue(session.issueId);
+    if (!issue) {
+      return c.json({ message: "Issue not found" }, 404);
+    }
+
+    const agentId = body.agentId ?? session.agentId;
+    const providerConfig = await loadProviderConfig(c.env, stub, agentId);
+    const effectiveEnv = resolveAgentEnv(c.env, providerConfig ?? undefined);
+
+    // Nudge = retry with context (PILE-209): prior result + caller context
+    // become dispatch instructions; one-shot sessions are never mutated.
+    const instructions = [
+      session.result
+        ? `Previous attempt result: ${session.result.slice(0, 2000)}`
+        : null,
+      body.context,
+    ]
+      .filter((part): part is string => !!part)
+      .join("\n\n");
+
+    const retried = await dispatchAgent(
+      effectiveEnv,
+      agentId,
+      organizationId,
+      issue,
+      identity,
+      body.model,
+      getExecutionCtx(c),
+      { instructions: instructions || undefined }
+    );
+    await stub.updateAgentSession(retried.id, {
+      retryOf: session.id,
+      retryCount: (session.retryCount ?? 0) + 1,
+    });
+    const activities = await stub.listAgentActivities(retried.id);
+    return c.json(toSessionResponse(retried, activities), 201);
+  });
+
+  app.openapi(listAutomationsRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const automations = await stub.listAgentAutomations({});
+    return c.json({ automations }, 200);
+  });
+
+  app.openapi(createAutomationRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const identity = c.var.workspaceIdentity;
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const automation = await stub.createAgentAutomation({
+      ...body,
+      enabled: true,
+      createdBy: identity.id,
+    });
+    return c.json(automation, 201);
+  });
+
+  app.openapi(deleteAutomationRoute, async (c) => {
+    const { organizationId, automationId } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const existing = await stub.getAgentAutomation(automationId);
+    if (!existing) {
+      return c.json({ message: "Automation not found" }, 404);
+    }
+    await stub.deleteAgentAutomation(automationId);
+    return c.json({ ok: true }, 200);
   });
 }

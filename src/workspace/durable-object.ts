@@ -2006,12 +2006,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const maxSpawnDepth = parsed?.maxAgentSpawnDepth;
     const maxActiveDescendants = parsed?.maxActiveAgentDescendants;
     return {
-      maxSpawnDepth:
-        typeof maxSpawnDepth === "number" ? maxSpawnDepth : 2,
+      maxSpawnDepth: typeof maxSpawnDepth === "number" ? maxSpawnDepth : 2,
       maxActiveDescendants:
-        typeof maxActiveDescendants === "number"
-          ? maxActiveDescendants
-          : 20,
+        typeof maxActiveDescendants === "number" ? maxActiveDescendants : 20,
     };
   }
 

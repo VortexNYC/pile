@@ -1206,6 +1206,125 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "agent sessions prompt create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/prompt",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "sessionId",
+        flag: "session",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "prompt",
+        flag: "prompt",
+      },
+    ],
+  },
+  "agent sessions retry create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/retry",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "sessionId",
+        flag: "session",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "context",
+        flag: "context",
+      },
+      {
+        name: "agentId",
+        flag: "agent-id",
+      },
+      {
+        name: "model",
+        flag: "model",
+      },
+    ],
+  },
+  "agent automations list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/agent/automations",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "agent automations create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/agent/automations",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "prompt",
+        flag: "prompt",
+      },
+      {
+        name: "agentId",
+        flag: "agent-id",
+      },
+      {
+        name: "teamId",
+        flag: "team",
+      },
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+      {
+        name: "triggerKind",
+        flag: "trigger-kind",
+      },
+      {
+        name: "triggerValue",
+        flag: "trigger-value",
+      },
+    ],
+  },
+  "agent automations delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/agent/automations/{automationId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "automationId",
+        flag: "automation-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "agent providers catalog list": {
     method: "GET",
     path: "/workspaces/{organizationId}/agent/providers/catalog",

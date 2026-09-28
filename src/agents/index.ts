@@ -1,5 +1,8 @@
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 
+import { createD1 } from "../global/db.js";
+import { organization } from "../global/schema.js";
 import { createAuth } from "../platform/auth.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
@@ -16,8 +19,14 @@ import { loadProviderConfig } from "./credentials.js";
 import { CursorCliAgentProvider } from "./cursor-cli.js";
 import { CursorAgentProvider } from "./cursor.js";
 import { resolveAgentEnv } from "./daytona.js";
+import { checkDispatchDedupe, type DedupeResult } from "./dedupe.js";
 import { DevinCliAgentProvider } from "./devin-cli.js";
 import { DevinAgentProvider } from "./devin.js";
+import {
+  getLaneDbProvider,
+  laneDbConfigForRepo,
+  type LaneDbConfig,
+} from "./lane-db.js";
 import type { AgentProvider } from "./provider.js";
 
 const providers: Record<string, (env: WorkerEnv) => AgentProvider> = {
@@ -74,6 +83,31 @@ export function registerAgentProvider(
   providers[agentId] = factory;
 }
 
+/** Org metadata → laneDb config for a repo (organization.metadata.laneDb
+ *  keyed by "owner/name"). */
+async function laneDbConfigForOrgRepo(
+  env: WorkerEnv,
+  organizationId: string,
+  repo: string
+): Promise<LaneDbConfig | null> {
+  const d1 = createD1(env.D1);
+  const row = await d1
+    .select({ metadata: organization.metadata })
+    .from(organization)
+    .where(eq(organization.id, organizationId))
+    .get();
+  let parsed: Record<string, unknown> | null = null;
+  try {
+    const value: unknown = JSON.parse(row?.metadata ?? "");
+    if (typeof value === "object" && value !== null) {
+      parsed = value as Record<string, unknown>;
+    }
+  } catch {
+    parsed = null;
+  }
+  return laneDbConfigForRepo(parsed, repo);
+}
+
 export async function dispatchAgent(
   env: WorkerEnv,
   agentId: string,
@@ -82,7 +116,18 @@ export async function dispatchAgent(
   actor: WorkspaceIdentity,
   model?: string,
   ctx?: { waitUntil: (promise: Promise<unknown>) => void },
-  options?: { instructions?: string }
+  options?: {
+    instructions?: string;
+    /** Spawned-lane linkage: children carry their parent's session id and
+     *  spawnDepth+1 so caps and `child.terminal` events work (PILE-211). */
+    parentSessionId?: string;
+    spawnDepth?: number;
+    /** Extra runner env from lane provisioning (e.g. PlanetScale branch URLs). */
+    extraEnv?: Record<string, string>;
+    /** Promote a parked `waiting` session instead of creating a fresh row —
+     *  the sweep calls this when the queuedAfter blocker goes terminal. */
+    promoteSessionId?: string;
+  }
 ): Promise<AgentSession> {
   const stub = env.WORKSPACE_DURABLE_OBJECT.get(
     env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
@@ -115,7 +160,7 @@ export async function dispatchAgent(
     : null;
 
   const active = await stub.getActiveAgentSessionForIssue(issue.id);
-  if (active) {
+  if (active && active.session.id !== options?.promoteSessionId) {
     throw new VortexError({
       code: "CONFLICT",
       status: 409,
@@ -123,16 +168,130 @@ export async function dispatchAgent(
     });
   }
 
-  const session = await stub.createAgentSession({
-    issueId: issue.id,
-    agentId,
-    provider: agentId,
-    actorId: actor.id,
-    actorType: actor.type,
-    status: "created",
-    result: null,
-    url: null,
-  });
+  // PILE-214 — pre-dispatch dedupe. Skipped on promote: the parked session
+  // already passed (or was deliberately queued by) this gate.
+  let dedupeAdvisory: DedupeResult | null = null;
+  if (!options?.promoteSessionId) {
+    const dedupe = await checkDispatchDedupe(env, stub, issue).catch(
+      () => null
+    );
+    if (dedupe?.hardBlock) {
+      throw new VortexError({
+        code: "CONFLICT",
+        status: 409,
+        message: dedupe.hardBlock.reason,
+      });
+    }
+    if (dedupe?.queueAfter) {
+      const queued = await stub.createAgentSession({
+        issueId: issue.id,
+        agentId,
+        provider: agentId,
+        actorId: actor.id,
+        actorType: actor.type,
+        status: "waiting",
+        queuedAfter: dedupe.queueAfter,
+        parentSessionId: options?.parentSessionId ?? null,
+        spawnDepth: options?.spawnDepth ?? 0,
+      });
+      await stub
+        .addAgentSessionEvent({
+          sessionId: queued.id,
+          type: "lane.queued",
+          message: `Queued behind session ${dedupe.queueAfter} — open PR coverage detected`,
+          payload: { coverage: dedupe.coverage },
+        })
+        .catch(() => {});
+      return queued;
+    }
+    if (
+      dedupe &&
+      (dedupe.coverage.length > 0 || dedupe.collisions.length > 0)
+    ) {
+      // Advisory findings surface on the session the moment it's created.
+      dedupeAdvisory = dedupe;
+    }
+  }
+
+  let session: AgentSession;
+  if (options?.promoteSessionId) {
+    const promoted = await stub.getAgentSession(options.promoteSessionId);
+    if (!promoted || promoted.status !== "waiting") {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Queued session not found or no longer waiting",
+      });
+    }
+    session =
+      (await stub.updateAgentSession(promoted.id, {
+        status: "created",
+        queuedAfter: null,
+      })) ?? promoted;
+  } else {
+    session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: actor.id,
+      actorType: actor.type,
+      status: "created",
+      result: null,
+      url: null,
+      parentSessionId: options?.parentSessionId ?? null,
+      spawnDepth: options?.spawnDepth ?? 0,
+    });
+  }
+
+  // PILE-212 — lane-scoped preview DB: when org metadata declares laneDb for
+  // this repo, provision a PlanetScale branch+role and inject the env into the
+  // runner. Branch is named off the real session id, so this runs post-create.
+  let extraEnv = options?.extraEnv;
+  if (issue.repo && !session.laneDbRef) {
+    const laneConfig = await laneDbConfigForOrgRepo(
+      env,
+      organizationId,
+      issue.repo
+    );
+    if (laneConfig) {
+      const laneProvider = getLaneDbProvider(env);
+      if (laneProvider) {
+        try {
+          const provisioned = await laneProvider.provision(
+            laneConfig,
+            session.id
+          );
+          extraEnv = { ...extraEnv, ...provisioned.env };
+          await stub.updateAgentSession(session.id, {
+            laneDbRef: JSON.stringify(provisioned.ref),
+          });
+        } catch (err) {
+          await stub
+            .addAgentActivity({
+              sessionId: session.id,
+              actorId: actor.id,
+              type: "error",
+              message: `Lane DB provisioning failed: ${err instanceof Error ? err.message : String(err)}`,
+            })
+            .catch(() => {});
+        }
+      }
+    }
+  }
+
+  if (dedupeAdvisory) {
+    await stub
+      .addAgentSessionEvent({
+        sessionId: session.id,
+        type: "lane.dedupe",
+        message: `Pre-dispatch dedupe: ${dedupeAdvisory.coverage.length} PR coverage match(es), ${dedupeAdvisory.collisions.length} file collision(s)`,
+        payload: {
+          coverage: dedupeAdvisory.coverage,
+          collisions: dedupeAdvisory.collisions,
+        },
+      })
+      .catch(() => {});
+  }
 
   await stub.addAgentActivity({
     sessionId: session.id,
@@ -211,6 +370,7 @@ export async function dispatchAgent(
         comments,
         pileApi,
         instructions: options?.instructions,
+        extraEnv,
       }
     );
 

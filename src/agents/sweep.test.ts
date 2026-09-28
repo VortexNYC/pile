@@ -524,3 +524,26 @@ describe("syncOpenPrSessions", () => {
     expect((await stub.getAgentSession(session.id))?.prState).toBe("open");
   });
 });
+
+describe("cronMatchesNow", () => {
+  const at = new Date("2026-09-28T14:30:00Z"); // Mon 14:30 UTC
+
+  it("matches exact, wildcard, step, range, and list fields", async () => {
+    const { cronMatchesNow } = await import("./sweep.js");
+    expect(cronMatchesNow("30 14 * * *", at)).toBe(true);
+    expect(cronMatchesNow("* * * * *", at)).toBe(true);
+    expect(cronMatchesNow("*/15 * * * *", at)).toBe(true);
+    expect(cronMatchesNow("10-40/10 * * * *", at)).toBe(true);
+    expect(cronMatchesNow("0,30 * * * *", at)).toBe(true);
+    expect(cronMatchesNow("30 14 28 9 1", at)).toBe(true);
+  });
+
+  it("rejects non-matching and malformed expressions", async () => {
+    const { cronMatchesNow } = await import("./sweep.js");
+    expect(cronMatchesNow("31 14 * * *", at)).toBe(false);
+    expect(cronMatchesNow("*/7 * * * *", at)).toBe(false);
+    expect(cronMatchesNow("45-50 * * * *", at)).toBe(false);
+    expect(cronMatchesNow("30 14", at)).toBe(false);
+    expect(cronMatchesNow("not-a-cron", at)).toBe(false);
+  });
+});

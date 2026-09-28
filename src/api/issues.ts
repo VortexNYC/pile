@@ -1462,6 +1462,32 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     }
 
     let session: Awaited<ReturnType<typeof dispatchAgent>> | undefined;
+    if (assigneeId === null) {
+      // Unassign kills the lane (PILE-211): cancel any live session on this
+      // issue — the issue is the orchestration surface.
+      const active = await stub.getActiveAgentSessionForIssue(id);
+      if (active) {
+        const providerConfig = await loadProviderConfig(
+          c.env,
+          stub,
+          active.session.agentId
+        );
+        const provider = getAgentProvider(
+          active.session.agentId,
+          resolveAgentEnv(c.env, providerConfig ?? undefined)
+        );
+        if (provider.cancel) {
+          await provider
+            .cancel(active.session.providerSessionId ?? active.session.id)
+            .catch((err) => console.error("unassign cancel failed", err));
+        }
+        await stub.applyAgentSessionResult(
+          active.session.id,
+          { status: "canceled" },
+          identity.id
+        );
+      }
+    }
     if (assigneeId) {
       let isAgent = false;
       try {
