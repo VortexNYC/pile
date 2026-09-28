@@ -22,6 +22,7 @@ import type { FilterCondition } from "../filter.js";
 import type { workspaceSchema } from "../schema-map.js";
 import {
   workspaceAgentActivities,
+  workspaceAgentAutomations,
   workspaceAgentSessionEvents,
   workspaceDocumentHistory,
   workspaceDocumentLinks,
@@ -936,6 +937,10 @@ export interface AgentSessionInput {
   startedAt?: string | null;
   prUrl?: string | null;
   prState?: string | null;
+  queuedAfter?: string | null;
+  parentSessionId?: string | null;
+  spawnDepth?: number;
+  laneDbRef?: string | null;
 }
 
 export async function createAgentSession(
@@ -960,6 +965,10 @@ export async function createAgentSession(
     startedAt: input.startedAt ?? null,
     prUrl: input.prUrl ?? null,
     prState: input.prState ?? null,
+    queuedAfter: input.queuedAfter ?? null,
+    parentSessionId: input.parentSessionId ?? null,
+    spawnDepth: input.spawnDepth ?? 0,
+    laneDbRef: input.laneDbRef ?? null,
     updatedAt: ts,
   });
   const row = await db
@@ -1065,6 +1074,10 @@ export async function updateAgentSession(
     prUrl: string | null;
     prState: string | null;
     branch: string | null;
+    queuedAfter: string | null;
+    parentSessionId: string | null;
+    spawnDepth: number;
+    laneDbRef: string | null;
   }>
 ) {
   const existing = await getAgentSession(db, organizationId, id);
@@ -1087,11 +1100,98 @@ export async function updateAgentSession(
   if (input.prUrl !== undefined) set.prUrl = input.prUrl;
   if (input.prState !== undefined) set.prState = input.prState;
   if (input.branch !== undefined) set.branch = input.branch;
+  if (input.queuedAfter !== undefined) set.queuedAfter = input.queuedAfter;
+  if (input.parentSessionId !== undefined)
+    set.parentSessionId = input.parentSessionId;
+  if (input.spawnDepth !== undefined) set.spawnDepth = input.spawnDepth;
+  if (input.laneDbRef !== undefined) set.laneDbRef = input.laneDbRef;
   await db
     .update(workspaceAgentSessions)
     .set(set)
     .where(eq(workspaceAgentSessions.id, id));
   return getAgentSession(db, organizationId, id);
+}
+
+/** Sessions parked in `waiting` because a blocker lane owns the same file
+ *  surface (queuedAfter). The sweep promotes them once the blocker session
+ *  is terminal or gone. */
+export function listQueuedAgentSessions(
+  db: WorkspaceDb,
+  organizationId: string
+) {
+  return db
+    .select()
+    .from(workspaceAgentSessions)
+    .where(
+      and(
+        eq(workspaceAgentSessions.organizationId, organizationId),
+        eq(workspaceAgentSessions.status, "waiting")
+      )
+    )
+    .orderBy(
+      workspaceAgentSessions.createdAt,
+      workspaceAgentSessions.id
+    )
+    .all();
+}
+
+/** Direct children of a session (agent-spawned lanes). */
+export function listChildAgentSessions(
+  db: WorkspaceDb,
+  organizationId: string,
+  parentSessionId: string
+) {
+  return db
+    .select()
+    .from(workspaceAgentSessions)
+    .where(
+      and(
+        eq(workspaceAgentSessions.organizationId, organizationId),
+        eq(workspaceAgentSessions.parentSessionId, parentSessionId)
+      )
+    )
+    .orderBy(workspaceAgentSessions.createdAt)
+    .all();
+}
+
+/** Non-terminal sessions in the whole spawn tree rooted at rootSessionId —
+ *  breadth-first walk over parentSessionId. Caps bound total descendant
+ *  lanes regardless of which level spawns them. */
+export async function countActiveDescendantSessions(
+  db: WorkspaceDb,
+  organizationId: string,
+  rootSessionId: string
+): Promise<number> {
+  const terminal: AgentSessionStatus[] = ["completed", "failed", "canceled"];
+  const rows = await db
+    .select({
+      id: workspaceAgentSessions.id,
+      parentSessionId: workspaceAgentSessions.parentSessionId,
+      status: workspaceAgentSessions.status,
+    })
+    .from(workspaceAgentSessions)
+    .where(eq(workspaceAgentSessions.organizationId, organizationId))
+    .all();
+  const childrenByParent = new Map<string, typeof rows>();
+  for (const row of rows) {
+    if (!row.parentSessionId) continue;
+    const list = childrenByParent.get(row.parentSessionId) ?? [];
+    list.push(row);
+    childrenByParent.set(row.parentSessionId, list);
+  }
+  let active = 0;
+  const queue = [rootSessionId];
+  const seen = new Set<string>();
+  while (queue.length > 0) {
+    const parent = queue.shift();
+    if (!parent || seen.has(parent)) continue;
+    seen.add(parent);
+    for (const child of childrenByParent.get(parent) ?? []) {
+      if (!terminal.includes(child.status as AgentSessionStatus)) active += 1;
+      queue.push(child.id);
+    }
+  }
+  return active;
 }
 
 export interface AgentActivityInput {
@@ -1273,6 +1373,111 @@ export async function getActiveAgentSessionForIssue(
   if (!active) return null;
   const activities = await listAgentActivities(db, active.id, { limit: 50 });
   return { session: active, activities };
+}
+
+// ---- agent automations (PILE-211) ----
+
+export interface AgentAutomationInput {
+  name: string;
+  prompt: string;
+  agentId: string;
+  teamId?: string | null;
+  issueId?: string | null;
+  triggerKind: "cron" | "event";
+  triggerValue: string;
+  enabled?: boolean;
+  createdBy?: string | null;
+}
+
+export async function createAgentAutomation(
+  db: WorkspaceDb,
+  organizationId: string,
+  input: AgentAutomationInput
+) {
+  const id = crypto.randomUUID();
+  await db.insert(workspaceAgentAutomations).values({
+    id,
+    organizationId,
+    name: input.name,
+    prompt: input.prompt,
+    agentId: input.agentId,
+    teamId: input.teamId ?? null,
+    issueId: input.issueId ?? null,
+    triggerKind: input.triggerKind,
+    triggerValue: input.triggerValue,
+    enabled: input.enabled === false ? 0 : 1,
+    createdBy: input.createdBy ?? null,
+    createdAt: new Date().toISOString(),
+  });
+  return db
+    .select()
+    .from(workspaceAgentAutomations)
+    .where(eq(workspaceAgentAutomations.id, id))
+    .get();
+}
+
+export function listAgentAutomations(
+  db: WorkspaceDb,
+  organizationId: string,
+  options: { enabledOnly?: boolean; triggerKind?: "cron" | "event" } = {}
+) {
+  const conditions = [
+    eq(workspaceAgentAutomations.organizationId, organizationId),
+  ];
+  if (options.enabledOnly) {
+    conditions.push(eq(workspaceAgentAutomations.enabled, 1));
+  }
+  if (options.triggerKind) {
+    conditions.push(
+      eq(workspaceAgentAutomations.triggerKind, options.triggerKind)
+    );
+  }
+  return db
+    .select()
+    .from(workspaceAgentAutomations)
+    .where(and(...conditions))
+    .orderBy(workspaceAgentAutomations.createdAt)
+    .all();
+}
+
+export function getAgentAutomation(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  return db
+    .select()
+    .from(workspaceAgentAutomations)
+    .where(
+      and(
+        eq(workspaceAgentAutomations.organizationId, organizationId),
+        eq(workspaceAgentAutomations.id, id)
+      )
+    )
+    .get();
+}
+
+export async function markAgentAutomationFired(
+  db: WorkspaceDb,
+  id: string
+) {
+  await db
+    .update(workspaceAgentAutomations)
+    .set({ lastFiredAt: new Date().toISOString() })
+    .where(eq(workspaceAgentAutomations.id, id));
+}
+
+export async function deleteAgentAutomation(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  const existing = await getAgentAutomation(db, organizationId, id);
+  if (!existing) return false;
+  await db
+    .delete(workspaceAgentAutomations)
+    .where(eq(workspaceAgentAutomations.id, id));
+  return true;
 }
 
 // ---- webhook subscriptions + outbound deliveries ----

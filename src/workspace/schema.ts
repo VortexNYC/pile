@@ -789,6 +789,18 @@ export const workspaceAgentSessions = sqliteTable(
     infraFailure: integer("infra_failure" as string)
       .notNull()
       .default(0),
+    // Sequenced dispatch: when set the session sits in `waiting` until the
+    // blocker session reaches a terminal state (PILE-214 collision queue).
+    queuedAfter: text("queued_after" as string),
+    // Agent-spawned lanes: which session created this one + how deep the
+    // spawn chain is, so the children route can enforce MAX_SPAWN_DEPTH.
+    parentSessionId: text("parent_session_id" as string),
+    spawnDepth: integer("spawn_depth" as string)
+      .notNull()
+      .default(0),
+    // Lane-scoped preview DB (PILE-212): JSON handle describing the
+    // provisioned branch/role so teardown can run on terminal state.
+    laneDbRef: text("lane_db_ref" as string),
   },
   (table) => [
     index("agent_sessions_organization_idx" as string).on(
@@ -854,6 +866,36 @@ export const workspaceAgentSessionEvents = sqliteTable(
       table.sessionId,
       table.id
     ),
+  ]
+);
+
+// PILE-211: declarative lane triggers. `triggerKind` is "cron" or "event";
+// `triggerValue` is the 5-field cron expression or the event name
+// (issue.assigned / issue.commented / pr.ci_failed). concurrencyKey defaults
+// to the target issue id — the existing one-active-session-per-issue guard
+// does the dedupe.
+export const workspaceAgentAutomations = sqliteTable(
+  "agent_automations" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    name: text("name" as string).notNull(),
+    prompt: text("prompt" as string).notNull(),
+    agentId: text("agent_id" as string).notNull(),
+    teamId: text("team_id" as string),
+    issueId: text("issue_id" as string),
+    triggerKind: text("trigger_kind" as string, {
+      enum: ["cron", "event"],
+    }).notNull(),
+    triggerValue: text("trigger_value" as string).notNull(),
+    enabled: integer("enabled" as string).notNull().default(1),
+    lastFiredAt: text("last_fired_at" as string),
+    createdBy: text("created_by" as string),
+    createdAt: text("created_at" as string).notNull(),
+  },
+  (table) => [
+    index("agent_automations_org_idx" as string).on(table.organizationId),
+    index("agent_automations_issue_idx" as string).on(table.issueId),
   ]
 );
 

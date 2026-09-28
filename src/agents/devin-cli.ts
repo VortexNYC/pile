@@ -272,6 +272,24 @@ const PYTHON_RUNNER = [
   "    run(['git', '-C', REPO_DIR, 'config', 'user.name', os.environ.get('GIT_AUTHOR_NAME', 'Devin')], check=True)",
   "    run(['git', '-C', REPO_DIR, 'config', 'user.email', os.environ.get('GIT_AUTHOR_EMAIL', 'devin@pile.nyc')], check=True)",
   "",
+  "def run_setup_hook():",
+  "    # Repo-declared environment hook (.pile/setup.sh) — each repo wires its",
+  "    # own toolchain instead of the image hardcoding per-repo steps.",
+  "    hook = os.path.join(REPO_DIR, '.pile', 'setup.sh')",
+  "    if not os.path.exists(hook):",
+  "        return",
+  "    t0 = time.time()",
+  "    print('running .pile/setup.sh')",
+  "    result = run(['bash', hook], cwd=REPO_DIR, env=devin_env(), check=False)",
+  "    print(f'[timing] setup.sh: {time.time() - t0:.0f}s exit={result.returncode}')",
+  "",
+  "def resume_repo():",
+  "    # Follow-up prompt on a kept sandbox: the checkout and branch survive",
+  "    # from the prior run — fetch and fast-forward so the agent resumes on",
+  "    # current remote state (its earlier push included).",
+  "    run(['timeout', '120', 'git', '-C', REPO_DIR, 'fetch', '--depth', '50', 'origin', BRANCH], check=False)",
+  "    run(['git', '-C', REPO_DIR, 'merge', '--ff-only', f'origin/{BRANCH}'], check=False)",
+  "",
   "def find_pr():",
   "    owner, name = REPO.split('/')",
   "    try:",
@@ -354,15 +372,7 @@ const PYTHON_RUNNER = [
   "    run(['su', 'postgres', '-c', 'createdb vortex_dev'], check=False)",
   "    print(f'[timing] postgres up: {time.time() - t0:.0f}s')",
   "",
-  "def main():",
-  "    creds_b64 = os.environ['DEVIN_CREDENTIALS_B64']",
-  "    write_devin_home(creds_b64)",
-  "    devin_bin = ensure_devin()",
-  "    create_branch()",
-  "    clone_repo()",
-  "    ensure_postgres()",
-  "    output = run_devin(devin_bin)",
-  "    pushed = commit_and_push()",
+  "def finalize(output, pushed):",
   "    pr_url = ''",
   "    if pushed:",
   "        pr_url = find_pr() or create_pr()",
@@ -375,6 +385,30 @@ const PYTHON_RUNNER = [
   "    with open('/tmp/devin-result.json', 'w') as f:",
   "        json.dump({'status': 'completed', 'prUrl': pr_url, 'branch': BRANCH, 'result': result_text}, f)",
   "    return 0",
+  "",
+  "def main():",
+  "    creds_b64 = os.environ['DEVIN_CREDENTIALS_B64']",
+  "    write_devin_home(creds_b64)",
+  "    devin_bin = ensure_devin()",
+  "    if os.environ.get('FOLLOWUP') == '1':",
+  "        # Resume path: sandbox was kept after the prior run. Drop the stale",
+  "        # result file so a mid-run poll can't serve the previous outcome.",
+  "        try:",
+  "            os.remove('/tmp/devin-result.json')",
+  "        except OSError:",
+  "            pass",
+  "        ensure_postgres()",
+  "        resume_repo()",
+  "        output = run_devin(devin_bin)",
+  "        pushed = commit_and_push()",
+  "        return finalize(output, pushed)",
+  "    create_branch()",
+  "    clone_repo()",
+  "    run_setup_hook()",
+  "    ensure_postgres()",
+  "    output = run_devin(devin_bin)",
+  "    pushed = commit_and_push()",
+  "    return finalize(output, pushed)",
   "",
   "if __name__ == '__main__':",
   "    try:",
@@ -392,7 +426,8 @@ function buildSandboxEnv(
   githubToken: string,
   gitIdentity: GitIdentity,
   comments?: DispatchComment[],
-  instructions?: string
+  instructions?: string,
+  extraEnv?: Record<string, string>
 ): Record<string, string> {
   const branch = issue.branch ?? `issue-${issue.id}`;
   const repo = issue.repo ?? "";
@@ -413,6 +448,7 @@ function buildSandboxEnv(
     // this is just a local dir — harmless, and keeps the path consistent.
     npm_config_store_dir: "/home/daytona/cache/pnpm-store",
     RUNNER_PY_B64: encodeBase64(PYTHON_RUNNER),
+    ...extraEnv,
   };
 }
 
@@ -509,7 +545,8 @@ export class DevinCliAgentProvider implements AgentProvider {
     sessionId: string,
     gitIdentity: GitIdentity,
     comments?: DispatchComment[],
-    instructions?: string
+    instructions?: string,
+    extraEnv?: Record<string, string>
   ) {
     const credentialsB64 = this.requireAuth();
     const compute = this.requireCompute();
@@ -552,7 +589,8 @@ export class DevinCliAgentProvider implements AgentProvider {
             githubToken,
             gitIdentity,
             comments,
-            instructions
+            instructions,
+            extraEnv
           );
           const sandbox = await compute.createSandbox({
             name,
@@ -634,7 +672,8 @@ export class DevinCliAgentProvider implements AgentProvider {
       sessionId,
       gitIdentity,
       sessionContext?.comments,
-      sessionContext?.instructions
+      sessionContext?.instructions,
+      sessionContext?.extraEnv
     );
 
     if (sessionContext?.waitUntil) {
@@ -682,6 +721,14 @@ export class DevinCliAgentProvider implements AgentProvider {
       return { id: sessionId, agentId: this.id, status: "running" };
     }
 
+    // The primary process exited — but a follow-up run (sendPrompt) may be
+    // in flight under a `${sessionId}-fu-*` sibling process id.
+    const followupActive =
+      (await compute.runnerBusy?.(sandbox, sessionId)) === true;
+    if (followupActive) {
+      return { id: sessionId, agentId: this.id, status: "running" };
+    }
+
     const raw = await compute.readFile(sandbox, RESULT_PATH);
     let result: z.infer<typeof devinResultSchema> | null = null;
     if (raw) {
@@ -708,12 +755,14 @@ export class DevinCliAgentProvider implements AgentProvider {
     const prUrl = result.prUrl?.trim() || null;
     const prState = prUrl ? "open" : null;
 
-    await compute.deleteSandbox(sandbox);
+    // Keep the sandbox — sleepAfter parks it inside ~4h and the sweep's
+    // terminal-sandbox reaper destroys it after the resume window. Deleting
+    // here would make sendPrompt/follow-ups impossible (PILE-210).
     await this.note(
       sandbox.organizationId,
       sessionId,
       "status",
-      "sandbox deleted after terminal result",
+      "sandbox kept alive for follow-up prompts",
       { sandbox: sandbox.id }
     );
 
@@ -726,6 +775,72 @@ export class DevinCliAgentProvider implements AgentProvider {
       prState,
       branch: result.branch ?? null,
     };
+  }
+
+  /**
+   * Follow-up prompt (PILE-210): start a `${sessionId}-fu-*` process on the
+   * kept sandbox in FOLLOWUP mode — skips clone, resumes the branch, runs
+   * devin with the new instruction, commits/pushes, rewrites the result file.
+   * startProcess registers the process record before resolving, so a poll
+   * that lands mid-run sees runnerBusy()=true instead of the stale result.
+   */
+  async sendPrompt(
+    trackerSessionId: string,
+    prompt: string,
+    issue: Issue,
+    gitIdentity?: GitIdentity | null
+  ): Promise<boolean> {
+    const compute = this.requireCompute();
+    const sandbox = await compute.findSandbox(
+      trackerSessionId,
+      sandboxName(trackerSessionId),
+      RESULT_PATH
+    );
+    if (!sandbox || sandbox.state !== "started") return false;
+    if (!issue.repo) return false;
+    if ((await compute.runnerBusy?.(sandbox, trackerSessionId)) === true) {
+      return false;
+    }
+
+    const credentialsB64 = this.requireAuth();
+    const githubToken = await this.githubToken(issue.repo);
+    const followupId = `${trackerSessionId}-fu-${Date.now().toString(36)}`;
+
+    const followupEnv = buildSandboxEnv(
+      issue,
+      this.env.DEVIN_CLI_MODEL ?? DEFAULT_MODEL,
+      credentialsB64,
+      githubToken,
+      gitIdentity ?? {
+        id: "followup",
+        organizationId: "",
+        repo: issue.repo,
+        name: "Devin",
+        email: "devin@pile.nyc",
+        githubUsername: null,
+        signingKeyRef: null,
+        createdAt: "",
+        updatedAt: "",
+      },
+      undefined,
+      prompt,
+      { FOLLOWUP: "1" }
+    );
+
+    await compute.startRunner(
+      sandbox,
+      followupId,
+      buildRunnerCommand(),
+      followupEnv
+    );
+    await this.note(
+      sandbox.organizationId,
+      trackerSessionId,
+      "action",
+      "follow-up prompt delivered to live sandbox",
+      { followupId }
+    );
+    return true;
   }
 
   async cancel(sessionId: string): Promise<void> {

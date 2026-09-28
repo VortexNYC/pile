@@ -1966,6 +1966,78 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return typeof value === "number" ? value : 10;
   }
 
+  listQueuedAgentSessions() {
+    return data.listQueuedAgentSessions(this.db, this.organizationId);
+  }
+
+  listChildAgentSessions(parentSessionId: string) {
+    return data.listChildAgentSessions(
+      this.db,
+      this.organizationId,
+      parentSessionId
+    );
+  }
+
+  countActiveDescendantSessions(rootSessionId: string) {
+    return data.countActiveDescendantSessions(
+      this.db,
+      this.organizationId,
+      rootSessionId
+    );
+  }
+
+  /** Spawn guardrails for agent-created lanes. Depth is read off the
+   *  session's spawnDepth column; the descendant cap counts every active
+   *  session in the root's tree. Both overridable via org metadata. */
+  async getAgentSpawnLimits(): Promise<{
+    maxSpawnDepth: number;
+    maxActiveDescendants: number;
+  }> {
+    const d1 = createD1(this.env.D1);
+    const row = await d1
+      .select({ metadata: organization.metadata })
+      .from(organization)
+      .where(eq(organization.id, this.organizationId))
+      .get();
+    const parsed = safeJSON(row?.metadata ?? null) as Record<
+      string,
+      unknown
+    > | null;
+    const maxSpawnDepth = parsed?.maxAgentSpawnDepth;
+    const maxActiveDescendants = parsed?.maxActiveAgentDescendants;
+    return {
+      maxSpawnDepth:
+        typeof maxSpawnDepth === "number" ? maxSpawnDepth : 2,
+      maxActiveDescendants:
+        typeof maxActiveDescendants === "number"
+          ? maxActiveDescendants
+          : 20,
+    };
+  }
+
+  // ---- agent automations ----
+  createAgentAutomation(input: data.AgentAutomationInput) {
+    return data.createAgentAutomation(this.db, this.organizationId, input);
+  }
+
+  listAgentAutomations(
+    options: { enabledOnly?: boolean; triggerKind?: "cron" | "event" } = {}
+  ) {
+    return data.listAgentAutomations(this.db, this.organizationId, options);
+  }
+
+  getAgentAutomation(id: string) {
+    return data.getAgentAutomation(this.db, this.organizationId, id);
+  }
+
+  markAgentAutomationFired(id: string) {
+    return data.markAgentAutomationFired(this.db, id);
+  }
+
+  deleteAgentAutomation(id: string) {
+    return data.deleteAgentAutomation(this.db, this.organizationId, id);
+  }
+
   async countActiveChildSessions(parentIssueId: string): Promise<number> {
     await this.ready;
     const childIssues = await this.db
@@ -2468,6 +2540,24 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         session: updatedSession,
         issue: updatedIssue ?? issue,
       });
+
+      // childSessionUpdate (PILE-211): a spawning lane reads its children's
+      // outcomes off its own event stream instead of polling each child.
+      if (updatedSession.parentSessionId) {
+        await this.addAgentSessionEvent({
+          sessionId: updatedSession.parentSessionId,
+          type: "child.terminal",
+          message: `Child session ${updatedSession.id} ${updatedSession.status}`,
+          payload: {
+            childSessionId: updatedSession.id,
+            childIssueId: updatedSession.issueId,
+            status: updatedSession.status,
+            prUrl: updatedSession.prUrl,
+            branch: updatedSession.branch,
+            result: updatedSession.result?.slice(0, 2000) ?? null,
+          },
+        }).catch(() => {});
+      }
     }
 
     return updatedSession;

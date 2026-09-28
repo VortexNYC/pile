@@ -63,10 +63,19 @@ export interface ComputeBackend {
   startRunner(
     sandbox: ComputeSandbox,
     sessionId: string,
-    command: string
+    command: string,
+    env?: Record<string, string>
   ): Promise<void>;
   runnerState(sandbox: ComputeSandbox, sessionId: string): Promise<RunnerState>;
   readFile(sandbox: ComputeSandbox, path: string): Promise<string | null>;
+  writeFile(
+    sandbox: ComputeSandbox,
+    path: string,
+    content: string
+  ): Promise<void>;
+  /** Any runner process in flight for this session — used to distinguish a
+   *  follow-up run from a dead lane after the primary process exits. */
+  runnerBusy?(sandbox: ComputeSandbox, sessionId: string): Promise<boolean>;
   runnerLogs?(
     sandbox: ComputeSandbox,
     sessionId: string
@@ -81,6 +90,12 @@ function computeError(message: string, status = 502): VortexError {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function encodeUtf8Base64(input: string): string {
+  const bytes = new TextEncoder().encode(input);
+  const bin = Array.from(bytes, (b) => String.fromCharCode(b)).join("");
+  return btoa(bin);
 }
 
 // ---------------------------------------------------------------------------
@@ -214,9 +229,20 @@ class DaytonaBackend implements ComputeBackend {
   async startRunner(
     sandbox: ComputeSandbox,
     sessionId: string,
-    command: string
+    command: string,
+    env?: Record<string, string>
   ): Promise<void> {
     const base = this.toolbox(sandbox);
+    // Toolbox exec has no per-command env — write a sourced env file and
+    // prefix the command instead. Values are single-quote escaped.
+    if (env && Object.keys(env).length > 0) {
+      const envPath = `/tmp/pile-env-${sessionId.replace(/[^a-zA-Z0-9-]/g, "")}.sh`;
+      const body = Object.entries(env)
+        .map(([k, v]) => `export ${k}='${v.replaceAll("'", "'\\''")}'`)
+        .join("\n");
+      await this.writeFile(sandbox, envPath, body);
+      command = `set -a && . ${envPath} && set +a && ${command}`;
+    }
     const createRes = await fetch(`${base}/process/session`, {
       method: "POST",
       headers: {
@@ -289,6 +315,59 @@ class DaytonaBackend implements ComputeBackend {
     return data.result;
   }
 
+  async writeFile(
+    sandbox: ComputeSandbox,
+    path: string,
+    content: string
+  ): Promise<void> {
+    const base = this.toolbox(sandbox);
+    const res = await fetch(`${base}/process/execute`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.config.apiKey}`,
+      },
+      body: JSON.stringify({
+        command: `python3 -c "import base64,sys;open(sys.argv[1],'wb').write(base64.b64decode(sys.argv[2]))" ${path} ${encodeUtf8Base64(content)}`,
+        cwd: "/",
+      }),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw computeError(`Daytona writeFile failed: ${res.status} ${text}`);
+    }
+    const data = daytonaSyncExecSchema.parse(await res.json());
+    if (data.exitCode !== 0) {
+      throw computeError(
+        `Daytona writeFile exited ${data.exitCode}: ${data.result ?? ""}`
+      );
+    }
+  }
+
+  async runnerBusy(
+    sandbox: ComputeSandbox,
+    sessionId: string
+  ): Promise<boolean> {
+    const base = this.toolbox(sandbox);
+    // The runner uses one process session per attempt: `${sessionId}` for the
+    // primary run and `${sessionId}-fu` for follow-ups. Busy = any tracked
+    // session has a command that hasn't reported an exit code.
+    for (const pid of [sessionId, `${sessionId}-fu`]) {
+      const res = await fetch(`${base}/process/session/${pid}`, {
+        headers: { Authorization: `Bearer ${this.config.apiKey}` },
+      }).catch(() => null);
+      if (!res?.ok) continue;
+      const parsed = daytonaProcessSessionSchema.safeParse(await res.json());
+      if (
+        parsed.success &&
+        parsed.data.commands.some((c) => c.exitCode === undefined)
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   async deleteSandbox(sandbox: ComputeSandbox): Promise<void> {
     const res = await this.request(`/sandbox/${sandbox.id}`, {
       method: "DELETE",
@@ -317,7 +396,13 @@ class DaytonaBackend implements ComputeBackend {
 
 export type SandboxHandle = Pick<
   Sandbox,
-  "getProcess" | "startProcess" | "readFile" | "destroy" | "getProcessLogs"
+  | "getProcess"
+  | "listProcesses"
+  | "startProcess"
+  | "readFile"
+  | "writeFile"
+  | "destroy"
+  | "getProcessLogs"
 >;
 
 export class CloudflareBackend implements ComputeBackend {
@@ -367,15 +452,35 @@ export class CloudflareBackend implements ComputeBackend {
   async startRunner(
     sandbox: ComputeSandbox,
     sessionId: string,
-    command: string
+    command: string,
+    env?: Record<string, string>
   ): Promise<void> {
     await (
       await this.sandbox(sandbox.name)
     ).startProcess(command, {
       processId: sessionId,
-      env: sandbox.runnerEnv,
+      env: env ?? sandbox.runnerEnv,
       autoCleanup: false,
     });
+  }
+
+  async runnerBusy(
+    sandbox: ComputeSandbox,
+    sessionId: string
+  ): Promise<boolean> {
+    // Follow-up runs use `${sessionId}-fu` process ids — any live process
+    // under the session prefix counts, not just the primary one.
+    const processes = await (
+      await this.sandbox(sandbox.name)
+    )
+      .listProcesses()
+      .catch(() => []);
+    for (const proc of processes) {
+      if (!proc.id.startsWith(sessionId)) continue;
+      const status = await proc.getStatus().catch(() => null);
+      if (status === "starting" || status === "running") return true;
+    }
+    return false;
   }
 
   async runnerState(
@@ -400,6 +505,20 @@ export class CloudflareBackend implements ComputeBackend {
       return res.success && res.content ? res.content : null;
     } catch {
       return null;
+    }
+  }
+
+  async writeFile(
+    sandbox: ComputeSandbox,
+    path: string,
+    content: string
+  ): Promise<void> {
+    const res = await (await this.sandbox(sandbox.name)).writeFile(
+      path,
+      content
+    );
+    if (!res.success) {
+      throw computeError(`Cloudflare writeFile failed: ${path}`);
     }
   }
 

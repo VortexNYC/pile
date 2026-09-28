@@ -142,6 +142,10 @@ describe("ingestFailedAgentSession", () => {
       retryCount: 0,
       infraFailure: 0,
       startedAt: null,
+      queuedAfter: null,
+      parentSessionId: null,
+      spawnDepth: 0,
+      laneDbRef: null,
     };
     const polled = {
       id: "prov-1",

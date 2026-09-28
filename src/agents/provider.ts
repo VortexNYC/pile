@@ -43,6 +43,9 @@ export interface AgentDispatchContext {
    *  context section — lets an orchestrator pass constraints without
    *  posting an issue comment. */
   instructions?: string;
+  /** Additional sandbox env vars (e.g. lane-DB connection strings from
+   *  PILE-212 provisioning). Providers merge these into the runner env. */
+  extraEnv?: Record<string, string>;
 }
 
 export interface AgentProviderHealth {
@@ -77,6 +80,17 @@ export interface AgentProvider {
    * locally.
    */
   cancel?(sessionId: string): Promise<void>;
+  /**
+   * Deliver a follow-up prompt into a session whose sandbox is still alive
+   * (kept after a terminal run for the resume window — PILE-210). Returns
+   * true when the prompt was accepted by a live sandbox; false when the
+   * sandbox is gone or busy and the caller should cold-dispatch instead.
+   */
+  sendPrompt?(
+    trackerSessionId: string,
+    prompt: string,
+    issue: Issue
+  ): Promise<boolean>;
   /**
    * Optional live state for the provider and underlying compute. Used by the
    * session state endpoint to expose raw provider/compute details.

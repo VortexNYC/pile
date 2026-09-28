@@ -741,6 +741,34 @@ ALTER TABLE audit_log ADD COLUMN user_agent TEXT`;
 
 const v42 = `ALTER TABLE agent_sessions ADD COLUMN started_at TEXT`;
 
+const v43 = `ALTER TABLE agent_sessions ADD COLUMN queued_after TEXT
+--> statement-breakpoint
+ALTER TABLE agent_sessions ADD COLUMN parent_session_id TEXT
+--> statement-breakpoint
+ALTER TABLE agent_sessions ADD COLUMN spawn_depth INTEGER NOT NULL DEFAULT 0
+--> statement-breakpoint
+ALTER TABLE agent_sessions ADD COLUMN lane_db_ref TEXT
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS agent_automations (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  prompt TEXT NOT NULL,
+  agent_id TEXT NOT NULL,
+  team_id TEXT,
+  issue_id TEXT,
+  trigger_kind TEXT NOT NULL,
+  trigger_value TEXT NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  last_fired_at TEXT,
+  created_by TEXT,
+  created_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS agent_automations_org_idx ON agent_automations (organization_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS agent_automations_issue_idx ON agent_automations (issue_id)`;
+
 export const workspaceMigrations = {
   journal: {
     entries: [
@@ -786,6 +814,7 @@ export const workspaceMigrations = {
       { idx: 39, when: 39, tag: "v40", breakpoints: true },
       { idx: 40, when: 40, tag: "v41", breakpoints: true },
       { idx: 41, when: 41, tag: "v42", breakpoints: true },
+      { idx: 42, when: 42, tag: "v43", breakpoints: true },
     ],
   },
   migrations: {
@@ -831,5 +860,6 @@ export const workspaceMigrations = {
     m0039: v40,
     m0040: v41,
     m0041: v42,
+    m0042: v43,
   },
 } satisfies Parameters<typeof migrate>[1];
