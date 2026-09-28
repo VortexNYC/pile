@@ -34,6 +34,21 @@ Or with a specific model:
 pile issues dispatch --workspace <org> --id <issue-id> --agent-id devin --model "claude-sonnet-4"
 ```
 
+Dispatch accepts per-run overrides — useful when orchestrating many tickets
+without editing each issue first:
+
+```bash
+pile issues dispatch --workspace <org> --id <issue-id> --agent-id devin-cli \
+  --repo "owner/name" --branch "feat/my-branch" \
+  --instructions "Only touch src/api — no deploys" --model "swe-2"
+```
+
+`--repo`/`--branch` override the issue's stored fields for this dispatch only
+(the issue itself is not modified). `--instructions` is appended to the
+prompt's context section as operating rules. If no git identity is bound to
+the target repo, dispatch falls back to the workspace-default identity —
+create one with `pile git identities create --repo "*" ...`.
+
 ### API
 
 ```bash
@@ -41,6 +56,15 @@ curl -X POST "https://<worker>/workspaces/<org>/issues/<issue-id>/dispatch" \
   -H "Authorization: Bearer $PILE_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"agentId": "devin"}'
+```
+
+The same overrides are available in the request body:
+
+```bash
+curl -X POST "https://<worker>/workspaces/<org>/issues/<issue-id>/dispatch" \
+  -H "Authorization: Bearer $PILE_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"agentId": "devin-cli", "repo": "owner/name", "branch": "feat/x", "instructions": "no deploys", "model": "swe-2"}'
 ```
 
 The response contains the `id` of the agent session and a `url` you can open.

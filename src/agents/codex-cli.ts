@@ -70,7 +70,8 @@ function parseRepo(repo: string): [string, string] {
 function buildPrompt(
   issue: Issue,
   gitIdentity?: GitIdentity | null,
-  comments?: DispatchComment[]
+  comments?: DispatchComment[],
+  instructions?: string
 ): string {
   const repo = issue.repo ?? "this repository";
   const branch = issue.branch ?? `issue-${issue.id}`;
@@ -107,6 +108,7 @@ function buildPrompt(
       : []),
     "",
     ...identityLines,
+    ...(instructions ? ["", "## Dispatch instructions", "", instructions] : []),
     "",
     "Implement the requested change. Verify proportionate to the diff: always run the project's lint/typecheck (for example `pnpm run check`) when the toolchain exists; when you change code, add or extend tests covering the change and run the relevant suites; skip tests entirely when the diff is docs/config-only. Do not burn time on suites that need network egress the sandbox lacks — note the limitation and move on. Make commits with clear messages. Push your changes to the current branch and open a GitHub pull request. Include the full PR URL in your final message.",
     "Do not attempt to update Pile yourself — an external system will poll your session and write the status back automatically.",
@@ -381,12 +383,13 @@ function buildSandboxEnv(
   githubToken: string,
   gitIdentity: GitIdentity,
   envId: string,
-  comments?: DispatchComment[]
+  comments?: DispatchComment[],
+  instructions?: string
 ): Record<string, string> {
   const branch = issue.branch ?? `issue-${issue.id}`;
   const repo = issue.repo ?? "";
   const identifier = issue.identifier ?? issue.id;
-  const prompt = buildPrompt(issue, gitIdentity, comments);
+  const prompt = buildPrompt(issue, gitIdentity, comments, instructions);
   return {
     CODEX_AUTH_JSON_B64: authB64,
     CODEX_CLI_ENV_ID: envId,
@@ -510,7 +513,8 @@ export class CodexCliAgentProvider implements AgentProvider {
     model: string,
     sessionId: string,
     gitIdentity: GitIdentity,
-    comments?: DispatchComment[]
+    comments?: DispatchComment[],
+    instructions?: string
   ) {
     const authB64 = this.requireAuth();
     const compute = this.requireCompute();
@@ -552,7 +556,8 @@ export class CodexCliAgentProvider implements AgentProvider {
         githubToken,
         gitIdentity,
         envId,
-        comments
+        comments,
+        instructions
       );
       const sandbox = await compute.createSandbox({
         name,
@@ -625,7 +630,8 @@ export class CodexCliAgentProvider implements AgentProvider {
       effectiveModel,
       sessionId,
       gitIdentity,
-      sessionContext?.comments
+      sessionContext?.comments,
+      sessionContext?.instructions
     );
 
     if (sessionContext?.waitUntil) {

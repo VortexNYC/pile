@@ -162,6 +162,75 @@ describe("DevinCliAgentProvider", () => {
     expect(body.labels["vortex.agent"]).toBe("devin-cli");
   });
 
+  it("appends dispatch instructions to the prompt context", async () => {
+    const sandboxId = "sb-1";
+    const toolboxBase = `https://proxy.app.daytona.io/toolbox/${sandboxId}`;
+    const fetchSpy = mockFetch([
+      {
+        url: "https://app.daytona.io/api/sandbox",
+        method: "GET",
+        response: () => ({ items: [] }),
+      },
+      {
+        url: "https://app.daytona.io/api/sandbox",
+        method: "POST",
+        response: () => ({
+          id: sandboxId,
+          name: "vortex-devin-sess1",
+          state: "creating",
+          toolboxProxyUrl: "https://proxy.app.daytona.io/toolbox",
+        }),
+      },
+      {
+        url: `https://app.daytona.io/api/sandbox/${sandboxId}`,
+        method: "GET",
+        response: () => ({
+          id: sandboxId,
+          name: "vortex-devin-sess1",
+          state: "started",
+          toolboxProxyUrl: "https://proxy.app.daytona.io/toolbox",
+        }),
+      },
+      {
+        url: `${toolboxBase}/process/session`,
+        method: "POST",
+        response: () => ({ sessionId: "sess-1" }),
+      },
+      {
+        url: `${toolboxBase}/process/session/sess-1/exec`,
+        method: "POST",
+        response: () => ({ cmdId: "cmd-1" }),
+      },
+    ]);
+
+    const provider = new DevinCliAgentProvider(cliEnv());
+    (
+      provider as unknown as { githubToken: (repo: string) => Promise<string> }
+    ).githubToken = vi.fn().mockResolvedValue("gh-token");
+
+    const result = await provider.dispatch("org-1", issueFixture(), "swe-2", {
+      sessionId: "sess-1",
+      gitIdentity: gitIdentityFixture(),
+      instructions: "Only touch src/api — no deploys",
+    });
+    expect(result.id).toBe("sess-1");
+
+    const createCall = fetchSpy.mock.calls.find(
+      ([input, init]) =>
+        String(input) === "https://app.daytona.io/api/sandbox" &&
+        (init as RequestInit | undefined)?.method === "POST"
+    );
+    expect(createCall).toBeDefined();
+    const body = JSON.parse((createCall![1] as RequestInit).body as string);
+    const prompt = new TextDecoder().decode(
+      Uint8Array.from(atob(body.env.PROMPT_B64 as string), (c) =>
+        c.charCodeAt(0)
+      )
+    );
+    expect(prompt).toContain("## Dispatch instructions");
+    expect(prompt).toContain("Only touch src/api — no deploys");
+  });
+
   it("polls running while command is in progress", async () => {
     const sandboxId = "sb-1";
     const toolboxBase = `https://proxy.app.daytona.io/toolbox/${sandboxId}`;

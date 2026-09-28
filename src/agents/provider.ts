@@ -36,6 +36,10 @@ export interface AgentDispatchContext {
   /** Recent issue comments, chronological — folded into the prompt so
    *  re-dispatches carry review feedback. */
   comments?: DispatchComment[];
+  /** Extra operating rules for this dispatch, appended to the prompt's
+   *  context section — lets an orchestrator pass constraints without
+   *  posting an issue comment. */
+  instructions?: string;
 }
 
 export interface AgentProviderHealth {
