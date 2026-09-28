@@ -144,6 +144,7 @@ export type SupportTicket = {
   priority: SupportTicketPriority;
   sourceChannel: SupportTicketChannel;
   issueId: string | null;
+  isPublic: boolean;
   snoozedUntil: string | null;
   lastCustomerMessageAt: string | null;
   lastAgentMessageAt: string | null;
@@ -2449,7 +2450,7 @@ export type TicketVoteInput = {
   voterEmail: string;
   customerId?: string | null;
   priority?: "nice_to_have" | "important" | "must_have" | null;
-  castByActorType?: "user" | "agent" | null;
+  castByActorType?: "user" | "agent" | "customer" | null;
   castByActorId?: string | null;
   sourceTicketId?: string | null;
 };

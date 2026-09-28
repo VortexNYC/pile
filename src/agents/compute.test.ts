@@ -8,6 +8,7 @@ import type { ComputeSandbox, SandboxHandle } from "./compute.js";
 function baseEnv(): AppEnv {
   return {
     D1: {} as AppEnv["D1"],
+    ATTACHMENTS_BUCKET: {} as AppEnv["ATTACHMENTS_BUCKET"],
     BETTER_AUTH_SECRET: "x",
     BETTER_AUTH_URL: "https://pile.test",
     DEVIN_TOKEN: "x",

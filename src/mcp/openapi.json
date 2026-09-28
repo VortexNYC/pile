@@ -15859,7 +15859,8 @@
                             }
                           },
                           "publishedAt": {
-                            "type": "string"
+                            "type": "string",
+                            "nullable": true
                           }
                         },
                         "required": [
@@ -32953,6 +32954,7 @@
                           "enum": [
                             "user",
                             "agent",
+                            "customer",
                             null
                           ]
                         },
@@ -33120,6 +33122,7 @@
                             "enum": [
                               "user",
                               "agent",
+                              "customer",
                               null
                             ]
                           },

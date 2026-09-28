@@ -3,7 +3,10 @@ import { eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { changelogNotifyRecipients } from "../global/changelog.js";
+import {
+  changelogNotifyRecipients,
+  getChangelogEntryWithLinks,
+} from "../global/changelog.js";
 import { createD1 } from "../global/db.js";
 import { apikey as apikeyTable, user as userTable } from "../global/schema.js";
 import { createWorkspace } from "../global/workspaces.js";
@@ -156,17 +159,17 @@ describe("changelog API", () => {
 
     // Opt-out filtering — only the non-opted-out voter is a recipient.
     const db = createD1(env.D1);
-    const recipients = await changelogNotifyRecipients(db, organizationId, {
-      ...(entry as never),
-      links: [
-        {
-          id: "l1",
-          entryId: entry.id,
-          ticketId: ticket.id,
-          issueId: null,
-        },
-      ],
-    });
+    const fullEntry = await getChangelogEntryWithLinks(
+      db,
+      organizationId,
+      entry.id
+    );
+    if (!fullEntry) throw new Error("changelog entry not found");
+    const recipients = await changelogNotifyRecipients(
+      db,
+      organizationId,
+      fullEntry
+    );
     expect(recipients).toEqual(["fan@example.com"]);
 
     // Publish → public list + RSS include it.

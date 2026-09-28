@@ -1115,7 +1115,7 @@ describe("support-capture API", () => {
       attachmentType: string,
       contentType: string,
       fileName: string,
-      buffer: Uint8Array | string,
+      buffer: Uint8Array<ArrayBuffer> | string,
       extra?: Record<string, unknown>
     ): Promise<void> {
       const sessionRes = await captureFetch("/support/capture/upload-session", {

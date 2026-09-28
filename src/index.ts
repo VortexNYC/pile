@@ -1,7 +1,3 @@
-import type {
-  ForwardableEmailMessage,
-  MessageBatch,
-} from "@cloudflare/workers-types";
 import { ne } from "drizzle-orm";
 
 import { sweepAgentSessions } from "./agents/sweep.js";

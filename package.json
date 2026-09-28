@@ -18,7 +18,7 @@
     "deploy": "vp exec wrangler deploy -e production",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p packages/capture && tsc --noEmit -p packages/cli && tsc --noEmit -p packages/widget",
     "types": "wrangler types",
     "db:generate": "drizzle-kit generate",
     "openapi:generate": "tsx scripts/generate-openapi.ts",

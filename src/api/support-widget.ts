@@ -353,7 +353,7 @@ const widgetChangelogRoute = createRoute({
                 title: z.string(),
                 body: z.string(),
                 labels: z.array(z.string()),
-                publishedAt: z.string(),
+                publishedAt: z.string().nullable(),
               })
             ),
           }),

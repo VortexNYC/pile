@@ -2460,7 +2460,7 @@ export const supportTicketVotes = sqliteTable(
       enum: ["nice_to_have", "important", "must_have"] as const,
     }),
     castByActorType: text("cast_by_actor_type" as string, {
-      enum: ["user", "agent"] as const,
+      enum: ["user", "agent", "customer"] as const,
     }),
     castByActorId: text("cast_by_actor_id" as string),
     sourceTicketId: text("source_ticket_id" as string).references(

@@ -212,7 +212,7 @@ function withRetry(
 
   const attempt = async (request: Request, n: number): Promise<Response> => {
     const last = n >= config.maxRetries;
-    const attemptRequest = last ? request : request.clone();
+    const attemptRequest = last ? request : (request.clone() as Request);
     let response: Response;
     try {
       response = await baseFetch(attemptRequest);

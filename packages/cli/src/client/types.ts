@@ -8301,7 +8301,7 @@ export interface paths {
                                 title: string;
                                 body: string;
                                 labels: string[];
-                                publishedAt: string;
+                                publishedAt: string | null;
                             }[];
                         };
                     };
@@ -16153,7 +16153,7 @@ export interface paths {
                                 /** @enum {string|null} */
                                 priority: "nice_to_have" | "important" | "must_have" | null;
                                 /** @enum {string|null} */
-                                castByActorType: "user" | "agent" | null;
+                                castByActorType: "user" | "agent" | "customer" | null;
                                 castByActorId: string | null;
                                 sourceTicketId: string | null;
                                 createdAt: string;
@@ -16204,7 +16204,7 @@ export interface paths {
                                 /** @enum {string|null} */
                                 priority: "nice_to_have" | "important" | "must_have" | null;
                                 /** @enum {string|null} */
-                                castByActorType: "user" | "agent" | null;
+                                castByActorType: "user" | "agent" | "customer" | null;
                                 castByActorId: string | null;
                                 sourceTicketId: string | null;
                                 createdAt: string;

@@ -16,7 +16,7 @@ import type { WorkerEnv } from "../platform/middleware.js";
 export interface IncomingEmailMessage {
   from: string;
   to: string | { address?: string; name?: string }[];
-  raw: ReadableStream<Uint8Array>;
+  raw: ForwardableEmailMessage["raw"];
   setReject(reason: string): void;
 }
 

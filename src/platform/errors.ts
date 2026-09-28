@@ -10,10 +10,15 @@ export const ERROR_CATALOG = {
   USAGE_LIMIT: { status: 402, message: "Usage limit reached" },
   UNPROCESSABLE_CONTENT: { status: 422, message: "Unprocessable content" },
   TOO_MANY_REQUESTS: { status: 429, message: "Too many requests" },
+  RATE_LIMITED: { status: 429, message: "Rate limit exceeded" },
   AGENT_ERROR: { status: 502, message: "Agent provider error" },
   CONFIG_ERROR: { status: 500, message: "Configuration error" },
   INTERNAL_ERROR: { status: 500, message: "Internal error" },
   CAPTURE_CHALLENGE_REQUIRED: {
+    status: 403,
+    message: "A challenge token is required",
+  },
+  WIDGET_CHALLENGE_REQUIRED: {
     status: 403,
     message: "A challenge token is required",
   },

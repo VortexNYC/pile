@@ -631,7 +631,7 @@ const ticketVoteSchema = z.object({
   customerId: z.string().nullable(),
   voterEmail: z.string(),
   priority: votePriorityEnum.nullable(),
-  castByActorType: z.enum(["user", "agent"]).nullable(),
+  castByActorType: z.enum(["user", "agent", "customer"]).nullable(),
   castByActorId: z.string().nullable(),
   sourceTicketId: z.string().nullable(),
   createdAt: z.string(),

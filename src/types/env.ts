@@ -2,7 +2,7 @@ import type { Sandbox } from "@cloudflare/sandbox";
 
 export interface AppEnv {
   D1: D1Database;
-  ATTACHMENTS_BUCKET?: R2Bucket;
+  ATTACHMENTS_BUCKET: R2Bucket;
   BETTER_AUTH_SECRET: string;
   BETTER_AUTH_URL: string;
   BETTER_AUTH_ADMIN_IDS?: string;

@@ -969,7 +969,7 @@ function uploadsFromSession(session: {
   ) as CaptureUploadRecord[];
 }
 
-function base64ToBytes(value: string): Uint8Array {
+function base64ToBytes(value: string): Uint8Array<ArrayBuffer> {
   const binary = atob(value);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) {
@@ -1003,7 +1003,7 @@ async function verifySvixSignature({
   const rawSecret = secret.startsWith("whsec_")
     ? secret.slice("whsec_".length)
     : secret;
-  let keyBytes: Uint8Array;
+  let keyBytes: Uint8Array<ArrayBuffer>;
   try {
     keyBytes = base64ToBytes(rawSecret);
   } catch {

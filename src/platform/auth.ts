@@ -47,7 +47,7 @@ export async function createAuth(env: AppEnv) {
     // adapterConfig flag to be a function; providing one makes the adapter
     // factory run transactional callbacks through its built-in sequential
     // fallback — the same guarantee every non-transactional adapter has.
-    database: (options) => {
+    database: (options: Parameters<typeof drizzleFactory>[0]) => {
       const instance = drizzleFactory(options);
       const adapterConfig = instance.options?.adapterConfig;
       if (adapterConfig && typeof adapterConfig.transaction !== "function") {

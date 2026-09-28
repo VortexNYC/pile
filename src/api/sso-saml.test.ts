@@ -174,8 +174,7 @@ describe("SAML SSO handshake", () => {
     const idp = samlify.IdentityProvider({
       metadata: IDP_METADATA,
       privateKey: IDP_KEY,
-      isAssertionSigned: true,
-      encNameIDFormat: "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+      nameIDFormat: ["urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress"],
     });
 
     // SP-initiated: ask our worker for a login redirect, which carries a
@@ -203,7 +202,7 @@ describe("SAML SSO handshake", () => {
     const email = `sso-${crypto.randomUUID()}@example.com`;
     const { context: samlResponse } = (await idp.createLoginResponse(
       sp,
-      requestInfo,
+      { extract: requestInfo.extract },
       "post",
       { email }
     )) as { context: string };

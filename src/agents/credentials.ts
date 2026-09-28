@@ -28,7 +28,7 @@ function b64encode(buf: ArrayBuffer | Uint8Array): string {
   );
 }
 
-function b64decode(s: string): Uint8Array {
+function b64decode(s: string): Uint8Array<ArrayBuffer> {
   return Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 }
 
