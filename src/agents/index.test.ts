@@ -85,6 +85,52 @@ describe("agent providers", () => {
     expect(session.actorId).toBe("user-1");
   });
 
+  it("keeps ctx.waitUntil bound so providers can fire-and-forget", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)
+    );
+    await stub.setOrganizationId(actor.organizationId);
+    const issue = await stub.createIssue({ title: "waitUntil binding test" });
+
+    let waited = 0;
+    // Mimics workerd's ExecutionContext: waitUntil is a WebIDL method that
+    // throws "Illegal invocation" when invoked detached from its receiver.
+    const ctx = {
+      waitUntil(this: unknown, task: Promise<unknown>) {
+        if (this !== ctx) throw new TypeError("Illegal invocation");
+        waited += 1;
+        void task;
+      },
+    };
+
+    const provider = new MockAgentProvider("mock", {
+      dispatch: (_org, _i, _model, sessionContext) => {
+        // Real providers hand their start() to sessionContext.waitUntil —
+        // this call is detached from ctx by construction.
+        sessionContext?.waitUntil?.(Promise.resolve());
+        return {
+          id: "wu-1",
+          agentId: "mock-waituntil",
+          issueId: issue.id,
+          status: "created",
+        };
+      },
+    });
+    registerAgentProvider("mock-waituntil", () => provider);
+
+    const session = await dispatchAgent(
+      env,
+      "mock-waituntil",
+      actor.organizationId,
+      issue,
+      actor,
+      undefined,
+      ctx
+    );
+    expect(session.status).toBe("created");
+    expect(waited).toBe(1);
+  });
+
   it("polls a mock session", async () => {
     const provider = new MockAgentProvider("mock", {
       poll: (sessionId) => ({

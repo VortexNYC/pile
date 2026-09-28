@@ -194,7 +194,13 @@ export async function dispatchAgent(
       {
         sessionId: session.id,
         gitIdentity,
-        waitUntil: ctx?.waitUntil,
+        // ExecutionContext.waitUntil is a WebIDL method — passing
+        // `ctx.waitUntil` detaches it and workerd throws "Illegal invocation"
+        // when the provider calls sessionContext.waitUntil(task). Wrap it so
+        // the real ctx stays the receiver.
+        waitUntil: ctx
+          ? (task: Promise<unknown>) => ctx.waitUntil(task)
+          : undefined,
         comments,
         pileApi,
       }
