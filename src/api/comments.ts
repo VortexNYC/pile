@@ -368,7 +368,11 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
       const active = await issueStub
         .getActiveAgentSessionForIssue(issueId)
         .catch(() => null);
-      if (active && active.session.status === "running") {
+      if (
+        active &&
+        (active.session.status === "running" ||
+          active.session.status === "waiting")
+      ) {
         try {
           const providerConfig = await loadProviderConfig(
             c.env,

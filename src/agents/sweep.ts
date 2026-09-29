@@ -740,8 +740,7 @@ export async function sweepAgentSessions(
                 sessionId: session.id,
                 type: "elicitation",
                 message:
-                  polled.result ??
-                  "Lane is blocked and waiting for input",
+                  polled.result ?? "Lane is blocked and waiting for input",
               })
               .catch(() => null);
           }
