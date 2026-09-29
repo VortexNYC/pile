@@ -2095,15 +2095,18 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           message: activity.message,
           payload: { issueId: issue?.id ?? null },
         });
-        const recipientId =
+        const humanAssignee =
           issue?.assigneeId && !issue.assigneeId.startsWith("lane:")
             ? issue.assigneeId
-            : session?.actorType === "user"
-              ? session.actorId
-              : null;
+            : null;
+        const recipientId = humanAssignee ?? session?.actorId ?? null;
+        const recipientType: data.RecipientType = humanAssignee
+          ? "user"
+          : (session?.actorType ?? "user");
         if (recipientId && issue) {
           await this.createNotification({
             recipientId,
+            recipientType,
             issueId: issue.id,
             type: "lane_needs_input",
             metadata: {
