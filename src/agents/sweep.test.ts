@@ -530,6 +530,82 @@ describe("syncOpenPrSessions", () => {
     expect(issueAfter?.status).toBe("canceled");
   });
 
+  it("nudges a running lane with failing check names when CI flips to failing", async () => {
+    const agentId = `mock-ci-${crypto.randomUUID().slice(0, 8)}`;
+    const prompts: string[] = [];
+    registerMock(agentId, {
+      sendPrompt: async (_id, prompt) => {
+        prompts.push(prompt);
+        return true;
+      },
+    });
+    const issue = await stub.createIssue({ title: "CI fail nudge" });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+      prUrl: "https://github.com/vortexnyc/pile/pull/777",
+      prState: "open",
+    });
+
+    const ghFetchFailing = async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/pulls/777")) {
+        return new Response(
+          JSON.stringify({
+            state: "open",
+            merged_at: null,
+            head: { sha: "def456" },
+          }),
+          { status: 200 }
+        );
+      }
+      if (url.includes("/commits/def456/check-runs")) {
+        return new Response(
+          JSON.stringify({
+            check_runs: [
+              {
+                name: "typecheck",
+                status: "completed",
+                conclusion: "failure",
+                details_url: "https://github.com/x/runs/1",
+              },
+              { name: "lint", status: "completed", conclusion: "success" },
+            ],
+          }),
+          { status: 200 }
+        );
+      }
+      return new Response("not found", { status: 404 });
+    };
+
+    await syncOpenPrSessions(env, stub, organizationId, {
+      tokenForRepo: async () => "gh-test-token",
+      fetch: ghFetchFailing as typeof fetch,
+    });
+
+    const issueAfter = await stub.getIssue(issue.id);
+    expect(issueAfter?.prCheckState).toBe("failing");
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toContain("typecheck");
+    expect(prompts[0]).not.toContain("lint (");
+    const events = await stub.listAgentSessionEvents(session.id, {});
+    const types = events.map((e) => e.type);
+    expect(types).toContain("pr.ci_failed");
+    expect(types).toContain("prompt.followup");
+
+    // A second sweep with the same failing state must not re-nudge.
+    prompts.length = 0;
+    await syncOpenPrSessions(env, stub, organizationId, {
+      tokenForRepo: async () => "gh-test-token",
+      fetch: ghFetchFailing as typeof fetch,
+    });
+    expect(prompts).toHaveLength(0);
+  });
+
   it("leaves sessions alone when the repo has no installation", async () => {
     const issue = await stub.createIssue({ title: "No installation" });
     const session = await stub.createAgentSession({

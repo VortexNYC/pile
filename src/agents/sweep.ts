@@ -870,6 +870,12 @@ export async function syncOpenPrSessions(
       const headSha = typeof head?.sha === "string" ? head.sha : null;
 
       let checkState: string | null = null;
+      let checkRuns: Array<{
+        name?: string;
+        status?: string;
+        conclusion?: string | null;
+        details_url?: string;
+      }> = [];
       if (headSha) {
         const checks = (await withTimeout(
           githubApiGet(
@@ -879,11 +885,18 @@ export async function syncOpenPrSessions(
           ),
           probeTimeoutMs,
           "github-checks"
-        )) as {
-          check_runs?: Array<{ status?: string; conclusion?: string | null }>;
-        };
-        checkState = summarizeCheckRuns(checks.check_runs);
+        )) as { check_runs?: typeof checkRuns };
+        checkRuns = checks.check_runs ?? [];
+        checkState = summarizeCheckRuns(checkRuns);
       }
+      const failingChecks = checkRuns.filter(
+        (c) =>
+          c.status === "completed" &&
+          c.conclusion &&
+          c.conclusion !== "success" &&
+          c.conclusion !== "skipped" &&
+          c.conclusion !== "neutral"
+      );
 
       const issue = await stub.getIssue(session.issueId);
 
@@ -906,17 +919,73 @@ export async function syncOpenPrSessions(
             sessionId: session.id,
             type: "pr.ci_failed",
             message: `CI failing on ${prUrl}`,
-            payload: { prUrl, headSha, checkState },
+            payload: {
+              prUrl,
+              headSha,
+              checkState,
+              failingChecks: failingChecks.map((c) => c.name ?? "unknown"),
+            },
           })
           .catch(() => {});
+        const failingList = failingChecks
+          .map((c) => `- ${c.name ?? "unknown"}${c.details_url ? ` (${c.details_url})` : ""}`)
+          .join("\n");
+        const ciPrompt =
+          `CI is failing on ${prUrl}${headSha ? ` (sha ${headSha})` : ""}.\n` +
+          (failingList ? `Failing checks:\n${failingList}\n` : "") +
+          "Fetch the failing check runs, fix, and push.";
         await fireEventAutomations(
           env,
           stub,
           organizationId,
           "pr.ci_failed",
           session,
-          `CI is failing on ${prUrl}${headSha ? ` (sha ${headSha})` : ""}. Fetch the failing check runs, fix, and push.`
+          ciPrompt
         );
+        if (
+          session.status === "running" ||
+          session.status === "waiting"
+        ) {
+          try {
+            const providerConfig = await loadProviderConfig(
+              env,
+              stub,
+              session.agentId
+            );
+            const provider = getAgentProvider(
+              session.agentId,
+              resolveAgentEnv(env, providerConfig ?? undefined)
+            );
+            if (provider.sendPrompt && issue) {
+              const gitIdentity = issue.repo
+                ? ((await stub.getGitIdentityByRepo(issue.repo)) ?? null)
+                : null;
+              const delivered = await provider.sendPrompt(
+                session.providerSessionId ?? session.id,
+                ciPrompt,
+                issue,
+                gitIdentity
+              );
+              await stub
+                .addAgentSessionEvent({
+                  sessionId: session.id,
+                  type: delivered
+                    ? "prompt.followup"
+                    : "prompt.followup_failed",
+                  message: delivered
+                    ? "CI failure delivered as follow-up prompt"
+                    : "CI failure follow-up prompt rejected by provider",
+                  payload: { issueId: issue.id, prUrl },
+                })
+                .catch(() => {});
+            }
+          } catch (err) {
+            console.error("ci-fail lane nudge failed", {
+              sessionId: session.id,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        }
       }
       const reviewers = pr.requested_reviewers;
       if (
