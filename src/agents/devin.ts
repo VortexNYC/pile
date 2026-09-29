@@ -231,6 +231,14 @@ export class DevinAgentProvider implements AgentProvider {
         body: JSON.stringify({ message: prompt }),
       }
     );
+    if (!res.ok) {
+      const text = await res.text();
+      console.error("devin sendPrompt failed", {
+        sessionId: providerSessionId,
+        status: res.status,
+        body: text.slice(0, 500),
+      });
+    }
     return res.ok;
   }
 

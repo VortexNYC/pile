@@ -597,15 +597,22 @@ async function nudgeLaneForIssue(
       issue,
       gitIdentity
     );
-    if (delivered) {
-      await stub
-        .addAgentSessionEvent({
-          sessionId: active.session.id,
-          type: "prompt.followup",
-          message: "PR review delivered as follow-up prompt",
-          payload: { issueId: issue.id },
-        })
-        .catch(() => {});
+    await stub
+      .addAgentSessionEvent({
+        sessionId: active.session.id,
+        type: delivered ? "prompt.followup" : "prompt.followup_failed",
+        message: delivered
+          ? "PR review delivered as follow-up prompt"
+          : "PR review follow-up prompt rejected by provider",
+        payload: { issueId: issue.id },
+      })
+      .catch(() => {});
+    if (!delivered) {
+      console.error("pr review lane nudge rejected by provider", {
+        issueId: issue.id,
+        sessionId: active.session.id,
+        agentId: active.session.agentId,
+      });
     }
   } catch (err) {
     console.error("pr review lane nudge failed", {
