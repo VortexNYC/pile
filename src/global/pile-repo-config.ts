@@ -51,7 +51,12 @@ export async function fetchPileRepoConfig(
       "X-GitHub-Api-Version": "2022-11-28",
     },
   });
-  if (!res.ok) return null;
+  if (!res.ok) {
+    console.warn(
+      `pile-repo-config: contents fetch ${res.status} for ${repo}${ref ? `@${ref}` : ""}`
+    );
+    return null;
+  }
 
   const parsed = z
     .object({ content: z.string(), encoding: z.string() })
