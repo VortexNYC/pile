@@ -26,6 +26,10 @@ import { scopedDeliveryId } from "../global/webhook-queue.js";
 import { enqueueWebhook } from "../global/webhook-queue.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
+import type { Issue } from "../types/workspace.js";
+import { loadProviderConfig } from "./credentials.js";
+import { resolveAgentEnv } from "./daytona.js";
+import { getAgentProvider } from "./index.js";
 
 const pullRequestPayloadSchema = z.object({
   action: z.string(),
@@ -153,10 +157,30 @@ const issueCommentPayloadSchema = z.object({
   }),
 });
 
+const pullRequestReviewPayloadSchema = z.object({
+  action: z.enum(["submitted", "edited", "dismissed"]),
+  review: z.object({
+    id: z.number().int(),
+    state: z.string(),
+    body: z.string().nullable(),
+    user: z.object({ login: z.string() }).nullable(),
+    html_url: z.string(),
+  }),
+  pull_request: z.object({
+    number: z.number().int(),
+    html_url: z.string(),
+    head: z.object({
+      ref: z.string(),
+      repo: z.object({ full_name: z.string() }),
+    }),
+  }),
+});
+
 const pullRequestReviewCommentPayloadSchema = z.object({
   action: z.enum(["created", "edited", "deleted"]),
   pull_request: z.object({
     number: z.number().int(),
+    html_url: z.string(),
     head: z.object({
       ref: z.string(),
       repo: z.object({
@@ -323,6 +347,9 @@ export async function processGithubWebhookPayload(
   }
   if (event === "pull_request_review_comment") {
     return processPullRequestReviewComment(env, db, deliveryId, event, rawBody);
+  }
+  if (event === "pull_request_review") {
+    return processPullRequestReview(env, db, deliveryId, event, rawBody);
   }
   if (event === "check_run" || event === "check_suite") {
     return processCheckRun(env, db, deliveryId, event, rawBody);
@@ -530,6 +557,141 @@ async function processIssueComment(
   return;
 }
 
+type WorkspaceStub = ReturnType<WorkerEnv["WORKSPACE_DURABLE_OBJECT"]["get"]>;
+
+// PILE-224 — a review on a lane's PR is steering. When the lane that
+// authored the PR still has a live session, deliver the review text as a
+// follow-up prompt instead of leaving it as a dead GitHub comment.
+async function nudgeLaneForIssue(
+  env: WorkerEnv,
+  stub: WorkspaceStub,
+  organizationId: string,
+  issue: Issue,
+  text: string
+): Promise<void> {
+  try {
+    const active = await stub.getActiveAgentSessionForIssue(issue.id);
+    if (
+      !active ||
+      (active.session.status !== "running" &&
+        active.session.status !== "waiting")
+    ) {
+      return;
+    }
+    const providerConfig = await loadProviderConfig(
+      env,
+      stub,
+      active.session.agentId
+    );
+    const provider = getAgentProvider(
+      active.session.agentId,
+      resolveAgentEnv(env, providerConfig ?? undefined)
+    );
+    if (!provider.sendPrompt) return;
+    const gitIdentity = issue.repo
+      ? ((await stub.getGitIdentityByRepo(issue.repo)) ?? null)
+      : null;
+    const delivered = await provider.sendPrompt(
+      active.session.providerSessionId ?? active.session.id,
+      text,
+      issue,
+      gitIdentity
+    );
+    if (delivered) {
+      await stub
+        .addAgentSessionEvent({
+          sessionId: active.session.id,
+          type: "prompt.followup",
+          message: "PR review delivered as follow-up prompt",
+          payload: { issueId: issue.id },
+        })
+        .catch(() => {});
+    }
+  } catch (err) {
+    console.error("pr review lane nudge failed", {
+      issueId: issue.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+async function processPullRequestReview(
+  env: WorkerEnv,
+  db: D1Client,
+  deliveryId: string | undefined,
+  event: string,
+  rawBody: string
+) {
+  let parsedBody: unknown;
+  try {
+    parsedBody = JSON.parse(rawBody);
+  } catch {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Invalid JSON",
+    });
+  }
+  const payload = pullRequestReviewPayloadSchema.safeParse(parsedBody);
+  if (!payload.success) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Invalid pull_request_review payload",
+      hint: payload.error.message,
+    });
+  }
+
+  const { action, pull_request, review } = payload.data;
+  if (action !== "submitted") return;
+
+  const repo = pull_request.head.repo.full_name;
+  const branch = pull_request.head.ref;
+  const workspaceRecord = await findWorkspaceByRepo(db, repo);
+  if (!workspaceRecord) return;
+
+  const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+    env.WORKSPACE_DURABLE_OBJECT.idFromName(workspaceRecord.organizationId)
+  );
+  await stub.setOrganizationId(workspaceRecord.organizationId);
+  const issue = await stub.getIssueByBranch(repo, branch);
+  if (!issue) return;
+
+  const author = review.user?.login ?? "unknown";
+  // Mirror the review onto the issue comment thread (deduped by the
+  // review id) — comments on already-filed reviews sync via
+  // pull_request_review_comment separately.
+  if (review.body?.trim()) {
+    const externalId = `review-${review.id}`;
+    const existing = await stub.findCommentByExternalId("github", externalId);
+    if (existing) {
+      await stub.updateComment(existing.id, { body: review.body });
+    } else {
+      await stub.createComment({
+        issueId: issue.id,
+        body: `[review:${review.state}] ${review.body}`,
+        externalId,
+        externalSource: "github",
+        externalAuthor: author,
+      });
+    }
+  }
+
+  const parts = [
+    `${author} reviewed ${pull_request.html_url} (state: ${review.state})`,
+    review.body?.trim() || "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+  await nudgeLaneForIssue(
+    env,
+    stub,
+    workspaceRecord.organizationId,
+    issue,
+    parts
+  );
+}
+
 async function processPullRequestReviewComment(
   env: WorkerEnv,
   db: D1Client,
@@ -592,6 +754,13 @@ async function processPullRequestReviewComment(
       createdAt: comment.created_at,
       updatedAt: comment.updated_at,
     });
+    await nudgeLaneForIssue(
+      env,
+      stub,
+      workspaceRecord.organizationId,
+      issue,
+      `${externalAuthor} commented on ${pull_request.html_url} (${comment.path}):\n\n${comment.body}`
+    );
   }
 
   if (action === "edited") {

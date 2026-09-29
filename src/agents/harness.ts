@@ -1,4 +1,4 @@
-import type { Issue } from "../types/workspace.js";
+import type { GitIdentity, Issue } from "../types/workspace.js";
 import type {
   AgentDispatchContext,
   AgentProvider,
@@ -21,6 +21,12 @@ export interface MockAgentProviderOptions {
     providerSessionId: string,
     trackerSessionId: string
   ) => AgentProviderState | Promise<AgentProviderState | null> | null;
+  sendPrompt?: (
+    trackerSessionId: string,
+    prompt: string,
+    issue: Issue,
+    gitIdentity?: GitIdentity | null
+  ) => boolean | Promise<boolean>;
   health?: () => AgentProviderHealth | Promise<AgentProviderHealth>;
 }
 
@@ -76,6 +82,23 @@ export class MockAgentProvider implements AgentProvider {
       return await this.options.getState(providerSessionId, trackerSessionId);
     }
     return null;
+  }
+
+  async sendPrompt(
+    trackerSessionId: string,
+    prompt: string,
+    issue: Issue,
+    gitIdentity?: GitIdentity | null
+  ): Promise<boolean> {
+    if (this.options.sendPrompt) {
+      return await this.options.sendPrompt(
+        trackerSessionId,
+        prompt,
+        issue,
+        gitIdentity
+      );
+    }
+    return false;
   }
 
   async health(): Promise<AgentProviderHealth> {
