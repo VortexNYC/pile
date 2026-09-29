@@ -271,6 +271,30 @@ async function ghFetchFailing(input: RequestInfo | URL) {
   return new Response("not found", { status: 404 });
 }
 
+async function ghFetchConflict(input: RequestInfo | URL) {
+  const url = String(input);
+  if (url.endsWith("/pulls/888")) {
+    return new Response(
+      JSON.stringify({
+        state: "open",
+        merged_at: null,
+        mergeable: false,
+        head: { sha: "fff999" },
+      }),
+      { status: 200 }
+    );
+  }
+  if (url.includes("/commits/fff999/check-runs")) {
+    return new Response(
+      JSON.stringify({
+        check_runs: [{ status: "completed", conclusion: "success" }],
+      }),
+      { status: 200 }
+    );
+  }
+  return new Response("not found", { status: 404 });
+}
+
 describe("sweepAgentSessions", () => {
   const userId = "user-sweep-loop";
   let organizationId = "";
@@ -602,6 +626,48 @@ describe("syncOpenPrSessions", () => {
     await syncOpenPrSessions(env, stub, organizationId, {
       tokenForRepo: async () => "gh-test-token",
       fetch: ghFetchFailing as typeof fetch,
+    });
+    expect(prompts).toHaveLength(0);
+  });
+
+  it("nudges a running lane to rebase when its PR is conflicting", async () => {
+    const agentId = `mock-conflict-${crypto.randomUUID().slice(0, 8)}`;
+    const prompts: string[] = [];
+    registerMock(agentId, {
+      sendPrompt: async (_id, prompt) => {
+        prompts.push(prompt);
+        return true;
+      },
+    });
+    const issue = await stub.createIssue({ title: "Conflicted lane" });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+      prUrl: "https://github.com/vortexnyc/pile/pull/888",
+      prState: "open",
+    });
+
+    await syncOpenPrSessions(env, stub, organizationId, {
+      tokenForRepo: async () => "gh-test-token",
+      fetch: ghFetchConflict as typeof fetch,
+    });
+
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toContain("merge conflicts");
+    const events = await stub.listAgentSessionEvents(session.id, {});
+    const types = events.map((e) => e.type);
+    expect(types).toContain("pr.conflict");
+    expect(types).toContain("prompt.followup");
+
+    // Deduped per headSha: a second sweep on the same conflict must not re-nudge.
+    prompts.length = 0;
+    await syncOpenPrSessions(env, stub, organizationId, {
+      tokenForRepo: async () => "gh-test-token",
+      fetch: ghFetchConflict as typeof fetch,
     });
     expect(prompts).toHaveLength(0);
   });

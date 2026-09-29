@@ -6,7 +6,11 @@ import { processIncomingMessage } from "../global/support-channels.js";
 import { replyLaneResultToTicket } from "../global/support-escalation.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkerEnv } from "../platform/middleware.js";
-import type { AgentSession, AgentSessionStatus } from "../types/workspace.js";
+import type {
+  AgentSession,
+  AgentSessionStatus,
+  Issue,
+} from "../types/workspace.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
 import { loadProviderConfig } from "./credentials.js";
 import { resolveAgentEnv } from "./daytona.js";
@@ -852,6 +856,66 @@ interface PrSyncDeps {
   probeTimeoutMs?: number;
 }
 
+// Shared lane nudge path (CI failures, merge conflicts): provider sendPrompt
+// through the workspace-configured throttle, with an audit event either way.
+async function nudgeLane(
+  env: WorkerEnv,
+  stub: DurableObjectStub<WorkspaceDO>,
+  organizationId: string,
+  session: AgentSession,
+  issue: Issue | undefined,
+  prUrl: string,
+  opts: { prompt: string; reason: string }
+): Promise<void> {
+  if (!issue || (session.status !== "running" && session.status !== "waiting"))
+    return;
+  try {
+    const providerConfig = await loadProviderConfig(env, stub, session.agentId);
+    const provider = getAgentProvider(
+      session.agentId,
+      resolveAgentEnv(env, providerConfig ?? undefined)
+    );
+    if (!provider.sendPrompt) return;
+    const windowMs = followupThrottleWindowMs(providerConfig?.config);
+    if (await laneFollowupThrottled(stub, session.id, windowMs)) {
+      await stub
+        .addAgentSessionEvent({
+          sessionId: session.id,
+          type: "prompt.followup_skipped",
+          message: `${opts.reason} follow-up throttled (recent nudge within window)`,
+          payload: { issueId: issue.id, prUrl },
+        })
+        .catch(() => {});
+      return;
+    }
+    const gitIdentity = issue.repo
+      ? ((await stub.getGitIdentityByRepo(issue.repo)) ?? null)
+      : null;
+    const delivered = await provider.sendPrompt(
+      session.providerSessionId ?? session.id,
+      opts.prompt,
+      issue,
+      gitIdentity
+    );
+    await stub
+      .addAgentSessionEvent({
+        sessionId: session.id,
+        type: delivered ? "prompt.followup" : "prompt.followup_failed",
+        message: delivered
+          ? `${opts.reason} delivered as follow-up prompt`
+          : `${opts.reason} follow-up prompt rejected by provider`,
+        payload: { issueId: issue.id, prUrl },
+      })
+      .catch(() => {});
+  } catch (err) {
+    console.error("lane nudge failed", {
+      sessionId: session.id,
+      reason: opts.reason,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
 // Reconcile terminal sessions' PR state + the issue's PR fields from GitHub.
 // Sessions leave the running/created poll list at terminal, so without this
 // their prState freezes at whatever the runner last reported ("open").
@@ -959,59 +1023,48 @@ export async function syncOpenPrSessions(
           session,
           ciPrompt
         );
-        if (session.status === "running" || session.status === "waiting") {
-          try {
-            const providerConfig = await loadProviderConfig(
-              env,
-              stub,
-              session.agentId
-            );
-            const provider = getAgentProvider(
-              session.agentId,
-              resolveAgentEnv(env, providerConfig ?? undefined)
-            );
-            if (provider.sendPrompt && issue) {
-              const windowMs = followupThrottleWindowMs(providerConfig?.config);
-              if (await laneFollowupThrottled(stub, session.id, windowMs)) {
-                await stub
-                  .addAgentSessionEvent({
-                    sessionId: session.id,
-                    type: "prompt.followup_skipped",
-                    message:
-                      "CI failure follow-up throttled (recent nudge within 5m)",
-                    payload: { issueId: issue.id, prUrl },
-                  })
-                  .catch(() => {});
-              } else {
-                const gitIdentity = issue.repo
-                  ? ((await stub.getGitIdentityByRepo(issue.repo)) ?? null)
-                  : null;
-                const delivered = await provider.sendPrompt(
-                  session.providerSessionId ?? session.id,
-                  ciPrompt,
-                  issue,
-                  gitIdentity
-                );
-                await stub
-                  .addAgentSessionEvent({
-                    sessionId: session.id,
-                    type: delivered
-                      ? "prompt.followup"
-                      : "prompt.followup_failed",
-                    message: delivered
-                      ? "CI failure delivered as follow-up prompt"
-                      : "CI failure follow-up prompt rejected by provider",
-                    payload: { issueId: issue.id, prUrl },
-                  })
-                  .catch(() => {});
-              }
-            }
-          } catch (err) {
-            console.error("ci-fail lane nudge failed", {
+        await nudgeLane(env, stub, organizationId, session, issue, prUrl, {
+          prompt: ciPrompt,
+          reason: "CI failure",
+        });
+      }
+      // PILE-230: merge-conflict awareness. GitHub reports mergeable:false once
+      // it has computed mergeability (null = still computing; skip those).
+      // Deduped per headSha via the pr.conflict event, same pattern as
+      // pr.review_requested below.
+      if (state === "open" && pr.mergeable === false && issue) {
+        const seen = await stub
+          .listAgentSessionEvents(session.id, { limit: 100 })
+          .catch(() => []);
+        const alreadyNoted = seen.some(
+          (e) =>
+            e.type === "pr.conflict" &&
+            typeof e.payload === "string" &&
+            e.payload.includes(headSha ?? "")
+        );
+        if (!alreadyNoted) {
+          await stub
+            .addAgentSessionEvent({
               sessionId: session.id,
-              error: err instanceof Error ? err.message : String(err),
-            });
-          }
+              type: "pr.conflict",
+              message: `PR ${prUrl} has merge conflicts`,
+              payload: { prUrl, headSha },
+            })
+            .catch(() => {});
+          await fireEventAutomations(
+            env,
+            stub,
+            organizationId,
+            "pr.conflict",
+            session,
+            `PR ${prUrl} has merge conflicts. Rebase or merge the base branch and resolve.`
+          );
+          await nudgeLane(env, stub, organizationId, session, issue, prUrl, {
+            prompt:
+              `PR ${prUrl} has merge conflicts with the base branch.\n` +
+              "Rebase (or merge the base branch), resolve the conflicts, and push.",
+            reason: "merge conflict",
+          });
         }
       }
       const reviewers = pr.requested_reviewers;
