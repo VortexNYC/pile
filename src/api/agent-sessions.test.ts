@@ -1386,6 +1386,10 @@ describe("agent sessions API", () => {
     const final = await stub.getAgentSession(session.id);
     expect(final?.status).toBe("completed");
     expect(final?.result).toBe("all done");
+    // A bare status report must not wipe fields set by earlier reports —
+    // caught live: the completion report nulled prUrl/branch.
+    expect(final?.prUrl).toBe("https://github.com/VortexNYC/pile/pull/999");
+    expect(final?.branch).toBe("bot/branch");
 
     // Terminal sessions refuse further reports.
     const after = await app.fetch(

@@ -1134,10 +1134,13 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         ) {
           await stub.applyAgentSessionResult(sessionId, {
             status: update.status,
+            // Fields not present in this report keep the session's current
+            // values — a bare {status:"completed"} must not wipe a prUrl
+            // reported earlier.
             result: update.result ?? null,
-            url: update.url ?? null,
-            prUrl: update.prUrl ?? null,
-            branch: update.branch ?? null,
+            url: update.url ?? session.url ?? null,
+            prUrl: update.prUrl ?? session.prUrl ?? null,
+            branch: update.branch ?? session.branch ?? null,
           });
           await stub.updateAgentSession(sessionId, {
             lastProgressAt: update.lastProgressAt,
