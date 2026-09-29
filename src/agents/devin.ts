@@ -256,11 +256,15 @@ export class DevinAgentProvider implements AgentProvider {
       });
       return null;
     }
-    const parsed = devinMessagesSchema.safeParse(await res.json());
+    const body: unknown = await res.json();
+    const parsed = devinMessagesSchema.safeParse(body);
     if (!parsed.success) {
       console.error("devin latestElicitation parse failed", {
         sessionId: providerSessionId,
-        issues: parsed.error.issues.slice(0, 3),
+        keys:
+          typeof body === "object" && body !== null
+            ? Object.keys(body)
+            : typeof body,
       });
       return null;
     }
