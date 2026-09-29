@@ -3,6 +3,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 
 import { decryptSecret, loadProviderConfig } from "../agents/credentials.js";
 import { resolveAgentEnv } from "../agents/daytona.js";
+import { laneFollowupThrottled } from "../agents/followup.js";
 import { getAgentProvider } from "../agents/index.js";
 import { createD1 } from "../global/db.js";
 import { getInstallationToken } from "../global/github-auth.js";
@@ -376,29 +377,47 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
             resolveAgentEnv(c.env, providerConfig ?? undefined)
           );
           if (provider.sendPrompt) {
-            const gitIdentity = issue.repo
-              ? ((await issueStub.getGitIdentityByRepo(issue.repo)) ?? null)
-              : null;
-            const delivered = await provider.sendPrompt(
-              active.session.providerSessionId ?? active.session.id,
-              `${identity.id} commented on ${issue.identifier ?? issueId}:\n\n${body}`,
-              issue,
-              gitIdentity
-            );
-            if (delivered) {
+            if (
+              await laneFollowupThrottled(
+                issueStub,
+                active.session.id,
+                5 * 60 * 1000
+              )
+            ) {
               await issueStub
                 .addAgentSessionEvent({
                   sessionId: active.session.id,
-                  type: "prompt.followup",
-                  message: "Issue comment delivered as follow-up prompt",
+                  type: "prompt.followup_skipped",
+                  message:
+                    "Comment follow-up throttled (recent nudge within 5m)",
                   payload: { commentId: item.id },
                 })
                 .catch(() => {});
-              await issueStub.applyAgentSessionResult(
-                active.session.id,
-                { status: "running", result: null },
-                identity.id
+            } else {
+              const gitIdentity = issue.repo
+                ? ((await issueStub.getGitIdentityByRepo(issue.repo)) ?? null)
+                : null;
+              const delivered = await provider.sendPrompt(
+                active.session.providerSessionId ?? active.session.id,
+                `${identity.id} commented on ${issue.identifier ?? issueId}:\n\n${body}`,
+                issue,
+                gitIdentity
               );
+              if (delivered) {
+                await issueStub
+                  .addAgentSessionEvent({
+                    sessionId: active.session.id,
+                    type: "prompt.followup",
+                    message: "Issue comment delivered as follow-up prompt",
+                    payload: { commentId: item.id },
+                  })
+                  .catch(() => {});
+                await issueStub.applyAgentSessionResult(
+                  active.session.id,
+                  { status: "running", result: null },
+                  identity.id
+                );
+              }
             }
           }
         } catch (err) {
