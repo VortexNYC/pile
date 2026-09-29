@@ -211,7 +211,13 @@ export class DevinAgentProvider implements AgentProvider {
     return {
       id: data.session_id,
       agentId: this.id,
-      status: STATUS_MAP[data.status] ?? "running",
+      // Devin keeps `status: "running"` while blocked on a user question;
+      // status_detail "waiting_for_user" is the real signal. Map it to
+      // `waiting` so the sweep surfaces an elicitation (needs_input).
+      status:
+        data.status_detail === "waiting_for_user" || data.status === "blocked"
+          ? "waiting"
+          : (STATUS_MAP[data.status] ?? "running"),
       result: (data.status_detail ?? prState) || undefined,
       url: `https://app.devin.ai/sessions/${data.session_id}`,
       prUrl: prUrl ?? null,

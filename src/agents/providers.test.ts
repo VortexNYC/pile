@@ -77,6 +77,22 @@ describe("agent providers", () => {
       );
     });
 
+    it("maps waiting_for_user to waiting (blocked on a question)", async () => {
+      vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+        jsonResponse({
+          session_id: "devin-123",
+          status: "running",
+          status_detail: "waiting_for_user",
+        })
+      );
+
+      const provider = new DevinAgentProvider(devinEnv());
+      const result = await provider.poll("devin-123");
+
+      expect(result.status).toBe("waiting");
+      expect(result.result).toBe("waiting_for_user");
+    });
+
     it("getState returns provider without compute", async () => {
       const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
         jsonResponse({

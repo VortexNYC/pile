@@ -725,6 +725,27 @@ export async function sweepAgentSessions(
             await stub.applyAgentSessionResult(session.id, polled);
           }
 
+          // PILE-229: a provider that parks the lane "blocked"/waiting is the
+          // lane asking a human — surface it as an elicitation so the
+          // needs_input event + notification fire. Deduped by the status
+          // transition itself (only fires on entry into waiting). Queued lanes
+          // parked behind a blocker (queuedAfter) are not elicitations.
+          if (
+            polled.status === "waiting" &&
+            session.status !== "waiting" &&
+            !session.queuedAfter
+          ) {
+            await stub
+              .addAgentActivity({
+                sessionId: session.id,
+                type: "elicitation",
+                message:
+                  polled.result ??
+                  "Lane is blocked and waiting for input",
+              })
+              .catch(() => null);
+          }
+
           if (polled.status === "running" && session.startedAt === null) {
             await stub.updateAgentSession(session.id, {
               startedAt: new Date(now).toISOString(),

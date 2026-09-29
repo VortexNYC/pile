@@ -383,6 +383,46 @@ describe("sweepAgentSessions", () => {
     expect(retried?.retryCount).toBe(1);
   });
 
+  it("emits an elicitation when a running lane transitions to waiting", async () => {
+    const agentId = `mock-block-${crypto.randomUUID().slice(0, 8)}`;
+    registerMock(agentId, {
+      poll: (id) => ({
+        id,
+        agentId,
+        status: "waiting",
+        result: "waiting_for_user",
+      }),
+    });
+    const issue = await stub.createIssue({ title: "Blocked lane" });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+    });
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    const events = await stub.listAgentSessionEvents(session.id, {
+      limit: 100,
+    });
+    expect(events.some((e) => e.type === "session.needs_input")).toBe(true);
+
+    // Deduped: a second sweep still waiting must not re-elicit.
+    await stub.applyAgentSessionResult(session.id, { status: "waiting" });
+    const count = (
+      await stub.listAgentSessionEvents(session.id, { limit: 100 })
+    ).filter((e) => e.type === "session.needs_input").length;
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+    expect(
+      (await stub.listAgentSessionEvents(session.id, { limit: 100 })).filter(
+        (e) => e.type === "session.needs_input"
+      ).length
+    ).toBe(count);
+  });
+
   it("measures the run clock from startedAt, not createdAt", async () => {
     const agentId = `mock-clock-${crypto.randomUUID().slice(0, 8)}`;
     registerMock(agentId, {
