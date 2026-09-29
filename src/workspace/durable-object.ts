@@ -2235,11 +2235,28 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   async applyAgentSessionResult(
     sessionId: string,
     result: AgentSessionResult,
-    actorId?: string
+    actorId?: string,
+    options?: { expectStatus?: AgentSessionStatus }
   ): Promise<AgentSession | undefined> {
     await this.ready;
     const oldSession = await this.getAgentSession(sessionId);
     if (!oldSession) return undefined;
+    // Compare-and-swap guard: callers racing a status transition (e.g. a
+    // provision failure vs. a user cancel) carry the status they observed —
+    // the UPDATE no-ops when the session has already moved on.
+    if (
+      options?.expectStatus !== undefined &&
+      oldSession.status !== options.expectStatus
+    ) {
+      return undefined;
+    }
+    const statusGuard =
+      options?.expectStatus !== undefined
+        ? and(
+            eq(workspaceAgentSessions.id, sessionId),
+            eq(workspaceAgentSessions.status, options.expectStatus)
+          )
+        : eq(workspaceAgentSessions.id, sessionId);
 
     const issue = await this.getIssue(oldSession.issueId);
 
@@ -2305,7 +2322,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       const rows = await this.db
         .update(workspaceAgentSessions)
         .set(set)
-        .where(eq(workspaceAgentSessions.id, sessionId))
+        .where(statusGuard)
         .returning()
         .all();
       const updatedSession = rows[0] as AgentSession | undefined;
@@ -2337,7 +2354,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const updatedSession = await this.db
       .update(workspaceAgentSessions)
       .set(set)
-      .where(eq(workspaceAgentSessions.id, sessionId))
+      .where(statusGuard)
       .returning()
       .get();
     if (!updatedSession) return undefined;

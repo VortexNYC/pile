@@ -5,6 +5,7 @@ import type { InferSelectModel } from "drizzle-orm";
 import { agentLogToken, loadProviderConfig } from "../agents/credentials.js";
 import { resolveAgentEnv } from "../agents/daytona.js";
 import { dispatchAgent, getAgentProvider } from "../agents/index.js";
+import { DEFAULT_PROBE_TIMEOUT_MS, withTimeout } from "../agents/sweep.js";
 import { timingSafeEqualHex } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
 import { createRepoBranch } from "../global/repo-branches.js";
@@ -1204,25 +1205,45 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       return c.json(toSessionResponse(session, activities));
     }
 
-    const providerConfig = await loadProviderConfig(
-      c.env,
-      stub,
-      session.agentId
-    );
-    const effectiveEnv = resolveAgentEnv(c.env, providerConfig ?? undefined);
-    const provider = getAgentProvider(session.agentId, effectiveEnv);
-    if (provider.cancel) {
-      const remote = session.providerSessionId ?? sessionId;
-      await provider
-        .cancel(remote)
-        .catch((err) => console.error("provider cancel failed", err));
-    }
-
+    // Cancellation is a tracker-side decision: mark the session canceled
+    // before touching the provider. A wedged sandbox can hang
+    // provider.cancel() for minutes (PILE-217), so teardown runs off the
+    // response path under waitUntil with a bounded timeout.
     const updated = await stub.applyAgentSessionResult(
       sessionId,
       { status: "canceled" },
       identity.id
     );
+
+    try {
+      const providerConfig = await loadProviderConfig(
+        c.env,
+        stub,
+        session.agentId
+      );
+      const effectiveEnv = resolveAgentEnv(c.env, providerConfig ?? undefined);
+      const provider = getAgentProvider(session.agentId, effectiveEnv);
+      const providerCancel = provider.cancel;
+      if (providerCancel) {
+        const remote = session.providerSessionId ?? sessionId;
+        const teardown = (async () => {
+          try {
+            await withTimeout(
+              providerCancel.call(provider, remote),
+              DEFAULT_PROBE_TIMEOUT_MS,
+              "cancel"
+            );
+          } catch (err) {
+            console.error("provider cancel failed", err);
+          }
+        })();
+        getExecutionCtx(c)?.waitUntil(teardown);
+      }
+    } catch (err) {
+      // Teardown is best-effort — the session is already canceled.
+      console.error("provider cancel setup failed", err);
+    }
+
     const activities = await stub.listAgentActivities(sessionId);
     return c.json(toSessionResponse(updated ?? session, activities));
   });

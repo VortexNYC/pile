@@ -21,7 +21,7 @@ export const DEFAULT_INACTIVITY_MINUTES = 20;
 export const DEFAULT_PROVISION_TIMEOUT_MINUTES = 30;
 // A provider call that hangs must never stall the whole org's sweep — the
 // loop is serial, so one wedged sandbox otherwise starves every session.
-const DEFAULT_PROBE_TIMEOUT_MS = 90_000;
+export const DEFAULT_PROBE_TIMEOUT_MS = 90_000;
 // Follow-up prompts (PILE-210) can land while a terminal session's sandbox is
 // parked. Past this window the sweep destroys the sandbox and cold dispatch
 // takes over.
@@ -29,6 +29,9 @@ const SANDBOX_RESUME_WINDOW_MS = 4 * 60 * 60 * 1000;
 // The reaper only scans terminal sessions inside a bounded window — anything
 // older was reaped already or died of natural causes.
 const SANDBOX_REAP_MAX_AGE_MS = 48 * 60 * 60 * 1000;
+// Infra-failed sessions get one automatic redispatch, but only while the
+// failure is fresh — the pass must never resurrect a lane that died hours ago.
+const INFRA_RETRY_WINDOW_MS = 60 * 60 * 1000;
 const TERMINAL_STATUSES = new Set<AgentSessionStatus>([
   "completed",
   "failed",
@@ -72,7 +75,7 @@ export function parseAgentTimeouts(configJson: string | null | undefined): {
   return { timeoutMinutes, inactivityMinutes, provisionTimeoutMinutes };
 }
 
-async function withTimeout<T>(
+export async function withTimeout<T>(
   promise: Promise<T>,
   ms: number,
   label: string
@@ -246,6 +249,48 @@ async function retryInfraSession(
 // ---------------------------------------------------------------------------
 // PILE-214/211/212/210 — sweep-time maintenance
 // ---------------------------------------------------------------------------
+
+/** Sessions failed by the compute substrate (provision died before the runner
+ *  came up, sandbox errored) get one automatic redispatch. Failures can land
+ *  outside the sweep — a backgrounded provision that rejects marks the session
+ *  failed inline (PILE-217) — so this pass re-drives any recent infra failure
+ *  that has no retry yet, deduped on `retryOf` so a manual /retry or an
+ *  earlier pass doesn't double-spawn. */
+async function retryFailedInfraSessions(
+  env: WorkerEnv,
+  stub: DurableObjectStub<WorkspaceDO>,
+  organizationId: string,
+  now: number,
+  ctx?: { waitUntil: (promise: Promise<unknown>) => void }
+): Promise<void> {
+  const failed = await stub.listAgentSessions({
+    status: "failed",
+    limit: 100,
+  });
+  for (const session of failed) {
+    if (!session.infraFailure) continue;
+    if ((session.retryCount ?? 0) >= MAX_INFRA_RETRIES) continue;
+    // Bound on createdAt, not updatedAt — reaping/late writes bump updatedAt
+    // and would resurrect a long-dead lane.
+    const created = Date.parse(session.createdAt);
+    if (!Number.isFinite(created) || now - created > INFRA_RETRY_WINDOW_MS) {
+      continue;
+    }
+    const siblings = await stub.listAgentSessions({
+      issueId: session.issueId,
+    });
+    if (siblings.some((s) => s.retryOf === session.id)) continue;
+    await ingestFailedAgentSession(env, organizationId, session, {
+      id: session.providerSessionId ?? session.id,
+      agentId: session.agentId,
+      status: "failed",
+      result: session.result,
+      url: session.url,
+      infraFailure: true,
+    });
+    await retryInfraSession(env, stub, organizationId, session, ctx);
+  }
+}
 
 /** A `waiting` session parked behind a blocker lane (queuedAfter) gets
  *  promoted to a real dispatch once the blocker goes terminal or vanishes. */
@@ -566,6 +611,7 @@ export async function sweepAgentSessions(
       // merged PR doesn't sit displayed as "open" forever.
       await syncOpenPrSessions(env, stub, id, { probeTimeoutMs });
       await promoteQueuedSessions(env, stub, id, ctx);
+      await retryFailedInfraSessions(env, stub, id, now, ctx);
       await fireDueAutomations(env, stub, id, new Date(now), ctx);
       await reapTerminalArtifacts(env, stub, id, now);
       if (sessions.length === 0) continue;

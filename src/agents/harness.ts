@@ -22,15 +22,23 @@ export interface MockAgentProviderOptions {
     trackerSessionId: string
   ) => AgentProviderState | Promise<AgentProviderState | null> | null;
   health?: () => AgentProviderHealth | Promise<AgentProviderHealth>;
+  cancel?: (sessionId: string) => void | Promise<void>;
 }
 
 export class MockAgentProvider implements AgentProvider {
   readonly id: string;
+  readonly cancel?: (sessionId: string) => Promise<void>;
   private options: MockAgentProviderOptions;
 
   constructor(id: string, options: MockAgentProviderOptions = {}) {
     this.id = id;
     this.options = options;
+    if (options.cancel) {
+      const cancel = options.cancel;
+      this.cancel = async (sessionId: string) => {
+        await cancel(sessionId);
+      };
+    }
   }
 
   async dispatch(

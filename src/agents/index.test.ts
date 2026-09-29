@@ -132,6 +132,113 @@ describe("agent providers", () => {
     expect(waited).toBe(1);
   });
 
+  it("marks the session failed when a backgrounded provider start rejects", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)
+    );
+    await stub.setOrganizationId(actor.organizationId);
+    const issue = await stub.createIssue({
+      title: "Background provision failure",
+    });
+
+    // Providers hand start() to sessionContext.waitUntil — a rejection there
+    // never reaches dispatchAgent's catch, so the session must be failed
+    // inside the wrapped task itself.
+    registerAgentProvider(
+      "mock-bg-fail",
+      () =>
+        new MockAgentProvider("mock-bg-fail", {
+          dispatch: (_org, _issue, _model, sessionContext) => {
+            sessionContext?.waitUntil?.(
+              Promise.reject(new Error("sandbox provision wedged"))
+            );
+            return {
+              id: "bg-fail-1",
+              agentId: "mock-bg-fail",
+              status: "created",
+            };
+          },
+        })
+    );
+
+    const tasks: Promise<unknown>[] = [];
+    const ctx = {
+      waitUntil(task: Promise<unknown>) {
+        tasks.push(task);
+      },
+    };
+
+    const session = await dispatchAgent(
+      env,
+      "mock-bg-fail",
+      actor.organizationId,
+      issue,
+      actor,
+      undefined,
+      ctx
+    );
+    expect(session.status).toBe("created");
+    expect(tasks).toHaveLength(1);
+
+    // The wrapped task resolves once the failure handler has run.
+    await Promise.all(tasks);
+
+    const after = await stub.getAgentSession(session.id);
+    expect(after?.status).toBe("failed");
+    expect(after?.infraFailure).toBe(1);
+    expect(after?.result).toContain("sandbox provision wedged");
+  });
+
+  it("leaves a canceled session alone when the backgrounded start rejects", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)
+    );
+    await stub.setOrganizationId(actor.organizationId);
+    const issue = await stub.createIssue({
+      title: "Cancel during provision",
+    });
+
+    registerAgentProvider(
+      "mock-bg-cancel",
+      () =>
+        new MockAgentProvider("mock-bg-cancel", {
+          dispatch: (_org, _issue, _model, sessionContext) => {
+            sessionContext?.waitUntil?.(
+              Promise.reject(new Error("provision died"))
+            );
+            return {
+              id: "bg-cancel-1",
+              agentId: "mock-bg-cancel",
+              status: "created",
+            };
+          },
+        })
+    );
+
+    const tasks: Promise<unknown>[] = [];
+    const ctx = {
+      waitUntil(task: Promise<unknown>) {
+        tasks.push(task);
+      },
+    };
+
+    const session = await dispatchAgent(
+      env,
+      "mock-bg-cancel",
+      actor.organizationId,
+      issue,
+      actor,
+      undefined,
+      ctx
+    );
+    // Simulate a cancel racing the still-running provision.
+    await stub.applyAgentSessionResult(session.id, { status: "canceled" });
+    await Promise.all(tasks);
+
+    const after = await stub.getAgentSession(session.id);
+    expect(after?.status).toBe("canceled");
+  });
+
   it("polls a mock session", async () => {
     const provider = new MockAgentProvider("mock", {
       poll: (sessionId) => ({

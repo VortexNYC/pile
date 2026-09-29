@@ -365,7 +365,36 @@ export async function dispatchAgent(
         // when the provider calls sessionContext.waitUntil(task). Wrap it so
         // the real ctx stays the receiver.
         waitUntil: ctx
-          ? (task: Promise<unknown>) => ctx.waitUntil(task)
+          ? (task: Promise<unknown>) =>
+              // A backgrounded task that rejects never surfaces through
+              // dispatch()'s return — the session would sit `created` until
+              // the sweep's provision timeout (PILE-217). Fail it now; the
+              // sweep's infra-retry drives the redispatch.
+              ctx.waitUntil(
+                task.catch(async (err: unknown) => {
+                  const message =
+                    err instanceof Error ? err.message : String(err);
+                  console.error("agent background dispatch failed", {
+                    session: session.id,
+                    agentId,
+                    error: message,
+                  });
+                  // CAS on `created` — a cancel/poll that already moved the
+                  // session wins over the late failure report.
+                  await stub
+                    .applyAgentSessionResult(
+                      session.id,
+                      {
+                        status: "failed",
+                        result: message,
+                        infraFailure: true,
+                      },
+                      actor.id,
+                      { expectStatus: "created" }
+                    )
+                    .catch(() => {});
+                })
+              )
           : undefined,
         comments,
         pileApi,
@@ -385,7 +414,11 @@ export async function dispatchAgent(
         prState: providerSession.prState,
         branch: providerSession.branch,
       },
-      actor.id
+      actor.id,
+      // The session row was just written as `created`; a backgrounded
+      // start() may have already failed it or a cancel raced in — don't
+      // let the stale dispatch result overwrite that transition.
+      { expectStatus: "created" }
     );
 
     return updated ?? session;
@@ -396,7 +429,8 @@ export async function dispatchAgent(
         status: "failed",
         result: error instanceof Error ? error.message : String(error),
       },
-      actor.id
+      actor.id,
+      { expectStatus: "created" }
     );
     throw error;
   }

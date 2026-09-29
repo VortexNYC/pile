@@ -328,6 +328,75 @@ describe("sweepAgentSessions", () => {
     expect(retried?.retryCount).toBe(1);
   });
 
+  it("retries a recent infra-failed session that has no retry child", async () => {
+    const agentId = `mock-infra-${crypto.randomUUID().slice(0, 8)}`;
+    registerMock(agentId, {
+      dispatch: () => ({ id: "retried", agentId, status: "created" }),
+      poll: (id) => ({ id, agentId, status: "running" }),
+    });
+    const issue = await stub.createIssue({ title: "Infra retry" });
+    // Mirrors the dispatch-path failure (PILE-217): provider provisioning
+    // failed after dispatch returned, so the session went straight to
+    // failed+infraFailure without the sweep ever seeing it as `created`.
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+    });
+    await stub.applyAgentSessionResult(session.id, {
+      status: "failed",
+      result: "provision wedged",
+      infraFailure: true,
+    });
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    const siblings = await stub.listAgentSessions({ issueId: issue.id });
+    const retried = siblings.find((s) => s.retryOf === session.id);
+    expect(retried).toBeDefined();
+    expect(retried?.retryCount).toBe(1);
+  });
+
+  it("does not re-retry an infra failure that already has a retry child", async () => {
+    const agentId = `mock-infra-done-${crypto.randomUUID().slice(0, 8)}`;
+    registerMock(agentId, {
+      dispatch: () => ({ id: "retried", agentId, status: "created" }),
+      poll: (id) => ({ id, agentId, status: "running" }),
+    });
+    const issue = await stub.createIssue({ title: "Infra retry dedupe" });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+    });
+    await stub.applyAgentSessionResult(session.id, {
+      status: "failed",
+      result: "provision wedged",
+      infraFailure: true,
+    });
+    const prior = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "failed",
+    });
+    await stub.updateAgentSession(prior.id, {
+      retryOf: session.id,
+      retryCount: 1,
+    });
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    const siblings = await stub.listAgentSessions({ issueId: issue.id });
+    expect(siblings.filter((s) => s.retryOf === session.id)).toHaveLength(1);
+  });
+
   it("measures the run clock from startedAt, not createdAt", async () => {
     const agentId = `mock-clock-${crypto.randomUUID().slice(0, 8)}`;
     registerMock(agentId, {

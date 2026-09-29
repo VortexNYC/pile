@@ -1023,6 +1023,90 @@ describe("agent sessions API", () => {
     expect(got?.result).toBe("provider push");
   });
 
+  it("cancels a session without blocking on a wedged provider", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const issue = await stub.createIssue({ title: "Wedged cancel" });
+
+    let cancelCalls = 0;
+    registerAgentProvider(
+      "mock-wedged-cancel",
+      () =>
+        new MockAgentProvider("mock-wedged-cancel", {
+          cancel: () => {
+            cancelCalls += 1;
+            // Simulate a wedged sandbox: teardown never resolves.
+            return new Promise<void>(() => {});
+          },
+        })
+    );
+
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "mock-wedged-cancel",
+      provider: "mock-wedged-cancel",
+      actorId: "user-1",
+      actorType: "user",
+      status: "running",
+    });
+
+    const res = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/cancel`,
+        { method: "POST", token }
+      ),
+      env
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json<{ status: string }>();
+    expect(body.status).toBe("canceled");
+    expect(cancelCalls).toBe(1);
+
+    const stored = await stub.getAgentSession(session.id);
+    expect(stored?.status).toBe("canceled");
+  });
+
+  it("marks a session canceled even when provider teardown throws", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const issue = await stub.createIssue({ title: "Failing cancel" });
+
+    registerAgentProvider(
+      "mock-failing-cancel",
+      () =>
+        new MockAgentProvider("mock-failing-cancel", {
+          cancel: () => Promise.reject(new Error("sandbox stuck")),
+        })
+    );
+
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "mock-failing-cancel",
+      provider: "mock-failing-cancel",
+      actorId: "user-1",
+      actorType: "user",
+      status: "running",
+    });
+
+    const res = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/cancel`,
+        { method: "POST", token }
+      ),
+      env
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json<{ status: string }>();
+    expect(body.status).toBe("canceled");
+
+    const stored = await stub.getAgentSession(session.id);
+    expect(stored?.status).toBe("canceled");
+  });
+
   it("captures a PR URL from poll as a session artifact", async () => {
     registerAgentProvider(
       "pr-mock",
