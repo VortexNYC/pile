@@ -1212,4 +1212,190 @@ describe("agent sessions API", () => {
     );
     expect(miss.status).toBe(404);
   });
+
+  it("registers an external agent session and returns lane credentials", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const issue = await stub.createIssue({
+      title: "External session",
+      repo: "VortexNYC/pile",
+    });
+
+    const res = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/sessions/register`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          issueId: issue.id,
+          provider: "cursor-cloud",
+          providerSessionId: "cursor-ext-1",
+          status: "running",
+          url: "https://cursor.com/agents/abc",
+          branch: "cursor/fix-thing",
+        }),
+      }),
+      env
+    );
+    expect(res.status).toBe(201);
+    const body = await res.json<{
+      session: { id: string; providerSessionId: string | null; status: string };
+      laneToken: string;
+      logUrl: string | null;
+      reportUrl: string | null;
+    }>();
+    expect(body.session.providerSessionId).toBe("cursor-ext-1");
+    expect(body.session.status).toBe("running");
+    expect(body.laneToken).toBeTruthy();
+    expect(body.reportUrl).toContain(
+      `/agent/sessions/${body.session.id}/report`
+    );
+
+    // Re-registering the same provider session dedupes to the same row.
+    const again = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/sessions/register`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          issueId: issue.id,
+          provider: "cursor-cloud",
+          providerSessionId: "cursor-ext-1",
+        }),
+      }),
+      env
+    );
+    expect(again.status).toBe(200);
+    const againBody = await again.json<{ session: { id: string } }>();
+    expect(againBody.session.id).toBe(body.session.id);
+  });
+
+  it("rejects registration for a missing issue", async () => {
+    const res = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/sessions/register`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          issueId: crypto.randomUUID(),
+          provider: "cursor-cloud",
+        }),
+      }),
+      env
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it("lets a registered external session report via its lane token", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const issue = await stub.createIssue({
+      title: "Report test",
+      repo: "VortexNYC/pile",
+    });
+    const reg = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/sessions/register`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ issueId: issue.id, provider: "custom-bot" }),
+      }),
+      env
+    );
+    const { session, laneToken } = await reg.json<{
+      session: { id: string };
+      laneToken: string;
+    }>();
+    const reportBase = `/workspaces/${organizationId}/agent/sessions/${session.id}/report`;
+
+    // No token / wrong token → 401.
+    const noAuth = await app.fetch(
+      request(reportBase, {
+        method: "POST",
+        body: JSON.stringify({ status: "running" }),
+      }),
+      env
+    );
+    expect([401, 403]).toContain(noAuth.status);
+    const badToken = await app.fetch(
+      request(reportBase, {
+        method: "POST",
+        headers: { Authorization: "Bearer wrong" },
+        body: JSON.stringify({ status: "running" }),
+      }),
+      env
+    );
+    expect(badToken.status).toBe(401);
+
+    // A lane token minted for a *different* session must not work here.
+    const otherToken = await agentLogToken(
+      env as unknown as WorkerEnv,
+      organizationId,
+      crypto.randomUUID()
+    );
+    const cross = await app.fetch(
+      request(reportBase, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${otherToken}` },
+        body: JSON.stringify({ status: "running" }),
+      }),
+      env
+    );
+    expect(cross.status).toBe(401);
+
+    // Invalid status rejected.
+    const badStatus = await app.fetch(
+      request(reportBase, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${laneToken}` },
+        body: JSON.stringify({ status: "exploded" }),
+      }),
+      env
+    );
+    expect(badStatus.status).toBe(400);
+
+    // Non-lifecycle fields land.
+    const fields = await app.fetch(
+      request(reportBase, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${laneToken}` },
+        body: JSON.stringify({
+          url: "https://example.com/run",
+          branch: "bot/branch",
+          prUrl: "https://github.com/VortexNYC/pile/pull/999",
+        }),
+      }),
+      env
+    );
+    expect(fields.status).toBe(200);
+    const got = await stub.getAgentSession(session.id);
+    expect(got?.branch).toBe("bot/branch");
+    expect(got?.prUrl).toBe("https://github.com/VortexNYC/pile/pull/999");
+    expect(got?.lastProgressAt).toBeTruthy();
+
+    // Terminal transition flows through the result path.
+    const done = await app.fetch(
+      request(reportBase, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${laneToken}` },
+        body: JSON.stringify({ status: "completed", result: "all done" }),
+      }),
+      env
+    );
+    expect(done.status).toBe(200);
+    const final = await stub.getAgentSession(session.id);
+    expect(final?.status).toBe("completed");
+    expect(final?.result).toBe("all done");
+
+    // Terminal sessions refuse further reports.
+    const after = await app.fetch(
+      request(reportBase, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${laneToken}` },
+        body: JSON.stringify({ status: "running" }),
+      }),
+      env
+    );
+    expect(after.status).toBe(409);
+  });
 });

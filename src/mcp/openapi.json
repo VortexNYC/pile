@@ -3243,6 +3243,481 @@
         "summary": "Create issue assign"
       }
     },
+    "/workspaces/{organizationId}/agent/sessions/register": {
+      "post": {
+        "tags": [
+          "agent-sessions"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "issueId": {
+                    "type": "string"
+                  },
+                  "provider": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "providerSessionId": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "created",
+                      "running",
+                      "waiting",
+                      "completed",
+                      "failed",
+                      "canceled"
+                    ]
+                  },
+                  "url": {
+                    "type": "string"
+                  },
+                  "branch": {
+                    "type": "string"
+                  },
+                  "prUrl": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "issueId",
+                  "provider"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Session already registered (providerSessionId dedupe)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "session": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "issueId": {
+                          "type": "string"
+                        },
+                        "agentId": {
+                          "type": "string"
+                        },
+                        "provider": {
+                          "type": "string"
+                        },
+                        "actorId": {
+                          "type": "string"
+                        },
+                        "actorType": {
+                          "type": "string",
+                          "enum": [
+                            "user",
+                            "agent"
+                          ]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "created",
+                            "running",
+                            "waiting",
+                            "completed",
+                            "failed",
+                            "canceled"
+                          ]
+                        },
+                        "result": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "url": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "providerSessionId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "prUrl": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "prState": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "branch": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        },
+                        "lastProgressAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "lastStateHash": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "derivedStatus": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "stalled",
+                            "needs_input",
+                            null
+                          ]
+                        },
+                        "activities": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "sessionId": {
+                                "type": "string"
+                              },
+                              "actorId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "thought",
+                                  "response",
+                                  "error",
+                                  "elicitation",
+                                  "action",
+                                  "status",
+                                  "artifact"
+                                ]
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "payload": {
+                                "nullable": true
+                              },
+                              "parentId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "startedAt": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "endedAt": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "durationMs": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "sessionId",
+                              "actorId",
+                              "type",
+                              "message",
+                              "parentId",
+                              "startedAt",
+                              "endedAt",
+                              "durationMs",
+                              "createdAt"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "issueId",
+                        "agentId",
+                        "provider",
+                        "actorId",
+                        "actorType",
+                        "status",
+                        "result",
+                        "url",
+                        "providerSessionId",
+                        "prUrl",
+                        "prState",
+                        "branch",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    },
+                    "laneToken": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "logUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "reportUrl": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "session",
+                    "laneToken",
+                    "logUrl",
+                    "reportUrl"
+                  ]
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Session registered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "session": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "issueId": {
+                          "type": "string"
+                        },
+                        "agentId": {
+                          "type": "string"
+                        },
+                        "provider": {
+                          "type": "string"
+                        },
+                        "actorId": {
+                          "type": "string"
+                        },
+                        "actorType": {
+                          "type": "string",
+                          "enum": [
+                            "user",
+                            "agent"
+                          ]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "created",
+                            "running",
+                            "waiting",
+                            "completed",
+                            "failed",
+                            "canceled"
+                          ]
+                        },
+                        "result": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "url": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "providerSessionId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "prUrl": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "prState": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "branch": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        },
+                        "lastProgressAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "lastStateHash": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "derivedStatus": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "stalled",
+                            "needs_input",
+                            null
+                          ]
+                        },
+                        "activities": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "sessionId": {
+                                "type": "string"
+                              },
+                              "actorId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "thought",
+                                  "response",
+                                  "error",
+                                  "elicitation",
+                                  "action",
+                                  "status",
+                                  "artifact"
+                                ]
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "payload": {
+                                "nullable": true
+                              },
+                              "parentId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "startedAt": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "endedAt": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "durationMs": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "sessionId",
+                              "actorId",
+                              "type",
+                              "message",
+                              "parentId",
+                              "startedAt",
+                              "endedAt",
+                              "durationMs",
+                              "createdAt"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "issueId",
+                        "agentId",
+                        "provider",
+                        "actorId",
+                        "actorType",
+                        "status",
+                        "result",
+                        "url",
+                        "providerSessionId",
+                        "prUrl",
+                        "prState",
+                        "branch",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    },
+                    "laneToken": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "logUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "reportUrl": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "session",
+                    "laneToken",
+                    "logUrl",
+                    "reportUrl"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Issue not found"
+          }
+        },
+        "summary": "Create agent session register"
+      }
+    },
     "/workspaces/{organizationId}/agent/sessions": {
       "get": {
         "tags": [

@@ -1541,6 +1541,157 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/agent/sessions/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create agent session register */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        issueId: string;
+                        provider: string;
+                        providerSessionId?: string;
+                        /** @enum {string} */
+                        status?: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                        url?: string;
+                        branch?: string;
+                        prUrl?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Session already registered (providerSessionId dedupe) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            session: {
+                                id: string;
+                                organizationId: string;
+                                issueId: string;
+                                agentId: string;
+                                provider: string;
+                                actorId: string;
+                                /** @enum {string} */
+                                actorType: "user" | "agent";
+                                /** @enum {string} */
+                                status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                                result: string | null;
+                                url: string | null;
+                                providerSessionId: string | null;
+                                prUrl: string | null;
+                                prState: string | null;
+                                branch: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                lastProgressAt?: string | null;
+                                lastStateHash?: string | null;
+                                /** @enum {string|null} */
+                                derivedStatus?: "stalled" | "needs_input" | null;
+                                activities?: {
+                                    id: string;
+                                    sessionId: string;
+                                    actorId: string | null;
+                                    /** @enum {string} */
+                                    type: "thought" | "response" | "error" | "elicitation" | "action" | "status" | "artifact";
+                                    message: string;
+                                    payload?: unknown;
+                                    parentId: string | null;
+                                    startedAt: string | null;
+                                    endedAt: string | null;
+                                    durationMs: number | null;
+                                    createdAt: string;
+                                }[];
+                            };
+                            laneToken: string | null;
+                            logUrl: string | null;
+                            reportUrl: string | null;
+                        };
+                    };
+                };
+                /** @description Session registered */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            session: {
+                                id: string;
+                                organizationId: string;
+                                issueId: string;
+                                agentId: string;
+                                provider: string;
+                                actorId: string;
+                                /** @enum {string} */
+                                actorType: "user" | "agent";
+                                /** @enum {string} */
+                                status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                                result: string | null;
+                                url: string | null;
+                                providerSessionId: string | null;
+                                prUrl: string | null;
+                                prState: string | null;
+                                branch: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                lastProgressAt?: string | null;
+                                lastStateHash?: string | null;
+                                /** @enum {string|null} */
+                                derivedStatus?: "stalled" | "needs_input" | null;
+                                activities?: {
+                                    id: string;
+                                    sessionId: string;
+                                    actorId: string | null;
+                                    /** @enum {string} */
+                                    type: "thought" | "response" | "error" | "elicitation" | "action" | "status" | "artifact";
+                                    message: string;
+                                    payload?: unknown;
+                                    parentId: string | null;
+                                    startedAt: string | null;
+                                    endedAt: string | null;
+                                    durationMs: number | null;
+                                    createdAt: string;
+                                }[];
+                            };
+                            laneToken: string | null;
+                            logUrl: string | null;
+                            reportUrl: string | null;
+                        };
+                    };
+                };
+                /** @description Issue not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/agent/sessions": {
         parameters: {
             query?: never;

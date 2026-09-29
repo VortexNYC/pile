@@ -908,6 +908,47 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "agent sessions register create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/agent/sessions/register",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+      {
+        name: "provider",
+        flag: "provider",
+      },
+      {
+        name: "providerSessionId",
+        flag: "provider-session-id",
+      },
+      {
+        name: "status",
+        flag: "status",
+      },
+      {
+        name: "url",
+        flag: "url",
+      },
+      {
+        name: "branch",
+        flag: "branch",
+      },
+      {
+        name: "prUrl",
+        flag: "pr-url",
+      },
+    ],
+  },
   "agent sessions list": {
     method: "GET",
     path: "/workspaces/{organizationId}/agent/sessions",

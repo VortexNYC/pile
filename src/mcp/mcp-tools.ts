@@ -8805,6 +8805,63 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdAgentSessionsRegister",
+    "description": "Create agent session register (POST /workspaces/{organizationId}/agent/sessions/register) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: issueId*, provider*, providerSessionId, status, url, branch, prUrl (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/agent/sessions/register",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "issueId": {
+              "type": "string"
+            },
+            "provider": {
+              "type": "string",
+              "minLength": 1
+            },
+            "providerSessionId": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "created",
+                "running",
+                "waiting",
+                "completed",
+                "failed",
+                "canceled"
+              ]
+            },
+            "url": {
+              "type": "string"
+            },
+            "branch": {
+              "type": "string"
+            },
+            "prUrl": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "issueId",
+            "provider"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdAgentSessionsSessionIdActivities",
     "description": "Create agent session activity (POST /workspaces/{organizationId}/agent/sessions/{sessionId}/activities) Path params (top-level, required): organizationId, sessionId. Request body goes in the \"body\" object; fields: type*, message*, payload, parentId, startedAt, endedAt, durationMs (* = required).",
     "method": "POST",

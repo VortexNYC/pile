@@ -279,6 +279,21 @@ export function agentGithubTokenUrl(
 }
 
 /**
+ * Lane endpoint external agents call to self-report status/PR/progress —
+ * the inbound half of "Pile is the home for agents" (PILE-227). Same
+ * per-session HMAC bearer as agentLogUrl.
+ */
+export function agentReportUrl(
+  env: WorkerEnv,
+  organizationId: string,
+  sessionId: string
+): string | null {
+  const base = env.PUBLIC_API_URL ?? env.BETTER_AUTH_URL;
+  if (!base) return null;
+  return `${base.replace(/\/$/, "")}/workspaces/${organizationId}/agent/sessions/${sessionId}/report`;
+}
+
+/**
  * Base URL for the runner's pnpm-store cache (GET/PUT keyed by lockfile hash
  * appended as a path segment). Same per-session token auth as agentLogUrl.
  */

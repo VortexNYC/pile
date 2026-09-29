@@ -118,13 +118,13 @@ function computeLastSeen(state: AgentProviderState | null): number | null {
 async function cancelSession(
   stub: DurableObjectStub<WorkspaceDO>,
   session: AgentSession,
-  provider: AgentProvider,
+  provider: AgentProvider | null,
   result: string,
   probeTimeoutMs: number
 ): Promise<void> {
   const remoteId = session.providerSessionId ?? session.id;
   try {
-    if (provider.cancel)
+    if (provider?.cancel)
       await withTimeout(provider.cancel(remoteId), probeTimeoutMs, "cancel");
   } catch (err) {
     console.error("agent session cancel failed", {
@@ -588,7 +588,14 @@ export async function sweepAgentSessions(
         const effectiveEnv = resolveAgentEnv(env, providerConfig ?? undefined);
         const { timeoutMinutes, inactivityMinutes, provisionTimeoutMinutes } =
           parseAgentTimeouts(providerConfig?.config);
-        const provider = getAgentProvider(session.agentId, effectiveEnv);
+        // Externally-registered sessions (PILE-227) have no dispatchable
+        // provider — timeouts still apply, poll/cancel degrade to no-ops.
+        let provider: AgentProvider | null = null;
+        try {
+          provider = getAgentProvider(session.agentId, effectiveEnv);
+        } catch {
+          provider = null;
+        }
         const created = Date.parse(session.createdAt);
         // `created` sessions never started a runner — the sandbox wedged or
         // the queue is saturated. Bound provisioning separately from the run
@@ -625,7 +632,7 @@ export async function sweepAgentSessions(
           };
           await stub.applyAgentSessionResult(session.id, provisionFailure);
           await ingestFailedAgentSession(env, id, session, provisionFailure);
-          await retryInfraSession(env, stub, id, session, ctx);
+          if (provider) await retryInfraSession(env, stub, id, session, ctx);
           return;
         }
         // The run clock starts at the first `running` transition (startedAt),
@@ -646,6 +653,27 @@ export async function sweepAgentSessions(
           return;
         }
 
+        if (!provider) {
+          // External session: no remote to poll. If it has stopped reporting
+          // past the inactivity window, mark it canceled rather than zombie.
+          if (
+            progressIsStale({
+              now,
+              createdAt: session.createdAt,
+              lastProgressAt: session.lastProgressAt,
+              inactivityMinutes,
+            })
+          ) {
+            await cancelSession(
+              stub,
+              session,
+              null,
+              `external session silent for ${inactivityMinutes}m`,
+              probeTimeoutMs
+            );
+          }
+          return;
+        }
         const remoteId = session.providerSessionId ?? session.id;
         let stillAlive = false;
         try {

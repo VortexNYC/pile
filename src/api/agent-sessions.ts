@@ -2,7 +2,12 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 import type { InferSelectModel } from "drizzle-orm";
 
-import { agentLogToken, loadProviderConfig } from "../agents/credentials.js";
+import {
+  agentLogToken,
+  agentLogUrl,
+  agentReportUrl,
+  loadProviderConfig,
+} from "../agents/credentials.js";
 import { resolveAgentEnv } from "../agents/daytona.js";
 import { dispatchAgent, getAgentProvider } from "../agents/index.js";
 import { timingSafeEqualHex } from "../global/crypto.js";
@@ -506,6 +511,67 @@ const createChildSessionRoute = createRoute({
   },
 });
 
+// Inbound registration (PILE-227): sessions for agents Pile didn't dispatch —
+// a Cursor cloud agent started elsewhere, a Devin web session, a custom bot.
+// The caller (workspace API key) gets back a per-session lane token the
+// external agent then uses to push /logs and /report updates; Pile never
+// provisions compute for these.
+const registerSessionRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/agent/sessions/register",
+  tags: ["agent-sessions"],
+  middleware: [rls("write", "agent:write")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+    body: {
+      content: {
+        "application/json": {
+          schema: z
+            .object({
+              issueId: z.string(),
+              provider: z.string().min(1),
+              providerSessionId: z.string().optional(),
+              status: agentSessionStatusSchema.optional(),
+              url: z.string().optional(),
+              branch: z.string().optional(),
+              prUrl: z.string().optional(),
+            })
+            .strict(),
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "Session registered",
+      content: {
+        "application/json": {
+          schema: z.object({
+            session: agentSessionSchema,
+            laneToken: z.string().nullable(),
+            logUrl: z.string().nullable(),
+            reportUrl: z.string().nullable(),
+          }),
+        },
+      },
+    },
+    200: {
+      description: "Session already registered (providerSessionId dedupe)",
+      content: {
+        "application/json": {
+          schema: z.object({
+            session: agentSessionSchema,
+            laneToken: z.string().nullable(),
+            logUrl: z.string().nullable(),
+            reportUrl: z.string().nullable(),
+          }),
+        },
+      },
+    },
+    404: { description: "Issue not found" },
+  },
+});
+
 const promptSessionRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/prompt",
@@ -698,6 +764,72 @@ const verifySessionToken = async (
 };
 
 export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
+  app.openapi(registerSessionRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const identity = c.var.workspaceIdentity;
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const issue = await stub.getIssue(input.issueId);
+    if (!issue) {
+      return c.json({ message: "Issue not found" }, 404);
+    }
+
+    const laneUrls = async (sessionId: string) => ({
+      laneToken: await agentLogToken(c.env, organizationId, sessionId),
+      logUrl: agentLogUrl(c.env, organizationId, sessionId),
+      reportUrl: agentReportUrl(c.env, organizationId, sessionId),
+    });
+
+    // Idempotent: a retry or a webhook bridge re-registering the same
+    // provider-side session returns the existing row + fresh lane URLs
+    // instead of a duplicate session.
+    if (input.providerSessionId) {
+      const existing = await stub.getAgentSessionByProviderSessionId(
+        input.providerSessionId
+      );
+      if (existing) {
+        return c.json(
+          { session: existing, ...(await laneUrls(existing.id)) },
+          200
+        );
+      }
+    }
+
+    const session = await stub.createAgentSession({
+      issueId: input.issueId,
+      agentId: input.provider,
+      provider: input.provider,
+      actorId: identity.id,
+      actorType: "agent",
+      status: input.status ?? "running",
+      url: input.url ?? null,
+      providerSessionId: input.providerSessionId ?? null,
+      prUrl: input.prUrl ?? null,
+      startedAt:
+        (input.status ?? "running") === "running"
+          ? new Date().toISOString()
+          : null,
+    });
+    if (input.branch) {
+      await stub.updateAgentSession(session.id, { branch: input.branch });
+    }
+    // Registering a session that's already terminal still goes through the
+    // result path so completion events and issue effects fire once.
+    if (
+      input.status === "completed" ||
+      input.status === "failed" ||
+      input.status === "canceled"
+    ) {
+      await stub.applyAgentSessionResult(session.id, {
+        status: input.status,
+        url: input.url ?? null,
+        prUrl: input.prUrl ?? null,
+        branch: input.branch ?? null,
+      });
+    }
+    return c.json({ session, ...(await laneUrls(session.id)) }, 201);
+  });
+
   app.openapi(listSessionsRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
     const query = c.req.valid("query");
@@ -916,6 +1048,13 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
             )
           : [];
       const capped = lines.slice(-100);
+      // Every ingested line is a heartbeat — keeps the liveness sweep from
+      // treating a chatty live lane (or external session) as stalled.
+      await stub
+        .updateAgentSession(sessionId, {
+          lastProgressAt: new Date().toISOString(),
+        })
+        .catch(() => {});
       await Promise.all(
         capped.map((line) =>
           stub.addAgentSessionEvent({
@@ -926,6 +1065,90 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         )
       );
       return c.json({ ok: true, appended: capped.length });
+    }
+  );
+
+  // Self-report for externally-registered sessions (PILE-227): the agent
+  // pushes its own lifecycle — status, result, PR, branch — with the same
+  // per-session HMAC bearer as log ingest. Pile owns no compute here; this
+  // is pure observability.
+  app.post(
+    "/workspaces/:organizationId/agent/sessions/:sessionId/report",
+    async (c) => {
+      const { organizationId, sessionId } = c.req.param();
+      if (
+        !(await verifySessionToken(
+          c.env,
+          c.req.header("authorization"),
+          organizationId,
+          sessionId
+        ))
+      ) {
+        return c.json({ message: "Unauthorized" }, 401);
+      }
+      const stub = getWorkspaceStub(c.env, organizationId);
+      const session = await stub.getAgentSession(sessionId);
+      if (!session) {
+        return c.json({ message: "Session not found" }, 404);
+      }
+      // A lane token can't reopen a terminal session — once a session
+      // resolves, reporting stops.
+      if (["completed", "failed", "canceled"].includes(session.status)) {
+        return c.json({ message: "Session is terminal" }, 409);
+      }
+      const body: unknown = await c.req.json().catch(() => null);
+      if (body === null || typeof body !== "object") {
+        return c.json({ message: "Invalid body" }, 400);
+      }
+      const input = body as Record<string, unknown>;
+      const update: {
+        status?: AgentSessionStatus;
+        result?: string;
+        url?: string;
+        prUrl?: string;
+        branch?: string;
+        lastProgressAt?: string;
+      } = { lastProgressAt: new Date().toISOString() };
+      for (const key of ["result", "url", "prUrl", "branch"] as const) {
+        const value = input[key];
+        if (typeof value === "string") update[key] = value;
+      }
+      if (typeof input.status === "string") {
+        const allowed = new Set<string>([
+          "created",
+          "running",
+          "waiting",
+          "completed",
+          "failed",
+          "canceled",
+        ]);
+        if (!allowed.has(input.status)) {
+          return c.json({ message: "Invalid status" }, 400);
+        }
+        update.status = input.status as AgentSessionStatus;
+      }
+      if (update.status !== undefined) {
+        if (
+          ["completed", "failed", "canceled"].includes(update.status) ||
+          update.status === "running"
+        ) {
+          await stub.applyAgentSessionResult(sessionId, {
+            status: update.status,
+            result: update.result ?? null,
+            url: update.url ?? null,
+            prUrl: update.prUrl ?? null,
+            branch: update.branch ?? null,
+          });
+          await stub.updateAgentSession(sessionId, {
+            lastProgressAt: update.lastProgressAt,
+          });
+          const updated = await stub.getAgentSession(sessionId);
+          return c.json({ session: updated });
+        }
+      }
+      await stub.updateAgentSession(sessionId, update);
+      const updated = await stub.getAgentSession(sessionId);
+      return c.json({ session: updated });
     }
   );
 
