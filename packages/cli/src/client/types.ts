@@ -20763,6 +20763,7 @@ export interface paths {
                                 organizationId: string;
                                 installationId: string;
                                 repo: string;
+                                defaultAgentId: string | null;
                                 createdAt: string;
                             }[];
                         };
@@ -20812,7 +20813,50 @@ export interface paths {
         };
         options?: never;
         head?: never;
-        patch?: never;
+        /** Update github installation */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        defaultAgentId: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Installation updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            installationId: string;
+                            repo: string;
+                            defaultAgentId: string | null;
+                            createdAt: string;
+                        };
+                    };
+                };
+                /** @description Installation not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         trace?: never;
     };
     "/workspaces/{organizationId}/issues/{issueId}/history": {

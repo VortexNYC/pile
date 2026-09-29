@@ -303,6 +303,7 @@ export const githubInstallations = sqliteTable(
       .references(() => organization.id),
     installationId: text("installation_id" as string).notNull(),
     repo: text("repo" as string).notNull(),
+    defaultAgentId: text("default_agent_id" as string),
     createdAt: text("created_at" as string)
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),

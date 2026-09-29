@@ -275,7 +275,9 @@ describe("agent providers", () => {
       }),
     });
 
-    const events = await stub.listAgentSessionEvents(session.id, 100);
+    const events = await stub.listAgentSessionEvents(session.id, {
+      limit: 100,
+    });
     const summary = events.find((e) => e.type === "session.summary");
     expect(summary).toBeDefined();
     const payload = JSON.parse(summary?.payload as string) as Record<
@@ -304,7 +306,9 @@ describe("agent providers", () => {
       status: "failed",
       result: "plain failure text",
     });
-    const events2 = await stub.listAgentSessionEvents(session2.id, 100);
+    const events2 = await stub.listAgentSessionEvents(session2.id, {
+      limit: 100,
+    });
     const summary2 = events2.find((e) => e.type === "session.summary");
     expect(summary2).toBeDefined();
     const payload2 = JSON.parse(summary2?.payload as string) as Record<

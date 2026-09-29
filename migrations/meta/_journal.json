@@ -694,6 +694,13 @@
       "when": 1790365689499,
       "tag": "0099_nifty_cyclops",
       "breakpoints": true
+    },
+    {
+      "idx": 100,
+      "version": "6",
+      "when": 1790699244125,
+      "tag": "0100_installation_default_agent",
+      "breakpoints": true
     }
   ]
 }

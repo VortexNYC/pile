@@ -8323,6 +8323,27 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "github installations update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/github/installations/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "defaultAgentId",
+        flag: "default-agent-id",
+      },
+    ],
+  },
   "github installations delete": {
     method: "DELETE",
     path: "/workspaces/{organizationId}/github/installations/{id}",

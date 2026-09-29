@@ -7,7 +7,11 @@ import { agentLogToken } from "../agents/credentials.js";
 import { MockAgentProvider } from "../agents/harness.js";
 import { registerAgentProvider } from "../agents/index.js";
 import { createD1 } from "../global/db.js";
-import { organization, user as userTable } from "../global/schema.js";
+import {
+  githubInstallations,
+  organization,
+  user as userTable,
+} from "../global/schema.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
@@ -184,6 +188,76 @@ describe("agent sessions API", () => {
     expect(dispatchRes.status).toBe(201);
     const session = await dispatchRes.json<{ status: string }>();
     expect(session.status).toBe("created");
+  });
+
+  it("falls back to the repo's default agent when none is given", async () => {
+    const db = createD1(env.D1);
+    const agentId = `mock-repo-${crypto.randomUUID().slice(0, 8)}`;
+    registerAgentProvider(agentId, () => new MockAgentProvider(agentId));
+    const repo = "VortexNYC/other-repo";
+    await db.insert(githubInstallations).values({
+      id: crypto.randomUUID(),
+      organizationId,
+      installationId: "inst-1",
+      repo,
+      defaultAgentId: agentId,
+    });
+
+    const issueRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ title: "Repo default", repo }),
+      }),
+      env
+    );
+    const issue = await issueRes.json<{ id: string }>();
+
+    const dispatchRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${issue.id}/dispatch`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({}),
+      }),
+      env
+    );
+    expect(dispatchRes.status).toBe(201);
+    const session = await dispatchRes.json<{ agentId: string }>();
+    expect(session.agentId).toBe(agentId);
+  });
+
+  it("sets a repo's default agent via installation PATCH", async () => {
+    const db = createD1(env.D1);
+    const instId = crypto.randomUUID();
+    const repo = "VortexNYC/patch-repo";
+    await db.insert(githubInstallations).values({
+      id: instId,
+      organizationId,
+      installationId: "inst-2",
+      repo,
+    });
+
+    const patchRes = await app.fetch(
+      request(`/workspaces/${organizationId}/github/installations/${instId}`, {
+        method: "PATCH",
+        token,
+        body: JSON.stringify({ defaultAgentId: "devin" }),
+      }),
+      env
+    );
+    expect(patchRes.status).toBe(200);
+    const updated = await patchRes.json<{ defaultAgentId: string }>();
+    expect(updated.defaultAgentId).toBe("devin");
+
+    const badRes = await app.fetch(
+      request(`/workspaces/${organizationId}/github/installations/${instId}`, {
+        method: "PATCH",
+        token,
+        body: JSON.stringify({ defaultAgentId: "not-a-provider" }),
+      }),
+      env
+    );
+    expect(badRes.status).toBe(400);
   });
 
   it("dispatches via the provider alias and rejects unknown body keys", async () => {

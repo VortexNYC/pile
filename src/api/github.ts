@@ -1,6 +1,8 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
+import { eq } from "drizzle-orm";
 
+import { getAgentProvider } from "../agents/index.js";
 import { createD1 } from "../global/db.js";
 import { getInstallationToken } from "../global/github-auth.js";
 import {
@@ -13,6 +15,7 @@ import {
   createGithubUserMapping,
   listGithubUsers,
 } from "../global/github-users.js";
+import { githubInstallations } from "../global/schema.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
@@ -42,6 +45,7 @@ const githubInstallationSchema = z.object({
   organizationId: z.string(),
   installationId: z.string(),
   repo: z.string(),
+  defaultAgentId: z.string().nullable(),
   createdAt: z.string(),
 });
 
@@ -151,6 +155,34 @@ const githubInstallationDeleteRoute = createRoute({
   },
 });
 
+const githubInstallationUpdateRoute = createRoute({
+  method: "patch",
+  path: "/workspaces/{organizationId}/github/installations/{id}",
+  tags: ["github"],
+  middleware: [rls("admin", "admin")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            defaultAgentId: z.string().nullable(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Installation updated",
+      content: {
+        "application/json": { schema: githubInstallationSchema },
+      },
+    },
+    404: { description: "Installation not found" },
+  },
+});
+
 export function registerGithubRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(githubUserRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
@@ -242,6 +274,41 @@ export function registerGithubRoutes(app: OpenAPIHono<AppContext>) {
     const db = createD1(c.env.D1);
     const installations = await listGithubInstallations(db, organizationId);
     return c.json({ installations });
+  });
+
+  app.openapi(githubInstallationUpdateRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const { defaultAgentId } = c.req.valid("json");
+    const db = createD1(c.env.D1);
+    const existing = await listGithubInstallations(db, organizationId);
+    const match = existing.find((row) => row.id === id);
+    if (!match) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Installation not found",
+      });
+    }
+    if (defaultAgentId) {
+      try {
+        getAgentProvider(defaultAgentId, c.env);
+      } catch {
+        throw new VortexError({
+          code: "BAD_REQUEST",
+          status: 400,
+          message: `Unknown agent provider: ${defaultAgentId}`,
+        });
+      }
+    }
+    await db
+      .update(githubInstallations)
+      .set({ defaultAgentId })
+      .where(eq(githubInstallations.id, id));
+    const rows = await listGithubInstallations(db, organizationId);
+    return c.json(
+      rows.find((row) => row.id === id),
+      200
+    );
   });
 
   app.openapi(githubInstallationDeleteRoute, async (c) => {

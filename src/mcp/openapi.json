@@ -42559,6 +42559,10 @@
                           "repo": {
                             "type": "string"
                           },
+                          "defaultAgentId": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "createdAt": {
                             "type": "string"
                           }
@@ -42568,6 +42572,7 @@
                           "organizationId",
                           "installationId",
                           "repo",
+                          "defaultAgentId",
                           "createdAt"
                         ]
                       }
@@ -42585,6 +42590,92 @@
       }
     },
     "/workspaces/{organizationId}/github/installations/{id}": {
+      "patch": {
+        "tags": [
+          "github"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "defaultAgentId": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "defaultAgentId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Installation updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "installationId": {
+                      "type": "string"
+                    },
+                    "repo": {
+                      "type": "string"
+                    },
+                    "defaultAgentId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "installationId",
+                    "repo",
+                    "defaultAgentId",
+                    "createdAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Installation not found"
+          }
+        },
+        "summary": "Update github installation"
+      },
       "delete": {
         "tags": [
           "github"

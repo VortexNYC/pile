@@ -12,7 +12,7 @@ import {
   createRepoBranch,
   suggestBranchName,
 } from "../global/repo-branches.js";
-import { repoBranches } from "../global/schema.js";
+import { githubInstallations, repoBranches } from "../global/schema.js";
 import {
   canAccessTeam,
   getDefaultTeam,
@@ -1397,7 +1397,23 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       branch: branch ?? issue.branch,
     };
 
-    const resolvedAgentId = agentId ?? provider ?? "devin";
+    // Explicit agentId wins; otherwise a repo's configured default agent
+    // (github installation row) beats the global "devin" fallback.
+    const repoDefault = target.repo
+      ? (
+          await db
+            .select({ defaultAgentId: githubInstallations.defaultAgentId })
+            .from(githubInstallations)
+            .where(
+              and(
+                eq(githubInstallations.organizationId, organizationId),
+                eq(githubInstallations.repo, target.repo)
+              )
+            )
+            .get()
+        )?.defaultAgentId
+      : undefined;
+    const resolvedAgentId = agentId ?? provider ?? repoDefault ?? "devin";
     const providerConfig = await loadProviderConfig(
       c.env,
       stub,

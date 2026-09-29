@@ -6158,6 +6158,39 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "patchWorkspacesOrganizationIdGithubInstallationsId",
+    "description": "Update github installation (PATCH /workspaces/{organizationId}/github/installations/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: defaultAgentId* (* = required).",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/github/installations/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "defaultAgentId": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          "required": [
+            "defaultAgentId"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "patchWorkspacesOrganizationIdInitiativesId",
     "description": "Update initiative (PATCH /workspaces/{organizationId}/initiatives/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: roadmapId, name, description, status, startDate, targetDate.",
     "method": "PATCH",

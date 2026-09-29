@@ -1,0 +1,1 @@
+ALTER TABLE `github_installations` ADD `default_agent_id` text;
