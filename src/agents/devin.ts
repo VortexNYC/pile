@@ -300,7 +300,9 @@ export class DevinAgentProvider implements AgentProvider {
     if (best) return best.message;
     console.error("devin latestElicitation found no devin message", {
       sessionId: providerSessionId,
-      types: messages.map((m) => m.type).slice(-10),
+      items: messages
+        .slice(-3)
+        .map((m) => (typeof m === "object" && m !== null ? Object.keys(m) : m)),
     });
     return null;
   }
