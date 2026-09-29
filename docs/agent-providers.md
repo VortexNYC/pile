@@ -188,6 +188,61 @@ cancel`, Devin `DELETE /sessions/{id}`), then the local session is marked
 and, when a new `prUrl` appears, records it as a session **artifact** (same
 path as `POST …/artifacts`).
 
+## Lane events
+
+Every lane (agent session) has an append-only event stream in the workspace
+DO. `GET /workspaces/{org}/agent/sessions/{id}/stream` serves it as raw SSE
+(`id:` = event id, `event:` = type, `data:` =
+`{id,type,message,payload,createdAt}`). With no `Last-Event-ID` it tails from
+the newest event; `Last-Event-ID: 0` replays the whole run. The stream closes
+once the session is terminal. Session-event writers: `applyAgentSessionResult`
+/ `addAgentActivity` / `createAgentSession` in
+`src/workspace/durable-object.ts`, PR sync + nudges in `src/agents/sweep.ts`.
+
+Lifecycle, in order: `created` (a queued lane starts `waiting` and is
+promoted to `created`) → `running` ⇄ `waiting` → `completed` | `failed` |
+`canceled`. Each field change emits
+`session.{field}`; the first transition into a terminal status emits
+`session.terminal` then `session.summary`, and a `child.terminal` on the
+parent lane if there is one. PR events keep landing after terminal, because
+`syncOpenPrSessions` polls GitHub for every session with an open PR.
+
+| type                                   | fires when                                                                                                                                                                   | payload                                                                     |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `activity`                             | Any activity is appended (`thought`, `response`, `error`, `elicitation`, …).                                                                                                 | `{activity}` (the full activity row)                                        |
+| `session.status`                       | Session status changes.                                                                                                                                                      | `{field, old, new}`                                                         |
+| `session.result`                       | Result text changes.                                                                                                                                                         | `{field, old, new}`                                                         |
+| `session.prUrl`                        | PR URL is first set or changes.                                                                                                                                              | `{field, old, new}`                                                         |
+| `session.prState`                      | Session PR state changes (runner report or PR sync).                                                                                                                         | `{field, old, new}`                                                         |
+| `session.branch`                       | Branch changes.                                                                                                                                                              | `{field, old, new}`                                                         |
+| `session.terminal`                     | First transition from non-terminal to `completed`/`failed`/`canceled`.                                                                                                       | `{status}`                                                                  |
+| `session.summary`                      | Same transition, right after `session.terminal`. One digest per run (see below).                                                                                             | `{status, durationMs, prUrl, branch, agentId, digest?}`                     |
+| `session.needs_input`                  | An `elicitation` activity lands, meaning the lane is asking a human. Also notifies the human assignee (or the dispatcher) with `lane_needs_input`.                           | `{issueId}`                                                                 |
+| `pr.ci_failed`                         | PR sync sees check runs go to `failing` (edge-triggered against the issue's previous `prCheckState`). Also nudges the lane.                                                  | `{prUrl, headSha, checkState, failingChecks[]}`                             |
+| `pr.conflict`                          | PR is open and GitHub reports `mergeable: false`. Deduped per `headSha`. Also nudges the lane.                                                                               | `{prUrl, headSha}`                                                          |
+| `pr.review_requested`                  | PR is open and has requested reviewers. Deduped per `headSha`.                                                                                                               | `{prUrl, headSha, reviewers}` (count)                                       |
+| `pr.merged` / `pr.closed` / `pr.draft` | PR sync sees the PR state change to a non-`open` value.                                                                                                                      | `{prUrl, prState, headSha}`                                                 |
+| `prompt.followup`                      | A follow-up prompt was delivered to the live lane: `POST …/prompt`, an issue comment, a PR review, or a CI/conflict nudge.                                                   | `{prompt}` (route) · `{commentId}` · `{issueId}` · `{issueId, prUrl}`       |
+| `prompt.followup_failed`               | The provider rejected a PR-review or CI/conflict follow-up.                                                                                                                  | `{issueId}` or `{issueId, prUrl}`                                           |
+| `prompt.followup_skipped`              | A follow-up was throttled because a nudge already went out inside the provider's throttle window.                                                                            | `{commentId}` · `{issueId}` · `{issueId, prUrl}`                            |
+| `child.terminal`                       | A child lane (`parentSessionId` set) reaches terminal. Written on the **parent's** stream.                                                                                   | `{childSessionId, childIssueId, status, prUrl, branch, result}` (≤2000 chr) |
+| `agent_session.created`                | `createAgentSession` ran for an issue. This is a realtime/webhook event (`emit`), **not** a session-stream row. Siblings: `agent_session.updated/completed/failed/canceled`. | `{session, issue}`                                                          |
+
+Other rows that also land on the stream: `session.url` /
+`session.providerSessionId` (same `{field, old, new}` shape), `issue.prUrl` /
+`issue.prState` / `issue.branch` / `issue.status` (issue writeback),
+`lane.queued` / `lane.dedupe` (pre-dispatch dedupe), and `log` (runner log
+lines, message only).
+
+`session.summary`: the `digest` key appears only when the provider's `result`
+is JSON with a `digest` object, e.g.
+`{durationSec, filesChanged, commits}`. Plain-text results just omit it.
+`durationMs` is measured from session `createdAt`. The event fires exactly
+once per run, on the first terminal transition. Later terminal→terminal
+updates (a late poll, a webhook replay, cancel after completion) don't emit it
+again. A follow-up prompt that moves the session back to `running` starts a
+new run, and that run's own terminal transition emits a new summary.
+
 ## Timeouts
 
 A cron sweep cancels running sessions that exceed the workspace provider
