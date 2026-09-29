@@ -96,14 +96,22 @@ describe("agent providers", () => {
     it("latestElicitation returns the last Devin-authored message", async () => {
       const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
         jsonResponse({
-          messages: [
-            { type: "user_message", message: "do the thing" },
-            { type: "devin_message", message: "working on it" },
+          items: [
             {
               type: "devin_message",
               message: "Which environment should I target — staging or prod?",
+              timestamp: "2026-09-29T23:20:00Z",
+            },
+            { type: "user_message", message: "do the thing" },
+            {
+              type: "devin_message",
+              message: "working on it",
+              timestamp: "2026-09-29T23:00:00Z",
             },
           ],
+          end_cursor: "abc",
+          has_next_page: false,
+          total: 3,
         })
       );
 

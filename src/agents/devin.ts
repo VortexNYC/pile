@@ -44,6 +44,7 @@ const devinMessageSchema = z.object({
 });
 
 const devinMessagesSchema = z.union([
+  z.object({ items: z.array(devinMessageSchema) }),
   z.object({ messages: z.array(devinMessageSchema) }),
   z.array(devinMessageSchema),
 ]);
@@ -270,17 +271,33 @@ export class DevinAgentProvider implements AgentProvider {
     }
     const messages = Array.isArray(parsed.data)
       ? parsed.data
-      : parsed.data.messages;
-    // Last Devin-authored message is whatever it's asking the user.
-    for (let i = messages.length - 1; i >= 0; i--) {
+      : "items" in parsed.data
+        ? parsed.data.items
+        : parsed.data.messages;
+    // Last Devin-authored message is whatever it's asking the user. The
+    // paginated envelope does not guarantee ordering, so prefer the newest
+    // timestamp and fall back to array position.
+    let best: { message: string; ts: number } | null = null;
+    for (let i = 0; i < messages.length; i++) {
       const m = messages[i];
       if (
-        m.message &&
-        (m.type === "devin_message" || m.type?.includes("devin"))
+        !m.message ||
+        !(m.type === "devin_message" || m.type?.includes("devin"))
       ) {
-        return m.message;
+        continue;
+      }
+      const ts =
+        typeof m.timestamp === "number"
+          ? m.timestamp < 1e12
+            ? m.timestamp * 1000
+            : m.timestamp
+          : Date.parse(String(m.timestamp ?? ""));
+      const score = Number.isFinite(ts) ? ts : i;
+      if (!best || score >= best.ts) {
+        best = { message: m.message, ts: score };
       }
     }
+    if (best) return best.message;
     console.error("devin latestElicitation found no devin message", {
       sessionId: providerSessionId,
       types: messages.map((m) => m.type).slice(-10),
@@ -306,6 +323,8 @@ export class DevinAgentProvider implements AgentProvider {
     );
     if (!res.ok && res.status !== 404) {
       const text = await res.text();
+      // "already exited" is success for a cancel — the lane is gone either way.
+      if (res.status === 400 && text.includes("already exited")) return;
       throw new VortexError({
         code: "AGENT_ERROR",
         status: 502,
