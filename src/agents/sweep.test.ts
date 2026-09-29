@@ -502,6 +502,32 @@ describe("syncOpenPrSessions", () => {
     const issueAfter = await stub.getIssue(issue.id);
     expect(issueAfter?.prState).toBe("merged");
     expect(issueAfter?.prCheckState).toBe("passing");
+    expect(issueAfter?.status).toBe("done");
+  });
+
+  it("does not reopen a terminal issue when its PR merges", async () => {
+    const issue = await stub.createIssue({ title: "Canceled with PR" });
+    await stub.updateIssue(issue.id, { status: "canceled" });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "mock-prs",
+      provider: "mock-prs",
+      actorId: userId,
+      actorType: "user",
+      status: "completed",
+      prUrl: "https://github.com/vortexnyc/pile/pull/210",
+      prState: "open",
+    });
+
+    await syncOpenPrSessions(env, stub, organizationId, {
+      tokenForRepo: async () => "gh-test-token",
+      fetch: ghFetchStub as typeof fetch,
+    });
+
+    expect((await stub.getAgentSession(session.id))?.prState).toBe("merged");
+    const issueAfter = await stub.getIssue(issue.id);
+    expect(issueAfter?.prState).toBe("merged");
+    expect(issueAfter?.status).toBe("canceled");
   });
 
   it("leaves sessions alone when the repo has no installation", async () => {

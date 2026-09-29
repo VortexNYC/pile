@@ -4172,7 +4172,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       prCheckState,
       updatedAt: new Date().toISOString(),
     };
-    if (status !== undefined) {
+    if (status !== undefined && !isTerminalStatus(old.status)) {
       set.status = status;
     }
 
