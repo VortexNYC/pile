@@ -213,6 +213,27 @@ export class DevinAgentProvider implements AgentProvider {
     }
   }
 
+  async sendPrompt(
+    providerSessionId: string,
+    prompt: string
+  ): Promise<boolean> {
+    const orgId = this.env.DEVIN_ORG_ID;
+    const token = this.env.DEVIN_TOKEN;
+    if (!orgId || !token) return false;
+    const res = await fetch(
+      `https://api.devin.ai/v3/organizations/${orgId}/sessions/${providerSessionId}/message`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ message: prompt }),
+      }
+    );
+    return res.ok;
+  }
+
   async getState(
     providerSessionId: string,
     _trackerSessionId: string
