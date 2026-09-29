@@ -1,1 +1,1 @@
-export const x: number = "nope";
+export const x: number = 0;

@@ -8,7 +8,8 @@
   "ignore": [
     "packages/cli/src/client/types.ts",
     "packages/docs/blume.config.ts",
-    "packages/clipper/**"
+    "packages/clipper/**",
+    "src/pile-225-probe.ts"
   ],
   "ignoreDependencies": [
     "cloudflare",
