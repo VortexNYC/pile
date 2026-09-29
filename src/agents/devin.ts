@@ -13,6 +13,7 @@ import type {
   AgentProviderHealth,
   AgentProviderSession,
   AgentProviderState,
+  DispatchComment,
 } from "./provider.js";
 import { probeUrl } from "./provider.js";
 
@@ -45,7 +46,12 @@ const STATUS_MAP: Record<string, AgentSessionStatus> = {
   created: "created",
 };
 
-function buildPrompt(issue: Issue, gitIdentity?: GitIdentity | null): string {
+function buildPrompt(
+  issue: Issue,
+  gitIdentity?: GitIdentity | null,
+  comments?: DispatchComment[],
+  instructions?: string
+): string {
   const repo = issue.repo ?? "this repository";
   const branch = issue.branch ?? `issue-${issue.id}`;
   const identityLines = gitIdentity
@@ -74,11 +80,25 @@ function buildPrompt(issue: Issue, gitIdentity?: GitIdentity | null): string {
     ...repoLines,
     `Issue tracker: https://github.com/VortexNYC/pile`,
     `Issue: ${issue.identifier ?? issue.id}`,
+    `Priority: ${issue.priority ?? "none"}`,
     "",
     issue.description ?? "",
+    ...(comments && comments.length > 0
+      ? [
+          "",
+          "## Follow-up comments",
+          "",
+          ...comments.map(
+            (c) =>
+              `- ${c.author}${c.createdAt ? ` (${c.createdAt})` : ""}: ${c.body}`
+          ),
+        ]
+      : []),
     "",
     ...identityLines,
+    ...(instructions ? ["", "## Dispatch instructions", "", instructions] : []),
     "",
+    "Verify proportionate to the diff: run the project's lint/typecheck and any tests covering code you change (the repository's AGENTS.md lists its proof commands); docs/config-only diffs can skip tests. Note honestly in the PR body what you could not run.",
     "Do not attempt to update Pile yourself — an external system will poll your session and write the PR URL and final status back automatically.",
   ].join("\n");
 }
@@ -113,7 +133,12 @@ export class DevinAgentProvider implements AgentProvider {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          prompt: buildPrompt(issue, sessionContext?.gitIdentity),
+          prompt: buildPrompt(
+            issue,
+            sessionContext?.gitIdentity,
+            sessionContext?.comments,
+            sessionContext?.instructions
+          ),
           repos: repo ? [`https://github.com/${repo}`] : undefined,
           bypass_approval: true,
           model,
