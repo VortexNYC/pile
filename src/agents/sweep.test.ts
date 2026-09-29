@@ -240,6 +240,37 @@ async function ghFetchStub(input: RequestInfo | URL) {
   return new Response("not found", { status: 404 });
 }
 
+async function ghFetchFailing(input: RequestInfo | URL) {
+  const url = String(input);
+  if (url.endsWith("/pulls/777")) {
+    return new Response(
+      JSON.stringify({
+        state: "open",
+        merged_at: null,
+        head: { sha: "def456" },
+      }),
+      { status: 200 }
+    );
+  }
+  if (url.includes("/commits/def456/check-runs")) {
+    return new Response(
+      JSON.stringify({
+        check_runs: [
+          {
+            name: "typecheck",
+            status: "completed",
+            conclusion: "failure",
+            details_url: "https://github.com/x/runs/1",
+          },
+          { name: "lint", status: "completed", conclusion: "success" },
+        ],
+      }),
+      { status: 200 }
+    );
+  }
+  return new Response("not found", { status: 404 });
+}
+
 describe("sweepAgentSessions", () => {
   const userId = "user-sweep-loop";
   let organizationId = "";
@@ -550,37 +581,6 @@ describe("syncOpenPrSessions", () => {
       prUrl: "https://github.com/vortexnyc/pile/pull/777",
       prState: "open",
     });
-
-    const ghFetchFailing = async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.endsWith("/pulls/777")) {
-        return new Response(
-          JSON.stringify({
-            state: "open",
-            merged_at: null,
-            head: { sha: "def456" },
-          }),
-          { status: 200 }
-        );
-      }
-      if (url.includes("/commits/def456/check-runs")) {
-        return new Response(
-          JSON.stringify({
-            check_runs: [
-              {
-                name: "typecheck",
-                status: "completed",
-                conclusion: "failure",
-                details_url: "https://github.com/x/runs/1",
-              },
-              { name: "lint", status: "completed", conclusion: "success" },
-            ],
-          }),
-          { status: 200 }
-        );
-      }
-      return new Response("not found", { status: 404 });
-    };
 
     await syncOpenPrSessions(env, stub, organizationId, {
       tokenForRepo: async () => "gh-test-token",
