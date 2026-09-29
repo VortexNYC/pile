@@ -59,11 +59,19 @@ function buildPrompt(issue: Issue, gitIdentity?: GitIdentity | null): string {
           : []),
       ]
     : [];
+  const repoLines = issue.repo
+    ? [
+        `Repository: https://github.com/${repo}`,
+        `Suggested branch name: ${branch}`,
+        "Do all work in the Repository above. Do not open pull requests in any other repository. Open the PR against the main branch of that repository.",
+      ]
+    : [
+        "This task has no code repository — produce the deliverable directly (report, document, analysis) and summarize it in your final answer. Do not open pull requests.",
+      ];
   return [
     `# ${issue.title}`,
     "",
-    `Repository: https://github.com/${repo}`,
-    `Suggested branch name: ${branch}`,
+    ...repoLines,
     `Issue tracker: https://github.com/VortexNYC/pile`,
     `Issue: ${issue.identifier ?? issue.id}`,
     "",
@@ -71,7 +79,6 @@ function buildPrompt(issue: Issue, gitIdentity?: GitIdentity | null): string {
     "",
     ...identityLines,
     "",
-    "Do all work in the Repository above. Do not open pull requests in any other repository. Open the PR against the main branch of that repository.",
     "Do not attempt to update Pile yourself — an external system will poll your session and write the PR URL and final status back automatically.",
   ].join("\n");
 }

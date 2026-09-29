@@ -113,11 +113,18 @@ function buildPrompt(
           : []),
       ]
     : [];
+  const repoLines = issue.repo
+    ? [
+        `Repository: https://github.com/${repo}`,
+        `Branch: ${branch}`,
+      ]
+    : [
+        "This task has no code repository — your workdir is empty. Produce the deliverable as files in the workdir and summarize it in your final answer.",
+      ];
   return [
     `# ${issue.title}`,
     "",
-    `Repository: https://github.com/${repo}`,
-    `Branch: ${branch}`,
+    ...repoLines,
     `Issue tracker: https://github.com/VortexNYC/pile`,
     `Issue: ${issue.identifier ?? issue.id}`,
     "",
@@ -488,11 +495,22 @@ const PYTHON_RUNNER = [
   "        except OSError:",
   "            pass",
   "        ensure_postgres()",
-  "        resume_repo()",
+  "        if REPO:",
+  "            resume_repo()",
+  "        else:",
+  "            os.makedirs(REPO_DIR, exist_ok=True)",
   "        output = run_devin(devin_bin)",
   "        output = drain_followups(devin_bin) or output",
-  "        pushed = commit_and_push()",
+  "        pushed = commit_and_push() if REPO else False",
   "        return finalize(output, pushed)",
+  "    if not REPO:",
+  "        # Repo-less lane — research/docs/design work. The agent runs in an",
+  "        # empty workdir; its result text is the deliverable, no git surface.",
+  "        os.makedirs(REPO_DIR, exist_ok=True)",
+  "        ensure_postgres()",
+  "        output = run_devin(devin_bin)",
+  "        output = drain_followups(devin_bin) or output",
+  "        return finalize(output, False)",
   "    create_branch()",
   "    clone_repo()",
   "    run_setup_hook()",
@@ -516,7 +534,7 @@ function buildSandboxEnv(
   model: string,
   credentialsB64: string,
   githubToken: string,
-  gitIdentity: GitIdentity,
+  gitIdentity: GitIdentity | null,
   comments?: DispatchComment[],
   instructions?: string,
   extraEnv?: Record<string, string>,
@@ -529,8 +547,10 @@ function buildSandboxEnv(
   return {
     DEVIN_CREDENTIALS_B64: credentialsB64,
     GITHUB_TOKEN: githubToken,
-    GIT_AUTHOR_NAME: sanitizeEnv(gitIdentity.name),
-    GIT_AUTHOR_EMAIL: sanitizeEnv(gitIdentity.email),
+    GIT_AUTHOR_NAME: sanitizeEnv(gitIdentity?.name ?? "Devin"),
+    GIT_AUTHOR_EMAIL: sanitizeEnv(
+      gitIdentity?.email ?? "devin@pile.nyc"
+    ),
     REPO: repo,
     BRANCH: branch,
     ISSUE_TITLE: sanitizeEnv(issue.title),
@@ -639,21 +659,16 @@ export class DevinCliAgentProvider implements AgentProvider {
     issue: Issue,
     model: string,
     sessionId: string,
-    gitIdentity: GitIdentity,
+    gitIdentity: GitIdentity | null,
     comments?: DispatchComment[],
     instructions?: string,
     extraEnv?: Record<string, string>
   ) {
     const credentialsB64 = this.requireAuth();
     const compute = this.requireCompute();
-    if (!issue.repo) {
-      throw new VortexError({
-        code: "BAD_REQUEST",
-        status: 400,
-        message: "Issue must have a repository",
-      });
-    }
-    const githubToken = await this.githubToken(issue.repo);
+    const githubToken = issue.repo
+      ? await this.githubToken(issue.repo)
+      : "";
     const name = sandboxName(sessionId);
 
     const spanId = await this.openSpan(
@@ -902,7 +917,6 @@ export class DevinCliAgentProvider implements AgentProvider {
       RESULT_PATH
     );
     if (!sandbox || sandbox.state !== "started") return false;
-    if (!issue.repo) return false;
     if ((await compute.runnerBusy?.(sandbox, trackerSessionId)) === true) {
       // Mid-run injection: the runner's watcher thread feeds files dropped in
       // /tmp/followups into the live devin process's stdin (and drains any
@@ -923,7 +937,9 @@ export class DevinCliAgentProvider implements AgentProvider {
     }
 
     const credentialsB64 = this.requireAuth();
-    const githubToken = await this.githubToken(issue.repo);
+    const githubToken = issue.repo
+      ? await this.githubToken(issue.repo)
+      : "";
     const followupId = `${trackerSessionId}-fu-${Date.now().toString(36)}`;
 
     const followupEnv = buildSandboxEnv(
@@ -934,7 +950,7 @@ export class DevinCliAgentProvider implements AgentProvider {
       gitIdentity ?? {
         id: "followup",
         organizationId: "",
-        repo: issue.repo,
+        repo: issue.repo ?? "",
         name: "Devin",
         email: "devin@pile.nyc",
         githubUsername: null,

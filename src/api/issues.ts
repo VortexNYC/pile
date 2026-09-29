@@ -1396,13 +1396,6 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       repo: repo ?? issue.repo,
       branch: branch ?? issue.branch,
     };
-    if (!target.repo) {
-      throw new VortexError({
-        code: "BAD_REQUEST",
-        status: 400,
-        message: "Issue must have a repository to dispatch an agent",
-      });
-    }
 
     const resolvedAgentId = agentId ?? provider ?? "devin";
     const providerConfig = await loadProviderConfig(
@@ -1497,13 +1490,6 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         isAgent = false;
       }
       if (isAgent) {
-        if (!issue.repo) {
-          throw new VortexError({
-            code: "BAD_REQUEST",
-            status: 400,
-            message: "Issue must have a repository to dispatch an agent",
-          });
-        }
         if (!identity.permissions.includes("agent:write")) {
           throw new VortexError({
             code: "FORBIDDEN",

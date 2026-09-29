@@ -280,18 +280,22 @@ describe("support-escalation API", () => {
     const db = createD1(env.D1);
     const agentId = `mock-esc-${crypto.randomUUID().slice(0, 8)}`;
     registerAgentProvider(agentId, () => new MockAgentProvider(agentId, {}));
-    await fetch(`/workspaces/${organizationId}/support/escalation-rules`, {
-      method: "POST",
-      body: JSON.stringify({
-        name: "dispatch lane on escalate",
-        conditions: { keywords: ["crash"], channels: ["api"] },
-        action: {
-          type: "create_issue",
-          agentId,
-          repo: "VortexNYC/pile",
-        },
-      }),
-    }).then((r) => expect(r.status).toBe(201));
+    const ruleRes = await fetch(
+      `/workspaces/${organizationId}/support/escalation-rules`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "dispatch lane on escalate",
+          conditions: { keywords: ["crash"], channels: ["api"] },
+          action: {
+            type: "create_issue",
+            agentId,
+            repo: "VortexNYC/pile",
+          },
+        }),
+      }
+    );
+    expect(ruleRes.status).toBe(201);
 
     const customerId = await createCustomer("lane@example.com");
     const ticketRes = await fetch(

@@ -160,6 +160,32 @@ describe("agent sessions API", () => {
     expect(missingRes.status).toBe(404);
   });
 
+  it("dispatches an agent on a repo-less issue (research/docs/design work)", async () => {
+    const issueRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ title: "Write onboarding doc" }),
+      }),
+      env
+    );
+    expect(issueRes.status).toBe(201);
+    const issue = await issueRes.json<{ id: string; repo: unknown }>();
+    expect(issue.repo).toBeNull();
+
+    const dispatchRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${issue.id}/dispatch`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ agentId: "mock" }),
+      }),
+      env
+    );
+    expect(dispatchRes.status).toBe(201);
+    const session = await dispatchRes.json<{ status: string }>();
+    expect(session.status).toBe("created");
+  });
+
   it("dispatches via the provider alias and rejects unknown body keys", async () => {
     const issueRes = await app.fetch(
       request(`/workspaces/${organizationId}/issues`, {
@@ -227,16 +253,6 @@ describe("agent sessions API", () => {
     );
     expect(issueRes.status).toBe(201);
     const issue = await issueRes.json<{ id: string }>();
-
-    const missingRepo = await app.fetch(
-      request(`/workspaces/${organizationId}/issues/${issue.id}/dispatch`, {
-        method: "POST",
-        token,
-        body: JSON.stringify({ agentId: "mock-override" }),
-      }),
-      env
-    );
-    expect(missingRepo.status).toBe(400);
 
     const dispatchRes = await app.fetch(
       request(`/workspaces/${organizationId}/issues/${issue.id}/dispatch`, {

@@ -408,7 +408,7 @@ async function createIssueFromTicket(
     status: action.status ?? "triage",
     priority: action.priority ?? ticket.priority,
     teamId: action.teamId,
-    repo: action.repo ?? null,
+    repo: action.repo ?? undefined,
     labelIds:
       action.labelIds && action.labelIds.length > 0
         ? action.labelIds.join(",")
