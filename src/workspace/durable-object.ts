@@ -1918,6 +1918,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     });
     const issue = await this.getIssue(session.issueId);
     if (issue) {
+      // PILE-229: the lane owns the workload while it runs. `lane:{id}` in
+      // assigneeId distinguishes agent ownership from a human assignee and is
+      // released on terminal transition in applyAgentSessionResult.
+      await this.updateIssue(issue.id, {
+        assigneeId: `lane:${session.id}`,
+      }).catch(() => null);
       await this.emit({
         type: "agent_session.created",
         organizationId: this.organizationId,
@@ -2076,6 +2082,43 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       message: activity.message,
       payload: { activity },
     });
+    // PILE-229 handoff: an elicitation is the lane asking a human. Mark it on
+    // the event stream and notify the issue's human owner — the assignee when
+    // it's a user, else the actor who dispatched the lane.
+    if (input.type === "elicitation") {
+      try {
+        const session = await this.getAgentSession(input.sessionId);
+        const issue = session ? await this.getIssue(session.issueId) : null;
+        await data.addAgentSessionEvent(this.db, {
+          sessionId: input.sessionId,
+          type: "session.needs_input",
+          message: activity.message,
+          payload: { issueId: issue?.id ?? null },
+        });
+        const recipientId =
+          issue?.assigneeId && !issue.assigneeId.startsWith("lane:")
+            ? issue.assigneeId
+            : session?.actorType === "user"
+              ? session.actorId
+              : null;
+        if (recipientId && issue) {
+          await this.createNotification({
+            recipientId,
+            issueId: issue.id,
+            type: "lane_needs_input",
+            metadata: {
+              sessionId: input.sessionId,
+              question: activity.message,
+            },
+          });
+        }
+      } catch (err) {
+        console.error("elicitation handoff notify failed", {
+          sessionId: input.sessionId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
     return activity;
   }
 
@@ -2468,6 +2511,16 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           toValue: statusFromPr,
         });
       }
+    }
+
+    // PILE-229: release the lane's ownership marker when the run ends.
+    if (becameTerminal && issue.assigneeId === `lane:${sessionId}`) {
+      issueSet.assigneeId = null;
+      historyEntries.push({
+        field: "assignee_id",
+        fromValue: issue.assigneeId,
+        toValue: null,
+      });
     }
 
     let updatedIssue: Issue | undefined;

@@ -707,7 +707,8 @@ export type NotificationType =
   | "comment_created"
   | "document_updated"
   | "document_commented"
-  | "mention";
+  | "mention"
+  | "lane_needs_input";
 
 export type RecipientType = "user" | "agent";
 

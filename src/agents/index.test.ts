@@ -319,6 +319,60 @@ describe("agent providers", () => {
     expect(payload2.digest).toBeUndefined();
   });
 
+  it("lane owns the issue while running, hands off via elicitation, releases on terminal", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)
+    );
+    await stub.setOrganizationId(actor.organizationId);
+    const issue = await stub.createIssue({ title: "Handoff test" });
+
+    const provider = new MockAgentProvider("mock", {
+      dispatch: () => ({
+        id: "handoff-1",
+        agentId: "mock",
+        status: "created",
+      }),
+    });
+    registerAgentProvider("mock-handoff", () => provider);
+
+    const session = await dispatchAgent(
+      env,
+      "mock-handoff",
+      actor.organizationId,
+      issue,
+      actor
+    );
+
+    // Lane owns the workload while it runs.
+    const owned = await stub.getIssue(issue.id);
+    expect(owned?.assigneeId).toBe(`lane:${session.id}`);
+
+    // Elicitation is the lane→human ask: needs_input event + notification
+    // to the dispatching human (no human assignee set on the issue).
+    await stub.addAgentActivity({
+      sessionId: session.id,
+      type: "elicitation",
+      message: "Which environment should I target?",
+    });
+    const events = await stub.listAgentSessionEvents(session.id, {
+      limit: 100,
+    });
+    expect(events.some((e) => e.type === "session.needs_input")).toBe(true);
+    const notifications = await stub.listNotificationsForRecipient(
+      actor.id,
+      "user",
+      {}
+    );
+    const n = notifications.find((x) => x.type === "lane_needs_input");
+    expect(n).toBeDefined();
+    expect(n?.recipientId).toBe(actor.id);
+
+    // Terminal transition releases ownership.
+    await stub.applyAgentSessionResult(session.id, { status: "completed" });
+    const released = await stub.getIssue(issue.id);
+    expect(released?.assigneeId).toBeNull();
+  });
+
   it("marks the session failed without changing the issue status", async () => {
     const stub = env.WORKSPACE_DURABLE_OBJECT.get(
       env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)
