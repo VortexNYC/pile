@@ -140,6 +140,36 @@ function createMockSpawn({
   return child;
 }
 
+function jsonResponse(body: unknown, status = 200): Promise<Response> {
+  return Promise.resolve(
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { "Content-Type": "application/json" },
+    })
+  );
+}
+
+function createDispatchFollowFetch(states: readonly unknown[]) {
+  let polls = 0;
+  return vi.fn().mockImplementation((url: URL | string, init?: RequestInit) => {
+    const pathname = new URL(typeof url === "string" ? url : url.href).pathname;
+    if (pathname.endsWith("/dispatch") && init?.method === "POST") {
+      return jsonResponse({ id: "sess-1", status: "created" }, 201);
+    }
+    if (pathname.endsWith("/agent/sessions/sess-1/state")) {
+      const state = states[Math.min(polls, states.length - 1)];
+      polls += 1;
+      return state === undefined
+        ? jsonResponse({ message: "no live state" }, 400)
+        : jsonResponse(state);
+    }
+    if (pathname.endsWith("/agent/sessions/sess-1")) {
+      return jsonResponse({ id: "sess-1", status: "running", prUrl: null });
+    }
+    return jsonResponse({ message: "unexpected" }, 404);
+  });
+}
+
 describe("CLI integration", () => {
   let home: string;
   let originalHome: string | undefined;
@@ -793,6 +823,84 @@ describe("CLI integration", () => {
     );
     process.env.PILE_EMAIL = prev;
     expect(exitCode).toBe(1);
+  });
+
+  it("dispatch --follow exits 0 once the lane opens a PR", async () => {
+    const mockFetch = createDispatchFollowFetch([
+      { session: { status: "running", prUrl: null } },
+      {
+        session: { status: "running", prUrl: "https://github.com/o/r/pull/1" },
+      },
+    ]);
+    const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    const exitCode = await runCli(
+      [
+        "issues",
+        "dispatch",
+        "--workspace",
+        "ws-1",
+        "--follow",
+        "ISS-1",
+        "--interval",
+        "1",
+      ],
+      { fetch: mockFetch }
+    );
+
+    expect(exitCode).toBe(0);
+    const [url, init] = mockFetch.mock.calls[0] as [
+      URL,
+      { method: string; body?: string },
+    ];
+    expect(url.pathname).toBe("/workspaces/ws-1/issues/ISS-1/dispatch");
+    expect(init.body).toBeUndefined();
+    expect(spy).toHaveBeenCalledWith("pr: https://github.com/o/r/pull/1");
+    spy.mockRestore();
+  });
+
+  it("dispatch --follow exits 1 when the lane fails", async () => {
+    const mockFetch = createDispatchFollowFetch([
+      { session: { status: "failed", prUrl: null } },
+    ]);
+    const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    const exitCode = await runCli(
+      ["issues", "dispatch", "ISS-1", "--workspace", "ws-1", "--follow"],
+      { fetch: mockFetch }
+    );
+
+    expect(exitCode).toBe(1);
+    spy.mockRestore();
+  });
+
+  it("dispatch --follow falls back to the session record and times out with 124", async () => {
+    const mockFetch = createDispatchFollowFetch([undefined]);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const error = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+
+    const exitCode = await runCli(
+      [
+        "issues",
+        "dispatch",
+        "ISS-1",
+        "--workspace",
+        "ws-1",
+        "--follow",
+        "--timeout",
+        "0",
+        "--interval",
+        "1",
+      ],
+      { fetch: mockFetch }
+    );
+
+    expect(exitCode).toBe(124);
+    expect(log).toHaveBeenCalledWith("status: running");
+    log.mockRestore();
+    error.mockRestore();
   });
 
   it("rejects an unknown command", async () => {

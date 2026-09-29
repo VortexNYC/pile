@@ -81,6 +81,8 @@ type ParsedArgs = {
   readonly flags: Readonly<Record<string, string | boolean>>;
 };
 
+const BOOLEAN_FLAGS = new Set(["follow", "help"]);
+
 function parseArgs(args: readonly string[]): ParsedArgs {
   const positionals: string[] = [];
   const flags: Record<string, string | boolean> = {};
@@ -99,7 +101,11 @@ function parseArgs(args: readonly string[]): ParsedArgs {
       continue;
     }
     const next = args[index + 1];
-    if (next !== undefined && !next.startsWith("--")) {
+    if (
+      next !== undefined &&
+      !next.startsWith("--") &&
+      !BOOLEAN_FLAGS.has(withoutPrefix)
+    ) {
       flags[withoutPrefix] = next;
       index += 1;
       continue;
@@ -254,6 +260,24 @@ async function commandCommand(
   flags: Readonly<Record<string, string | boolean>>,
   deps: CliDeps = {}
 ): Promise<number> {
+  const { ok, text } = await executeCommand(positionals, flags, deps);
+  printResponse(text);
+  return ok ? 0 : 1;
+}
+
+function printResponse(text: string): void {
+  try {
+    console.log(JSON.stringify(parseJson(text), null, 2));
+  } catch {
+    console.log(text);
+  }
+}
+
+async function executeCommand(
+  positionals: readonly string[],
+  flags: Readonly<Record<string, string | boolean>>,
+  deps: CliDeps = {}
+): Promise<{ readonly ok: boolean; readonly text: string }> {
   const [name, args] = findCommand(positionals);
   if (!name) {
     throw new Error(`Unknown command: ${positionals.join(" ")}`);
@@ -350,15 +374,28 @@ async function commandCommand(
     body: bodyText,
   });
 
-  const text = await response.text();
-  try {
-    const parsed = parseJson(text);
-    console.log(JSON.stringify(parsed, null, 2));
-  } catch {
-    console.log(text);
-  }
+  return { ok: response.ok, text: await response.text() };
+}
 
-  return response.ok ? 0 : 1;
+// `pile issues dispatch <id> --workspace <org> --follow` — dispatches, then
+// watches the lane until it opens a PR, reaches a terminal status, or times out.
+async function dispatchFollowCommand(
+  positionals: readonly string[],
+  flags: Readonly<Record<string, string | boolean>>,
+  deps: CliDeps = {}
+): Promise<number> {
+  const { ok, text } = await executeCommand(positionals, flags, deps);
+  printResponse(text);
+  if (!ok) return 1;
+  const parsed: unknown = parseJson(text);
+  const sessionId =
+    isJsonObject(parsed) && typeof parsed.id === "string"
+      ? parsed.id
+      : undefined;
+  if (sessionId === undefined) {
+    throw new Error("Dispatch response did not include a session id");
+  }
+  return await sessionWatchCommand(sessionId, flags, deps, { untilPr: true });
 }
 
 function getSetCookie(headers: Headers): readonly string[] {
@@ -959,6 +996,7 @@ function printUsage(): void {
     "agent context pull --workspace <org> [--dir .]",
     "agent context push --workspace <org> [--dir .]",
     "agent sessions watch <sessionId> --workspace <org>",
+    "issues dispatch <id> --workspace <org> --follow [--timeout <min>]",
   ]) {
     console.log(`  ${cmd}`);
   }
@@ -1095,11 +1133,14 @@ async function agentContextCommand(
 const TERMINAL_SESSION_STATUSES = new Set(["completed", "failed", "canceled"]);
 
 // `pile agent sessions watch <id> --workspace <org>` — tails the runner's
-// live logs and session status until the session reaches a terminal state.
+// live logs and session status until the session reaches a terminal state
+// (or, with `untilPr`, opens a PR). Exits 0 on completed/PR, 1 on
+// failed/canceled/error, 124 on timeout.
 async function sessionWatchCommand(
   sessionId: string | undefined,
   flags: Readonly<Record<string, string | boolean>>,
-  deps: CliDeps = {}
+  deps: CliDeps = {},
+  { untilPr = false }: { readonly untilPr?: boolean } = {}
 ): Promise<number> {
   if (sessionId === undefined || sessionId.length === 0) {
     throw new Error(
@@ -1128,34 +1169,64 @@ async function sessionWatchCommand(
   let lastStatus = "";
   let logOffset = 0;
   let idle = 0;
-  const maxIdle = Number(flagString(flags, "idle-minutes") ?? "70") * 60 * 1000;
+  const maxIdle =
+    Number(
+      flagString(flags, "timeout") ?? flagString(flags, "idle-minutes") ?? "70"
+    ) *
+    60 *
+    1000;
   const started = Date.now();
+  const timedOut = () => {
+    if (idle <= maxIdle && Date.now() - started <= maxIdle) return false;
+    console.error(
+      `watch: timed out waiting for ${untilPr ? "PR or " : ""}terminal status`
+    );
+    return true;
+  };
+  const sleep = () => new Promise((resolve) => setTimeout(resolve, intervalMs));
 
   for (;;) {
     const res = await doFetch(url, { headers });
     if (!res.ok) {
-      // /state 400s once the compute is destroyed — the session record itself
-      // still exists, so check it before giving up.
+      // /state 400s once the compute is destroyed (or when the provider has
+      // no live state) — the session record itself still exists, so fall
+      // back to it.
       const sessionRes = await doFetch(
         `${baseUrl}/workspaces/${workspace}/agent/sessions/${sessionId}`,
         { headers }
       );
-      if (sessionRes.ok) {
-        const record = (await sessionRes.json()) as {
-          session?: { status?: string; prUrl?: string | null };
-          status?: string;
-          prUrl?: string | null;
-        };
-        const flat = record.session ?? record;
-        const status = flat.status ?? "";
-        if (TERMINAL_SESSION_STATUSES.has(status)) {
-          console.log(`status: ${status}`);
-          if (flat.prUrl) console.log(`pr: ${flat.prUrl}`);
-          return status === "completed" ? 0 : 1;
-        }
+      if (!sessionRes.ok) {
+        console.error(`watch: GET /state returned ${res.status}`);
+        return 1;
       }
-      console.error(`watch: GET /state returned ${res.status}`);
-      return 1;
+      const record = (await sessionRes.json()) as {
+        session?: { status?: string; prUrl?: string | null };
+        status?: string;
+        prUrl?: string | null;
+      };
+      const flat = record.session ?? record;
+      const status = flat.status ?? "";
+      if (TERMINAL_SESSION_STATUSES.has(status)) {
+        console.log(`status: ${status}`);
+        if (flat.prUrl) console.log(`pr: ${flat.prUrl}`);
+        return status === "completed" ? 0 : 1;
+      }
+      if (!untilPr) {
+        console.error(`watch: GET /state returned ${res.status}`);
+        return 1;
+      }
+      if (status !== lastStatus) {
+        console.log(`status: ${status}`);
+        lastStatus = status;
+      }
+      if (flat.prUrl) {
+        console.log(`pr: ${flat.prUrl}`);
+        return 0;
+      }
+      idle += intervalMs;
+      if (timedOut()) return 124;
+      await sleep();
+      continue;
     }
     const state = (await res.json()) as {
       session?: {
@@ -1190,11 +1261,12 @@ async function sessionWatchCommand(
       if (prUrl) console.log(`pr: ${prUrl}`);
       return status === "completed" ? 0 : 1;
     }
-    if (idle > maxIdle || Date.now() - started > maxIdle) {
-      console.error("watch: timed out waiting for terminal status");
-      return 1;
+    if (untilPr && state.session?.prUrl) {
+      console.log(`pr: ${state.session.prUrl}`);
+      return 0;
     }
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    if (timedOut()) return 124;
+    await sleep();
   }
 }
 
@@ -1262,6 +1334,14 @@ export async function runCli(
       positionals[2] === "watch"
     ) {
       return await sessionWatchCommand(positionals[3], flags, deps);
+    }
+
+    if (
+      scope === "issues" &&
+      positionals[1] === "dispatch" &&
+      flags.follow === true
+    ) {
+      return await dispatchFollowCommand(positionals, flags, deps);
     }
 
     return await commandCommand(positionals, flags, deps);
