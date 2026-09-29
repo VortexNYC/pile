@@ -114,10 +114,7 @@ function buildPrompt(
       ]
     : [];
   const repoLines = issue.repo
-    ? [
-        `Repository: https://github.com/${repo}`,
-        `Branch: ${branch}`,
-      ]
+    ? [`Repository: https://github.com/${repo}`, `Branch: ${branch}`]
     : [
         "This task has no code repository — your workdir is empty. Produce the deliverable as files in the workdir and summarize it in your final answer.",
       ];
@@ -548,9 +545,7 @@ function buildSandboxEnv(
     DEVIN_CREDENTIALS_B64: credentialsB64,
     GITHUB_TOKEN: githubToken,
     GIT_AUTHOR_NAME: sanitizeEnv(gitIdentity?.name ?? "Devin"),
-    GIT_AUTHOR_EMAIL: sanitizeEnv(
-      gitIdentity?.email ?? "devin@pile.nyc"
-    ),
+    GIT_AUTHOR_EMAIL: sanitizeEnv(gitIdentity?.email ?? "devin@pile.nyc"),
     REPO: repo,
     BRANCH: branch,
     ISSUE_TITLE: sanitizeEnv(issue.title),
@@ -666,9 +661,7 @@ export class DevinCliAgentProvider implements AgentProvider {
   ) {
     const credentialsB64 = this.requireAuth();
     const compute = this.requireCompute();
-    const githubToken = issue.repo
-      ? await this.githubToken(issue.repo)
-      : "";
+    const githubToken = issue.repo ? await this.githubToken(issue.repo) : "";
     const name = sandboxName(sessionId);
 
     const spanId = await this.openSpan(
@@ -937,9 +930,7 @@ export class DevinCliAgentProvider implements AgentProvider {
     }
 
     const credentialsB64 = this.requireAuth();
-    const githubToken = issue.repo
-      ? await this.githubToken(issue.repo)
-      : "";
+    const githubToken = issue.repo ? await this.githubToken(issue.repo) : "";
     const followupId = `${trackerSessionId}-fu-${Date.now().toString(36)}`;
 
     const followupEnv = buildSandboxEnv(
