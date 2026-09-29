@@ -9,6 +9,7 @@ import type { AgentSession, AgentSessionStatus } from "../types/workspace.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
 import { loadProviderConfig } from "./credentials.js";
 import { resolveAgentEnv } from "./daytona.js";
+import { laneFollowupThrottled } from "./followup.js";
 import { dispatchAgent, getAgentProvider } from "./index.js";
 import { getLaneDbProvider, type LaneDbRef } from "./lane-db.js";
 import type {
@@ -957,27 +958,41 @@ export async function syncOpenPrSessions(
               resolveAgentEnv(env, providerConfig ?? undefined)
             );
             if (provider.sendPrompt && issue) {
-              const gitIdentity = issue.repo
-                ? ((await stub.getGitIdentityByRepo(issue.repo)) ?? null)
-                : null;
-              const delivered = await provider.sendPrompt(
-                session.providerSessionId ?? session.id,
-                ciPrompt,
-                issue,
-                gitIdentity
-              );
-              await stub
-                .addAgentSessionEvent({
-                  sessionId: session.id,
-                  type: delivered
-                    ? "prompt.followup"
-                    : "prompt.followup_failed",
-                  message: delivered
-                    ? "CI failure delivered as follow-up prompt"
-                    : "CI failure follow-up prompt rejected by provider",
-                  payload: { issueId: issue.id, prUrl },
-                })
-                .catch(() => {});
+              if (
+                await laneFollowupThrottled(stub, session.id, 5 * 60 * 1000)
+              ) {
+                await stub
+                  .addAgentSessionEvent({
+                    sessionId: session.id,
+                    type: "prompt.followup_skipped",
+                    message:
+                      "CI failure follow-up throttled (recent nudge within 5m)",
+                    payload: { issueId: issue.id, prUrl },
+                  })
+                  .catch(() => {});
+              } else {
+                const gitIdentity = issue.repo
+                  ? ((await stub.getGitIdentityByRepo(issue.repo)) ?? null)
+                  : null;
+                const delivered = await provider.sendPrompt(
+                  session.providerSessionId ?? session.id,
+                  ciPrompt,
+                  issue,
+                  gitIdentity
+                );
+                await stub
+                  .addAgentSessionEvent({
+                    sessionId: session.id,
+                    type: delivered
+                      ? "prompt.followup"
+                      : "prompt.followup_failed",
+                    message: delivered
+                      ? "CI failure delivered as follow-up prompt"
+                      : "CI failure follow-up prompt rejected by provider",
+                    payload: { issueId: issue.id, prUrl },
+                  })
+                  .catch(() => {});
+              }
             }
           } catch (err) {
             console.error("ci-fail lane nudge failed", {

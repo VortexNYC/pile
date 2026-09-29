@@ -29,6 +29,7 @@ import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import type { Issue } from "../types/workspace.js";
 import { loadProviderConfig } from "./credentials.js";
 import { resolveAgentEnv } from "./daytona.js";
+import { laneFollowupThrottled } from "./followup.js";
 import { getAgentProvider } from "./index.js";
 
 const pullRequestPayloadSchema = z.object({
@@ -588,6 +589,17 @@ async function nudgeLaneForIssue(
       resolveAgentEnv(env, providerConfig ?? undefined)
     );
     if (!provider.sendPrompt) return;
+    if (await laneFollowupThrottled(stub, active.session.id, 5 * 60 * 1000)) {
+      await stub
+        .addAgentSessionEvent({
+          sessionId: active.session.id,
+          type: "prompt.followup_skipped",
+          message: "Follow-up prompt throttled (recent nudge within 5m)",
+          payload: { issueId: issue.id },
+        })
+        .catch(() => {});
+      return;
+    }
     const gitIdentity = issue.repo
       ? ((await stub.getGitIdentityByRepo(issue.repo)) ?? null)
       : null;
