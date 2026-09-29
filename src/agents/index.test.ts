@@ -243,6 +243,78 @@ describe("agent providers", () => {
     expect(comments[0]?.body).toContain(prUrl);
   });
 
+  it("writes a session.summary event on terminal transition with provider digest", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)
+    );
+    await stub.setOrganizationId(actor.organizationId);
+    const issue = await stub.createIssue({ title: "Digest test" });
+
+    const provider = new MockAgentProvider("mock", {
+      dispatch: () => ({
+        id: "digest-1",
+        agentId: "mock",
+        status: "created",
+      }),
+    });
+    registerAgentProvider("mock-digest", () => provider);
+
+    const session = await dispatchAgent(
+      env,
+      "mock-digest",
+      actor.organizationId,
+      issue,
+      actor
+    );
+
+    await stub.applyAgentSessionResult(session.id, {
+      status: "completed",
+      result: JSON.stringify({
+        output_tail: "done",
+        digest: { durationSec: 42, filesChanged: ["a.ts"], commits: 1 },
+      }),
+    });
+
+    const events = await stub.listAgentSessionEvents(session.id, 100);
+    const summary = events.find((e) => e.type === "session.summary");
+    expect(summary).toBeDefined();
+    const payload = JSON.parse(summary?.payload as string) as Record<
+      string,
+      unknown
+    >;
+    expect(payload.status).toBe("completed");
+    expect(payload.agentId).toBe("mock-digest");
+    expect(typeof payload.durationMs).toBe("number");
+    expect(payload.digest).toEqual({
+      durationSec: 42,
+      filesChanged: ["a.ts"],
+      commits: 1,
+    });
+
+    // Plain-text results still emit a summary — just without a digest.
+    const issue2 = await stub.createIssue({ title: "Digest text" });
+    const session2 = await dispatchAgent(
+      env,
+      "mock-digest",
+      actor.organizationId,
+      issue2,
+      actor
+    );
+    await stub.applyAgentSessionResult(session2.id, {
+      status: "failed",
+      result: "plain failure text",
+    });
+    const events2 = await stub.listAgentSessionEvents(session2.id, 100);
+    const summary2 = events2.find((e) => e.type === "session.summary");
+    expect(summary2).toBeDefined();
+    const payload2 = JSON.parse(summary2?.payload as string) as Record<
+      string,
+      unknown
+    >;
+    expect(payload2.status).toBe("failed");
+    expect(payload2.digest).toBeUndefined();
+  });
+
   it("marks the session failed without changing the issue status", async () => {
     const stub = env.WORKSPACE_DURABLE_OBJECT.get(
       env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)

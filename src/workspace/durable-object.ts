@@ -2283,6 +2283,34 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           message: `Session ${updatedSession.status}`,
           payload: { status: updatedSession.status },
         });
+        // PILE-231 — one digest event per run: Pile-owned fields (status,
+        // duration, PR) merged with whatever the provider's result JSON
+        // carries under `digest` (files changed, commits, runner timing).
+        const summary: Record<string, unknown> = {
+          status: updatedSession.status,
+          durationMs: updatedSession.createdAt
+            ? Date.now() - Date.parse(updatedSession.createdAt)
+            : null,
+          prUrl: updatedSession.prUrl ?? null,
+          branch: updatedSession.branch ?? null,
+          agentId: updatedSession.agentId,
+        };
+        try {
+          const parsed = JSON.parse(updatedSession.result ?? "") as {
+            digest?: Record<string, unknown>;
+          };
+          if (parsed && typeof parsed === "object" && parsed.digest) {
+            summary.digest = parsed.digest;
+          }
+        } catch {
+          // result is plain text for most providers — no digest to merge
+        }
+        payloads.push({
+          sessionId,
+          type: "session.summary",
+          message: "Run summary",
+          payload: summary,
+        });
       }
       return payloads;
     };
