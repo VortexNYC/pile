@@ -52,8 +52,9 @@ export async function fetchPileRepoConfig(
     },
   });
   if (!res.ok) {
+    const detail = await res.text().catch(() => "");
     console.warn(
-      `pile-repo-config: contents fetch ${res.status} for ${repo}${ref ? `@${ref}` : ""}`
+      `pile-repo-config: contents fetch ${res.status} for ${repo}${ref ? `@${ref}` : ""}: ${detail.slice(0, 200)}`
     );
     return null;
   }
