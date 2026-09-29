@@ -942,6 +942,7 @@ export interface AgentSessionInput {
   parentSessionId?: string | null;
   spawnDepth?: number;
   laneDbRef?: string | null;
+  purpose?: string | null;
 }
 
 export async function createAgentSession(
@@ -970,6 +971,7 @@ export async function createAgentSession(
     parentSessionId: input.parentSessionId ?? null,
     spawnDepth: input.spawnDepth ?? 0,
     laneDbRef: input.laneDbRef ?? null,
+    purpose: input.purpose ?? null,
     updatedAt: ts,
   });
   const row = await db

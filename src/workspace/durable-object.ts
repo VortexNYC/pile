@@ -2582,9 +2582,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       oldStatus !== "completed" &&
       (result.result || result.prUrl)
     ) {
-      const commentBody = result.prUrl
-        ? `Agent ${oldSession.agentId} completed${result.result ? `: ${result.result}` : ""}\n\n${result.prUrl}`
-        : `Agent ${oldSession.agentId} completed: ${result.result}`;
+      const commentBody =
+        updatedSession.purpose === "preflight"
+          ? `Preflight critique by ${oldSession.agentId}:\n\n${result.result ?? "No report — see session stream."}`
+          : result.prUrl
+            ? `Agent ${oldSession.agentId} completed${result.result ? `: ${result.result}` : ""}\n\n${result.prUrl}`
+            : `Agent ${oldSession.agentId} completed: ${result.result}`;
       const comment = await this.createComment({
         issueId: issue.id,
         body: commentBody,

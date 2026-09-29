@@ -769,6 +769,8 @@ CREATE INDEX IF NOT EXISTS agent_automations_org_idx ON agent_automations (organ
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS agent_automations_issue_idx ON agent_automations (issue_id)`;
 
+const v44 = `ALTER TABLE agent_sessions ADD COLUMN purpose TEXT`;
+
 export const workspaceMigrations = {
   journal: {
     entries: [
@@ -815,6 +817,7 @@ export const workspaceMigrations = {
       { idx: 40, when: 40, tag: "v41", breakpoints: true },
       { idx: 41, when: 41, tag: "v42", breakpoints: true },
       { idx: 42, when: 42, tag: "v43", breakpoints: true },
+      { idx: 43, when: 43, tag: "v44", breakpoints: true },
     ],
   },
   migrations: {
@@ -861,5 +864,6 @@ export const workspaceMigrations = {
     m0040: v41,
     m0041: v42,
     m0042: v43,
+    m0043: v44,
   },
 } satisfies Parameters<typeof migrate>[1];

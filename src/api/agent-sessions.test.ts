@@ -226,6 +226,107 @@ describe("agent sessions API", () => {
     expect(session.agentId).toBe(agentId);
   });
 
+  it("returns a preflight report and flags gaps on the thread once", async () => {
+    const issueRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          title: "Fix the thing",
+          description: "TBD.",
+        }),
+      }),
+      env
+    );
+    const issue = await issueRes.json<{ id: string }>();
+
+    const dispatchRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${issue.id}/dispatch`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ agentId: "mock" }),
+      }),
+      env
+    );
+    expect(dispatchRes.status).toBe(201);
+    const session = await dispatchRes.json<{
+      id: string;
+      preflight?: { ready: boolean; missing: string[] };
+    }>();
+    expect(session.preflight?.ready).toBe(false);
+    expect(session.preflight?.missing.length).toBeGreaterThan(0);
+
+    const commentsRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${issue.id}/comments`, {
+        token,
+      }),
+      env
+    );
+    const comments = await commentsRes.json<{
+      comments: Array<{ externalSource: string | null; body: string }>;
+    }>();
+    const flagged = (comments.comments ?? comments).filter(
+      (c: { externalSource: string | null }) => c.externalSource === "preflight"
+    );
+    expect(flagged.length).toBe(1);
+  });
+
+  it("preflight dispatch creates a repo-less critique session", async () => {
+    const agentId = `mock-pf-${crypto.randomUUID().slice(0, 8)}`;
+    let seenRepo: string | null | undefined;
+    let seenInstructions: string | undefined;
+    registerAgentProvider(
+      agentId,
+      () =>
+        new MockAgentProvider(agentId, {
+          dispatch: (_org, dispatchedIssue, _model, ctx) => {
+            seenRepo = dispatchedIssue.repo;
+            seenInstructions = ctx?.instructions;
+            return {
+              id: `pf-${crypto.randomUUID()}`,
+              agentId,
+              issueId: dispatchedIssue.id,
+              status: "created" as const,
+            };
+          },
+        })
+    );
+
+    const issueRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          title: "Improve the sweep",
+          description:
+            "Lanes should rebase when the base branch moves forward so their PRs never land stale. Verify the sweep detects out-of-date PRs and prompts the lane.",
+          repo: "VortexNYC/pile",
+        }),
+      }),
+      env
+    );
+    const issue = await issueRes.json<{ id: string }>();
+
+    const dispatchRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${issue.id}/dispatch`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ agentId, preflight: true }),
+      }),
+      env
+    );
+    expect(dispatchRes.status).toBe(201);
+    const session = await dispatchRes.json<{
+      purpose?: string | null;
+      preflight?: { ready: boolean };
+    }>();
+    expect(session.purpose).toBe("preflight");
+    expect(session.preflight?.ready).toBe(true);
+    expect(seenRepo).toBeNull();
+    expect(seenInstructions).toContain("do NOT implement");
+    expect(seenInstructions).toContain("VortexNYC/pile");
+  });
+
   it("sets a repo's default agent via installation PATCH", async () => {
     const db = createD1(env.D1);
     const instId = crypto.randomUUID();

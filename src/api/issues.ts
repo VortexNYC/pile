@@ -5,6 +5,10 @@ import { eq, and } from "drizzle-orm";
 import { loadProviderConfig } from "../agents/credentials.js";
 import { resolveAgentEnv } from "../agents/daytona.js";
 import { dispatchAgent, getAgentProvider } from "../agents/index.js";
+import {
+  buildPreflightCritiqueInstructions,
+  evaluateDispatchReadiness,
+} from "../agents/preflight.js";
 import { consumeUsage } from "../global/billing.js";
 import { createD1 } from "../global/db.js";
 import { deleteIssueReferences } from "../global/issue-data.js";
@@ -633,6 +637,11 @@ const getIssueChildrenRoute = createRoute({
   },
 });
 
+const dispatchPreflightSchema = z.object({
+  ready: z.boolean(),
+  missing: z.array(z.string()),
+});
+
 const dispatchRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/issues/{id}/dispatch",
@@ -656,6 +665,10 @@ const dispatchRoute = createRoute({
               repo: z.string().optional(),
               branch: z.string().optional(),
               instructions: z.string().optional(),
+              // VTX-209 — when true, dispatch a repo-less planner-critique
+              // session on the target provider instead of the task lane. It
+              // reports missing/ambiguous context back onto the issue thread.
+              preflight: z.boolean().optional(),
             })
             .strict(),
         },
@@ -666,7 +679,11 @@ const dispatchRoute = createRoute({
     201: {
       description: "Session created",
       content: {
-        "application/json": { schema: agentSessionSchema },
+        "application/json": {
+          schema: agentSessionSchema.extend({
+            preflight: dispatchPreflightSchema,
+          }),
+        },
       },
     },
   },
@@ -1366,7 +1383,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(dispatchRoute, async (c) => {
-    const { agentId, provider, model, repo, branch, instructions } =
+    const { agentId, provider, model, repo, branch, instructions, preflight } =
       c.req.valid("json");
     const { organizationId, id } = c.req.valid("param");
     const identity = c.get("workspaceIdentity");
@@ -1435,6 +1452,27 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     }
     const resolvedModel = model ?? pileConfig?.model;
 
+    // VTX-209 — deterministic readiness gate. Advisory only: the report rides
+    // the response and gaps are annotated on the thread once, so callers see
+    // exactly what a lane would trip over before tokens get spent.
+    const readiness = evaluateDispatchReadiness(target);
+    if (!readiness.ready) {
+      const thread = await stub.listComments(issue.id).catch(() => []);
+      const alreadyFlagged = thread.some(
+        (comment) => comment.externalSource === "preflight"
+      );
+      if (!alreadyFlagged) {
+        await stub
+          .createComment({
+            issueId: issue.id,
+            body: `Dispatch preflight flagged gaps:\n\n${readiness.missing.map((m) => `- ${m}`).join("\n")}\n\nAnswer these in the thread before dispatching, or dispatch anyway.`,
+            externalAuthor: "preflight",
+            externalSource: "preflight",
+          })
+          .catch(() => null);
+      }
+    }
+
     const providerConfig = await loadProviderConfig(
       c.env,
       stub,
@@ -1442,18 +1480,42 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     );
     const effectiveEnv = resolveAgentEnv(c.env, providerConfig ?? undefined);
 
-    const session = await dispatchAgent(
-      effectiveEnv,
-      resolvedAgentId,
-      organizationId,
-      target,
-      identity,
-      resolvedModel,
-      getExecutionCtx(c),
-      { instructions, envAllowlist: pileConfig?.env }
-    );
+    // Planner-critique mode: a repo-less lane on the SAME target provider
+    // reads the ticket and reports what a real lane would need clarified.
+    // Runs detached from the repo so it can't implement — critique only.
+    const session = preflight
+      ? await dispatchAgent(
+          effectiveEnv,
+          resolvedAgentId,
+          organizationId,
+          { ...target, repo: null, branch: null },
+          identity,
+          resolvedModel,
+          getExecutionCtx(c),
+          {
+            instructions: [
+              buildPreflightCritiqueInstructions(target),
+              instructions ?? null,
+            ]
+              .filter((line): line is string => line !== null)
+              .join("\n\n"),
+            envAllowlist: pileConfig?.env,
+            purpose: "preflight",
+            skipQueue: true,
+          }
+        )
+      : await dispatchAgent(
+          effectiveEnv,
+          resolvedAgentId,
+          organizationId,
+          target,
+          identity,
+          resolvedModel,
+          getExecutionCtx(c),
+          { instructions, envAllowlist: pileConfig?.env }
+        );
 
-    if (target.repo && target.branch) {
+    if (target.repo && target.branch && !preflight) {
       await createRepoBranch(
         db,
         organizationId,
@@ -1463,7 +1525,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       );
     }
 
-    return c.json(session, 201);
+    return c.json({ ...session, preflight: readiness }, 201);
   });
 
   app.openapi(assignIssueRoute, async (c) => {

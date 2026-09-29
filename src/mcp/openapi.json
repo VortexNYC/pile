@@ -2814,6 +2814,9 @@
                   },
                   "instructions": {
                     "type": "string"
+                  },
+                  "preflight": {
+                    "type": "boolean"
                   }
                 },
                 "additionalProperties": false
@@ -2886,6 +2889,10 @@
                       "nullable": true
                     },
                     "branch": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "purpose": {
                       "type": "string",
                       "nullable": true
                     },
@@ -2978,6 +2985,24 @@
                           "createdAt"
                         ]
                       }
+                    },
+                    "preflight": {
+                      "type": "object",
+                      "properties": {
+                        "ready": {
+                          "type": "boolean"
+                        },
+                        "missing": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "ready",
+                        "missing"
+                      ]
                     }
                   },
                   "required": [
@@ -2996,7 +3021,8 @@
                     "prState",
                     "branch",
                     "createdAt",
-                    "updatedAt"
+                    "updatedAt",
+                    "preflight"
                   ]
                 }
               }
@@ -3118,6 +3144,10 @@
                           "nullable": true
                         },
                         "branch": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "purpose": {
                           "type": "string",
                           "nullable": true
                         },
@@ -3375,6 +3405,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "purpose": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -3575,6 +3609,10 @@
                           "nullable": true
                         },
                         "branch": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "purpose": {
                           "type": "string",
                           "nullable": true
                         },
@@ -3819,6 +3857,10 @@
                             "nullable": true
                           },
                           "branch": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "purpose": {
                             "type": "string",
                             "nullable": true
                           },
@@ -4131,6 +4173,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "purpose": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -4412,6 +4458,10 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "purpose": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -4655,6 +4705,10 @@
                       "nullable": true
                     },
                     "branch": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "purpose": {
                       "type": "string",
                       "nullable": true
                     },
@@ -5375,6 +5429,10 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "purpose": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -5583,6 +5641,10 @@
                       "nullable": true
                     },
                     "branch": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "purpose": {
                       "type": "string",
                       "nullable": true
                     },
@@ -5797,6 +5859,10 @@
                           "nullable": true
                         },
                         "branch": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "purpose": {
                           "type": "string",
                           "nullable": true
                         },
@@ -6055,6 +6121,10 @@
                           "nullable": true
                         },
                         "branch": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "purpose": {
                           "type": "string",
                           "nullable": true
                         },
@@ -6356,6 +6426,10 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "purpose": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -6588,6 +6662,10 @@
                       "nullable": true
                     },
                     "branch": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "purpose": {
                       "type": "string",
                       "nullable": true
                     },

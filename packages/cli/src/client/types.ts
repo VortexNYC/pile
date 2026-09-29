@@ -1398,6 +1398,7 @@ export interface paths {
                         repo?: string;
                         branch?: string;
                         instructions?: string;
+                        preflight?: boolean;
                     };
                 };
             };
@@ -1425,6 +1426,7 @@ export interface paths {
                             prUrl: string | null;
                             prState: string | null;
                             branch: string | null;
+                            purpose?: string | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;
@@ -1445,6 +1447,10 @@ export interface paths {
                                 durationMs: number | null;
                                 createdAt: string;
                             }[];
+                            preflight: {
+                                ready: boolean;
+                                missing: string[];
+                            };
                         };
                     };
                 };
@@ -1509,6 +1515,7 @@ export interface paths {
                                 prUrl: string | null;
                                 prState: string | null;
                                 branch: string | null;
+                                purpose?: string | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -1599,6 +1606,7 @@ export interface paths {
                                 prUrl: string | null;
                                 prState: string | null;
                                 branch: string | null;
+                                purpose?: string | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -1650,6 +1658,7 @@ export interface paths {
                                 prUrl: string | null;
                                 prState: string | null;
                                 branch: string | null;
+                                purpose?: string | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -1738,6 +1747,7 @@ export interface paths {
                                 prUrl: string | null;
                                 prState: string | null;
                                 branch: string | null;
+                                purpose?: string | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -1869,6 +1879,7 @@ export interface paths {
                                 prUrl: string | null;
                                 prState: string | null;
                                 branch: string | null;
+                                purpose?: string | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -1960,6 +1971,7 @@ export interface paths {
                             prUrl: string | null;
                             prState: string | null;
                             branch: string | null;
+                            purpose?: string | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;
@@ -2045,6 +2057,7 @@ export interface paths {
                             prUrl: string | null;
                             prState: string | null;
                             branch: string | null;
+                            purpose?: string | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;
@@ -2401,6 +2414,7 @@ export interface paths {
                             prUrl: string | null;
                             prState: string | null;
                             branch: string | null;
+                            purpose?: string | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;
@@ -2484,6 +2498,7 @@ export interface paths {
                             prUrl: string | null;
                             prState: string | null;
                             branch: string | null;
+                            purpose?: string | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;
@@ -2566,6 +2581,7 @@ export interface paths {
                                 prUrl: string | null;
                                 prState: string | null;
                                 branch: string | null;
+                                purpose?: string | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -2672,6 +2688,7 @@ export interface paths {
                                 prUrl: string | null;
                                 prState: string | null;
                                 branch: string | null;
+                                purpose?: string | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -2789,6 +2806,7 @@ export interface paths {
                             prUrl: string | null;
                             prState: string | null;
                             branch: string | null;
+                            purpose?: string | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;
@@ -2887,6 +2905,7 @@ export interface paths {
                             prUrl: string | null;
                             prState: string | null;
                             branch: string | null;
+                            purpose?: string | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;

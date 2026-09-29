@@ -801,6 +801,10 @@ export const workspaceAgentSessions = sqliteTable(
     // Lane-scoped preview DB (PILE-212): JSON handle describing the
     // provisioned branch/role so teardown can run on terminal state.
     laneDbRef: text("lane_db_ref" as string),
+    // "preflight" marks a planner-critique lane (VTX-209): repo-less session
+    // on the target provider whose only job is to flag missing/ambiguous
+    // ticket context before tokens get spent implementing the wrong thing.
+    purpose: text("purpose" as string),
   },
   (table) => [
     index("agent_sessions_organization_idx" as string).on(

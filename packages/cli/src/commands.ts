@@ -885,6 +885,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "instructions",
         flag: "instructions",
       },
+      {
+        name: "preflight",
+        flag: "preflight",
+      },
     ],
   },
   "issues assign create": {

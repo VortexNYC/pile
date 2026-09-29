@@ -135,6 +135,11 @@ export async function dispatchAgent(
     /** Promote a parked `waiting` session instead of creating a fresh row —
      *  the sweep calls this when the queuedAfter blocker goes terminal. */
     promoteSessionId?: string;
+    /** Lane purpose — "preflight" marks planner-critique sessions (VTX-209). */
+    purpose?: string;
+    /** Preflight critiques must not park behind dedupe coverage — they run
+     *  repo-less and only produce a report. */
+    skipQueue?: boolean;
   }
 ): Promise<AgentSession> {
   const stub = env.WORKSPACE_DURABLE_OBJECT.get(
@@ -194,7 +199,7 @@ export async function dispatchAgent(
         message: dedupe.hardBlock.reason,
       });
     }
-    if (dedupe?.queueAfter) {
+    if (dedupe?.queueAfter && !options?.skipQueue) {
       const queued = await stub.createAgentSession({
         issueId: issue.id,
         agentId,
@@ -205,6 +210,7 @@ export async function dispatchAgent(
         queuedAfter: dedupe.queueAfter,
         parentSessionId: options?.parentSessionId ?? null,
         spawnDepth: options?.spawnDepth ?? 0,
+        purpose: options?.purpose ?? null,
       });
       await stub
         .addAgentSessionEvent({
@@ -269,6 +275,7 @@ export async function dispatchAgent(
       url: null,
       parentSessionId: options?.parentSessionId ?? null,
       spawnDepth: options?.spawnDepth ?? 0,
+      purpose: options?.purpose ?? null,
     });
   }
 

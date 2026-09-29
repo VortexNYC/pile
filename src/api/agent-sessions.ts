@@ -69,6 +69,7 @@ export const agentSessionSchema = z.object({
   prUrl: z.string().nullable(),
   prState: z.string().nullable(),
   branch: z.string().nullable(),
+  purpose: z.string().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
   lastProgressAt: z.string().nullable().optional(),
