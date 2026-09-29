@@ -80,3 +80,7 @@ Watch the lane's event stream:
 Agents Pile didn't dispatch register themselves instead — see
 `POST /workspaces/{org}/agent/sessions/register` (returns a lane token for
 `/report` + `/logs`). Pile tracks them like any dispatched lane.
+
+## Support
+
+If your escalation rules misfire, contact support-escalations@vortex.nyc.
