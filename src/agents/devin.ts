@@ -274,36 +274,11 @@ export class DevinAgentProvider implements AgentProvider {
       : "items" in parsed.data
         ? parsed.data.items
         : parsed.data.messages;
-    // Last Devin-authored message is whatever it's asking the user. The
-    // paginated envelope does not guarantee ordering, so prefer the newest
-    // timestamp and fall back to array position.
-    let best: { message: string; ts: number } | null = null;
-    for (let i = 0; i < messages.length; i++) {
-      const m = messages[i];
-      if (
-        !m.message ||
-        !(m.type === "devin_message" || m.type?.includes("devin"))
-      ) {
-        continue;
-      }
-      const ts =
-        typeof m.timestamp === "number"
-          ? m.timestamp < 1e12
-            ? m.timestamp * 1000
-            : m.timestamp
-          : Date.parse(String(m.timestamp ?? ""));
-      const score = Number.isFinite(ts) ? ts : i;
-      if (!best || score >= best.ts) {
-        best = { message: m.message, ts: score };
-      }
-    }
-    if (best) return best.message;
-    console.error("devin latestElicitation found no devin message", {
-      sessionId: providerSessionId,
-      items: messages
-        .slice(-3)
-        .map((m) => (typeof m === "object" && m !== null ? Object.keys(m) : m)),
-    });
+    // Devin's message items only carry `message` — no author field. When the
+    // lane parks waiting_for_user the newest item is its question; prefer it,
+    // fall back to the last devin-typed message for older envelope shapes.
+    const last = messages[messages.length - 1];
+    if (last?.message) return last.message;
     return null;
   }
 
