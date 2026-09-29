@@ -595,6 +595,23 @@ export async function sweepAgentSessions(
           Number.isFinite(created) &&
           now - created >= provisionTimeoutMinutes * 60 * 1000
         ) {
+          // Process records take a few minutes to register after
+          // `startProcess` resolves — a `created` status alone doesn't prove
+          // provisioning failed. The "runner started" activity is written only
+          // after the RPC returns, so if it's present the lane is alive and
+          // the next poll will flip it to `running`.
+          const events = await stub
+            .listAgentSessionEvents(session.id, { limit: 100 })
+            .catch(() => []);
+          const runnerStarted = events.some((event) =>
+            String(event.message ?? "").includes("runner started")
+          );
+          if (
+            runnerStarted &&
+            now - created < provisionTimeoutMinutes * 2 * 60 * 1000
+          ) {
+            continue;
+          }
           const provisionFailure: AgentProviderSession = {
             id: session.id,
             agentId: session.agentId,
