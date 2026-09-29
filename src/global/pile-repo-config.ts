@@ -1,7 +1,10 @@
 import { z } from "zod";
 
 import type { AppEnv } from "../types/env.js";
-import { getInstallationTokenForRepo } from "./github-auth.js";
+import {
+  getInstallationTokenForRepo,
+  GITHUB_USER_AGENT,
+} from "./github-auth.js";
 
 const GITHUB_API = "https://api.github.com";
 
@@ -49,6 +52,7 @@ export async function fetchPileRepoConfig(
       Authorization: `Bearer ${token}`,
       Accept: "application/vnd.github+json",
       "X-GitHub-Api-Version": "2022-11-28",
+      "User-Agent": GITHUB_USER_AGENT,
     },
   });
   if (!res.ok) {
