@@ -157,6 +157,7 @@ const PYTHON_RUNNER = [
   "import shutil",
   "import subprocess",
   "import sys",
+  "import threading",
   "import time",
   "import urllib.error",
   "import urllib.request",
@@ -328,13 +329,39 @@ const PYTHON_RUNNER = [
   "    env['PATH'] = DEVIN_INSTALL_DIR + ':' + env.get('PATH', '')",
   "    return env",
   "",
-  "def run_devin(devin_bin):",
-  "    prompt = base64.b64decode(os.environ['PROMPT_B64']).decode('utf-8')",
+  "FOLLOWUP_DIR = '/tmp/followups'",
+  "",
+  "def inject_followups(proc):",
+  "    # Mid-run prompt channel: sendPrompt drops files in FOLLOWUP_DIR via a",
+  "    # sandbox writeFile RPC; we feed them into the live devin process's",
+  "    # stdin. Injected files get an .injected marker — if devin didn't",
+  "    # actually consume stdin, the post-run drain still re-runs only files",
+  "    # that were never injected.",
+  "    while proc.poll() is None:",
+  "        try:",
+  "            os.makedirs(FOLLOWUP_DIR, exist_ok=True)",
+  "            for name in sorted(os.listdir(FOLLOWUP_DIR)):",
+  "                if not name.endswith('.prompt'):",
+  "                    continue",
+  "                path = os.path.join(FOLLOWUP_DIR, name)",
+  "                with open(path) as f:",
+  "                    text = f.read()",
+  "                proc.stdin.write(text.rstrip() + '\\n')",
+  "                proc.stdin.flush()",
+  "                os.rename(path, path[:-7] + '.injected')",
+  "                print('follow-up prompt injected mid-run:', name)",
+  "        except (BrokenPipeError, OSError):",
+  "            return",
+  "        time.sleep(2)",
+  "",
+  "def run_devin(devin_bin, prompt=None):",
+  "    prompt = prompt or base64.b64decode(os.environ['PROMPT_B64']).decode('utf-8')",
   "    model = os.environ.get('MODEL', 'swe-2')",
   "    proc = subprocess.Popen(",
   "        [devin_bin, '-p', prompt, '--model', model, '--permission-mode', 'dangerous', '--respect-workspace-trust', 'false'],",
-  "        cwd=REPO_DIR, env=devin_env(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True",
+  "        cwd=REPO_DIR, env=devin_env(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.PIPE, text=True",
   "    )",
+  "    threading.Thread(target=inject_followups, args=(proc,), daemon=True).start()",
   "    tail = []",
   "    try:",
   "        for line in proc.stdout:",
@@ -416,6 +443,24 @@ const PYTHON_RUNNER = [
   "    run(['su', 'postgres', '-c', 'createdb vortex_dev'], check=False)",
   "    print(f'[timing] postgres up: {time.time() - t0:.0f}s')",
   "",
+  "def drain_followups(devin_bin):",
+  "    # Prompts that arrived while devin ran but were never consumed through",
+  "    # stdin get a proper continuation run on the same checkout. Bounded so",
+  "    # a caller can't keep a lane alive forever by spamming prompts.",
+  "    for _ in range(3):",
+  "        pending = sorted(n for n in os.listdir(FOLLOWUP_DIR) if n.endswith('.prompt'))",
+  "        if not pending:",
+  "            return ''",
+  "        name = pending[0]",
+  "        path = os.path.join(FOLLOWUP_DIR, name)",
+  "        with open(path) as f:",
+  "            text = f.read()",
+  "        os.rename(path, path[:-7] + '.drained')",
+  "        print('running queued follow-up prompt:', name)",
+  "        output = run_devin(devin_bin, prompt=text)",
+  "        commit_and_push()",
+  "    return output",
+  "",
   "def finalize(output, pushed):",
   "    pr_url = ''",
   "    if pushed:",
@@ -431,6 +476,7 @@ const PYTHON_RUNNER = [
   "    return 0",
   "",
   "def main():",
+  "    os.makedirs(FOLLOWUP_DIR, exist_ok=True)",
   "    creds_b64 = os.environ['DEVIN_CREDENTIALS_B64']",
   "    write_devin_home(creds_b64)",
   "    devin_bin = ensure_devin()",
@@ -444,6 +490,7 @@ const PYTHON_RUNNER = [
   "        ensure_postgres()",
   "        resume_repo()",
   "        output = run_devin(devin_bin)",
+  "        output = drain_followups(devin_bin) or output",
   "        pushed = commit_and_push()",
   "        return finalize(output, pushed)",
   "    create_branch()",
@@ -451,6 +498,7 @@ const PYTHON_RUNNER = [
   "    run_setup_hook()",
   "    ensure_postgres()",
   "    output = run_devin(devin_bin)",
+  "    output = drain_followups(devin_bin) or output",
   "    pushed = commit_and_push()",
   "    return finalize(output, pushed)",
   "",
@@ -856,7 +904,22 @@ export class DevinCliAgentProvider implements AgentProvider {
     if (!sandbox || sandbox.state !== "started") return false;
     if (!issue.repo) return false;
     if ((await compute.runnerBusy?.(sandbox, trackerSessionId)) === true) {
-      return false;
+      // Mid-run injection: the runner's watcher thread feeds files dropped in
+      // /tmp/followups into the live devin process's stdin (and drains any
+      // never-consumed leftovers as continuation runs after the primary exits).
+      await compute.writeFile(
+        sandbox,
+        `/tmp/followups/${Date.now().toString(36)}.prompt`,
+        prompt
+      );
+      await this.note(
+        sandbox.organizationId,
+        trackerSessionId,
+        "action",
+        "follow-up prompt injected into running sandbox",
+        { channel: "stdin" }
+      );
+      return true;
     }
 
     const credentialsB64 = this.requireAuth();
