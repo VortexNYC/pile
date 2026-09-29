@@ -247,9 +247,23 @@ export class DevinAgentProvider implements AgentProvider {
       `https://api.devin.ai/v3/organizations/${orgId}/sessions/${devinId}/messages`,
       { headers: { Authorization: `Bearer ${token}` } }
     ).catch(() => null);
-    if (!res || !res.ok) return null;
+    if (!res) return null;
+    if (!res.ok) {
+      console.error("devin latestElicitation failed", {
+        sessionId: providerSessionId,
+        status: res.status,
+        body: (await res.text()).slice(0, 500),
+      });
+      return null;
+    }
     const parsed = devinMessagesSchema.safeParse(await res.json());
-    if (!parsed.success) return null;
+    if (!parsed.success) {
+      console.error("devin latestElicitation parse failed", {
+        sessionId: providerSessionId,
+        issues: parsed.error.issues.slice(0, 3),
+      });
+      return null;
+    }
     const messages = Array.isArray(parsed.data)
       ? parsed.data
       : parsed.data.messages;
@@ -263,6 +277,10 @@ export class DevinAgentProvider implements AgentProvider {
         return m.message;
       }
     }
+    console.error("devin latestElicitation found no devin message", {
+      sessionId: providerSessionId,
+      types: messages.map((m) => m.type).slice(-10),
+    });
     return null;
   }
 
