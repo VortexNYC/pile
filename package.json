@@ -1,7 +1,7 @@
 {
   "name": "pile",
   "version": "0.1.1",
-  "description": "Pile \u2014 an open-source, agent-native issue tracker on Cloudflare Workers.",
+  "description": "Pile — an open-source, agent-native issue tracker on Cloudflare Workers.",
   "keywords": [
     "agent",
     "cloudflare",

@@ -1081,6 +1081,39 @@ describe("agent sessions API", () => {
     );
   });
 
+  it("guards the lane github-token mint with per-session token auth", async () => {
+    const sessionId = crypto.randomUUID();
+    const laneToken = await agentLogToken(
+      env as unknown as WorkerEnv,
+      organizationId,
+      sessionId
+    );
+    const base = `/workspaces/${organizationId}/agent/sessions/${sessionId}/github-token`;
+
+    const noAuth = await app.fetch(request(base, { method: "POST" }), env);
+    expect([401, 403]).toContain(noAuth.status);
+
+    const badToken = await app.fetch(
+      request(base, {
+        method: "POST",
+        headers: { Authorization: "Bearer wrong" },
+      }),
+      env
+    );
+    expect(badToken.status).toBe(401);
+
+    // Valid lane token, unknown session → 404 (token can't mint for another
+    // session id, and a real session is required to resolve the repo).
+    const unknown = await app.fetch(
+      request(base, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${laneToken}` },
+      }),
+      env
+    );
+    expect(unknown.status).toBe(404);
+  });
+
   it("serves the runner pnpm-store cache with per-session token auth", async () => {
     const sessionId = crypto.randomUUID();
     const cacheToken = await agentLogToken(

@@ -11,6 +11,7 @@ import type {
 } from "../types/workspace.js";
 import { computeBackend } from "./compute.js";
 import type { ComputeBackend } from "./compute.js";
+import { agentGithubTokenUrl, agentLogToken } from "./credentials.js";
 import {
   writeAgentSessionActivity,
   openAgentSessionSpan,
@@ -346,8 +347,28 @@ const PYTHON_RUNNER = [
   "        raise RuntimeError(f'devin -p failed ({proc.returncode}): {output[-500:]}')",
   "    return output",
   "",
+  "def refresh_github_token():",
+  "    # The installation token baked at dispatch expires ~1h in — long lanes",
+  "    # re-mint through Pile (per-session lane token auth) right before push.",
+  "    url = os.environ.get('PILE_TOKEN_URL')",
+  "    token = os.environ.get('LANE_TOKEN')",
+  "    if not (url and token):",
+  "        return",
+  "    try:",
+  "        req = urllib.request.Request(url, headers={'Authorization': 'Bearer ' + token}, method='POST')",
+  "        with urllib.request.urlopen(req, timeout=30) as resp:",
+  "            data = json.load(resp)",
+  "        globals()['GITHUB_TOKEN'] = data['token']",
+  "        print('github token refreshed')",
+  "    except Exception as e:",
+  "        print('github token refresh failed:', e)",
+  "",
   "def commit_and_push():",
   "    env = devin_env()",
+  "    refresh_github_token()",
+  "    # Re-set the remote so the just-refreshed token (not the dispatch-time",
+  "    # one, possibly >1h stale) is what push authenticates with.",
+  "    run(['git', '-C', REPO_DIR, 'remote', 'set-url', 'origin', f'https://x-access-token:{GITHUB_TOKEN}@github.com/{REPO}.git'], env=env, check=False)",
   "    status = run(['git', '-C', REPO_DIR, 'status', '--porcelain'], env=env, capture_output=True, text=True, check=True)",
   "    ahead = run(['git', '-C', REPO_DIR, 'rev-list', '--count', f'origin/{BRANCH}..HEAD'], env=env, capture_output=True, text=True, check=True)",
   "    if status.stdout.strip():",
@@ -366,8 +387,12 @@ const PYTHON_RUNNER = [
   "    if not shutil.which('pg_ctlcluster'):",
   "        return",
   "    t0 = time.time()",
-  "    run(['pg_ctlcluster', '16', 'main', 'start'], check=False)",
-  "    run(['pg_isready', '-h', '127.0.0.1', '-p', '5432', '-t', '30'], check=False)",
+  "    start = run(['pg_ctlcluster', '16', 'main', 'start'], check=False, capture_output=True, text=True)",
+  "    if start.returncode != 0 and 'already running' not in (start.stderr or ''):",
+  "        print('pg_ctlcluster start failed:', (start.stdout or '') + (start.stderr or ''))",
+  "    ready = run(['pg_isready', '-h', '127.0.0.1', '-p', '5432', '-t', '30'], check=False, capture_output=True, text=True)",
+  "    if ready.returncode != 0:",
+  "        print('WARNING: postgres not accepting connections:', (ready.stdout or '') + (ready.stderr or ''))",
   "    run(['su', 'postgres', '-c', \"psql -c \\\"ALTER USER postgres PASSWORD 'postgres'\\\"\"], check=False)",
   "    run(['su', 'postgres', '-c', 'createdb vortex_dev'], check=False)",
   "    print(f'[timing] postgres up: {time.time() - t0:.0f}s')",
@@ -427,7 +452,8 @@ function buildSandboxEnv(
   gitIdentity: GitIdentity,
   comments?: DispatchComment[],
   instructions?: string,
-  extraEnv?: Record<string, string>
+  extraEnv?: Record<string, string>,
+  lane?: { tokenUrl: string | null; token: string | null }
 ): Record<string, string> {
   const branch = issue.branch ?? `issue-${issue.id}`;
   const repo = issue.repo ?? "";
@@ -448,6 +474,9 @@ function buildSandboxEnv(
     // this is just a local dir — harmless, and keeps the path consistent.
     npm_config_store_dir: "/home/daytona/cache/pnpm-store",
     RUNNER_PY_B64: encodeBase64(PYTHON_RUNNER),
+    ...(lane?.tokenUrl && lane.token
+      ? { PILE_TOKEN_URL: lane.tokenUrl, LANE_TOKEN: lane.token }
+      : {}),
     ...extraEnv,
   };
 }
@@ -582,6 +611,7 @@ export class DevinCliAgentProvider implements AgentProvider {
             await compute.deleteSandbox(existing);
           }
 
+          const workerEnv = this.env as WorkerEnv;
           const sandboxEnv = buildSandboxEnv(
             issue,
             model,
@@ -590,7 +620,15 @@ export class DevinCliAgentProvider implements AgentProvider {
             gitIdentity,
             comments,
             instructions,
-            extraEnv
+            extraEnv,
+            {
+              tokenUrl: agentGithubTokenUrl(
+                workerEnv,
+                organizationId,
+                sessionId
+              ),
+              token: await agentLogToken(workerEnv, organizationId, sessionId),
+            }
           );
           const sandbox = await compute.createSandbox({
             name,
@@ -824,7 +862,23 @@ export class DevinCliAgentProvider implements AgentProvider {
       },
       undefined,
       prompt,
-      { FOLLOWUP: "1" }
+      { FOLLOWUP: "1" },
+      // org may be absent when the sandbox was found via result file — no
+      // lane token without it, refresh just no-ops in the runner.
+      sandbox.organizationId
+        ? {
+            tokenUrl: agentGithubTokenUrl(
+              this.env as WorkerEnv,
+              sandbox.organizationId,
+              trackerSessionId
+            ),
+            token: await agentLogToken(
+              this.env as WorkerEnv,
+              sandbox.organizationId,
+              trackerSessionId
+            ),
+          }
+        : undefined
     );
 
     await compute.startRunner(

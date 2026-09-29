@@ -85,6 +85,7 @@ async function ghGet(
   path: string
 ): Promise<unknown> {
   const res = await ghFetch(`https://api.github.com${path}`, {
+    signal: AbortSignal.timeout(15_000),
     headers: {
       Authorization: `Bearer ${token}`,
       Accept: "application/vnd.github+json",

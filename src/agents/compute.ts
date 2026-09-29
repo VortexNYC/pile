@@ -13,6 +13,23 @@ const DEFAULT_FALLBACK_TOOLBOX = "https://proxy.app.daytona.io/toolbox";
 const POLL_INTERVAL_MS = 5000;
 const MAX_START_POLLS = 60; // 5 minutes
 const CF_SLEEP_AFTER = "4h"; // leak ceiling, above the runner's 2h timeout
+// Bound every compute I/O call — a wedged sandbox or dead toolbox must fail
+// fast, not hold the request/DO open indefinitely (PILE-217).
+const IO_TIMEOUT_MS = 30_000;
+
+function ioTimeout<T>(promise: Promise<T>, what: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () =>
+        reject(
+          computeError(`${what} timed out after ${IO_TIMEOUT_MS / 1000}s`, 504)
+        ),
+      IO_TIMEOUT_MS
+    );
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
 
 const daytonaProcessSessionSchema = z.object({
   sessionId: z.string(),
@@ -112,6 +129,7 @@ class DaytonaBackend implements ComputeBackend {
 
   private async request(path: string, init?: RequestInit): Promise<Response> {
     return fetch(`${this.config.apiUrl}${path}`, {
+      signal: AbortSignal.timeout(IO_TIMEOUT_MS),
       ...init,
       headers: {
         Authorization: `Bearer ${this.config.apiKey}`,
@@ -241,9 +259,10 @@ class DaytonaBackend implements ComputeBackend {
         .map(([k, v]) => `export ${k}='${v.replaceAll("'", "'\\''")}'`)
         .join("\n");
       await this.writeFile(sandbox, envPath, body);
-      command = `set -a && . ${envPath} && set +a && ${command}`;
+      command = `set -a && . ${envPath} && set +a && rm -f ${envPath}; ${command}`;
     }
     const createRes = await fetch(`${base}/process/session`, {
+      signal: AbortSignal.timeout(IO_TIMEOUT_MS),
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -258,6 +277,7 @@ class DaytonaBackend implements ComputeBackend {
       );
     }
     const execRes = await fetch(`${base}/process/session/${sessionId}/exec`, {
+      signal: AbortSignal.timeout(IO_TIMEOUT_MS),
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -279,6 +299,7 @@ class DaytonaBackend implements ComputeBackend {
   ): Promise<RunnerState> {
     const base = this.toolbox(sandbox);
     const res = await fetch(`${base}/process/session/${sessionId}`, {
+      signal: AbortSignal.timeout(IO_TIMEOUT_MS),
       headers: { Authorization: `Bearer ${this.config.apiKey}` },
     });
     if (res.status === 404) return "pending";
@@ -302,6 +323,7 @@ class DaytonaBackend implements ComputeBackend {
   ): Promise<string | null> {
     const base = this.toolbox(sandbox);
     const res = await fetch(`${base}/process/execute`, {
+      signal: AbortSignal.timeout(IO_TIMEOUT_MS),
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -322,6 +344,7 @@ class DaytonaBackend implements ComputeBackend {
   ): Promise<void> {
     const base = this.toolbox(sandbox);
     const res = await fetch(`${base}/process/execute`, {
+      signal: AbortSignal.timeout(IO_TIMEOUT_MS),
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -354,6 +377,7 @@ class DaytonaBackend implements ComputeBackend {
     // session has a command that hasn't reported an exit code.
     for (const pid of [sessionId, `${sessionId}-fu`]) {
       const res = await fetch(`${base}/process/session/${pid}`, {
+        signal: AbortSignal.timeout(IO_TIMEOUT_MS),
         headers: { Authorization: `Bearer ${this.config.apiKey}` },
       }).catch(() => null);
       if (!res?.ok) continue;
@@ -435,8 +459,11 @@ export class CloudflareBackend implements ComputeBackend {
     name: string,
     resultPath?: string
   ): Promise<ComputeSandbox | null> {
-    const sandbox = await this.sandbox(name);
-    const proc = await sandbox.getProcess(sessionId).catch(() => null);
+    const sandbox = await ioTimeout(this.sandbox(name), "sandbox handle");
+    const proc = await ioTimeout(
+      sandbox.getProcess(sessionId),
+      "sandbox getProcess"
+    ).catch(() => null);
     if (proc) return { id: name, name, state: "started" };
     // Process records can disappear after exit or a container sleep/restart.
     // The result file surviving is proof the sandbox (and its disk) is alive.
@@ -455,13 +482,18 @@ export class CloudflareBackend implements ComputeBackend {
     command: string,
     env?: Record<string, string>
   ): Promise<void> {
-    await (
-      await this.sandbox(sandbox.name)
-    ).startProcess(command, {
-      processId: sessionId,
-      env: env ?? sandbox.runnerEnv,
-      autoCleanup: false,
-    });
+    const handle = await ioTimeout(
+      this.sandbox(sandbox.name),
+      "sandbox handle"
+    );
+    await ioTimeout(
+      handle.startProcess(command, {
+        processId: sessionId,
+        env: env ?? sandbox.runnerEnv,
+        autoCleanup: false,
+      }),
+      "sandbox startProcess"
+    );
   }
 
   async runnerBusy(
@@ -470,14 +502,19 @@ export class CloudflareBackend implements ComputeBackend {
   ): Promise<boolean> {
     // Follow-up runs use `${sessionId}-fu` process ids — any live process
     // under the session prefix counts, not just the primary one.
-    const processes = await (
-      await this.sandbox(sandbox.name)
-    )
-      .listProcesses()
-      .catch(() => []);
+    const handle = await ioTimeout(
+      this.sandbox(sandbox.name),
+      "sandbox handle"
+    );
+    const processes = await ioTimeout(
+      handle.listProcesses(),
+      "sandbox listProcesses"
+    ).catch(() => []);
     for (const proc of processes) {
       if (!proc.id.startsWith(sessionId)) continue;
-      const status = await proc.getStatus().catch(() => null);
+      const status = await ioTimeout(proc.getStatus(), "process status").catch(
+        () => null
+      );
       if (status === "starting" || status === "running") return true;
     }
     return false;
@@ -487,11 +524,16 @@ export class CloudflareBackend implements ComputeBackend {
     sandbox: ComputeSandbox,
     sessionId: string
   ): Promise<RunnerState> {
-    const proc = await (await this.sandbox(sandbox.name)).getProcess(sessionId);
+    const proc = await ioTimeout(
+      (
+        await ioTimeout(this.sandbox(sandbox.name), "sandbox handle")
+      ).getProcess(sessionId),
+      "sandbox getProcess"
+    );
     // A missing record on a live sandbox means the runner exited (or its
     // record was lost to a container sleep) — let the result file decide.
     if (!proc) return { exitCode: 1 };
-    const status = await proc.getStatus();
+    const status = await ioTimeout(proc.getStatus(), "process status");
     if (status === "starting" || status === "running") return "running";
     return { exitCode: proc.exitCode ?? (status === "completed" ? 0 : 1) };
   }
@@ -501,7 +543,8 @@ export class CloudflareBackend implements ComputeBackend {
     path: string
   ): Promise<string | null> {
     try {
-      const res = await (await this.sandbox(sandbox.name)).readFile(path);
+      const handle = await this.sandbox(sandbox.name);
+      const res = await ioTimeout(handle.readFile(path), "sandbox readFile");
       return res.success && res.content ? res.content : null;
     } catch {
       return null;
@@ -513,9 +556,13 @@ export class CloudflareBackend implements ComputeBackend {
     path: string,
     content: string
   ): Promise<void> {
-    const res = await (
-      await this.sandbox(sandbox.name)
-    ).writeFile(path, content);
+    const res = await ioTimeout(
+      (await ioTimeout(this.sandbox(sandbox.name), "sandbox handle")).writeFile(
+        path,
+        content
+      ),
+      "sandbox writeFile"
+    );
     if (!res.success) {
       throw computeError(`Cloudflare writeFile failed: ${path}`);
     }
@@ -526,9 +573,12 @@ export class CloudflareBackend implements ComputeBackend {
     sessionId: string
   ): Promise<string | null> {
     try {
-      const logs = await (
-        await this.sandbox(sandbox.name)
-      ).getProcessLogs(sessionId);
+      const logs = await ioTimeout(
+        (
+          await ioTimeout(this.sandbox(sandbox.name), "sandbox handle")
+        ).getProcessLogs(sessionId),
+        "sandbox getProcessLogs"
+      );
       const tail = `${logs.stdout}\n${logs.stderr}`.trim();
       return tail ? tail.slice(-4000) : null;
     } catch {
@@ -537,7 +587,10 @@ export class CloudflareBackend implements ComputeBackend {
   }
 
   async deleteSandbox(sandbox: ComputeSandbox): Promise<void> {
-    await (await this.sandbox(sandbox.name)).destroy();
+    await ioTimeout(
+      (await ioTimeout(this.sandbox(sandbox.name), "sandbox handle")).destroy(),
+      "sandbox destroy"
+    );
   }
 
   async health(): Promise<{ ok: boolean; message?: string }> {

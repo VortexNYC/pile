@@ -264,6 +264,21 @@ export function agentLogUrl(
 }
 
 /**
+ * Lane endpoint the runner calls to mint a fresh GitHub installation token —
+ * the dispatch-time GITHUB_TOKEN expires ~1h in, so lanes that run long
+ * re-mint right before push. Same per-session HMAC bearer as agentLogUrl.
+ */
+export function agentGithubTokenUrl(
+  env: WorkerEnv,
+  organizationId: string,
+  sessionId: string
+): string | null {
+  const base = env.PUBLIC_API_URL ?? env.BETTER_AUTH_URL;
+  if (!base) return null;
+  return `${base.replace(/\/$/, "")}/workspaces/${organizationId}/agent/sessions/${sessionId}/github-token`;
+}
+
+/**
  * Base URL for the runner's pnpm-store cache (GET/PUT keyed by lockfile hash
  * appended as a path segment). Same per-session token auth as agentLogUrl.
  */

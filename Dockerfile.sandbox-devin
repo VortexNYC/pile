@@ -25,7 +25,14 @@ RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/* \
     && corepack enable \
-    && corepack prepare pnpm@11.13.1 --activate
+    && corepack prepare pnpm@11.13.1 --activate \
+    && corepack prepare pnpm@9.15.4
+# The base image ships node22 at /usr/local/bin — which precedes /usr/bin in
+# PATH — so shadow it with the nodesource v24 binaries.
+RUN for b in node npm npx corepack; do \
+      [ -e "/usr/bin/$b" ] && ln -sf "/usr/bin/$b" "/usr/local/bin/$b"; \
+    done \
+    && node --version | grep -q '^v24'
 
 ENV HOME=/root
 

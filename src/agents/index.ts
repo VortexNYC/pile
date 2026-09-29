@@ -15,6 +15,7 @@ import {
 import { CfAgentProvider } from "./cf-agent.js";
 import { CodexCliAgentProvider } from "./codex-cli.js";
 import { CodexAgentProvider } from "./codex.js";
+import { computeBackend } from "./compute.js";
 import { loadProviderConfig } from "./credentials.js";
 import { CursorCliAgentProvider } from "./cursor-cli.js";
 import { CursorAgentProvider } from "./cursor.js";
@@ -28,6 +29,10 @@ import {
   type LaneDbConfig,
 } from "./lane-db.js";
 import type { AgentProvider } from "./provider.js";
+
+// Workspace-wide ceiling on live lanes — the container apps are bounded
+// (max_instances) and one lane's provisioning wedge otherwise starves all.
+const MAX_ACTIVE_LANES_PER_WORKSPACE = 25;
 
 const providers: Record<string, (env: WorkerEnv) => AgentProvider> = {
   devin: (env) => new DevinAgentProvider(env),
@@ -169,12 +174,16 @@ export async function dispatchAgent(
   }
 
   // PILE-214 — pre-dispatch dedupe. Skipped on promote: the parked session
-  // already passed (or was deliberately queued by) this gate.
+  // already passed (or was deliberately queued by) this gate. Fails open —
+  // a GitHub outage must not stop dispatch — but the skip is surfaced as a
+  // session event so coverage gaps are auditable.
   let dedupeAdvisory: DedupeResult | null = null;
+  let dedupeError: string | null = null;
   if (!options?.promoteSessionId) {
-    const dedupe = await checkDispatchDedupe(env, stub, issue).catch(
-      () => null
-    );
+    const dedupe = await checkDispatchDedupe(env, stub, issue).catch((err) => {
+      dedupeError = err instanceof Error ? err.message : String(err);
+      return null;
+    });
     if (dedupe?.hardBlock) {
       throw new VortexError({
         code: "CONFLICT",
@@ -203,6 +212,23 @@ export async function dispatchAgent(
         })
         .catch(() => {});
       return queued;
+    }
+    // Workspace-wide lane ceiling for container-backed lanes — the CF
+    // container apps are bounded (max_instances) and an uncapped queue of
+    // concurrent lanes wedges provisioning for everyone. Promote is exempt:
+    // it moves a parked lane. Daytona lanes are provider-quota bound, not ours.
+    const liveCount = (await stub.listAgentSessions({ limit: 200 })).filter(
+      (s) => !["completed", "failed", "canceled"].includes(s.status)
+    ).length;
+    if (
+      liveCount >= MAX_ACTIVE_LANES_PER_WORKSPACE &&
+      computeBackend(env, agentId).kind === "cloudflare"
+    ) {
+      throw new VortexError({
+        code: "CONFLICT",
+        status: 409,
+        message: `Workspace has ${liveCount} active agent sessions (max ${MAX_ACTIVE_LANES_PER_WORKSPACE}) — wait for lanes to finish`,
+      });
     }
     if (
       dedupe &&
@@ -279,6 +305,15 @@ export async function dispatchAgent(
     }
   }
 
+  if (dedupeError) {
+    await stub
+      .addAgentSessionEvent({
+        sessionId: session.id,
+        type: "lane.dedupe",
+        message: `Pre-dispatch dedupe skipped: ${dedupeError}`,
+      })
+      .catch(() => {});
+  }
   if (dedupeAdvisory) {
     await stub
       .addAgentSessionEvent({

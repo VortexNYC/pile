@@ -7,6 +7,7 @@ import { resolveAgentEnv } from "../agents/daytona.js";
 import { dispatchAgent, getAgentProvider } from "../agents/index.js";
 import { timingSafeEqualHex } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
+import { getInstallationTokenForRepo } from "../global/github-auth.js";
 import { createRepoBranch } from "../global/repo-branches.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
@@ -925,6 +926,45 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         )
       );
       return c.json({ ok: true, appended: capped.length });
+    }
+  );
+
+  // Fresh GitHub installation token for live lanes — the token baked at
+  // dispatch expires ~1h in, so the runner re-mints through here right before
+  // push. Same per-session HMAC bearer auth as log ingest; returns a token
+  // scoped to the session issue's repo only.
+  app.post(
+    "/workspaces/:organizationId/agent/sessions/:sessionId/github-token",
+    async (c) => {
+      const { organizationId, sessionId } = c.req.param();
+      if (
+        !(await verifySessionToken(
+          c.env,
+          c.req.header("authorization"),
+          organizationId,
+          sessionId
+        ))
+      ) {
+        return c.json({ message: "Unauthorized" }, 401);
+      }
+      const stub = getWorkspaceStub(c.env, organizationId);
+      const session = await stub.getAgentSession(sessionId);
+      if (!session) {
+        return c.json({ message: "Session not found" }, 404);
+      }
+      if (["completed", "failed", "canceled"].includes(session.status)) {
+        return c.json({ message: "Session is terminal" }, 409);
+      }
+      const issue = await stub.getIssue(session.issueId);
+      if (!issue?.repo) {
+        return c.json({ message: "Session issue has no repository" }, 422);
+      }
+      const [owner, name] = issue.repo.split("/");
+      const token = await getInstallationTokenForRepo(c.env, owner, name);
+      if (!token) {
+        return c.json({ message: "No installation token for repository" }, 502);
+      }
+      return c.json({ token });
     }
   );
 

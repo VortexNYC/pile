@@ -3,6 +3,7 @@ import { getInstallationTokenForRepo } from "../global/github-auth.js";
 import { scrubCaptureText } from "../global/redact.js";
 import { organization } from "../global/schema.js";
 import { processIncomingMessage } from "../global/support-channels.js";
+import { VortexError } from "../platform/errors.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { AgentSession, AgentSessionStatus } from "../types/workspace.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
@@ -18,7 +19,7 @@ import type {
 
 export const DEFAULT_TIMEOUT_MINUTES = 60;
 export const DEFAULT_INACTIVITY_MINUTES = 20;
-export const DEFAULT_PROVISION_TIMEOUT_MINUTES = 30;
+export const DEFAULT_PROVISION_TIMEOUT_MINUTES = 10;
 // A provider call that hangs must never stall the whole org's sweep — the
 // loop is serial, so one wedged sandbox otherwise starves every session.
 const DEFAULT_PROBE_TIMEOUT_MS = 90_000;
@@ -235,9 +236,14 @@ async function retryInfraSession(
       message: `Infrastructure failure — redispatched as session ${retried.id}`,
     });
   } catch (err) {
-    console.error("agent session infra retry failed", {
+    // CONFLICT means a live session already owns the issue — the retry is
+    // redundant, not an error worth alarming on.
+    const isConflict = err instanceof VortexError && err.code === "CONFLICT";
+    const log = isConflict ? console.log : console.error;
+    log("agent session infra retry skipped/failed", {
       session: session.id,
       agentId: session.agentId,
+      conflict: isConflict,
       error: err instanceof Error ? err.message : String(err),
     });
   }
