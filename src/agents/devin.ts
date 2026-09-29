@@ -220,8 +220,11 @@ export class DevinAgentProvider implements AgentProvider {
     const orgId = this.env.DEVIN_ORG_ID;
     const token = this.env.DEVIN_TOKEN;
     if (!orgId || !token) return false;
+    const devinId = providerSessionId.startsWith("devin-")
+      ? providerSessionId
+      : `devin-${providerSessionId}`;
     const res = await fetch(
-      `https://api.devin.ai/v3/organizations/${orgId}/sessions/${providerSessionId}/message`,
+      `https://api.devin.ai/v3/organizations/${orgId}/sessions/${devinId}/messages`,
       {
         method: "POST",
         headers: {
