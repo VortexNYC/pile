@@ -1,6 +1,6 @@
 # Agent Providers
 
-<!-- This doc is generated-maintained; keep edits in sync with the provider catalog. -->
+<!-- This doc is generated-maintained by the release process; keep edits in sync with the provider catalog. -->
 
 The tracker is provider-agnostic at the core: every agent is a registered
 provider with a `dispatch`/`poll` contract, and each workspace configures its
