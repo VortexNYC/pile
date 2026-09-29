@@ -4,7 +4,7 @@ import * as samlify from "samlify";
 import { describe, expect, it } from "vitest";
 
 import { createD1 } from "../global/db.js";
-import { member, user } from "../global/schema.js";
+import { member, ssoProvider, user } from "../global/schema.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
 
@@ -156,6 +156,32 @@ describe("SAML SSO handshake", () => {
     );
     expect(register.status).toBe(200);
 
+    const signInRequest = () =>
+      new Request(new URL("/api/auth/sign-in/sso", origin), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          providerId,
+          callbackURL: `${origin}/sso-done`,
+        }),
+      });
+
+    // domainVerification is enabled: sign-in is refused until the provider
+    // proves domain ownership.
+    const unverified = await app.fetch(signInRequest(), env);
+    expect(unverified.status).toBe(401);
+    expect(await unverified.json()).toMatchObject({
+      message: "Provider domain has not been verified",
+    });
+
+    // The DNS TXT lookup can't run in workerd tests; record the outcome a
+    // successful /sso/verify-domain would persist.
+    const db = createD1(env.D1);
+    await db
+      .update(ssoProvider)
+      .set({ domainVerified: true })
+      .where(eq(ssoProvider.providerId, providerId));
+
     // Fetch our SP metadata and build a mock IdP against it.
     const spMetaRes = await app.fetch(
       new Request(
@@ -179,17 +205,7 @@ describe("SAML SSO handshake", () => {
 
     // SP-initiated: ask our worker for a login redirect, which carries a
     // deflated SAMLRequest the IdP parses and answers.
-    const signIn = await app.fetch(
-      new Request(new URL("/api/auth/sign-in/sso", origin), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          providerId,
-          callbackURL: `${origin}/sso-done`,
-        }),
-      }),
-      env
-    );
+    const signIn = await app.fetch(signInRequest(), env);
     expect(signIn.status).toBe(200);
     const { url: redirectUrl } = (await signIn.json()) as { url: string };
     const samlRequest = new URL(redirectUrl).searchParams.get("SAMLRequest");
@@ -224,7 +240,6 @@ describe("SAML SSO handshake", () => {
     );
 
     // organizationProvisioning: the SSO user lands as a member of the org.
-    const db = createD1(env.D1);
     const rows = await db
       .select({ role: member.role })
       .from(member)
