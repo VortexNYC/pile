@@ -1,5 +1,7 @@
 # Agent Providers
 
+<!-- This doc is generated-maintained; keep edits in sync with the provider catalog. -->
+
 The tracker is provider-agnostic at the core: every agent is a registered
 provider with a `dispatch`/`poll` contract, and each workspace configures its
 own providers. Credentials are per-workspace, stored in that workspace's own
