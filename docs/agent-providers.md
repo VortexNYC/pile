@@ -1,6 +1,7 @@
 # Agent Providers
 
 <!-- This doc is generated-maintained by the release process. Keep manual edits in sync with the provider catalog so the next release does not overwrite them. -->
+<!-- Covers external providers too, not just the built-in agents. -->
 
 The tracker is provider-agnostic at the core: every agent is a registered
 provider with a `dispatch`/`poll` contract, and each workspace configures its
