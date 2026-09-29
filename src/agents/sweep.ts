@@ -9,7 +9,7 @@ import type { AgentSession, AgentSessionStatus } from "../types/workspace.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
 import { loadProviderConfig } from "./credentials.js";
 import { resolveAgentEnv } from "./daytona.js";
-import { laneFollowupThrottled } from "./followup.js";
+import { followupThrottleWindowMs, laneFollowupThrottled } from "./followup.js";
 import { dispatchAgent, getAgentProvider } from "./index.js";
 import { getLaneDbProvider, type LaneDbRef } from "./lane-db.js";
 import type {
@@ -958,9 +958,8 @@ export async function syncOpenPrSessions(
               resolveAgentEnv(env, providerConfig ?? undefined)
             );
             if (provider.sendPrompt && issue) {
-              if (
-                await laneFollowupThrottled(stub, session.id, 5 * 60 * 1000)
-              ) {
+              const windowMs = followupThrottleWindowMs(providerConfig?.config);
+              if (await laneFollowupThrottled(stub, session.id, windowMs)) {
                 await stub
                   .addAgentSessionEvent({
                     sessionId: session.id,

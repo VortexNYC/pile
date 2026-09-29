@@ -3,7 +3,10 @@ import { createRoute, z } from "@hono/zod-openapi";
 
 import { decryptSecret, loadProviderConfig } from "../agents/credentials.js";
 import { resolveAgentEnv } from "../agents/daytona.js";
-import { laneFollowupThrottled } from "../agents/followup.js";
+import {
+  followupThrottleWindowMs,
+  laneFollowupThrottled,
+} from "../agents/followup.js";
 import { getAgentProvider } from "../agents/index.js";
 import { createD1 } from "../global/db.js";
 import { getInstallationToken } from "../global/github-auth.js";
@@ -377,11 +380,12 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
             resolveAgentEnv(c.env, providerConfig ?? undefined)
           );
           if (provider.sendPrompt) {
+            const windowMs = followupThrottleWindowMs(providerConfig?.config);
             if (
               await laneFollowupThrottled(
                 issueStub,
                 active.session.id,
-                5 * 60 * 1000
+                windowMs
               )
             ) {
               await issueStub
