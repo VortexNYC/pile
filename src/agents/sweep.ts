@@ -3,6 +3,7 @@ import { getInstallationTokenForRepo } from "../global/github-auth.js";
 import { scrubCaptureText } from "../global/redact.js";
 import { organization } from "../global/schema.js";
 import { processIncomingMessage } from "../global/support-channels.js";
+import { replyLaneResultToTicket } from "../global/support-escalation.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { AgentSession, AgentSessionStatus } from "../types/workspace.js";
@@ -690,6 +691,18 @@ export async function sweepAgentSessions(
           ) {
             await stub.applyAgentSessionResult(session.id, polled);
             await teardownLaneDbForSession(env, stub, session);
+            // PILE-223 — escalated tickets get the lane's result posted
+            // back to the customer thread.
+            if (polled.status === "completed" || polled.status === "failed") {
+              await replyLaneResultToTicket(
+                env,
+                d1,
+                id,
+                session.issueId,
+                session.id,
+                polled.result
+              );
+            }
             if (polled.status === "failed") {
               await ingestFailedAgentSession(env, id, session, polled);
               if (polled.infraFailure) {

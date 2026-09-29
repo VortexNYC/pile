@@ -27,6 +27,7 @@ import {
   getTicketById,
   stripHtml,
   type SupportTicket,
+  type SupportTicketActorType,
   type SupportTicketMessageChannel,
   type SupportTicketSource,
 } from "./support-tickets.js";
@@ -210,6 +211,10 @@ export async function processOutgoingMessage(
     markdownContent?: string | null;
     subject?: string | null;
     idempotencyKey?: string | null;
+    /** Non-human senders (lanes, automations) — avoids stamping a fake
+     *  user FK on the ticket message. */
+    actorType?: SupportTicketActorType;
+    actorId?: string;
   },
   userId: string
 ): Promise<{ ok: true; messageId: string; sent: boolean }> {
@@ -257,9 +262,9 @@ export async function processOutgoingMessage(
       textContent: input.textContent,
       markdownContent: input.markdownContent ?? null,
       channel: channel.type as SupportTicketMessageChannel,
-      userId,
-      actorType: "user",
-      actorId: userId,
+      userId: input.actorType && input.actorType !== "user" ? null : userId,
+      actorType: input.actorType ?? "user",
+      actorId: input.actorId ?? userId,
       subType: idempotencyKey ? "outbound" : null,
       externalId: idempotencyKey,
       metadata,

@@ -15,6 +15,7 @@ import { timingSafeEqualHex } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
 import { getInstallationTokenForRepo } from "../global/github-auth.js";
 import { createRepoBranch } from "../global/repo-branches.js";
+import { replyLaneResultToTicket } from "../global/support-escalation.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
@@ -1224,6 +1225,18 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
           await stub.updateAgentSession(sessionId, {
             lastProgressAt: update.lastProgressAt,
           });
+          // PILE-223 — an escalated ticket gets the external agent's
+          // result posted back to the customer thread.
+          if (update.status === "completed" || update.status === "failed") {
+            await replyLaneResultToTicket(
+              c.env,
+              createD1(c.env.D1),
+              organizationId,
+              session.issueId,
+              sessionId,
+              update.result ?? session.result
+            );
+          }
           const updated = await stub.getAgentSession(sessionId);
           return c.json({ session: updated });
         }

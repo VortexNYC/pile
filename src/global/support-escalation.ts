@@ -5,6 +5,7 @@ import type { WorkerEnv } from "../platform/middleware.js";
 import type { Issue } from "../types/workspace.js";
 import type { D1Client } from "./db.js";
 import {
+  supportChannels,
   supportEscalationRules,
   supportTicketEvents,
   supportTickets,
@@ -85,6 +86,11 @@ export const escalationActionSchema = z.object({
     ] as const)
     .optional(),
   labelIds: z.array(z.string()).optional(),
+  /** PILE-223 — optional auto-dispatch: a lane starts on the escalated
+   *  issue with the ticket context already in its description. */
+  agentId: z.string().optional(),
+  repo: z.string().optional(),
+  instructions: z.string().optional(),
 });
 
 export type EscalationAction = z.infer<typeof escalationActionSchema>;
@@ -402,6 +408,7 @@ async function createIssueFromTicket(
     status: action.status ?? "triage",
     priority: action.priority ?? ticket.priority,
     teamId: action.teamId,
+    repo: action.repo ?? null,
     labelIds:
       action.labelIds && action.labelIds.length > 0
         ? action.labelIds.join(",")
@@ -441,7 +448,101 @@ async function createIssueFromTicket(
     createdAt: now,
   });
 
+  if (action.agentId) {
+    try {
+      const { dispatchAgent } = await import("../agents/index.js");
+      await dispatchAgent(
+        env,
+        action.agentId,
+        organizationId,
+        issue,
+        {
+          id: ruleId,
+          organizationId,
+          type: "agent",
+          permissions: [],
+        },
+        undefined,
+        undefined,
+        {
+          instructions:
+            action.instructions ??
+            `Support ticket ${ticket.number} escalated to this issue. Investigate and fix; your completion summary is posted back to the customer thread.`,
+        }
+      );
+    } catch (err) {
+      console.error("escalation dispatch failed", {
+        ticketId: ticket.id,
+        issueId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
   return issue;
+}
+
+/** PILE-223 reply leg — when a lane finishes an issue that was escalated
+ *  from a support ticket, post its result back on the ticket's source
+ *  channel. Idempotent per session; silently skips when no ticket/channel. */
+export async function replyLaneResultToTicket(
+  env: WorkerEnv,
+  db: D1Client,
+  organizationId: string,
+  issueId: string,
+  sessionId: string,
+  result: string | null | undefined
+): Promise<void> {
+  try {
+    if (!result?.trim()) return;
+    const ticket = await db
+      .select()
+      .from(supportTickets)
+      .where(
+        and(
+          eq(supportTickets.issueId, issueId),
+          eq(supportTickets.organizationId, organizationId)
+        )
+      )
+      .limit(1)
+      .get();
+    if (!ticket) return;
+
+    const channel = await db
+      .select()
+      .from(supportChannels)
+      .where(
+        and(
+          eq(supportChannels.organizationId, organizationId),
+          eq(supportChannels.type, ticket.sourceChannel),
+          eq(supportChannels.isActive, true)
+        )
+      )
+      .limit(1)
+      .get();
+    if (!channel) return;
+
+    const { processOutgoingMessage } = await import("./support-channels.js");
+    await processOutgoingMessage(
+      db,
+      env,
+      channel,
+      {
+        ticketId: ticket.id,
+        textContent: result,
+        idempotencyKey: `lane-reply:${sessionId}`,
+        actorType: "agent",
+        actorId: `lane:${sessionId}`,
+      },
+      ""
+    );
+  } catch (err) {
+    console.error("escalation reply failed", {
+      issueId,
+      sessionId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 function buildEscalationDescription(

@@ -3,14 +3,19 @@ import { eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { MockAgentProvider } from "../agents/harness.js";
+import { registerAgentProvider } from "../agents/index.js";
 import { createD1 } from "../global/db.js";
 import {
   apikey as apikeyTable,
+  supportChannels,
   supportTicketEvents,
+  supportTicketMessages,
   supportTickets,
   user as userTable,
 } from "../global/schema.js";
 import { getCustomerById } from "../global/support-contacts.js";
+import { replyLaneResultToTicket } from "../global/support-escalation.js";
 import { maybeEscalate } from "../global/support-escalation.js";
 import { createTicket, getTicketById } from "../global/support-tickets.js";
 import { createWorkspace } from "../global/workspaces.js";
@@ -269,5 +274,129 @@ describe("support-escalation API", () => {
       .where(eq(supportTicketEvents.ticketId, ticket.id))
       .all();
     expect(linkEvents.filter((e) => e.type === "link_added")).toHaveLength(1);
+  });
+
+  it("dispatches a lane when the rule action names an agentId", async () => {
+    const db = createD1(env.D1);
+    const agentId = `mock-esc-${crypto.randomUUID().slice(0, 8)}`;
+    registerAgentProvider(agentId, () => new MockAgentProvider(agentId, {}));
+    await fetch(`/workspaces/${organizationId}/support/escalation-rules`, {
+      method: "POST",
+      body: JSON.stringify({
+        name: "dispatch lane on escalate",
+        conditions: { keywords: ["crash"], channels: ["api"] },
+        action: {
+          type: "create_issue",
+          agentId,
+          repo: "VortexNYC/pile",
+        },
+      }),
+    }).then((r) => expect(r.status).toBe(201));
+
+    const customerId = await createCustomer("lane@example.com");
+    const ticketRes = await fetch(
+      `/workspaces/${organizationId}/support/tickets`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          customerId,
+          title: "app crash on save",
+          sourceChannel: "api",
+          message: { textContent: "crash", channel: "api" },
+        }),
+      }
+    );
+    const ticketBody = (await ticketRes.json()) as {
+      ticket: { id: string; issueId: string | null };
+    };
+    expect(ticketBody.ticket.issueId).toBeTruthy();
+
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const issue = await stub.getIssue(ticketBody.ticket.issueId!);
+    expect(issue?.repo).toBe("VortexNYC/pile");
+    const sessions = await stub.listAgentSessions({
+      issueId: issue!.id,
+    });
+    expect(sessions.length).toBeGreaterThanOrEqual(1);
+    expect(sessions[0]?.agentId).toBe(agentId);
+    void db;
+  });
+
+  it("posts the lane result back to the escalated ticket thread once", async () => {
+    const db = createD1(env.D1);
+    const customerId = await createCustomer("reply@example.com");
+    await db.insert(supportChannels).values({
+      id: crypto.randomUUID(),
+      organizationId,
+      type: "api",
+      name: "api-channel",
+      isActive: true,
+      config: "{}",
+    });
+    const ticket = await createTicket(db, {
+      organizationId,
+      customerId,
+      title: "reply ticket",
+      sourceChannel: "api",
+      priority: "medium",
+      status: "todo",
+      externalSource: "api",
+    });
+    const sessionId = crypto.randomUUID();
+    const issueId = `escalation:${ticket.id}`;
+    await db
+      .update(supportTickets)
+      .set({ issueId })
+      .where(eq(supportTickets.id, ticket.id));
+
+    await replyLaneResultToTicket(
+      env,
+      db,
+      organizationId,
+      issueId,
+      sessionId,
+      "Fixed in commit abc123"
+    );
+
+    const ticketMessages = () =>
+      db
+        .select()
+        .from(supportTicketMessages)
+        .innerJoin(
+          supportTicketEvents,
+          eq(supportTicketMessages.eventId, supportTicketEvents.id)
+        )
+        .where(eq(supportTicketEvents.ticketId, ticket.id))
+        .all();
+
+    const messages = await ticketMessages();
+    const outbound = messages.filter(
+      (m) =>
+        m.support_ticket_messages.direction === "outbound" &&
+        m.support_ticket_messages.textContent === "Fixed in commit abc123"
+    );
+    expect(outbound).toHaveLength(1);
+
+    // Idempotent — a second terminal signal for the same session
+    // must not double-post.
+    await replyLaneResultToTicket(
+      env,
+      db,
+      organizationId,
+      issueId,
+      sessionId,
+      "Fixed in commit abc123"
+    );
+    const after = await ticketMessages();
+    expect(
+      after.filter(
+        (m) =>
+          m.support_ticket_messages.direction === "outbound" &&
+          m.support_ticket_messages.textContent === "Fixed in commit abc123"
+      )
+    ).toHaveLength(1);
   });
 });

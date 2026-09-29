@@ -17836,6 +17836,9 @@ export interface paths {
                                     /** @enum {string} */
                                     status?: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
                                     labelIds?: string[];
+                                    agentId?: string;
+                                    repo?: string;
+                                    instructions?: string;
                                 };
                                 createdAt: string;
                                 updatedAt: string;
@@ -17879,6 +17882,9 @@ export interface paths {
                             /** @enum {string} */
                             status?: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
                             labelIds?: string[];
+                            agentId?: string;
+                            repo?: string;
+                            instructions?: string;
                         };
                     };
                 };
@@ -17914,6 +17920,9 @@ export interface paths {
                                     /** @enum {string} */
                                     status?: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
                                     labelIds?: string[];
+                                    agentId?: string;
+                                    repo?: string;
+                                    instructions?: string;
                                 };
                                 createdAt: string;
                                 updatedAt: string;
@@ -17979,6 +17988,9 @@ export interface paths {
                                     /** @enum {string} */
                                     status?: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
                                     labelIds?: string[];
+                                    agentId?: string;
+                                    repo?: string;
+                                    instructions?: string;
                                 };
                                 createdAt: string;
                                 updatedAt: string;
@@ -18062,6 +18074,9 @@ export interface paths {
                             /** @enum {string} */
                             status?: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
                             labelIds?: string[];
+                            agentId?: string;
+                            repo?: string;
+                            instructions?: string;
                         };
                     };
                 };
@@ -18097,6 +18112,9 @@ export interface paths {
                                     /** @enum {string} */
                                     status?: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
                                     labelIds?: string[];
+                                    agentId?: string;
+                                    repo?: string;
+                                    instructions?: string;
                                 };
                                 createdAt: string;
                                 updatedAt: string;

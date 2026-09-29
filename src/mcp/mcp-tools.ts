@@ -7186,6 +7186,15 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                   "items": {
                     "type": "string"
                   }
+                },
+                "agentId": {
+                  "type": "string"
+                },
+                "repo": {
+                  "type": "string"
+                },
+                "instructions": {
+                  "type": "string"
                 }
               },
               "required": [
@@ -12938,6 +12947,15 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                   "items": {
                     "type": "string"
                   }
+                },
+                "agentId": {
+                  "type": "string"
+                },
+                "repo": {
+                  "type": "string"
+                },
+                "instructions": {
+                  "type": "string"
                 }
               },
               "required": [

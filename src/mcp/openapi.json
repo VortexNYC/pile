@@ -36651,6 +36651,15 @@
                                 "items": {
                                   "type": "string"
                                 }
+                              },
+                              "agentId": {
+                                "type": "string"
+                              },
+                              "repo": {
+                                "type": "string"
+                              },
+                              "instructions": {
+                                "type": "string"
                               }
                             },
                             "required": [
@@ -36832,6 +36841,15 @@
                         "items": {
                           "type": "string"
                         }
+                      },
+                      "agentId": {
+                        "type": "string"
+                      },
+                      "repo": {
+                        "type": "string"
+                      },
+                      "instructions": {
+                        "type": "string"
                       }
                     },
                     "required": [
@@ -36988,6 +37006,15 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "agentId": {
+                              "type": "string"
+                            },
+                            "repo": {
+                              "type": "string"
+                            },
+                            "instructions": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -37188,6 +37215,15 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "agentId": {
+                              "type": "string"
+                            },
+                            "repo": {
+                              "type": "string"
+                            },
+                            "instructions": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -37379,6 +37415,15 @@
                         "items": {
                           "type": "string"
                         }
+                      },
+                      "agentId": {
+                        "type": "string"
+                      },
+                      "repo": {
+                        "type": "string"
+                      },
+                      "instructions": {
+                        "type": "string"
                       }
                     },
                     "required": [
@@ -37530,6 +37575,15 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "agentId": {
+                              "type": "string"
+                            },
+                            "repo": {
+                              "type": "string"
+                            },
+                            "instructions": {
+                              "type": "string"
                             }
                           },
                           "required": [
