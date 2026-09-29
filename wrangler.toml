@@ -174,7 +174,7 @@ instance_type = "standard-1"
 
 [[env.production.containers]]
 class_name = "DevinSandbox"
-image = "registry.cloudflare.com/31bfc2c14a28e0a39e8b9e3c556a18be/pile-devinsandbox-production@sha256:babbd0ec01042f71bd0b9cb2ba1383bd699a80526375acd9084c0a9429469074"
+image = "registry.cloudflare.com/31bfc2c14a28e0a39e8b9e3c556a18be/pile-devinsandbox-production@sha256:4c2bc6db1581708ac60209fe697ca2a588fcb93471e0d86374c5ef57c9d6046b"
 max_instances = 20
 instance_type = "standard-1"
 

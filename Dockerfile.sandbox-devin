@@ -29,19 +29,9 @@ RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
 
 ENV HOME=/root
 
-# Prewarm the pnpm store. Lanes extract a branch tarball into a fresh dir and
-# run `pnpm install` — with the store baked, install only fetches lockfile
-# drift instead of the whole tree. Seeds are vendored lockfile snapshots
-# (docker/prewarm/); refresh them occasionally — drift is fine, it's a cache.
-# `pnpm fetch` needs package.json (+workspace manifest) next to the lockfile
-# or it no-ops. This repo's own files COPY from the root; lane targets are
-# vendored snapshots under docker/prewarm/.
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml /prewarm/pile/
-COPY docker/prewarm/ /prewarm/
-RUN cd /prewarm/pile && pnpm fetch \
-    && cd /prewarm/vortex && pnpm fetch \
-    && cd /prewarm/seal && pnpm fetch \
-    && rm -rf /prewarm
+# NOTE: a baked pnpm store (prewarmed dep trees) pushed this image past the
+# Workers Containers ~2GB size limit and instances would not start. Keep the
+# image lean; lanes pay `pnpm install` cost per run.
 
 # The devin installer exits non-zero when its interactive wizard bails
 # without a TTY; verify the binary directly.
