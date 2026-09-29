@@ -1,5 +1,6 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 
+import { verifySessionToken } from "../agents/credentials.js";
 import { githubWebhookRoute, processGithubWebhook } from "../agents/github.js";
 import { gitlabWebhookRoute, processGitlabWebhook } from "../agents/gitlab.js";
 import {
@@ -159,6 +160,36 @@ app.use("/workspaces/:organizationId/*", async (c, next) => {
       c.req.method === "GET" ||
       c.req.method === "PUT")
   ) {
+    await next();
+    return;
+  }
+  // Lane-token reads (PILE-232): a lane may read back only its own session
+  // record and event timeline. Unlike the write routes above, these paths
+  // are shared with workspace-authenticated callers, so the bypass only
+  // applies when the bearer actually validates as the lane token for that
+  // session — everyone else falls through to workspace auth as usual.
+  const laneGet =
+    c.req.method === "GET" &&
+    /^\/workspaces\/([^/]+)\/agent\/sessions\/([^/]+)(\/(events|checks))?$/.exec(
+      c.req.path
+    );
+  if (
+    laneGet &&
+    (await verifySessionToken(
+      c.env,
+      c.req.header("authorization"),
+      laneGet[1]!,
+      laneGet[2]!
+    ))
+  ) {
+    // A valid lane token becomes a scoped agent identity — enough for
+    // agent:read routes, nothing else.
+    c.set("workspaceIdentity", {
+      id: `lane:${laneGet[2]}`,
+      organizationId: laneGet[1]!,
+      type: "agent",
+      permissions: ["agent:read"],
+    });
     await next();
     return;
   }

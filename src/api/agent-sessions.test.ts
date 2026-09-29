@@ -1402,4 +1402,90 @@ describe("agent sessions API", () => {
     );
     expect(after.status).toBe(409);
   });
+
+  it("lets a lane token read back its own session and events (PILE-232)", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const issue = await stub.createIssue({
+      title: "Lane read test",
+      repo: "VortexNYC/pile",
+    });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "mock",
+      provider: "mock",
+      actorId: "user-1",
+      actorType: "user",
+      status: "running",
+      providerSessionId: "lane-read-1",
+    });
+    const laneToken = await agentLogToken(
+      env as unknown as WorkerEnv,
+      organizationId,
+      session.id
+    );
+
+    const getRes = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/sessions/${session.id}`, {
+        headers: { Authorization: `Bearer ${laneToken}` },
+      }),
+      env
+    );
+    expect(getRes.status).toBe(200);
+    const got = await getRes.json<{ id: string; status: string }>();
+    expect(got.id).toBe(session.id);
+
+    const evRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/events`,
+        { headers: { Authorization: `Bearer ${laneToken}` } }
+      ),
+      env
+    );
+    expect(evRes.status).toBe(200);
+
+    // No prUrl → checks resolves empty without touching GitHub.
+    const checksRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/checks`,
+        { headers: { Authorization: `Bearer ${laneToken}` } }
+      ),
+      env
+    );
+    expect(checksRes.status).toBe(200);
+    const checks = await checksRes.json<{ checks: unknown[] }>();
+    expect(checks.checks).toEqual([]);
+
+    // A token minted for a different session cannot read this one.
+    const foreign = await agentLogToken(
+      env as unknown as WorkerEnv,
+      organizationId,
+      crypto.randomUUID()
+    );
+    const cross = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/sessions/${session.id}`, {
+        headers: { Authorization: `Bearer ${foreign}` },
+      }),
+      env
+    );
+    expect([401, 403]).toContain(cross.status);
+
+    // No credentials → not a lane request, falls to workspace auth → 401.
+    const anon = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/sessions/${session.id}`),
+      env
+    );
+    expect([401, 403]).toContain(anon.status);
+
+    // Workspace tokens keep working on the same path (no regression).
+    const wsRes = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/sessions/${session.id}`, {
+        token,
+      }),
+      env
+    );
+    expect(wsRes.status).toBe(200);
+  });
 });

@@ -4899,6 +4899,96 @@
         "summary": "List agent session events"
       }
     },
+    "/workspaces/{organizationId}/agent/sessions/{sessionId}/checks": {
+      "get": {
+        "tags": [
+          "agent-sessions"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "sessionId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "CI check-runs for the session's pull request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "checks": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "conclusion": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "detailsUrl": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "htmlUrl": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "status",
+                          "conclusion",
+                          "detailsUrl",
+                          "htmlUrl"
+                        ]
+                      }
+                    },
+                    "prCheckState": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "checks",
+                    "prCheckState"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Session prUrl is not a GitHub PR"
+          },
+          "404": {
+            "description": "Session not found"
+          },
+          "502": {
+            "description": "GitHub lookup failed"
+          }
+        },
+        "summary": "List agent session checks"
+      }
+    },
     "/workspaces/{organizationId}/agent/sessions/{sessionId}/activities": {
       "post": {
         "tags": [

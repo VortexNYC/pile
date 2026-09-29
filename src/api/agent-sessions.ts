@@ -7,6 +7,7 @@ import {
   agentLogUrl,
   agentReportUrl,
   loadProviderConfig,
+  verifySessionToken,
 } from "../agents/credentials.js";
 import { resolveAgentEnv } from "../agents/daytona.js";
 import { dispatchAgent, getAgentProvider } from "../agents/index.js";
@@ -27,6 +28,7 @@ import type {
 } from "../workspace/schema.js";
 import { captureSessionPrArtifact } from "./agent-artifacts.js";
 import { getExecutionCtx } from "./execution-ctx.js";
+import { fetchGitHubCheckRuns, fetchGitHubPull, parsePrUrl } from "./pr.js";
 import { getWorkspaceStub } from "./stub.js";
 
 const agentActivityTypeSchema = z.enum([
@@ -273,6 +275,40 @@ const getSessionEventsRoute = createRoute({
       },
     },
     404: { description: "Session not found" },
+  },
+});
+
+const getSessionChecksRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/checks",
+  tags: ["agent-sessions"],
+  middleware: [rls("read", "agent:read")],
+  request: {
+    params: z.object({ organizationId: z.string(), sessionId: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "CI check-runs for the session's pull request",
+      content: {
+        "application/json": {
+          schema: z.object({
+            checks: z.array(
+              z.object({
+                name: z.string(),
+                status: z.string(),
+                conclusion: z.string().nullable(),
+                detailsUrl: z.string().nullable(),
+                htmlUrl: z.string().nullable(),
+              })
+            ),
+            prCheckState: z.string().nullable(),
+          }),
+        },
+      },
+    },
+    400: { description: "Session prUrl is not a GitHub PR" },
+    404: { description: "Session not found" },
+    502: { description: "GitHub lookup failed" },
   },
 });
 
@@ -752,17 +788,6 @@ const putStoreObject = async (
   return cacheJson({ ok: true });
 };
 
-const verifySessionToken = async (
-  env: WorkerEnv,
-  authorization: string | undefined,
-  organizationId: string,
-  sessionId: string
-) => {
-  const expected = await agentLogToken(env, organizationId, sessionId);
-  const provided = (authorization ?? "").replace(/^Bearer\s+/i, "");
-  return !!expected && !!provided && timingSafeEqualHex(provided, expected);
-};
-
 export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(registerSessionRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
@@ -934,6 +959,60 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       limit: limit ? Number(limit) : undefined,
     });
     return c.json({ events: events.map(toActivityResponse) });
+  });
+
+  // Lane-facing CI detail (PILE-232): a lane whose PR went red can read
+  // back exactly which check-runs failed and where their logs live — the
+  // same answer a human gets from the PR checks box. Reachable with a
+  // workspace token or the session's lane token (auth bypass validates it).
+  app.openapi(getSessionChecksRoute, async (c) => {
+    const { organizationId, sessionId } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const session = await stub.getAgentSession(sessionId);
+    if (!session) {
+      return c.json({ message: "Session not found" }, 404);
+    }
+    if (!session.prUrl) {
+      return c.json({ checks: [], prCheckState: null });
+    }
+    const parsed = parsePrUrl(session.prUrl);
+    if (!parsed) {
+      return c.json({ message: "Session prUrl is not a GitHub PR" }, 400);
+    }
+    const token = await getInstallationTokenForRepo(
+      c.env,
+      parsed.owner,
+      parsed.name
+    );
+    if (!token) {
+      return c.json({ message: "GitHub installation not found" }, 502);
+    }
+    const pr = await fetchGitHubPull(
+      token,
+      parsed.owner,
+      parsed.name,
+      parsed.number
+    );
+    if (!pr) {
+      return c.json({ message: "GitHub pull request lookup failed" }, 502);
+    }
+    const runs = await fetchGitHubCheckRuns(
+      token,
+      parsed.owner,
+      parsed.name,
+      pr.head.sha
+    );
+    const issue = await stub.getIssue(session.issueId);
+    return c.json({
+      checks: runs.map((run) => ({
+        name: run.name,
+        status: run.status,
+        conclusion: run.conclusion,
+        detailsUrl: run.details_url ?? null,
+        htmlUrl: run.html_url ?? null,
+      })),
+      prCheckState: issue?.prCheckState ?? null,
+    });
   });
 
   app.openapi(addActivityRoute, async (c) => {

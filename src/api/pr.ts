@@ -62,7 +62,7 @@ const getPrStatusRoute = createRoute({
   },
 });
 
-function parsePrUrl(prUrl: string) {
+export function parsePrUrl(prUrl: string) {
   const match = prUrl.match(
     /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)$/
   );
@@ -107,7 +107,7 @@ function normalizeCheckState(
   return allSuccess ? "success" : "unknown";
 }
 
-async function fetchGitHubPull(
+export async function fetchGitHubPull(
   token: string,
   owner: string,
   name: string,
@@ -137,7 +137,7 @@ async function fetchGitHubPull(
   return parsed.success ? parsed.data : undefined;
 }
 
-async function fetchGitHubCheckRuns(
+export async function fetchGitHubCheckRuns(
   token: string,
   owner: string,
   name: string,
@@ -160,8 +160,11 @@ async function fetchGitHubCheckRuns(
     .object({
       check_runs: z.array(
         z.object({
+          name: z.string(),
           status: z.string(),
           conclusion: z.string().nullable(),
+          details_url: z.string().nullable().optional(),
+          html_url: z.string().nullable().optional(),
         })
       ),
     })

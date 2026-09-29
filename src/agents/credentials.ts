@@ -1,4 +1,4 @@
-import { sha256Hex } from "../global/crypto.js";
+import { sha256Hex, timingSafeEqualHex } from "../global/crypto.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { AgentProviderConfigRow } from "./daytona.js";
 
@@ -247,6 +247,22 @@ export async function agentLogToken(
   const secret = env.DISPATCH_SECRET ?? env.BETTER_AUTH_SECRET;
   if (!secret) return null;
   return sha256Hex(`agent-logs:${organizationId}:${sessionId}:${secret}`);
+}
+
+/**
+ * Verify an Authorization header against the per-session lane token.
+ * Shared by the lane-callback routes and the auth bypass in api/index.ts
+ * that lets lane tokens read back their own session record/events.
+ */
+export async function verifySessionToken(
+  env: WorkerEnv,
+  authorization: string | undefined,
+  organizationId: string,
+  sessionId: string
+): Promise<boolean> {
+  const expected = await agentLogToken(env, organizationId, sessionId);
+  const provided = (authorization ?? "").replace(/^Bearer\s+/i, "");
+  return !!expected && !!provided && timingSafeEqualHex(provided, expected);
 }
 
 /**

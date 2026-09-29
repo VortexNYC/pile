@@ -1834,6 +1834,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdAgentSessionsSessionIdChecks",
+    "description": "List agent session checks (GET /workspaces/{organizationId}/agent/sessions/{sessionId}/checks) Path params (top-level, required): organizationId, sessionId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/agent/sessions/{sessionId}/checks",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "sessionId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdAgentSessionsSessionIdEvents",
     "description": "List agent session events (GET /workspaces/{organizationId}/agent/sessions/{sessionId}/events) Path params (top-level, required): organizationId, sessionId. Query params (top-level, optional): limit.",
     "method": "GET",
