@@ -111,9 +111,6 @@ importers:
       secretlint:
         specifier: ^13.0.5
         version: 13.0.5
-      simple-git-hooks:
-        specifier: ^2.14.0
-        version: 2.14.0
       tsx:
         specifier: ^4.23.13
         version: 4.23.13
@@ -6757,10 +6754,6 @@ packages:
   signal-exit@4.1.0:
     resolution: {integrity: sha512-bzyZ1e88w9O1iNJbKnOlvYTrWPDl46O1bG0D3XInv+9tkPrxrN8jUUTiFlDkkmKWgn1M6CfIA13SuGqOa9Korw==}
     engines: {node: '>=14'}
-
-  simple-git-hooks@2.14.0:
-    resolution: {integrity: sha512-kkTORPAuxQz2g1QUuN0J8yGWT28tjGBfPOdJ4xT7Vbeu30veKUZQIoID2qGgCDAakaQn59UeZJJ4cFGB8PVP2A==}
-    hasBin: true
 
   simple-icons@16.32.0:
     resolution: {integrity: sha512-BwqATHxAulx7X6kNdTkecy7PBjLkgtAHcgrwYLd9iA+cD2At9DzhJwdwaSELk2+aZe01IfiM/Wxtyp68Dvup2A==}
@@ -14511,8 +14504,6 @@ snapshots:
   signal-exit@3.0.7: {}
 
   signal-exit@4.1.0: {}
-
-  simple-git-hooks@2.14.0: {}
 
   simple-icons@16.32.0: {}
 
