@@ -61,7 +61,7 @@ describe("agent providers", () => {
               pr_state: "merged",
             },
           ],
-        }),
+        })
       );
 
       const provider = new DevinAgentProvider(devinEnv());
@@ -73,7 +73,7 @@ describe("agent providers", () => {
       expect(result.prState).toBe("merged");
       expect(fetchSpy).toHaveBeenCalledOnce();
       expect(String(fetchSpy.mock.calls[0]?.[0] ?? "")).toContain(
-        "/sessions/devin-123",
+        "/sessions/devin-123"
       );
     });
 
@@ -83,7 +83,7 @@ describe("agent providers", () => {
           session_id: "devin-123",
           status: "running",
           status_detail: "waiting_for_user",
-        }),
+        })
       );
 
       const provider = new DevinAgentProvider(devinEnv());
@@ -104,23 +104,23 @@ describe("agent providers", () => {
               message: "Which environment should I target — staging or prod?",
             },
           ],
-        }),
+        })
       );
 
       const provider = new DevinAgentProvider(devinEnv());
       const question = await provider.latestElicitation("devin-123");
 
       expect(question).toBe(
-        "Which environment should I target — staging or prod?",
+        "Which environment should I target — staging or prod?"
       );
       expect(String(fetchSpy.mock.calls[0]?.[0] ?? "")).toContain(
-        "/sessions/devin-123/messages",
+        "/sessions/devin-123/messages"
       );
     });
 
     it("latestElicitation is null when the messages endpoint fails", async () => {
       vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-        new Response("nope", { status: 404 }),
+        new Response("nope", { status: 404 })
       );
 
       const provider = new DevinAgentProvider(devinEnv());
@@ -133,7 +133,7 @@ describe("agent providers", () => {
           session_id: "devin-123",
           status: "running",
           status_detail: "working",
-        }),
+        })
       );
 
       const provider = new DevinAgentProvider(devinEnv());
@@ -142,7 +142,7 @@ describe("agent providers", () => {
       expect(state).not.toBeNull();
       if (!state) throw new Error("state is null");
       expect((state.provider as Record<string, string>).session_id).toBe(
-        "devin-123",
+        "devin-123"
       );
       expect(state.compute).toBeNull();
       expect(fetchSpy).toHaveBeenCalledTimes(1);
@@ -165,7 +165,7 @@ describe("agent providers", () => {
               { branch: "feature-2" },
             ],
           },
-        }),
+        })
       );
 
       const provider = new CursorAgentProvider(cursorEnv());
@@ -197,7 +197,7 @@ describe("agent providers", () => {
           agent: { id: "agent-1", url: "https://cursor.test/agent-1" },
           run: { id: "run-9", status: "FINISHED" },
         },
-        new Headers(),
+        new Headers()
       );
 
       expect(parsed?.sessionId).toBe("agent-1/run-9");
@@ -215,7 +215,7 @@ describe("agent providers", () => {
           prUrl: "https://github.com/org/repo/pull/5",
           branch: "cursor/run-2",
         },
-        new Headers(),
+        new Headers()
       );
 
       expect(parsed?.sessionId).toBe("agent-2/run-2");
@@ -227,7 +227,7 @@ describe("agent providers", () => {
     it("parseWebhook returns null for unrecognized payloads", () => {
       const provider = new CursorAgentProvider(cursorEnv());
       expect(
-        provider.parseWebhook?.({ hello: "world" }, new Headers()),
+        provider.parseWebhook?.({ hello: "world" }, new Headers())
       ).toBeNull();
       expect(provider.parseWebhook?.(null, new Headers())).toBeNull();
     });
@@ -244,7 +244,7 @@ describe("agent providers", () => {
             },
           ],
           settlements: [{ submissionId: "s1", outcome: "completed" }],
-        }),
+        })
       );
 
       const provider = new CfAgentProvider(flueEnv(), "flue");
@@ -261,7 +261,7 @@ describe("agent providers", () => {
       const provider = new CfAgentProvider(flueEnv(), "flue");
       const parsed = provider.parseWebhook?.(
         { conversationId: "conv-9", outcome: "completed", result: "shipped" },
-        new Headers(),
+        new Headers()
       );
 
       expect(parsed?.sessionId).toBe("conv-9");
@@ -273,7 +273,7 @@ describe("agent providers", () => {
       const provider = new CfAgentProvider(flueEnv(), "flue");
       const parsed = provider.parseWebhook?.(
         { conversation_id: "conv-2", outcome: "aborted" },
-        new Headers(),
+        new Headers()
       );
 
       expect(parsed?.sessionId).toBe("conv-2");
@@ -283,7 +283,7 @@ describe("agent providers", () => {
     it("parseWebhook returns null without a conversation id", () => {
       const provider = new CfAgentProvider(flueEnv(), "flue");
       expect(
-        provider.parseWebhook?.({ outcome: "completed" }, new Headers()),
+        provider.parseWebhook?.({ outcome: "completed" }, new Headers())
       ).toBeNull();
     });
   });

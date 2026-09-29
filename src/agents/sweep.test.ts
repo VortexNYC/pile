@@ -43,8 +43,8 @@ describe("parseAgentTimeouts", () => {
           timeout: 90,
           inactivityTimeout: 10,
           provisionTimeout: 5,
-        }),
-      ),
+        })
+      )
     ).toEqual({
       timeoutMinutes: 90,
       inactivityMinutes: 10,
@@ -63,7 +63,7 @@ describe("progressIsStale", () => {
         createdAt: "2026-09-16T15:30:00.000Z",
         lastProgressAt: null,
         inactivityMinutes: 20,
-      }),
+      })
     ).toBe(true);
     expect(
       progressIsStale({
@@ -71,7 +71,7 @@ describe("progressIsStale", () => {
         createdAt: "2026-09-16T15:50:00.000Z",
         lastProgressAt: null,
         inactivityMinutes: 20,
-      }),
+      })
     ).toBe(false);
   });
 
@@ -82,7 +82,7 @@ describe("progressIsStale", () => {
         createdAt: "2026-09-16T12:00:00.000Z",
         lastProgressAt: "2026-09-16T15:50:00.000Z",
         inactivityMinutes: 20,
-      }),
+      })
     ).toBe(false);
   });
 });
@@ -179,10 +179,10 @@ describe("ingestFailedAgentSession", () => {
 describe("prStateFromPull", () => {
   it("maps GitHub pull fields to PR state", () => {
     expect(prStateFromPull({ merged_at: "2026-09-28T18:00:00Z" })).toBe(
-      "merged",
+      "merged"
     );
     expect(prStateFromPull({ state: "closed", merged_at: null })).toBe(
-      "closed",
+      "closed"
     );
     expect(prStateFromPull({ state: "open", draft: true })).toBe("draft");
     expect(prStateFromPull({ state: "open", draft: false })).toBe("open");
@@ -194,26 +194,26 @@ describe("summarizeCheckRuns", () => {
     expect(summarizeCheckRuns(undefined)).toBeNull();
     expect(summarizeCheckRuns([])).toBeNull();
     expect(
-      summarizeCheckRuns([{ status: "completed", conclusion: "success" }]),
+      summarizeCheckRuns([{ status: "completed", conclusion: "success" }])
     ).toBe("passing");
     expect(
       summarizeCheckRuns([
         { status: "completed", conclusion: "success" },
         { status: "in_progress", conclusion: null },
-      ]),
+      ])
     ).toBe("pending");
     expect(
       summarizeCheckRuns([
         { status: "completed", conclusion: "success" },
         { status: "completed", conclusion: "failure" },
-      ]),
+      ])
     ).toBe("failing");
   });
 });
 
 function registerMock(
   agentId: string,
-  options: ConstructorParameters<typeof MockAgentProvider>[1],
+  options: ConstructorParameters<typeof MockAgentProvider>[1]
 ) {
   registerAgentProvider(agentId, () => new MockAgentProvider(agentId, options));
 }
@@ -227,7 +227,7 @@ async function ghFetchStub(input: RequestInfo | URL) {
         merged_at: "2026-09-28T18:17:22Z",
         head: { sha: "abc123" },
       }),
-      { status: 200 },
+      { status: 200 }
     );
   }
   if (url.includes("/commits/abc123/check-runs")) {
@@ -235,7 +235,7 @@ async function ghFetchStub(input: RequestInfo | URL) {
       JSON.stringify({
         check_runs: [{ status: "completed", conclusion: "success" }],
       }),
-      { status: 200 },
+      { status: 200 }
     );
   }
   return new Response("not found", { status: 404 });
@@ -250,7 +250,7 @@ async function ghFetchFailing(input: RequestInfo | URL) {
         merged_at: null,
         head: { sha: "def456" },
       }),
-      { status: 200 },
+      { status: 200 }
     );
   }
   if (url.includes("/commits/def456/check-runs")) {
@@ -266,7 +266,7 @@ async function ghFetchFailing(input: RequestInfo | URL) {
           { name: "lint", status: "completed", conclusion: "success" },
         ],
       }),
-      { status: 200 },
+      { status: 200 }
     );
   }
   return new Response("not found", { status: 404 });
@@ -282,7 +282,7 @@ async function ghFetchConflict(input: RequestInfo | URL) {
         mergeable: false,
         head: { sha: "fff999" },
       }),
-      { status: 200 },
+      { status: 200 }
     );
   }
   if (url.includes("/commits/fff999/check-runs")) {
@@ -290,7 +290,7 @@ async function ghFetchConflict(input: RequestInfo | URL) {
       JSON.stringify({
         check_runs: [{ status: "completed", conclusion: "success" }],
       }),
-      { status: 200 },
+      { status: 200 }
     );
   }
   return new Response("not found", { status: 404 });
@@ -325,7 +325,7 @@ describe("sweepAgentSessions", () => {
     });
     organizationId = workspace!.id;
     stub = env.WORKSPACE_DURABLE_OBJECT.get(
-      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId),
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
     );
     await stub.setOrganizationId(organizationId);
   });
@@ -419,8 +419,8 @@ describe("sweepAgentSessions", () => {
     await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
     expect(
       (await stub.listAgentSessionEvents(session.id, { limit: 100 })).filter(
-        (e) => e.type === "session.needs_input",
-      ).length,
+        (e) => e.type === "session.needs_input"
+      ).length
     ).toBe(count);
   });
 
@@ -453,7 +453,7 @@ describe("sweepAgentSessions", () => {
     });
     const needsInput = events.find((e) => e.type === "session.needs_input");
     expect(needsInput?.message).toBe(
-      "Which environment should I deploy to — staging or prod?",
+      "Which environment should I deploy to — staging or prod?"
     );
   });
 
@@ -491,10 +491,10 @@ describe("sweepAgentSessions", () => {
     await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
 
     expect((await stub.getAgentSession(queuedThenStarted.id))?.status).toBe(
-      "running",
+      "running"
     );
     expect((await stub.getAgentSession(longRunning.id))?.status).toBe(
-      "canceled",
+      "canceled"
     );
   });
 
@@ -603,7 +603,7 @@ describe("syncOpenPrSessions", () => {
     });
     organizationId = workspace!.id;
     stub = env.WORKSPACE_DURABLE_OBJECT.get(
-      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId),
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
     );
     await stub.setOrganizationId(organizationId);
   });

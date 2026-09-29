@@ -82,13 +82,13 @@ export function parseAgentTimeouts(configJson: string | null | undefined): {
 async function withTimeout<T>(
   promise: Promise<T>,
   ms: number,
-  label: string,
+  label: string
 ): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(
       () => reject(new Error(`${label} probe timed out after ${ms}ms`)),
-      ms,
+      ms
     );
   });
   try {
@@ -126,7 +126,7 @@ async function cancelSession(
   session: AgentSession,
   provider: AgentProvider | null,
   result: string,
-  probeTimeoutMs: number,
+  probeTimeoutMs: number
 ): Promise<void> {
   const remoteId = session.providerSessionId ?? session.id;
   try {
@@ -148,7 +148,7 @@ async function cancelSession(
       prUrl: session.prUrl ?? null,
       prState: session.prState ?? null,
     },
-    undefined,
+    undefined
   );
 }
 
@@ -159,7 +159,7 @@ export async function ingestFailedAgentSession(
   env: WorkerEnv,
   organizationId: string,
   session: AgentSession,
-  polled: AgentProviderSession,
+  polled: AgentProviderSession
 ): Promise<void> {
   try {
     const db = createD1(env.D1);
@@ -178,7 +178,7 @@ export async function ingestFailedAgentSession(
         polled.result ?? "Provider reported failure with no details.",
       ]
         .filter((line): line is string => line !== null)
-        .join("\n"),
+        .join("\n")
     );
     await processIncomingMessage(db, organizationId, {
       channel: "api",
@@ -209,7 +209,7 @@ async function retryInfraSession(
   stub: DurableObjectStub<WorkspaceDO>,
   organizationId: string,
   session: AgentSession,
-  ctx?: { waitUntil: (promise: Promise<unknown>) => void },
+  ctx?: { waitUntil: (promise: Promise<unknown>) => void }
 ): Promise<void> {
   if ((session.retryCount ?? 0) >= MAX_INFRA_RETRIES) return;
   try {
@@ -229,7 +229,7 @@ async function retryInfraSession(
         permissions: [],
       },
       undefined,
-      ctx,
+      ctx
     );
     await stub.updateAgentSession(retried.id, {
       retryOf: session.id,
@@ -265,7 +265,7 @@ async function promoteQueuedSessions(
   env: WorkerEnv,
   stub: DurableObjectStub<WorkspaceDO>,
   organizationId: string,
-  ctx?: { waitUntil: (promise: Promise<unknown>) => void },
+  ctx?: { waitUntil: (promise: Promise<unknown>) => void }
 ): Promise<void> {
   const queued = await stub.listQueuedAgentSessions();
   for (const session of queued) {
@@ -285,7 +285,7 @@ async function promoteQueuedSessions(
       const providerConfig = await loadProviderConfig(
         env,
         stub,
-        session.agentId,
+        session.agentId
       );
       const effectiveEnv = resolveAgentEnv(env, providerConfig ?? undefined);
       await dispatchAgent(
@@ -301,7 +301,7 @@ async function promoteQueuedSessions(
         },
         undefined,
         ctx,
-        { promoteSessionId: session.id },
+        { promoteSessionId: session.id }
       );
     } catch (err) {
       console.error("queued session promotion failed", {
@@ -317,7 +317,7 @@ async function promoteQueuedSessions(
 async function teardownLaneDbForSession(
   env: WorkerEnv,
   stub: DurableObjectStub<WorkspaceDO>,
-  session: AgentSession,
+  session: AgentSession
 ): Promise<void> {
   if (!session.laneDbRef) return;
   try {
@@ -342,7 +342,7 @@ async function reapTerminalArtifacts(
   env: WorkerEnv,
   stub: DurableObjectStub<WorkspaceDO>,
   organizationId: string,
-  now: number,
+  now: number
 ): Promise<void> {
   const recent = await stub.listAgentSessions({ limit: 200 });
   for (const session of recent) {
@@ -360,11 +360,11 @@ async function reapTerminalArtifacts(
       const providerConfig = await loadProviderConfig(
         env,
         stub,
-        session.agentId,
+        session.agentId
       );
       const provider = getAgentProvider(
         session.agentId,
-        resolveAgentEnv(env, providerConfig ?? undefined),
+        resolveAgentEnv(env, providerConfig ?? undefined)
       );
       if (provider.cancel) {
         await provider.cancel(session.providerSessionId ?? session.id);
@@ -438,7 +438,7 @@ async function fireDueAutomations(
   stub: DurableObjectStub<WorkspaceDO>,
   organizationId: string,
   now: Date,
-  ctx?: { waitUntil: (promise: Promise<unknown>) => void },
+  ctx?: { waitUntil: (promise: Promise<unknown>) => void }
 ): Promise<void> {
   const automations = await stub.listAgentAutomations({
     enabledOnly: true,
@@ -472,7 +472,7 @@ async function fireAutomation(
     name: string;
   },
   ctx?: { waitUntil: (promise: Promise<unknown>) => void },
-  context?: string,
+  context?: string
 ): Promise<void> {
   try {
     const issue = automation.issueId
@@ -487,12 +487,12 @@ async function fireAutomation(
           teamId: automation.teamId ?? undefined,
           status: "backlog",
         },
-        automation.createdBy ?? undefined,
+        automation.createdBy ?? undefined
       ));
     const providerConfig = await loadProviderConfig(
       env,
       stub,
-      automation.agentId,
+      automation.agentId
     );
     const effectiveEnv = resolveAgentEnv(env, providerConfig ?? undefined);
     await dispatchAgent(
@@ -508,7 +508,7 @@ async function fireAutomation(
       },
       undefined,
       ctx,
-      { instructions: context ?? automation.prompt },
+      { instructions: context ?? automation.prompt }
     );
   } catch (err) {
     console.error("automation dispatch failed", {
@@ -528,7 +528,7 @@ async function fireEventAutomations(
   eventName: string,
   session: AgentSession,
   context?: string,
-  ctx?: { waitUntil: (promise: Promise<unknown>) => void },
+  ctx?: { waitUntil: (promise: Promise<unknown>) => void }
 ): Promise<void> {
   const automations = await stub.listAgentAutomations({
     enabledOnly: true,
@@ -546,7 +546,7 @@ async function fireEventAutomations(
         ? automation
         : { ...automation, issueId: session.issueId },
       ctx,
-      context,
+      context
     );
   }
 }
@@ -554,7 +554,7 @@ async function fireEventAutomations(
 export async function sweepAgentSessions(
   env: WorkerEnv,
   ctx?: { waitUntil: (promise: Promise<unknown>) => void },
-  options?: { probeTimeoutMs?: number },
+  options?: { probeTimeoutMs?: number }
 ): Promise<void> {
   const probeTimeoutMs = options?.probeTimeoutMs ?? DEFAULT_PROBE_TIMEOUT_MS;
   const d1 = createD1(env.D1);
@@ -566,7 +566,7 @@ export async function sweepAgentSessions(
   for (const { id } of orgs) {
     try {
       const stub = env.WORKSPACE_DURABLE_OBJECT.get(
-        env.WORKSPACE_DURABLE_OBJECT.idFromName(id),
+        env.WORKSPACE_DURABLE_OBJECT.idFromName(id)
       );
       await stub.setOrganizationId(id);
       const sessions = [
@@ -589,7 +589,7 @@ export async function sweepAgentSessions(
         const providerConfig = await loadProviderConfig(
           env,
           stub,
-          session.agentId,
+          session.agentId
         );
         const effectiveEnv = resolveAgentEnv(env, providerConfig ?? undefined);
         const { timeoutMinutes, inactivityMinutes, provisionTimeoutMinutes } =
@@ -621,7 +621,7 @@ export async function sweepAgentSessions(
             .listAgentSessionEvents(session.id, { limit: 100 })
             .catch(() => []);
           const runnerStarted = events.some((event) =>
-            String(event.message ?? "").includes("runner started"),
+            String(event.message ?? "").includes("runner started")
           );
           if (
             runnerStarted &&
@@ -654,7 +654,7 @@ export async function sweepAgentSessions(
             session,
             provider,
             `session timed out after ${timeoutMinutes}m`,
-            probeTimeoutMs,
+            probeTimeoutMs
           );
           return;
         }
@@ -675,7 +675,7 @@ export async function sweepAgentSessions(
               session,
               null,
               `external session silent for ${inactivityMinutes}m`,
-              probeTimeoutMs,
+              probeTimeoutMs
             );
           }
           return;
@@ -686,7 +686,7 @@ export async function sweepAgentSessions(
           const polled = await withTimeout(
             provider.poll(remoteId),
             probeTimeoutMs,
-            "poll",
+            "poll"
           );
           if (
             polled.status === "completed" ||
@@ -704,7 +704,7 @@ export async function sweepAgentSessions(
                 id,
                 session.issueId,
                 session.id,
-                polled.result,
+                polled.result
               );
             }
             if (polled.status === "failed") {
@@ -774,7 +774,7 @@ export async function sweepAgentSessions(
             const state = await withTimeout(
               provider.getState(remoteId, session.id),
               probeTimeoutMs,
-              "getState",
+              "getState"
             );
             const lastSeen = computeLastSeen(state);
             if (
@@ -808,12 +808,12 @@ export async function sweepAgentSessions(
           session,
           provider,
           `session inactive for ${inactivityMinutes}m`,
-          probeTimeoutMs,
+          probeTimeoutMs
         );
       };
       for (let i = 0; i < sessions.length; i += SWEEP_FANOUT) {
         await Promise.allSettled(
-          sessions.slice(i, i + SWEEP_FANOUT).map(sweepSession),
+          sessions.slice(i, i + SWEEP_FANOUT).map(sweepSession)
         );
       }
     } catch (err) {
@@ -831,7 +831,7 @@ const GITHUB_PR_URL_RE =
 async function githubApiGet(
   ghFetch: typeof fetch,
   token: string,
-  path: string,
+  path: string
 ): Promise<unknown> {
   const res = await ghFetch(`https://api.github.com${path}`, {
     headers: {
@@ -855,7 +855,7 @@ export function prStateFromPull(pr: Record<string, unknown>): string {
 }
 
 export function summarizeCheckRuns(
-  runs: Array<{ status?: string; conclusion?: string | null }> | undefined,
+  runs: Array<{ status?: string; conclusion?: string | null }> | undefined
 ): string | null {
   if (!runs || runs.length === 0) return null;
   if (
@@ -867,7 +867,7 @@ export function summarizeCheckRuns(
       (r) =>
         r.status !== "completed" ||
         r.conclusion === "action_required" ||
-        r.conclusion === "timed_out",
+        r.conclusion === "timed_out"
     )
   )
     return "pending";
@@ -878,7 +878,7 @@ interface PrSyncDeps {
   tokenForRepo?: (
     env: WorkerEnv,
     owner: string,
-    name: string,
+    name: string
   ) => Promise<string | undefined>;
   fetch?: typeof fetch;
   probeTimeoutMs?: number;
@@ -893,7 +893,7 @@ async function nudgeLane(
   session: AgentSession,
   issue: Issue | undefined,
   prUrl: string,
-  opts: { prompt: string; reason: string },
+  opts: { prompt: string; reason: string }
 ): Promise<void> {
   if (!issue || (session.status !== "running" && session.status !== "waiting"))
     return;
@@ -901,7 +901,7 @@ async function nudgeLane(
     const providerConfig = await loadProviderConfig(env, stub, session.agentId);
     const provider = getAgentProvider(
       session.agentId,
-      resolveAgentEnv(env, providerConfig ?? undefined),
+      resolveAgentEnv(env, providerConfig ?? undefined)
     );
     if (!provider.sendPrompt) return;
     const windowMs = followupThrottleWindowMs(providerConfig?.config);
@@ -923,7 +923,7 @@ async function nudgeLane(
       session.providerSessionId ?? session.id,
       opts.prompt,
       issue,
-      gitIdentity,
+      gitIdentity
     );
     await stub
       .addAgentSessionEvent({
@@ -951,7 +951,7 @@ export async function syncOpenPrSessions(
   env: WorkerEnv,
   stub: DurableObjectStub<WorkspaceDO>,
   organizationId: string,
-  deps: PrSyncDeps = {},
+  deps: PrSyncDeps = {}
 ): Promise<void> {
   const tokenForRepo = deps.tokenForRepo ?? getInstallationTokenForRepo;
   const ghFetch = deps.fetch ?? fetch;
@@ -969,7 +969,7 @@ export async function syncOpenPrSessions(
       const pr = (await withTimeout(
         githubApiGet(ghFetch, token, `/repos/${owner}/${repo}/pulls/${num}`),
         probeTimeoutMs,
-        "github-pr",
+        "github-pr"
       )) as Record<string, unknown>;
       const state = prStateFromPull(pr);
       const head = pr.head as Record<string, unknown> | undefined;
@@ -987,10 +987,10 @@ export async function syncOpenPrSessions(
           githubApiGet(
             ghFetch,
             token,
-            `/repos/${owner}/${repo}/commits/${headSha}/check-runs?per_page=100`,
+            `/repos/${owner}/${repo}/commits/${headSha}/check-runs?per_page=100`
           ),
           probeTimeoutMs,
-          "github-checks",
+          "github-checks"
         )) as { check_runs?: typeof checkRuns };
         checkRuns = checks.check_runs ?? [];
         checkState = summarizeCheckRuns(checkRuns);
@@ -1001,7 +1001,7 @@ export async function syncOpenPrSessions(
           c.conclusion &&
           c.conclusion !== "success" &&
           c.conclusion !== "skipped" &&
-          c.conclusion !== "neutral",
+          c.conclusion !== "neutral"
       );
 
       const issue = await stub.getIssue(session.issueId);
@@ -1036,7 +1036,7 @@ export async function syncOpenPrSessions(
         const failingList = failingChecks
           .map(
             (c) =>
-              `- ${c.name ?? "unknown"}${c.details_url ? ` (${c.details_url})` : ""}`,
+              `- ${c.name ?? "unknown"}${c.details_url ? ` (${c.details_url})` : ""}`
           )
           .join("\n");
         const ciPrompt =
@@ -1049,7 +1049,7 @@ export async function syncOpenPrSessions(
           organizationId,
           "pr.ci_failed",
           session,
-          ciPrompt,
+          ciPrompt
         );
         await nudgeLane(env, stub, organizationId, session, issue, prUrl, {
           prompt: ciPrompt,
@@ -1068,7 +1068,7 @@ export async function syncOpenPrSessions(
           (e) =>
             e.type === "pr.conflict" &&
             typeof e.payload === "string" &&
-            e.payload.includes(headSha ?? ""),
+            e.payload.includes(headSha ?? "")
         );
         if (!alreadyNoted) {
           await stub
@@ -1085,7 +1085,7 @@ export async function syncOpenPrSessions(
             organizationId,
             "pr.conflict",
             session,
-            `PR ${prUrl} has merge conflicts. Rebase or merge the base branch and resolve.`,
+            `PR ${prUrl} has merge conflicts. Rebase or merge the base branch and resolve.`
           );
           await nudgeLane(env, stub, organizationId, session, issue, prUrl, {
             prompt:
@@ -1108,7 +1108,7 @@ export async function syncOpenPrSessions(
           (e) =>
             e.type === "pr.review_requested" &&
             typeof e.payload === "string" &&
-            e.payload.includes(headSha ?? ""),
+            e.payload.includes(headSha ?? "")
         );
         if (!alreadyNoted) {
           await stub
@@ -1136,7 +1136,7 @@ export async function syncOpenPrSessions(
           prUrl,
           state,
           checkState ?? issue.prCheckState,
-          "agent-sweep",
+          "agent-sweep"
         );
       }
     } catch (err) {

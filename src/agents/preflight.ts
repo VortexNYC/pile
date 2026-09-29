@@ -31,7 +31,7 @@ const PLACEHOLDER_PATTERN =
  * advisory — dispatch is never blocked on them.
  */
 export function evaluateDispatchReadiness(
-  issue: PreflightIssueShape,
+  issue: PreflightIssueShape
 ): DispatchReadiness {
   const missing: string[] = [];
   const description = issue.description?.trim() ?? "";
@@ -65,7 +65,7 @@ export function evaluateDispatchReadiness(
  * the session terminates.
  */
 export function buildPreflightCritiqueInstructions(
-  issue: PreflightIssueShape,
+  issue: PreflightIssueShape
 ): string {
   return [
     "You are running a dispatch preflight — do NOT implement anything.",

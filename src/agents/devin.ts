@@ -61,7 +61,7 @@ function buildPrompt(
   issue: Issue,
   gitIdentity?: GitIdentity | null,
   comments?: DispatchComment[],
-  instructions?: string,
+  instructions?: string
 ): string {
   const repo = issue.repo ?? "this repository";
   const branch = issue.branch ?? `issue-${issue.id}`;
@@ -101,7 +101,7 @@ function buildPrompt(
           "",
           ...comments.map(
             (c) =>
-              `- ${c.author}${c.createdAt ? ` (${c.createdAt})` : ""}: ${c.body}`,
+              `- ${c.author}${c.createdAt ? ` (${c.createdAt})` : ""}: ${c.body}`
           ),
         ]
       : []),
@@ -123,7 +123,7 @@ export class DevinAgentProvider implements AgentProvider {
     organizationId: string,
     issue: Issue,
     model = "swe-2",
-    sessionContext?: AgentDispatchContext,
+    sessionContext?: AgentDispatchContext
   ): Promise<AgentProviderSession> {
     const orgId = this.env.DEVIN_ORG_ID;
     if (!orgId) {
@@ -148,7 +148,7 @@ export class DevinAgentProvider implements AgentProvider {
             issue,
             sessionContext?.gitIdentity,
             sessionContext?.comments,
-            sessionContext?.instructions,
+            sessionContext?.instructions
           ),
           repos: repo ? [`https://github.com/${repo}`] : undefined,
           bypass_approval: true,
@@ -156,7 +156,7 @@ export class DevinAgentProvider implements AgentProvider {
           title: issue.title,
           tags: [`vortex:${organizationId}`, `issue:${issue.id}`],
         }),
-      },
+      }
     );
 
     if (!res.ok) {
@@ -202,7 +202,7 @@ export class DevinAgentProvider implements AgentProvider {
       `https://api.devin.ai/v3/organizations/${orgId}/sessions/${sessionId}`,
       {
         headers: { Authorization: `Bearer ${this.env.DEVIN_TOKEN}` },
-      },
+      }
     );
 
     if (!res.ok) {
@@ -245,7 +245,7 @@ export class DevinAgentProvider implements AgentProvider {
       : `devin-${providerSessionId}`;
     const res = await fetch(
       `https://api.devin.ai/v3/organizations/${orgId}/sessions/${devinId}/messages`,
-      { headers: { Authorization: `Bearer ${token}` } },
+      { headers: { Authorization: `Bearer ${token}` } }
     ).catch(() => null);
     if (!res || !res.ok) return null;
     const parsed = devinMessagesSchema.safeParse(await res.json());
@@ -280,7 +280,7 @@ export class DevinAgentProvider implements AgentProvider {
       {
         method: "DELETE",
         headers: { Authorization: `Bearer ${this.env.DEVIN_TOKEN}` },
-      },
+      }
     );
     if (!res.ok && res.status !== 404) {
       const text = await res.text();
@@ -294,7 +294,7 @@ export class DevinAgentProvider implements AgentProvider {
 
   async sendPrompt(
     providerSessionId: string,
-    prompt: string,
+    prompt: string
   ): Promise<boolean> {
     const orgId = this.env.DEVIN_ORG_ID;
     const token = this.env.DEVIN_TOKEN;
@@ -311,7 +311,7 @@ export class DevinAgentProvider implements AgentProvider {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ message: prompt }),
-      },
+      }
     );
     if (!res.ok) {
       const text = await res.text();
@@ -326,14 +326,14 @@ export class DevinAgentProvider implements AgentProvider {
 
   async getState(
     providerSessionId: string,
-    _trackerSessionId: string,
+    _trackerSessionId: string
   ): Promise<AgentProviderState | null> {
     const orgId = this.env.DEVIN_ORG_ID;
     const token = this.env.DEVIN_TOKEN;
     if (!orgId || !token) return null;
     const devinRes = await fetch(
       `https://api.devin.ai/v3/organizations/${orgId}/sessions/${providerSessionId}`,
-      { headers: { Authorization: `Bearer ${token}` } },
+      { headers: { Authorization: `Bearer ${token}` } }
     );
     const provider = devinRes.ok ? await devinRes.json() : null;
     return { provider, compute: null };
@@ -347,13 +347,13 @@ export class DevinAgentProvider implements AgentProvider {
     }
     return probeUrl(
       `https://api.devin.ai/v3/organizations/${orgId}/sessions?limit=1`,
-      { headers: { Authorization: `Bearer ${token}` } },
+      { headers: { Authorization: `Bearer ${token}` } }
     );
   }
 
   parseWebhook(
     body: unknown,
-    _headers?: Headers,
+    _headers?: Headers
   ): {
     sessionId: string;
     session?: AgentProviderSession;
