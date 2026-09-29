@@ -12,22 +12,25 @@ export interface MockAgentProviderOptions {
     organizationId: string,
     issue: Issue,
     model?: string,
-    sessionContext?: AgentDispatchContext
+    sessionContext?: AgentDispatchContext,
   ) => AgentProviderSession | Promise<AgentProviderSession>;
   poll?: (
-    sessionId: string
+    sessionId: string,
   ) => AgentProviderSession | Promise<AgentProviderSession>;
   getState?: (
     providerSessionId: string,
-    trackerSessionId: string
+    trackerSessionId: string,
   ) => AgentProviderState | Promise<AgentProviderState | null> | null;
   sendPrompt?: (
     trackerSessionId: string,
     prompt: string,
     issue: Issue,
-    gitIdentity?: GitIdentity | null
+    gitIdentity?: GitIdentity | null,
   ) => boolean | Promise<boolean>;
   health?: () => AgentProviderHealth | Promise<AgentProviderHealth>;
+  latestElicitation?: (
+    providerSessionId: string,
+  ) => string | Promise<string | null> | null;
 }
 
 export class MockAgentProvider implements AgentProvider {
@@ -43,14 +46,14 @@ export class MockAgentProvider implements AgentProvider {
     organizationId: string,
     issue: Issue,
     model?: string,
-    sessionContext?: AgentDispatchContext
+    sessionContext?: AgentDispatchContext,
   ): Promise<AgentProviderSession> {
     if (this.options.dispatch) {
       return await this.options.dispatch(
         organizationId,
         issue,
         model,
-        sessionContext
+        sessionContext,
       );
     }
     return {
@@ -76,7 +79,7 @@ export class MockAgentProvider implements AgentProvider {
 
   async getState(
     providerSessionId: string,
-    trackerSessionId: string
+    trackerSessionId: string,
   ): Promise<AgentProviderState | null> {
     if (this.options.getState) {
       return await this.options.getState(providerSessionId, trackerSessionId);
@@ -88,14 +91,14 @@ export class MockAgentProvider implements AgentProvider {
     trackerSessionId: string,
     prompt: string,
     issue: Issue,
-    gitIdentity?: GitIdentity | null
+    gitIdentity?: GitIdentity | null,
   ): Promise<boolean> {
     if (this.options.sendPrompt) {
       return await this.options.sendPrompt(
         trackerSessionId,
         prompt,
         issue,
-        gitIdentity
+        gitIdentity,
       );
     }
     return false;
@@ -104,5 +107,12 @@ export class MockAgentProvider implements AgentProvider {
   async health(): Promise<AgentProviderHealth> {
     if (this.options.health) return await this.options.health();
     return { ok: true };
+  }
+
+  async latestElicitation(providerSessionId: string): Promise<string | null> {
+    if (this.options.latestElicitation) {
+      return await this.options.latestElicitation(providerSessionId);
+    }
+    return null;
   }
 }

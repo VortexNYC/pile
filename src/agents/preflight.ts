@@ -31,7 +31,7 @@ const PLACEHOLDER_PATTERN =
  * advisory — dispatch is never blocked on them.
  */
 export function evaluateDispatchReadiness(
-  issue: PreflightIssueShape
+  issue: PreflightIssueShape,
 ): DispatchReadiness {
   const missing: string[] = [];
   const description = issue.description?.trim() ?? "";
@@ -65,14 +65,13 @@ export function evaluateDispatchReadiness(
  * the session terminates.
  */
 export function buildPreflightCritiqueInstructions(
-  issue: PreflightIssueShape
+  issue: PreflightIssueShape,
 ): string {
   return [
     "You are running a dispatch preflight — do NOT implement anything.",
     "Evaluate whether this ticket is specific enough for an autonomous agent to complete end-to-end without human help.",
     issue.repo ? `Target repository: ${issue.repo} (do not clone it).` : null,
     "",
-    "IMPORTANT: never block waiting for input. If the ticket is ambiguous, do not ask — record the questions in your report and finish.",
     "Report back:",
     "1. READY or NOT READY verdict in the first line",
     "2. Missing or ambiguous details a lane would need answered",

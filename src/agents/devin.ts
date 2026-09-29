@@ -37,6 +37,17 @@ const devinSessionSchema = z.object({
   pull_requests: z.array(prSchema).optional(),
 });
 
+const devinMessageSchema = z.object({
+  type: z.string().optional(),
+  message: z.string().optional(),
+  timestamp: z.union([z.string(), z.number()]).optional(),
+});
+
+const devinMessagesSchema = z.union([
+  z.object({ messages: z.array(devinMessageSchema) }),
+  z.array(devinMessageSchema),
+]);
+
 const STATUS_MAP: Record<string, AgentSessionStatus> = {
   blocked: "waiting",
   exit: "completed",
@@ -50,7 +61,7 @@ function buildPrompt(
   issue: Issue,
   gitIdentity?: GitIdentity | null,
   comments?: DispatchComment[],
-  instructions?: string
+  instructions?: string,
 ): string {
   const repo = issue.repo ?? "this repository";
   const branch = issue.branch ?? `issue-${issue.id}`;
@@ -90,7 +101,7 @@ function buildPrompt(
           "",
           ...comments.map(
             (c) =>
-              `- ${c.author}${c.createdAt ? ` (${c.createdAt})` : ""}: ${c.body}`
+              `- ${c.author}${c.createdAt ? ` (${c.createdAt})` : ""}: ${c.body}`,
           ),
         ]
       : []),
@@ -112,7 +123,7 @@ export class DevinAgentProvider implements AgentProvider {
     organizationId: string,
     issue: Issue,
     model = "swe-2",
-    sessionContext?: AgentDispatchContext
+    sessionContext?: AgentDispatchContext,
   ): Promise<AgentProviderSession> {
     const orgId = this.env.DEVIN_ORG_ID;
     if (!orgId) {
@@ -137,7 +148,7 @@ export class DevinAgentProvider implements AgentProvider {
             issue,
             sessionContext?.gitIdentity,
             sessionContext?.comments,
-            sessionContext?.instructions
+            sessionContext?.instructions,
           ),
           repos: repo ? [`https://github.com/${repo}`] : undefined,
           bypass_approval: true,
@@ -145,7 +156,7 @@ export class DevinAgentProvider implements AgentProvider {
           title: issue.title,
           tags: [`vortex:${organizationId}`, `issue:${issue.id}`],
         }),
-      }
+      },
     );
 
     if (!res.ok) {
@@ -191,7 +202,7 @@ export class DevinAgentProvider implements AgentProvider {
       `https://api.devin.ai/v3/organizations/${orgId}/sessions/${sessionId}`,
       {
         headers: { Authorization: `Bearer ${this.env.DEVIN_TOKEN}` },
-      }
+      },
     );
 
     if (!res.ok) {
@@ -225,6 +236,36 @@ export class DevinAgentProvider implements AgentProvider {
     };
   }
 
+  async latestElicitation(providerSessionId: string): Promise<string | null> {
+    const orgId = this.env.DEVIN_ORG_ID;
+    const token = this.env.DEVIN_TOKEN;
+    if (!orgId || !token) return null;
+    const devinId = providerSessionId.startsWith("devin-")
+      ? providerSessionId
+      : `devin-${providerSessionId}`;
+    const res = await fetch(
+      `https://api.devin.ai/v3/organizations/${orgId}/sessions/${devinId}/messages`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    ).catch(() => null);
+    if (!res || !res.ok) return null;
+    const parsed = devinMessagesSchema.safeParse(await res.json());
+    if (!parsed.success) return null;
+    const messages = Array.isArray(parsed.data)
+      ? parsed.data
+      : parsed.data.messages;
+    // Last Devin-authored message is whatever it's asking the user.
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (
+        m.message &&
+        (m.type === "devin_message" || m.type?.includes("devin"))
+      ) {
+        return m.message;
+      }
+    }
+    return null;
+  }
+
   async cancel(sessionId: string): Promise<void> {
     const orgId = this.env.DEVIN_ORG_ID;
     if (!orgId) {
@@ -239,7 +280,7 @@ export class DevinAgentProvider implements AgentProvider {
       {
         method: "DELETE",
         headers: { Authorization: `Bearer ${this.env.DEVIN_TOKEN}` },
-      }
+      },
     );
     if (!res.ok && res.status !== 404) {
       const text = await res.text();
@@ -253,7 +294,7 @@ export class DevinAgentProvider implements AgentProvider {
 
   async sendPrompt(
     providerSessionId: string,
-    prompt: string
+    prompt: string,
   ): Promise<boolean> {
     const orgId = this.env.DEVIN_ORG_ID;
     const token = this.env.DEVIN_TOKEN;
@@ -270,7 +311,7 @@ export class DevinAgentProvider implements AgentProvider {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ message: prompt }),
-      }
+      },
     );
     if (!res.ok) {
       const text = await res.text();
@@ -285,14 +326,14 @@ export class DevinAgentProvider implements AgentProvider {
 
   async getState(
     providerSessionId: string,
-    _trackerSessionId: string
+    _trackerSessionId: string,
   ): Promise<AgentProviderState | null> {
     const orgId = this.env.DEVIN_ORG_ID;
     const token = this.env.DEVIN_TOKEN;
     if (!orgId || !token) return null;
     const devinRes = await fetch(
       `https://api.devin.ai/v3/organizations/${orgId}/sessions/${providerSessionId}`,
-      { headers: { Authorization: `Bearer ${token}` } }
+      { headers: { Authorization: `Bearer ${token}` } },
     );
     const provider = devinRes.ok ? await devinRes.json() : null;
     return { provider, compute: null };
@@ -306,13 +347,13 @@ export class DevinAgentProvider implements AgentProvider {
     }
     return probeUrl(
       `https://api.devin.ai/v3/organizations/${orgId}/sessions?limit=1`,
-      { headers: { Authorization: `Bearer ${token}` } }
+      { headers: { Authorization: `Bearer ${token}` } },
     );
   }
 
   parseWebhook(
     body: unknown,
-    _headers?: Headers
+    _headers?: Headers,
   ): {
     sessionId: string;
     session?: AgentProviderSession;

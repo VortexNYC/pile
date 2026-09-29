@@ -55,7 +55,7 @@ export interface AgentProviderHealth {
 
 export async function probeUrl(
   url: string,
-  init?: RequestInit
+  init?: RequestInit,
 ): Promise<AgentProviderHealth> {
   const res = await fetch(url, init);
   if (!res.ok) {
@@ -71,7 +71,7 @@ export interface AgentProvider {
     organizationId: string,
     issue: Issue,
     model?: string,
-    sessionContext?: AgentDispatchContext
+    sessionContext?: AgentDispatchContext,
   ): Promise<AgentProviderSession>;
   poll(sessionId: string): Promise<AgentProviderSession>;
   /**
@@ -90,7 +90,7 @@ export interface AgentProvider {
     trackerSessionId: string,
     prompt: string,
     issue: Issue,
-    gitIdentity?: GitIdentity | null
+    gitIdentity?: GitIdentity | null,
   ): Promise<boolean>;
   /**
    * Optional live state for the provider and underlying compute. Used by the
@@ -98,8 +98,15 @@ export interface AgentProvider {
    */
   getState?(
     providerSessionId: string,
-    trackerSessionId: string
+    trackerSessionId: string,
   ): Promise<AgentProviderState | null>;
+  /**
+   * Optional: fetch the text of whatever the agent is currently asking, when
+   * the lane is parked in `waiting` (VTX-209). Lets the elicitation surface
+   * carry the actual question instead of a bare status string. Providers
+   * without a message-history API omit it.
+   */
+  latestElicitation?(providerSessionId: string): Promise<string | null>;
   /**
    * Optional credential/config probe. Must not start a session. Used by
    * POST /agent/providers/{agentId}/health so a bad token fails at save-time
@@ -112,6 +119,6 @@ export interface AgentProvider {
    */
   parseWebhook?(
     body: unknown,
-    headers: Headers
+    headers: Headers,
   ): { sessionId: string; session?: AgentProviderSession } | null;
 }
