@@ -575,7 +575,11 @@ export async function sweepAgentSessions(
       await fireDueAutomations(env, stub, id, new Date(now), ctx);
       await reapTerminalArtifacts(env, stub, id, now);
       if (sessions.length === 0) continue;
-      for (const session of sessions) {
+      // Sessions are swept in parallel with a bounded fan-out — one session
+      // whose provider probes all stall can burn ~3x probeTimeoutMs serially,
+      // which would let a single wedged lane starve the whole pass.
+      const SWEEP_FANOUT = 5;
+      const sweepSession = async (session: (typeof sessions)[number]) => {
         const providerConfig = await loadProviderConfig(
           env,
           stub,
@@ -610,7 +614,7 @@ export async function sweepAgentSessions(
             runnerStarted &&
             now - created < provisionTimeoutMinutes * 2 * 60 * 1000
           ) {
-            continue;
+            return;
           }
           const provisionFailure: AgentProviderSession = {
             id: session.id,
@@ -622,7 +626,7 @@ export async function sweepAgentSessions(
           await stub.applyAgentSessionResult(session.id, provisionFailure);
           await ingestFailedAgentSession(env, id, session, provisionFailure);
           await retryInfraSession(env, stub, id, session, ctx);
-          continue;
+          return;
         }
         // The run clock starts at the first `running` transition (startedAt),
         // not at dispatch — a queued lane doesn't eat its own budget.
@@ -639,7 +643,7 @@ export async function sweepAgentSessions(
             `session timed out after ${timeoutMinutes}m`,
             probeTimeoutMs
           );
-          continue;
+          return;
         }
 
         const remoteId = session.providerSessionId ?? session.id;
@@ -663,7 +667,7 @@ export async function sweepAgentSessions(
                 await retryInfraSession(env, stub, id, session, ctx);
               }
             }
-            continue;
+            return;
           }
           if (
             polled.status !== session.status ||
@@ -689,7 +693,7 @@ export async function sweepAgentSessions(
               inactivityMinutes,
             })
           ) {
-            continue;
+            return;
           }
 
           if (provider.getState) {
@@ -721,16 +725,21 @@ export async function sweepAgentSessions(
             error: err instanceof Error ? err.message : String(err),
           });
           // A blip is not silence. Max-runtime still bounds the run.
-          continue;
+          return;
         }
 
-        if (stillAlive) continue;
+        if (stillAlive) return;
         await cancelSession(
           stub,
           session,
           provider,
           `session inactive for ${inactivityMinutes}m`,
           probeTimeoutMs
+        );
+      };
+      for (let i = 0; i < sessions.length; i += SWEEP_FANOUT) {
+        await Promise.allSettled(
+          sessions.slice(i, i + SWEEP_FANOUT).map(sweepSession)
         );
       }
     } catch (err) {
