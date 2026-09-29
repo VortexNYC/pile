@@ -307,3 +307,31 @@ dispatch + poll through the tracker's provider interface — see
 Stream-json live events verified (ISS-99).
 
 Live transcript streaming verified (ISS-98).
+
+## Repo environment contract — `.pile/config.json`
+
+A repo can commit `.pile/config.json` at its root to declare the environment
+lanes run in. The file is read at dispatch time through the GitHub contents
+API (resolved against the issue's branch when set), and every field is
+optional:
+
+```json
+{
+  "agents": ["devin", "devin-cli"],
+  "model": "swe-2",
+  "setup": ".pile/setup.sh",
+  "env": ["DATABASE_URL", "NPM_TOKEN"]
+}
+```
+
+| field    | effect                                                                                                                                         |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `agents` | Allowlist — dispatch with any other agentId is rejected (400).                                                                                 |
+| `model`  | Default model when the dispatch request doesn't name one.                                                                                      |
+| `setup`  | Documented setup hook. `.pile/setup.sh` runs after clone either way.                                                                           |
+| `env`    | Env-var allowlist — caller-supplied `extraEnv` keys not named here are dropped before they reach the lane. Infra env (lane DB etc.) is exempt. |
+
+Repositories that also install the Pile GitHub App get a per-repo default
+agent: `PATCH /workspaces/{org}/github/installations/{id}` with
+`{"defaultAgentId": "devin-cli"}`. Dispatch on an issue in that repo uses it
+when the request doesn't name an agent.

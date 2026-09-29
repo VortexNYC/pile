@@ -8,6 +8,7 @@ import { dispatchAgent, getAgentProvider } from "../agents/index.js";
 import { consumeUsage } from "../global/billing.js";
 import { createD1 } from "../global/db.js";
 import { deleteIssueReferences } from "../global/issue-data.js";
+import { fetchPileRepoConfig } from "../global/pile-repo-config.js";
 import {
   createRepoBranch,
   suggestBranchName,
@@ -1414,6 +1415,26 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         )?.defaultAgentId
       : undefined;
     const resolvedAgentId = agentId ?? provider ?? repoDefault ?? "devin";
+
+    // PILE-221 — a repo can commit `.pile/config.json` to declare which
+    // agents may run on it and a default model. Enforcement happens here so
+    // the contract applies to UI, API, and automation dispatches alike.
+    const pileConfig = target.repo
+      ? await fetchPileRepoConfig(c.env, target.repo, target.branch)
+      : null;
+    if (
+      pileConfig?.agents &&
+      pileConfig.agents.length > 0 &&
+      !pileConfig.agents.includes(resolvedAgentId)
+    ) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: `Agent "${resolvedAgentId}" is not allowed by .pile/config.json (allowed: ${pileConfig.agents.join(", ")})`,
+      });
+    }
+    const resolvedModel = model ?? pileConfig?.model;
+
     const providerConfig = await loadProviderConfig(
       c.env,
       stub,
@@ -1427,9 +1448,9 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       organizationId,
       target,
       identity,
-      model,
+      resolvedModel,
       getExecutionCtx(c),
-      { instructions }
+      { instructions, envAllowlist: pileConfig?.env }
     );
 
     if (target.repo && target.branch) {

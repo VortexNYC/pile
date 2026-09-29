@@ -577,4 +577,40 @@ describe("agent providers", () => {
       dispatchAgent(env, agentId, actor.organizationId, issue, actor)
     ).rejects.toThrow("Invalid agent provider teamIds configuration");
   });
+
+  it("filters extraEnv against the repo env allowlist", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)
+    );
+    await stub.setOrganizationId(actor.organizationId);
+    const issue = await stub.createIssue({ title: "Env allowlist" });
+
+    let captured: AgentDispatchContext | undefined;
+    registerAgentProvider(
+      "mock-envlist",
+      () =>
+        new MockAgentProvider("mock-envlist", {
+          dispatch: (_org, _issue, _model, ctx) => {
+            captured = ctx;
+            return { id: "env-1", agentId: "mock-envlist", status: "created" };
+          },
+        })
+    );
+
+    await dispatchAgent(
+      env,
+      "mock-envlist",
+      actor.organizationId,
+      issue,
+      actor,
+      undefined,
+      undefined,
+      {
+        extraEnv: { DATABASE_URL: "postgres://x", GITHUB_TOKEN: "ghp_x" },
+        envAllowlist: ["DATABASE_URL"],
+      }
+    );
+
+    expect(captured?.extraEnv).toEqual({ DATABASE_URL: "postgres://x" });
+  });
 });

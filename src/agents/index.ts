@@ -129,6 +129,9 @@ export async function dispatchAgent(
     spawnDepth?: number;
     /** Extra runner env from lane provisioning (e.g. PlanetScale branch URLs). */
     extraEnv?: Record<string, string>;
+    // `.pile/config.json` env allowlist — caller-supplied extraEnv keys
+    // outside the list are dropped (infra env like laneDb is exempt).
+    envAllowlist?: string[];
     /** Promote a parked `waiting` session instead of creating a fresh row —
      *  the sweep calls this when the queuedAfter blocker goes terminal. */
     promoteSessionId?: string;
@@ -272,7 +275,14 @@ export async function dispatchAgent(
   // PILE-212 — lane-scoped preview DB: when org metadata declares laneDb for
   // this repo, provision a PlanetScale branch+role and inject the env into the
   // runner. Branch is named off the real session id, so this runs post-create.
-  let extraEnv = options?.extraEnv;
+  let extraEnv =
+    options?.extraEnv && options?.envAllowlist
+      ? Object.fromEntries(
+          Object.entries(options.extraEnv).filter(([key]) =>
+            options.envAllowlist?.includes(key)
+          )
+        )
+      : options?.extraEnv;
   if (issue.repo && !session.laneDbRef) {
     const laneConfig = await laneDbConfigForOrgRepo(
       env,
