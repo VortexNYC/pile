@@ -928,7 +928,10 @@ export async function syncOpenPrSessions(
           })
           .catch(() => {});
         const failingList = failingChecks
-          .map((c) => `- ${c.name ?? "unknown"}${c.details_url ? ` (${c.details_url})` : ""}`)
+          .map(
+            (c) =>
+              `- ${c.name ?? "unknown"}${c.details_url ? ` (${c.details_url})` : ""}`
+          )
           .join("\n");
         const ciPrompt =
           `CI is failing on ${prUrl}${headSha ? ` (sha ${headSha})` : ""}.\n` +
@@ -942,10 +945,7 @@ export async function syncOpenPrSessions(
           session,
           ciPrompt
         );
-        if (
-          session.status === "running" ||
-          session.status === "waiting"
-        ) {
+        if (session.status === "running" || session.status === "waiting") {
           try {
             const providerConfig = await loadProviderConfig(
               env,
