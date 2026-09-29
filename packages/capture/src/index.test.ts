@@ -217,3 +217,66 @@ describe("initCapture", () => {
     capture.destroy();
   });
 });
+
+describe("session persistence across page refresh", () => {
+  const store = new Map<string, string>();
+
+  beforeEach(() => {
+    store.clear();
+    vi.stubGlobal("sessionStorage", {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        store.set(key, value);
+      },
+      removeItem: (key: string) => {
+        store.delete(key);
+      },
+    });
+    vi.stubGlobal("window", new EventTarget());
+  });
+
+  it("resumes a started session after reload so stop() still submits", async () => {
+    const before = initCapture({ publicKey: "pk_test" });
+    await before.start();
+    console.log("logged before the refresh");
+    window.dispatchEvent(new Event("pagehide"));
+    const persisted = store.get("pile-capture:session");
+    expect(persisted).toContain("logged before the refresh");
+    before.destroy();
+
+    // Simulate the reloaded page: storage survives, in-memory state does not.
+    store.set("pile-capture:session", String(persisted));
+    const after = initCapture({ publicKey: "pk_test" });
+    const result = await after.stop({ email: "r@e.com" });
+    expect(result.ticketId).toBe("ticket_1");
+    const sessionCall = calls.find((c) => c.url.endsWith("/upload-session"));
+    const body = JSON.parse(String(sessionCall?.body)) as {
+      artifacts: Array<{ attachmentType: string }>;
+    };
+    expect(
+      body.artifacts.some((a) => a.attachmentType === "debugger_json")
+    ).toBe(true);
+    expect(store.has("pile-capture:session")).toBe(false);
+    after.destroy();
+  });
+
+  it("does not resume when no session was started", async () => {
+    const capture = initCapture({ publicKey: "pk_test" });
+    window.dispatchEvent(new Event("pagehide"));
+    expect(store.has("pile-capture:session")).toBe(false);
+    await expect(capture.stop({ email: "r@e.com" })).rejects.toThrow(
+      "capture not started"
+    );
+    capture.destroy();
+  });
+
+  it("ignores corrupt persisted state", async () => {
+    store.set("pile-capture:session", "{not json");
+    const capture = initCapture({ publicKey: "pk_test" });
+    await expect(capture.stop({ email: "r@e.com" })).rejects.toThrow(
+      "capture not started"
+    );
+    expect(store.has("pile-capture:session")).toBe(false);
+    capture.destroy();
+  });
+});

@@ -27,6 +27,11 @@ import {
   startDomRecording,
   type ReplayRecorder,
 } from "./replay.js";
+import {
+  clearCaptureSession,
+  loadCaptureSession,
+  saveCaptureSession,
+} from "./session-store.js";
 import { gzipBlob, submitCaptureReport } from "./transport.js";
 import type {
   CaptureArtifact,
@@ -195,6 +200,22 @@ export function initCapture(options: CaptureInitOptions): Capture {
   const pendingArtifacts: CaptureArtifact[] = [];
   const metadataCallbacks: Array<() => Record<string, unknown>> = [];
   let active: ActiveSession | null = null;
+  // An explicit session survives a page refresh: it is persisted on
+  // pagehide and resumed here. Screen video cannot outlive the page.
+  const resumed = loadCaptureSession();
+  if (resumed) {
+    recorder.resumeSession(resumed);
+    active = { recording: null, artifacts: [] };
+  }
+  const persistActiveSession = () => {
+    const session = recorder.getSessionSnapshot();
+    if (active && session) {
+      saveCaptureSession(session);
+    }
+  };
+  if (typeof window !== "undefined") {
+    window.addEventListener("pagehide", persistActiveSession);
+  }
   // DOM replay is always-on like the event buffer: rrweb buffers events so
   // a report includes the session leading up to the bug, not after it.
   let replayRecorder: ReplayRecorder | null = null;
@@ -316,7 +337,7 @@ export function initCapture(options: CaptureInitOptions): Capture {
         await ensureReplay().catch(() => null);
       }
       active = { recording, artifacts: [] };
-      void session;
+      saveCaptureSession(session);
     },
 
     async stop(stopOptions) {
@@ -344,6 +365,7 @@ export function initCapture(options: CaptureInitOptions): Capture {
       }
       const snapshot = recorder.getSessionSnapshot();
       recorder.discardSession();
+      clearCaptureSession();
       if (!snapshot) {
         throw new Error("capture session missing");
       }
@@ -389,6 +411,10 @@ export function initCapture(options: CaptureInitOptions): Capture {
     },
 
     destroy() {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("pagehide", persistActiveSession);
+      }
+      clearCaptureSession();
       instrumentation.dispose();
       replayRecorder?.stop();
       replayRecorder = null;

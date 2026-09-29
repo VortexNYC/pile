@@ -66,6 +66,10 @@ export class EventRecorder {
     return session;
   }
 
+  resumeSession(session: CaptureSession): void {
+    this.session = session;
+  }
+
   markRecordingStarted(recordingStartedAt: number): void {
     if (this.session) {
       this.session.recordingStartedAt = recordingStartedAt;
