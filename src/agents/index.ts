@@ -140,6 +140,10 @@ export async function dispatchAgent(
     /** Preflight critiques must not park behind dedupe coverage — they run
      *  repo-less and only produce a report. */
     skipQueue?: boolean;
+    /** Explicit sequencing (PILE-245 batch dispatch): park the new session in
+     *  `waiting` behind this session id; the sweep promotes it once the
+     *  blocker goes terminal. Wins over the dedupe-derived queueAfter. */
+    queueAfter?: string;
   }
 ): Promise<AgentSession> {
   const stub = env.WORKSPACE_DURABLE_OBJECT.get(
@@ -199,7 +203,8 @@ export async function dispatchAgent(
         message: dedupe.hardBlock.reason,
       });
     }
-    if (dedupe?.queueAfter && !options?.skipQueue) {
+    const queueAfter = options?.queueAfter ?? dedupe?.queueAfter;
+    if (queueAfter && !options?.skipQueue) {
       const queued = await stub.createAgentSession({
         issueId: issue.id,
         agentId,
@@ -207,7 +212,7 @@ export async function dispatchAgent(
         actorId: actor.id,
         actorType: actor.type,
         status: "waiting",
-        queuedAfter: dedupe.queueAfter,
+        queuedAfter: queueAfter,
         parentSessionId: options?.parentSessionId ?? null,
         spawnDepth: options?.spawnDepth ?? 0,
         purpose: options?.purpose ?? null,
@@ -216,8 +221,10 @@ export async function dispatchAgent(
         .addAgentSessionEvent({
           sessionId: queued.id,
           type: "lane.queued",
-          message: `Queued behind session ${dedupe.queueAfter} — open PR coverage detected`,
-          payload: { coverage: dedupe.coverage },
+          message: options?.queueAfter
+            ? `Queued behind session ${queueAfter}`
+            : `Queued behind session ${queueAfter} — open PR coverage detected`,
+          payload: dedupe ? { coverage: dedupe.coverage } : undefined,
         })
         .catch(() => {});
       return queued;

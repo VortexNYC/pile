@@ -39,6 +39,7 @@ export const MCP_TOOL_ALIASES: Readonly<Record<string, string>> = {
   list_issue_subscribers: "getWorkspacesOrganizationIdIssuesIssueIdSubscribers",
   subscribe_to_issue: "postWorkspacesOrganizationIdIssuesIssueIdSubscribers",
   dispatch_issue: "postWorkspacesOrganizationIdIssuesIdDispatch",
+  dispatch_batch: "postWorkspacesOrganizationIdAgentDispatchbatch",
 
   // Comments
   list_issue_comments: "getWorkspacesOrganizationIdIssuesIssueIdComments",
