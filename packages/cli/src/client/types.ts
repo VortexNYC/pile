@@ -1863,6 +1863,8 @@ export interface paths {
                         "application/json": {
                             live: number;
                             missingEndedAt: number;
+                            lastSweepAt: string | null;
+                            sweepStale: boolean;
                             providers: {
                                 agentId: string;
                                 live: number;

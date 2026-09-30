@@ -234,6 +234,8 @@ const fleetHealthRoute = createRoute({
           schema: z.object({
             live: z.number(),
             missingEndedAt: z.number(),
+            lastSweepAt: z.string().nullable(),
+            sweepStale: z.boolean(),
             providers: z.array(
               z.object({
                 agentId: z.string(),
@@ -983,12 +985,19 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(fleetHealthRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
-    const rows = await stub.listAgentSessions({ limit: 200 });
+    const [rows, tickRows] = await Promise.all([
+      stub.listAgentSessions({ limit: 200 }),
+      stub.listAuditLog({ action: "sweep.tick", limit: 1 }),
+    ]);
 
     const TERMINAL = new Set(["completed", "failed", "canceled"]);
     const RESUME_WINDOW_MS = 4 * 60 * 60 * 1000;
     const UNHEALTHY_STREAK = 3;
     const now = Date.now();
+    const lastSweepAt = tickRows[0]?.createdAt ?? null;
+    const lastSweepMs = lastSweepAt ? Date.parse(lastSweepAt) : NaN;
+    // The sweep runs every 5 min; >3 missed ticks means lanes stall silently.
+    const sweepStale = !Number.isFinite(lastSweepMs) || now - lastSweepMs > 15 * 60 * 1000;
 
     let live = 0;
     let missingEndedAt = 0;
@@ -1030,6 +1039,8 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       {
         live,
         missingEndedAt,
+        lastSweepAt,
+        sweepStale,
         providers: [...agentIds].map((agentId) => ({
           agentId,
           live: rows.filter(

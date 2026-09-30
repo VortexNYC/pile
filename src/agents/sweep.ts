@@ -642,6 +642,10 @@ export async function sweepAgentSessions(
         env.WORKSPACE_DURABLE_OBJECT.idFromName(id)
       );
       await stub.setOrganizationId(id);
+      // Heartbeat — fleet-health reads the latest tick to flag a dead sweep.
+      await stub
+        .recordAudit("sweep.tick", "system", "sweep")
+        .catch(() => {});
       const sessions = [
         ...(await stub.listAgentSessions({ status: "running" })),
         ...(await stub.listAgentSessions({ status: "created" })),

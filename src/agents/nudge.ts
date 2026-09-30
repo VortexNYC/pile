@@ -35,7 +35,17 @@ export async function nudgeLane(
       session.agentId,
       resolveAgentEnv(env, providerConfig ?? undefined)
     );
-    if (!provider.sendPrompt) return;
+    if (!provider.sendPrompt) {
+      await stub
+        .addAgentSessionEvent({
+          sessionId: session.id,
+          type: "prompt.followup_skipped",
+          message: `${opts.reason} follow-up skipped: provider ${session.agentId} cannot accept follow-up prompts`,
+          payload: { issueId: issue.id, prUrl, reason: "no_send_prompt" },
+        })
+        .catch(() => {});
+      return;
+    }
     // Dedupe on DELIVERY, not detection: detection events (pr.ci_failed,
     // pr.review) fire once, but a nudge rejected while the sandbox is busy
     // must be retried on later sweeps or the lane never hears about it.

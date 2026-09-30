@@ -4107,6 +4107,13 @@
                     "missingEndedAt": {
                       "type": "number"
                     },
+                    "lastSweepAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "sweepStale": {
+                      "type": "boolean"
+                    },
                     "providers": {
                       "type": "array",
                       "items": {
@@ -4141,6 +4148,8 @@
                   "required": [
                     "live",
                     "missingEndedAt",
+                    "lastSweepAt",
+                    "sweepStale",
                     "providers"
                   ]
                 }
