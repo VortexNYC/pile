@@ -48,7 +48,7 @@ const pullRequestPayloadSchema = z.object({
 });
 
 const checkRunInnerSchema = z.object({
-  name: z.string(),
+  name: z.string().nullish(),
   head_branch: z.string().nullable(),
   head_sha: z.string(),
   details_url: z.string().nullable().optional(),
@@ -1211,7 +1211,7 @@ async function processCheckRun(
           prUrl,
           headSha: check_run.head_sha,
           checkState: check_run.conclusion,
-          failingChecks: [check_run.name],
+          failingChecks: [check_run.name ?? "check_suite"],
         },
       })
       .catch(() => {});
@@ -1225,7 +1225,7 @@ async function processCheckRun(
     {
       prompt:
         `CI is failing on ${prUrl || `${repo} branch ${branch}`} (sha ${check_run.head_sha}).\n` +
-        `Failing check: ${check_run.name}${check_run.details_url ? ` (${check_run.details_url})` : ""}\n` +
+        `Failing check: ${check_run.name ?? "check_suite"}${check_run.details_url ? ` (${check_run.details_url})` : ""}\n` +
         "Fetch the failing check runs, fix, and push.",
       reason: "CI failure",
       dedupeKey,
