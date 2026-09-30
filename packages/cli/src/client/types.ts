@@ -1701,6 +1701,65 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/agent/dispatch-batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create agent dispatch batch */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        items: {
+                            issueId: string;
+                            agentId?: string;
+                            branch?: string;
+                            instructions?: string;
+                            queuedAfter?: string;
+                        }[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Per-item dispatch results — each entry carries a sessionId or an error, independent of sibling failures */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            batchId: string;
+                            results: {
+                                issueId: string;
+                                sessionId: string | null;
+                                /** @enum {string|null} */
+                                status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled" | null;
+                                error: string | null;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/agent/sessions": {
         parameters: {
             query?: never;

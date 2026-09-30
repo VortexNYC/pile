@@ -69,6 +69,23 @@ curl -X POST "https://<worker>/workspaces/<org>/issues/<issue-id>/dispatch" \
 
 The response contains the `id` of the agent session and a `url` you can open.
 
+## Dispatch a batch of issues
+
+```bash
+pile agent dispatch-batch --workspace <org> --file batch.json
+# or inline:
+pile agent dispatch-batch --workspace <org> --item ISS-1 --item ISS-2
+pile agent dispatch-batch --workspace <org> --item '{"issueId":"ISS-3","queuedAfter":"ISS-1"}'
+```
+
+`batch.json` is either an array of items or `{ "items": [...] }`; each item is
+`{issueId, agentId?, branch?, instructions?, queuedAfter?}`. The endpoint is
+`POST /workspaces/<org>/agent/dispatch-batch` and returns per-item results —
+`{issueId, sessionId | error}` — so one conflict never fails the rest.
+`queuedAfter` names a sibling item's `issueId`, an existing session id, or an
+issue with a live session; the item parks in `waiting` until the blocker goes
+terminal.
+
 ## List agent sessions
 
 ### CLI
