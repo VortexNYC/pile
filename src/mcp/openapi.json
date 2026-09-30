@@ -3756,6 +3756,128 @@
         "summary": "Create agent session register"
       }
     },
+    "/workspaces/{organizationId}/agent/dispatch-batch": {
+      "post": {
+        "tags": [
+          "agent-sessions"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "issueId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "agentId": {
+                          "type": "string"
+                        },
+                        "branch": {
+                          "type": "string"
+                        },
+                        "instructions": {
+                          "type": "string"
+                        },
+                        "queuedAfter": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "issueId"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "minItems": 1,
+                    "maxItems": 50
+                  }
+                },
+                "required": [
+                  "items"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Per-item dispatch results — each entry carries a sessionId or an error, independent of sibling failures",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "batchId": {
+                      "type": "string"
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "issueId": {
+                            "type": "string"
+                          },
+                          "sessionId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "status": {
+                            "type": "string",
+                            "nullable": true,
+                            "enum": [
+                              "created",
+                              "running",
+                              "waiting",
+                              "completed",
+                              "failed",
+                              "canceled",
+                              null
+                            ]
+                          },
+                          "error": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "issueId",
+                          "sessionId",
+                          "status",
+                          "error"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "batchId",
+                    "results"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create agent dispatch batch"
+      }
+    },
     "/workspaces/{organizationId}/agent/sessions": {
       "get": {
         "tags": [
