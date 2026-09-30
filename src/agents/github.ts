@@ -52,13 +52,7 @@ const checkRunInnerSchema = z.object({
   head_branch: z.string().nullish(),
   head_sha: z.string(),
   details_url: z.string().nullable().optional(),
-  status: z.enum([
-    "queued",
-    "in_progress",
-    "completed",
-    "pending",
-    "waiting",
-  ]),
+  status: z.enum(["queued", "in_progress", "completed", "pending", "waiting"]),
   conclusion: z
     .enum([
       "success",

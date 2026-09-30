@@ -6,15 +6,10 @@ import { processIncomingMessage } from "../global/support-channels.js";
 import { replyLaneResultToTicket } from "../global/support-escalation.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkerEnv } from "../platform/middleware.js";
-import type {
-  AgentSession,
-  AgentSessionStatus,
-  Issue,
-} from "../types/workspace.js";
+import type { AgentSession, AgentSessionStatus } from "../types/workspace.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
 import { loadProviderConfig } from "./credentials.js";
 import { resolveAgentEnv } from "./daytona.js";
-import { followupThrottleWindowMs, laneFollowupThrottled } from "./followup.js";
 import { dispatchAgent, getAgentProvider } from "./index.js";
 import { getLaneDbProvider, type LaneDbRef } from "./lane-db.js";
 import { nudgeLane } from "./nudge.js";
