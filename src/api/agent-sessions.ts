@@ -1558,7 +1558,8 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     if (!session) {
       return c.json({ message: "Session not found" }, 404);
     }
-    const terminal = session.status === "completed" ||
+    const terminal =
+      session.status === "completed" ||
       session.status === "failed" ||
       session.status === "canceled";
 
