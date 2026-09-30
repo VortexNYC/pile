@@ -248,9 +248,9 @@ const PYTHON_RUNNER = [
   "",
   "HOME = os.environ.get('HOME', '/tmp')",
   "CURSOR_INSTALL_DIR = os.path.join(HOME, '.local', 'bin')",
-  "REPO = os.environ['REPO']",
-  "BRANCH = os.environ['BRANCH']",
-  "GITHUB_TOKEN = os.environ['GITHUB_TOKEN']",
+  "REPO = os.environ.get('REPO', '')",
+  "BRANCH = os.environ.get('BRANCH', '')",
+  "GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN', '')",
   "REPO_DIR = os.path.join(HOME, 'repo')",
   "",
   "def run(cmd, cwd=None, env=None, check=False, **kwargs):",
@@ -406,7 +406,7 @@ const PYTHON_RUNNER = [
   "    if model:",
   "        cmd += ['--model', model]",
   "    proc = subprocess.Popen(",
-  "        cmd, cwd=REPO_DIR, env=cli_env(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True",
+  "        cmd, cwd=REPO_DIR if REPO else HOME, env=cli_env(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True",
   "    )",
   "    tail = []",
   "    events = open('/tmp/agent-events.ndjson', 'a', buffering=1)",
@@ -449,11 +449,12 @@ const PYTHON_RUNNER = [
   "",
   "def main():",
   "    agent_bin = ensure_cursor()",
-  "    create_branch()",
-  "    clone_repo()",
-  "    warm_pnpm_store()",
+  "    if REPO:",
+  "        create_branch()",
+  "        clone_repo()",
+  "        warm_pnpm_store()",
   "    output = run_cursor(agent_bin)",
-  "    pushed = commit_and_push()",
+  "    pushed = commit_and_push() if REPO else False",
   "    pr_url = ''",
   "    if pushed:",
   "        pr_url = find_pr() or create_pr()",
@@ -487,7 +488,7 @@ function buildSandboxEnv(
   model: string,
   apiKey: string,
   githubToken: string,
-  gitIdentity: GitIdentity,
+  gitIdentity: GitIdentity | null,
   comments?: DispatchComment[],
   instructions?: string,
   logUrl?: string | null,
@@ -515,8 +516,12 @@ function buildSandboxEnv(
     ...(cacheUrl ? { PILE_CACHE_URL: cacheUrl } : {}),
     CURSOR_API_KEY: apiKey,
     GITHUB_TOKEN: githubToken,
-    GIT_AUTHOR_NAME: sanitizeEnv(gitIdentity.name),
-    GIT_AUTHOR_EMAIL: sanitizeEnv(gitIdentity.email),
+    ...(gitIdentity
+      ? {
+          GIT_AUTHOR_NAME: sanitizeEnv(gitIdentity.name),
+          GIT_AUTHOR_EMAIL: sanitizeEnv(gitIdentity.email),
+        }
+      : {}),
     REPO: repo,
     BRANCH: branch,
     ISSUE_TITLE: sanitizeEnv(issue.title),
@@ -621,21 +626,16 @@ export class CursorCliAgentProvider implements AgentProvider {
     issue: Issue,
     model: string,
     sessionId: string,
-    gitIdentity: GitIdentity,
+    gitIdentity: GitIdentity | null,
     comments?: DispatchComment[],
     pileApi?: { url: string; key: string },
     instructions?: string
   ) {
     const apiKey = this.requireAuth();
     const compute = this.requireCompute();
-    if (!issue.repo) {
-      throw new VortexError({
-        code: "BAD_REQUEST",
-        status: 400,
-        message: "Issue must have a repository",
-      });
-    }
-    const githubToken = await this.githubToken(issue.repo);
+    // Repo-less lanes (preflight critiques, analysis) get no clone/push stage
+    // and no GitHub token — the agent only reads the prompt and reports back.
+    const githubToken = issue.repo ? await this.githubToken(issue.repo) : "";
     const name = sandboxName(sessionId);
 
     const spanId = await this.openSpan(
@@ -728,7 +728,9 @@ export class CursorCliAgentProvider implements AgentProvider {
       });
     }
     const gitIdentity = sessionContext?.gitIdentity;
-    if (!gitIdentity) {
+    // A repo-less lane (e.g. preflight critique) never commits — git identity
+    // is only required when there's a repository to push to.
+    if (!gitIdentity && issue.repo) {
       throw new VortexError({
         code: "CONFIG_ERROR",
         status: 500,
@@ -742,7 +744,7 @@ export class CursorCliAgentProvider implements AgentProvider {
       issue,
       effectiveModel,
       sessionId,
-      gitIdentity,
+      gitIdentity ?? null,
       sessionContext?.comments,
       sessionContext?.pileApi,
       sessionContext?.instructions
