@@ -195,12 +195,14 @@ const DEFAULT_PUSH_INSTRUCTION =
 
 export class SandboxCliAgentProvider implements AgentProvider {
   readonly id: string;
+  readonly keepsTerminalSandbox: boolean;
 
   constructor(
     private env: AppEnv,
     private d: SandboxCliDescriptor
   ) {
     this.id = d.id;
+    this.keepsTerminalSandbox = d.followup === true;
   }
 
   private async note(
