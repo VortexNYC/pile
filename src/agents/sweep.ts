@@ -1172,6 +1172,84 @@ export async function syncOpenPrSessions(
           });
         }
       }
+      // PILE-224 — the review→lane round trip: a submitted GitHub review is
+      // agent-facing work, not just a status. Each new review emits one
+      // deduped pr.review event; reviews that carry feedback (changes
+      // requested or a body) nudge the lane so the agent can act on it.
+      if (state === "open") {
+        const reviews = (await withTimeout(
+          githubApiGet(
+            ghFetch,
+            token,
+            `/repos/${owner}/${repo}/pulls/${num}/reviews?per_page=100`
+          ),
+          probeTimeoutMs,
+          "github-reviews"
+        ).catch(() => null)) as
+          | Array<{
+              id?: number;
+              state?: string;
+              body?: string;
+              user?: { login?: string };
+            }>
+          | null;
+        if (reviews && reviews.length > 0) {
+          const seen = await stub
+            .listAgentSessionEvents(session.id, { limit: 100 })
+            .catch(() => []);
+          for (const review of reviews) {
+            if (typeof review.id !== "number") continue;
+            const marker = `review-${review.id}`;
+            if (
+              seen.some(
+                (e) =>
+                  e.type === "pr.review" &&
+                  typeof e.payload === "string" &&
+                  e.payload.includes(marker)
+              )
+            ) {
+              continue;
+            }
+            const reviewState = (review.state ?? "").toUpperCase();
+            const reviewer = review.user?.login ?? "reviewer";
+            const body = (review.body ?? "").trim();
+            await stub
+              .addAgentSessionEvent({
+                sessionId: session.id,
+                type: "pr.review",
+                message: `${reviewer} reviewed ${prUrl}: ${reviewState.toLowerCase()}`,
+                payload: {
+                  prUrl,
+                  headSha,
+                  reviewId: marker,
+                  state: reviewState,
+                  reviewer,
+                },
+              })
+              .catch(() => {});
+            const actionable =
+              reviewState === "CHANGES_REQUESTED" || body.length > 0;
+            if (!actionable) continue;
+            const reviewPrompt =
+              `${reviewer} reviewed ${prUrl} (${reviewState.toLowerCase()}).\n` +
+              (body ? `Review:\n${body}\n` : "") +
+              "Read the review comments on the PR, address the feedback, and push.";
+            await fireEventAutomations(
+              env,
+              stub,
+              organizationId,
+              "pr.review",
+              session,
+              reviewPrompt
+            );
+            await nudgeLane(env, stub, organizationId, session, issue, prUrl, {
+              prompt: reviewPrompt,
+              reason: "review feedback",
+            });
+          }
+        }
+      }
+
       const reviewers = pr.requested_reviewers;
       if (
         Array.isArray(reviewers) &&
