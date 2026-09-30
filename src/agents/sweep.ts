@@ -970,7 +970,7 @@ async function nudgeLane(
   session: AgentSession,
   issue: Issue | undefined,
   prUrl: string,
-  opts: { prompt: string; reason: string }
+  opts: { prompt: string; reason: string; dedupeKey?: string }
 ): Promise<void> {
   // completed is included: reviews/CI land after the lane finishes, and
   // kept-sandbox providers (devin-cli) resume on the follow-up — that
@@ -990,6 +990,22 @@ async function nudgeLane(
       resolveAgentEnv(env, providerConfig ?? undefined)
     );
     if (!provider.sendPrompt) return;
+    // Dedupe on DELIVERY, not detection: detection events (pr.ci_failed,
+    // pr.review) fire once, but a nudge rejected while the sandbox is busy
+    // must be retried on later sweeps or the lane never hears about it.
+    const dedupeKey = opts.dedupeKey;
+    if (dedupeKey) {
+      const seen = await stub
+        .listAgentSessionEvents(session.id, { limit: 100 })
+        .catch(() => []);
+      const alreadyDelivered = seen.some(
+        (e) =>
+          e.type === "prompt.followup" &&
+          typeof e.payload === "string" &&
+          e.payload.includes(dedupeKey)
+      );
+      if (alreadyDelivered) return;
+    }
     const windowMs = followupThrottleWindowMs(providerConfig?.config);
     if (await laneFollowupThrottled(stub, session.id, windowMs)) {
       await stub
@@ -1018,7 +1034,11 @@ async function nudgeLane(
         message: delivered
           ? `${opts.reason} delivered as follow-up prompt`
           : `${opts.reason} follow-up prompt rejected by provider`,
-        payload: { issueId: issue.id, prUrl },
+        payload: {
+          issueId: issue.id,
+          prUrl,
+          ...(opts.dedupeKey ? { key: opts.dedupeKey } : {}),
+        },
       })
       .catch(() => {});
     // Resume bookkeeping mirrors the /prompt endpoint: a delivered follow-up
@@ -1116,6 +1136,17 @@ export async function syncOpenPrSessions(
           })
           .catch(() => {});
       }
+      const ciPrompt =
+        `CI is failing on ${prUrl}${headSha ? ` (sha ${headSha})` : ""}.\n` +
+        (failingChecks.length
+          ? `Failing checks:\n${failingChecks
+              .map(
+                (c) =>
+                  `- ${c.name ?? "unknown"}${c.details_url ? ` (${c.details_url})` : ""}`
+              )
+              .join("\n")}\n`
+          : "") +
+        "Fetch the failing check runs, fix, and push.";
       if (checkState === "failing" && priorCheckState !== "failing") {
         await stub
           .addAgentSessionEvent({
@@ -1130,16 +1161,6 @@ export async function syncOpenPrSessions(
             },
           })
           .catch(() => {});
-        const failingList = failingChecks
-          .map(
-            (c) =>
-              `- ${c.name ?? "unknown"}${c.details_url ? ` (${c.details_url})` : ""}`
-          )
-          .join("\n");
-        const ciPrompt =
-          `CI is failing on ${prUrl}${headSha ? ` (sha ${headSha})` : ""}.\n` +
-          (failingList ? `Failing checks:\n${failingList}\n` : "") +
-          "Fetch the failing check runs, fix, and push.";
         await fireEventAutomations(
           env,
           stub,
@@ -1148,9 +1169,15 @@ export async function syncOpenPrSessions(
           session,
           ciPrompt
         );
+      }
+      // The nudge retries every sweep while CI is red — delivery dedupe
+      // (not detection) decides whether the lane already got this sha's fix
+      // prompt, so a busy-sandbox rejection just retries next tick.
+      if (checkState === "failing") {
         await nudgeLane(env, stub, organizationId, session, issue, prUrl, {
           prompt: ciPrompt,
           reason: "CI failure",
+          dedupeKey: `ci-${headSha ?? "unknown"}`,
         });
       }
       // PILE-230: merge-conflict awareness. GitHub reports mergeable:false once
@@ -1184,13 +1211,14 @@ export async function syncOpenPrSessions(
             session,
             `PR ${prUrl} has merge conflicts. Rebase or merge the base branch and resolve.`
           );
-          await nudgeLane(env, stub, organizationId, session, issue, prUrl, {
-            prompt:
-              `PR ${prUrl} has merge conflicts with the base branch.\n` +
-              "Rebase (or merge the base branch), resolve the conflicts, and push.",
-            reason: "merge conflict",
-          });
         }
+        await nudgeLane(env, stub, organizationId, session, issue, prUrl, {
+          prompt:
+            `PR ${prUrl} has merge conflicts with the base branch.\n` +
+            "Rebase (or merge the base branch), resolve the conflicts, and push.",
+          reason: "merge conflict",
+          dedupeKey: `conflict-${headSha ?? "unknown"}`,
+        });
       }
       // PILE-224 — the review→lane round trip: a submitted GitHub review is
       // agent-facing work, not just a status. Each new review emits one
@@ -1220,33 +1248,31 @@ export async function syncOpenPrSessions(
           for (const review of reviews) {
             if (typeof review.id !== "number") continue;
             const marker = `review-${review.id}`;
-            if (
-              seen.some(
-                (e) =>
-                  e.type === "pr.review" &&
-                  typeof e.payload === "string" &&
-                  e.payload.includes(marker)
-              )
-            ) {
-              continue;
-            }
             const reviewState = (review.state ?? "").toUpperCase();
             const reviewer = review.user?.login ?? "reviewer";
             const body = (review.body ?? "").trim();
-            await stub
-              .addAgentSessionEvent({
-                sessionId: session.id,
-                type: "pr.review",
-                message: `${reviewer} reviewed ${prUrl}: ${reviewState.toLowerCase()}`,
-                payload: {
-                  prUrl,
-                  headSha,
-                  reviewId: marker,
-                  state: reviewState,
-                  reviewer,
-                },
-              })
-              .catch(() => {});
+            const isNew = !seen.some(
+              (e) =>
+                e.type === "pr.review" &&
+                typeof e.payload === "string" &&
+                e.payload.includes(marker)
+            );
+            if (isNew) {
+              await stub
+                .addAgentSessionEvent({
+                  sessionId: session.id,
+                  type: "pr.review",
+                  message: `${reviewer} reviewed ${prUrl}: ${reviewState.toLowerCase()}`,
+                  payload: {
+                    prUrl,
+                    headSha,
+                    reviewId: marker,
+                    state: reviewState,
+                    reviewer,
+                  },
+                })
+                .catch(() => {});
+            }
             const actionable =
               reviewState === "CHANGES_REQUESTED" || body.length > 0;
             if (!actionable) continue;
@@ -1254,17 +1280,22 @@ export async function syncOpenPrSessions(
               `${reviewer} reviewed ${prUrl} (${reviewState.toLowerCase()}).\n` +
               (body ? `Review:\n${body}\n` : "") +
               "Read the review comments on the PR, address the feedback, and push.";
-            await fireEventAutomations(
-              env,
-              stub,
-              organizationId,
-              "pr.review",
-              session,
-              reviewPrompt
-            );
+            if (isNew) {
+              await fireEventAutomations(
+                env,
+                stub,
+                organizationId,
+                "pr.review",
+                session,
+                reviewPrompt
+              );
+            }
+            // Delivery dedupe, not detection: a rejected nudge retries on
+            // later sweeps until the lane actually gets this review.
             await nudgeLane(env, stub, organizationId, session, issue, prUrl, {
               prompt: reviewPrompt,
               reason: "review feedback",
+              dedupeKey: marker,
             });
           }
         }
