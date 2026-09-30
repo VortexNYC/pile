@@ -953,6 +953,23 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "agent dispatch batch create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/agent/dispatch-batch",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "items",
+        flag: "items",
+      },
+    ],
+  },
   "agent sessions list": {
     method: "GET",
     path: "/workspaces/{organizationId}/agent/sessions",
@@ -9002,7 +9019,12 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "workspace",
       },
     ],
-    query: [],
+    query: [
+      {
+        name: "token",
+        flag: "token",
+      },
+    ],
     body: [],
   },
   "saved views list": {

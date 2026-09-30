@@ -80,6 +80,9 @@ function isHttpMethod(value: string): value is HttpMethod {
 type ParsedArgs = {
   readonly positionals: readonly string[];
   readonly flags: Readonly<Record<string, string | boolean>>;
+  // Every string value a flag received, in order — repeated flags like
+  // `--item a --item b` collapse to the last value in `flags`.
+  readonly multi: Readonly<Record<string, readonly string[]>>;
 };
 
 const BOOLEAN_FLAGS = new Set(["follow", "help"]);
@@ -87,6 +90,13 @@ const BOOLEAN_FLAGS = new Set(["follow", "help"]);
 function parseArgs(args: readonly string[]): ParsedArgs {
   const positionals: string[] = [];
   const flags: Record<string, string | boolean> = {};
+  const multi: Record<string, string[]> = {};
+  const record = (key: string, value: string | boolean) => {
+    flags[key] = value;
+    if (typeof value === "string") {
+      (multi[key] ??= []).push(value);
+    }
+  };
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (!arg.startsWith("--")) {
@@ -96,8 +106,9 @@ function parseArgs(args: readonly string[]): ParsedArgs {
     const withoutPrefix = arg.slice(2);
     const equalsIndex = withoutPrefix.indexOf("=");
     if (equalsIndex >= 0) {
-      flags[withoutPrefix.slice(0, equalsIndex)] = withoutPrefix.slice(
-        equalsIndex + 1
+      record(
+        withoutPrefix.slice(0, equalsIndex),
+        withoutPrefix.slice(equalsIndex + 1)
       );
       continue;
     }
@@ -107,13 +118,13 @@ function parseArgs(args: readonly string[]): ParsedArgs {
       !next.startsWith("--") &&
       !BOOLEAN_FLAGS.has(withoutPrefix)
     ) {
-      flags[withoutPrefix] = next;
+      record(withoutPrefix, next);
       index += 1;
       continue;
     }
-    flags[withoutPrefix] = true;
+    record(withoutPrefix, true);
   }
-  return { positionals, flags };
+  return { positionals, flags, multi };
 }
 
 export function flagString(
@@ -398,6 +409,75 @@ async function dispatchFollowCommand(
     throw new Error("Dispatch response did not include a session id");
   }
   return await sessionWatchCommand(sessionId, flags, deps, { untilPr: true });
+}
+
+// `pile agent dispatch-batch --workspace <org> --file batch.json` — or items
+// inline: repeated `--item <issueId|'{"issueId":…}'>` flags, or `--items` as a
+// JSON array. POSTs one batch dispatch and prints per-item results.
+async function agentDispatchBatchCommand(
+  flags: Readonly<Record<string, string | boolean>>,
+  multi: Readonly<Record<string, readonly string[]>>,
+  deps: CliDeps = {}
+): Promise<number> {
+  const workspace =
+    flagString(flags, "workspace") ?? flagString(flags, "workspace-id");
+  if (workspace === undefined || workspace.length === 0) {
+    throw new Error("Missing --workspace. Use --workspace <org>.");
+  }
+
+  const items: Json[] = [];
+  const file = flagString(flags, "file");
+  if (file !== undefined) {
+    const parsed = parseJson(readFileSync(file, "utf8"));
+    if (Array.isArray(parsed)) {
+      items.push(...parsed);
+    } else if (isJsonObject(parsed) && Array.isArray(parsed.items)) {
+      items.push(...parsed.items);
+    } else {
+      throw new Error(
+        "Expected --file to contain a JSON array or an object with an items array"
+      );
+    }
+  }
+  const inline = flagString(flags, "items");
+  if (inline !== undefined) {
+    const parsed = parseJson(inline);
+    if (!Array.isArray(parsed)) {
+      throw new Error("Expected --items to be a JSON array");
+    }
+    items.push(...parsed);
+  }
+  for (const raw of multi.item ?? []) {
+    items.push(raw.startsWith("{") ? parseJson(raw) : { issueId: raw });
+  }
+  if (items.length === 0) {
+    throw new Error(
+      "Usage: pile agent dispatch-batch --workspace <org> (--file batch.json | --items '<json>' | --item <issueId|json> repeated)"
+    );
+  }
+
+  const config = resolveConfig();
+  if (config.apiKey === undefined || config.apiKey.length === 0) {
+    throw new Error(
+      "Missing API key. Set PILE_API_KEY or run `pile config set --api-key <key>`."
+    );
+  }
+
+  const baseUrl = config.baseUrl.replace(/\/$/u, "");
+  const doFetch = deps.fetch ?? fetch;
+  const response = await doFetch(
+    `${baseUrl}/workspaces/${workspace}/agent/dispatch-batch`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ items }),
+    }
+  );
+  printResponse(await response.text());
+  return response.ok ? 0 : 1;
 }
 
 function getSetCookie(headers: Headers): readonly string[] {
@@ -999,6 +1079,7 @@ function printUsage(): void {
     "agent context push --workspace <org> [--dir .]",
     "agent sessions watch <sessionId> --workspace <org>",
     "fleet --workspace <org>",
+    "agent dispatch-batch --workspace <org> --file batch.json",
     "issues dispatch <id> --workspace <org> --follow [--timeout <min>]",
   ]) {
     console.log(`  ${cmd}`);
@@ -1278,7 +1359,7 @@ export async function runCli(
   deps: FleetDeps = {}
 ): Promise<number> {
   try {
-    const { positionals, flags } = parseArgs(args);
+    const { positionals, flags, multi } = parseArgs(args);
     const [scope] = positionals;
 
     if (
@@ -1321,6 +1402,10 @@ export async function runCli(
 
     if (scope === "capture" && positionals[1] === "run") {
       return await captureRunCommand(flags, deps);
+    }
+
+    if (scope === "agent" && positionals[1] === "dispatch-batch") {
+      return await agentDispatchBatchCommand(flags, multi, deps);
     }
 
     if (

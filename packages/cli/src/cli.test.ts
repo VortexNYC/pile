@@ -903,6 +903,93 @@ describe("CLI integration", () => {
     error.mockRestore();
   });
 
+  it("dispatches a batch from repeated --item flags", async () => {
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          batchId: "b1",
+          results: [
+            { issueId: "ISS-1", sessionId: "s1", status: "created" },
+            { issueId: "ISS-2", sessionId: "s2", status: "waiting" },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+    const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    const exitCode = await runCli(
+      [
+        "agent",
+        "dispatch-batch",
+        "--workspace",
+        "ws-1",
+        "--item",
+        "ISS-1",
+        "--item",
+        '{"issueId":"ISS-2","queuedAfter":"ISS-1"}',
+      ],
+      { fetch: mockFetch }
+    );
+
+    expect(exitCode).toBe(0);
+    const [url, init] = mockFetch.mock.calls[0] as [
+      string,
+      { method: string; body?: string },
+    ];
+    expect(new URL(url).pathname).toBe("/workspaces/ws-1/agent/dispatch-batch");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({
+      items: [{ issueId: "ISS-1" }, { issueId: "ISS-2", queuedAfter: "ISS-1" }],
+    });
+    spy.mockRestore();
+  });
+
+  it("dispatches a batch from --file", async () => {
+    const file = join(home, "batch.json");
+    writeFileSync(
+      file,
+      JSON.stringify({ items: [{ issueId: "ISS-9", agentId: "devin" }] })
+    );
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          batchId: "b2",
+          results: [{ issueId: "ISS-9", sessionId: "s9" }],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+    const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    const exitCode = await runCli(
+      ["agent", "dispatch-batch", "--workspace", "ws-1", "--file", file],
+      { fetch: mockFetch }
+    );
+
+    expect(exitCode).toBe(0);
+    const [, init] = mockFetch.mock.calls[0] as [
+      URL,
+      { method: string; body?: string },
+    ];
+    expect(JSON.parse(init.body as string)).toEqual({
+      items: [{ issueId: "ISS-9", agentId: "devin" }],
+    });
+    spy.mockRestore();
+  });
+
+  it("dispatch-batch without items exits 1", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const exitCode = await runCli(
+      ["agent", "dispatch-batch", "--workspace", "ws-1"],
+      { fetch: vi.fn() }
+    );
+
+    expect(exitCode).toBe(1);
+    spy.mockRestore();
+  });
+
   it("rejects an unknown command", async () => {
     const mockFetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ issues: [] }), {

@@ -3964,7 +3964,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdRealtime",
-    "description": "List realtime (GET /workspaces/{organizationId}/realtime) Path params (top-level, required): organizationId.",
+    "description": "List realtime (GET /workspaces/{organizationId}/realtime) Path params (top-level, required): organizationId. Query params (top-level, optional): token.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/realtime",
     "inputSchema": {
@@ -3972,6 +3972,10 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "properties": {
         "organizationId": {
           "type": "string"
+        },
+        "token": {
+          "type": "string",
+          "description": "Workspace API key for browser WebSocket clients, which cannot set the Authorization header"
         }
       },
       "required": [
@@ -8833,6 +8837,62 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "agentId",
             "triggerKind",
             "triggerValue"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdAgentDispatchbatch",
+    "description": "Create agent dispatch batch (POST /workspaces/{organizationId}/agent/dispatch-batch) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: items* (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/agent/dispatch-batch",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "issueId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "agentId": {
+                    "type": "string"
+                  },
+                  "branch": {
+                    "type": "string"
+                  },
+                  "instructions": {
+                    "type": "string"
+                  },
+                  "queuedAfter": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "issueId"
+                ],
+                "additionalProperties": false
+              },
+              "minItems": 1,
+              "maxItems": 50
+            }
+          },
+          "required": [
+            "items"
           ],
           "additionalProperties": false
         }

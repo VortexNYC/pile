@@ -10,6 +10,7 @@ export const ERROR_CATALOG = {
   USAGE_LIMIT: { status: 402, message: "Usage limit reached" },
   UNPROCESSABLE_CONTENT: { status: 422, message: "Unprocessable content" },
   TOO_MANY_REQUESTS: { status: 429, message: "Too many requests" },
+  UPGRADE_REQUIRED: { status: 426, message: "Upgrade Required" },
   RATE_LIMITED: { status: 429, message: "Rate limit exceeded" },
   AGENT_ERROR: { status: 502, message: "Agent provider error" },
   CONFIG_ERROR: { status: 500, message: "Configuration error" },
@@ -93,6 +94,8 @@ export function errorCodeFromStatus(status: number): ErrorCode {
       return "CONFLICT";
     case 422:
       return "UNPROCESSABLE_CONTENT";
+    case 426:
+      return "UPGRADE_REQUIRED";
     case 429:
       return "TOO_MANY_REQUESTS";
     case 502:
