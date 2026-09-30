@@ -9,6 +9,7 @@ import {
 import { dirname, join } from "node:path";
 
 import { COMMANDS } from "./commands.js";
+import { fleetCommand, type FleetDeps } from "./fleet.js";
 
 type Json =
   | null
@@ -49,7 +50,7 @@ export type CliDeps = {
   };
 };
 
-function isJsonValue(value: unknown): value is Json {
+export function isJsonValue(value: unknown): value is Json {
   if (value === null) return true;
   const type = typeof value;
   if (type === "boolean" || type === "number" || type === "string") return true;
@@ -60,7 +61,7 @@ function isJsonValue(value: unknown): value is Json {
   return false;
 }
 
-function parseJson(text: string): Json {
+export function parseJson(text: string): Json {
   const parsed: unknown = JSON.parse(text);
   if (!isJsonValue(parsed)) {
     throw new Error("Expected valid JSON");
@@ -68,7 +69,7 @@ function parseJson(text: string): Json {
   return parsed;
 }
 
-function isJsonObject(value: unknown): value is JsonObject {
+export function isJsonObject(value: unknown): value is JsonObject {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
@@ -115,7 +116,7 @@ function parseArgs(args: readonly string[]): ParsedArgs {
   return { positionals, flags };
 }
 
-function flagString(
+export function flagString(
   flags: Readonly<Record<string, string | boolean>>,
   key: string
 ): string | undefined {
@@ -170,7 +171,8 @@ function readStoredConfig(): CliConfig {
   };
 }
 
-function resolveConfig(): Required<Pick<CliConfig, "baseUrl">> & CliConfig {
+export function resolveConfig(): Required<Pick<CliConfig, "baseUrl">> &
+  CliConfig {
   const stored = readStoredConfig();
   return {
     ...stored,
@@ -996,6 +998,7 @@ function printUsage(): void {
     "agent context pull --workspace <org> [--dir .]",
     "agent context push --workspace <org> [--dir .]",
     "agent sessions watch <sessionId> --workspace <org>",
+    "fleet --workspace <org>",
     "issues dispatch <id> --workspace <org> --follow [--timeout <min>]",
   ]) {
     console.log(`  ${cmd}`);
@@ -1272,7 +1275,7 @@ async function sessionWatchCommand(
 
 export async function runCli(
   args: readonly string[] = process.argv.slice(2),
-  deps: CliDeps = {}
+  deps: FleetDeps = {}
 ): Promise<number> {
   try {
     const { positionals, flags } = parseArgs(args);
@@ -1334,6 +1337,10 @@ export async function runCli(
       positionals[2] === "watch"
     ) {
       return await sessionWatchCommand(positionals[3], flags, deps);
+    }
+
+    if (scope === "fleet") {
+      return await fleetCommand(flags, deps);
     }
 
     if (
