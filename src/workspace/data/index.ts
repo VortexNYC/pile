@@ -1081,6 +1081,7 @@ export async function updateAgentSession(
     parentSessionId: string | null;
     spawnDepth: number;
     laneDbRef: string | null;
+    endedAt: string | null;
   }>
 ) {
   const existing = await getAgentSession(db, organizationId, id);
@@ -1118,6 +1119,7 @@ export async function updateAgentSession(
     set.parentSessionId = input.parentSessionId;
   if (input.spawnDepth !== undefined) set.spawnDepth = input.spawnDepth;
   if (input.laneDbRef !== undefined) set.laneDbRef = input.laneDbRef;
+  if (input.endedAt !== undefined) set.endedAt = input.endedAt;
   await db
     .update(workspaceAgentSessions)
     .set(set)

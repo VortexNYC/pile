@@ -36,6 +36,11 @@ const SANDBOX_RESUME_WINDOW_MS = 4 * 60 * 60 * 1000;
 // The reaper only scans terminal sessions inside a bounded window — anything
 // older was reaped already or died of natural causes.
 const SANDBOX_REAP_MAX_AGE_MS = 48 * 60 * 60 * 1000;
+// PILE-239 — kept sandboxes are bounded fleet capacity, not a nicety: a
+// reaper bug once let them pile to max_instances and wedge every new lane.
+// Past this count per provider, the oldest in-window sessions are reaped
+// regardless of their remaining resume window.
+const KEPT_SANDBOX_CAP_PER_PROVIDER = 5;
 const TERMINAL_STATUSES = new Set<AgentSessionStatus>([
   "completed",
   "failed",
@@ -200,6 +205,25 @@ export async function ingestFailedAgentSession(
 }
 
 const MAX_INFRA_RETRIES = 1;
+// PILE-240 — consecutive infra failures across a provider's lanes mean the
+// provider/substrate is unhealthy (devin's fleet repeatedly wedged with
+// "runner never started"). Past the streak, retries stop churning lanes
+// and the issue gets told plainly instead.
+const PROVIDER_UNHEALTHY_STREAK = 3;
+
+async function providerInfraStreak(
+  stub: DurableObjectStub<WorkspaceDO>,
+  agentId: string
+): Promise<number> {
+  const recent = await stub.listAgentSessions({ limit: 20 });
+  let streak = 0;
+  for (const s of recent) {
+    if (s.agentId !== agentId) continue;
+    if (s.status === "failed" && s.infraFailure === 1) streak += 1;
+    else break;
+  }
+  return streak;
+}
 
 // Redispatch once when the compute substrate failed underneath the agent —
 // sandbox error, runner dying without a result — not when the agent itself
@@ -212,6 +236,16 @@ async function retryInfraSession(
   ctx?: { waitUntil: (promise: Promise<unknown>) => void }
 ): Promise<void> {
   if ((session.retryCount ?? 0) >= MAX_INFRA_RETRIES) return;
+  const streak = await providerInfraStreak(stub, session.agentId);
+  if (streak >= PROVIDER_UNHEALTHY_STREAK) {
+    await stub.addAgentActivity({
+      sessionId: session.id,
+      actorId: session.actorId,
+      type: "error",
+      message: `${session.agentId} unhealthy — ${streak} consecutive infra failures, redispatch paused`,
+    });
+    return;
+  }
   try {
     const issue = await stub.getIssue(session.issueId);
     if (!issue) return;
@@ -345,17 +379,56 @@ async function reapTerminalArtifacts(
   now: number
 ): Promise<void> {
   const recent = await stub.listAgentSessions({ limit: 200 });
+  // PILE-239 — first pass: terminal sessions inside the resume window are
+  // the kept-sandbox population per provider. Beyond the cap the oldest are
+  // reaped even though their window hasn't closed.
+  const inWindowByProvider = new Map<string, { id: string; at: number }[]>();
   for (const session of recent) {
     if (!TERMINAL_STATUSES.has(session.status)) continue;
     if (session.lastStateHash === "reaped") continue;
+    const anchor = Date.parse(session.endedAt ?? session.updatedAt);
+    if (!Number.isFinite(anchor)) continue;
+    if (now - anchor < SANDBOX_RESUME_WINDOW_MS) {
+      const list = inWindowByProvider.get(session.agentId) ?? [];
+      list.push({ id: session.id, at: anchor });
+      inWindowByProvider.set(session.agentId, list);
+    }
+  }
+  const forceReap = new Set<string>();
+  for (const list of inWindowByProvider.values()) {
+    if (list.length <= KEPT_SANDBOX_CAP_PER_PROVIDER) continue;
+    list.sort((a, b) => a.at - b.at);
+    for (const s of list.slice(0, -KEPT_SANDBOX_CAP_PER_PROVIDER)) {
+      forceReap.add(s.id);
+    }
+  }
+
+  for (const session of recent) {
+    if (!TERMINAL_STATUSES.has(session.status)) continue;
+    if (session.lastStateHash === "reaped") continue;
+    // PILE-238 — endedAt is the reaper anchor; a write path that skips it
+    // (like the applyAgentSessionResult bypass did) silently leaks kept
+    // sandboxes. Self-heal stale rows and log so regressions surface.
+    if (!session.endedAt) {
+      console.error("terminal session missing endedAt", {
+        session: session.id,
+        organizationId,
+        status: session.status,
+      });
+      await stub.updateAgentSession(session.id, {
+        endedAt: session.updatedAt,
+      });
+      continue;
+    }
     await teardownLaneDbForSession(env, stub, session);
     // Anchor to the terminal transition — updatedAt churns on every write
     // (prState, laneDb teardown, this reaper's marker) and would otherwise
     // keep the sandbox inside the resume window forever.
-    const updated = Date.parse(session.endedAt ?? session.updatedAt);
+    const updated = Date.parse(session.endedAt);
     if (
       !Number.isFinite(updated) ||
-      now - updated < SANDBOX_RESUME_WINDOW_MS ||
+      (now - updated < SANDBOX_RESUME_WINDOW_MS &&
+        !forceReap.has(session.id)) ||
       now - updated > SANDBOX_REAP_MAX_AGE_MS
     ) {
       continue;
@@ -899,7 +972,16 @@ async function nudgeLane(
   prUrl: string,
   opts: { prompt: string; reason: string }
 ): Promise<void> {
-  if (!issue || (session.status !== "running" && session.status !== "waiting"))
+  // completed is included: reviews/CI land after the lane finishes, and
+  // kept-sandbox providers (devin-cli) resume on the follow-up — that
+  // resume is the whole review→lane loop. Providers without sendPrompt
+  // bail below.
+  if (
+    !issue ||
+    (session.status !== "running" &&
+      session.status !== "waiting" &&
+      session.status !== "completed")
+  )
     return;
   try {
     const providerConfig = await loadProviderConfig(env, stub, session.agentId);
@@ -939,6 +1021,17 @@ async function nudgeLane(
         payload: { issueId: issue.id, prUrl },
       })
       .catch(() => {});
+    // Resume bookkeeping mirrors the /prompt endpoint: a delivered follow-up
+    // on a completed lane flips it back to running so the poll loop picks up
+    // the follow-up run's result (and re-records endedAt when it re-ends).
+    if (delivered && session.status === "completed") {
+      await stub
+        .applyAgentSessionResult(session.id, {
+          status: "running",
+          result: null,
+        })
+        .catch(() => {});
+    }
   } catch (err) {
     console.error("lane nudge failed", {
       sessionId: session.id,
@@ -1099,6 +1192,84 @@ export async function syncOpenPrSessions(
           });
         }
       }
+      // PILE-224 — the review→lane round trip: a submitted GitHub review is
+      // agent-facing work, not just a status. Each new review emits one
+      // deduped pr.review event; reviews that carry feedback (changes
+      // requested or a body) nudge the lane so the agent can act on it.
+      if (state === "open") {
+        const reviews = (await withTimeout(
+          githubApiGet(
+            ghFetch,
+            token,
+            `/repos/${owner}/${repo}/pulls/${num}/reviews?per_page=100`
+          ),
+          probeTimeoutMs,
+          "github-reviews"
+        ).catch(() => null)) as
+          | Array<{
+              id?: number;
+              state?: string;
+              body?: string;
+              user?: { login?: string };
+            }>
+          | null;
+        if (reviews && reviews.length > 0) {
+          const seen = await stub
+            .listAgentSessionEvents(session.id, { limit: 100 })
+            .catch(() => []);
+          for (const review of reviews) {
+            if (typeof review.id !== "number") continue;
+            const marker = `review-${review.id}`;
+            if (
+              seen.some(
+                (e) =>
+                  e.type === "pr.review" &&
+                  typeof e.payload === "string" &&
+                  e.payload.includes(marker)
+              )
+            ) {
+              continue;
+            }
+            const reviewState = (review.state ?? "").toUpperCase();
+            const reviewer = review.user?.login ?? "reviewer";
+            const body = (review.body ?? "").trim();
+            await stub
+              .addAgentSessionEvent({
+                sessionId: session.id,
+                type: "pr.review",
+                message: `${reviewer} reviewed ${prUrl}: ${reviewState.toLowerCase()}`,
+                payload: {
+                  prUrl,
+                  headSha,
+                  reviewId: marker,
+                  state: reviewState,
+                  reviewer,
+                },
+              })
+              .catch(() => {});
+            const actionable =
+              reviewState === "CHANGES_REQUESTED" || body.length > 0;
+            if (!actionable) continue;
+            const reviewPrompt =
+              `${reviewer} reviewed ${prUrl} (${reviewState.toLowerCase()}).\n` +
+              (body ? `Review:\n${body}\n` : "") +
+              "Read the review comments on the PR, address the feedback, and push.";
+            await fireEventAutomations(
+              env,
+              stub,
+              organizationId,
+              "pr.review",
+              session,
+              reviewPrompt
+            );
+            await nudgeLane(env, stub, organizationId, session, issue, prUrl, {
+              prompt: reviewPrompt,
+              reason: "review feedback",
+            });
+          }
+        }
+      }
+
       const reviewers = pr.requested_reviewers;
       if (
         Array.isArray(reviewers) &&

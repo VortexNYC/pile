@@ -4078,6 +4078,79 @@
         "summary": "List agent stats"
       }
     },
+    "/workspaces/{organizationId}/agent/fleet-health": {
+      "get": {
+        "tags": [
+          "agent-sessions"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Fleet health: live lanes, kept sandboxes per provider, endedAt gaps, infra failure streaks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "live": {
+                      "type": "number"
+                    },
+                    "missingEndedAt": {
+                      "type": "number"
+                    },
+                    "providers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "agentId": {
+                            "type": "string"
+                          },
+                          "live": {
+                            "type": "number"
+                          },
+                          "keptSandboxes": {
+                            "type": "number"
+                          },
+                          "infraStreak": {
+                            "type": "number"
+                          },
+                          "unhealthy": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "agentId",
+                          "live",
+                          "keptSandboxes",
+                          "infraStreak",
+                          "unhealthy"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "live",
+                    "missingEndedAt",
+                    "providers"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List agent fleet health"
+      }
+    },
     "/workspaces/{organizationId}/issues/{issueId}/live": {
       "get": {
         "tags": [

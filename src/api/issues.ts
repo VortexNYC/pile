@@ -663,6 +663,8 @@ const dispatchRoute = createRoute({
               // stored fields for this run only; instructions are appended
               // to the prompt's context section.
               repo: z.string().optional(),
+              // The lane's WORKING branch (created off the repo default and
+              // pushed by the runner) — not the base. PILE-241.
               branch: z.string().optional(),
               instructions: z.string().optional(),
               // VTX-209 — when true, dispatch a repo-less planner-critique
@@ -1409,6 +1411,16 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     }
     await assertIssueAccess(db, issue, identity);
 
+    // PILE-241 — branch names the lane's working branch: the runner creates
+    // it off the repo default and pushes it. Passing "main"/"master" makes
+    // the lane try to create the default branch and fail at push time.
+    if (branch && (branch === "main" || branch === "master")) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: `"${branch}" is a repo default branch — branch sets the lane's working branch (leave empty for issue-<id>)`,
+      });
+    }
     const target: Issue = {
       ...issue,
       repo: repo ?? issue.repo,

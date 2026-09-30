@@ -986,6 +986,18 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "agent fleet health list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/agent/fleet-health",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "issues live": {
     method: "GET",
     path: "/workspaces/{organizationId}/issues/{issueId}/live",

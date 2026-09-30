@@ -1756,6 +1756,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdAgentFleethealth",
+    "description": "List agent fleet health (GET /workspaces/{organizationId}/agent/fleet-health) Path params (top-level, required): organizationId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/agent/fleet-health",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdAgentProviders",
     "description": "List agent providers (GET /workspaces/{organizationId}/agent/providers) Path params (top-level, required): organizationId.",
     "method": "GET",

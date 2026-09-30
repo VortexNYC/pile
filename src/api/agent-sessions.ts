@@ -214,6 +214,42 @@ const agentStatsRoute = createRoute({
   },
 });
 
+// PILE-242 — one read for "is the fleet healthy": kept-sandbox pressure,
+// terminal sessions missing the endedAt anchor (would leak), and per-
+// provider infra-failure streaks (the unhealthy signal).
+const fleetHealthRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/agent/fleet-health",
+  tags: ["agent-sessions"],
+  middleware: [rls("read", "agent:read")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+  },
+  responses: {
+    200: {
+      description:
+        "Fleet health: live lanes, kept sandboxes per provider, endedAt gaps, infra failure streaks",
+      content: {
+        "application/json": {
+          schema: z.object({
+            live: z.number(),
+            missingEndedAt: z.number(),
+            providers: z.array(
+              z.object({
+                agentId: z.string(),
+                live: z.number(),
+                keptSandboxes: z.number(),
+                infraStreak: z.number(),
+                unhealthy: z.boolean(),
+              })
+            ),
+          }),
+        },
+      },
+    },
+  },
+});
+
 const issueLiveRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/issues/{issueId}/live",
@@ -923,6 +959,68 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
               : Math.round((a.completed / (a.completed + a.failed)) * 100) /
                 100,
           avgDurationSeconds: avgSeconds(a.durations),
+        })),
+      },
+      200
+    );
+  });
+
+  app.openapi(fleetHealthRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const rows = await stub.listAgentSessions({ limit: 200 });
+
+    const TERMINAL = new Set(["completed", "failed", "canceled"]);
+    const RESUME_WINDOW_MS = 4 * 60 * 60 * 1000;
+    const UNHEALTHY_STREAK = 3;
+    const now = Date.now();
+
+    let live = 0;
+    let missingEndedAt = 0;
+    const kept = new Map<string, number>();
+    const streaks = new Map<string, number>();
+    const broken = new Set<string>();
+
+    for (const row of rows) {
+      // rows arrive newest-first — a provider's streak is consecutive infra
+      // failures from the top; any other session (running, completed, …)
+      // ends it, matching the sweep's unhealthy check.
+      if (!broken.has(row.agentId)) {
+        if (row.status === "failed" && row.infraFailure === 1) {
+          streaks.set(row.agentId, (streaks.get(row.agentId) ?? 0) + 1);
+        } else {
+          broken.add(row.agentId);
+        }
+      }
+      if (!TERMINAL.has(row.status)) {
+        live += 1;
+        continue;
+      }
+      if (!row.endedAt) missingEndedAt += 1;
+      // Kept sandboxes only exist on sandbox-CLI providers (hosted agents
+      // leave no container). This is an upper bound — a destroyed sandbox's
+      // session still counts until it ages out of the window.
+      const anchor = Date.parse(row.endedAt ?? row.updatedAt);
+      if (
+        row.agentId.endsWith("-cli") &&
+        Number.isFinite(anchor) &&
+        now - anchor < RESUME_WINDOW_MS
+      ) {
+        kept.set(row.agentId, (kept.get(row.agentId) ?? 0) + 1);
+      }
+    }
+
+    const agentIds = new Set([...kept.keys(), ...streaks.keys()]);
+    return c.json(
+      {
+        live,
+        missingEndedAt,
+        providers: [...agentIds].map((agentId) => ({
+          agentId,
+          live: rows.filter((r) => r.agentId === agentId && !TERMINAL.has(r.status)).length,
+          keptSandboxes: kept.get(agentId) ?? 0,
+          infraStreak: streaks.get(agentId) ?? 0,
+          unhealthy: (streaks.get(agentId) ?? 0) >= UNHEALTHY_STREAK,
         })),
       },
       200

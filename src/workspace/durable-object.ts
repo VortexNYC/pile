@@ -2366,7 +2366,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         updatedAt: new Date().toISOString(),
         lastProgressAt: new Date().toISOString(),
       };
-      if (result.status !== undefined) set.status = result.status;
+      if (result.status !== undefined) {
+        set.status = result.status;
+        if (terminal.has(result.status) && !oldSession.endedAt)
+          set.endedAt = set.updatedAt;
+        if (!terminal.has(result.status) && oldSession.endedAt)
+          set.endedAt = null;
+      }
       if (result.infraFailure !== undefined)
         set.infraFailure = result.infraFailure ? 1 : 0;
       if (result.result !== undefined) set.result = result.result;
@@ -2397,7 +2403,16 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       updatedAt: new Date().toISOString(),
       lastProgressAt: new Date().toISOString(),
     };
-    if (result.status !== undefined) set.status = result.status;
+    if (result.status !== undefined) {
+      set.status = result.status;
+      if (terminal.has(result.status) && !oldSession.endedAt)
+        set.endedAt = set.updatedAt;
+      // Resumed lane: clear the anchor so the kept-sandbox window restarts
+      // when it re-ends — otherwise the reaper keys off the ORIGINAL end
+      // and can destroy a sandbox that's actively working a follow-up.
+      if (!terminal.has(result.status) && oldSession.endedAt)
+        set.endedAt = null;
+    }
     if (result.infraFailure !== undefined)
       set.infraFailure = result.infraFailure ? 1 : 0;
     if (result.result !== undefined) set.result = result.result;
