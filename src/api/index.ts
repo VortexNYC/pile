@@ -65,7 +65,7 @@ import { registerProjectMemberRoutes } from "./project-members.js";
 import { registerProjectDetailRoutes } from "./projects.js";
 import { registerPushRoutes } from "./push.js";
 import { registerReactionRoutes } from "./reactions.js";
-import { registerRealtimeRoutes } from "./realtime.js";
+import { registerRealtimeRoutes, toMutableResponse } from "./realtime.js";
 import { registerReleaseRoutes } from "./releases.js";
 import { registerSavedViewRoutes } from "./saved-views.js";
 import { registerSCIMRoutes } from "./scim.js";
@@ -306,7 +306,7 @@ app.openapi(
     const { organizationId } = c.req.valid("param");
     const id = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId);
     const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(id);
-    return await stub.fetch(c.req.raw);
+    return toMutableResponse(await stub.fetch(c.req.raw));
   }
 );
 
