@@ -1363,6 +1363,34 @@ export function listAgentSessionEvents(
     .all();
 }
 
+/** One chronological stream for a lane: activity spans (thoughts,
+ *  responses, elicitations) interleaved with lifecycle events
+ *  (pr.review, pr.ci_failed, prompt.followup, ...). The single
+ *  developer-facing timeline — dedupe and delivery evidence live here. */
+export function listAgentTimeline(
+  db: WorkspaceDb,
+  sessionId: string,
+  options: { limit?: number } = {}
+) {
+  const limit = options.limit ?? 100;
+  const [activities, events] = [
+    listAgentActivities(db, sessionId, { limit }),
+    listAgentSessionEvents(db, sessionId, { limit }),
+  ];
+  const merged = [
+    ...activities.map((row) => ({ kind: "activity" as const, ...row })),
+    ...events.map((row) => ({ kind: "event" as const, ...row })),
+  ];
+  merged.sort((a, b) => {
+    const t = a.createdAt.localeCompare(b.createdAt);
+    if (t !== 0) return t;
+    const ai = typeof a.id === "number" ? a.id : 0;
+    const bi = typeof b.id === "number" ? b.id : 0;
+    return ai - bi;
+  });
+  return merged.slice(0, limit);
+}
+
 export async function getAgentSessionWithActivities(
   db: WorkspaceDb,
   organizationId: string,

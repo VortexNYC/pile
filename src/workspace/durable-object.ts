@@ -2220,6 +2220,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.listAgentSessionEvents(this.db, sessionId, options);
   }
 
+  listAgentTimeline(sessionId: string, options: { limit?: number } = {}) {
+    return data.listAgentTimeline(this.db, sessionId, options);
+  }
+
   // ---- agent provider configs ----
   upsertAgentProviderConfig(input: data.AgentProviderConfigInput) {
     return data.upsertAgentProviderConfig(this.db, this.organizationId, input);
