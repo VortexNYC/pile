@@ -91,7 +91,7 @@ function reviewPayload(over: Record<string, unknown> = {}) {
     pull_request: {
       number: 42,
       html_url: `https://github.com/${REPO}/pull/42`,
-      head: { ref: BRANCH, repo: { full_name: REPO } },
+      head: { ref: BRANCH, sha: "abc123", repo: { full_name: REPO } },
     },
     repository: { full_name: REPO },
     ...over,
@@ -186,7 +186,11 @@ describe("github pr review → lane nudge (PILE-224)", () => {
           pull_request: {
             number: 44,
             html_url: `https://github.com/${REPO}/pull/44`,
-            head: { ref: `${BRANCH}-review`, repo: { full_name: REPO } },
+            head: {
+              ref: `${BRANCH}-review`,
+              sha: "def456",
+              repo: { full_name: REPO },
+            },
           },
         })
       )
@@ -201,10 +205,10 @@ describe("github pr review → lane nudge (PILE-224)", () => {
     ).toBe(true);
   });
 
-  it("does not nudge when the lane session is terminal", async () => {
+  it("resumes a completed kept-sandbox lane on a review comment", async () => {
     const s = stub();
     const issue = await s.createIssue({
-      title: "Dead lane",
+      title: "Kept lane",
       repo: REPO,
       branch: `${BRANCH}-dead`,
     });
@@ -233,6 +237,7 @@ describe("github pr review → lane nudge (PILE-224)", () => {
         })
       )
     );
-    expect(prompts.length).toBe(before);
+    // Completed lanes are resumable — the follow-up is the review→lane loop.
+    expect(prompts.length).toBe(before + 1);
   });
 });

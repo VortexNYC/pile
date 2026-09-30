@@ -218,7 +218,7 @@ export function registerGithubRoutes(app: OpenAPIHono<AppContext>) {
     }
 
     const response = await fetch(
-      `https://api.github.com/installations/${installationId}/repositories`,
+      `https://api.github.com/installation/repositories`,
       {
         headers: {
           Authorization: `Bearer ${token}`,

@@ -308,7 +308,22 @@ const getSessionEventsRoute = createRoute({
       description: "Agent session events",
       content: {
         "application/json": {
-          schema: z.object({ events: z.array(agentActivitySchema) }),
+          schema: z.object({
+            events: z.array(
+              z.union([
+                agentActivitySchema.extend({ kind: z.literal("activity") }),
+                z.object({
+                  kind: z.literal("event"),
+                  id: z.number(),
+                  sessionId: z.string(),
+                  type: z.string(),
+                  message: z.string(),
+                  payload: z.unknown().nullable(),
+                  createdAt: z.string(),
+                }),
+              ])
+            ),
+          }),
         },
       },
     },
@@ -1057,10 +1072,25 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     if (!session) {
       return c.json({ message: "Session not found" }, 404);
     }
-    const events = await stub.listAgentActivities(sessionId, {
+    // One stream: activity spans + lifecycle events merged chronologically.
+    const timeline = await stub.listAgentTimeline(sessionId, {
       limit: limit ? Number(limit) : undefined,
     });
-    return c.json({ events: events.map(toActivityResponse) });
+    return c.json({
+      events: timeline.map((row) =>
+        row.kind === "activity"
+          ? { kind: row.kind, ...toActivityResponse(row) }
+          : {
+              kind: row.kind,
+              id: row.id,
+              sessionId: row.sessionId,
+              type: row.type,
+              message: row.message,
+              payload: row.payload ? JSON.parse(row.payload) : null,
+              createdAt: row.createdAt,
+            }
+      ),
+    });
   });
 
   // Lane-facing CI detail (PILE-232): a lane whose PR went red can read

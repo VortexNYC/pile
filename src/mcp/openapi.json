@@ -4947,67 +4947,115 @@
                     "events": {
                       "type": "array",
                       "items": {
-                        "type": "object",
-                        "properties": {
-                          "id": {
-                            "type": "string"
-                          },
-                          "sessionId": {
-                            "type": "string"
-                          },
-                          "actorId": {
-                            "type": "string",
-                            "nullable": true
-                          },
-                          "type": {
-                            "type": "string",
-                            "enum": [
-                              "thought",
-                              "response",
-                              "error",
-                              "elicitation",
-                              "action",
-                              "status",
-                              "artifact"
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "sessionId": {
+                                "type": "string"
+                              },
+                              "actorId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "thought",
+                                  "response",
+                                  "error",
+                                  "elicitation",
+                                  "action",
+                                  "status",
+                                  "artifact"
+                                ]
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "payload": {
+                                "nullable": true
+                              },
+                              "parentId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "startedAt": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "endedAt": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "durationMs": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "activity"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "sessionId",
+                              "actorId",
+                              "type",
+                              "message",
+                              "parentId",
+                              "startedAt",
+                              "endedAt",
+                              "durationMs",
+                              "createdAt",
+                              "kind"
                             ]
                           },
-                          "message": {
-                            "type": "string"
-                          },
-                          "payload": {
-                            "nullable": true
-                          },
-                          "parentId": {
-                            "type": "string",
-                            "nullable": true
-                          },
-                          "startedAt": {
-                            "type": "string",
-                            "nullable": true
-                          },
-                          "endedAt": {
-                            "type": "string",
-                            "nullable": true
-                          },
-                          "durationMs": {
-                            "type": "number",
-                            "nullable": true
-                          },
-                          "createdAt": {
-                            "type": "string"
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "event"
+                                ]
+                              },
+                              "id": {
+                                "type": "number"
+                              },
+                              "sessionId": {
+                                "type": "string"
+                              },
+                              "type": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "payload": {
+                                "nullable": true
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "id",
+                              "sessionId",
+                              "type",
+                              "message",
+                              "createdAt"
+                            ]
                           }
-                        },
-                        "required": [
-                          "id",
-                          "sessionId",
-                          "actorId",
-                          "type",
-                          "message",
-                          "parentId",
-                          "startedAt",
-                          "endedAt",
-                          "durationMs",
-                          "createdAt"
                         ]
                       }
                     }
