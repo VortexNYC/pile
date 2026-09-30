@@ -2169,7 +2169,7 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
-                            events: {
+                            events: ({
                                 id: string;
                                 sessionId: string;
                                 actorId: string | null;
@@ -2182,7 +2182,18 @@ export interface paths {
                                 endedAt: string | null;
                                 durationMs: number | null;
                                 createdAt: string;
-                            }[];
+                                /** @enum {string} */
+                                kind: "activity";
+                            } | {
+                                /** @enum {string} */
+                                kind: "event";
+                                id: number;
+                                sessionId: string;
+                                type: string;
+                                message: string;
+                                payload?: unknown;
+                                createdAt: string;
+                            })[];
                         };
                     };
                 };
