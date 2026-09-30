@@ -9002,7 +9002,12 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "workspace",
       },
     ],
-    query: [],
+    query: [
+      {
+        name: "token",
+        flag: "token",
+      },
+    ],
     body: [],
   },
   "saved views list": {

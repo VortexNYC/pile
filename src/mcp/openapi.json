@@ -45612,6 +45612,16 @@
             "required": true,
             "name": "organizationId",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Workspace API key for browser WebSocket clients, which cannot set the Authorization header"
+            },
+            "required": false,
+            "description": "Workspace API key for browser WebSocket clients, which cannot set the Authorization header",
+            "name": "token",
+            "in": "query"
           }
         ],
         "responses": {

@@ -26,6 +26,12 @@ export type AppContext = {
   Variables: { workspaceIdentity: WorkspaceIdentity; userId?: string };
 };
 
+// Browser WebSocket clients cannot set the Authorization header, so the
+// realtime endpoints also accept the workspace API key as ?token=. Query
+// credentials are scoped to these paths only — they must not become a
+// general auth mechanism, since URLs end up in logs and browser history.
+const QUERY_TOKEN_PATHS = /\/(realtime|ws)$/;
+
 export const workspaceAuthMiddleware = createMiddleware<{
   Bindings: WorkerEnv;
   Variables: AppContext["Variables"];
@@ -33,7 +39,10 @@ export const workspaceAuthMiddleware = createMiddleware<{
   const organizationId = c.req.param("organizationId");
   const db = createD1(c.env.D1);
   const header = c.req.header("Authorization") ?? "";
-  const token = header.replace(/^Bearer\s+/i, "").trim();
+  let token = header.replace(/^Bearer\s+/i, "").trim();
+  if (!token && QUERY_TOKEN_PATHS.test(c.req.path)) {
+    token = c.req.query("token")?.trim() ?? "";
+  }
 
   if (token) {
     const auth = await createAuth(c.env);

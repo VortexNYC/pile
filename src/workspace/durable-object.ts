@@ -387,7 +387,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
     const pair = new WebSocketPair();
     const [client, server] = [pair[0], pair[1]];
-    this.ctx.acceptWebSocket(client);
+    this.ctx.acceptWebSocket(server);
 
     await this.emit({
       type: "connected",
@@ -396,7 +396,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
     return new Response(null, {
       status: 101,
-      webSocket: server,
+      webSocket: client,
     });
   }
 

@@ -3964,7 +3964,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdRealtime",
-    "description": "List realtime (GET /workspaces/{organizationId}/realtime) Path params (top-level, required): organizationId.",
+    "description": "List realtime (GET /workspaces/{organizationId}/realtime) Path params (top-level, required): organizationId. Query params (top-level, optional): token.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/realtime",
     "inputSchema": {
@@ -3972,6 +3972,10 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "properties": {
         "organizationId": {
           "type": "string"
+        },
+        "token": {
+          "type": "string",
+          "description": "Workspace API key for browser WebSocket clients, which cannot set the Authorization header"
         }
       },
       "required": [

@@ -22497,7 +22497,10 @@ export interface paths {
         /** List realtime */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description Workspace API key for browser WebSocket clients, which cannot set the Authorization header */
+                    token?: string;
+                };
                 header?: never;
                 path: {
                     organizationId: string;
