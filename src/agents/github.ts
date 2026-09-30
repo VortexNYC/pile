@@ -47,34 +47,37 @@ const pullRequestPayloadSchema = z.object({
   }),
 });
 
+const checkRunInnerSchema = z.object({
+  name: z.string(),
+  head_branch: z.string().nullable(),
+  head_sha: z.string(),
+  details_url: z.string().nullable().optional(),
+  status: z.enum([
+    "queued",
+    "in_progress",
+    "completed",
+    "pending",
+    "waiting",
+  ]),
+  conclusion: z
+    .enum([
+      "success",
+      "failure",
+      "neutral",
+      "cancelled",
+      "skipped",
+      "timed_out",
+      "action_required",
+      "stale",
+    ])
+    .nullable()
+    .default(null),
+});
+
 const checkRunPayloadSchema = z.object({
-  action: z.enum(["created", "completed", "rerequested", "requested_action"]),
-  check_run: z.object({
-    name: z.string(),
-    head_branch: z.string(),
-    head_sha: z.string(),
-    details_url: z.string().nullable().optional(),
-    status: z.enum([
-      "queued",
-      "in_progress",
-      "completed",
-      "pending",
-      "waiting",
-    ]),
-    conclusion: z
-      .enum([
-        "success",
-        "failure",
-        "neutral",
-        "cancelled",
-        "skipped",
-        "timed_out",
-        "action_required",
-        "stale",
-      ])
-      .nullable()
-      .default(null),
-  }),
+  action: z.string().optional(),
+  check_run: checkRunInnerSchema.optional(),
+  check_suite: checkRunInnerSchema.optional(),
   repository: z.object({
     full_name: z.string(),
   }),
@@ -1141,9 +1144,20 @@ async function processCheckRun(
     });
   }
 
-  const { check_run, repository } = payload.data;
+  const check_run = payload.data.check_run ?? payload.data.check_suite;
+  if (!check_run) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Invalid check_run payload",
+    });
+  }
+  const { repository } = payload.data;
   const repo = repository.full_name;
   const branch = check_run.head_branch;
+  if (!branch) {
+    return;
+  }
   const prCheckState =
     check_run.status === "completed"
       ? (check_run.conclusion ?? "completed")
