@@ -738,7 +738,10 @@ export class SandboxCliAgentProvider implements AgentProvider {
         sessionId,
         "status",
         `${this.id} sandbox delete failed`,
-        { sandbox: name, error: err instanceof Error ? err.message : String(err) }
+        {
+          sandbox: name,
+          error: err instanceof Error ? err.message : String(err),
+        }
       );
     }
   }
