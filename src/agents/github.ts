@@ -49,7 +49,7 @@ const pullRequestPayloadSchema = z.object({
 
 const checkRunInnerSchema = z.object({
   name: z.string().nullish(),
-  head_branch: z.string().nullable(),
+  head_branch: z.string().nullish(),
   head_sha: z.string(),
   details_url: z.string().nullable().optional(),
   status: z.enum([
