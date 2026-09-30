@@ -76,17 +76,52 @@ export class VortexError extends Error {
   }
 }
 
+/** Map an HTTP status onto the catalog code clients already branch on. */
+export function errorCodeFromStatus(status: number): ErrorCode {
+  switch (status) {
+    case 400:
+      return "BAD_REQUEST";
+    case 401:
+      return "UNAUTHORIZED";
+    case 402:
+      return "USAGE_LIMIT";
+    case 403:
+      return "FORBIDDEN";
+    case 404:
+      return "NOT_FOUND";
+    case 409:
+      return "CONFLICT";
+    case 422:
+      return "UNPROCESSABLE_CONTENT";
+    case 429:
+      return "TOO_MANY_REQUESTS";
+    case 502:
+      return "AGENT_ERROR";
+    default:
+      return status >= 500 ? "INTERNAL_ERROR" : "BAD_REQUEST";
+  }
+}
+
 export function toErrorResponse(error: unknown): Response {
   let vortex: VortexError;
   if (error instanceof VortexError) {
     vortex = error;
   } else if (error instanceof HTTPException) {
+    const code = errorCodeFromStatus(error.status);
+    const catalog = ERROR_CATALOG[code];
     vortex = new VortexError({
-      code: error.status === 400 ? "BAD_REQUEST" : "INTERNAL_ERROR",
+      code,
       status: error.status,
-      message: error.status < 500 ? error.message : "Internal error",
-      hint: error.status < 500 ? undefined : error.message,
+      // Keep 5xx internals off the wire; 4xx can surface the exception text.
+      message:
+        error.status < 500 ? error.message || catalog.message : catalog.message,
     });
+    if (error.status >= 500) {
+      console.error("unhandled HTTPException", {
+        status: error.status,
+        message: error.message,
+      });
+    }
   } else if (error instanceof ZodError) {
     vortex = new VortexError({
       code: "BAD_REQUEST",
@@ -95,11 +130,13 @@ export function toErrorResponse(error: unknown): Response {
       hint: error.message,
     });
   } else {
+    console.error("unhandled error", {
+      message: error instanceof Error ? error.message : String(error),
+    });
     vortex = new VortexError({
       code: "INTERNAL_ERROR",
       status: 500,
       message: "Internal error",
-      hint: error instanceof Error ? error.message : undefined,
     });
   }
 

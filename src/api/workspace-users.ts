@@ -6,7 +6,7 @@ import { and, eq, notInArray } from "drizzle-orm";
 import { createD1 } from "../global/db.js";
 import { invitation, member, user as userTable } from "../global/schema.js";
 import { createAuth } from "../platform/auth.js";
-import { VortexError } from "../platform/errors.js";
+import { errorCodeFromStatus, VortexError } from "../platform/errors.js";
 import { workspaceRoleSchema } from "../platform/identity.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
@@ -15,17 +15,11 @@ import { emitWorkspaceAudit } from "./audit-emit.js";
 function mapAuthError(error: unknown): never {
   if (isAPIError(error)) {
     const status = error.statusCode;
-    const code =
-      status === 401
-        ? "UNAUTHORIZED"
-        : status === 403
-          ? "FORBIDDEN"
-          : status === 404
-            ? "NOT_FOUND"
-            : status === 400
-              ? "BAD_REQUEST"
-              : "INTERNAL_ERROR";
-    throw new VortexError({ code, status, message: error.message });
+    throw new VortexError({
+      code: errorCodeFromStatus(status),
+      status,
+      message: error.message,
+    });
   }
   throw error;
 }
