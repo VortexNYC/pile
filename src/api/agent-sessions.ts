@@ -1,6 +1,6 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
-import type { InferSelectModel } from "drizzle-orm";
+import { and, eq, type InferSelectModel } from "drizzle-orm";
 
 import {
   agentLogToken,
@@ -11,17 +11,22 @@ import {
 } from "../agents/credentials.js";
 import { resolveAgentEnv } from "../agents/daytona.js";
 import { dispatchAgent, getAgentProvider } from "../agents/index.js";
+import { consumeUsage } from "../global/billing.js";
 import { timingSafeEqualHex } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
 import { getInstallationTokenForRepo } from "../global/github-auth.js";
+import { fetchPileRepoConfig } from "../global/pile-repo-config.js";
 import { createRepoBranch } from "../global/repo-branches.js";
+import { githubInstallations } from "../global/schema.js";
 import { replyLaneResultToTicket } from "../global/support-escalation.js";
+import { canAccessTeam } from "../global/teams.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 import {
   DEFAULT_GIT_IDENTITY_REPO,
   type AgentSessionStatus,
+  type Issue,
 } from "../types/workspace.js";
 import type {
   workspaceAgentActivities,
@@ -661,6 +666,79 @@ const registerSessionRoute = createRoute({
   },
 });
 
+// PILE-245 — batch dispatch: one call fans out N issues to lanes. Results are
+// per-item (a conflict or missing issue reports in place instead of failing
+// the batch), and `queuedAfter` sequences an item behind a sibling item's
+// issueId, an existing session id, or the live session of a named issue.
+const dispatchBatchItemSchema = z
+  .object({
+    issueId: z.string().min(1),
+    agentId: z.string().optional(),
+    branch: z.string().optional(),
+    instructions: z.string().optional(),
+    queuedAfter: z.string().optional(),
+  })
+  .strict();
+
+type DispatchBatchItemResult = {
+  issueId: string;
+  sessionId: string | null;
+  status: AgentSessionStatus | null;
+  error: string | null;
+};
+
+const dispatchBatchItemError = (
+  issueId: string,
+  error: string
+): DispatchBatchItemResult => ({
+  issueId,
+  sessionId: null,
+  status: null,
+  error,
+});
+
+const dispatchBatchRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/agent/dispatch-batch",
+  tags: ["agent-sessions"],
+  middleware: [rls("write", "agent:write")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+    body: {
+      content: {
+        "application/json": {
+          schema: z
+            .object({
+              items: z.array(dispatchBatchItemSchema).min(1).max(50),
+            })
+            .strict(),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description:
+        "Per-item dispatch results — each entry carries a sessionId or an error, independent of sibling failures",
+      content: {
+        "application/json": {
+          schema: z.object({
+            batchId: z.string(),
+            results: z.array(
+              z.object({
+                issueId: z.string(),
+                sessionId: z.string().nullable(),
+                status: agentSessionStatusSchema.nullable(),
+                error: z.string().nullable(),
+              })
+            ),
+          }),
+        },
+      },
+    },
+  },
+});
+
 const promptSessionRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/prompt",
@@ -906,6 +984,257 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
     return c.json({ session, ...(await laneUrls(session.id)) }, 201);
+  });
+
+  // PILE-245 — items dispatch concurrently; a failure on one is reported in
+  // place instead of failing the batch. `queuedAfter` may name a sibling
+  // item's issueId — those edges are resolved through deferred results so
+  // dependents park behind the sibling's fresh session.
+  app.openapi(dispatchBatchRoute, async (c) => {
+    const { items } = c.req.valid("json");
+    const { organizationId } = c.req.valid("param");
+    const identity = c.var.workspaceIdentity;
+    const db = createD1(c.env.D1);
+    const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
+    await consumeUsage(
+      db,
+      organizationId,
+      "agents",
+      "dispatch",
+      Number(c.env.FREE_USE_CAP ?? 0),
+      items.length,
+      c.env,
+      getExecutionCtx(c)
+    );
+
+    const batchId = crypto.randomUUID();
+
+    // First occurrence wins — the one-active-session-per-issue guard would
+    // race if two items dispatched the same issue concurrently.
+    const firstIndexByIssueId = new Map<string, number>();
+    items.forEach((item, index) => {
+      if (!firstIndexByIssueId.has(item.issueId)) {
+        firstIndexByIssueId.set(item.issueId, index);
+      }
+    });
+
+    // Intra-batch dependency edges (queuedAfter naming a sibling issueId).
+    // Chains that loop would deadlock the awaits below — flag them up front.
+    const siblingDep = items.map((item, index) => {
+      if (item.queuedAfter === undefined) return undefined;
+      const dep = firstIndexByIssueId.get(item.queuedAfter);
+      return dep !== undefined && dep !== index ? dep : undefined;
+    });
+    const cyclic = new Set<number>();
+    for (let i = 0; i < items.length; i += 1) {
+      const seen = new Set<number>();
+      for (
+        let cur: number | undefined = i;
+        cur !== undefined;
+        cur = siblingDep[cur]
+      ) {
+        if (!seen.add(cur)) {
+          cyclic.add(i);
+          break;
+        }
+      }
+    }
+
+    const deferred = items.map(() => {
+      let resolve!: (result: DispatchBatchItemResult) => void;
+      const promise = new Promise<DispatchBatchItemResult>((r) => {
+        resolve = r;
+      });
+      return { promise, resolve };
+    });
+
+    const runItem = async (
+      item: (typeof items)[number],
+      index: number
+    ): Promise<DispatchBatchItemResult> => {
+      const issueId = item.issueId;
+      try {
+        if (firstIndexByIssueId.get(issueId) !== index) {
+          return dispatchBatchItemError(issueId, "Duplicate issueId in batch");
+        }
+        if (cyclic.has(index)) {
+          return dispatchBatchItemError(
+            issueId,
+            "queuedAfter forms a dependency cycle in this batch"
+          );
+        }
+        if (item.queuedAfter === issueId) {
+          return dispatchBatchItemError(
+            issueId,
+            "Cannot queue an item behind itself"
+          );
+        }
+
+        let queueAfter: string | undefined;
+        if (item.queuedAfter !== undefined) {
+          const sibling = siblingDep[index];
+          if (sibling !== undefined) {
+            const upstream = await deferred[sibling].promise;
+            if (!upstream.sessionId) {
+              return dispatchBatchItemError(
+                issueId,
+                `queuedAfter target failed to dispatch: ${upstream.error}`
+              );
+            }
+            queueAfter = upstream.sessionId;
+          } else {
+            // A session id, or the issueId of an issue with a live session.
+            const named = await stub.getAgentSession(item.queuedAfter);
+            if (named) {
+              if (!["completed", "failed", "canceled"].includes(named.status)) {
+                queueAfter = named.id;
+              }
+            } else {
+              const live = await stub.getActiveAgentSessionForIssue(
+                item.queuedAfter
+              );
+              if (!live) {
+                return dispatchBatchItemError(
+                  issueId,
+                  `queuedAfter target not found: ${item.queuedAfter}`
+                );
+              }
+              queueAfter = live.session.id;
+            }
+          }
+        }
+
+        const issue = await stub.getIssue(issueId);
+        if (!issue) {
+          return dispatchBatchItemError(issueId, "Issue not found");
+        }
+        if (!(await canAccessTeam(db, issue.teamId, identity))) {
+          return dispatchBatchItemError(issueId, "Issue not found");
+        }
+        // Same guard as single dispatch: branch is the lane's working branch,
+        // so "main"/"master" would fail at push time.
+        if (item.branch === "main" || item.branch === "master") {
+          return dispatchBatchItemError(
+            issueId,
+            `"${item.branch}" is a repo default branch — branch sets the lane's working branch (leave empty for issue-<id>)`
+          );
+        }
+        const target: Issue = {
+          ...issue,
+          branch: item.branch ?? issue.branch,
+        };
+
+        // Explicit agentId wins; otherwise the repo's configured default
+        // beats the global "devin" fallback — same as single dispatch.
+        const repoDefault = target.repo
+          ? (
+              await db
+                .select({
+                  defaultAgentId: githubInstallations.defaultAgentId,
+                })
+                .from(githubInstallations)
+                .where(
+                  and(
+                    eq(githubInstallations.organizationId, organizationId),
+                    eq(githubInstallations.repo, target.repo)
+                  )
+                )
+                .get()
+            )?.defaultAgentId
+          : undefined;
+        const resolvedAgentId = item.agentId ?? repoDefault ?? "devin";
+
+        // `.pile/config.json` agent allowlist applies to batch dispatches too.
+        const pileConfig = target.repo
+          ? await fetchPileRepoConfig(c.env, target.repo, target.branch)
+          : null;
+        if (
+          pileConfig?.agents &&
+          pileConfig.agents.length > 0 &&
+          !pileConfig.agents.includes(resolvedAgentId)
+        ) {
+          return dispatchBatchItemError(
+            issueId,
+            `Agent "${resolvedAgentId}" is not allowed by .pile/config.json (allowed: ${pileConfig.agents.join(", ")})`
+          );
+        }
+
+        const providerConfig = await loadProviderConfig(
+          c.env,
+          stub,
+          resolvedAgentId
+        );
+        const effectiveEnv = resolveAgentEnv(
+          c.env,
+          providerConfig ?? undefined
+        );
+        const session = await dispatchAgent(
+          effectiveEnv,
+          resolvedAgentId,
+          organizationId,
+          target,
+          identity,
+          pileConfig?.model,
+          getExecutionCtx(c),
+          {
+            instructions: item.instructions,
+            envAllowlist: pileConfig?.env,
+            queueAfter,
+          }
+        );
+
+        if (target.repo && target.branch && session.status !== "waiting") {
+          await createRepoBranch(
+            db,
+            organizationId,
+            target.repo,
+            target.branch,
+            target.id
+          );
+        }
+        await stub
+          .addAgentActivity({
+            sessionId: session.id,
+            actorId: identity.id,
+            type: "thought",
+            message:
+              session.status === "waiting"
+                ? `Queued as part of batch ${batchId} behind session ${queueAfter}`
+                : `Dispatched to ${resolvedAgentId} as part of batch ${batchId} (${items.length} items)`,
+          })
+          .catch(() => {});
+        return {
+          issueId,
+          sessionId: session.id,
+          status: session.status,
+          error: null,
+        };
+      } catch (error) {
+        return dispatchBatchItemError(
+          issueId,
+          error instanceof Error ? error.message : String(error)
+        );
+      }
+    };
+
+    const results = await Promise.all(
+      items.map(async (item, index) => {
+        let result: DispatchBatchItemResult;
+        try {
+          result = await runItem(item, index);
+        } catch (error) {
+          result = dispatchBatchItemError(
+            item.issueId,
+            error instanceof Error ? error.message : String(error)
+          );
+        }
+        deferred[index].resolve(result);
+        return result;
+      })
+    );
+
+    return c.json({ batchId, results }, 200);
   });
 
   app.openapi(listSessionsRoute, async (c) => {

@@ -1679,4 +1679,217 @@ describe("agent sessions API", () => {
     );
     expect(wsRes.status).toBe(200);
   });
+
+  describe("dispatch-batch", () => {
+    // Separate workspace: the shared org accumulates live sessions across the
+    // suite and trips the per-workspace active-lane ceiling.
+    let batchOrg: string;
+    let batchToken: string;
+
+    beforeAll(async () => {
+      const db = createD1(env.D1);
+      const headers = await createAdminHeaders(env, "user-1");
+      const workspace = await createWorkspace(db, env, headers, {
+        name: "Batch dispatch tests",
+        slug: `batch-dispatch-${crypto.randomUUID()}`,
+        ownerId: "user-1",
+      });
+      batchOrg = workspace!.id;
+      const auth = await createAuth(env);
+      const result = await auth.api.createApiKey({
+        body: {
+          userId: "user-1",
+          name: "batch-dispatch",
+          metadata: { organizationId: batchOrg, permissions: "admin" },
+        },
+      });
+      batchToken = z.object({ key: z.string() }).parse(result).key;
+    });
+
+    const createIssue = async (title: string) => {
+      const res = await app.fetch(
+        request(`/workspaces/${batchOrg}/issues`, {
+          method: "POST",
+          token: batchToken,
+          body: JSON.stringify({ title }),
+        }),
+        env
+      );
+      expect(res.status).toBe(201);
+      return (await res.json<{ id: string }>()).id;
+    };
+
+    type BatchResult = {
+      issueId: string;
+      sessionId: string | null;
+      status: string | null;
+      error: string | null;
+    };
+
+    const postBatch = (items: unknown[]) =>
+      app.fetch(
+        request(`/workspaces/${batchOrg}/agent/dispatch-batch`, {
+          method: "POST",
+          token: batchToken,
+          body: JSON.stringify({ items }),
+        }),
+        env
+      );
+
+    it("dispatches every item in one call and returns all session ids", async () => {
+      const issueIds = await Promise.all([
+        createIssue("Batch lane one"),
+        createIssue("Batch lane two"),
+        createIssue("Batch lane three"),
+      ]);
+
+      const res = await postBatch(
+        issueIds.map((issueId) => ({ issueId, agentId: "mock" }))
+      );
+      expect(res.status).toBe(200);
+      const body = await res.json<{
+        batchId: string;
+        results: BatchResult[];
+      }>();
+      expect(body.batchId).toBeTruthy();
+      expect(body.results).toHaveLength(3);
+      for (const [index, result] of body.results.entries()) {
+        expect(result.issueId).toBe(issueIds[index]);
+        expect(result.sessionId).toBeTruthy();
+        expect(result.status).toBe("created");
+        expect(result.error).toBeNull();
+      }
+
+      // Each issue got its session plus an activity noting the batch.
+      for (const [index, result] of body.results.entries()) {
+        const sessionsRes = await app.fetch(
+          request(
+            `/workspaces/${batchOrg}/agent/sessions?issueId=${issueIds[index]}`,
+            { token: batchToken }
+          ),
+          env
+        );
+        const sessions = await sessionsRes.json<{
+          sessions: { id: string }[];
+        }>();
+        expect(sessions.sessions.map((s) => s.id)).toContain(result.sessionId);
+
+        const activityRes = await app.fetch(
+          request(
+            `/workspaces/${batchOrg}/issues/${issueIds[index]}/activity`,
+            { token: batchToken }
+          ),
+          env
+        );
+        const feed = await activityRes.json<{
+          activity: { kind: string; message?: string }[];
+        }>();
+        const batchNote = feed.activity.find(
+          (a) => a.kind === "agent" && a.message?.includes(body.batchId)
+        );
+        expect(batchNote).toBeTruthy();
+      }
+    });
+
+    it("reports a conflicted item's error without failing the rest", async () => {
+      const conflicted = await createIssue("Already has a lane");
+      const ok = await createIssue("Fresh lane");
+
+      const first = await app.fetch(
+        request(`/workspaces/${batchOrg}/issues/${conflicted}/dispatch`, {
+          method: "POST",
+          token: batchToken,
+          body: JSON.stringify({ agentId: "mock" }),
+        }),
+        env
+      );
+      expect(first.status).toBe(201);
+
+      const res = await postBatch([
+        { issueId: conflicted, agentId: "mock" },
+        { issueId: ok, agentId: "mock" },
+        { issueId: "missing-issue-id", agentId: "mock" },
+      ]);
+      expect(res.status).toBe(200);
+      const body = await res.json<{ results: BatchResult[] }>();
+      expect(body.results).toHaveLength(3);
+      expect(body.results[0].sessionId).toBeNull();
+      expect(body.results[0].error).toContain("active agent session");
+      expect(body.results[1].sessionId).toBeTruthy();
+      expect(body.results[1].error).toBeNull();
+      expect(body.results[2].sessionId).toBeNull();
+      expect(body.results[2].error).toBe("Issue not found");
+    });
+
+    it("queues an item behind a sibling item via queuedAfter", async () => {
+      const blocker = await createIssue("Runs first");
+      const queued = await createIssue("Runs after");
+
+      const res = await postBatch([
+        { issueId: blocker, agentId: "mock" },
+        { issueId: queued, agentId: "mock", queuedAfter: blocker },
+      ]);
+      expect(res.status).toBe(200);
+      const body = await res.json<{ results: BatchResult[] }>();
+      expect(body.results[0].status).toBe("created");
+      expect(body.results[1].status).toBe("waiting");
+      expect(body.results[1].sessionId).toBeTruthy();
+
+      const sessionRes = await app.fetch(
+        request(
+          `/workspaces/${batchOrg}/agent/sessions/${body.results[1].sessionId}`,
+          { token: batchToken }
+        ),
+        env
+      );
+      const session = await sessionRes.json<{
+        status: string;
+        queuedAfter: string | null;
+      }>();
+      expect(session.status).toBe("waiting");
+      expect(session.queuedAfter).toBe(body.results[0].sessionId);
+    });
+
+    it("queues an item behind an existing session id", async () => {
+      const blocker = await createIssue("Lane already running");
+      const queued = await createIssue("Parks behind it");
+
+      const first = await app.fetch(
+        request(`/workspaces/${batchOrg}/issues/${blocker}/dispatch`, {
+          method: "POST",
+          token: batchToken,
+          body: JSON.stringify({ agentId: "mock" }),
+        }),
+        env
+      );
+      const blockerSession = await first.json<{ id: string }>();
+
+      const res = await postBatch([
+        {
+          issueId: queued,
+          agentId: "mock",
+          queuedAfter: blockerSession.id,
+        },
+      ]);
+      expect(res.status).toBe(200);
+      const body = await res.json<{ results: BatchResult[] }>();
+      expect(body.results[0].status).toBe("waiting");
+      expect(body.results[0].sessionId).toBeTruthy();
+    });
+
+    it("fails the dependent item when its queuedAfter sibling fails", async () => {
+      const missing = "missing-sibling-issue";
+      const queued = await createIssue("Orphaned dependent");
+
+      const res = await postBatch([
+        { issueId: missing, agentId: "mock" },
+        { issueId: queued, agentId: "mock", queuedAfter: missing },
+      ]);
+      expect(res.status).toBe(200);
+      const body = await res.json<{ results: BatchResult[] }>();
+      expect(body.results[0].error).toBe("Issue not found");
+      expect(body.results[1].sessionId).toBeNull();
+      expect(body.results[1].error).toContain("queuedAfter target failed");
+    });
+  });
 });
