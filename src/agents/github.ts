@@ -27,10 +27,7 @@ import { enqueueWebhook } from "../global/webhook-queue.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import type { Issue } from "../types/workspace.js";
-import { loadProviderConfig } from "./credentials.js";
-import { resolveAgentEnv } from "./daytona.js";
-import { followupThrottleWindowMs, laneFollowupThrottled } from "./followup.js";
-import { getAgentProvider } from "./index.js";
+import { nudgeLane } from "./nudge.js";
 
 const pullRequestPayloadSchema = z.object({
   action: z.string(),
@@ -56,6 +53,7 @@ const checkRunPayloadSchema = z.object({
     name: z.string(),
     head_branch: z.string(),
     head_sha: z.string(),
+    details_url: z.string().nullable().optional(),
     status: z.enum([
       "queued",
       "in_progress",
@@ -172,6 +170,7 @@ const pullRequestReviewPayloadSchema = z.object({
     html_url: z.string(),
     head: z.object({
       ref: z.string(),
+      sha: z.string(),
       repo: z.object({ full_name: z.string() }),
     }),
   }),
@@ -560,76 +559,44 @@ async function processIssueComment(
 
 type WorkspaceStub = ReturnType<WorkerEnv["WORKSPACE_DURABLE_OBJECT"]["get"]>;
 
-// PILE-224 — a review on a lane's PR is steering. When the lane that
-// authored the PR still has a live session, deliver the review text as a
-// follow-up prompt instead of leaving it as a dead GitHub comment.
+// Resolve the lane for an issue: a live session first, else the most
+// recent completed one — kept-sandbox providers resume completed lanes on
+// the follow-up. Returns null when the issue never had a lane.
+async function resolveLaneForIssue(
+  stub: WorkspaceStub,
+  issueId: string
+): Promise<
+  Awaited<ReturnType<WorkspaceStub["listAgentSessions"]>>[number] | null
+> {
+  const sessions = await stub
+    .listAgentSessions({ issueId, limit: 20 })
+    .catch(() => []);
+  return (
+    sessions.find((s) => s.status === "running" || s.status === "waiting") ??
+    sessions.find((s) => s.status === "completed") ??
+    null
+  );
+}
+
+// PILE-224 — a review/CI event on a lane's PR is steering. Delegates to the
+// shared nudge path so webhook and sweep deliveries share the same
+// dedupeKey, throttle, and audit events.
 async function nudgeLaneForIssue(
   env: WorkerEnv,
   stub: WorkspaceStub,
   organizationId: string,
   issue: Issue,
-  text: string
+  prUrl: string,
+  opts: { prompt: string; reason: string; dedupeKey?: string }
 ): Promise<void> {
   try {
-    const active = await stub.getActiveAgentSessionForIssue(issue.id);
-    if (
-      !active ||
-      (active.session.status !== "running" &&
-        active.session.status !== "waiting")
-    ) {
-      return;
-    }
-    const providerConfig = await loadProviderConfig(
-      env,
-      stub,
-      active.session.agentId
-    );
-    const provider = getAgentProvider(
-      active.session.agentId,
-      resolveAgentEnv(env, providerConfig ?? undefined)
-    );
-    if (!provider.sendPrompt) return;
-    const windowMs = followupThrottleWindowMs(providerConfig?.config);
-    if (await laneFollowupThrottled(stub, active.session.id, windowMs)) {
-      await stub
-        .addAgentSessionEvent({
-          sessionId: active.session.id,
-          type: "prompt.followup_skipped",
-          message: "Follow-up prompt throttled (recent nudge within 5m)",
-          payload: { issueId: issue.id },
-        })
-        .catch(() => {});
-      return;
-    }
-    const gitIdentity = issue.repo
-      ? ((await stub.getGitIdentityByRepo(issue.repo)) ?? null)
-      : null;
-    const delivered = await provider.sendPrompt(
-      active.session.providerSessionId ?? active.session.id,
-      text,
-      issue,
-      gitIdentity
-    );
-    await stub
-      .addAgentSessionEvent({
-        sessionId: active.session.id,
-        type: delivered ? "prompt.followup" : "prompt.followup_failed",
-        message: delivered
-          ? "PR review delivered as follow-up prompt"
-          : "PR review follow-up prompt rejected by provider",
-        payload: { issueId: issue.id },
-      })
-      .catch(() => {});
-    if (!delivered) {
-      console.error("pr review lane nudge rejected by provider", {
-        issueId: issue.id,
-        sessionId: active.session.id,
-        agentId: active.session.agentId,
-      });
-    }
+    const session = await resolveLaneForIssue(stub, issue.id);
+    if (!session) return;
+    await nudgeLane(env, stub, organizationId, session, issue, prUrl, opts);
   } catch (err) {
-    console.error("pr review lane nudge failed", {
+    console.error("webhook lane nudge failed", {
       issueId: issue.id,
+      reason: opts.reason,
       error: err instanceof Error ? err.message : String(err),
     });
   }
@@ -678,37 +645,71 @@ async function processPullRequestReview(
   if (!issue) return;
 
   const author = review.user?.login ?? "unknown";
+  const marker = `review-${review.id}`;
   // Mirror the review onto the issue comment thread (deduped by the
   // review id) — comments on already-filed reviews sync via
   // pull_request_review_comment separately.
   if (review.body?.trim()) {
-    const externalId = `review-${review.id}`;
-    const existing = await stub.findCommentByExternalId("github", externalId);
+    const existing = await stub.findCommentByExternalId("github", marker);
     if (existing) {
       await stub.updateComment(existing.id, { body: review.body });
     } else {
       await stub.createComment({
         issueId: issue.id,
         body: `[review:${review.state}] ${review.body}`,
-        externalId,
+        externalId: marker,
         externalSource: "github",
         externalAuthor: author,
       });
     }
   }
 
-  const parts = [
-    `${author} reviewed ${pull_request.html_url} (state: ${review.state})`,
-    review.body?.trim() || "",
-  ]
-    .filter(Boolean)
-    .join("\n\n");
+  // Emit the same detection event the sweep produces so neither path
+  // re-detects a review the other already recorded; the dedupeKey carries
+  // delivery semantics (retry until the lane actually has it).
+  const session = await resolveLaneForIssue(stub, issue.id);
+  const reviewState = (review.state ?? "").toUpperCase();
+  if (session) {
+    const seen = await stub
+      .listAgentSessionEvents(session.id, { limit: 100 })
+      .catch(() => []);
+    const isNew = !seen.some(
+      (e) =>
+        e.type === "pr.review" &&
+        typeof e.payload === "string" &&
+        e.payload.includes(marker)
+    );
+    if (isNew) {
+      await stub
+        .addAgentSessionEvent({
+          sessionId: session.id,
+          type: "pr.review",
+          message: `${author} reviewed ${pull_request.html_url}: ${reviewState.toLowerCase()}`,
+          payload: {
+            prUrl: pull_request.html_url,
+            headSha: pull_request.head.sha,
+            reviewId: marker,
+            state: reviewState,
+            reviewer: author,
+          },
+        })
+        .catch(() => {});
+    }
+  }
+
+  const body = review.body?.trim() ?? "";
+  if (reviewState !== "CHANGES_REQUESTED" && body.length === 0) return;
+  const reviewPrompt =
+    `${author} reviewed ${pull_request.html_url} (${reviewState.toLowerCase()}).\n` +
+    (body ? `Review:\n${body}\n` : "") +
+    "Read the review comments on the PR, address the feedback, and push.";
   await nudgeLaneForIssue(
     env,
     stub,
     workspaceRecord.organizationId,
     issue,
-    parts
+    pull_request.html_url,
+    { prompt: reviewPrompt, reason: "review feedback", dedupeKey: marker }
   );
 }
 
@@ -779,7 +780,12 @@ async function processPullRequestReviewComment(
       stub,
       workspaceRecord.organizationId,
       issue,
-      `${externalAuthor} commented on ${pull_request.html_url} (${comment.path}):\n\n${comment.body}`
+      pull_request.html_url,
+      {
+        prompt: `${externalAuthor} commented on ${pull_request.html_url} (${comment.path}):\n\n${comment.body}`,
+        reason: "review comment",
+        dedupeKey: `comment-${comment.id}`,
+      }
     );
   }
 
@@ -1153,6 +1159,64 @@ async function processCheckRun(
   );
   const stub = env.WORKSPACE_DURABLE_OBJECT.get(doId);
   await stub.updatePrCheckState(repo, branch, prCheckState, "github");
+
+  // Fast path for CI failures — same detection event + delivery dedupeKey
+  // the sweep uses, so whichever path sees the red check first delivers it
+  // and the other skips. The 5-min sweep remains the backstop.
+  const failed =
+    check_run.status === "completed" &&
+    (check_run.conclusion === "failure" ||
+      check_run.conclusion === "timed_out" ||
+      check_run.conclusion === "action_required");
+  if (!failed) return;
+
+  await stub.setOrganizationId(workspaceRecord.organizationId);
+  const issue = await stub.getIssueByBranch(repo, branch);
+  if (!issue) return;
+  const session = await resolveLaneForIssue(stub, issue.id);
+  if (!session) return;
+
+  const dedupeKey = `ci-${check_run.head_sha}`;
+  const prUrl = issue.prUrl ?? "";
+  const seen = await stub
+    .listAgentSessionEvents(session.id, { limit: 100 })
+    .catch(() => []);
+  const isNew = !seen.some(
+    (e) =>
+      e.type === "pr.ci_failed" &&
+      typeof e.payload === "string" &&
+      e.payload.includes(check_run.head_sha)
+  );
+  if (isNew) {
+    await stub
+      .addAgentSessionEvent({
+        sessionId: session.id,
+        type: "pr.ci_failed",
+        message: `CI failing on ${prUrl || `${repo}@${branch}`}`,
+        payload: {
+          prUrl,
+          headSha: check_run.head_sha,
+          checkState: check_run.conclusion,
+          failingChecks: [check_run.name],
+        },
+      })
+      .catch(() => {});
+  }
+  await nudgeLaneForIssue(
+    env,
+    stub,
+    workspaceRecord.organizationId,
+    issue,
+    prUrl,
+    {
+      prompt:
+        `CI is failing on ${prUrl || `${repo} branch ${branch}`} (sha ${check_run.head_sha}).\n` +
+        `Failing check: ${check_run.name}${check_run.details_url ? ` (${check_run.details_url})` : ""}\n` +
+        "Fetch the failing check runs, fix, and push.",
+      reason: "CI failure",
+      dedupeKey,
+    }
+  );
 
   return;
 }
