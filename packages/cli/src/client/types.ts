@@ -1773,6 +1773,7 @@ export interface paths {
                 query?: {
                     issueId?: string;
                     limit?: string;
+                    summary?: string;
                 };
                 header?: never;
                 path: {
@@ -1782,7 +1783,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Agent sessions list */
+                /** @description Agent sessions list. Pass `?summary=1` for lane-row scalars only (no result/activity blobs) — the shape `pile fleet` polls. */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -1827,6 +1828,24 @@ export interface paths {
                                     durationMs: number | null;
                                     createdAt: string;
                                 }[];
+                            }[];
+                        } | {
+                            sessions: {
+                                id: string;
+                                issueId: string;
+                                agentId: string;
+                                provider: string;
+                                /** @enum {string} */
+                                status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                                prUrl: string | null;
+                                prState: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                lastProgressAt?: string | null;
+                                /** @enum {string|null} */
+                                derivedStatus?: "stalled" | "needs_input" | null;
+                                startedAt: string | null;
+                                endedAt: string | null;
                             }[];
                         };
                     };
@@ -2045,7 +2064,9 @@ export interface paths {
         /** Get agent session */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    summary?: string;
+                };
                 header?: never;
                 path: {
                     organizationId: string;
@@ -2055,7 +2076,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Agent session with activities */
+                /** @description Agent session with activities. Pass `?summary=1` for lane-row scalars only. */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -2099,6 +2120,22 @@ export interface paths {
                                 durationMs: number | null;
                                 createdAt: string;
                             }[];
+                        } | {
+                            id: string;
+                            issueId: string;
+                            agentId: string;
+                            provider: string;
+                            /** @enum {string} */
+                            status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                            prUrl: string | null;
+                            prState: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                            lastProgressAt?: string | null;
+                            /** @enum {string|null} */
+                            derivedStatus?: "stalled" | "needs_input" | null;
+                            startedAt: string | null;
+                            endedAt: string | null;
                         };
                     };
                 };

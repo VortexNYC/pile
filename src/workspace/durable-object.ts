@@ -1957,6 +1957,21 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.listAgentSessions(this.db, this.organizationId, options);
   }
 
+  listAgentSessionSummaries(
+    options: {
+      issueId?: string;
+      status?: AgentSessionStatus;
+      openPr?: boolean;
+      limit?: number;
+    } = {}
+  ) {
+    return data.listAgentSessionSummaries(
+      this.db,
+      this.organizationId,
+      options
+    );
+  }
+
   async getMaxConcurrentAgentChildren(): Promise<number> {
     const d1 = createD1(this.env.D1);
     const row = await d1
