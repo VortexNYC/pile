@@ -147,6 +147,7 @@ describe("ingestFailedAgentSession", () => {
       spawnDepth: 0,
       laneDbRef: null,
       purpose: null,
+      endedAt: null,
     };
     const polled = {
       id: "prov-1",

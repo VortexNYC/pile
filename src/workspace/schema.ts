@@ -805,6 +805,9 @@ export const workspaceAgentSessions = sqliteTable(
     // on the target provider whose only job is to flag missing/ambiguous
     // ticket context before tokens get spent implementing the wrong thing.
     purpose: text("purpose" as string),
+    // First transition into a terminal status — the kept-sandbox reaper
+    // anchors its resume window here; updatedAt churns on every write.
+    endedAt: text("ended_at" as string),
   },
   (table) => [
     index("agent_sessions_organization_idx" as string).on(

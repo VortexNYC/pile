@@ -347,8 +347,12 @@ async function reapTerminalArtifacts(
   const recent = await stub.listAgentSessions({ limit: 200 });
   for (const session of recent) {
     if (!TERMINAL_STATUSES.has(session.status)) continue;
+    if (session.lastStateHash === "reaped") continue;
     await teardownLaneDbForSession(env, stub, session);
-    const updated = Date.parse(session.updatedAt);
+    // Anchor to the terminal transition — updatedAt churns on every write
+    // (prState, laneDb teardown, this reaper's marker) and would otherwise
+    // keep the sandbox inside the resume window forever.
+    const updated = Date.parse(session.endedAt ?? session.updatedAt);
     if (
       !Number.isFinite(updated) ||
       now - updated < SANDBOX_RESUME_WINDOW_MS ||

@@ -1088,7 +1088,17 @@ export async function updateAgentSession(
   const set: Record<string, string | number | null> = {
     updatedAt: new Date().toISOString(),
   };
-  if (input.status !== undefined) set.status = input.status;
+  if (input.status !== undefined) {
+    set.status = input.status;
+    // Anchor the first terminal transition — the kept-sandbox reaper keys
+    // its resume window off endedAt, which later writes can't push.
+    if (
+      ["completed", "failed", "canceled"].includes(input.status) &&
+      !existing.endedAt
+    ) {
+      set.endedAt = set.updatedAt;
+    }
+  }
   if (input.result !== undefined) set.result = input.result;
   if (input.url !== undefined) set.url = input.url;
   if (input.providerSessionId !== undefined)

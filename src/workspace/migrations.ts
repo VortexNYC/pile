@@ -771,6 +771,12 @@ CREATE INDEX IF NOT EXISTS agent_automations_issue_idx ON agent_automations (iss
 
 const v44 = `ALTER TABLE agent_sessions ADD COLUMN purpose TEXT`;
 
+// VTX-216 — kept-sandbox reaper leaked because updatedAt is bumped by every
+// write (prState, laneDb teardown, the reaper's own marker), so the 4h
+// resume window never elapsed. ended_at anchors the window to the terminal
+// transition, written once.
+const v45 = `ALTER TABLE agent_sessions ADD COLUMN ended_at TEXT`;
+
 export const workspaceMigrations = {
   journal: {
     entries: [
@@ -818,6 +824,7 @@ export const workspaceMigrations = {
       { idx: 41, when: 41, tag: "v42", breakpoints: true },
       { idx: 42, when: 42, tag: "v43", breakpoints: true },
       { idx: 43, when: 43, tag: "v44", breakpoints: true },
+      { idx: 44, when: 44, tag: "v45", breakpoints: true },
     ],
   },
   migrations: {
@@ -865,5 +872,6 @@ export const workspaceMigrations = {
     m0041: v42,
     m0042: v43,
     m0043: v44,
+    m0044: v45,
   },
 } satisfies Parameters<typeof migrate>[1];
