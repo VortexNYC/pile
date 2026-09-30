@@ -7,3 +7,4 @@ coverage
 *.log
 backups/
 /.vite-hooks/_/
+.cloudflare

@@ -297,3 +297,37 @@ put` → `cf workers secrets update`, bulk → `cf workers secrets bulk`,
       while `cloudflare.config.ts` exists).
 - [ ] `cf` pinned in `package.json`; `contract:check` regenerated artifacts
       unaffected.
+
+## Resolution (2026-09-30, PILE-243 config branch)
+
+`cloudflare.config.ts` and `wrangler.config.ts` are now committed with every
+`TODO(@cloudflare)` resolved; the `Migration incomplete` throw is removed.
+`wrangler.toml` is unchanged and remains the deploy config. Verification was
+dry-run only: `cf workers types` (both modes), `convertToWranglerConfig` on
+the parsed config, and `vp check`/`contract:check`.
+
+| Report row | Resolution |
+| ---------- | ---------- |
+| DO bindings | All 5 bindings per mode, self-referencing `worker` name. `exportName` is now compile-checked: `selfDurableObjectBinding<typeof workerExports>` keys it on the exports map, so a typo fails `tsc` instead of deploying. |
+| DO migrations | Replaced by `worker.exports` — all 5 classes with `storage: "sqlite"` in both branches; verified `src/index.ts` exports match. Note `migrations` and `exports` are mutually exclusive under wrangler (`errorIfMigrationsAndExportsBothSet`) — the toml's `[[migrations]]` and this file's `exports` can coexist only because each tool reads one file. |
+| Containers | `StandardContainerConfig` is the right shape: wrangler sends `scheduling_policy ?? "default"` for `[[containers]]`, and `container` on an `exports.durableObject` entry resolves to the app's `name` (1:1 enforced by both cf and wrangler validators). 4 `defineContainer` per mode with exact wrangler-derived names; dev uses `{ dockerfile }`, prod `{ reference }` digests. |
+| D1 `migrations_dir` | No config equivalent; `cf d1 migrations apply pile-global` defaults (`--dir ./migrations`, `--table d1_migrations`) match the repo. Call sites (migrate.yml, selfhost.sh, backup/dr-restore) still run wrangler — move them to `cf d1 migrations apply c4f71628-3f93-4be1-ac11-48b5611f5934` after the `issuetracker-global` vs `pile-global` question is resolved. |
+| Env split | `ctx.mode ?? "development"` — wrangler leaves mode `undefined` without `-e`, matching the toml's top-level env. `default:` throws on unknown modes (verified: `--mode prod` errors). |
+
+New findings during implementation:
+
+- **`workersDev: false` on production.** Wrangler defaults `workers_dev` to
+  `routes.length === 0`, so `pile` deploys today with the workers.dev
+  subdomain disabled. cf defaults `workersDev` to `true` unconditionally —
+  without the explicit `false`, `cf deploy` would re-enable it.
+- **wrangler `--experimental-new-config` cannot consume this file.** Wrangler
+  4.129's new-config loader expects `cloudflare.config.ts` to export
+  `defineWorker(...)` definitions (`type: "worker"`) and has no `containers`
+  support — a different module format than cf's `defineConfig`. The committed
+  `wrangler.config.ts` also had a generator bug: `types` must live under
+  `dev.types` per `WranglerConfigSchema` (fixed; the generated top-level
+  `types` fails strict validation). So the `cf` ↔ wrangler round-trip via
+  `--experimental-new-config` is not usable at these versions; it was left in
+  place for when wrangler's new-config lands.
+- `cf` is pinned `1.0.0-beta.7` in devDependencies; `.cloudflare/` (types and
+  build output) is gitignored; both config files are knip entry points.

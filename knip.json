@@ -2,7 +2,11 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
     ".": {
-      "entry": ["scripts/consolidate-linear-import.ts"]
+      "entry": [
+        "scripts/consolidate-linear-import.ts",
+        "cloudflare.config.ts",
+        "wrangler.config.ts"
+      ]
     }
   },
   "ignore": [

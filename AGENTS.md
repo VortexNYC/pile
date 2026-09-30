@@ -35,6 +35,7 @@ vp run knip
 - Durable Object SQLite requires `new_sqlite_classes` in the `[[migrations]]` section of `wrangler.toml`. `new_classes` is not enough and will fail at runtime.
 - Keep `compatibility_date` pinned to a date the installed `workerd` binary supports. It is currently aligned to `2026-07-30` for `workerd 1.20260730.1`; do not use a later date.
 - The `wrangler.toml` file is the canonical, committed config and is not git-ignored. Do not move it to `wrangler.toml.example`.
+- `cloudflare.config.ts` is the `cf`-side config (PILE-243): `cf` commands read it, `wrangler deploy`/`wrangler dev` still read `wrangler.toml`. Until the toml is retired, every binding/vars change must land in both files. `wrangler --experimental-new-config` does not currently support the cf config format (no containers); do not deploy with it.
 
 ## Git workflow
 
