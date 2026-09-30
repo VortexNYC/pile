@@ -121,6 +121,14 @@ describe("github pr review → lane nudge (PILE-224)", () => {
           },
         })
     );
+    registerAgentProvider(
+      "nudge-dead",
+      () =>
+        new MockAgentProvider("nudge-dead", {
+          // Sandbox reaped — delivery is rejected.
+          sendPrompt: () => false,
+        })
+    );
   });
 
   it("delivers a review comment to the lane's live session", async () => {
@@ -203,6 +211,102 @@ describe("github pr review → lane nudge (PILE-224)", () => {
     expect(
       comments.some((c) => c.body.includes("[review:changes_requested]"))
     ).toBe(true);
+  });
+
+  it("records prompt.followup_failed when the kept sandbox is already gone", async () => {
+    const s = stub();
+    const issue = await s.createIssue({
+      title: "Reaped lane",
+      repo: REPO,
+      branch: `${BRANCH}-reaped`,
+    });
+    const session = await s.createAgentSession({
+      issueId: issue.id,
+      agentId: "nudge-dead",
+      provider: "nudge-dead",
+      actorId: "review-user",
+      actorType: "user",
+      status: "completed",
+      providerSessionId: "remote-dead-1",
+    });
+
+    const before = prompts.length;
+    await processGithubWebhookPayload(
+      createD1(env.D1),
+      env as unknown as WorkerEnv,
+      queuePayload(
+        "pull_request_review",
+        reviewPayload({
+          pull_request: {
+            number: 45,
+            html_url: `https://github.com/${REPO}/pull/45`,
+            head: {
+              ref: `${BRANCH}-reaped`,
+              sha: "aaa999",
+              repo: { full_name: REPO },
+            },
+          },
+        })
+      )
+    );
+
+    expect(prompts.length).toBe(before);
+    const events = await s.listAgentSessionEvents(session.id, {});
+    const types = events.map((e) => e.type);
+    // Detection and delivery-rejection are both on the record — never silence.
+    expect(types).toContain("pr.review");
+    expect(types).toContain("prompt.followup_failed");
+  });
+
+  it("records prompt.followup_skipped on a dead lane, once per review", async () => {
+    const s = stub();
+    const issue = await s.createIssue({
+      title: "Failed lane",
+      repo: REPO,
+      branch: `${BRANCH}-failed`,
+    });
+    const session = await s.createAgentSession({
+      issueId: issue.id,
+      agentId: "nudge-mock",
+      provider: "nudge-mock",
+      actorId: "review-user",
+      actorType: "user",
+      status: "failed",
+      providerSessionId: "remote-failed-1",
+    });
+
+    const payload = queuePayload(
+      "pull_request_review",
+      reviewPayload({
+        pull_request: {
+          number: 46,
+          html_url: `https://github.com/${REPO}/pull/46`,
+          head: {
+            ref: `${BRANCH}-failed`,
+            sha: "bbb111",
+            repo: { full_name: REPO },
+          },
+        },
+      })
+    );
+    await processGithubWebhookPayload(
+      createD1(env.D1),
+      env as unknown as WorkerEnv,
+      payload
+    );
+    // A redelivery of the same review must not stack more skip records.
+    await processGithubWebhookPayload(
+      createD1(env.D1),
+      env as unknown as WorkerEnv,
+      payload
+    );
+
+    const events = await s.listAgentSessionEvents(session.id, {});
+    const types = events.map((e) => e.type);
+    expect(types).toContain("pr.review");
+    expect(types.filter((t) => t === "prompt.followup_skipped")).toHaveLength(
+      1
+    );
   });
 
   it("resumes a completed kept-sandbox lane on a review comment", async () => {

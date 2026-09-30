@@ -126,6 +126,77 @@ describe("checkDispatchDedupe", () => {
     expect(result.coverage[0].overlap).toBe("identifier");
   });
 
+  it("does not hard-block when the covering PR has outstanding requested changes", async () => {
+    const reviews = [
+      {
+        id: 1,
+        state: "CHANGES_REQUESTED",
+        user: { login: "reviewer-a" },
+      },
+    ];
+    const result = await checkDispatchDedupe(env, noSessions, makeIssue(), {
+      tokenForRepo,
+      fetch: ghStub({ "/pulls/740/reviews": reviews }),
+    });
+    expect(result.hardBlock).toBeNull();
+    expect(result.queueAfter).toBeNull();
+    expect(result.coverage[0].changesRequested).toBe(true);
+  });
+
+  it("still hard-blocks once the same reviewer approves", async () => {
+    const reviews = [
+      {
+        id: 1,
+        state: "CHANGES_REQUESTED",
+        user: { login: "reviewer-a" },
+      },
+      { id: 2, state: "APPROVED", user: { login: "reviewer-a" } },
+    ];
+    const result = await checkDispatchDedupe(env, noSessions, makeIssue(), {
+      tokenForRepo,
+      fetch: ghStub({ "/pulls/740/reviews": reviews }),
+    });
+    expect(result.hardBlock?.prUrl).toBe(
+      "https://github.com/acme/widgets/pull/740"
+    );
+  });
+
+  it("stays unblocked while any reviewer still wants changes", async () => {
+    const reviews = [
+      {
+        id: 1,
+        state: "CHANGES_REQUESTED",
+        user: { login: "reviewer-a" },
+      },
+      { id: 2, state: "APPROVED", user: { login: "reviewer-b" } },
+      { id: 3, state: "COMMENTED", user: { login: "reviewer-a" } },
+    ];
+    const result = await checkDispatchDedupe(env, noSessions, makeIssue(), {
+      tokenForRepo,
+      fetch: ghStub({ "/pulls/740/reviews": reviews }),
+    });
+    expect(result.hardBlock).toBeNull();
+    expect(result.coverage[0].changesRequested).toBe(true);
+  });
+
+  it("treats a dismissed change request as resolved", async () => {
+    const reviews = [
+      {
+        id: 1,
+        state: "CHANGES_REQUESTED",
+        user: { login: "reviewer-a" },
+      },
+      { id: 2, state: "DISMISSED", user: { login: "reviewer-a" } },
+    ];
+    const result = await checkDispatchDedupe(env, noSessions, makeIssue(), {
+      tokenForRepo,
+      fetch: ghStub({ "/pulls/740/reviews": reviews }),
+    });
+    expect(result.hardBlock?.prUrl).toBe(
+      "https://github.com/acme/widgets/pull/740"
+    );
+  });
+
   it("queues behind the sibling session that owns the covering PR", async () => {
     const sibling = makeSession({
       id: "sess-owner",

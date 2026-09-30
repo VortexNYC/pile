@@ -503,6 +503,79 @@ describe("agent sessions API", () => {
     expect(captured?.branch).toBe("iss-42");
   });
 
+  it("retries a completed session into a new session on the same lane branch", async () => {
+    const agentId = `mock-retry-${crypto.randomUUID().slice(0, 8)}`;
+    let seenBranch: string | null | undefined;
+    registerAgentProvider(
+      agentId,
+      () =>
+        new MockAgentProvider(agentId, {
+          dispatch: (_org, dispatchedIssue) => {
+            seenBranch = dispatchedIssue.branch;
+            return {
+              id: `rs-${crypto.randomUUID()}`,
+              agentId,
+              issueId: dispatchedIssue.id,
+              status: "created" as const,
+            };
+          },
+        })
+    );
+
+    const issueRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          title: "Retry lane",
+          repo: "acme/roadmap",
+          branch: "lane/pile-249",
+        }),
+      }),
+      env
+    );
+    expect(issueRes.status).toBe(201);
+    const issue = await issueRes.json<{ id: string }>();
+
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: "user-1",
+      actorType: "user",
+      status: "completed",
+      result: "opened a PR",
+    });
+
+    const retryRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/retry`,
+        {
+          method: "POST",
+          token,
+          body: JSON.stringify({ context: "address the review feedback" }),
+        }
+      ),
+      env
+    );
+    expect(retryRes.status).toBe(201);
+    const retried = await retryRes.json<{
+      id: string;
+      issueId: string;
+      status: string;
+    }>();
+    expect(retried.id).not.toBe(session.id);
+    expect(retried.issueId).toBe(issue.id);
+    // The lane branch is already on the issue — the new session resumes it.
+    expect(seenBranch).toBe("lane/pile-249");
+    const stored = await stub.getAgentSession(retried.id);
+    expect(stored?.retryOf).toBe(session.id);
+    expect(stored?.retryCount).toBe(1);
+  });
+
   it("appends an activity and updates session state", async () => {
     const stub = env.WORKSPACE_DURABLE_OBJECT.get(
       env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
