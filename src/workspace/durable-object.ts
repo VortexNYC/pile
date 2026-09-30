@@ -2366,7 +2366,11 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         updatedAt: new Date().toISOString(),
         lastProgressAt: new Date().toISOString(),
       };
-      if (result.status !== undefined) set.status = result.status;
+      if (result.status !== undefined) {
+        set.status = result.status;
+        if (terminal.has(result.status) && !oldSession.endedAt)
+          set.endedAt = set.updatedAt;
+      }
       if (result.infraFailure !== undefined)
         set.infraFailure = result.infraFailure ? 1 : 0;
       if (result.result !== undefined) set.result = result.result;
@@ -2397,7 +2401,11 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       updatedAt: new Date().toISOString(),
       lastProgressAt: new Date().toISOString(),
     };
-    if (result.status !== undefined) set.status = result.status;
+    if (result.status !== undefined) {
+      set.status = result.status;
+      if (terminal.has(result.status) && !oldSession.endedAt)
+        set.endedAt = set.updatedAt;
+    }
     if (result.infraFailure !== undefined)
       set.infraFailure = result.infraFailure ? 1 : 0;
     if (result.result !== undefined) set.result = result.result;
