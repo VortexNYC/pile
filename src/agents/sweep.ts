@@ -972,7 +972,16 @@ async function nudgeLane(
   prUrl: string,
   opts: { prompt: string; reason: string }
 ): Promise<void> {
-  if (!issue || (session.status !== "running" && session.status !== "waiting"))
+  // completed is included: reviews/CI land after the lane finishes, and
+  // kept-sandbox providers (devin-cli) resume on the follow-up — that
+  // resume is the whole review→lane loop. Providers without sendPrompt
+  // bail below.
+  if (
+    !issue ||
+    (session.status !== "running" &&
+      session.status !== "waiting" &&
+      session.status !== "completed")
+  )
     return;
   try {
     const providerConfig = await loadProviderConfig(env, stub, session.agentId);
@@ -1012,6 +1021,17 @@ async function nudgeLane(
         payload: { issueId: issue.id, prUrl },
       })
       .catch(() => {});
+    // Resume bookkeeping mirrors the /prompt endpoint: a delivered follow-up
+    // on a completed lane flips it back to running so the poll loop picks up
+    // the follow-up run's result (and re-records endedAt when it re-ends).
+    if (delivered && session.status === "completed") {
+      await stub
+        .applyAgentSessionResult(session.id, {
+          status: "running",
+          result: null,
+        })
+        .catch(() => {});
+    }
   } catch (err) {
     console.error("lane nudge failed", {
       sessionId: session.id,
