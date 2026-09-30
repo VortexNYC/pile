@@ -1017,7 +1017,9 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         missingEndedAt,
         providers: [...agentIds].map((agentId) => ({
           agentId,
-          live: rows.filter((r) => r.agentId === agentId && !TERMINAL.has(r.status)).length,
+          live: rows.filter(
+            (r) => r.agentId === agentId && !TERMINAL.has(r.status)
+          ).length,
           keptSandboxes: kept.get(agentId) ?? 0,
           infraStreak: streaks.get(agentId) ?? 0,
           unhealthy: (streaks.get(agentId) ?? 0) >= UNHEALTHY_STREAK,

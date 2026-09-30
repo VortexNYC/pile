@@ -1205,14 +1205,12 @@ export async function syncOpenPrSessions(
           ),
           probeTimeoutMs,
           "github-reviews"
-        ).catch(() => null)) as
-          | Array<{
-              id?: number;
-              state?: string;
-              body?: string;
-              user?: { login?: string };
-            }>
-          | null;
+        ).catch(() => null)) as Array<{
+          id?: number;
+          state?: string;
+          body?: string;
+          user?: { login?: string };
+        }> | null;
         if (reviews && reviews.length > 0) {
           const seen = await stub
             .listAgentSessionEvents(session.id, { limit: 100 })
