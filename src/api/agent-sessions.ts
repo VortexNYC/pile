@@ -997,8 +997,15 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         continue;
       }
       if (!row.endedAt) missingEndedAt += 1;
+      // Kept sandboxes only exist on sandbox-CLI providers (hosted agents
+      // leave no container). This is an upper bound — a destroyed sandbox's
+      // session still counts until it ages out of the window.
       const anchor = Date.parse(row.endedAt ?? row.updatedAt);
-      if (Number.isFinite(anchor) && now - anchor < RESUME_WINDOW_MS) {
+      if (
+        row.agentId.endsWith("-cli") &&
+        Number.isFinite(anchor) &&
+        now - anchor < RESUME_WINDOW_MS
+      ) {
         kept.set(row.agentId, (kept.get(row.agentId) ?? 0) + 1);
       }
     }
