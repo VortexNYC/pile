@@ -46,7 +46,8 @@
     "entire:experts": "entire experts",
     "entire:tokens": "entire tokens",
     "entire:tokens:profile": "entire tokens profile",
-    "docs:bundle": "tsx scripts/generate-docs-bundle.ts"
+    "docs:bundle": "tsx scripts/generate-docs-bundle.ts",
+    "runner:bundle": "tsx scripts/generate-runner-bundle.ts"
   },
   "dependencies": {
     "@better-auth/api-key": "1.7.2",

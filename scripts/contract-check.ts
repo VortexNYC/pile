@@ -9,6 +9,7 @@ const generated = [
   "src/assets/capture.iife.ts",
   "src/assets/chat.iife.ts",
   "src/assets/docs-bundle.ts",
+  "src/agents/runner/bundle.ts",
 ];
 
 function run(label: string, command: string): void {
@@ -23,6 +24,7 @@ try {
   run("regenerating capture bundle", "pnpm run capture:bundle");
   run("regenerating chat bundle", "pnpm run chat:bundle");
   run("regenerating docs bundle", "pnpm run docs:bundle");
+  run("regenerating runner bundle", "pnpm run runner:bundle");
 
   console.log("[contract-check] verifying generated artifacts are committed");
   const diff = execSync(`git diff -- ${generated.join(" ")}`, {
