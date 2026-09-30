@@ -2215,7 +2215,11 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   listAgentSessionEvents(
     sessionId: string,
-    options: { afterId?: number; limit?: number } = {}
+    options: {
+      afterId?: number;
+      limit?: number;
+      order?: "asc" | "desc";
+    } = {}
   ) {
     return data.listAgentSessionEvents(this.db, sessionId, options);
   }
