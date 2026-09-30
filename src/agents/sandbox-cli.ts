@@ -717,19 +717,28 @@ export class SandboxCliAgentProvider implements AgentProvider {
 
   async cancel(sessionId: string): Promise<void> {
     const compute = this.requireCompute();
-    const sandbox = await compute.findSandbox(
-      sessionId,
-      this.sandboxName(sessionId),
-      RESULT_PATH
-    );
-    if (sandbox) {
-      await compute.deleteSandbox(sandbox);
+    const name = this.sandboxName(sessionId);
+    const sandbox = await compute.findSandbox(sessionId, name, RESULT_PATH);
+    // findSandbox can miss a sleeping/idle container (process record gone,
+    // result file unreadable) while the DO is still billing an instance.
+    // Destroy by name regardless — backends tolerate deleting the unknown.
+    const target = sandbox ?? { id: name, name, state: "started" as const };
+    try {
+      await compute.deleteSandbox(target);
       await this.note(
-        sandbox.organizationId,
+        target.organizationId ?? sandbox?.organizationId,
         sessionId,
         "status",
         `${this.id} sandbox deleted`,
-        { sandbox: sandbox.id }
+        { sandbox: target.id }
+      );
+    } catch (err) {
+      await this.note(
+        undefined,
+        sessionId,
+        "status",
+        `${this.id} sandbox delete failed`,
+        { sandbox: name, error: err instanceof Error ? err.message : String(err) }
       );
     }
   }

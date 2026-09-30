@@ -1558,10 +1558,9 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     if (!session) {
       return c.json({ message: "Session not found" }, 404);
     }
-    if (session.status === "canceled") {
-      const activities = await stub.listAgentActivities(sessionId);
-      return c.json(toSessionResponse(session, activities));
-    }
+    const terminal = session.status === "completed" ||
+      session.status === "failed" ||
+      session.status === "canceled";
 
     const providerConfig = await loadProviderConfig(
       c.env,
@@ -1575,6 +1574,13 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       await provider
         .cancel(remote)
         .catch((err) => console.error("provider cancel failed", err));
+    }
+
+    // Terminal sessions keep their status — this call only cleans up any
+    // kept sandbox the lane left behind.
+    if (terminal) {
+      const activities = await stub.listAgentActivities(sessionId);
+      return c.json(toSessionResponse(session, activities));
     }
 
     const updated = await stub.applyAgentSessionResult(
