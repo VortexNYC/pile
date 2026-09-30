@@ -2383,9 +2383,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       if (result.url !== undefined) set.url = result.url;
       if (result.providerSessionId !== undefined)
         set.providerSessionId = result.providerSessionId;
-      if (result.prUrl !== undefined) set.prUrl = result.prUrl;
-      if (result.prState !== undefined) set.prState = result.prState;
-      if (result.branch !== undefined) set.branch = result.branch;
+      // Empty result values mean "the run didn't report", not "field
+      // cleared" — a follow-up run that produces no PR must not wipe the
+      // PR the lane already has. Clearing lives in the sweep's reconcile.
+      if (result.prUrl) set.prUrl = result.prUrl;
+      if (result.prState) set.prState = result.prState;
+      if (result.branch) set.branch = result.branch;
       const rows = await this.db
         .update(workspaceAgentSessions)
         .set(set)
@@ -2423,9 +2426,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (result.url !== undefined) set.url = result.url;
     if (result.providerSessionId !== undefined)
       set.providerSessionId = result.providerSessionId;
-    if (result.prUrl !== undefined) set.prUrl = result.prUrl;
-    if (result.prState !== undefined) set.prState = result.prState;
-    if (result.branch !== undefined) set.branch = result.branch;
+    if (result.prUrl) set.prUrl = result.prUrl;
+    if (result.prState) set.prState = result.prState;
+    if (result.branch) set.branch = result.branch;
 
     const updatedSession = await this.db
       .update(workspaceAgentSessions)
@@ -2473,7 +2476,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       toValue: string | null;
     }> = [];
 
-    if (result.prUrl !== undefined && result.prUrl !== issue.prUrl) {
+    if (result.prUrl && result.prUrl !== issue.prUrl) {
       issueSet.prUrl = result.prUrl;
       historyEntries.push({
         field: "pr_url",
@@ -2481,7 +2484,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         toValue: result.prUrl,
       });
     }
-    if (result.prState !== undefined && result.prState !== issue.prState) {
+    if (result.prState && result.prState !== issue.prState) {
       issueSet.prState = result.prState;
       historyEntries.push({
         field: "pr_state",
@@ -2489,7 +2492,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         toValue: result.prState,
       });
     }
-    if (result.branch !== undefined && result.branch !== issue.branch) {
+    if (result.branch && result.branch !== issue.branch) {
       issueSet.branch = result.branch;
       historyEntries.push({
         field: "branch",
