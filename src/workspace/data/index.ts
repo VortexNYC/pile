@@ -1348,7 +1348,7 @@ export async function addAgentSessionEvent(
 export function listAgentSessionEvents(
   db: WorkspaceDb,
   sessionId: string,
-  options: { afterId?: number; limit?: number } = {}
+  options: { afterId?: number; limit?: number; order?: "asc" | "desc" } = {}
 ) {
   const conditions = [eq(workspaceAgentSessionEvents.sessionId, sessionId)];
   if (options.afterId !== undefined) {
@@ -1358,7 +1358,11 @@ export function listAgentSessionEvents(
     .select()
     .from(workspaceAgentSessionEvents)
     .where(and(...conditions))
-    .orderBy(workspaceAgentSessionEvents.id)
+    .orderBy(
+      options.order === "desc"
+        ? desc(workspaceAgentSessionEvents.id)
+        : workspaceAgentSessionEvents.id
+    )
     .limit(options.limit ?? 100)
     .all();
 }

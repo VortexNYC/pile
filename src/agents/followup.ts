@@ -37,7 +37,7 @@ export async function laneFollowupThrottled(
 ): Promise<boolean> {
   if (windowMs <= 0) return false;
   const events = await stub
-    .listAgentSessionEvents(sessionId, { limit: 50 })
+    .listAgentSessionEvents(sessionId, { limit: 50, order: "desc" })
     .catch(() => []);
   const cutoff = Date.now() - windowMs;
   return events.some(

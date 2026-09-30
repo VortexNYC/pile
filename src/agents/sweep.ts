@@ -696,7 +696,7 @@ export async function sweepAgentSessions(
           // after the RPC returns, so if it's present the lane is alive and
           // the next poll will flip it to `running`.
           const events = await stub
-            .listAgentSessionEvents(session.id, { limit: 100 })
+            .listAgentSessionEvents(session.id, { limit: 100, order: "desc" })
             .catch(() => []);
           const runnerStarted = events.some((event) =>
             String(event.message ?? "").includes("runner started")
@@ -1087,7 +1087,7 @@ export async function syncOpenPrSessions(
       // pr.review_requested below.
       if (state === "open" && pr.mergeable === false && issue) {
         const seen = await stub
-          .listAgentSessionEvents(session.id, { limit: 100 })
+          .listAgentSessionEvents(session.id, { limit: 100, order: "desc" })
           .catch(() => []);
         const alreadyNoted = seen.some(
           (e) =>
@@ -1142,7 +1142,7 @@ export async function syncOpenPrSessions(
         }> | null;
         if (reviews && reviews.length > 0) {
           const seen = await stub
-            .listAgentSessionEvents(session.id, { limit: 100 })
+            .listAgentSessionEvents(session.id, { limit: 100, order: "desc" })
             .catch(() => []);
           for (const review of reviews) {
             if (typeof review.id !== "number") continue;
@@ -1207,7 +1207,7 @@ export async function syncOpenPrSessions(
         state === "open"
       ) {
         const seen = await stub
-          .listAgentSessionEvents(session.id, { limit: 100 })
+          .listAgentSessionEvents(session.id, { limit: 100, order: "desc" })
           .catch(() => []);
         const alreadyNoted = seen.some(
           (e) =>

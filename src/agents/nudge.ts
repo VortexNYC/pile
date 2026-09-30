@@ -42,7 +42,7 @@ export async function nudgeLane(
     const dedupeKey = opts.dedupeKey;
     if (dedupeKey) {
       const seen = await stub
-        .listAgentSessionEvents(session.id, { limit: 100 })
+        .listAgentSessionEvents(session.id, { limit: 100, order: "desc" })
         .catch(() => []);
       const alreadyDelivered = seen.some(
         (e) =>

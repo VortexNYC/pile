@@ -674,7 +674,7 @@ async function processPullRequestReview(
   const reviewState = (review.state ?? "").toUpperCase();
   if (session) {
     const seen = await stub
-      .listAgentSessionEvents(session.id, { limit: 100 })
+      .listAgentSessionEvents(session.id, { limit: 100, order: "desc" })
       .catch(() => []);
     const isNew = !seen.some(
       (e) =>
@@ -1193,7 +1193,7 @@ async function processCheckRun(
   const dedupeKey = `ci-${check_run.head_sha}`;
   const prUrl = issue.prUrl ?? "";
   const seen = await stub
-    .listAgentSessionEvents(session.id, { limit: 100 })
+    .listAgentSessionEvents(session.id, { limit: 100, order: "desc" })
     .catch(() => []);
   const isNew = !seen.some(
     (e) =>
