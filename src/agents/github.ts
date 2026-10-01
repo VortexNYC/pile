@@ -568,9 +568,13 @@ async function resolveLaneForIssue(
   const sessions = await stub
     .listAgentSessions({ issueId, limit: 20 })
     .catch(() => []);
+  // PILE-249 — dead lanes still resolve: a review on a failed/canceled
+  // lane's PR gets its detection event plus a prompt.followup_skipped
+  // record from nudgeLane instead of silence.
   return (
     sessions.find((s) => s.status === "running" || s.status === "waiting") ??
     sessions.find((s) => s.status === "completed") ??
+    sessions.find((s) => s.status === "failed" || s.status === "canceled") ??
     null
   );
 }
