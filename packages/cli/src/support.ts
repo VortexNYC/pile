@@ -320,7 +320,7 @@ function lastCustomerTouch(ticket: SupportTicket): string {
 export function sortTickets(
   tickets: readonly SupportTicket[]
 ): SupportTicket[] {
-  return [...tickets].sort((a, b) => {
+  return tickets.toSorted((a, b) => {
     const statusDiff = STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
     if (statusDiff !== 0) return statusDiff;
     if (a.status === "todo") {
