@@ -182,6 +182,26 @@ describe("CloudflareBackend shared admission (PILE-302)", () => {
   });
 });
 
+describe("CloudflareBackend.waitForRunner + admission (PILE-302/308)", () => {
+  it("waits on the process health port once the process registers", async () => {
+    const waitForPort = vi.fn().mockResolvedValue(undefined);
+    const proc = { ...fakeProcess("running"), waitForPort };
+    const { handle, getProcess } = fakeSandbox({ "sess-1": proc });
+    const backend = new CloudflareBackend(() => Promise.resolve(handle));
+    await backend.waitForRunner!(sandboxRecord, "sess-1", 5_000);
+    expect(getProcess).toHaveBeenCalledWith("sess-1");
+    expect(waitForPort).toHaveBeenCalled();
+  });
+
+  it("throws when the process never registers before the deadline", async () => {
+    const { handle } = fakeSandbox({});
+    const backend = new CloudflareBackend(() => Promise.resolve(handle));
+    await expect(
+      backend.waitForRunner!(sandboxRecord, "ghost", 50)
+    ).rejects.toThrow(/never registered/);
+  });
+});
+
 const sandboxRecord: ComputeSandbox = {
   id: "vortex-codex-abc123",
   name: "vortex-codex-abc123",
