@@ -240,6 +240,74 @@ describe("lane security: Pile endpoints reachable with a lane token", () => {
         },
       ]);
     });
+    it("mints for a configured secondary repo only (PILE-294)", async () => {
+      const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+        env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+      );
+      await stub.setOrganizationId(organizationId);
+      const issue = await stub.createIssue({
+        title: "Cross-repo lane fixture",
+        repo: REPO,
+      });
+      const session = await stub.createAgentSession({
+        issueId: issue.id,
+        agentId: "mock",
+        provider: "mock",
+        actorId: "user-1",
+        actorType: "user",
+        status: "running",
+        providerSessionId: `lane-sec-${crypto.randomUUID()}`,
+        secondaryRepos: JSON.stringify([
+          { repo: "VortexNYC/vortex", access: "read" },
+        ]),
+      });
+      const laneToken = await agentLogToken(
+        env as unknown as WorkerEnv,
+        organizationId,
+        session.id
+      );
+      if (!laneToken) throw new Error("lane token derivation failed");
+      const privateKey = await generatePrivateKeyPem();
+      const minted: unknown[] = [];
+      const lookedUp: string[] = [];
+      vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+        const url = String(input instanceof Request ? input.url : input);
+        if (url.endsWith("/installation")) {
+          lookedUp.push(url);
+          return Response.json({ id: 4242 });
+        }
+        if (url.endsWith("/app/installations/4242/access_tokens")) {
+          const raw = typeof init?.body === "string" ? init.body : null;
+          minted.push(raw ? JSON.parse(raw) : null);
+          return Response.json({ token: FAKE_INSTALLATION_TOKEN });
+        }
+        return new Response("unexpected", { status: 599 });
+      });
+      const appEnv = {
+        ...env,
+        GITHUB_APP_ID: "123",
+        GITHUB_PRIVATE_KEY: privateKey,
+      };
+      for (const repo of ["vortexnyc/VORTEX", "VortexNYC/vortex-payments"]) {
+        const res = await app.fetch(
+          request(`${tokenPath(organizationId, session.id)}?repo=${repo}`, {
+            method: "POST",
+            token: laneToken,
+          }),
+          appEnv
+        );
+        expect(res.status).toBe(200);
+      }
+      expect(lookedUp).toEqual([
+        "https://api.github.com/repos/VortexNYC/vortex/installation",
+        "https://api.github.com/repos/VortexNYC/pile/installation",
+      ]);
+      expect(minted).toEqual([
+        { repositories: ["vortex"] },
+        { repositories: ["pile"] },
+      ]);
+      await stub.updateAgentSession(session.id, { status: "completed" });
+    });
   });
 
   describe("tokenExfil: transcript and result persistence", () => {

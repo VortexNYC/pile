@@ -1445,6 +1445,16 @@ export interface paths {
                         branch?: string | null;
                         instructions?: string;
                         preflight?: boolean;
+                        secondaryRepos?: {
+                            repo: string;
+                            /**
+                             * @default read
+                             * @enum {string}
+                             */
+                            access?: "read" | "write";
+                        }[];
+                        /** @enum {string} */
+                        mode?: "build" | "plan" | "implement_plan";
                         /** @enum {string} */
                         effort?: "low" | "medium" | "high" | "max";
                         /** @description Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue */
@@ -1481,6 +1491,7 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            secondaryRepos?: string | null;
                             maxDurationMinutes?: number | null;
                             /** @enum {string|null} */
                             effort?: "low" | "medium" | "high" | "max" | null;
@@ -1579,6 +1590,7 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                secondaryRepos?: string | null;
                                 maxDurationMinutes?: number | null;
                                 /** @enum {string|null} */
                                 effort?: "low" | "medium" | "high" | "max" | null;
@@ -1679,6 +1691,7 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                secondaryRepos?: string | null;
                                 maxDurationMinutes?: number | null;
                                 /** @enum {string|null} */
                                 effort?: "low" | "medium" | "high" | "max" | null;
@@ -1741,6 +1754,7 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                secondaryRepos?: string | null;
                                 maxDurationMinutes?: number | null;
                                 /** @enum {string|null} */
                                 effort?: "low" | "medium" | "high" | "max" | null;
@@ -1821,6 +1835,14 @@ export interface paths {
                             branch?: string | null;
                             instructions?: string;
                             queuedAfter?: string;
+                            secondaryRepos?: {
+                                repo: string;
+                                /**
+                                 * @default read
+                                 * @enum {string}
+                                 */
+                                access?: "read" | "write";
+                            }[];
                             /** @enum {string} */
                             effort?: "low" | "medium" | "high" | "max";
                             /** @description Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue */
@@ -1908,6 +1930,7 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                secondaryRepos?: string | null;
                                 maxDurationMinutes?: number | null;
                                 /** @enum {string|null} */
                                 effort?: "low" | "medium" | "high" | "max" | null;
@@ -2116,6 +2139,7 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                secondaryRepos?: string | null;
                                 maxDurationMinutes?: number | null;
                                 /** @enum {string|null} */
                                 effort?: "low" | "medium" | "high" | "max" | null;
@@ -2219,6 +2243,7 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            secondaryRepos?: string | null;
                             maxDurationMinutes?: number | null;
                             /** @enum {string|null} */
                             effort?: "low" | "medium" | "high" | "max" | null;
@@ -2331,6 +2356,7 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            secondaryRepos?: string | null;
                             maxDurationMinutes?: number | null;
                             /** @enum {string|null} */
                             effort?: "low" | "medium" | "high" | "max" | null;
@@ -2708,6 +2734,7 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            secondaryRepos?: string | null;
                             maxDurationMinutes?: number | null;
                             /** @enum {string|null} */
                             effort?: "low" | "medium" | "high" | "max" | null;
@@ -2801,6 +2828,7 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            secondaryRepos?: string | null;
                             maxDurationMinutes?: number | null;
                             /** @enum {string|null} */
                             effort?: "low" | "medium" | "high" | "max" | null;
@@ -2893,6 +2921,7 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                secondaryRepos?: string | null;
                                 maxDurationMinutes?: number | null;
                                 /** @enum {string|null} */
                                 effort?: "low" | "medium" | "high" | "max" | null;
@@ -3013,6 +3042,7 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                secondaryRepos?: string | null;
                                 maxDurationMinutes?: number | null;
                                 /** @enum {string|null} */
                                 effort?: "low" | "medium" | "high" | "max" | null;
@@ -3140,6 +3170,7 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            secondaryRepos?: string | null;
                             maxDurationMinutes?: number | null;
                             /** @enum {string|null} */
                             effort?: "low" | "medium" | "high" | "max" | null;
@@ -3252,6 +3283,7 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            secondaryRepos?: string | null;
                             maxDurationMinutes?: number | null;
                             /** @enum {string|null} */
                             effort?: "low" | "medium" | "high" | "max" | null;

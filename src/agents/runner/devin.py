@@ -8,7 +8,7 @@ FOLLOWUP_DIR = '/tmp/followups'
 
 def agent_env():
     # Credentials live in DEVIN_HOME on disk; DEVIN_CREDENTIALS_B64 stays runner-only.
-    return scrubbed_env()
+    return with_browser_env(scrubbed_env())
 
 
 def apply_tool_policy():
@@ -71,7 +71,7 @@ def inject_followups(proc):
 
 
 def run_agent(devin_bin, prompt=None):
-    prompt = prompt or base64.b64decode(os.environ['PROMPT_B64']).decode('utf-8')
+    prompt = prompt or lane_prompt()
     model = os.environ.get('MODEL', 'swe-2')
     proc = subprocess.Popen(
         [devin_bin, '-p', prompt, '--model', model, '--permission-mode', permission_mode(), '--respect-workspace-trust', 'false'],
@@ -146,6 +146,7 @@ def main():
         output = run_turn(devin_bin)
         output = drain_followups(devin_bin) or output
         pushed = commit_and_push(agent_env()) if REPO else False
+        push_secondary_repos(agent_env())
         return finalize(output, pushed)
     if not REPO:
         # Repo-less lane — research/docs/design work. The agent runs in an
@@ -157,12 +158,14 @@ def main():
         return finalize(output, False)
     create_branch()
     clone_repo()
+    clone_secondary_repos()
     run_hook('postCheckout', agent_env())
     run_setup_hook(agent_env)
     ensure_postgres()
     output = run_turn(devin_bin)
     output = drain_followups(devin_bin) or output
     pushed = commit_and_push(agent_env())
+    push_secondary_repos(agent_env())
     return finalize(output, pushed)
 
 

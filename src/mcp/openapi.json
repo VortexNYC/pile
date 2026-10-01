@@ -2909,6 +2909,39 @@
                   "preflight": {
                     "type": "boolean"
                   },
+                  "secondaryRepos": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "repo": {
+                          "type": "string",
+                          "pattern": "^[A-Za-z0-9_.-]+\\/[A-Za-z0-9_.-]+$"
+                        },
+                        "access": {
+                          "type": "string",
+                          "enum": [
+                            "read",
+                            "write"
+                          ],
+                          "default": "read"
+                        }
+                      },
+                      "required": [
+                        "repo"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 5
+                  },
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "build",
+                      "plan",
+                      "implement_plan"
+                    ]
+                  },
                   "effort": {
                     "type": "string",
                     "enum": [
@@ -3016,6 +3049,10 @@
                       "nullable": true
                     },
                     "purpose": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "secondaryRepos": {
                       "type": "string",
                       "nullable": true
                     },
@@ -3307,6 +3344,10 @@
                           "nullable": true
                         },
                         "purpose": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "secondaryRepos": {
                           "type": "string",
                           "nullable": true
                         },
@@ -3604,6 +3645,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "secondaryRepos": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "maxDurationMinutes": {
                           "type": "integer",
                           "nullable": true
@@ -3852,6 +3897,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "secondaryRepos": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "maxDurationMinutes": {
                           "type": "integer",
                           "nullable": true
@@ -4075,6 +4124,31 @@
                         },
                         "queuedAfter": {
                           "type": "string"
+                        },
+                        "secondaryRepos": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "repo": {
+                                "type": "string",
+                                "pattern": "^[A-Za-z0-9_.-]+\\/[A-Za-z0-9_.-]+$"
+                              },
+                              "access": {
+                                "type": "string",
+                                "enum": [
+                                  "read",
+                                  "write"
+                                ],
+                                "default": "read"
+                              }
+                            },
+                            "required": [
+                              "repo"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "maxItems": 5
                         },
                         "effort": {
                           "type": "string",
@@ -4303,6 +4377,10 @@
                                 "nullable": true
                               },
                               "purpose": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "secondaryRepos": {
                                 "type": "string",
                                 "nullable": true
                               },
@@ -4821,6 +4899,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "secondaryRepos": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "maxDurationMinutes": {
                           "type": "integer",
                           "nullable": true
@@ -5149,6 +5231,10 @@
                           "nullable": true
                         },
                         "purpose": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "secondaryRepos": {
                           "type": "string",
                           "nullable": true
                         },
@@ -5517,6 +5603,10 @@
                       "nullable": true
                     },
                     "purpose": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "secondaryRepos": {
                       "type": "string",
                       "nullable": true
                     },
@@ -6325,6 +6415,10 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "secondaryRepos": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "maxDurationMinutes": {
                       "type": "integer",
                       "nullable": true
@@ -6573,6 +6667,10 @@
                       "nullable": true
                     },
                     "purpose": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "secondaryRepos": {
                       "type": "string",
                       "nullable": true
                     },
@@ -6827,6 +6925,10 @@
                           "nullable": true
                         },
                         "purpose": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "secondaryRepos": {
                           "type": "string",
                           "nullable": true
                         },
@@ -7140,6 +7242,10 @@
                           "nullable": true
                         },
                         "purpose": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "secondaryRepos": {
                           "type": "string",
                           "nullable": true
                         },
@@ -7481,6 +7587,10 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "secondaryRepos": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "maxDurationMinutes": {
                       "type": "integer",
                       "nullable": true
@@ -7768,6 +7878,10 @@
                       "nullable": true
                     },
                     "purpose": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "secondaryRepos": {
                       "type": "string",
                       "nullable": true
                     },

@@ -911,6 +911,14 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "preflight",
       },
       {
+        name: "secondaryRepos",
+        flag: "secondary-repos",
+      },
+      {
+        name: "mode",
+        flag: "mode",
+      },
+      {
         name: "effort",
         flag: "effort",
       },

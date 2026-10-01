@@ -8924,6 +8924,31 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                   "queuedAfter": {
                     "type": "string"
                   },
+                  "secondaryRepos": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "repo": {
+                          "type": "string",
+                          "pattern": "^[A-Za-z0-9_.-]+\\/[A-Za-z0-9_.-]+$"
+                        },
+                        "access": {
+                          "type": "string",
+                          "enum": [
+                            "read",
+                            "write"
+                          ],
+                          "default": "read"
+                        }
+                      },
+                      "required": [
+                        "repo"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 5
+                  },
                   "effort": {
                     "type": "string",
                     "enum": [
@@ -11285,7 +11310,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdIssuesIdDispatch",
-    "description": "Dispatch issue (POST /workspaces/{organizationId}/issues/{id}/dispatch) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: agentId, provider, model, repo, branch, instructions, preflight, effort, maxDuration, resultSchema.",
+    "description": "Dispatch issue (POST /workspaces/{organizationId}/issues/{id}/dispatch) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: agentId, provider, model, repo, branch, instructions, preflight, secondaryRepos, mode, effort, maxDuration, resultSchema.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/issues/{id}/dispatch",
     "inputSchema": {
@@ -11322,6 +11347,39 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "preflight": {
               "type": "boolean"
+            },
+            "secondaryRepos": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "repo": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_.-]+\\/[A-Za-z0-9_.-]+$"
+                  },
+                  "access": {
+                    "type": "string",
+                    "enum": [
+                      "read",
+                      "write"
+                    ],
+                    "default": "read"
+                  }
+                },
+                "required": [
+                  "repo"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 5
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "build",
+                "plan",
+                "implement_plan"
+              ]
             },
             "effort": {
               "type": "string",
