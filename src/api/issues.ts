@@ -2,6 +2,11 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 import { eq, and } from "drizzle-orm";
 
+import {
+  dispatchEffortSchema,
+  maxDurationSchema,
+  resolveDispatchEffort,
+} from "../agents/budget.js";
 import { loadProviderConfig } from "../agents/credentials.js";
 import { resolveAgentEnv } from "../agents/daytona.js";
 import { dispatchAgent, getAgentProvider } from "../agents/index.js";
@@ -678,6 +683,12 @@ const dispatchRoute = createRoute({
               // session on the target provider instead of the task lane. It
               // reports missing/ambiguous context back onto the issue thread.
               preflight: z.boolean().optional(),
+              // PILE-293 — run budget. effort is a model tier (low→max);
+              // unset, it follows the issue's priority (preflight: low).
+              // maxDuration (minutes) replaces the provider timeout for this
+              // lane; past it the lane is canceled and escalated.
+              effort: dispatchEffortSchema.optional(),
+              maxDuration: maxDurationSchema.optional(),
               // PILE-289 — validate the lane's final output; automations
               // read session.structuredResult instead of scraping prose.
               resultSchema: resultSchemaInputSchema.optional(),
@@ -1440,6 +1451,8 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       branch,
       instructions,
       preflight,
+      effort,
+      maxDuration,
       resultSchema: resultSchemaInput,
     } = c.req.valid("json");
     const { organizationId, id } = c.req.valid("param");
@@ -1517,7 +1530,12 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         message: `Agent "${resolvedAgentId}" is not allowed by .pile/config.json (allowed: ${pileConfig.agents.join(", ")})`,
       });
     }
-    const resolvedModel = model ?? pileConfig?.model;
+    const resolvedEffort = resolveDispatchEffort(
+      effort ?? (preflight ? "low" : undefined),
+      target
+    );
+    const resolvedModel =
+      model ?? pileConfig?.effortModels?.[resolvedEffort] ?? pileConfig?.model;
     const resultSchema = resultSchemaInput
       ? resolveResultSchema(resultSchemaInput)
       : undefined;
@@ -1572,6 +1590,8 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
             envAllowlist: pileConfig?.env,
             purpose: "preflight",
             skipQueue: true,
+            effort: resolvedEffort,
+            maxDurationMinutes: maxDuration,
             resultSchema,
           }
         )
@@ -1583,7 +1603,13 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
           identity,
           resolvedModel,
           getExecutionCtx(c),
-          { instructions, envAllowlist: pileConfig?.env, resultSchema }
+          {
+            instructions,
+            envAllowlist: pileConfig?.env,
+            effort: resolvedEffort,
+            maxDurationMinutes: maxDuration,
+            resultSchema,
+          }
         );
 
     if (target.repo && target.branch && !preflight) {

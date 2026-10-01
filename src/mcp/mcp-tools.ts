@@ -8894,6 +8894,21 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                   "queuedAfter": {
                     "type": "string"
                   },
+                  "effort": {
+                    "type": "string",
+                    "enum": [
+                      "low",
+                      "medium",
+                      "high",
+                      "max"
+                    ]
+                  },
+                  "maxDuration": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1440,
+                    "description": "Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue"
+                  },
                   "resultSchema": {
                     "anyOf": [
                       {
@@ -9175,7 +9190,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdAgentSessionsSessionIdChildren",
-    "description": "Create agent session children (POST /workspaces/{organizationId}/agent/sessions/{sessionId}/children) Path params (top-level, required): organizationId, sessionId. Request body goes in the \"body\" object; fields: title*, description, agentId, model, repo (* = required).",
+    "description": "Create agent session children (POST /workspaces/{organizationId}/agent/sessions/{sessionId}/children) Path params (top-level, required): organizationId, sessionId. Request body goes in the \"body\" object; fields: title*, description, agentId, model, repo, effort, maxDuration (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/agent/sessions/{sessionId}/children",
     "inputSchema": {
@@ -9205,6 +9220,21 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "repo": {
               "type": "string"
+            },
+            "effort": {
+              "type": "string",
+              "enum": [
+                "low",
+                "medium",
+                "high",
+                "max"
+              ]
+            },
+            "maxDuration": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1440,
+              "description": "Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue"
             }
           },
           "required": [
@@ -9275,7 +9305,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdAgentSessionsSessionIdRetry",
-    "description": "Create agent session retry (POST /workspaces/{organizationId}/agent/sessions/{sessionId}/retry) Path params (top-level, required): organizationId, sessionId. Request body goes in the \"body\" object; fields: context, agentId, model.",
+    "description": "Create agent session retry (POST /workspaces/{organizationId}/agent/sessions/{sessionId}/retry) Path params (top-level, required): organizationId, sessionId. Request body goes in the \"body\" object; fields: context, agentId, model, effort, maxDuration.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/agent/sessions/{sessionId}/retry",
     "inputSchema": {
@@ -9298,6 +9328,21 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "model": {
               "type": "string"
+            },
+            "effort": {
+              "type": "string",
+              "enum": [
+                "low",
+                "medium",
+                "high",
+                "max"
+              ]
+            },
+            "maxDuration": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1440,
+              "description": "Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue"
             }
           },
           "additionalProperties": false
@@ -11210,7 +11255,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdIssuesIdDispatch",
-    "description": "Dispatch issue (POST /workspaces/{organizationId}/issues/{id}/dispatch) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: agentId, provider, model, repo, branch, instructions, preflight, resultSchema.",
+    "description": "Dispatch issue (POST /workspaces/{organizationId}/issues/{id}/dispatch) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: agentId, provider, model, repo, branch, instructions, preflight, effort, maxDuration, resultSchema.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/issues/{id}/dispatch",
     "inputSchema": {
@@ -11247,6 +11292,21 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "preflight": {
               "type": "boolean"
+            },
+            "effort": {
+              "type": "string",
+              "enum": [
+                "low",
+                "medium",
+                "high",
+                "max"
+              ]
+            },
+            "maxDuration": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1440,
+              "description": "Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue"
             },
             "resultSchema": {
               "anyOf": [

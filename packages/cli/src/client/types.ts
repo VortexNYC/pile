@@ -1399,6 +1399,10 @@ export interface paths {
                         branch?: string | null;
                         instructions?: string;
                         preflight?: boolean;
+                        /** @enum {string} */
+                        effort?: "low" | "medium" | "high" | "max";
+                        /** @description Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue */
+                        maxDuration?: number;
                         /** @description JSON Schema (draft-07) the lane's final output must validate against, or "lane" for the built-in {verdict, summary, filesChanged} shape. The validated value lands on session.structuredResult. */
                         resultSchema?: "lane" | {
                             [key: string]: unknown;
@@ -1431,6 +1435,9 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            maxDurationMinutes?: number | null;
+                            /** @enum {string|null} */
+                            effort?: "low" | "medium" | "high" | "max" | null;
                             label?: string | null;
                             resultSchema?: {
                                 [key: string]: unknown;
@@ -1526,6 +1533,9 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                maxDurationMinutes?: number | null;
+                                /** @enum {string|null} */
+                                effort?: "low" | "medium" | "high" | "max" | null;
                                 label?: string | null;
                                 resultSchema?: {
                                     [key: string]: unknown;
@@ -1623,6 +1633,9 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                maxDurationMinutes?: number | null;
+                                /** @enum {string|null} */
+                                effort?: "low" | "medium" | "high" | "max" | null;
                                 label?: string | null;
                                 resultSchema?: {
                                     [key: string]: unknown;
@@ -1681,6 +1694,9 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                maxDurationMinutes?: number | null;
+                                /** @enum {string|null} */
+                                effort?: "low" | "medium" | "high" | "max" | null;
                                 label?: string | null;
                                 resultSchema?: {
                                     [key: string]: unknown;
@@ -1757,6 +1773,10 @@ export interface paths {
                             branch?: string | null;
                             instructions?: string;
                             queuedAfter?: string;
+                            /** @enum {string} */
+                            effort?: "low" | "medium" | "high" | "max";
+                            /** @description Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue */
+                            maxDuration?: number;
                             /** @description JSON Schema (draft-07) the lane's final output must validate against, or "lane" for the built-in {verdict, summary, filesChanged} shape. The validated value lands on session.structuredResult. */
                             resultSchema?: "lane" | {
                                 [key: string]: unknown;
@@ -1840,6 +1860,9 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                maxDurationMinutes?: number | null;
+                                /** @enum {string|null} */
+                                effort?: "low" | "medium" | "high" | "max" | null;
                                 label?: string | null;
                                 resultSchema?: {
                                     [key: string]: unknown;
@@ -2045,6 +2068,9 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                maxDurationMinutes?: number | null;
+                                /** @enum {string|null} */
+                                effort?: "low" | "medium" | "high" | "max" | null;
                                 label?: string | null;
                                 resultSchema?: {
                                     [key: string]: unknown;
@@ -2145,6 +2171,9 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            maxDurationMinutes?: number | null;
+                            /** @enum {string|null} */
+                            effort?: "low" | "medium" | "high" | "max" | null;
                             label?: string | null;
                             resultSchema?: {
                                 [key: string]: unknown;
@@ -2254,6 +2283,9 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            maxDurationMinutes?: number | null;
+                            /** @enum {string|null} */
+                            effort?: "low" | "medium" | "high" | "max" | null;
                             label?: string | null;
                             resultSchema?: {
                                 [key: string]: unknown;
@@ -2628,6 +2660,9 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            maxDurationMinutes?: number | null;
+                            /** @enum {string|null} */
+                            effort?: "low" | "medium" | "high" | "max" | null;
                             label?: string | null;
                             resultSchema?: {
                                 [key: string]: unknown;
@@ -2718,6 +2753,9 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            maxDurationMinutes?: number | null;
+                            /** @enum {string|null} */
+                            effort?: "low" | "medium" | "high" | "max" | null;
                             label?: string | null;
                             resultSchema?: {
                                 [key: string]: unknown;
@@ -2807,6 +2845,9 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                maxDurationMinutes?: number | null;
+                                /** @enum {string|null} */
+                                effort?: "low" | "medium" | "high" | "max" | null;
                                 label?: string | null;
                                 resultSchema?: {
                                     [key: string]: unknown;
@@ -2891,6 +2932,10 @@ export interface paths {
                         agentId?: string;
                         model?: string;
                         repo?: string;
+                        /** @enum {string} */
+                        effort?: "low" | "medium" | "high" | "max";
+                        /** @description Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue */
+                        maxDuration?: number;
                     };
                 };
             };
@@ -2920,6 +2965,9 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                maxDurationMinutes?: number | null;
+                                /** @enum {string|null} */
+                                effort?: "low" | "medium" | "high" | "max" | null;
                                 label?: string | null;
                                 resultSchema?: {
                                     [key: string]: unknown;
@@ -3044,6 +3092,9 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            maxDurationMinutes?: number | null;
+                            /** @enum {string|null} */
+                            effort?: "low" | "medium" | "high" | "max" | null;
                             label?: string | null;
                             resultSchema?: {
                                 [key: string]: unknown;
@@ -3121,6 +3172,10 @@ export interface paths {
                         context?: string;
                         agentId?: string;
                         model?: string;
+                        /** @enum {string} */
+                        effort?: "low" | "medium" | "high" | "max";
+                        /** @description Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue */
+                        maxDuration?: number;
                     };
                 };
             };
@@ -3149,6 +3204,9 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            maxDurationMinutes?: number | null;
+                            /** @enum {string|null} */
+                            effort?: "low" | "medium" | "high" | "max" | null;
                             label?: string | null;
                             resultSchema?: {
                                 [key: string]: unknown;

@@ -890,6 +890,14 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "preflight",
       },
       {
+        name: "effort",
+        flag: "effort",
+      },
+      {
+        name: "maxDuration",
+        flag: "max-duration",
+      },
+      {
         name: "resultSchema",
         flag: "result-schema",
       },
@@ -1307,6 +1315,14 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "repo",
         flag: "repo",
       },
+      {
+        name: "effort",
+        flag: "effort",
+      },
+      {
+        name: "maxDuration",
+        flag: "max-duration",
+      },
     ],
   },
   "agent sessions prompt create": {
@@ -1356,6 +1372,14 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "model",
         flag: "model",
+      },
+      {
+        name: "effort",
+        flag: "effort",
+      },
+      {
+        name: "maxDuration",
+        flag: "max-duration",
       },
     ],
   },
