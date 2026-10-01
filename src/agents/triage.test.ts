@@ -9,6 +9,7 @@ import { createWorkspace } from "../global/workspaces.js";
 import { createAdminHeaders } from "../platform/test-auth.js";
 import { MockAgentProvider } from "./harness.js";
 import { registerAgentProvider } from "./index.js";
+import { laneProgressExternalId } from "./lane-progress.js";
 import {
   buildTriageInstructions,
   dispatchTriageLane,
@@ -208,6 +209,11 @@ describe("triage lane", () => {
       expect.objectContaining({ toIssueId: candidate?.id, type: "duplicate" }),
     ]);
     const comments = await stub.listComments(issue.id);
+    expect(
+      comments.filter(
+        (c) => c.externalId === laneProgressExternalId(session.id)
+      )
+    ).toEqual([]);
     const body = comments.at(-1)?.body ?? "";
     expect(body).toContain("Known Safari issue.");
     expect(body).toContain("**Labels applied:** bug");
