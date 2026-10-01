@@ -51,6 +51,9 @@ const runnerResultSchema = z.object({
   branch: z.string().optional(),
   result: z.string().optional(),
   report: z.string().optional(),
+  // The runner sets this when the run died on the substrate (git transport,
+  // codeload, token mint) rather than on the task — gates the infra retry.
+  infraFailure: z.boolean().optional(),
 });
 
 type RunnerResult = z.infer<typeof runnerResultSchema>;
@@ -618,6 +621,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
       prUrl,
       prState,
       branch: result.branch ?? null,
+      infraFailure: result.infraFailure,
     };
   }
 

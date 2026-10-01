@@ -170,6 +170,15 @@ Write-back is push-style: the worker PATCHes the session and POSTs activities;
 
 ## Watching a session
 
+`GET /workspaces/{org}/agent/sessions` returns the full session rows —
+including `result` text — which gets heavy on poll loops. Pass `?summary=1`
+(also on `GET …/agent/sessions/{id}`) for lane-row scalars only: `id`,
+`issueId`, `agentId`, `provider`, `status`, `prUrl`, `prState`, the
+timestamps, and the derived `stalled` badge. `pile fleet` and
+`pile agent sessions watch` already use it; dashboards and other polling
+consumers should too. Push consumers can subscribe to `/realtime` or the
+session event stream instead of polling.
+
 `GET /workspaces/{org}/agent/sessions/{id}/stream` streams the activity log as
 a Vercel AI SDK **UI-message-stream** (`x-vercel-ai-ui-message-stream: v1`)
 SSE feed: `thought`→`reasoning-*`, `response`→`text-*`, `error`→`error`,
@@ -220,6 +229,7 @@ parent lane if there is one. PR events keep landing after terminal, because
 | `session.needs_input`                  | An `elicitation` activity lands, meaning the lane is asking a human. Also notifies the human assignee (or the dispatcher) with `lane_needs_input`.                           | `{issueId}`                                                                 |
 | `pr.ci_failed`                         | PR sync sees check runs go to `failing` (edge-triggered against the issue's previous `prCheckState`). Also nudges the lane.                                                  | `{prUrl, headSha, checkState, failingChecks[]}`                             |
 | `pr.conflict`                          | PR is open and GitHub reports `mergeable: false`. Deduped per `headSha`. Also nudges the lane.                                                                               | `{prUrl, headSha}`                                                          |
+| `pr.branch_update`                     | PR sync saw a managed lane PR (`issue-*` or the issue's linked branch) `behind` the base with no conflicts and fired GitHub update-branch. Deduped per `headSha`.            | `{prUrl, headSha}`                                                          |
 | `pr.review_requested`                  | PR is open and has requested reviewers. Deduped per `headSha`.                                                                                                               | `{prUrl, headSha, reviewers}` (count)                                       |
 | `pr.merged` / `pr.closed` / `pr.draft` | PR sync sees the PR state change to a non-`open` value.                                                                                                                      | `{prUrl, prState, headSha}`                                                 |
 | `prompt.followup`                      | A follow-up prompt was delivered to the live lane: `POST …/prompt`, an issue comment, a PR review, or a CI/conflict nudge.                                                   | `{prompt}` (route) · `{commentId}` · `{issueId}` · `{issueId, prUrl}`       |

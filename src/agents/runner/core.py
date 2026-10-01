@@ -8,7 +8,9 @@
 # define: ensure(), agent_env(), the run mechanism, and main().
 #
 # Contract with the adapter: the process writes RESULT_FILE
-# (/tmp/agent-result.json) with {status, prUrl, branch, result, report?}.
+# (/tmp/agent-result.json) with {status, prUrl, branch, result, report?,
+# infraFailure?} — infraFailure marks substrate failures (git transport,
+# codeload, token mint) so the sweep retries instead of failing the task.
 import base64
 import hashlib
 import json
@@ -59,6 +61,31 @@ def run(cmd, cwd=None, env=None, check=False, **kwargs):
     if check and result.returncode != 0:
         raise RuntimeError(f'Command failed: {_redact(str(cmd))} returned {result.returncode}; stdout={_redact(result.stdout or "")}; stderr={_redact(result.stderr or "")}')
     return result
+
+
+class TransportError(RuntimeError):
+    # Substrate failure — git transport, codeload, token mint. The lane's own
+    # work may be fine, so fail_result flags these infraFailure and the sweep
+    # re-drives the session instead of reporting a task failure.
+    pass
+
+
+_TRANSPORT_NOTES = []
+
+
+def run_transport(cmd, **kwargs):
+    # run(check=True) for calls that reach the network under the lane. A
+    # nonzero exit is retyped as TransportError so the failure classifies as
+    # infra rather than a task outcome.
+    try:
+        return run(cmd, check=True, **kwargs)
+    except TransportError:
+        raise
+    except Exception as e:
+        detail = str(e)
+        if _TRANSPORT_NOTES:
+            detail += ' [' + '; '.join(_redact(n) for n in _TRANSPORT_NOTES) + ']'
+        raise TransportError(detail) from e
 
 
 def github_api(method, path, body=None):
@@ -115,13 +142,13 @@ def clone_repo():
         shutil.rmtree(REPO_DIR)
     os.makedirs(REPO_DIR, exist_ok=True)
     t0 = time.time()
-    run(['curl', '-fsSL', '--max-time', '120', '-H', f'Authorization: Bearer {GITHUB_TOKEN}', '-o', '/tmp/repo.tgz', f'https://codeload.github.com/{REPO}/tar.gz/{BRANCH}'], check=True)
-    run(['tar', '-xzf', '/tmp/repo.tgz', '--strip-components=1', '-C', REPO_DIR], check=True)
+    run_transport(['curl', '-fsSL', '--max-time', '120', '-H', f'Authorization: Bearer {GITHUB_TOKEN}', '-o', '/tmp/repo.tgz', f'https://codeload.github.com/{REPO}/tar.gz/{BRANCH}'])
+    run_transport(['tar', '-xzf', '/tmp/repo.tgz', '--strip-components=1', '-C', REPO_DIR])
     print(f'[timing] codeload tarball: {time.time() - t0:.0f}s')
     t1 = time.time()
     run(['git', '-C', REPO_DIR, 'init', '-b', BRANCH], check=True)
     run(['git', '-C', REPO_DIR, 'remote', 'add', 'origin', f'https://x-access-token:{GITHUB_TOKEN}@github.com/{REPO}.git'], check=True)
-    run(['timeout', '300', 'git', '-C', REPO_DIR, '-c', 'http.lowSpeedLimit=1000', '-c', 'http.lowSpeedTime=60', 'fetch', '--depth', '1', 'origin', BRANCH], check=True)
+    run_transport(['timeout', '300', 'git', '-C', REPO_DIR, '-c', 'http.lowSpeedLimit=1000', '-c', 'http.lowSpeedTime=60', 'fetch', '--depth', '1', 'origin', BRANCH])
     run(['git', '-C', REPO_DIR, 'update-ref', f'refs/heads/{BRANCH}', 'FETCH_HEAD'], check=True)
     base = run(['git', '-C', REPO_DIR, 'rev-parse', 'FETCH_HEAD'], capture_output=True, text=True, check=False)
     if base.returncode == 0:
@@ -218,8 +245,13 @@ def refresh_github_token():
         with urllib.request.urlopen(req, timeout=30) as resp:
             data = json.load(resp)
         globals()['GITHUB_TOKEN'] = data['token']
+        _TRANSPORT_NOTES.clear()
         print('github token refreshed')
     except Exception as e:
+        # Not fatal on its own — the dispatch-time token may still be valid —
+        # but if a later transport call dies, the note rides along so the
+        # retried lane's failure shows the mint failure as the cause.
+        _TRANSPORT_NOTES.append(f'github token refresh failed: {e}')
         print('github token refresh failed:', e)
 
 
@@ -236,7 +268,7 @@ def commit_and_push(agent_env):
     elif ahead.stdout.strip() == '0':
         print('no changes to commit')
         return False
-    run(['git', '-C', REPO_DIR, 'push', 'origin', BRANCH], env=agent_env, check=True)
+    run_transport(['git', '-C', REPO_DIR, 'push', 'origin', BRANCH], env=agent_env)
     return True
 
 
@@ -391,10 +423,12 @@ def read_transcript(fallback=''):
         return fallback
 
 
-def write_result(status, pr_url='', result='', report=None):
+def write_result(status, pr_url='', result='', report=None, infra=False):
     payload = {'status': status, 'prUrl': pr_url, 'branch': BRANCH, 'result': result}
     if report:
         payload['report'] = report
+    if infra:
+        payload['infraFailure'] = True
     with open(RESULT_FILE, 'w') as f:
         json.dump(payload, f)
 
@@ -411,4 +445,4 @@ def finalize(output, pushed, report=None):
 
 
 def fail_result(error):
-    write_result('failed', '', str(error))
+    write_result('failed', '', str(error), infra=isinstance(error, TransportError))

@@ -44,8 +44,13 @@ All routes live under `/workspaces/{organizationId}` and reuse `workspaceAuthMid
 - `GET /workspaces/{organizationId}/agent/sessions`
   - List sessions for a workspace, optionally `?issueId=` filtered.
   - Sorted `createdAt DESC, id`.
+  - `?summary=1` returns lane-row scalars only (`id`, `issueId`, `agentId`,
+    `provider`, `status`, `prUrl`, `prState`, timestamps, `derivedStatus`) —
+    no `result`, `activities`, or internal bookkeeping. Polling consumers
+    (fleet TUI, dashboards) should use it; the same `?summary=1` flag works
+    on `GET /agent/sessions/{sessionId}`.
 - `GET /workspaces/{organizationId}/agent/sessions/{sessionId}`
-  - Get session with `activities` included.
+  - Get session with `activities` included (`?summary=1` for scalars only).
 - `POST /workspaces/{organizationId}/agent/sessions/{sessionId}/activities`
   - Append an activity. Body: `{ type, message, payload? }`.
   - Used by agents or provider webhooks to stream progress.
