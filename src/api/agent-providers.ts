@@ -15,6 +15,7 @@ import {
 import { resolveAgentEnv } from "../agents/daytona.js";
 import { getAgentProvider } from "../agents/index.js";
 import type { AgentProviderSession } from "../agents/provider.js";
+import { redactCredentialPool } from "../agents/subscription-pool.js";
 import { sha256Hex, timingSafeEqualHex } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
 import { listGithubInstallations } from "../global/github-installations.js";
@@ -34,7 +35,8 @@ const PROVIDER_ENV_CREDENTIALS: Record<string, (env: WorkerEnv) => boolean> = {
   cursor: (e) => !!e.AGENT_PROVIDER_TOKEN,
   "cursor-cli": (e) => !!(e.CURSOR_API_KEY ?? e.AGENT_PROVIDER_TOKEN),
   codex: (e) => !!e.OPENAI_API_KEY,
-  "codex-cli": (e) => !!e.CODEX_AUTH_JSON_B64,
+  "codex-cli": (e) => !!e.CODEX_AUTH_JSON_B64 || !!e.AGENT_CREDENTIAL_POOL,
+  "claude-cli": (e) => !!e.CLAUDE_CODE_OAUTH_TOKEN || !!e.AGENT_CREDENTIAL_POOL,
   "cf-agent": () => true,
   flue: () => true,
 };
@@ -98,12 +100,18 @@ function redactConfig(
   config: Record<string, unknown> | null
 ): Record<string, unknown> | null {
   if (!config) return null;
-  if (!("webhookSecret" in config)) return config;
+  if (!("webhookSecret" in config) && !("credentialPool" in config)) {
+    return config;
+  }
   const rest: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(config)) {
-    if (key !== "webhookSecret") rest[key] = value;
+    if (key !== "webhookSecret" && key !== "credentialPool") rest[key] = value;
   }
-  return { ...rest, hasWebhookSecret: true };
+  if ("webhookSecret" in config) rest.hasWebhookSecret = true;
+  if ("credentialPool" in config) {
+    rest.credentialPool = redactCredentialPool(config.credentialPool);
+  }
+  return rest;
 }
 
 function webhookSecretFromConfig(

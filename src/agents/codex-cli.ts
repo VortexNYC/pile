@@ -57,6 +57,14 @@ const descriptor: SandboxCliDescriptor = {
     CODEX_AUTH_JSON_B64: auth,
     CODEX_CLI_ENV_ID: env.CODEX_CLI_ENV_ID ?? "",
   }),
+  // ChatGPT-plan `codex login` auth.json files; probed for refresh state.
+  pool: {
+    kinds: ["codexOAuth"],
+    credentialEnv: (entry, env) => ({
+      CODEX_AUTH_JSON_B64: normalizeAuthB64(entry.secret) ?? "",
+      CODEX_CLI_ENV_ID: env.CODEX_CLI_ENV_ID ?? "",
+    }),
+  },
 };
 
 export class CodexCliAgentProvider extends SandboxCliAgentProvider {

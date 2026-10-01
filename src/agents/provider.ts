@@ -46,6 +46,9 @@ export interface AgentDispatchContext {
   /** Additional sandbox env vars (e.g. lane-DB connection strings from
    *  PILE-212 provisioning). Providers merge these into the runner env. */
   extraEnv?: Record<string, string>;
+  /** Lane purpose (e.g. "preflight", "review") — credential pools can scope
+   *  subscription entries to cheap review/triage-tier lanes. */
+  purpose?: string;
 }
 
 export interface AgentProviderHealth {
