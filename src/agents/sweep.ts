@@ -24,6 +24,10 @@ import type {
   AgentProviderSession,
   AgentProviderState,
 } from "./provider.js";
+import {
+  resolveAddressedReviewThreads,
+  reviewAutomationEvents,
+} from "./review-loop.js";
 
 export const DEFAULT_TIMEOUT_MINUTES = 60;
 export const DEFAULT_INACTIVITY_MINUTES = 20;
@@ -642,8 +646,9 @@ async function fireAutomation(
 }
 
 /** Event automations (PILE-211): trigger_value is the event name —
- *  pr.ci_failed, issue.assigned, issue.commented. */
-async function fireEventAutomations(
+ *  pr.ci_failed, pr.review, pr.review_changes, issue.assigned,
+ *  issue.commented. */
+export async function fireEventAutomations(
   env: WorkerEnv,
   stub: DurableObjectStub<WorkspaceDO>,
   organizationId: string,
@@ -1426,14 +1431,19 @@ export async function syncOpenPrSessions(
               (body ? `Review:\n${body}\n` : "") +
               "Read the review comments on the PR, address the feedback, and push.";
             if (isNew) {
-              await fireEventAutomations(
-                env,
-                stub,
-                organizationId,
-                "pr.review",
-                session,
-                reviewPrompt
-              );
+              for (const eventName of reviewAutomationEvents(
+                reviewState,
+                body
+              )) {
+                await fireEventAutomations(
+                  env,
+                  stub,
+                  organizationId,
+                  eventName,
+                  session,
+                  reviewPrompt
+                );
+              }
             }
             // Delivery dedupe, not detection: a rejected nudge retries on
             // later sweeps until the lane actually gets this review.
@@ -1444,6 +1454,15 @@ export async function syncOpenPrSessions(
             });
           }
         }
+      }
+
+      if (state === "open" && headSha) {
+        await resolveAddressedReviewThreads(
+          stub,
+          session,
+          { owner, repo, number: Number(num), prUrl, headSha },
+          { token, fetch: ghFetch, timeoutMs: probeTimeoutMs }
+        );
       }
 
       const reviewers = pr.requested_reviewers;

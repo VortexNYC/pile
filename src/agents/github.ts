@@ -8,6 +8,7 @@ import {
 } from "../global/crypto.js";
 import { findOrCreateCycleByName } from "../global/cycles.js";
 import { createD1, type D1Client } from "../global/db.js";
+import { getInstallationTokenForRepo } from "../global/github-auth.js";
 import {
   createGithubInstallation,
   deleteGithubInstallation,
@@ -28,6 +29,11 @@ import { VortexError } from "../platform/errors.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import type { Issue } from "../types/workspace.js";
 import { nudgeLane } from "./nudge.js";
+import {
+  resolveAddressedReviewThreads,
+  reviewAutomationEvents,
+} from "./review-loop.js";
+import { fireEventAutomations } from "./sweep.js";
 
 const pullRequestPayloadSchema = z.object({
   action: z.string(),
@@ -38,8 +44,10 @@ const pullRequestPayloadSchema = z.object({
     draft: z.boolean().default(false),
     merged: z.boolean().default(false),
     html_url: z.string(),
+    number: z.number().int().optional(),
     head: z.object({
       ref: z.string(),
+      sha: z.string().optional(),
       repo: z.object({
         full_name: z.string(),
       }),
@@ -670,17 +678,18 @@ async function processPullRequestReview(
   // delivery semantics (retry until the lane actually has it).
   const session = await resolveLaneForIssue(stub, issue.id);
   const reviewState = (review.state ?? "").toUpperCase();
+  let isNewReview = false;
   if (session) {
     const seen = await stub
       .listAgentSessionEvents(session.id, { limit: 100, order: "desc" })
       .catch(() => []);
-    const isNew = !seen.some(
+    isNewReview = !seen.some(
       (e) =>
         e.type === "pr.review" &&
         typeof e.payload === "string" &&
         e.payload.includes(marker)
     );
-    if (isNew) {
+    if (isNewReview) {
       await stub
         .addAgentSessionEvent({
           sessionId: session.id,
@@ -704,6 +713,21 @@ async function processPullRequestReview(
     `${author} reviewed ${pull_request.html_url} (${reviewState.toLowerCase()}).\n` +
     (body ? `Review:\n${body}\n` : "") +
     "Read the review comments on the PR, address the feedback, and push.";
+  // PILE-274 — the webhook is usually first to see a review, so it owns
+  // the once-per-review automation fire; the sweep skips reviews it finds
+  // already recorded.
+  if (session && isNewReview) {
+    for (const eventName of reviewAutomationEvents(reviewState, body)) {
+      await fireEventAutomations(
+        env,
+        stub,
+        workspaceRecord.organizationId,
+        eventName,
+        session,
+        reviewPrompt
+      );
+    }
+  }
   await nudgeLaneForIssue(
     env,
     stub,
@@ -844,7 +868,7 @@ async function processPullRequest(
     });
   }
 
-  const { pull_request } = payload.data;
+  const { action, pull_request } = payload.data;
   const repo = pull_request.head.repo.full_name;
   const branch = pull_request.head.ref;
   const prUrl = pull_request.html_url;
@@ -880,7 +904,68 @@ async function processPullRequest(
     )
   );
 
+  // PILE-274 fast path: a push to a lane PR may be the fix for review
+  // feedback the lane was sent — resolve those threads now instead of on
+  // the next sweep tick.
+  if (
+    action === "synchronize" &&
+    prState === "open" &&
+    pull_request.head.sha &&
+    pull_request.number !== undefined
+  ) {
+    await resolveThreadsOnPush(env, stub, {
+      organizationId: workspaceRecord.organizationId,
+      repo,
+      branch,
+      prUrl,
+      number: pull_request.number,
+      headSha: pull_request.head.sha,
+    });
+  }
+
   return;
+}
+
+async function resolveThreadsOnPush(
+  env: WorkerEnv,
+  stub: WorkspaceStub,
+  pr: {
+    organizationId: string;
+    repo: string;
+    branch: string;
+    prUrl: string;
+    number: number;
+    headSha: string;
+  }
+): Promise<void> {
+  try {
+    await stub.setOrganizationId(pr.organizationId);
+    const issue = await stub.getIssueByBranch(pr.repo, pr.branch);
+    if (!issue) return;
+    const session = await resolveLaneForIssue(stub, issue.id);
+    if (!session) return;
+    const [owner, name] = pr.repo.split("/");
+    if (!owner || !name) return;
+    const token = await getInstallationTokenForRepo(env, owner, name);
+    if (!token) return;
+    await resolveAddressedReviewThreads(
+      stub,
+      session,
+      {
+        owner,
+        repo: name,
+        number: pr.number,
+        prUrl: pr.prUrl,
+        headSha: pr.headSha,
+      },
+      { token, fetch }
+    );
+  } catch (err) {
+    console.error("webhook review thread resolve failed", {
+      prUrl: pr.prUrl,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 async function processGitHubIssue(
