@@ -5,7 +5,7 @@ CURSOR_HOME = os.path.join(HOME, '.local', 'share', 'cursor-agent')
 
 
 def agent_env():
-    return scrubbed_env({'CURSOR_API_KEY': os.environ.get('CURSOR_API_KEY', '')})
+    return with_browser_env(scrubbed_env({'CURSOR_API_KEY': os.environ.get('CURSOR_API_KEY', '')}))
 
 
 def apply_tool_policy():
@@ -59,7 +59,7 @@ def _render_event(evt):
 
 
 def run_agent(agent_bin, prompt=None):
-    prompt = prompt or base64.b64decode(os.environ['PROMPT_B64']).decode('utf-8')
+    prompt = prompt or lane_prompt()
     model = os.environ.get('MODEL', '')
     cmd = [agent_bin, '-p', prompt, '--force', '--trust', '--output-format', 'stream-json']
     if model:
@@ -105,6 +105,7 @@ def main():
     if REPO:
         create_branch()
         clone_repo()
+        clone_secondary_repos()
         run_hook('postCheckout', agent_env())
         warm_pnpm_store()
         run_setup_hook(agent_env)
@@ -115,6 +116,7 @@ def main():
     if healed is not None:
         output, report = healed
     pushed = commit_and_push(agent_env()) if REPO else False
+    push_secondary_repos(agent_env())
     rc = finalize(output, pushed, report=report)
     revoke_github_token()
     save_pnpm_store()

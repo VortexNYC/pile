@@ -50,6 +50,7 @@ import type {
 } from "./provider.js";
 import { DOMAIN_REVIEW_PROMPT } from "./review-prompt.js";
 import { runnerBundle } from "./runner/bundle.js";
+import type { SecondaryRepo } from "./secondary-repos.js";
 import {
   parseCredentialPool,
   poolEntriesForKinds,
@@ -219,6 +220,7 @@ function buildPrompt(
   pileApi: { url: string; key: string } | null,
   instructions: string | undefined,
   pushInstruction: string,
+  secondaryRepos: SecondaryRepo[],
   permissions: LanePermissions
 ): string {
   const repo = issue.repo ?? "this repository";
@@ -239,10 +241,23 @@ function buildPrompt(
     : [
         "This task has no code repository — your workdir is empty. Produce the deliverable as files in the workdir and summarize it in your final answer.",
       ];
+  const secondaryLines =
+    secondaryRepos.length > 0
+      ? [
+          "",
+          "Secondary repositories (shallow clones of each default branch under ~/xrepo/<owner>/<name>):",
+          ...secondaryRepos.map((entry) =>
+            entry.access === "write"
+              ? `- ${entry.repo} at ~/xrepo/${entry.repo} — writable, on branch ${branch}. Commit changes there; the runner pushes that branch and opens a PR in ${entry.repo}.`
+              : `- ${entry.repo} at ~/xrepo/${entry.repo} — read-only reference; do not modify it.`
+          ),
+        ]
+      : [];
   return [
     `# ${issue.title}`,
     "",
     ...repoLines,
+    ...secondaryLines,
     `Issue tracker: https://github.com/VortexNYC/pile`,
     `Issue: ${issue.identifier ?? issue.id}`,
     "",
@@ -283,6 +298,7 @@ const DEFAULT_PUSH_INSTRUCTION =
 export class SandboxCliAgentProvider implements AgentProvider {
   readonly id: string;
   readonly keepsTerminalSandbox: boolean;
+  readonly supportsSecondaryRepos: boolean;
 
   constructor(
     private env: AppEnv,
@@ -290,6 +306,8 @@ export class SandboxCliAgentProvider implements AgentProvider {
   ) {
     this.id = d.id;
     this.keepsTerminalSandbox = d.followup === true;
+    // Codex runs on OpenAI's cloud, which never sees the sandbox's ~/xrepo.
+    this.supportsSecondaryRepos = d.driver !== "codex";
   }
 
   private async note(
@@ -346,7 +364,8 @@ export class SandboxCliAgentProvider implements AgentProvider {
   private async githubToken(
     repo: string,
     permissions: LanePermissions,
-    lane: { organizationId: string; sessionId: string } | null
+    lane: { organizationId: string; sessionId: string } | null,
+    options?: { secondary?: boolean }
   ): Promise<RepoScopedToken> {
     const [owner, name] = parseRepo(repo);
     const tokenPermissions = laneTokenPermissions(permissions.push);
@@ -357,7 +376,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
             lane.organizationId,
             lane.sessionId,
             repo,
-            tokenPermissions
+            { ...options, permissions: tokenPermissions }
           )
         : await getRepoScopedInstallationToken(
             this.env,
@@ -447,11 +466,13 @@ export class SandboxCliAgentProvider implements AgentProvider {
       log?: { url: string | null; token: string | null };
       cacheUrl?: string | null;
       extra?: Record<string, string>;
+      secondaryRepos?: Array<SecondaryRepo & { token: string }>;
       permissions: LanePermissions;
       /** Caller env keys (already allowlisted) the agent subprocess may see. */
       agentEnvKeys?: string[];
     }
   ): Record<string, string> {
+    const secondaryRepos = options.secondaryRepos ?? [];
     const { permissions } = options;
     // The scoped Pile credential is an env-var secret: lanes whose shell is
     // below "enabled" never receive it.
@@ -464,6 +485,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
       pileApi,
       options.instructions,
       this.d.pushInstruction ?? DEFAULT_PUSH_INSTRUCTION,
+      secondaryRepos,
       permissions
     );
     const laneMint = Boolean(options.lane?.tokenUrl && options.lane.token);
@@ -479,6 +501,9 @@ export class SandboxCliAgentProvider implements AgentProvider {
         ? { PILE_LOG_URL: options.log.url, PILE_LOG_TOKEN: options.log.token }
         : {}),
       ...(options.cacheUrl ? { PILE_CACHE_URL: options.cacheUrl } : {}),
+      ...(secondaryRepos.length > 0
+        ? { SECONDARY_REPOS_JSON: JSON.stringify(secondaryRepos) }
+        : {}),
       ...(options.lane?.tokenUrl && options.lane.token
         ? {
             PILE_TOKEN_URL: options.lane.tokenUrl,
@@ -542,12 +567,20 @@ export class SandboxCliAgentProvider implements AgentProvider {
     const compute = this.requireCompute();
     // Repo-less lanes (preflight critiques, analysis) get no clone/push stage
     // and no GitHub token — the agent only reads the prompt and reports back.
+    const lane = { organizationId, sessionId };
     const github = issue.repo
-      ? await this.githubToken(issue.repo, permissions, {
-          organizationId,
-          sessionId,
-        })
+      ? await this.githubToken(issue.repo, permissions, lane)
       : null;
+    const secondaryRepos = await Promise.all(
+      (sessionContext?.secondaryRepos ?? []).map(async (entry) => ({
+        ...entry,
+        token: (
+          await this.githubToken(entry.repo, permissions, lane, {
+            secondary: true,
+          })
+        ).token,
+      }))
+    );
     const name = this.sandboxName(sessionId);
 
     const spanId = await this.openSpan(
@@ -615,6 +648,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
               instructions: sessionContext?.instructions,
               pileApi: sessionContext?.pileApi ?? null,
               extra: sessionContext?.extraEnv,
+              secondaryRepos,
               permissions,
               agentEnvKeys: Object.keys(sessionContext?.extraEnv ?? {}),
               log: {
