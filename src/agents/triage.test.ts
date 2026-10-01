@@ -87,7 +87,7 @@ describe("buildTriageInstructions", () => {
 describe("triage lane", () => {
   let organizationId: string;
   let teamId: string;
-  const instructionsSeen: string[] = [];
+  const instructionsSeen = new Map<string, string>();
 
   beforeAll(async () => {
     const db = createD1(env.D1);
@@ -119,7 +119,7 @@ describe("triage lane", () => {
       () =>
         new MockAgentProvider("mock-triage", {
           dispatch: (_org, issue, _model, ctx) => {
-            instructionsSeen.push(ctx?.instructions ?? "");
+            instructionsSeen.set(issue.id, ctx?.instructions ?? "");
             return {
               id: `triage-${issue.id}`,
               agentId: "mock-triage",
@@ -154,7 +154,8 @@ describe("triage lane", () => {
     return vi.waitFor(async () => {
       const sessions = await stub.listAgentSessions({ issueId });
       const session = sessions.find((s) => s.purpose === TRIAGE_PURPOSE);
-      expect(session).toBeDefined();
+      // Wait for the provider handoff to land, not just the session row.
+      expect(session?.status).toBe("running");
       return session!;
     });
   }
@@ -177,7 +178,7 @@ describe("triage lane", () => {
     });
 
     const session = await waitForTriageSession(issue.id);
-    const prompt = instructionsSeen.at(-1) ?? "";
+    const prompt = instructionsSeen.get(issue.id) ?? "";
     expect(prompt).toContain("Login page crashes on Safari");
 
     // Triage lanes neither move the issue nor block a real lane.
