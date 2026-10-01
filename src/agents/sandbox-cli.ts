@@ -13,6 +13,7 @@ import { isSafeLaneBranch } from "../global/lane-guard.js";
 import {
   DEFAULT_LANE_PERMISSIONS,
   fetchLanePermissions,
+  fetchPileRepoConfig,
   laneTokenPermissions,
   type LanePermissions,
 } from "../global/pile-repo-config.js";
@@ -26,7 +27,7 @@ import type {
   Issue,
 } from "../types/workspace.js";
 import { computeBackend } from "./compute.js";
-import type { ComputeBackend } from "./compute.js";
+import type { ComputeBackend, ComputeSandbox } from "./compute.js";
 import {
   agentCacheUrl,
   agentGithubTokenUrl,
@@ -893,6 +894,11 @@ export class SandboxCliAgentProvider implements AgentProvider {
         "sandbox kept alive for follow-up prompts",
         { sandbox: sandbox.id }
       );
+      // PILE-310 — repo opts in via .pile/config.json preview.port: open a
+      // quick tunnel to the lane's dev server and comment the URL on the PR.
+      // Lives as long as the kept sandbox does; a reaped sandbox's preview
+      // link simply stops resolving.
+      await this.maybePostPreview(sandbox, sessionId, prUrl, result.branch);
     } else {
       await compute.deleteSandbox(sandbox);
       await this.note(
@@ -916,6 +922,66 @@ export class SandboxCliAgentProvider implements AgentProvider {
       branch: result.branch ?? null,
       infraFailure: result.infraFailure,
     };
+  }
+
+  private async maybePostPreview(
+    sandbox: ComputeSandbox,
+    sessionId: string,
+    prUrl: string | null,
+    branch: string | null | undefined
+  ): Promise<void> {
+    const repo = sandbox.runnerEnv?.REPO;
+    if (!repo || !prUrl) return;
+    const compute = this.requireCompute();
+    if (!compute.previewUrl) return;
+    try {
+      const config = await fetchPileRepoConfig(
+        this.env as WorkerEnv,
+        repo,
+        branch ?? undefined
+      );
+      const port = config?.preview?.port;
+      if (!port) return;
+      const url = await compute.previewUrl(sandbox, port);
+      if (!url) return;
+      const pullNumber = /\/pull\/(\d+)/.exec(prUrl)?.[1];
+      if (!pullNumber) return;
+      const token = await this.githubToken(repo, DEFAULT_LANE_PERMISSIONS, {
+        organizationId: sandbox.organizationId ?? "",
+        sessionId,
+      });
+      const res = await fetch(
+        `https://api.github.com/repos/${repo}/issues/${pullNumber}/comments`,
+        {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${token.token}`,
+            "content-type": "application/json",
+            accept: "application/vnd.github+json",
+          },
+          body: JSON.stringify({
+            body: `### Lane preview\n\n${url}\n\n_Tunnel lives while this lane's sandbox does (resumed after a reaped keep-alive window it stops resolving)._`,
+          }),
+        }
+      );
+      await this.note(
+        sandbox.organizationId,
+        sessionId,
+        "action",
+        res.ok
+          ? `preview tunnel posted to PR`
+          : `preview comment failed: github ${res.status}`,
+        { url, prUrl }
+      );
+    } catch (err) {
+      await this.note(
+        sandbox.organizationId,
+        sessionId,
+        "error",
+        "preview tunnel failed",
+        { error: err instanceof Error ? err.message : String(err) }
+      ).catch(() => {});
+    }
   }
 
   /**

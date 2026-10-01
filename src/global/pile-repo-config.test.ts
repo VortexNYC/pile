@@ -68,3 +68,13 @@ describe("lane permission policy (PILE-276)", () => {
     expect(res.lockedReason).toContain("unreadable");
   });
 });
+
+describe("preview config (PILE-310)", () => {
+  it("parses preview.port and rejects a non-port value", () => {
+    const cfg = parsePileRepoConfig({ preview: { port: 3000 } });
+    expect(cfg?.preview?.port).toBe(3000);
+    expect(parsePileRepoConfig({ preview: { port: "3000" } })).toBeNull();
+    expect(parsePileRepoConfig({ preview: { port: -1 } })).toBeNull();
+    expect(parsePileRepoConfig({})).not.toBeNull();
+  });
+});
