@@ -521,6 +521,16 @@ function fakeComputeBackend(opts: {
   };
 }
 
+function reviewThreadNode(id: string, isResolved: boolean, review: number) {
+  return {
+    id,
+    isResolved,
+    comments: {
+      nodes: [{ databaseId: 1, pullRequestReview: { databaseId: review } }],
+    },
+  };
+}
+
 describe("sweepAgentSessions", () => {
   const userId = "user-sweep-loop";
   let organizationId = "";
@@ -1415,6 +1425,110 @@ describe("syncOpenPrSessions", () => {
       fetch: ghFetchConflict as typeof fetch,
     });
     expect(prompts).toHaveLength(0);
+  });
+
+  it("resolves review threads the lane was sent once it pushes a fix (PILE-274)", async () => {
+    const agentId = `mock-threads-${crypto.randomUUID().slice(0, 8)}`;
+    registerMock(agentId, { sendPrompt: async () => true });
+    const issue = await stub.createIssue({ title: "Review threads" });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+      prUrl: "https://github.com/vortexnyc/pile/pull/901",
+      prState: "open",
+    });
+    await stub.addAgentSessionEvent({
+      sessionId: session.id,
+      type: "prompt.followup",
+      message: "review feedback delivered as follow-up prompt",
+      payload: { key: "review-555" },
+    });
+    const resolved: string[] = [];
+    let graphqlCalls = 0;
+    const ghFetchThreads = async (
+      input: RequestInfo | URL,
+      init?: RequestInit
+    ) => {
+      const url = String(input);
+      if (url.endsWith("/graphql")) {
+        graphqlCalls += 1;
+        const req = JSON.parse(String(init?.body)) as {
+          query: string;
+          variables: { threadId?: string };
+        };
+        if (req.query.includes("resolveReviewThread")) {
+          resolved.push(req.variables.threadId ?? "");
+          return new Response(JSON.stringify({ data: {} }), { status: 200 });
+        }
+        return new Response(
+          JSON.stringify({
+            data: {
+              repository: {
+                pullRequest: {
+                  commits: {
+                    nodes: [
+                      {
+                        commit: {
+                          committedDate: new Date(
+                            Date.now() + 60_000
+                          ).toISOString(),
+                          parents: { totalCount: 1 },
+                        },
+                      },
+                    ],
+                  },
+                  reviewThreads: {
+                    nodes: [
+                      reviewThreadNode("T-delivered", false, 555),
+                      reviewThreadNode("T-undelivered", false, 999),
+                      reviewThreadNode("T-done", true, 555),
+                    ],
+                  },
+                },
+              },
+            },
+          }),
+          { status: 200 }
+        );
+      }
+      if (url.endsWith("/pulls/901")) {
+        return new Response(
+          JSON.stringify({ state: "open", head: { sha: "fix901" } }),
+          { status: 200 }
+        );
+      }
+      if (url.includes("/commits/fix901/check-runs")) {
+        return new Response(
+          JSON.stringify({
+            check_runs: [{ status: "completed", conclusion: "success" }],
+          }),
+          { status: 200 }
+        );
+      }
+      return new Response("not found", { status: 404 });
+    };
+
+    await syncOpenPrSessions(env, stub, organizationId, {
+      tokenForRepo: async () => "gh-test-token",
+      fetch: ghFetchThreads as typeof fetch,
+    });
+
+    expect(resolved).toEqual(["T-delivered"]);
+    const events = await stub.listAgentSessionEvents(session.id, {});
+    const marker = events.find((e) => e.type === "pr.review_threads");
+    expect(marker?.payload).toContain("T-delivered");
+
+    // Checked once per headSha — a second sweep on the same head is a no-op.
+    const callsBefore = graphqlCalls;
+    await syncOpenPrSessions(env, stub, organizationId, {
+      tokenForRepo: async () => "gh-test-token",
+      fetch: ghFetchThreads as typeof fetch,
+    });
+    expect(graphqlCalls).toBe(callsBefore);
   });
 
   it("resolves a generated-only conflict with the scripted fixer, no lane", async () => {
