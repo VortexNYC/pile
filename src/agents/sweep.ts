@@ -292,26 +292,42 @@ export async function ingestFailedAgentSession(
 }
 
 // PILE-293 — a lane that exhausts its dispatch-time maxDuration is canceled
-// and handed to humans on the issue thread instead of redispatched: a retry
-// would spend the same budget again on the same outcome.
+// and escalated the PILE-270 way (issue.escalated + comment + triage) instead
+// of redispatched: a retry would spend the same budget on the same outcome.
 async function escalateBudgetExceeded(
   stub: DurableObjectStub<WorkspaceDO>,
   session: AgentSession,
   maxDurationMinutes: number
 ): Promise<void> {
-  const message = `Lane ${session.id} hit its ${maxDurationMinutes}m run budget (maxDuration${session.effort ? `, effort ${session.effort}` : ""}) and was canceled — needs a human: narrow the scope, raise maxDuration/effort, or take it over.`;
-  await stub
-    .addAgentSessionEvent({
+  const effort = session.effort ? `, effort ${session.effort}` : "";
+  try {
+    await stub.addAgentSessionEvent({
       sessionId: session.id,
-      type: "lane.budget_exceeded",
-      message,
-      payload: { maxDurationMinutes, effort: session.effort ?? null },
-    })
-    .catch(() => {});
+      type: "issue.escalated",
+      message: `run budget exhausted (${maxDurationMinutes}m${effort}) — escalated to triage`,
+      payload: {
+        issueId: session.issueId,
+        reason: "max_duration",
+        maxDurationMinutes,
+        effort: session.effort ?? null,
+        key: `escalated-${session.id}`,
+      },
+    });
+  } catch (err) {
+    console.error("budget escalation event failed", {
+      session: session.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return;
+  }
+  const body =
+    `**Escalated — run budget exhausted.**\n\n` +
+    `Lane \`${session.agentId}\` (session \`${session.id}\`) hit its ${maxDurationMinutes}m run budget (maxDuration${effort}) and was canceled.\n\n` +
+    "Not retried automatically. Narrow the scope, raise maxDuration/effort and retry, or take it over.";
   await stub
     .createComment({
       issueId: session.issueId,
-      body: message,
+      body,
       externalAuthor: "pile-sweep",
       externalSource: "budget",
     })
@@ -321,6 +337,22 @@ async function escalateBudgetExceeded(
         error: err instanceof Error ? err.message : String(err),
       })
     );
+  const issue = await stub.getIssue(session.issueId).catch(() => null);
+  if (
+    issue &&
+    issue.status !== "triage" &&
+    issue.status !== "done" &&
+    issue.status !== "canceled"
+  ) {
+    await stub
+      .updateIssue(issue.id, { status: "triage" }, "agent-escalation")
+      .catch((err: unknown) =>
+        console.error("budget escalation status move failed", {
+          session: session.id,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      );
+  }
 }
 
 const MAX_AUTO_RETRIES = 1;

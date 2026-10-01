@@ -1146,7 +1146,14 @@ describe("sweepAgentSessions", () => {
       limit: 50,
       order: "desc",
     });
-    expect(events.some((e) => e.type === "lane.budget_exceeded")).toBe(true);
+    expect(
+      events.some(
+        (e) =>
+          e.type === "issue.escalated" &&
+          String(e.payload).includes("max_duration")
+      )
+    ).toBe(true);
+    expect((await stub.getIssue(issue.id))?.status).toBe("triage");
   });
 
   it("lets a lane with a larger maxDuration outlive the provider timeout", async () => {
