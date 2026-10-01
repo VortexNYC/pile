@@ -10,6 +10,7 @@ import type {
   AgentProviderState,
 } from "./provider.js";
 import { probeUrl } from "./provider.js";
+import { DOMAIN_REVIEW_PROMPT } from "./review-prompt.js";
 
 const cursorConfigSchema = z.object({
   endpoint: z.string().default("https://api.cursor.com"),
@@ -107,6 +108,7 @@ export class CursorAgentProvider implements AgentProvider {
             issue.description ?? "",
             issue.branch ? `Target branch: ${issue.branch}` : "",
             `Tracker: workspace ${organizationId}, issue ${issue.id}`,
+            repoUrl ? DOMAIN_REVIEW_PROMPT : "",
           ]
             .filter(Boolean)
             .join("\n\n"),
