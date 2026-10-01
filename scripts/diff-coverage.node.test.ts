@@ -26,7 +26,7 @@ describe("diff-coverage", () => {
     expect(report).toMatchObject({ ok: true, reason: "no-source-changes" });
   });
 
-  it("passes when a test file changed and reports untested siblings", () => {
+  it("fails when a source file's co-located test wasn't touched (PILE-298)", () => {
     const report = evaluateDiffCoverage(
       [
         "src/agents/sweep.ts",
@@ -35,8 +35,21 @@ describe("diff-coverage", () => {
       ],
       ""
     );
-    expect(report).toMatchObject({ ok: true, reason: "tests-changed" });
+    expect(report).toMatchObject({ ok: false, reason: "missing-tests" });
     expect(report.untestedSourceFiles).toEqual(["src/agents/github.ts"]);
+  });
+
+  it("passes when every changed source file's test is touched", () => {
+    const report = evaluateDiffCoverage(
+      [
+        "src/agents/sweep.ts",
+        "src/agents/sweep.test.ts",
+        "src/agents/github.ts",
+        "src/agents/github.test.ts",
+      ],
+      ""
+    );
+    expect(report).toMatchObject({ ok: true, reason: "tests-changed" });
   });
 
   it("fails when source changed without tests or explanation", () => {

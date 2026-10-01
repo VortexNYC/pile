@@ -66,7 +66,10 @@ export function evaluateDiffCoverage(
   if (sourceFiles.length === 0) {
     return { ok: true, reason: "no-source-changes", ...base };
   }
-  if (testFiles.length > 0)
+  // PILE-298 — per-file attribution: every changed source file needs its
+  // co-located test file touched (or an explicit explanation). A stray
+  // test edit elsewhere no longer covers an untested sibling.
+  if (untestedSourceFiles.length === 0)
     return { ok: true, reason: "tests-changed", ...base };
   if (explanation) return { ok: true, reason: "explained", ...base };
   return { ok: false, reason: "missing-tests", ...base };
@@ -96,8 +99,8 @@ function main(): void {
   }
   if (!report.ok) {
     console.error(
-      `[diff-coverage] ${report.sourceFiles.length} source file(s) under src/ changed but no *.test.ts did. ` +
-        'Add or update tests, or explain why in the PR description with a line like "No tests: <reason>".'
+      `[diff-coverage] ${report.untestedSourceFiles.length} source file(s) changed without their co-located *.test.ts. ` +
+        'Add or update tests for each, or explain why in the PR description with a line like "No tests: <reason>".'
     );
   }
   console.log(JSON.stringify({ proof: "diff-coverage", base, ...report }));
