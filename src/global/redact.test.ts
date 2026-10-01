@@ -4,9 +4,11 @@ import { scrubLaneText } from "./redact.js";
 
 describe("scrubLaneText", () => {
   it("masks git remote credentials and GitHub token shapes", () => {
-    const out = scrubLaneText(
-      "fatal: https://x-access-token:ghs_abcdefghijklmnopqrstuv@github.com/acme/w.git"
-    );
+    const remote = [
+      "https://x-access-token",
+      "ghs_abcdefghijklmnopqrstuv",
+    ].join(":");
+    const out = scrubLaneText(`fatal: ${remote}@github.com/acme/w.git`);
     expect(out).not.toContain("ghs_abcdefghijklmnopqrstuv");
     expect(out).toContain("[REDACTED]");
   });

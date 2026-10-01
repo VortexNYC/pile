@@ -48,7 +48,7 @@ export const SCRUBBABLE_ATTACHMENT_TYPES = new Set([
 ]);
 
 // Lane output additionally carries git remote credentials
-// (https://x-access-token:TOKEN@github.com/...) and secrets whose exact
+// (credentials in the URL userinfo) and secrets whose exact
 // values the caller knows (the lane's own session token).
 const LANE_PATTERNS: readonly RegExp[] = [/(:\/\/[^:/\s@]+:)([^@\s/]+)(@)/g];
 
