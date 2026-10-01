@@ -81,6 +81,16 @@ Two compute backends exist behind the same runner/result contract
   Devin/Codex equivalents) bake each CLI at build time so dispatch skips
   per-run install; verified end-to-end for cursor-cli on `CursorSandbox`
   (VTX-265).
+  **Headless browser (optional).** Build the devin/cursor images with
+  `--build-arg LANE_BROWSER=1` (or `image_vars = { LANE_BROWSER = "1" }` on
+  the `[[containers]]` entry) to bake Google Chrome and
+  [`agent-browser`](https://github.com/vercel-labs/agent-browser). The runner
+  detects the binary, exports `PILE_BROWSER`, `CHROME_PATH`,
+  `PUPPETEER_EXECUTABLE_PATH`, `AGENT_BROWSER_EXECUTABLE_PATH` and
+  `AGENT_BROWSER_ARGS` (`--no-sandbox,--disable-dev-shm-usage`) to the agent,
+  and appends a "Headless browser" section to the prompt so UI-touching lanes
+  run e2e suites and screenshot their change instead of shipping blind. Off by
+  default to stay under the ~2GB image limit; images without it are unchanged.
 
 A workspace can also select the backend via `config.computeProvider`
 (`"daytona"` | `"cloudflare"`) in the provider upsert — it overrides the

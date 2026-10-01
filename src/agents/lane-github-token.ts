@@ -4,6 +4,10 @@
 // session is terminal the sweep revokes whatever the lane still holds. A
 // compromised lane therefore holds at most one live, single-repo token that
 // dies with the run instead of living out GitHub's ~1h TTL.
+//
+// Secondary repos (PILE-294) get their own single-repo token in a separate
+// slot (`<sessionId>|<repo>`), so minting one never revokes the primary's and
+// the reaper retires them together once the session is terminal.
 import {
   getRepoScopedInstallationToken,
   type InstallationTokenScope,
@@ -17,6 +21,13 @@ import { decryptSecret, encryptSecret } from "./credentials.js";
 type WorkspaceStub = DurableObjectStub<WorkspaceDO>;
 
 const TERMINAL_STATUSES = new Set(["completed", "failed", "canceled"]);
+const SLOT_SEPARATOR = "|";
+
+function laneTokenSlot(sessionId: string, secondaryRepo?: string): string {
+  return secondaryRepo
+    ? `${sessionId}${SLOT_SEPARATOR}${secondaryRepo.toLowerCase()}`
+    : sessionId;
+}
 
 async function revokeEncrypted(
   env: WorkerEnv,
@@ -37,8 +48,12 @@ export async function mintLaneGithubToken(
   organizationId: string,
   sessionId: string,
   repo: string,
-  permissions?: InstallationTokenScope["permissions"]
+  options?: {
+    secondary?: boolean;
+    permissions?: InstallationTokenScope["permissions"];
+  }
 ): Promise<RepoScopedToken | undefined> {
+  const permissions = options?.permissions;
   const [owner, name] = repo.split("/");
   if (!owner || !name) return undefined;
   const minted = await getRepoScopedInstallationToken(
@@ -52,7 +67,7 @@ export async function mintLaneGithubToken(
     env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
   );
   const previous = await stub.swapLaneGithubToken(
-    sessionId,
+    laneTokenSlot(sessionId, options?.secondary ? repo : undefined),
     await encryptSecret(env, minted.token)
   );
   if (previous) await revokeEncrypted(env, previous);
@@ -62,9 +77,9 @@ export async function mintLaneGithubToken(
 export async function revokeLaneGithubToken(
   env: WorkerEnv,
   stub: WorkspaceStub,
-  sessionId: string
+  slot: string
 ): Promise<boolean> {
-  const encrypted = await stub.takeLaneGithubToken(sessionId);
+  const encrypted = await stub.takeLaneGithubToken(slot);
   if (!encrypted) return false;
   return revokeEncrypted(env, encrypted);
 }
@@ -75,10 +90,11 @@ export async function reapLaneGithubTokens(
   stub: WorkspaceStub
 ): Promise<number> {
   let revoked = 0;
-  for (const sessionId of await stub.listLaneGithubTokenSessions()) {
+  for (const slot of await stub.listLaneGithubTokenSessions()) {
+    const [sessionId] = slot.split(SLOT_SEPARATOR);
     const session = await stub.getAgentSession(sessionId);
     if (session && !TERMINAL_STATUSES.has(session.status)) continue;
-    if (await revokeLaneGithubToken(env, stub, sessionId)) revoked++;
+    if (await revokeLaneGithubToken(env, stub, slot)) revoked++;
   }
   return revoked;
 }
