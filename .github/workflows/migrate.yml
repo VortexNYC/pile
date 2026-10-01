@@ -62,7 +62,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
-          vp exec wrangler d1 migrations apply issuetracker-global --env production --remote
+          vp exec wrangler d1 migrations apply pile-global --env production --remote
 
       - name: Stamp deployed/d1-production
         id: stamp
