@@ -46,3 +46,26 @@ export const SCRUBBABLE_ATTACHMENT_TYPES = new Set([
   "debugger_json",
   "replay",
 ]);
+
+// Lane output additionally carries git remote credentials
+// (credentials in the URL userinfo) and secrets whose exact
+// values the caller knows (the lane's own session token).
+const LANE_PATTERNS: readonly RegExp[] = [/(:\/\/[^:/\s@]+:)([^@\s/]+)(@)/g];
+
+export function scrubLaneText(
+  text: string,
+  knownSecrets: readonly (string | null | undefined)[] = []
+): string {
+  let out = text;
+  for (const secret of knownSecrets) {
+    if (secret && secret.length >= 8) out = out.split(secret).join(REDACTED);
+  }
+  for (const pattern of LANE_PATTERNS) {
+    out = out.replace(
+      pattern,
+      (_match, prefix: string, _secret: string, suffix: string) =>
+        `${prefix}${REDACTED}${suffix}`
+    );
+  }
+  return scrubCaptureText(out);
+}

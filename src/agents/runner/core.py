@@ -3,15 +3,18 @@
 # This file is concatenated with a per-agent driver (cursor.py, devin.py,
 # codex.py) and shipped to the sandbox as RUNNER_PY_B64. Everything an agent
 # lane needs that is NOT agent-specific lives here: transcript tee, redact,
+# agent env allowlist, GitHub token refresh/revoke,
 # repo ops, GitHub API, PR creation, lane digest, GitHub token refresh, log
-# shipping, pnpm-store cache, postgres warmup, .pile/setup.sh. Drivers only
-# define: ensure(), agent_env(), the run mechanism, and main().
+# shipping, pnpm-store cache, postgres warmup, .pile/setup.sh, lane lifecycle
+# hooks. Drivers only define: ensure(), agent_env(), the run mechanism, and
+# main().
 #
 # Contract with the adapter: the process writes RESULT_FILE
 # (/tmp/agent-result.json) with {status, prUrl, branch, result, report?,
 # infraFailure?} — infraFailure marks substrate failures (git transport,
 # codeload, token mint) so the sweep retries instead of failing the task.
 import base64
+import calendar
 import hashlib
 import json
 import os
@@ -24,12 +27,63 @@ import time
 import urllib.error
 import urllib.request
 
+# Credential masking. The lane is assumed compromised: anything it prints —
+# runner commands, agent output, errors — may carry a secret, so every line
+# is masked before it reaches the transcript, the shipped log, or the result
+# file. Exact values of secret-bearing env vars are masked verbatim; known
+# token shapes are masked even when the value was never in our env.
+_SECRET_ENV_RE = re.compile(r'TOKEN|SECRET|PASSWORD|PASSWD|API_KEY|PRIVATE_KEY|CREDENTIALS|AUTH', re.I)
+_MASKS = set()
+_REDACT_PATTERNS = (
+    (re.compile(r'(://[^:/\s@]+:)[^@\s/]+@'), r'\1***@'),
+    (re.compile(r'(Bearer)\s+[A-Za-z0-9\-._~+/]{8,}=*'), r'\1 ***'),
+    (re.compile(r'(authorization:\s*token)\s+\S+', re.I), r'\1 ***'),
+    (re.compile(r'(x-access-token:)\s*[^@\s]+'), r'\1***'),
+    (re.compile(r'(authorization:\s*basic\s+)\S+', re.I), r'\1***'),
+    (re.compile(r'\b(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_.-]+'), r'\1_***'),
+    (re.compile(r'\bgithub_pat_[A-Za-z0-9_]+'), 'github_pat_***'),
+    (re.compile(r'\bsk-[A-Za-z0-9_-]{16,}'), 'sk-***'),
+    (re.compile(r'\bxox[baprs]-[A-Za-z0-9-]{8,}'), 'xox-***'),
+    (re.compile(r'\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{4,}'), 'jwt-***'),
+)
+
+
+def add_mask(value):
+    if isinstance(value, str) and len(value) >= 8:
+        _MASKS.add(value)
+
+
+def mask_credential_blob(raw):
+    # Credential files (devin credentials.toml, codex auth.json) are decoded
+    # inside the sandbox — mask every long quoted value they contain.
+    text = raw.decode('utf-8', 'replace') if isinstance(raw, bytes) else raw
+    for value in re.findall(r'"([^"\s]{16,})"', text):
+        add_mask(value)
+
+
+for _key, _value in os.environ.items():
+    if _SECRET_ENV_RE.search(_key):
+        add_mask(_value)
+
+
+def _redact(s):
+    if not isinstance(s, str):
+        s = str(s)
+    for value in sorted(_MASKS, key=len, reverse=True):
+        if value in s:
+            s = s.replace(value, '***')
+    for pattern, repl in _REDACT_PATTERNS:
+        s = pattern.sub(repl, s)
+    return s
+
+
 # Tee everything this runner prints (including the agent subprocess, whose
 # output flows through sys.stdout) to a transcript file Pile can read live.
 class _Tee:
     def __init__(self, *streams):
         self.streams = streams
     def write(self, s):
+        s = _redact(s)
         for st in self.streams:
             st.write(s)
     def flush(self):
@@ -42,17 +96,23 @@ INSTALL_DIR = os.path.join(HOME, '.local', 'bin')
 REPO = os.environ.get('REPO', '')
 BRANCH = os.environ.get('BRANCH', '')
 GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN', '')
+
+
+def _parse_expiry(value):
+    try:
+        return calendar.timegm(time.strptime(value or '', '%Y-%m-%dT%H:%M:%SZ'))
+    except ValueError:
+        return 0
+
+
+GITHUB_TOKEN_EXPIRES_AT = _parse_expiry(os.environ.get('GITHUB_TOKEN_EXPIRES_AT'))
+# Re-mint this long before expiry so no GitHub call races the TTL.
+TOKEN_REFRESH_MARGIN_SEC = 300
 REPO_DIR = os.path.join(HOME, 'repo')
 RESULT_FILE = '/tmp/agent-result.json'
 AGENT_LABEL = os.environ.get('AGENT_LABEL', 'Agent')
 PR_ERRORS = []
 RUN_STARTED = time.time()
-
-
-def _redact(s):
-    s = re.sub(r'(Bearer|x-access-token:)\s*\S+', r'\1 ***', s)
-    s = re.sub(r'ghs_[A-Za-z0-9_.-]+', 'ghs_***', s)
-    return s
 
 
 def run(cmd, cwd=None, env=None, check=False, **kwargs):
@@ -61,6 +121,42 @@ def run(cmd, cwd=None, env=None, check=False, **kwargs):
     if check and result.returncode != 0:
         raise RuntimeError(f'Command failed: {_redact(str(cmd))} returned {result.returncode}; stdout={_redact(result.stdout or "")}; stderr={_redact(result.stderr or "")}')
     return result
+
+
+# Env the agent subprocess may see. Everything else — the GitHub token, the
+# lane token and its URLs, the agent credential blobs, the runner bundle —
+# stays in the runner. Repo-allowlisted extra keys arrive via
+# PILE_AGENT_ENV_KEYS; runner-only keys can never be re-admitted that way.
+_AGENT_ENV_ALLOW = frozenset((
+    'PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'LANG', 'LANGUAGE', 'TERM', 'TZ',
+    'TMPDIR', 'HOSTNAME', 'PWD', 'CI', 'DEBIAN_FRONTEND',
+    'SSL_CERT_FILE', 'SSL_CERT_DIR', 'NODE_EXTRA_CA_CERTS', 'REQUESTS_CA_BUNDLE', 'CURL_CA_BUNDLE',
+    'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'http_proxy', 'https_proxy', 'no_proxy',
+    'NVM_DIR', 'NODE_OPTIONS', 'GOPATH', 'GOROOT', 'CARGO_HOME', 'RUSTUP_HOME', 'VIRTUAL_ENV',
+    'npm_config_store_dir',
+    'GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL',
+    'REPO', 'BRANCH', 'ISSUE_TITLE', 'ISSUE_IDENTIFIER', 'AGENT_LABEL', 'MODEL',
+    'PILE_API_URL', 'PILE_API_KEY',
+))
+_AGENT_ENV_ALLOW_PREFIXES = ('LC_', 'XDG_')
+_RUNNER_ONLY_ENV = frozenset((
+    'GITHUB_TOKEN', 'GITHUB_TOKEN_EXPIRES_AT', 'GH_TOKEN', 'LANE_TOKEN', 'PILE_TOKEN_URL',
+    'PILE_LOG_TOKEN', 'PILE_LOG_URL', 'PILE_CACHE_URL', 'PILE_AGENT_ENV_KEYS',
+    'RUNNER_PY_B64', 'PROMPT_B64', 'DEVIN_CREDENTIALS_B64', 'CODEX_AUTH_JSON_B64', 'FOLLOWUP',
+))
+
+
+def agent_env_base(extra=None):
+    allowed = set(_AGENT_ENV_ALLOW)
+    allowed.update(k.strip() for k in os.environ.get('PILE_AGENT_ENV_KEYS', '').split(',') if k.strip())
+    env = {
+        k: v for k, v in os.environ.items()
+        if k not in _RUNNER_ONLY_ENV and (k in allowed or k.startswith(_AGENT_ENV_ALLOW_PREFIXES))
+    }
+    env['HOME'] = HOME
+    env['PATH'] = INSTALL_DIR + ':' + os.environ.get('PATH', '')
+    env.update(extra or {})
+    return env
 
 
 class TransportError(RuntimeError):
@@ -89,6 +185,7 @@ def run_transport(cmd, **kwargs):
 
 
 def github_api(method, path, body=None):
+    ensure_fresh_github_token()
     owner, name = REPO.split('/')
     url = f'https://api.github.com/repos/{owner}/{name}{path}'
     headers = {
@@ -171,14 +268,157 @@ def resume_repo():
 
 def run_setup_hook(agent_env):
     # Repo-declared environment hook (.pile/setup.sh) — each repo wires its
-    # own toolchain instead of the image hardcoding per-repo steps.
+    # own toolchain instead of the image hardcoding per-repo steps. A
+    # hooks.setup command in .pile/config.json runs right after it.
     hook = os.path.join(REPO_DIR, '.pile', 'setup.sh')
-    if not os.path.exists(hook):
-        return
+    if os.path.exists(hook):
+        t0 = time.time()
+        print('running .pile/setup.sh')
+        result = run(['bash', hook], cwd=REPO_DIR, env=agent_env(), check=False)
+        print(f'[timing] setup.sh: {time.time() - t0:.0f}s exit={result.returncode}')
+    run_hook('setup', agent_env())
+
+
+# Lane lifecycle hooks — the `hooks` block of the checkout's .pile/config.json:
+#   setup         after clone, before the agent (non-fatal)
+#   postCheckout  after every checkout: fresh clone and kept-sandbox resume
+#   prePush       before every push; nonzero blocks the push and fails the lane
+#   stop          after each agent turn; nonzero resumes the agent with the
+#                 failure output (up to stopMaxAttempts), so the lane fixes its
+#                 own broken work instead of opening a red PR
+# Each is a bash command run from the repo root with PILE_HOOK, PILE_BRANCH,
+# PILE_BASE_SHA and PILE_CHANGED_FILES (path to a newline list of files
+# changed vs the lane's base) in its env.
+HOOK_NAMES = ('setup', 'postCheckout', 'prePush', 'stop')
+HOOK_TIMEOUT_SEC = 1800
+HOOK_OUTPUT_TAIL = 8000
+STOP_MAX_ATTEMPTS_DEFAULT = 2
+STOP_MAX_ATTEMPTS_CAP = 5
+CHANGED_FILES_PATH = '/tmp/pile-changed-files'
+HOOK_RUNS = []
+STOP_HOOK = {}
+_LANE_HOOKS = []
+
+
+class HookFailure(RuntimeError):
+    pass
+
+
+def lane_hooks():
+    # Read once per process, after checkout — hooks come from the branch the
+    # lane is working on, not the default branch.
+    if _LANE_HOOKS:
+        return _LANE_HOOKS[0]
+    hooks = {}
+    try:
+        with open(os.path.join(REPO_DIR, '.pile', 'config.json')) as f:
+            raw = json.load(f)
+    except (OSError, ValueError):
+        raw = None
+    block = raw.get('hooks') if isinstance(raw, dict) else None
+    if isinstance(block, dict):
+        for name in HOOK_NAMES:
+            cmd = block.get(name)
+            if isinstance(cmd, str) and cmd.strip():
+                hooks[name] = cmd
+        attempts = block.get('stopMaxAttempts')
+        if isinstance(attempts, int) and not isinstance(attempts, bool) and 0 <= attempts <= STOP_MAX_ATTEMPTS_CAP:
+            hooks['stopMaxAttempts'] = attempts
+    if os.path.isdir(REPO_DIR):
+        _LANE_HOOKS.append(hooks)
+    return hooks
+
+
+def _base_sha():
+    try:
+        with open('/tmp/base_sha') as f:
+            return f.read().strip()
+    except OSError:
+        return ''
+
+
+def _write_changed_files(base):
+    files = set()
+    if base:
+        diff = run(['git', '-C', REPO_DIR, 'diff', '--name-only', base], capture_output=True, text=True, check=False)
+        files.update(l for l in (diff.stdout or '').splitlines() if l)
+    untracked = run(['git', '-C', REPO_DIR, 'ls-files', '--others', '--exclude-standard'], capture_output=True, text=True, check=False)
+    files.update(l for l in (untracked.stdout or '').splitlines() if l)
+    with open(CHANGED_FILES_PATH, 'w') as f:
+        f.write(''.join(l + '\n' for l in sorted(files)))
+
+
+def run_hook(name, env):
+    # Returns (exit_code, redacted output tail), or None when the repo
+    # doesn't declare this hook. Output streams into the lane transcript.
+    cmd = lane_hooks().get(name)
+    if not cmd:
+        return None
+    base = _base_sha()
+    _write_changed_files(base)
+    hook_env = dict(env)
+    hook_env.update({'PILE_HOOK': name, 'PILE_BRANCH': BRANCH, 'PILE_BASE_SHA': base, 'PILE_CHANGED_FILES': CHANGED_FILES_PATH})
+    print(_redact(f'[hook] {name}: {cmd}'))
     t0 = time.time()
-    print('running .pile/setup.sh')
-    result = run(['bash', hook], cwd=REPO_DIR, env=agent_env(), check=False)
-    print(f'[timing] setup.sh: {time.time() - t0:.0f}s exit={result.returncode}')
+    proc = subprocess.Popen(['bash', '-c', cmd], cwd=REPO_DIR, env=hook_env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors='replace')
+    timer = threading.Timer(HOOK_TIMEOUT_SEC, proc.kill)
+    timer.start()
+    tail = []
+    size = 0
+    try:
+        for line in proc.stdout:
+            print(_redact(line), end='')
+            tail.append(line)
+            size += len(line)
+            while size > HOOK_OUTPUT_TAIL and len(tail) > 1:
+                size -= len(tail.pop(0))
+        rc = proc.wait()
+    finally:
+        timer.cancel()
+    timed_out = time.time() - t0 >= HOOK_TIMEOUT_SEC
+    if timed_out:
+        tail.append(f'\n[hook] {name} killed after {HOOK_TIMEOUT_SEC}s\n')
+    duration = round(time.time() - t0)
+    print(f'[hook] {name}: exit={rc} {duration}s')
+    HOOK_RUNS.append({'hook': name, 'exit': rc, 'durationSec': duration})
+    return rc, _redact(''.join(tail))[-HOOK_OUTPUT_TAIL:]
+
+
+def stop_hook_prompt(task, cmd, rc, output, attempt, max_attempts):
+    return (
+        'The repository\'s stop hook (`hooks.stop` in .pile/config.json) failed after your last turn, '
+        'so this work is not done yet. Fix the failures below in this checkout — do not weaken or skip the check — '
+        f'then finish. Self-heal attempt {attempt}/{max_attempts}; nothing has been pushed yet.\n\n'
+        f'Command: {cmd}\nExit code: {rc}\n\nOutput (tail):\n```\n{output}\n```\n\n'
+        f'Original task:\n{task[:4000]}'
+    )
+
+
+def self_heal(env, resume, task=''):
+    # Runs hooks.stop; while it exits nonzero, resume(prompt) hands the
+    # failure back to the agent and the hook re-runs. Returns the last
+    # resume() result, or None when the agent was never resumed. A hook that
+    # still fails after stopMaxAttempts lets the lane push anyway — the
+    # digest and PR body flag it so a human sees the red check up front.
+    hooks = lane_hooks()
+    cmd = hooks.get('stop')
+    if not cmd:
+        return None
+    max_attempts = hooks.get('stopMaxAttempts', STOP_MAX_ATTEMPTS_DEFAULT)
+    resumed = None
+    attempt = 0
+    while True:
+        rc, output = run_hook('stop', env)
+        if rc == 0:
+            STOP_HOOK.update({'status': 'passed', 'attempts': attempt})
+            return resumed
+        if attempt >= max_attempts:
+            STOP_HOOK.update({'status': 'failed', 'attempts': attempt, 'exit': rc})
+            print(f'[hook] stop still failing after {attempt} self-heal attempts — pushing with failure flagged')
+            return resumed
+        attempt += 1
+        print(f'[hook] stop failed (exit {rc}) — resuming agent with the failure ({attempt}/{max_attempts})')
+        resumed = resume(stop_hook_prompt(task, cmd, rc, output, attempt, max_attempts))
 
 
 def find_pr():
@@ -199,11 +439,11 @@ def collect_digest():
     # Run-summary ground truth — Pile merges this into the session.summary
     # event so a human can review 'what did this lane do' at a glance.
     digest = {'durationSec': round(time.time() - RUN_STARTED)}
-    try:
-        with open('/tmp/base_sha') as f:
-            base = f.read().strip()
-    except OSError:
-        base = ''
+    if HOOK_RUNS:
+        digest['hooks'] = list(HOOK_RUNS)
+    if STOP_HOOK:
+        digest['stopHook'] = dict(STOP_HOOK)
+    base = _base_sha()
     if REPO and base:
         files = run(['git', '-C', REPO_DIR, 'diff', '--name-only', f'{base}...HEAD'], capture_output=True, text=True, check=False)
         digest['filesChanged'] = [f for f in (files.stdout or '').splitlines() if f]
@@ -217,6 +457,9 @@ def create_pr(digest=None):
         summary = ''
         if digest and digest.get('filesChanged') is not None:
             summary = f"\n\n---\nLane digest: {len(digest['filesChanged'])} files changed, {digest.get('commits', 0)} commits, ~{digest['durationSec']}s."
+        stop = (digest or {}).get('stopHook') or {}
+        if stop.get('status') == 'failed':
+            summary += f"\n\n**Stop hook still failing** (exit {stop.get('exit')}) after {stop.get('attempts', 0)} self-heal attempts — see the lane transcript."
         body = {
             'title': os.environ['ISSUE_TITLE'],
             'head': BRANCH,
@@ -244,7 +487,9 @@ def refresh_github_token():
         req = urllib.request.Request(url, headers={'Authorization': 'Bearer ' + token, 'User-Agent': 'pile-agent-runner/1.0'}, method='POST')
         with urllib.request.urlopen(req, timeout=30) as resp:
             data = json.load(resp)
+        add_mask(data['token'])
         globals()['GITHUB_TOKEN'] = data['token']
+        globals()['GITHUB_TOKEN_EXPIRES_AT'] = _parse_expiry(data.get('expiresAt'))
         _TRANSPORT_NOTES.clear()
         print('github token refreshed')
     except Exception as e:
@@ -253,6 +498,35 @@ def refresh_github_token():
         # retried lane's failure shows the mint failure as the cause.
         _TRANSPORT_NOTES.append(f'github token refresh failed: {e}')
         print('github token refresh failed:', e)
+
+
+def ensure_fresh_github_token():
+    # refreshGitToken hook: re-mint ahead of expiry instead of letting a
+    # long-running lane's GitHub calls start failing mid-run.
+    expires_at = globals()['GITHUB_TOKEN_EXPIRES_AT']
+    if expires_at and expires_at - time.time() < TOKEN_REFRESH_MARGIN_SEC:
+        refresh_github_token()
+
+
+def revoke_github_token():
+    # Run end: kill the installation token now rather than leaving it live
+    # for the rest of its ~1h TTL in a sandbox that may be kept for
+    # follow-ups. Pile's sweep revokes server-side too; this is the fast path.
+    token = globals()['GITHUB_TOKEN']
+    if not token:
+        return
+    globals()['GITHUB_TOKEN'] = ''
+    if REPO and os.path.isdir(os.path.join(REPO_DIR, '.git')):
+        run(['git', '-C', REPO_DIR, 'remote', 'set-url', 'origin', f'https://github.com/{REPO}.git'], check=False)
+    try:
+        req = urllib.request.Request(
+            'https://api.github.com/installation/token', method='DELETE',
+            headers={'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json',
+                     'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'pile-agent-runner/1.0'})
+        urllib.request.urlopen(req, timeout=15)
+        print('github token revoked')
+    except Exception as e:
+        print('github token revoke failed:', e)
 
 
 def commit_and_push(agent_env):
@@ -268,6 +542,9 @@ def commit_and_push(agent_env):
     elif ahead.stdout.strip() == '0':
         print('no changes to commit')
         return False
+    gate = run_hook('prePush', agent_env)
+    if gate and gate[0] != 0:
+        raise HookFailure(f'prePush hook failed (exit {gate[0]}); push blocked:\n{gate[1][-2000:]}')
     run_transport(['git', '-C', REPO_DIR, 'push', 'origin', BRANCH], env=agent_env)
     return True
 
@@ -424,9 +701,9 @@ def read_transcript(fallback=''):
 
 
 def write_result(status, pr_url='', result='', report=None, infra=False):
-    payload = {'status': status, 'prUrl': pr_url, 'branch': BRANCH, 'result': result}
+    payload = {'status': status, 'prUrl': pr_url, 'branch': BRANCH, 'result': _redact(result)}
     if report:
-        payload['report'] = report
+        payload['report'] = _redact(report)
     if infra:
         payload['infraFailure'] = True
     with open(RESULT_FILE, 'w') as f:
