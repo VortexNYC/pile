@@ -81,6 +81,16 @@ Two compute backends exist behind the same runner/result contract
   Devin/Codex equivalents) bake each CLI at build time so dispatch skips
   per-run install; verified end-to-end for cursor-cli on `CursorSandbox`
   (VTX-265).
+  **Headless browser (optional).** Build the devin/cursor images with
+  `--build-arg LANE_BROWSER=1` (or `image_vars = { LANE_BROWSER = "1" }` on
+  the `[[containers]]` entry) to bake Google Chrome and
+  [`agent-browser`](https://github.com/vercel-labs/agent-browser). The runner
+  detects the binary, exports `PILE_BROWSER`, `CHROME_PATH`,
+  `PUPPETEER_EXECUTABLE_PATH`, `AGENT_BROWSER_EXECUTABLE_PATH` and
+  `AGENT_BROWSER_ARGS` (`--no-sandbox,--disable-dev-shm-usage`) to the agent,
+  and appends a "Headless browser" section to the prompt so UI-touching lanes
+  run e2e suites and screenshot their change instead of shipping blind. Off by
+  default to stay under the ~2GB image limit; images without it are unchanged.
 
 A workspace can also select the backend via `config.computeProvider`
 (`"daytona"` | `"cloudflare"`) in the provider upsert — it overrides the
@@ -92,6 +102,29 @@ deployment each workspace brings its own. Sandboxes are deleted when the
 session reaches a terminal state, with an `autoStopInterval` safety ceiling
 on Daytona (`sleepAfter` on Cloudflare).
 Daytona compute path verified live 2026-09-23 (ISS-92) against snapshot vortex-cli-runner-v2 and sandbox label scheme vortex.session.
+
+### Lane isolation
+
+Agent CLIs, `.pile/setup.sh`, and CLI installers run with `scrubbed_env()` —
+the allowlisted agent env described under [Lane credential
+posture](#lane-credential-posture), never the runner's own environment.
+
+`LANE_RESTRICTED=1` (deployment env) additionally runs lanes in **restricted
+mode**:
+
+- PATH shims for `git`, `curl`, `wget`, `gh`, `ssh`, `scp`, `rsync`, `nc`, …
+  refuse `git push`/`send-pack`/`credential`, remote mutation
+  (`git remote add|set-url|…`), credential/remote/url/alias config
+  (`git config`, `-c`, `GIT_CONFIG_*`), network-only tools outright, and
+  `curl`/`wget` to hosts off the allowlist (GitHub, npm, PyPI, localhost, the
+  Pile API host, plus `LANE_NET_ALLOWLIST` — comma-separated). Blocked
+  commands exit `126` with `pile restricted lane: … blocked: <reason>`.
+- The GitHub token is kept out of `.git/config` while the agent runs; the
+  runner sets it only around its own fetch/push.
+
+Shims are a guardrail on the agent's PATH, not a kernel sandbox — the hard
+boundary is that no credential is reachable from the agent's env or repo
+config.
 
 ## Cursor Cloud Agents
 

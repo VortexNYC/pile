@@ -33,6 +33,12 @@ import {
 } from "../agents/lane-progress.js";
 import { evaluateLaneResult } from "../agents/lane-result.js";
 import {
+  extractPlanText,
+  formatPlanComment,
+  PLAN_COMMENT_SOURCE,
+  PLAN_PURPOSE,
+} from "../agents/plan.js";
+import {
   dispatchTriageLane,
   formatTriageComment,
   parseTriageReport,
@@ -2887,6 +2893,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       oldStatus !== "completed" &&
       (result.result || result.prUrl)
     ) {
+      const isPlan = updatedSession.purpose === PLAN_PURPOSE;
       let commentIssue = updatedIssue ?? issue;
       let commentBody: string;
       if (updatedSession.purpose === TRIAGE_PURPOSE) {
@@ -2898,6 +2905,11 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         );
         commentBody = triage.body;
         commentIssue = triage.issue;
+      } else if (isPlan) {
+        commentBody = formatPlanComment(
+          oldSession.agentId,
+          extractPlanText(result.result) || "No plan — see session stream."
+        );
       } else {
         commentBody =
           updatedSession.purpose === "preflight"
@@ -2912,7 +2924,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         issueId: issue.id,
         body: commentBody,
         externalAuthor: oldSession.agentId,
-        externalSource: "agent",
+        externalSource: isPlan ? PLAN_COMMENT_SOURCE : "agent",
         externalId: oldSession.id,
       });
       if (comment) {

@@ -12,6 +12,28 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && corepack enable \
     && corepack prepare pnpm@9.15.4 --activate
 
+# Optional headless browser (PILE-292): build with --build-arg LANE_BROWSER=1
+# (wrangler: image_vars = { LANE_BROWSER = "1" }) to bake Google Chrome and
+# agent-browser so UI-touching lanes can run e2e suites and screenshot their
+# work. Off by default — it adds ~750MB (unpacked) against the Workers
+# Containers ~2GB image limit. Ubuntu 22.04's chromium is snap-only, hence
+# Google's .deb. The runner detects the binary and wires
+# PILE_BROWSER/CHROME_PATH/AGENT_BROWSER_* into the agent env.
+ARG LANE_BROWSER=0
+RUN if [ "$LANE_BROWSER" = "1" ]; then \
+      curl -fsSL https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
+        -o /tmp/google-chrome.deb \
+      && apt-get update \
+      && apt-get install -y --no-install-recommends /tmp/google-chrome.deb fonts-liberation \
+      && rm -rf /var/lib/apt/lists/* /tmp/google-chrome.deb \
+      && npm install -g agent-browser@0.38.1 \
+      && find "$(npm root -g)/agent-browser/bin" -name 'agent-browser-*' \
+         ! -name 'agent-browser-linux-x64' -delete \
+      && npm cache clean --force \
+      && google-chrome-stable --version \
+      && agent-browser --version; \
+    fi
+
 # Provider CLI baked at image build time — the runner skips installation
 # when the binary already exists in ~/.local/bin.
 ENV HOME=/root

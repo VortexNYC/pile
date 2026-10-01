@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -89,6 +89,10 @@ elif mode == "finalize":
     with open("/tmp/agent-result.json") as f:
         result = json.load(f)
     out = {"rc": rc, "prUrl": result["prUrl"], "posts": posts}
+elif mode == "browser":
+    out = {"env": mod.__dict__["with_browser_env"]({}), "prompt": mod.__dict__["lane_prompt"]()}
+elif mode == "push":
+    out = {"pushed": mod.__dict__["commit_and_push"](dict(os.environ))}
 else:
     raise AssertionError("unknown mode " + mode)
 
@@ -104,9 +108,12 @@ interface HarnessResult {
   rc?: number;
   prUrl?: string;
   posts?: Array<{ head?: string; base?: string }>;
+  env?: Record<string, string>;
+  prompt?: string;
+  pushed?: boolean;
 }
 
-function runnerEnv(): NodeJS.ProcessEnv {
+function runnerEnv(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     REPO: "acme/widgets",
@@ -123,17 +130,25 @@ function runnerEnv(): NodeJS.ProcessEnv {
   delete env.PILE_TOKEN_URL;
   delete env.LANE_TOKEN;
   delete env.npm_config_store_dir;
-  return env;
+  delete env.PILE_LANE_MODE;
+  return { ...env, ...extra };
 }
+
+const PYTHON = execFileSync(
+  "python3",
+  ["-c", "import sys; print(sys.executable)"],
+  { encoding: "utf8" }
+).trim();
 
 function runHarness(
   pulls: Array<Record<string, unknown>>,
-  mode: "find" | "finalize"
+  mode: "find" | "finalize" | "browser" | "push",
+  extraEnv: Record<string, string> = {}
 ): HarnessResult {
   const out = execFileSync(
-    "python3",
+    PYTHON,
     [HARNESS_PATH, CORE_PATH, JSON.stringify(pulls), mode],
-    { encoding: "utf8", env: runnerEnv(), timeout: 30_000 }
+    { encoding: "utf8", env: runnerEnv(extraEnv), timeout: 30_000 }
   );
   const line = out
     .trim()
@@ -182,6 +197,82 @@ describe("runner PR resolution (PILE-257)", () => {
     const res = runHarness([], "finalize");
     expect(res.rc).toBe(0);
     expect(res.prUrl).toBe(NEW_PR_URL);
+  });
+});
+
+describe("runner headless browser (PILE-292)", () => {
+  const PROMPT = "# Fix the settings page";
+  const promptB64 = Buffer.from(PROMPT, "utf8").toString("base64");
+
+  it("wires the baked chromium into the agent env and prompt", () => {
+    const binDir = join(harnessDir, "browser-bin");
+    mkdirSync(binDir, { recursive: true });
+    const chromium = join(binDir, "chromium");
+    writeFileSync(chromium, "#!/bin/sh\nexit 0\n");
+    chmodSync(chromium, 0o755);
+    const res = runHarness([], "browser", {
+      PATH: binDir,
+      PROMPT_B64: promptB64,
+    });
+    expect(res.env).toEqual({
+      PILE_BROWSER: chromium,
+      CHROME_PATH: chromium,
+      PUPPETEER_EXECUTABLE_PATH: chromium,
+      AGENT_BROWSER_EXECUTABLE_PATH: chromium,
+      AGENT_BROWSER_ARGS: "--no-sandbox,--disable-dev-shm-usage",
+    });
+    expect(res.prompt?.startsWith(PROMPT)).toBe(true);
+    expect(res.prompt).toContain("## Headless browser");
+    expect(res.prompt).toContain(chromium);
+    expect(res.prompt).not.toContain("agent-browser open");
+  });
+
+  it("mentions agent-browser only when it is installed", () => {
+    const binDir = join(harnessDir, "browser-bin-ab");
+    mkdirSync(binDir, { recursive: true });
+    for (const name of ["chromium", "agent-browser"]) {
+      const p = join(binDir, name);
+      writeFileSync(p, "#!/bin/sh\nexit 0\n");
+      chmodSync(p, 0o755);
+    }
+    const res = runHarness([], "browser", {
+      PATH: binDir,
+      PROMPT_B64: promptB64,
+    });
+    expect(res.prompt).toContain("agent-browser open");
+  });
+
+  it("leaves the prompt alone when the lane has no shell", () => {
+    const binDir = join(harnessDir, "browser-bin-noshell");
+    mkdirSync(binDir, { recursive: true });
+    const chromium = join(binDir, "chromium");
+    writeFileSync(chromium, "#!/bin/sh\nexit 0\n");
+    chmodSync(chromium, 0o755);
+    const res = runHarness([], "browser", {
+      PATH: binDir,
+      PROMPT_B64: promptB64,
+      PILE_SHELL_POLICY: "disabled",
+    });
+    expect(res.prompt).toBe(PROMPT);
+  });
+
+  it("is a no-op on images without a browser", () => {
+    const emptyDir = join(harnessDir, "no-browser-bin");
+    mkdirSync(emptyDir, { recursive: true });
+    const res = runHarness([], "browser", {
+      PATH: emptyDir,
+      PROMPT_B64: promptB64,
+    });
+    expect(res.env).toEqual({});
+    expect(res.prompt).toBe(PROMPT);
+  });
+});
+
+describe("runner plan mode (PILE-283)", () => {
+  it("never commits or pushes a plan lane", () => {
+    // A real push would need git + a remote; the guard returns first.
+    const res = runHarness([], "push", { PILE_LANE_MODE: "plan" });
+    expect(res.pushed).toBe(false);
   });
 });
 
