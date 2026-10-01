@@ -11,7 +11,7 @@ def agent_env():
     env['CODEX_HOME'] = CODEX_HOME
     env['CODEX_INSTALL_DIR'] = INSTALL_DIR
     env['PATH'] = INSTALL_DIR + ':' + env.get('PATH', '')
-    return env
+    return strip_runner_secrets(env)
 
 
 def ensure():
@@ -85,14 +85,7 @@ def apply_and_push(codex_bin, task_url):
     if result.returncode != 0:
         print('codex cloud apply failed:', result.returncode, result.stdout, result.stderr)
         return False
-    status = run(['git', '-C', REPO_DIR, 'status', '--porcelain'], env=env, capture_output=True, text=True, check=True)
-    if not status.stdout.strip():
-        print('no changes to commit')
-        return False
-    run(['git', '-C', REPO_DIR, 'add', '-A'], env=env, check=True)
-    run(['git', '-C', REPO_DIR, 'commit', '-m', f'{AGENT_LABEL} changes for {BRANCH}'], env=env, check=True)
-    run_transport(['git', '-C', REPO_DIR, 'push', 'origin', BRANCH], env=env)
-    return True
+    return commit_and_push(env)
 
 
 def main():

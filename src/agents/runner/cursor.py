@@ -8,7 +8,7 @@ def agent_env():
     env = os.environ.copy()
     env['HOME'] = HOME
     env['PATH'] = INSTALL_DIR + ':' + env.get('PATH', '')
-    return env
+    return strip_runner_secrets(env)
 
 
 def ensure():

@@ -20,6 +20,7 @@ import { consumeUsage } from "../global/billing.js";
 import { timingSafeEqualHex } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
 import { getInstallationTokenForRepo } from "../global/github-auth.js";
+import { prUrlOnRepo, redactSecrets } from "../global/lane-guard.js";
 import { fetchPileRepoConfig } from "../global/pile-repo-config.js";
 import { createRepoBranch } from "../global/repo-branches.js";
 import { githubInstallations } from "../global/schema.js";
@@ -1705,7 +1706,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
           stub.addAgentSessionEvent({
             sessionId,
             type: "log",
-            message: line.slice(0, 2000),
+            message: redactSecrets(line).slice(0, 2000),
           })
         )
       );
@@ -1757,6 +1758,18 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       for (const key of ["result", "url", "prUrl", "branch"] as const) {
         const value = input[key];
         if (typeof value === "string") update[key] = value;
+      }
+      if (update.result !== undefined) {
+        update.result = redactSecrets(update.result);
+      }
+      if (update.prUrl !== undefined) {
+        const issue = await stub.getIssue(session.issueId);
+        if (issue?.repo && !prUrlOnRepo(update.prUrl, issue.repo)) {
+          return c.json(
+            { message: "prUrl is not a pull request on the session repo" },
+            400
+          );
+        }
       }
       if (typeof input.status === "string") {
         const allowed = new Set<string>([

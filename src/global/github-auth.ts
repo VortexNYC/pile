@@ -33,7 +33,8 @@ async function getAppJwt(env: AppEnv): Promise<string | undefined> {
 
 export async function getInstallationToken(
   env: AppEnv,
-  installationId: string
+  installationId: string,
+  repositories?: string[]
 ): Promise<string | undefined> {
   const jwt = await getAppJwt(env);
   if (!jwt) return undefined;
@@ -47,7 +48,9 @@ export async function getInstallationToken(
         Accept: "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
         "User-Agent": GITHUB_USER_AGENT,
+        ...(repositories ? { "Content-Type": "application/json" } : {}),
       },
+      ...(repositories ? { body: JSON.stringify({ repositories }) } : {}),
     }
   );
   if (!response.ok) return undefined;
@@ -91,5 +94,7 @@ export async function getInstallationTokenForRepo(
 ): Promise<string | undefined> {
   const installationId = await getInstallationIdForRepo(env, owner, name);
   if (!installationId) return undefined;
-  return getInstallationToken(env, installationId);
+  // Scoped to the one repo: lanes hold this token, so it must not reach
+  // sibling repos on the same installation.
+  return getInstallationToken(env, installationId, [name]);
 }

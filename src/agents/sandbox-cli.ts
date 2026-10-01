@@ -6,6 +6,7 @@
 import { z } from "zod";
 
 import { getInstallationTokenForRepo } from "../global/github-auth.js";
+import { isSafeLaneBranch } from "../global/lane-guard.js";
 import type { AppEnv } from "../platform/env.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkerEnv } from "../platform/middleware.js";
@@ -481,6 +482,13 @@ export class SandboxCliAgentProvider implements AgentProvider {
         code: "BAD_REQUEST",
         status: 400,
         message: "Issue must have a repository",
+      });
+    }
+    if (issue.repo && !isSafeLaneBranch(issue.branch ?? `issue-${issue.id}`)) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: "Issue branch is not a safe lane branch name",
       });
     }
     const gitIdentity = sessionContext?.gitIdentity;

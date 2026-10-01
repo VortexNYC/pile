@@ -24,6 +24,7 @@ import { alias } from "drizzle-orm/sqlite-core";
 import { z } from "zod";
 
 import { createD1 } from "../global/db.js";
+import { sanitizeLaneResult } from "../global/lane-guard.js";
 import {
   attachments as globalAttachments,
   agentActivities as globalAgentActivities,
@@ -2329,7 +2330,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   async applyAgentSessionResult(
     sessionId: string,
-    result: AgentSessionResult,
+    rawResult: AgentSessionResult,
     actorId?: string
   ): Promise<AgentSession | undefined> {
     await this.ready;
@@ -2337,6 +2338,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (!oldSession) return undefined;
 
     const issue = await this.getIssue(oldSession.issueId);
+    const result = sanitizeLaneResult(rawResult, issue?.repo ?? null);
 
     const terminal = new Set<AgentSessionStatus>([
       "completed",
