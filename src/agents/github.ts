@@ -180,6 +180,7 @@ const pullRequestReviewCommentPayloadSchema = z.object({
     html_url: z.string(),
     head: z.object({
       ref: z.string(),
+      sha: z.string().optional(),
       repo: z.object({
         full_name: z.string(),
       }),
@@ -588,7 +589,12 @@ async function nudgeLaneForIssue(
   organizationId: string,
   issue: Issue,
   prUrl: string,
-  opts: { prompt: string; reason: string; dedupeKey?: string }
+  opts: {
+    prompt: string;
+    reason: string;
+    dedupeKey?: string;
+    headSha?: string | null;
+  }
 ): Promise<void> {
   try {
     const session = await resolveLaneForIssue(stub, issue.id);
@@ -710,7 +716,12 @@ async function processPullRequestReview(
     workspaceRecord.organizationId,
     issue,
     pull_request.html_url,
-    { prompt: reviewPrompt, reason: "review feedback", dedupeKey: marker }
+    {
+      prompt: reviewPrompt,
+      reason: "review feedback",
+      dedupeKey: marker,
+      headSha: pull_request.head.sha,
+    }
   );
 }
 
@@ -786,6 +797,7 @@ async function processPullRequestReviewComment(
         prompt: `${externalAuthor} commented on ${pull_request.html_url} (${comment.path}):\n\n${comment.body}`,
         reason: "review comment",
         dedupeKey: `comment-${comment.id}`,
+        headSha: pull_request.head.sha ?? null,
       }
     );
   }
@@ -1227,6 +1239,7 @@ async function processCheckRun(
         "Fetch the failing check runs, fix, and push.",
       reason: "CI failure",
       dedupeKey,
+      headSha: check_run.head_sha,
     }
   );
 

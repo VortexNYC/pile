@@ -12,6 +12,7 @@ import {
   isNotNull,
   isNull,
   lte,
+  ne,
   or,
   sql,
 } from "drizzle-orm";
@@ -1067,6 +1068,38 @@ export function listAgentSessions(
       desc(workspaceAgentSessions.id)
     )
     .limit(options.limit ?? 100)
+    .all();
+}
+
+/** Timing of the agent's most recent completed lanes — the ETA baseline on
+ *  lane progress comments (PILE-290). Preflight critiques are excluded. */
+export function listRecentLaneTimings(
+  db: WorkspaceDb,
+  organizationId: string,
+  agentId: string,
+  limit = 20
+) {
+  return db
+    .select({
+      createdAt: workspaceAgentSessions.createdAt,
+      startedAt: workspaceAgentSessions.startedAt,
+      endedAt: workspaceAgentSessions.endedAt,
+    })
+    .from(workspaceAgentSessions)
+    .where(
+      and(
+        eq(workspaceAgentSessions.organizationId, organizationId),
+        eq(workspaceAgentSessions.agentId, agentId),
+        eq(workspaceAgentSessions.status, "completed"),
+        isNotNull(workspaceAgentSessions.endedAt),
+        or(
+          isNull(workspaceAgentSessions.purpose),
+          ne(workspaceAgentSessions.purpose, "preflight")
+        )
+      )
+    )
+    .orderBy(desc(workspaceAgentSessions.endedAt))
+    .limit(limit)
     .all();
 }
 
