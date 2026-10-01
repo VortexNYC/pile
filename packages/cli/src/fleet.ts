@@ -11,6 +11,17 @@ import {
   realtimeSocketUrl,
   type RealtimeSocketFactory,
 } from "./realtime.js";
+import {
+  TONE_COLORS,
+  TUI,
+  createTui,
+  createTwoPane,
+  errorMessage,
+  type TextChunk,
+  type TuiKey,
+  type TuiPromptOptions,
+  type TwoPane,
+} from "./tui.js";
 
 export type FleetSession = {
   readonly id: string;
@@ -509,10 +520,6 @@ export type FleetViewModel = {
   readonly markCount: number;
 };
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 const STALLED_PROGRESS_MS = 15 * 60 * 1000;
 
 // Mirrors the server's deriveSessionStatus for the part derivable from a
@@ -881,19 +888,9 @@ export class FleetModel {
   }
 }
 
-export type FleetKey = {
-  readonly name: string;
-  readonly ctrl: boolean;
-  readonly shift: boolean;
-};
+export type FleetKey = TuiKey;
 
-export type FleetPromptOptions = {
-  readonly title: string;
-  readonly placeholder?: string;
-  readonly initial?: string;
-  readonly onSubmit: (value: string) => void;
-  readonly onCancel: () => void;
-};
+export type FleetPromptOptions = TuiPromptOptions;
 
 export type FleetView = {
   start(): void;
@@ -903,218 +900,87 @@ export type FleetView = {
   // Modal single-line input (nudge prompt, branch override, custom agent id).
   // Owns the keyboard until submit/cancel.
   promptText(options: FleetPromptOptions): void;
+  showHelp?(lines: readonly string[], onClose?: () => void): void;
   destroy(): void;
 };
 
-const TONE_COLORS = {
-  live: "#4ade80",
-  queued: "#22d3ee",
-  warn: "#facc15",
-  ok: "#60a5fa",
-  fail: "#f87171",
-  muted: "#6b7280",
-} as const satisfies Record<StatusTone, string>;
+// Pane layout shared by standalone `pile fleet` and the fleet tab in
+// `pile home`.
+const FLEET_HELP = [
+  "j / k · arrows    move between lanes",
+  "g / G             first / last lane",
+  "space             mark lane's issue for dispatch",
+  "esc               clear marks",
+  "d                 dispatch marked/selected (agent picker → branch)",
+  "x                 cancel lane",
+  "n                 nudge lane with a follow-up prompt",
+  "R                 retry a finished lane",
+  "r                 refresh now",
+  "?                 this help",
+  "q · ctrl-c        quit",
+];
 
-const SELECTED_BG = "#1e3a5f";
-const HEADER_FG = "#9ca3af";
-const FOCUSED_BORDER = "#60a5fa";
-// Rows outside the table viewport: status line (1) + box border (2) + header
-// row (1).
-const TABLE_CHROME_ROWS = 4;
-const MAX_LOG_LINES = 4000;
+export const FLEET_PANE_OPTIONS = {
+  leftTitle: "sessions",
+  rightTitle: "log",
+  leftWidth: "48%",
+  detailWrapMode: "char",
+  detailStickyBottom: true,
+} as const;
 
-async function createOpenTuiView(): Promise<FleetView> {
-  type TextChunk = import("@opentui/core").TextChunk;
-  let ot: typeof import("@opentui/core");
-  let renderer: import("@opentui/core").CliRenderer;
-  try {
-    ot = await import("@opentui/core");
-    renderer = await ot.createCliRenderer({ exitOnCtrlC: false });
-  } catch (error) {
-    throw new Error(
-      `pile fleet needs an interactive terminal with OpenTUI support (Bun, or Node.js >= 26.1 with node:ffi): ${errorMessage(error)}`,
-      { cause: error }
-    );
-  }
-
-  const root = new ot.BoxRenderable(renderer, {
-    flexDirection: "column",
-    width: "100%",
-    height: "100%",
-  });
-  const panes = new ot.BoxRenderable(renderer, {
-    flexDirection: "row",
-    flexGrow: 1,
-    width: "100%",
-  });
-  const left = new ot.BoxRenderable(renderer, {
-    width: "48%",
-    border: true,
-    title: "sessions",
-    borderColor: "#374151",
-    flexDirection: "column",
-  });
-  const table = new ot.TextTableRenderable(renderer, {
-    wrapMode: "none",
-    columnGap: 1,
-    cellPaddingX: 0,
-    showBorders: false,
-    border: false,
-    outerBorder: false,
-    width: "100%",
-  });
-  left.add(table);
-  const right = new ot.ScrollBoxRenderable(renderer, {
-    flexGrow: 1,
-    border: true,
-    title: "log",
-    borderColor: "#374151",
-    stickyScroll: true,
-    stickyStart: "bottom",
-    scrollY: true,
-  });
-  const logText = new ot.TextRenderable(renderer, {
-    content: "",
-    wrapMode: "char",
-    width: "100%",
-    fg: "#d1d5db",
-  });
-  right.add(logText);
-  panes.add(left);
-  panes.add(right);
-  const status = new ot.TextRenderable(renderer, {
-    content: "",
-    height: 1,
-    wrapMode: "none",
-    truncate: true,
-    fg: "#9ca3af",
-  });
-  root.add(panes);
-  root.add(status);
-  renderer.root.add(root);
-
-  const selectedBg = ot.RGBA.fromHex(SELECTED_BG);
-  const cell = (text: string, fg?: string): TextChunk =>
-    ot.fg(fg ?? "#d1d5db")(text);
-
-  let modal: import("@opentui/core").BoxRenderable | null = null;
-  let modalKeyHandler: ((key: FleetKey) => void) | null = null;
-  const closeModal = () => {
-    if (modalKeyHandler !== null) {
-      renderer.keyInput.off("keypress", modalKeyHandler);
-      modalKeyHandler = null;
-    }
-    if (modal !== null) {
-      renderer.root.remove(modal);
-      modal = null;
-    }
-  };
-
+// FleetView painting against an existing two-pane chrome — home injects its
+// own pane; standalone fleet builds one.
+export function createFleetView(pane: TwoPane): FleetView {
   return {
-    start() {
-      renderer.start();
-    },
-    onKey(handler) {
-      renderer.keyInput.on("keypress", (key) => {
-        handler({ name: key.name, ctrl: key.ctrl, shift: key.shift });
-      });
-    },
-    tableViewportRows() {
-      return Math.max(1, renderer.height - TABLE_CHROME_ROWS);
-    },
-    promptText(options) {
-      closeModal();
-      const box = new ot.BoxRenderable(renderer, {
-        position: "absolute",
-        top: "30%",
-        left: "15%",
-        width: "70%",
-        border: true,
-        title: options.title,
-        borderColor: FOCUSED_BORDER,
-        backgroundColor: "#111827",
-        flexDirection: "column",
-        padding: 1,
-      });
-      const input = new ot.InputRenderable(renderer, {
-        placeholder: options.placeholder ?? "",
-        width: "100%",
-      });
-      if (options.initial !== undefined) {
-        input.value = options.initial;
-      }
-      box.add(input);
-      renderer.root.add(box);
-      modal = box;
-      input.on("enter", () => {
-        const value = input.value;
-        closeModal();
-        options.onSubmit(value);
-      });
-      modalKeyHandler = (key) => {
-        if (key.name === "escape") {
-          closeModal();
-          options.onCancel();
-        }
-      };
-      renderer.keyInput.on("keypress", modalKeyHandler);
-      input.focus();
-      renderer.requestRender();
-    },
+    start: () => pane.start(),
+    onKey: (handler) => pane.onKey(handler),
+    tableViewportRows: () => pane.tableViewportRows(),
+    promptText: (options) => pane.promptText(options),
+    showHelp: (lines, onClose) => pane.showHelp(lines, onClose),
     render(model) {
-      const paint = (text: string, fg?: string, selected = false) => {
-        const c = cell(text, fg);
-        return [selected ? { ...c, bg: selectedBg } : c];
-      };
       const header: TextChunk[][][] = [
         ["", "STATUS", "ISSUE", "AGENT", "LANE", "AGE", "PR"].map((h) => [
-          cell(h, HEADER_FG),
+          pane.cell(h, TUI.muted),
         ]),
       ];
       const body: TextChunk[][][] = model.rows.map((row, index) => {
         const selected = model.topIndex + index === model.selectedIndex;
         return [
-          paint(
+          pane.paint(
             `${selected ? ">" : " "}${row.marked ? "*" : ""}`,
             row.marked ? TONE_COLORS.warn : undefined,
             selected
           ),
-          paint(row.status, TONE_COLORS[row.tone], selected),
-          paint(row.issue, "#93c5fd", selected),
-          paint(row.agent, undefined, selected),
-          paint(row.lane, "#9ca3af", selected),
-          paint(row.age, "#9ca3af", selected),
+          pane.paint(row.status, TONE_COLORS[row.tone], selected),
+          pane.paint(row.issue, TUI.link, selected),
+          pane.paint(row.agent, undefined, selected),
+          pane.paint(row.lane, TUI.muted, selected),
+          pane.paint(row.age, TUI.muted, selected),
           row.prLabel === ""
-            ? paint("", undefined, selected)
-            : [
-                {
-                  ...ot.link(row.prUrl ?? "")(row.prLabel),
-                  ...(selected ? { bg: selectedBg } : {}),
-                },
-              ],
+            ? pane.paint("", undefined, selected)
+            : pane.link(row.prUrl ?? "", row.prLabel, selected),
         ];
       });
-      table.content = [...header, ...body];
-
-      const lines = model.logText.split("\n");
-      logText.content =
-        lines.length > MAX_LOG_LINES
-          ? lines.slice(-MAX_LOG_LINES).join("\n")
-          : model.logText;
-      right.title = `log — ${model.logTitle}`;
-      right.scrollTop = right.scrollHeight;
-      status.content = model.statusLine;
-      renderer.requestRender();
+      pane.setTable([...header, ...body]);
+      pane.setDetail(model.logText, `log — ${model.logTitle}`);
+      pane.setStatus(model.statusLine);
+      pane.requestRender();
     },
-    destroy() {
-      closeModal();
-      renderer.destroy();
-    },
+    destroy: () => pane.destroy(),
   };
+}
+
+async function createOpenTuiView(): Promise<FleetView> {
+  const { ot, renderer } = await createTui("pile fleet");
+  return createFleetView(
+    createTwoPane({ ot, renderer, ...FLEET_PANE_OPTIONS })
+  );
 }
 
 export type FleetDeps = CliDeps & {
   readonly createView?: () => FleetView | Promise<FleetView>;
+  // Host-provided quit (pile home tears down every screen together).
+  readonly quitSignal?: Promise<void>;
   readonly createSocket?: RealtimeSocketFactory | null;
   readonly now?: () => number;
   readonly reconnect?: {
@@ -1190,9 +1056,13 @@ export async function fleetCommand(
 
   let stopped = false;
   let resolveQuit!: () => void;
-  const quit = new Promise<void>((resolve) => {
+  const ownQuit = new Promise<void>((resolve) => {
     resolveQuit = resolve;
   });
+  const quit =
+    deps.quitSignal !== undefined
+      ? Promise.race([ownQuit, deps.quitSignal])
+      : ownQuit;
 
   const render = () => {
     view.render(model.viewModel(now(), view.tableViewportRows()));
@@ -1390,6 +1260,7 @@ export async function fleetCommand(
   }
 
   let inputOpen = false;
+  let helpOpen = false;
   function openInput(options: FleetPromptOptions): void {
     inputOpen = true;
     model.setMode("input");
@@ -1592,8 +1463,8 @@ export async function fleetCommand(
       resolveQuit();
       return;
     }
-    // The modal text input owns the keyboard until it submits or cancels.
-    if (inputOpen) return;
+    // Modals (text input, help overlay) own the keyboard until closed.
+    if (inputOpen || helpOpen) return;
     if (key.name === "q") {
       stopped = true;
       resolveQuit();
@@ -1639,6 +1510,12 @@ export async function fleetCommand(
       return;
     } else if (key.name === "r") {
       void poll();
+    } else if (key.name === "?" || (key.name === "/" && key.shift)) {
+      helpOpen = true;
+      view.showHelp?.(FLEET_HELP, () => {
+        helpOpen = false;
+      });
+      return;
     }
     render();
   });

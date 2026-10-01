@@ -10,6 +10,7 @@ import { dirname, join } from "node:path";
 
 import { COMMANDS } from "./commands.js";
 import { fleetCommand, type FleetDeps } from "./fleet.js";
+import { homeCommand } from "./home.js";
 import { inboxCommand, type InboxDeps } from "./inbox.js";
 import { supportCommand, type InboxDeps as SupportDeps } from "./support.js";
 
@@ -1080,6 +1081,7 @@ function printUsage(): void {
     "agent context pull --workspace <org> [--dir .]",
     "agent context push --workspace <org> [--dir .]",
     "agent sessions watch <sessionId> --workspace <org>",
+    "home [--workspace <org>] — bare `pile` opens this",
     "fleet --workspace <org> [--poll]",
     "support --workspace <org>",
     "inbox --workspace <org>",
@@ -1365,6 +1367,15 @@ export async function runCli(
   try {
     const { positionals, flags, multi } = parseArgs(args);
     const [scope] = positionals;
+
+    // Bare `pile` on a TTY drops into the tabbed home (fleet / issues /
+    // support); piped or non-interactive stays on plain usage text.
+    if (positionals.length === 0 && process.stdout.isTTY === true) {
+      return await homeCommand(flags, deps);
+    }
+    if (scope === "home") {
+      return await homeCommand(flags, deps);
+    }
 
     if (
       positionals.length === 0 ||
