@@ -17,6 +17,7 @@ import {
   parseAgentTimeouts,
   progressIsStale,
   prStateFromPull,
+  shouldUpdatePrBranch,
   summarizeCheckRuns,
   sweepAgentSessions,
   syncOpenPrSessions,
@@ -209,6 +210,52 @@ describe("summarizeCheckRuns", () => {
         { status: "completed", conclusion: "failure" },
       ])
     ).toBe("failing");
+  });
+});
+
+describe("shouldUpdatePrBranch", () => {
+  const base = {
+    state: "open",
+    mergeable: true,
+    mergeableState: "behind",
+    checkState: "passing" as string | null,
+    headRef: "issue-abc",
+    managedRefs: ["issue-abc", null] as (string | null)[],
+  };
+
+  it("updates a managed lane branch that is behind with no conflicts", () => {
+    expect(shouldUpdatePrBranch(base)).toBe(true);
+    expect(shouldUpdatePrBranch({ ...base, checkState: "pending" })).toBe(true);
+    expect(shouldUpdatePrBranch({ ...base, checkState: null })).toBe(true);
+    // mergeable null = GitHub still computing; expected_head_sha guards.
+    expect(shouldUpdatePrBranch({ ...base, mergeable: null })).toBe(true);
+    expect(shouldUpdatePrBranch({ ...base, headRef: "lane-x" })).toBe(false);
+    expect(
+      shouldUpdatePrBranch({
+        ...base,
+        headRef: "lane-x",
+        managedRefs: ["issue-abc", "lane-x"],
+      })
+    ).toBe(true);
+  });
+
+  it("skips conflicts, failing checks, non-open states, and unmanaged refs", () => {
+    expect(shouldUpdatePrBranch({ ...base, mergeable: false })).toBe(false);
+    expect(shouldUpdatePrBranch({ ...base, mergeableState: "dirty" })).toBe(
+      false
+    );
+    expect(shouldUpdatePrBranch({ ...base, mergeableState: "clean" })).toBe(
+      false
+    );
+    expect(shouldUpdatePrBranch({ ...base, checkState: "failing" })).toBe(
+      false
+    );
+    expect(shouldUpdatePrBranch({ ...base, state: "draft" })).toBe(false);
+    expect(shouldUpdatePrBranch({ ...base, state: "merged" })).toBe(false);
+    expect(shouldUpdatePrBranch({ ...base, headRef: null })).toBe(false);
+    expect(shouldUpdatePrBranch({ ...base, headRef: "fork/feature" })).toBe(
+      false
+    );
   });
 });
 
@@ -1115,6 +1162,221 @@ describe("syncOpenPrSessions", () => {
     expect(types).toContain("pr.conflict_fix");
     expect(types).toContain("pr.conflict_lane");
     expect(types).toContain("prompt.followup");
+  });
+
+  it("update-branches a managed lane PR that is behind the base", async () => {
+    const issue = await stub.createIssue({ title: "Behind lane" });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "mock-prs",
+      provider: "mock-prs",
+      actorId: userId,
+      actorType: "user",
+      status: "completed",
+      prUrl: "https://github.com/vortexnyc/pile/pull/555",
+      prState: "open",
+    });
+    const updates: { url: string; body: string }[] = [];
+    const fetchBehind = (async (
+      input: RequestInfo | URL,
+      init?: RequestInit
+    ) => {
+      const url = String(input);
+      if (url.endsWith("/pulls/555/update-branch")) {
+        updates.push({ url, body: String(init?.body) });
+        return new Response("{}", { status: 202 });
+      }
+      if (url.endsWith("/pulls/555")) {
+        return new Response(
+          JSON.stringify({
+            state: "open",
+            merged_at: null,
+            mergeable: true,
+            mergeable_state: "behind",
+            head: { sha: "behind111", ref: `issue-${issue.id}` },
+          }),
+          { status: 200 }
+        );
+      }
+      if (url.includes("/commits/behind111/check-runs")) {
+        return new Response(
+          JSON.stringify({
+            check_runs: [{ status: "completed", conclusion: "success" }],
+          }),
+          { status: 200 }
+        );
+      }
+      return new Response("not found", { status: 404 });
+    }) as typeof fetch;
+    const deps = {
+      tokenForRepo: async () => "gh-test-token",
+      fetch: fetchBehind,
+    };
+
+    await syncOpenPrSessions(env, stub, organizationId, deps);
+
+    expect(updates).toHaveLength(1);
+    expect(JSON.parse(updates[0]!.body).expected_head_sha).toBe("behind111");
+    const events = await stub.listAgentSessionEvents(session.id, {});
+    expect(events.some((e) => e.type === "pr.branch_update")).toBe(true);
+
+    // Deduped per headSha: a second sweep on the same sha does not re-fire.
+    await syncOpenPrSessions(env, stub, organizationId, deps);
+    expect(updates).toHaveLength(1);
+  });
+
+  it("update-branches a PR on the issue's linked branch", async () => {
+    const issue = await stub.createIssue({
+      title: "Linked branch lane",
+      branch: "lane-custom",
+    });
+    await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "mock-prs",
+      provider: "mock-prs",
+      actorId: userId,
+      actorType: "user",
+      status: "completed",
+      prUrl: "https://github.com/vortexnyc/pile/pull/557",
+      prState: "open",
+    });
+    const updates: string[] = [];
+    const fetchBehind = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/pulls/557/update-branch")) {
+        updates.push(url);
+        return new Response("{}", { status: 202 });
+      }
+      if (url.endsWith("/pulls/557")) {
+        return new Response(
+          JSON.stringify({
+            state: "open",
+            merged_at: null,
+            mergeable: true,
+            mergeable_state: "behind",
+            head: { sha: "behind222", ref: "lane-custom" },
+          }),
+          { status: 200 }
+        );
+      }
+      if (url.includes("/commits/behind222/check-runs")) {
+        return new Response(JSON.stringify({ check_runs: [] }), {
+          status: 200,
+        });
+      }
+      return new Response("not found", { status: 404 });
+    }) as typeof fetch;
+
+    await syncOpenPrSessions(env, stub, organizationId, {
+      tokenForRepo: async () => "gh-test-token",
+      fetch: fetchBehind,
+    });
+
+    expect(updates).toHaveLength(1);
+  });
+
+  it("does not update-branch a conflicting PR — pr.conflict owns it", async () => {
+    const issue = await stub.createIssue({ title: "Conflicted behind lane" });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "mock-prs",
+      provider: "mock-prs",
+      actorId: userId,
+      actorType: "user",
+      status: "completed",
+      prUrl: "https://github.com/vortexnyc/pile/pull/556",
+      prState: "open",
+    });
+    const updates: string[] = [];
+    const fetchDirty = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/update-branch")) {
+        updates.push(url);
+        return new Response("{}", { status: 202 });
+      }
+      if (url.endsWith("/pulls/556")) {
+        return new Response(
+          JSON.stringify({
+            state: "open",
+            merged_at: null,
+            mergeable: false,
+            mergeable_state: "dirty",
+            head: { sha: "conf111", ref: `issue-${issue.id}` },
+          }),
+          { status: 200 }
+        );
+      }
+      if (url.includes("/commits/conf111/check-runs")) {
+        return new Response(
+          JSON.stringify({
+            check_runs: [{ status: "completed", conclusion: "success" }],
+          }),
+          { status: 200 }
+        );
+      }
+      return new Response("not found", { status: 404 });
+    }) as typeof fetch;
+
+    await syncOpenPrSessions(env, stub, organizationId, {
+      tokenForRepo: async () => "gh-test-token",
+      fetch: fetchDirty,
+    });
+
+    expect(updates).toHaveLength(0);
+    const events = await stub.listAgentSessionEvents(session.id, {});
+    const types = events.map((e) => e.type);
+    expect(types).toContain("pr.conflict");
+    expect(types).not.toContain("pr.branch_update");
+  });
+
+  it("does not update-branch a PR on a branch the lane does not manage", async () => {
+    const issue = await stub.createIssue({ title: "External head ref" });
+    await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "mock-prs",
+      provider: "mock-prs",
+      actorId: userId,
+      actorType: "user",
+      status: "completed",
+      prUrl: "https://github.com/vortexnyc/pile/pull/558",
+      prState: "open",
+    });
+    const updates: string[] = [];
+    const fetchForeign = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/update-branch")) {
+        updates.push(url);
+        return new Response("{}", { status: 202 });
+      }
+      if (url.endsWith("/pulls/558")) {
+        return new Response(
+          JSON.stringify({
+            state: "open",
+            merged_at: null,
+            mergeable: true,
+            mergeable_state: "behind",
+            head: { sha: "ext111", ref: "human-topic-branch" },
+          }),
+          { status: 200 }
+        );
+      }
+      if (url.includes("/commits/ext111/check-runs")) {
+        return new Response(
+          JSON.stringify({
+            check_runs: [{ status: "completed", conclusion: "success" }],
+          }),
+          { status: 200 }
+        );
+      }
+      return new Response("not found", { status: 404 });
+    }) as typeof fetch;
+
+    await syncOpenPrSessions(env, stub, organizationId, {
+      tokenForRepo: async () => "gh-test-token",
+      fetch: fetchForeign,
+    });
+
+    expect(updates).toHaveLength(0);
   });
 
   it("leaves sessions alone when the repo has no installation", async () => {
