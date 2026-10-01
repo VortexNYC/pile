@@ -2909,6 +2909,14 @@
                   "preflight": {
                     "type": "boolean"
                   },
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "build",
+                      "plan",
+                      "implement_plan"
+                    ]
+                  },
                   "effort": {
                     "type": "string",
                     "enum": [
