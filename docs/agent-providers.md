@@ -56,7 +56,7 @@ Devin account, bypassing the organization sessions API entirely.
 
 ## Compute (optional, per-workspace)
 
-The headless CLI providers (`codex-cli`, `devin-cli`, `cursor-cli`) provision a
+The headless CLI providers (`codex-cli`, `devin-cli`, `cursor-cli`, `claude-cli`) provision a
 dedicated sandbox per session on your own compute provider (Daytona is the
 reference integration). The `compute*` fields override the deployment-level
 env vars:
@@ -102,6 +102,66 @@ deployment each workspace brings its own. Sandboxes are deleted when the
 session reaches a terminal state, with an `autoStopInterval` safety ceiling
 on Daytona (`sleepAfter` on Cloudflare).
 Daytona compute path verified live 2026-09-23 (ISS-92) against snapshot vortex-cli-runner-v2 and sandbox label scheme vortex.session.
+
+## Claude Code (`claude-cli`)
+
+Runs Claude Code headless (`claude -p --output-format stream-json`) in a
+sandbox, same runner/result contract as the other CLI providers. Set `token`
+(or `CLAUDE_CODE_OAUTH_TOKEN`) to the output of `claude setup-token` so the
+lane rides a Claude Pro/Max subscription instead of per-token API billing; an
+`sk-ant-api` key also works and is passed as `ANTHROPIC_API_KEY`.
+`config.model` / `CLAUDE_CLI_MODEL` overrides the default `sonnet`. With
+`COMPUTE_PROVIDER=cloudflare` it uses the shared `SANDBOX` binding and
+installs the CLI per run.
+
+## Subscription credential pool (PILE-285)
+
+`claude-cli` and `codex-cli` accept an ordered credential pool so cheap
+review/triage lanes can ride subscriptions with fallback. Set it per
+workspace as `config.credentialPool` in the provider upsert (encrypted at
+rest with the rest of `config`; responses return entries without `secret`),
+or deployment-wide as `AGENT_CREDENTIAL_POOL` (JSON array):
+
+```json
+[
+  {
+    "kind": "claudeSubscription",
+    "secret": "sk-ant-oat01-…",
+    "label": "max-1",
+    "purposes": ["review", "preflight"]
+  },
+  {
+    "kind": "claudeSubscription",
+    "secret": "<~/.claude/.credentials.json>",
+    "label": "max-2"
+  },
+  { "kind": "anthropicApiKey", "secret": "sk-ant-api03-…", "label": "metered" }
+]
+```
+
+| kind                 | secret                                                      | consumed by                      |
+| -------------------- | ----------------------------------------------------------- | -------------------------------- |
+| `claudeSubscription` | `claude setup-token` token or `~/.claude/.credentials.json` | `claude-cli`                     |
+| `anthropicApiKey`    | `sk-ant-api…` key (per-token billing)                       | `claude-cli`                     |
+| `codexOAuth`         | ChatGPT-login `~/.codex/auth.json` (raw or base64)          | `codex-cli`                      |
+| `geminiOAuth`        | `~/.gemini/oauth_creds.json`                                | probed only — no Gemini lane yet |
+
+On dispatch the provider walks its kinds in pool order and takes the first
+entry that (a) lists the lane's `purpose` in `purposes` (entries without
+`purposes` serve every lane) and (b) passes the offline subscription probe:
+
+- `ok` — token present and not expiring within 60s (or no expiry recorded).
+- `refreshable` — access token expired but a refresh token is stored; the
+  CLI refreshes it on first call (Codex: `exp` decoded from the
+  `tokens.access_token` JWT; Claude/Gemini: `expiresAt` / `expiry_date`).
+- `expired` / `invalid` — skipped.
+
+The choice (label, kind, probe state, skipped entries) is logged as a
+`status` lane event. If no entry qualifies, the provider's single configured
+credential (`token`) is the last fallback; otherwise dispatch fails with
+every candidate's reason. Provider health reports each entry's probe state
+and expiry. Refreshed tokens live only in the sandbox and are not written
+back to the pool.
 
 ### Lane isolation
 
@@ -304,6 +364,8 @@ parent lane if there is one. PR events keep landing after terminal, because
 | `pr.review_requested`                  | PR is open and has requested reviewers. Deduped per `headSha`.                                                                                                                                                                                                                                            | `{prUrl, headSha, reviewers}` (count)                                       |
 | `pr.review`                            | A submitted review is first seen (webhook or PR sync), deduped per review id. Reviews with feedback nudge the lane with the review body and fire `pr.review` event automations; non-approve verdicts (changes requested, or a commented review with a body) also fire `pr.review_changes` (PILE-274).     | `{prUrl, headSha, reviewId, state, reviewer}`                               |
 | `pr.review_threads`                    | The lane pushed a non-merge commit after review feedback was delivered to it: the PR review threads it was sent are resolved via GitHub GraphQL. Checked once per `headSha` (sweep, plus a `pull_request.synchronize` fast path).                                                                         | `{prUrl, headSha, resolved[]}` (thread ids)                                 |
+| `review.requested`                     | PR review lane (PILE-273) dispatched for a PR head. Written on the repo-less `purpose: "review"` session; the `pile-review` check run is created `in_progress` first. One per `headSha`.                                                                                                                  | `{prUrl, repo, pullNumber, headSha, checkRunId}`                            |
+| `review.published`                     | The sweep published a terminal review session: `pile-review` completed (approve→success, comment→neutral, request-changes→failure; failed lane→neutral) and the verdict comment posted.                                                                                                                   | `{prUrl, headSha, verdict, conclusion, commentUrl, checkRunId}`             |
 | `pr.merged` / `pr.closed` / `pr.draft` | PR sync sees the PR state change to a non-`open` value.                                                                                                                                                                                                                                                   | `{prUrl, prState, headSha}`                                                 |
 | `prompt.followup`                      | A follow-up prompt was delivered to the live lane: `POST …/prompt`, an issue comment, a PR review, or a CI/conflict nudge.                                                                                                                                                                                | `{prompt}` (route) · `{commentId}` · `{issueId}` · `{issueId, prUrl}`       |
 | `prompt.followup_failed`               | The provider rejected a PR-review or CI/conflict follow-up.                                                                                                                                                                                                                                               | `{issueId}` or `{issueId, prUrl}`                                           |
@@ -487,14 +549,41 @@ optional:
 }
 ```
 
-| field      | effect                                                                                                                                         |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `agents`   | Allowlist — dispatch with any other agentId is rejected (400).                                                                                 |
-| `model`    | Default model when the dispatch request doesn't name one.                                                                                      |
-| `setup`    | Documented setup hook. `.pile/setup.sh` runs after clone either way.                                                                           |
-| `env`      | Env-var allowlist — caller-supplied `extraEnv` keys not named here are dropped before they reach the lane. Infra env (lane DB etc.) is exempt. |
-| `triggers` | Event→lane triggers — see below.                                                                                                               |
-| `hooks`    | Lane lifecycle hooks — see below.                                                                                                              |
+| field    | effect                                                                                                                                         |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `agents` | Allowlist — dispatch with any other agentId is rejected (400).                                                                                 |
+| `model`  | Default model when the dispatch request doesn't name one.                                                                                      |
+| `setup`  | Documented setup hook. `.pile/setup.sh` runs after clone either way.                                                                           |
+| `env`    | Env-var allowlist — caller-supplied `extraEnv` keys not named here are dropped before they reach the lane. Infra env (lane DB etc.) is exempt. |
+| `review` | Opt-in PR review lane (`{agent?, model?}`, read from the PR's base ref). See below.                                                            |
+
+### PR review lane (PILE-273)
+
+With `review` set, every `pull_request` `opened`/`synchronize`/`reopened`/
+`ready_for_review` on a branch Pile tracks (webhook fast path, PR sync as
+backstop) dispatches one repo-less review session per `headSha` —
+`purpose: "review"`, agent `review.agent` (default `devin-cli`), model
+`review.model` (else the provider default) — with the PR diff inlined. It runs
+alongside the working lane and never counts as the issue's active lane.
+
+- A `pile-review` check run is created `in_progress` with the installation
+  token, then completed when the session ends: approve → `success`, comment →
+  `neutral`, request-changes → `failure` (so a required `pile-review` gates
+  the merge queue). A lane that fails or is canceled completes it `neutral`.
+- The verdict lands as a PR comment using the callout ladder:
+  `[!CAUTION]` will break → `[!IMPORTANT]` must address → ℹ️ minor → ✅ clean.
+- Diffs touching only `conflict.generated` paths get a `skipped` check run and
+  no lane; mixed diffs exclude the generated files from the inlined diff.
+- `pile-review` is excluded from Pile's CI state, so a request-changes verdict
+  never fires the CI-failure nudge.
+  | field      | effect                                                                                                                                         |
+  | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `agents`   | Allowlist — dispatch with any other agentId is rejected (400).                                                                                 |
+  | `model`    | Default model when the dispatch request doesn't name one.                                                                                      |
+  | `setup`    | Documented setup hook. `.pile/setup.sh` runs after clone either way.                                                                           |
+  | `env`      | Env-var allowlist — caller-supplied `extraEnv` keys not named here are dropped before they reach the lane. Infra env (lane DB etc.) is exempt. |
+  | `triggers` | Event→lane triggers — see below.                                                                                                               |
+  | `hooks`    | Lane lifecycle hooks — see below.                                                                                                              |
 
 ### Event→lane triggers
 

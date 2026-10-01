@@ -1540,12 +1540,13 @@ export async function getActiveAgentSessionForIssue(
     issueId,
     limit: 20,
   });
+  // Review side lanes (PILE-273) never own the issue.
   // Triage lanes (PILE-282) only report on the issue — they never own it, so
   // they must not block a real lane from dispatching.
   const active = sessions.find(
     (s) =>
-      !["completed", "failed", "canceled"].includes(s.status) &&
-      s.purpose !== "triage"
+      !["review", "triage"].includes(s.purpose ?? "") &&
+      !["completed", "failed", "canceled"].includes(s.status)
   );
   if (!active) return null;
   const activities = await listAgentActivities(db, active.id, { limit: 50 });

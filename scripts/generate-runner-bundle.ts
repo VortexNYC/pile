@@ -7,7 +7,7 @@ const repoRoot = resolve(import.meta.dirname, "..");
 const runnerDir = resolve(repoRoot, "src/agents/runner");
 const outputPath = resolve(runnerDir, "bundle.ts");
 
-const parts = ["core", "cursor", "devin", "codex"] as const;
+const parts = ["core", "cursor", "devin", "codex", "claude"] as const;
 
 const entries = parts.map(
   (name) =>

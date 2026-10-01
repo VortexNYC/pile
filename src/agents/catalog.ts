@@ -235,6 +235,50 @@ export const AGENT_PROVIDER_CATALOG: CatalogProvider[] = [
     ],
   },
   {
+    id: "claude-cli",
+    name: "Claude Code",
+    modes: [
+      {
+        id: "byo",
+        label: "Your computer or server",
+        help: "Pile provisions a sandbox and runs Claude Code headless there. Uses your Claude Pro/Max subscription (`claude setup-token`) instead of per-token API billing.",
+        fields: [
+          {
+            key: "token",
+            label: "Claude Code OAuth token",
+            required: true,
+            type: "secret",
+            help: "Output of `claude setup-token`. An sk-ant-api key also works but bills per token.",
+          },
+          {
+            key: "computeApiKey",
+            label: "Daytona API key",
+            required: true,
+            type: "secret",
+          },
+          {
+            key: "computeApiUrl",
+            label: "Daytona API URL",
+            required: false,
+            type: "text",
+          },
+          {
+            key: "computeSnapshot",
+            label: "Snapshot",
+            required: false,
+            type: "text",
+          },
+          {
+            key: "config.model",
+            label: "Model",
+            required: false,
+            type: "text",
+          },
+        ],
+      },
+    ],
+  },
+  {
     id: "cursor-cli",
     name: "Cursor CLI",
     modes: [

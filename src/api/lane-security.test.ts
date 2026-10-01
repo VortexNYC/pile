@@ -230,13 +230,28 @@ describe("lane security: Pile endpoints reachable with a lane token", () => {
         token: FAKE_INSTALLATION_TOKEN,
         expiresAt: null,
       });
+      // fetchLanePermissions resolves the lane's push tier on every mint —
+      // that auths its .pile/config.json fetch with a pile installation
+      // lookup before the token mint's own lookup.
       expect(lookedUp).toEqual([
         "https://api.github.com/repos/VortexNYC/pile/installation",
+        "https://api.github.com/repos/VortexNYC/pile/installation",
       ]);
+      // The config-fetch mint carries no body (installation-wide, used only
+      // to read .pile/config.json); the lane mint itself is repo-scoped and
+      // permission-scoped. The 599 on the contents fetch resolves to the
+      // locked tier, hence contents:read.
       expect(minted).toEqual([
         {
           url: "https://api.github.com/app/installations/4242/access_tokens",
-          body: { repositories: ["pile"] },
+          body: null,
+        },
+        {
+          url: "https://api.github.com/app/installations/4242/access_tokens",
+          body: {
+            repositories: ["pile"],
+            permissions: { contents: "read", metadata: "read" },
+          },
         },
       ]);
     });
@@ -299,12 +314,22 @@ describe("lane security: Pile endpoints reachable with a lane token", () => {
         expect(res.status).toBe(200);
       }
       expect(lookedUp).toEqual([
+        "https://api.github.com/repos/VortexNYC/pile/installation",
         "https://api.github.com/repos/VortexNYC/vortex/installation",
+        "https://api.github.com/repos/VortexNYC/pile/installation",
         "https://api.github.com/repos/VortexNYC/pile/installation",
       ]);
       expect(minted).toEqual([
-        { repositories: ["vortex"] },
-        { repositories: ["pile"] },
+        null,
+        {
+          repositories: ["vortex"],
+          permissions: { contents: "read", metadata: "read" },
+        },
+        null,
+        {
+          repositories: ["pile"],
+          permissions: { contents: "read", metadata: "read" },
+        },
       ]);
       await stub.updateAgentSession(session.id, { status: "completed" });
     });

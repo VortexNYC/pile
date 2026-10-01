@@ -51,6 +51,15 @@ import type {
 import { DOMAIN_REVIEW_PROMPT } from "./review-prompt.js";
 import { runnerBundle } from "./runner/bundle.js";
 import type { SecondaryRepo } from "./secondary-repos.js";
+import {
+  parseCredentialPool,
+  poolEntriesForKinds,
+  poolHealth,
+  selectPoolCredential,
+  type CredentialKind,
+  type CredentialPoolEntry,
+  type PoolSelection,
+} from "./subscription-pool.js";
 
 const RESULT_PATH = "/tmp/agent-result.json";
 // Sandbox compute calls (findSandbox/createSandbox/startRunner) hang
@@ -85,16 +94,31 @@ export interface SandboxCliDescriptor {
   /** Sandbox name prefix, e.g. "vortex-cursorcli". */
   namePrefix: string;
   /** Which runner driver is appended after core.py. */
-  driver: "cursor" | "devin" | "codex";
+  driver: "cursor" | "devin" | "codex" | "claude";
   defaultModel: string;
   /** Env var that overrides defaultModel. */
-  modelEnv: "CURSOR_CLI_MODEL" | "DEVIN_CLI_MODEL" | "CODEX_CLI_MODEL";
+  modelEnv:
+    | "CURSOR_CLI_MODEL"
+    | "DEVIN_CLI_MODEL"
+    | "CODEX_CLI_MODEL"
+    | "CLAUDE_CLI_MODEL";
   /** Resolve the provider credential or throw CONFIG_ERROR. */
   requireAuth(env: AppEnv): string;
   /** Any extra config required beyond the credential (e.g. CODEX_CLI_ENV_ID). */
   requireConfig?(env: AppEnv): void;
   /** Credential → sandbox env vars. */
   credentialEnv(credential: string, env: AppEnv): Record<string, string>;
+  /** AGENT_CREDENTIAL_POOL support (PILE-285): which entry kinds this agent
+   *  can run on, and how a selected entry becomes sandbox env. The single
+   *  requireAuth credential stays the last fallback when the pool is
+   *  exhausted. */
+  pool?: {
+    kinds: readonly CredentialKind[];
+    credentialEnv(
+      entry: CredentialPoolEntry,
+      env: AppEnv
+    ): Record<string, string>;
+  };
   /** Require a repo + git identity even for dispatch (codex cloud tasks). */
   requiresRepo?: boolean;
   /** Keep the sandbox after terminal result so follow-up prompts can resume
@@ -387,10 +411,51 @@ export class SandboxCliAgentProvider implements AgentProvider {
     return `${this.d.namePrefix}-${sessionId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 12)}`;
   }
 
+  private resolveCredential(purpose?: string | null): {
+    env: Record<string, string>;
+    selection: PoolSelection | null;
+    poolExhausted?: string;
+  } {
+    const single = () =>
+      this.d.credentialEnv(this.d.requireAuth(this.env), this.env);
+    const poolSpec = this.d.pool;
+    const pool = poolSpec
+      ? parseCredentialPool(this.env.AGENT_CREDENTIAL_POOL)
+      : null;
+    if (
+      !poolSpec ||
+      !pool ||
+      poolEntriesForKinds(pool, poolSpec.kinds).length === 0
+    ) {
+      return { env: single(), selection: null };
+    }
+    try {
+      const selection = selectPoolCredential(pool, {
+        kinds: poolSpec.kinds,
+        purpose,
+      });
+      return {
+        env: poolSpec.credentialEnv(selection.entry, this.env),
+        selection,
+      };
+    } catch (poolErr) {
+      try {
+        return {
+          env: single(),
+          selection: null,
+          poolExhausted:
+            poolErr instanceof Error ? poolErr.message : String(poolErr),
+        };
+      } catch {
+        throw poolErr;
+      }
+    }
+  }
+
   private buildSandboxEnv(
     issue: Issue,
     model: string,
-    credential: string,
+    credentialEnv: Record<string, string>,
     github: RepoScopedToken | null,
     gitIdentity: GitIdentity | null,
     options: {
@@ -423,7 +488,6 @@ export class SandboxCliAgentProvider implements AgentProvider {
       secondaryRepos,
       permissions
     );
-    const credentialEnv = this.d.credentialEnv(credential, this.env);
     const laneMint = Boolean(options.lane?.tokenUrl && options.lane.token);
     return {
       ...credentialEnv,
@@ -497,7 +561,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
     gitIdentity: GitIdentity | null,
     sessionContext?: AgentDispatchContext
   ) {
-    const credential = this.d.requireAuth(this.env);
+    const credential = this.resolveCredential(sessionContext?.purpose);
     this.d.requireConfig?.(this.env);
     const permissions = sessionContext?.permissions ?? DEFAULT_LANE_PERMISSIONS;
     const compute = this.requireCompute();
@@ -526,6 +590,32 @@ export class SandboxCliAgentProvider implements AgentProvider {
       { session: sessionId }
     );
     try {
+      if (credential.selection) {
+        const { label, entry, probe, skipped } = credential.selection;
+        await this.note(
+          organizationId,
+          sessionId,
+          "status",
+          `credential pool: using ${label} (${entry.kind})`,
+          {
+            label,
+            kind: entry.kind,
+            probe: probe.status,
+            expiresAt: probe.expiresAt,
+            skipped,
+          },
+          { parentId: spanId }
+        );
+      } else if (credential.poolExhausted) {
+        await this.note(
+          organizationId,
+          sessionId,
+          "status",
+          "credential pool exhausted; using the provider's configured credential",
+          { reason: credential.poolExhausted },
+          { parentId: spanId }
+        );
+      }
       await withTimeout(
         (async () => {
           const existing = await compute.findSandbox(sessionId, name);
@@ -550,7 +640,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
           const sandboxEnv = this.buildSandboxEnv(
             issue,
             model,
-            credential,
+            credential.env,
             github,
             gitIdentity,
             {
@@ -841,7 +931,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
       return true;
     }
 
-    const credential = this.d.requireAuth(this.env);
+    const credentialEnv = this.resolveCredential().env;
     const permissions = issue.repo
       ? (await fetchLanePermissions(this.env, issue.repo, this.id)).permissions
       : DEFAULT_LANE_PERMISSIONS;
@@ -862,7 +952,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
     const followupEnv = this.buildSandboxEnv(
       issue,
       this.defaultModel(),
-      credential,
+      credentialEnv,
       github,
       gitIdentity ?? {
         id: "followup",
@@ -972,11 +1062,43 @@ export class SandboxCliAgentProvider implements AgentProvider {
       : this.d.defaultModel;
   }
 
-  async health(): Promise<AgentProviderHealth> {
+  /** subscriptionProbe at save-time: every pool entry's expiry state. */
+  private credentialHealth(): AgentProviderHealth {
+    const poolSpec = this.d.pool;
+    const pool = poolSpec
+      ? parseCredentialPool(this.env.AGENT_CREDENTIAL_POOL)
+      : null;
+    if (
+      !poolSpec ||
+      !pool ||
+      poolEntriesForKinds(pool, poolSpec.kinds).length === 0
+    ) {
+      this.d.requireAuth(this.env);
+      return { ok: true };
+    }
+    const health = poolHealth(pool, poolSpec.kinds);
+    if (health.ok) return health;
     try {
       this.d.requireAuth(this.env);
+    } catch {
+      return health;
+    }
+    return {
+      ok: true,
+      message: `${health.message ?? "pool exhausted"}; falling back to configured credential`,
+    };
+  }
+
+  async health(): Promise<AgentProviderHealth> {
+    try {
+      const credentials = this.credentialHealth();
+      if (!credentials.ok) return credentials;
       this.d.requireConfig?.(this.env);
-      return await this.requireCompute().health();
+      const compute = await this.requireCompute().health();
+      const message = [credentials.message, compute.message]
+        .filter((m): m is string => !!m)
+        .join(" | ");
+      return message ? { ok: compute.ok, message } : { ok: compute.ok };
     } catch (err) {
       return {
         ok: false,

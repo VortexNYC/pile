@@ -377,6 +377,39 @@ async function ghFetchConflict(input: RequestInfo | URL) {
   return new Response("not found", { status: 404 });
 }
 
+// PILE-273: Pile's own pile-review verdict is red, real CI is green.
+async function ghFetchReviewCheck(input: RequestInfo | URL) {
+  const url = String(input);
+  if (url.endsWith("/pulls/892")) {
+    return new Response(
+      JSON.stringify({
+        state: "open",
+        merged_at: null,
+        mergeable: true,
+        head: { sha: "rev892", ref: "feature-x" },
+        base: { ref: "main" },
+      }),
+      { status: 200 }
+    );
+  }
+  if (url.includes("/commits/rev892/check-runs")) {
+    return new Response(
+      JSON.stringify({
+        check_runs: [
+          {
+            name: "pile-review",
+            status: "completed",
+            conclusion: "failure",
+          },
+          { name: "test", status: "completed", conclusion: "success" },
+        ],
+      }),
+      { status: 200 }
+    );
+  }
+  return new Response("not found", { status: 404 });
+}
+
 // PILE-251 fixtures: PR 890 conflicts only on files the repo declares as
 // generated; PR 891 conflicts on a real source file too.
 const GENERATED_CONFLICT_FILES = [
@@ -1256,6 +1289,30 @@ describe("syncOpenPrSessions", () => {
     expect(issueAfter?.prState).toBe("merged");
     expect(issueAfter?.prCheckState).toBe("passing");
     expect(issueAfter?.status).toBe("done");
+  });
+
+  it("does not read a pile-review verdict as CI state (PILE-273)", async () => {
+    const issue = await stub.createIssue({ title: "Reviewed PR" });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "mock-prs",
+      provider: "mock-prs",
+      actorId: userId,
+      actorType: "user",
+      status: "completed",
+      prUrl: "https://github.com/vortexnyc/pile/pull/892",
+      prState: "open",
+    });
+
+    await syncOpenPrSessions(env, stub, organizationId, {
+      tokenForRepo: async () => "gh-test-token",
+      fetch: ghFetchReviewCheck as typeof fetch,
+    });
+
+    const issueAfter = await stub.getIssue(issue.id);
+    expect(issueAfter?.prCheckState).toBe("passing");
+    const events = await stub.listAgentSessionEvents(session.id);
+    expect(events.some((e) => e.type === "pr.ci_failed")).toBe(false);
   });
 
   it("does not reopen a terminal issue when its PR merges", async () => {
