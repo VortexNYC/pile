@@ -1,3 +1,4 @@
+import type { LanePermissions } from "../global/pile-repo-config.js";
 import type {
   AgentSessionResult,
   GitIdentity,
@@ -47,6 +48,8 @@ export interface AgentDispatchContext {
   /** Additional sandbox env vars (e.g. lane-DB connection strings from
    *  PILE-212 provisioning). Providers merge these into the runner env. */
   extraEnv?: Record<string, string>;
+  /** Lane push/shell tiers (PILE-276); absent means fully enabled. */
+  permissions?: LanePermissions;
   /** PILE-293 — model tier the lane was dispatched at. The model is already
    *  resolved from it; providers with a native effort knob may also use it. */
   effort?: DispatchEffort;
