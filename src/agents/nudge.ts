@@ -1,10 +1,13 @@
+import { VortexError } from "../platform/errors.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { AgentSession, Issue } from "../types/workspace.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
 import { loadProviderConfig } from "./credentials.js";
 import { resolveAgentEnv } from "./daytona.js";
 import { followupThrottleWindowMs, laneFollowupThrottled } from "./followup.js";
-import { getAgentProvider } from "./index.js";
+import { dispatchAgent, getAgentProvider } from "./index.js";
+
+const DELIVERED_TYPES = new Set(["prompt.followup", "prompt.redispatch"]);
 
 // THE lane nudge path — one implementation shared by the sweep (poll
 // backstop) and the GitHub webhook (fast path). sendPrompt through the
@@ -32,8 +35,7 @@ export async function nudgeLane(
     dedupeKey !== undefined &&
     seen.some(
       (e) =>
-        (e.type === "prompt.followup" ||
-          e.type === "prompt.followup_skipped") &&
+        (DELIVERED_TYPES.has(e.type) || e.type === "prompt.followup_skipped") &&
         typeof e.payload === "string" &&
         e.payload.includes(dedupeKey)
     );
@@ -88,7 +90,7 @@ export async function nudgeLane(
     if (dedupeKey) {
       const alreadyDelivered = seen.some(
         (e) =>
-          e.type === "prompt.followup" &&
+          DELIVERED_TYPES.has(e.type) &&
           typeof e.payload === "string" &&
           e.payload.includes(dedupeKey)
       );
@@ -108,6 +110,22 @@ export async function nudgeLane(
           },
         })
         .catch(() => {});
+      return;
+    }
+    // A reaped kept sandbox can't take a follow-up — go straight to the
+    // cold dispatch instead of probing a sandbox we know is gone.
+    if (session.status === "completed" && session.lastStateHash === "reaped") {
+      await redispatchCompletedLane(
+        env,
+        stub,
+        organizationId,
+        session,
+        issue,
+        prUrl,
+        opts,
+        "kept sandbox reaped",
+        skipNoted
+      );
       return;
     }
     const gitIdentity = issue.repo
@@ -144,11 +162,89 @@ export async function nudgeLane(
         })
         .catch(() => {});
     }
+    // A completed lane's sandbox is idle, so a rejection means it's gone
+    // (reaped/expired), not busy — retrying sendPrompt on later sweeps would
+    // dead-end forever. Cold-dispatch a fresh lane with the nudge instead.
+    if (!delivered && session.status === "completed") {
+      await redispatchCompletedLane(
+        env,
+        stub,
+        organizationId,
+        session,
+        issue,
+        prUrl,
+        opts,
+        "kept sandbox unavailable",
+        skipNoted
+      );
+    }
   } catch (err) {
     console.error("lane nudge failed", {
       sessionId: session.id,
       reason: opts.reason,
       error: err instanceof Error ? err.message : String(err),
     });
+  }
+}
+
+async function redispatchCompletedLane(
+  env: WorkerEnv,
+  stub: DurableObjectStub<WorkspaceDO>,
+  organizationId: string,
+  session: AgentSession,
+  issue: Issue,
+  prUrl: string,
+  opts: { prompt: string; reason: string; dedupeKey?: string },
+  cause: string,
+  skipNoted: boolean
+): Promise<void> {
+  const payload = {
+    issueId: issue.id,
+    prUrl,
+    ...(opts.dedupeKey ? { key: opts.dedupeKey } : {}),
+  };
+  try {
+    const providerConfig = await loadProviderConfig(env, stub, session.agentId);
+    const dispatched = await dispatchAgent(
+      resolveAgentEnv(env, providerConfig ?? undefined),
+      session.agentId,
+      organizationId,
+      issue,
+      {
+        id: session.actorId,
+        organizationId,
+        type: session.actorType,
+        permissions: [],
+      },
+      undefined,
+      undefined,
+      { instructions: opts.prompt }
+    );
+    await stub
+      .updateAgentSession(dispatched.id, { retryOf: session.id })
+      .catch(() => null);
+    await stub
+      .addAgentSessionEvent({
+        sessionId: session.id,
+        type: "prompt.redispatch",
+        message: `${opts.reason} redispatched as session ${dispatched.id} (${cause})`,
+        payload: { ...payload, redispatchedAs: dispatched.id },
+      })
+      .catch(() => {});
+  } catch (err) {
+    // CONFLICT: another live lane already owns the issue — it sees the PR
+    // state itself, so this is a skip, not a failure.
+    const isConflict = err instanceof VortexError && err.code === "CONFLICT";
+    if (isConflict && skipNoted) return;
+    await stub
+      .addAgentSessionEvent({
+        sessionId: session.id,
+        type: isConflict ? "prompt.followup_skipped" : "prompt.followup_failed",
+        message: isConflict
+          ? `${opts.reason} redispatch skipped (${cause}): another lane owns the issue`
+          : `${opts.reason} redispatch failed (${cause}): ${err instanceof Error ? err.message : String(err)}`,
+        payload,
+      })
+      .catch(() => {});
   }
 }
