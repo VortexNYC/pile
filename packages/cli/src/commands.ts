@@ -893,6 +893,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "mode",
         flag: "mode",
       },
+      {
+        name: "resultSchema",
+        flag: "result-schema",
+      },
     ],
   },
   "issues assign create": {
