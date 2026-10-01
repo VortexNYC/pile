@@ -113,6 +113,34 @@ RESULT_FILE = '/tmp/agent-result.json'
 AGENT_LABEL = os.environ.get('AGENT_LABEL', 'Agent')
 PR_ERRORS = []
 RUN_STARTED = time.time()
+# Resolved before the agent runs: the agent can write ~/.local/bin (first on
+# its PATH), so the runner's own commit/push never resolves git through it.
+GIT = shutil.which('git') or '/usr/bin/git'
+
+
+def remote_url():
+    return f'https://x-access-token:{GITHUB_TOKEN}@github.com/{REPO}.git'
+
+
+_SAFE_BRANCH_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._/-]*$')
+
+
+def validate_branch():
+    # BRANCH reaches git argv, refspecs and the codeload URL. Refuse anything
+    # git could read as an option, refspec, qualified/symbolic ref or
+    # revision expression (mirrors isSafeLaneBranch on the Pile side).
+    b = BRANCH
+    ok = (
+        0 < len(b) <= 200
+        and _SAFE_BRANCH_RE.match(b)
+        and '..' not in b and '//' not in b
+        and not b.endswith(('/', '.', '.lock'))
+        and not any(part.startswith('.') for part in b.split('/'))
+        and not re.match(r'^(refs|heads|tags|remotes)/', b, re.I)
+        and not re.match(r'^(HEAD|FETCH_HEAD|ORIG_HEAD|MERGE_HEAD)$', b, re.I)
+    )
+    if not ok:
+        raise RuntimeError(f'refusing unsafe lane branch name: {b!r}')
 
 
 def run(cmd, cwd=None, env=None, check=False, **kwargs):
@@ -234,6 +262,7 @@ def clone_repo():
     # Refresh before the first GitHub call — the dispatch-time token may
     # already be old if the lane queued, and this proves the lane-token
     # refresh path fires on every run, not just at push time.
+    validate_branch()
     refresh_github_token()
     if os.path.exists(REPO_DIR):
         shutil.rmtree(REPO_DIR)
@@ -244,7 +273,7 @@ def clone_repo():
     print(f'[timing] codeload tarball: {time.time() - t0:.0f}s')
     t1 = time.time()
     run(['git', '-C', REPO_DIR, 'init', '-b', BRANCH], check=True)
-    run(['git', '-C', REPO_DIR, 'remote', 'add', 'origin', f'https://x-access-token:{GITHUB_TOKEN}@github.com/{REPO}.git'], check=True)
+    run(['git', '-C', REPO_DIR, 'remote', 'add', 'origin', remote_url()], check=True)
     run_transport(['timeout', '300', 'git', '-C', REPO_DIR, '-c', 'http.lowSpeedLimit=1000', '-c', 'http.lowSpeedTime=60', 'fetch', '--depth', '1', 'origin', BRANCH])
     run(['git', '-C', REPO_DIR, 'update-ref', f'refs/heads/{BRANCH}', 'FETCH_HEAD'], check=True)
     base = run(['git', '-C', REPO_DIR, 'rev-parse', 'FETCH_HEAD'], capture_output=True, text=True, check=False)
@@ -262,6 +291,7 @@ def resume_repo():
     # Follow-up prompt on a kept sandbox: the checkout and branch survive
     # from the prior run — fetch and fast-forward so the agent resumes on
     # current remote state (its earlier push included).
+    validate_branch()
     run(['timeout', '120', 'git', '-C', REPO_DIR, 'fetch', '--depth', '50', 'origin', BRANCH], check=False)
     run(['git', '-C', REPO_DIR, 'merge', '--ff-only', f'origin/{BRANCH}'], check=False)
 
@@ -529,23 +559,82 @@ def revoke_github_token():
         print('github token revoke failed:', e)
 
 
+# The agent had the checkout, $HOME and its PATH to itself, so .git/config,
+# .git/hooks, ~/.gitconfig and ~/.local/bin are all hostile by the time the
+# runner pushes. The runner's own git calls use a pinned binary, a rebuilt
+# repo config, no global/system config and no hooks, and push one explicit
+# refspec — the token never reaches agent-planted code and no config can
+# redirect the push to another ref or remote.
+_GIT_SAFE_FLAGS = [
+    '-c', 'core.hooksPath=/dev/null',
+    '-c', 'core.fsmonitor=false',
+    '-c', 'credential.helper=',
+    '-c', 'protocol.ext.allow=never',
+]
+_GIT_ENV_KEEP = ('GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL')
+
+
+def _git_env():
+    env = {k: v for k, v in os.environ.items() if not k.startswith('GIT_') or k in _GIT_ENV_KEEP}
+    for key in ('SSH_ASKPASS', 'SSH_AUTH_SOCK', 'LD_PRELOAD', 'LD_LIBRARY_PATH'):
+        env.pop(key, None)
+    env['PATH'] = ':'.join(p for p in env.get('PATH', os.defpath).split(':') if p and p != INSTALL_DIR)
+    env['GIT_CONFIG_GLOBAL'] = '/dev/null'
+    env['GIT_CONFIG_NOSYSTEM'] = '1'
+    env['GIT_TERMINAL_PROMPT'] = '0'
+    return env
+
+
+def _reset_git_config():
+    git_dir = os.path.join(REPO_DIR, '.git')
+    if os.path.islink(git_dir) or not os.path.isdir(git_dir):
+        raise RuntimeError('refusing to push: .git is not a plain directory')
+    config_path = os.path.join(git_dir, 'config')
+    for stale in (config_path, os.path.join(git_dir, 'config.worktree')):
+        if os.path.lexists(stale):
+            os.unlink(stale)
+    name = os.environ.get('GIT_AUTHOR_NAME', AGENT_LABEL)
+    email = os.environ.get('GIT_AUTHOR_EMAIL', 'agent@pile.nyc')
+    with open(config_path, 'w') as f:
+        f.write(
+            '[core]\n\trepositoryformatversion = 0\n\tfilemode = true\n\tbare = false\n\tlogallrefupdates = true\n'
+            f'[remote "origin"]\n\turl = {remote_url()}\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n'
+            f'[user]\n\tname = {name}\n\temail = {email}\n'
+        )
+
+
+def _refuse_default_branch():
+    try:
+        base = default_branch()
+    except Exception as e:
+        raise TransportError(f'default branch lookup failed: {e}') from e
+    if BRANCH == base:
+        raise RuntimeError(f'refusing to push lane branch {BRANCH!r}: it is the default branch')
+
+
 def commit_and_push(agent_env):
+    validate_branch()
     refresh_github_token()
-    # Re-set the remote so the just-refreshed token (not the dispatch-time
-    # one, possibly >1h stale) is what push authenticates with.
-    run(['git', '-C', REPO_DIR, 'remote', 'set-url', 'origin', f'https://x-access-token:{GITHUB_TOKEN}@github.com/{REPO}.git'], env=agent_env, check=False)
-    status = run(['git', '-C', REPO_DIR, 'status', '--porcelain'], env=agent_env, capture_output=True, text=True, check=True)
-    ahead = run(['git', '-C', REPO_DIR, 'rev-list', '--count', f'origin/{BRANCH}..HEAD'], env=agent_env, capture_output=True, text=True, check=True)
+    _refuse_default_branch()
+    # Rebuilt with the just-refreshed token (not the dispatch-time one,
+    # possibly >1h stale) as what push authenticates with.
+    _reset_git_config()
+    git = [GIT, '-C', REPO_DIR] + _GIT_SAFE_FLAGS
+    env = _git_env()
+    status = run(git + ['status', '--porcelain'], env=env, capture_output=True, text=True, check=True)
+    ahead = run(git + ['rev-list', '--count', f'refs/remotes/origin/{BRANCH}..HEAD'], env=env, capture_output=True, text=True, check=True)
     if status.stdout.strip():
-        run(['git', '-C', REPO_DIR, 'add', '-A'], env=agent_env, check=True)
-        run(['git', '-C', REPO_DIR, 'commit', '-m', f'{AGENT_LABEL} changes for {BRANCH}'], env=agent_env, check=True)
+        run(git + ['add', '-A'], env=env, check=True)
+        run(git + ['commit', '-m', f'{AGENT_LABEL} changes for {BRANCH}'], env=env, check=True)
     elif ahead.stdout.strip() == '0':
         print('no changes to commit')
         return False
     gate = run_hook('prePush', agent_env)
     if gate and gate[0] != 0:
         raise HookFailure(f'prePush hook failed (exit {gate[0]}); push blocked:\n{gate[1][-2000:]}')
-    run_transport(['git', '-C', REPO_DIR, 'push', 'origin', BRANCH], env=agent_env)
+    # The prePush hook is repo code and may have re-rigged .git/config.
+    _reset_git_config()
+    run_transport(git + ['push', 'origin', f'refs/heads/{BRANCH}:refs/heads/{BRANCH}'], env=env)
     return True
 
 
