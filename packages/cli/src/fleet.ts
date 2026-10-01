@@ -11,6 +11,16 @@ import {
   realtimeSocketUrl,
   type RealtimeSocketFactory,
 } from "./realtime.js";
+import {
+  TONE_COLORS,
+  TUI,
+  createTui,
+  createTwoPane,
+  errorMessage,
+  type TextChunk,
+  type TuiKey,
+  type TuiPromptOptions,
+} from "./tui.js";
 
 export type FleetSession = {
   readonly id: string;
@@ -496,10 +506,6 @@ export type FleetViewModel = {
   readonly markCount: number;
 };
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 const STALLED_PROGRESS_MS = 15 * 60 * 1000;
 
 // Mirrors the server's deriveSessionStatus for the part derivable from a
@@ -867,19 +873,9 @@ export class FleetModel {
   }
 }
 
-export type FleetKey = {
-  readonly name: string;
-  readonly ctrl: boolean;
-  readonly shift: boolean;
-};
+export type FleetKey = TuiKey;
 
-export type FleetPromptOptions = {
-  readonly title: string;
-  readonly placeholder?: string;
-  readonly initial?: string;
-  readonly onSubmit: (value: string) => void;
-  readonly onCancel: () => void;
-};
+export type FleetPromptOptions = TuiPromptOptions;
 
 export type FleetView = {
   start(): void;
@@ -892,209 +888,52 @@ export type FleetView = {
   destroy(): void;
 };
 
-const TONE_COLORS = {
-  live: "#4ade80",
-  queued: "#22d3ee",
-  warn: "#facc15",
-  ok: "#60a5fa",
-  fail: "#f87171",
-  muted: "#6b7280",
-} as const satisfies Record<StatusTone, string>;
-
-const SELECTED_BG = "#1e3a5f";
-const HEADER_FG = "#9ca3af";
-const FOCUSED_BORDER = "#60a5fa";
-// Rows outside the table viewport: status line (1) + box border (2) + header
-// row (1).
-const TABLE_CHROME_ROWS = 4;
-const MAX_LOG_LINES = 4000;
-
 async function createOpenTuiView(): Promise<FleetView> {
-  type TextChunk = import("@opentui/core").TextChunk;
-  let ot: typeof import("@opentui/core");
-  let renderer: import("@opentui/core").CliRenderer;
-  try {
-    ot = await import("@opentui/core");
-    renderer = await ot.createCliRenderer({ exitOnCtrlC: false });
-  } catch (error) {
-    throw new Error(
-      `pile fleet needs an interactive terminal with OpenTUI support (Bun, or Node.js >= 26.1 with node:ffi): ${errorMessage(error)}`,
-      { cause: error }
-    );
-  }
-
-  const root = new ot.BoxRenderable(renderer, {
-    flexDirection: "column",
-    width: "100%",
-    height: "100%",
+  const { ot, renderer } = await createTui("pile fleet");
+  const pane = createTwoPane({
+    ot,
+    renderer,
+    leftTitle: "sessions",
+    rightTitle: "log",
+    leftWidth: "48%",
+    detailWrapMode: "char",
+    detailStickyBottom: true,
   });
-  const panes = new ot.BoxRenderable(renderer, {
-    flexDirection: "row",
-    flexGrow: 1,
-    width: "100%",
-  });
-  const left = new ot.BoxRenderable(renderer, {
-    width: "48%",
-    border: true,
-    title: "sessions",
-    borderColor: "#374151",
-    flexDirection: "column",
-  });
-  const table = new ot.TextTableRenderable(renderer, {
-    wrapMode: "none",
-    columnGap: 1,
-    cellPaddingX: 0,
-    showBorders: false,
-    border: false,
-    outerBorder: false,
-    width: "100%",
-  });
-  left.add(table);
-  const right = new ot.ScrollBoxRenderable(renderer, {
-    flexGrow: 1,
-    border: true,
-    title: "log",
-    borderColor: "#374151",
-    stickyScroll: true,
-    stickyStart: "bottom",
-    scrollY: true,
-  });
-  const logText = new ot.TextRenderable(renderer, {
-    content: "",
-    wrapMode: "char",
-    width: "100%",
-    fg: "#d1d5db",
-  });
-  right.add(logText);
-  panes.add(left);
-  panes.add(right);
-  const status = new ot.TextRenderable(renderer, {
-    content: "",
-    height: 1,
-    wrapMode: "none",
-    truncate: true,
-    fg: "#9ca3af",
-  });
-  root.add(panes);
-  root.add(status);
-  renderer.root.add(root);
-
-  const selectedBg = ot.RGBA.fromHex(SELECTED_BG);
-  const cell = (text: string, fg?: string): TextChunk =>
-    ot.fg(fg ?? "#d1d5db")(text);
-
-  let modal: import("@opentui/core").BoxRenderable | null = null;
-  let modalKeyHandler: ((key: FleetKey) => void) | null = null;
-  const closeModal = () => {
-    if (modalKeyHandler !== null) {
-      renderer.keyInput.off("keypress", modalKeyHandler);
-      modalKeyHandler = null;
-    }
-    if (modal !== null) {
-      renderer.root.remove(modal);
-      modal = null;
-    }
-  };
 
   return {
-    start() {
-      renderer.start();
-    },
-    onKey(handler) {
-      renderer.keyInput.on("keypress", (key) => {
-        handler({ name: key.name, ctrl: key.ctrl, shift: key.shift });
-      });
-    },
-    tableViewportRows() {
-      return Math.max(1, renderer.height - TABLE_CHROME_ROWS);
-    },
-    promptText(options) {
-      closeModal();
-      const box = new ot.BoxRenderable(renderer, {
-        position: "absolute",
-        top: "30%",
-        left: "15%",
-        width: "70%",
-        border: true,
-        title: options.title,
-        borderColor: FOCUSED_BORDER,
-        backgroundColor: "#111827",
-        flexDirection: "column",
-        padding: 1,
-      });
-      const input = new ot.InputRenderable(renderer, {
-        placeholder: options.placeholder ?? "",
-        width: "100%",
-      });
-      if (options.initial !== undefined) {
-        input.value = options.initial;
-      }
-      box.add(input);
-      renderer.root.add(box);
-      modal = box;
-      input.on("enter", () => {
-        const value = input.value;
-        closeModal();
-        options.onSubmit(value);
-      });
-      modalKeyHandler = (key) => {
-        if (key.name === "escape") {
-          closeModal();
-          options.onCancel();
-        }
-      };
-      renderer.keyInput.on("keypress", modalKeyHandler);
-      input.focus();
-      renderer.requestRender();
-    },
+    start: () => pane.start(),
+    onKey: (handler) => pane.onKey(handler),
+    tableViewportRows: () => pane.tableViewportRows(),
+    promptText: (options) => pane.promptText(options),
     render(model) {
-      const paint = (text: string, fg?: string, selected = false) => {
-        const c = cell(text, fg);
-        return [selected ? { ...c, bg: selectedBg } : c];
-      };
       const header: TextChunk[][][] = [
         ["", "STATUS", "ISSUE", "AGENT", "AGE", "PR"].map((h) => [
-          cell(h, HEADER_FG),
+          pane.cell(h, TUI.muted),
         ]),
       ];
       const body: TextChunk[][][] = model.rows.map((row, index) => {
         const selected = model.topIndex + index === model.selectedIndex;
         return [
-          paint(
+          pane.paint(
             `${selected ? ">" : " "}${row.marked ? "*" : ""}`,
             row.marked ? TONE_COLORS.warn : undefined,
             selected
           ),
-          paint(row.status, TONE_COLORS[row.tone], selected),
-          paint(row.issue, "#93c5fd", selected),
-          paint(row.agent, undefined, selected),
-          paint(row.age, "#9ca3af", selected),
+          pane.paint(row.status, TONE_COLORS[row.tone], selected),
+          pane.paint(row.issue, TUI.link, selected),
+          pane.paint(row.agent, undefined, selected),
+          pane.paint(row.age, TUI.muted, selected),
           row.prLabel === ""
-            ? paint("", undefined, selected)
-            : [
-                {
-                  ...ot.link(row.prUrl ?? "")(row.prLabel),
-                  ...(selected ? { bg: selectedBg } : {}),
-                },
-              ],
+            ? pane.paint("", undefined, selected)
+            : pane.link(row.prUrl ?? "", row.prLabel, selected),
         ];
       });
-      table.content = [...header, ...body];
-
-      const lines = model.logText.split("\n");
-      logText.content =
-        lines.length > MAX_LOG_LINES
-          ? lines.slice(-MAX_LOG_LINES).join("\n")
-          : model.logText;
-      right.title = `log — ${model.logTitle}`;
-      right.scrollTop = right.scrollHeight;
-      status.content = model.statusLine;
-      renderer.requestRender();
+      pane.setTable([...header, ...body]);
+      pane.setDetail(model.logText, `log — ${model.logTitle}`);
+      pane.setStatus(model.statusLine);
+      pane.requestRender();
     },
-    destroy() {
-      closeModal();
-      renderer.destroy();
-    },
+    destroy: () => pane.destroy(),
   };
 }
 

@@ -6,6 +6,15 @@ import {
   type CliDeps,
 } from "./cli.js";
 import { formatAge, type StatusTone } from "./fleet.js";
+import {
+  TONE_COLORS,
+  TUI,
+  createTui,
+  createTwoPane,
+  errorMessage,
+  type TextChunk,
+  type TuiKey,
+} from "./tui.js";
 
 export type TicketStatus = "todo" | "done" | "snoozed";
 export type StatusFilter = "all" | TicketStatus;
@@ -445,10 +454,6 @@ export type InboxViewModel = {
   readonly totalCount: number;
 };
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 export class InboxModel {
   private tickets: SupportTicket[] = [];
   private selectedId: string | null = null;
@@ -631,11 +636,7 @@ export class InboxModel {
   }
 }
 
-export type InboxKey = {
-  readonly name: string;
-  readonly ctrl: boolean;
-  readonly shift: boolean;
-};
+export type InboxKey = TuiKey;
 
 export type InboxView = {
   start(): void;
@@ -645,143 +646,46 @@ export type InboxView = {
   destroy(): void;
 };
 
-const TONE_COLORS = {
-  live: "#4ade80",
-  queued: "#22d3ee",
-  warn: "#facc15",
-  ok: "#60a5fa",
-  fail: "#f87171",
-  muted: "#6b7280",
-} as const satisfies Record<StatusTone, string>;
-
-const SELECTED_BG = "#1e3a5f";
-const HEADER_FG = "#9ca3af";
-// Rows outside the table viewport: status line (1) + box border (2) + header
-// row (1).
-const TABLE_CHROME_ROWS = 4;
-const MAX_DETAIL_LINES = 4000;
-
 async function createOpenTuiView(): Promise<InboxView> {
-  type TextChunk = import("@opentui/core").TextChunk;
-  let ot: typeof import("@opentui/core");
-  let renderer: import("@opentui/core").CliRenderer;
-  try {
-    ot = await import("@opentui/core");
-    renderer = await ot.createCliRenderer({ exitOnCtrlC: false });
-  } catch (error) {
-    throw new Error(
-      `pile support needs an interactive terminal with OpenTUI support (Bun, or Node.js >= 26.1 with node:ffi): ${errorMessage(error)}`,
-      { cause: error }
-    );
-  }
-
-  const root = new ot.BoxRenderable(renderer, {
-    flexDirection: "column",
-    width: "100%",
-    height: "100%",
+  const { ot, renderer } = await createTui("pile support");
+  const pane = createTwoPane({
+    ot,
+    renderer,
+    leftTitle: "tickets",
+    rightTitle: "ticket",
+    leftWidth: "48%",
+    detailWrapMode: "word",
   });
-  const panes = new ot.BoxRenderable(renderer, {
-    flexDirection: "row",
-    flexGrow: 1,
-    width: "100%",
-  });
-  const left = new ot.BoxRenderable(renderer, {
-    width: "48%",
-    border: true,
-    title: "tickets",
-    borderColor: "#374151",
-    flexDirection: "column",
-  });
-  const table = new ot.TextTableRenderable(renderer, {
-    wrapMode: "none",
-    columnGap: 1,
-    cellPaddingX: 0,
-    showBorders: false,
-    border: false,
-    outerBorder: false,
-    width: "100%",
-  });
-  left.add(table);
-  const right = new ot.ScrollBoxRenderable(renderer, {
-    flexGrow: 1,
-    border: true,
-    title: "ticket",
-    borderColor: "#374151",
-    scrollY: true,
-  });
-  const detailText = new ot.TextRenderable(renderer, {
-    content: "",
-    wrapMode: "word",
-    width: "100%",
-    fg: "#d1d5db",
-  });
-  right.add(detailText);
-  panes.add(left);
-  panes.add(right);
-  const status = new ot.TextRenderable(renderer, {
-    content: "",
-    height: 1,
-    wrapMode: "none",
-    truncate: true,
-    fg: "#9ca3af",
-  });
-  root.add(panes);
-  root.add(status);
-  renderer.root.add(root);
-
-  const selectedBg = ot.RGBA.fromHex(SELECTED_BG);
-  const cell = (text: string, fg?: string): TextChunk =>
-    ot.fg(fg ?? "#d1d5db")(text);
 
   return {
-    start() {
-      renderer.start();
-    },
-    onKey(handler) {
-      renderer.keyInput.on("keypress", (key) => {
-        handler({ name: key.name, ctrl: key.ctrl, shift: key.shift });
-      });
-    },
-    tableViewportRows() {
-      return Math.max(1, renderer.height - TABLE_CHROME_ROWS);
-    },
+    start: () => pane.start(),
+    onKey: (handler) => pane.onKey(handler),
+    tableViewportRows: () => pane.tableViewportRows(),
     render(model) {
-      const paint = (text: string, fg?: string, selected = false) => {
-        const c = cell(text, fg);
-        return [selected ? { ...c, bg: selectedBg } : c];
-      };
       const header: TextChunk[][][] = [
         ["", "#", "STATUS", "PRI", "CUSTOMER", "CH", "AGE", "TITLE"].map(
-          (h) => [cell(h, HEADER_FG)]
+          (h) => [pane.cell(h, TUI.muted)]
         ),
       ];
       const body: TextChunk[][][] = model.rows.map((row, index) => {
         const selected = model.topIndex + index === model.selectedIndex;
         return [
-          paint(selected ? ">" : "", undefined, selected),
-          paint(row.number, "#93c5fd", selected),
-          paint(row.status, TONE_COLORS[row.tone], selected),
-          paint(row.priority, TONE_COLORS[row.priorityTone], selected),
-          paint(row.customer, undefined, selected),
-          paint(row.channel, "#9ca3af", selected),
-          paint(row.age, "#9ca3af", selected),
-          paint(row.title, undefined, selected),
+          pane.paint(selected ? ">" : "", undefined, selected),
+          pane.paint(row.number, TUI.link, selected),
+          pane.paint(row.status, TONE_COLORS[row.tone], selected),
+          pane.paint(row.priority, TONE_COLORS[row.priorityTone], selected),
+          pane.paint(row.customer, undefined, selected),
+          pane.paint(row.channel, TUI.muted, selected),
+          pane.paint(row.age, TUI.muted, selected),
+          pane.paint(row.title, undefined, selected),
         ];
       });
-      table.content = [...header, ...body];
-
-      const lines = model.detailText.split("\n");
-      detailText.content =
-        lines.length > MAX_DETAIL_LINES
-          ? lines.slice(-MAX_DETAIL_LINES).join("\n")
-          : model.detailText;
-      right.title = `ticket — ${model.detailTitle}`;
-      status.content = model.statusLine;
-      renderer.requestRender();
+      pane.setTable([...header, ...body]);
+      pane.setDetail(model.detailText, `ticket — ${model.detailTitle}`);
+      pane.setStatus(model.statusLine);
+      pane.requestRender();
     },
-    destroy() {
-      renderer.destroy();
-    },
+    destroy: () => pane.destroy(),
   };
 }
 
