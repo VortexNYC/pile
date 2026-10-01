@@ -1829,6 +1829,95 @@ describe("agent sessions API", () => {
     expect(after.status).toBe(409);
   });
 
+  it("keeps a live progress comment on the issue for a reporting lane (PILE-290)", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const issue = await stub.createIssue({
+      title: "Progress comment test",
+      repo: "VortexNYC/pile",
+    });
+    const reg = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/sessions/register`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          issueId: issue.id,
+          provider: "progress-bot",
+          status: "created",
+          url: "https://example.com/run/progress",
+        }),
+      }),
+      env
+    );
+    const { session, laneToken } = await reg.json<{
+      session: { id: string };
+      laneToken: string;
+    }>();
+    const report = (body: unknown) =>
+      app.fetch(
+        request(
+          `/workspaces/${organizationId}/agent/sessions/${session.id}/report`,
+          {
+            method: "POST",
+            headers: { Authorization: `Bearer ${laneToken}` },
+            body: JSON.stringify(body),
+          }
+        ),
+        env
+      );
+    const progressComments = async () =>
+      (await stub.listComments(issue.id)).filter(
+        (c) => c.externalId === `${session.id}:progress`
+      );
+
+    expect(await progressComments()).toHaveLength(0);
+
+    // First `running` report posts the comment immediately.
+    expect(
+      (await report({ status: "running", step: "Reading issue" })).status
+    ).toBe(200);
+    let [progress] = await progressComments();
+    expect(progress?.body).toContain("is on it");
+    expect(progress?.body).toContain("https://example.com/run/progress");
+    expect(progress?.body).toContain("Current step: Reading issue");
+    expect(progress?.body).toContain("ETA:");
+
+    // Task-list reports edit the same comment in place.
+    expect(
+      (
+        await report({
+          todos: [
+            { content: "Reading issue", status: "completed" },
+            { content: "Writing tests", status: "in_progress" },
+          ],
+        })
+      ).status
+    ).toBe(200);
+    const edited = await progressComments();
+    expect(edited).toHaveLength(1);
+    progress = edited[0];
+    expect(progress?.body).toContain("Current step: Writing tests");
+    expect(progress?.body).toContain("- [x] Reading issue");
+    expect(progress?.body).toContain("- [ ] Writing tests _(in progress)_");
+
+    expect(
+      (await report({ todos: [{ content: "", status: "nope" }] })).status
+    ).toBe(400);
+
+    // Terminal: progress comment freezes; the result comment still lands.
+    expect(
+      (await report({ status: "completed", result: "shipped" })).status
+    ).toBe(200);
+    const final = await progressComments();
+    expect(final).toHaveLength(1);
+    expect(final[0]?.body).toContain("completed** after");
+    expect(final[0]?.body).not.toContain("ETA:");
+    const all = await stub.listComments(issue.id);
+    expect(all.some((c) => c.body.includes("completed: shipped"))).toBe(true);
+  });
+
   it("lets a lane token read back its own session and events (PILE-232)", async () => {
     const stub = env.WORKSPACE_DURABLE_OBJECT.get(
       env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
