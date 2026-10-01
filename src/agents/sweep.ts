@@ -31,6 +31,12 @@ import type {
   AgentProviderSession,
   AgentProviderState,
 } from "./provider.js";
+import {
+  type AutomationEventFacts,
+  type AutomationEventTarget,
+  fireRepoTriggers,
+  issueEventTarget,
+} from "./repo-triggers.js";
 
 export const DEFAULT_TIMEOUT_MINUTES = 60;
 export const DEFAULT_INACTIVITY_MINUTES = 20;
@@ -779,16 +785,18 @@ async function fireAutomation(
   }
 }
 
-/** Event automations (PILE-211): trigger_value is the event name —
- *  pr.ci_failed, issue.assigned, issue.commented. */
-async function fireEventAutomations(
+/** Event automations: workspace automations whose trigger_value is the
+ *  event name (PILE-211 — pr.ci_failed, pr.conflict, pr.review, pr.opened,
+ *  …) plus the repo's `.pile/config.json` `triggers` (PILE-275). */
+export async function fireEventAutomations(
   env: WorkerEnv,
   stub: DurableObjectStub<WorkspaceDO>,
   organizationId: string,
   eventName: string,
-  session: AgentSession,
+  target: AutomationEventTarget,
   context?: string,
-  ctx?: { waitUntil: (promise: Promise<unknown>) => void }
+  ctx?: { waitUntil: (promise: Promise<unknown>) => void },
+  facts?: AutomationEventFacts
 ): Promise<void> {
   const automations = await stub.listAgentAutomations({
     enabledOnly: true,
@@ -804,11 +812,16 @@ async function fireEventAutomations(
       organizationId,
       automation.issueId
         ? automation
-        : { ...automation, issueId: session.issueId },
+        : { ...automation, issueId: (await target.issue())?.id ?? null },
       ctx,
       context
     );
   }
+  await fireRepoTriggers(env, stub, organizationId, eventName, target, {
+    context,
+    facts,
+    ctx,
+  });
 }
 
 export async function sweepAgentSessions(
@@ -1402,7 +1415,7 @@ export async function syncOpenPrSessions(
           stub,
           organizationId,
           "pr.ci_failed",
-          session,
+          issueEventTarget(stub, session.issueId),
           ciPrompt
         );
       }
@@ -1486,7 +1499,7 @@ export async function syncOpenPrSessions(
               stub,
               organizationId,
               "pr.conflict",
-              session,
+              issueEventTarget(stub, session.issueId),
               `PR ${prUrl} has merge conflicts. Rebase or merge the base branch and resolve.`
             );
           }
@@ -1620,7 +1633,7 @@ export async function syncOpenPrSessions(
                 stub,
                 organizationId,
                 "pr.review",
-                session,
+                issueEventTarget(stub, session.issueId),
                 reviewPrompt
               );
             }

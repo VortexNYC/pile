@@ -9,6 +9,32 @@ import {
 
 const GITHUB_API = "https://api.github.com";
 
+export const PILE_REPO_TRIGGER_EVENTS = [
+  "issue.created",
+  "pr.opened",
+  "pr.synchronize",
+  "ci.failed",
+  "mention",
+  "label.added",
+] as const;
+
+export type PileRepoTriggerEvent = (typeof PILE_REPO_TRIGGER_EVENTS)[number];
+
+// Event→lane trigger (PILE-275): when `on` fires for the repo, dispatch
+// `agent` with `prompt` as the lane instructions.
+export const pileRepoTriggerSchema = z.object({
+  on: z.enum(PILE_REPO_TRIGGER_EVENTS),
+  agent: z.string().nonempty(),
+  model: z.string().optional(),
+  prompt: z.string().nonempty(),
+  // label.added only — fire for this label name; any label when omitted.
+  label: z.string().optional(),
+  // mention only — the handle a comment must contain (default "@pile").
+  handle: z.string().optional(),
+});
+
+export type PileRepoTrigger = z.infer<typeof pileRepoTriggerSchema>;
+
 export const pileRepoConfigSchema = z.object({
   // Lane agent allowlist — dispatch is rejected for anything not named here.
   agents: z.array(z.string()).optional(),
@@ -35,6 +61,8 @@ export const pileRepoConfigSchema = z.object({
       regen: z.string().nonempty(),
     })
     .optional(),
+  // Event→lane triggers (PILE-275), processed by fireEventAutomations.
+  triggers: z.array(pileRepoTriggerSchema).optional(),
   // Lane lifecycle hooks (PILE-279). Bash commands the lane runner reads
   // from the checkout and runs from the repo root: `setup` after clone,
   // `postCheckout` after every checkout (clone or kept-sandbox resume),
