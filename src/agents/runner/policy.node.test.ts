@@ -86,6 +86,11 @@ elif mode == "push":
         out["gitConfig"] = f.read()
     log = subprocess.run(["git", "-C", g["REPO_DIR"], "log", "--format=%s"], capture_output=True, text=True).stdout
     out["commits"] = [l for l in log.splitlines() if l]
+elif mode == "hooks":
+    os.makedirs(os.path.join(g["REPO_DIR"], ".pile"), exist_ok=True)
+    with open(os.path.join(g["REPO_DIR"], ".pile", "config.json"), "w") as f:
+        json.dump({"hooks": {"prePush": "true", "stop": "true"}}, f)
+    out["hooks"] = sorted(g["lane_hooks"]().keys())
 else:
     raise AssertionError("unknown mode " + mode)
 # Bypass the runner's redacting stdout tee: assertions need raw values.
@@ -99,6 +104,7 @@ writeFileSync(HARNESS_PATH, HARNESS);
 
 interface PolicyResult {
   env?: string[];
+  hooks?: string[];
   pushed?: boolean;
   error?: string;
   hookRan?: boolean;
@@ -108,7 +114,7 @@ interface PolicyResult {
 }
 
 function runPolicy(
-  mode: "scrub" | "push",
+  mode: "scrub" | "push" | "hooks",
   policy: { push: string; shell: string },
   extra: Record<string, string> = {}
 ): PolicyResult {
@@ -251,6 +257,15 @@ describe("runner lane permission tiers (PILE-276)", () => {
     expect(res.transport).toEqual([]);
     expect(res.commits?.[0]).toBe(`Devin changes for ${LANE_BRANCH}`);
     expect(res.hookRan).toBe(false);
+  });
+
+  it("shell=disabled ignores the lane's .pile/config.json lifecycle hooks", () => {
+    expect(
+      runPolicy("hooks", { push: "enabled", shell: "enabled" }).hooks
+    ).toEqual(["prePush", "stop"]);
+    expect(
+      runPolicy("hooks", { push: "enabled", shell: "disabled" }).hooks
+    ).toEqual([]);
   });
 
   it("treats an unknown tier as disabled", () => {

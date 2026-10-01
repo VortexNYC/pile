@@ -108,9 +108,18 @@ def drain_followups(devin_bin):
             text = f.read()
         os.rename(path, path[:-7] + '.drained')
         print('running queued follow-up prompt:', name)
-        output = run_agent(devin_bin, prompt=text)
+        output = run_turn(devin_bin, prompt=text)
         commit_and_push(agent_env())
     return output
+
+
+def run_turn(devin_bin, prompt=None):
+    # One agent turn, gated by the repo's stop hook: a failing hook resumes
+    # devin with the failure before anything is pushed.
+    task = prompt or base64.b64decode(os.environ['PROMPT_B64']).decode('utf-8')
+    output = run_agent(devin_bin, prompt=prompt)
+    healed = self_heal(agent_env(), lambda p: run_agent(devin_bin, prompt=p), task)
+    return output if healed is None else healed
 
 
 def main():
@@ -129,9 +138,10 @@ def main():
         ensure_postgres()
         if REPO:
             resume_repo()
+            run_hook('postCheckout', agent_env())
         else:
             os.makedirs(REPO_DIR, exist_ok=True)
-        output = run_agent(devin_bin)
+        output = run_turn(devin_bin)
         output = drain_followups(devin_bin) or output
         pushed = commit_and_push(agent_env()) if REPO else False
         return finalize(output, pushed)
@@ -145,9 +155,10 @@ def main():
         return finalize(output, False)
     create_branch()
     clone_repo()
+    run_hook('postCheckout', agent_env())
     run_setup_hook(agent_env)
     ensure_postgres()
-    output = run_agent(devin_bin)
+    output = run_turn(devin_bin)
     output = drain_followups(devin_bin) or output
     pushed = commit_and_push(agent_env())
     return finalize(output, pushed)

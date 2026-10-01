@@ -32,6 +32,7 @@ import {
   laneDbConfigForRepo,
   type LaneDbConfig,
 } from "./lane-db.js";
+import { buildResultSchemaInstructions, sessionLabel } from "./lane-result.js";
 import type { AgentProvider } from "./provider.js";
 
 // Workspace-wide ceiling on live lanes — the container apps are bounded
@@ -163,8 +164,13 @@ export async function dispatchAgent(
      *  `waiting` behind this session id; the sweep promotes it once the
      *  blocker goes terminal. Wins over the dedupe-derived queueAfter. */
     queueAfter?: string;
+    /** Serialized draft-07 JSON Schema (see `resolveResultSchema`) the
+     *  lane's final output is validated against (PILE-289). */
+    resultSchema?: string;
   }
 ): Promise<AgentSession> {
+  const label = sessionLabel(issue, agentId, options?.purpose);
+  const resultSchema = options?.resultSchema ?? null;
   const stub = env.WORKSPACE_DURABLE_OBJECT.get(
     env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
   );
@@ -235,6 +241,8 @@ export async function dispatchAgent(
         parentSessionId: options?.parentSessionId ?? null,
         spawnDepth: options?.spawnDepth ?? 0,
         purpose: options?.purpose ?? null,
+        label,
+        resultSchema,
       });
       await stub
         .addAgentSessionEvent({
@@ -302,6 +310,8 @@ export async function dispatchAgent(
       parentSessionId: options?.parentSessionId ?? null,
       spawnDepth: options?.spawnDepth ?? 0,
       purpose: options?.purpose ?? null,
+      label,
+      resultSchema,
     });
   }
 
@@ -463,7 +473,15 @@ export async function dispatchAgent(
           : undefined,
         comments,
         pileApi,
-        instructions: options?.instructions,
+        instructions:
+          [
+            options?.instructions ?? null,
+            session.resultSchema
+              ? buildResultSchemaInstructions(session.resultSchema)
+              : null,
+          ]
+            .filter((part): part is string => part !== null && part !== "")
+            .join("\n\n") || undefined,
         extraEnv,
         permissions: lanePermissions.permissions,
       }
