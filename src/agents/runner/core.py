@@ -121,6 +121,31 @@ SECONDARY_PRS = []
 # Live secondary-repo tokens by repo, so run end can revoke them too.
 SECONDARY_TOKENS = {}
 RUN_STARTED = time.time()
+
+
+def _start_health_server():
+    """Binds :8787 so provision detection can waitForPort instead of
+    scraping the 'runner started' event — the lane only reads as live once
+    the runner process is actually accepting connections."""
+    try:
+        import http.server
+        import socketserver
+
+        class _H(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b'ok')
+            def log_message(self, *a):
+                pass
+
+        srv = socketserver.TCPServer(('127.0.0.1', 8787), _H)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+    except OSError:
+        pass
+
+
+_start_health_server()
 LANE_RESTRICTED = os.environ.get('PILE_LANE_RESTRICTED') == '1'
 SHIM_DIR = '/tmp/pile-shims'
 # Resolved before the agent runs: the agent can write ~/.local/bin (first on

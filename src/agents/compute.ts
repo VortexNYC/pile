@@ -77,6 +77,17 @@ export interface ComputeBackend {
     name: string,
     resultPath?: string
   ): Promise<ComputeSandbox | null>;
+  /**
+   * Block until the lane's runner process is actually alive — the runner
+   * binds 127.0.0.1:8787 as its readiness signal (PILE-308). Absent on
+   * backends that can't probe ports; callers treat missing as best-effort.
+   */
+  waitForRunner?(
+    sandbox: ComputeSandbox,
+    processId: string,
+    timeoutMs: number
+  ): Promise<void>;
+
   startRunner(
     sandbox: ComputeSandbox,
     sessionId: string,
@@ -651,6 +662,34 @@ export class CloudflareBackend implements ComputeBackend {
       return tail ? tail.slice(-4000) : null;
     } catch {
       return null;
+    }
+  }
+
+  async waitForRunner(
+    sandbox: ComputeSandbox,
+    processId: string,
+    timeoutMs: number
+  ): Promise<void> {
+    const handle = await ioTimeout(
+      this.sandbox(sandbox.name),
+      "sandbox handle"
+    );
+    // Process records take a beat to register after startProcess resolves —
+    // poll until the runner's record exists, then wait on its health port.
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      const proc = await handle.getProcess(processId);
+      if (proc) {
+        await ioTimeout(
+          proc.waitForPort(8787, { timeout: deadline - Date.now() }),
+          "runner waitForPort"
+        );
+        return;
+      }
+      if (Date.now() >= deadline) {
+        throw new Error(`runner process ${processId} never registered`);
+      }
+      await new Promise((r) => setTimeout(r, 1000));
     }
   }
 
