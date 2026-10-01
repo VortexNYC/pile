@@ -709,6 +709,13 @@ export class SandboxCliAgentProvider implements AgentProvider {
             sessionId,
             "printf '%s' \"$RUNNER_PY_B64\" | base64 -d > /tmp/run.py && python3 /tmp/run.py"
           );
+          // Real readiness: the runner binds :8787 when it's alive, so the
+          // 'runner started' marker means the process is actually up — not
+          // just that startProcess returned. Best-effort; a wedge here
+          // throws into the provision-timeout path instead of faking alive.
+          if (compute.waitForRunner) {
+            await compute.waitForRunner(sandbox, sessionId, 60_000);
+          }
           await this.note(
             organizationId,
             sessionId,

@@ -122,6 +122,10 @@ EMAIL_FROM = "notifications@pile.nyc"
 COMPUTE_PROVIDER = "cloudflare"
 PUBLIC_API_URL = "https://pile.nyc"
 FEEDBACK_CHANNEL_ID = "cc2f808d-007e-48a1-870f-bd4c68ae0cd6"
+# Shared container admission ledger (PILE-302) — lanes reserve a slot before
+# spawning; CF_ADMISSION_TOKEN is a wrangler secret matching cloudflare-ci's
+# ADMIN_TOKEN.
+CF_ADMISSION_URL = "https://cloudflare-ci.shlomo-31b.workers.dev"
 
 [[env.production.d1_databases]]
 binding = "D1"

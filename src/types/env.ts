@@ -21,6 +21,13 @@ export interface AppEnv {
   DAYTONA_LABEL_ID?: string;
   /** Compute backend for headless CLI providers: "daytona" (default) or "cloudflare". */
   COMPUTE_PROVIDER?: string;
+  /**
+   * Optional shared container-admission service (cloudflare-ci's scheduler).
+   * Lanes reserve a slot before spawning so account-wide capacity is
+   * coordinated in one place (PILE-302).
+   */
+  CF_ADMISSION_URL?: string;
+  CF_ADMISSION_TOKEN?: string;
   /** Cloudflare Sandbox binding (Workers Containers) for COMPUTE_PROVIDER=cloudflare. */
   SANDBOX?: DurableObjectNamespace<Sandbox>;
   /** Per-provider sandbox bindings — each backed by its own image. */
