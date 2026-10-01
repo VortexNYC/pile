@@ -82,6 +82,9 @@ export type TwoPaneOptions = {
   // Left column width, e.g. "48%".
   readonly leftWidth: `${number}%`;
   readonly detailWrapMode: "char" | "word";
+  // "markdown" swaps the detail pane to a real Markdown renderable — issue
+  // bodies and ticket threads render headings/lists/code instead of raw text.
+  readonly detailFormat?: "text" | "markdown";
   // Fleet's log tail: keep the detail pane pinned to the newest lines.
   readonly detailStickyBottom?: boolean;
   // Where to mount the pane subtree — defaults to renderer.root. `pile home`
@@ -112,6 +115,9 @@ export type TwoPane = {
   requestRender(): void;
   // Modal single-line input. Owns the keyboard until submit/cancel.
   promptText(options: TuiPromptOptions): void;
+  // `?` cheatsheet overlay. Owns the keyboard until esc/q/enter; onClose lets
+  // the screen un-gate its key handler.
+  showHelp(lines: readonly string[], onClose?: () => void): void;
   closeModal(): void;
   // True while a modal owns the keyboard — hosts defer tab switches.
   modalOpen(): boolean;
@@ -160,12 +166,29 @@ export function createTwoPane(options: TwoPaneOptions): TwoPane {
       ? { stickyScroll: true, stickyStart: "bottom" as const }
       : {}),
   });
-  const detailText = new ot.TextRenderable(renderer, {
-    content: "",
-    wrapMode: options.detailWrapMode,
-    width: "100%",
-    fg: TUI.fg,
-  });
+  const detailText =
+    options.detailFormat === "markdown"
+      ? new ot.MarkdownRenderable(renderer, {
+          content: "",
+          syntaxStyle: ot.SyntaxStyle.fromStyles({
+            "markup.heading": { fg: "#93c5fd", bold: true },
+            "markup.strong": { bold: true },
+            "markup.italic": { italic: true },
+            "markup.raw": { fg: "#4ade80" },
+            "markup.link": { fg: TUI.link, underline: true },
+            "markup.quote": { fg: TUI.muted, italic: true },
+            "markup.list": { fg: TUI.muted },
+          }),
+          conceal: true,
+          width: "100%",
+          fg: TUI.fg,
+        })
+      : new ot.TextRenderable(renderer, {
+          content: "",
+          wrapMode: options.detailWrapMode,
+          width: "100%",
+          fg: TUI.fg,
+        });
   right.add(detailText);
   panes.add(left);
   panes.add(right);
@@ -302,6 +325,43 @@ export function createTwoPane(options: TwoPaneOptions): TwoPane {
       };
       renderer.keyInput.on("keypress", modalKeyHandler);
       input.focus();
+      renderer.requestRender();
+    },
+    showHelp(lines, onClose) {
+      closeModal();
+      const box = new ot.BoxRenderable(renderer, {
+        position: "absolute",
+        top: "15%",
+        left: "20%",
+        width: "60%",
+        border: true,
+        title: "keys",
+        borderColor: TUI.borderFocused,
+        backgroundColor: TUI.modalBg,
+        flexDirection: "column",
+        padding: 1,
+      });
+      const text = new ot.TextRenderable(renderer, {
+        content: [...lines, "", "esc · q — close"].join("\n"),
+        wrapMode: "word",
+        width: "100%",
+        fg: TUI.fg,
+      });
+      box.add(text);
+      renderer.root.add(box);
+      modal = box;
+      modalKeyHandler = (key) => {
+        if (
+          key.name === "escape" ||
+          key.name === "q" ||
+          key.name === "return"
+        ) {
+          closeModal();
+          onClose?.();
+          renderer.requestRender();
+        }
+      };
+      renderer.keyInput.on("keypress", modalKeyHandler);
       renderer.requestRender();
     },
     closeModal,

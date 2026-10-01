@@ -236,7 +236,9 @@ export async function homeCommand(
 
   renderer.keyInput.on("keypress", (key) => {
     const k: TuiKey = { name: key.name, ctrl: key.ctrl, shift: key.shift };
-    if (k.name === "tab" || k.name === "]") {
+    // `[`/`]` + digits switch tabs — `tab` stays screen-local (the issues
+    // inbox uses it to focus its detail pane).
+    if (k.name === "]") {
       setActive((active + 1) % mounted.length);
       return;
     }

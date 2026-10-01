@@ -644,14 +644,28 @@ export type InboxView = {
   render(model: InboxViewModel): void;
   onKey(handler: (key: InboxKey) => void): void;
   tableViewportRows(): number;
+  showHelp?(lines: readonly string[], onClose?: () => void): void;
   destroy(): void;
 };
+
+const SUPPORT_HELP = [
+  "j / k · arrows    move between tickets",
+  "g / G             first / last ticket",
+  "d                 mark done",
+  "t                 back to todo",
+  "s / S             snooze 1 day / 1 week",
+  "f                 cycle status filter",
+  "r                 refresh now",
+  "?                 this help",
+  "q · ctrl-c        quit",
+];
 
 export const SUPPORT_PANE_OPTIONS = {
   leftTitle: "tickets",
   rightTitle: "ticket",
   leftWidth: "48%",
   detailWrapMode: "word",
+  detailFormat: "markdown",
 } as const;
 
 export function createSupportView(pane: TwoPane): InboxView {
@@ -659,6 +673,7 @@ export function createSupportView(pane: TwoPane): InboxView {
     start: () => pane.start(),
     onKey: (handler) => pane.onKey(handler),
     tableViewportRows: () => pane.tableViewportRows(),
+    showHelp: (lines, onClose) => pane.showHelp(lines, onClose),
     render(model) {
       const header: TextChunk[][][] = [
         ["", "#", "STATUS", "PRI", "CUSTOMER", "CH", "AGE", "TITLE"].map(
@@ -814,6 +829,7 @@ export async function supportCommand(
     return pollInFlight;
   };
 
+  let helpOpen = false;
   let actionInFlight = false;
   async function runAction(
     status: TicketStatus,
@@ -839,7 +855,15 @@ export async function supportCommand(
 
   view.onKey((key) => {
     if (stopped) return;
-    if (key.name === "q" || (key.ctrl && key.name === "c")) {
+    if (key.ctrl && key.name === "c") {
+      stopped = true;
+      resolveQuit();
+      return;
+    }
+    // The help overlay owns the keyboard until esc/q closes it — q goes to
+    // the modal, not quit.
+    if (helpOpen) return;
+    if (key.name === "q") {
       stopped = true;
       resolveQuit();
       return;
@@ -858,6 +882,13 @@ export async function supportCommand(
     }
     if (key.name === "r") {
       void poll();
+      return;
+    }
+    if (key.name === "?" || (key.name === "/" && key.shift)) {
+      helpOpen = true;
+      view.showHelp?.(SUPPORT_HELP, () => {
+        helpOpen = false;
+      });
       return;
     }
     if (key.name === "f") {

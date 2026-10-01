@@ -759,6 +759,7 @@ export type InboxView = {
   scrollDetail(deltaLines: number): void;
   scrollDetailTo(position: "top" | "bottom"): void;
   promptText(options: InboxPromptOptions): void;
+  showHelp?(lines: readonly string[], onClose?: () => void): void;
   destroy(): void;
 };
 
@@ -771,6 +772,21 @@ const PRIORITY_COLORS: Record<string, string> = {
 
 const TITLE_MAX = 48;
 
+const INBOX_HELP = [
+  "j / k · arrows    move between issues",
+  "g / G             first / last issue",
+  "tab               focus the detail pane (esc back)",
+  "b / t / i / d / x move → backlog / todo / in_progress / done / canceled",
+  "a                 assign (member or agent picker)",
+  "c                 comment",
+  "o                 open linked PR in browser",
+  "/                 search title + description",
+  "f                 cycle status filter",
+  "r                 refresh now",
+  "?                 this help",
+  "q · ctrl-c        quit",
+];
+
 function truncateTitle(title: string): string {
   return title.length > TITLE_MAX ? `${title.slice(0, TITLE_MAX - 1)}…` : title;
 }
@@ -780,6 +796,7 @@ export const INBOX_PANE_OPTIONS = {
   rightTitle: "detail",
   leftWidth: "55%",
   detailWrapMode: "word",
+  detailFormat: "markdown",
 } as const;
 
 export function createInboxView(pane: TwoPane): InboxView {
@@ -790,6 +807,7 @@ export function createInboxView(pane: TwoPane): InboxView {
     scrollDetail: (deltaLines) => pane.scrollDetail(deltaLines),
     scrollDetailTo: (position) => pane.scrollDetailTo(position),
     promptText: (options) => pane.promptText(options),
+    showHelp: (lines, onClose) => pane.showHelp(lines, onClose),
     render(model) {
       const header: TextChunk[][][] = [
         ["", "ID", "TITLE", "STATUS", "PRI", "TEAM", "ASSIGNEE", "PR"].map(
@@ -904,6 +922,7 @@ export async function inboxCommand(
 
   let stopped = false;
   let inputOpen = false;
+  let helpOpen = false;
   let resolveQuit!: () => void;
   const ownQuit = new Promise<void>((resolve) => {
     resolveQuit = resolve;
@@ -1155,8 +1174,8 @@ export async function inboxCommand(
       resolveQuit();
       return;
     }
-    // While a text prompt owns the keyboard, only ctrl-c is global.
-    if (inputOpen) return;
+    // Modals (text prompt, help overlay) own the keyboard until closed.
+    if (inputOpen || helpOpen) return;
     if (key.name === "q") {
       stopped = true;
       resolveQuit();
@@ -1217,6 +1236,12 @@ export async function inboxCommand(
       return;
     } else if (key.name === "o") {
       openSelectedPr();
+      return;
+    } else if (key.name === "?" || (key.name === "/" && key.shift)) {
+      helpOpen = true;
+      view.showHelp?.(INBOX_HELP, () => {
+        helpOpen = false;
+      });
       return;
     } else if (key.name === "/") {
       promptSearch();

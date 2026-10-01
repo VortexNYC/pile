@@ -886,11 +886,26 @@ export type FleetView = {
   // Modal single-line input (nudge prompt, branch override, custom agent id).
   // Owns the keyboard until submit/cancel.
   promptText(options: FleetPromptOptions): void;
+  showHelp?(lines: readonly string[], onClose?: () => void): void;
   destroy(): void;
 };
 
 // Pane layout shared by standalone `pile fleet` and the fleet tab in
 // `pile home`.
+const FLEET_HELP = [
+  "j / k · arrows    move between lanes",
+  "g / G             first / last lane",
+  "space             mark lane's issue for dispatch",
+  "esc               clear marks",
+  "d                 dispatch marked/selected (agent picker → branch)",
+  "x                 cancel lane",
+  "n                 nudge lane with a follow-up prompt",
+  "R                 retry a finished lane",
+  "r                 refresh now",
+  "?                 this help",
+  "q · ctrl-c        quit",
+];
+
 export const FLEET_PANE_OPTIONS = {
   leftTitle: "sessions",
   rightTitle: "log",
@@ -907,6 +922,7 @@ export function createFleetView(pane: TwoPane): FleetView {
     onKey: (handler) => pane.onKey(handler),
     tableViewportRows: () => pane.tableViewportRows(),
     promptText: (options) => pane.promptText(options),
+    showHelp: (lines, onClose) => pane.showHelp(lines, onClose),
     render(model) {
       const header: TextChunk[][][] = [
         ["", "STATUS", "ISSUE", "AGENT", "AGE", "PR"].map((h) => [
@@ -1229,6 +1245,7 @@ export async function fleetCommand(
   }
 
   let inputOpen = false;
+  let helpOpen = false;
   function openInput(options: FleetPromptOptions): void {
     inputOpen = true;
     model.setMode("input");
@@ -1431,8 +1448,8 @@ export async function fleetCommand(
       resolveQuit();
       return;
     }
-    // The modal text input owns the keyboard until it submits or cancels.
-    if (inputOpen) return;
+    // Modals (text input, help overlay) own the keyboard until closed.
+    if (inputOpen || helpOpen) return;
     if (key.name === "q") {
       stopped = true;
       resolveQuit();
@@ -1478,6 +1495,12 @@ export async function fleetCommand(
       return;
     } else if (key.name === "r") {
       void poll();
+    } else if (key.name === "?" || (key.name === "/" && key.shift)) {
+      helpOpen = true;
+      view.showHelp?.(FLEET_HELP, () => {
+        helpOpen = false;
+      });
+      return;
     }
     render();
   });
