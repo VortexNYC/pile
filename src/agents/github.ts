@@ -28,6 +28,7 @@ import { VortexError } from "../platform/errors.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import type { Issue } from "../types/workspace.js";
 import { nudgeLane } from "./nudge.js";
+import { routeSubmittedReview } from "./sweep.js";
 
 const pullRequestPayloadSchema = z.object({
   action: z.string(),
@@ -665,52 +666,23 @@ async function processPullRequestReview(
     }
   }
 
-  // Emit the same detection event the sweep produces so neither path
-  // re-detects a review the other already recorded; the dedupeKey carries
-  // delivery semantics (retry until the lane actually has it).
+  // Same routing the PR sync runs (shared pr.review detection + delivery
+  // dedupe), so whichever path sees the review first acts on it.
   const session = await resolveLaneForIssue(stub, issue.id);
-  const reviewState = (review.state ?? "").toUpperCase();
-  if (session) {
-    const seen = await stub
-      .listAgentSessionEvents(session.id, { limit: 100, order: "desc" })
-      .catch(() => []);
-    const isNew = !seen.some(
-      (e) =>
-        e.type === "pr.review" &&
-        typeof e.payload === "string" &&
-        e.payload.includes(marker)
-    );
-    if (isNew) {
-      await stub
-        .addAgentSessionEvent({
-          sessionId: session.id,
-          type: "pr.review",
-          message: `${author} reviewed ${pull_request.html_url}: ${reviewState.toLowerCase()}`,
-          payload: {
-            prUrl: pull_request.html_url,
-            headSha: pull_request.head.sha,
-            reviewId: marker,
-            state: reviewState,
-            reviewer: author,
-          },
-        })
-        .catch(() => {});
-    }
-  }
-
-  const body = review.body?.trim() ?? "";
-  if (reviewState !== "CHANGES_REQUESTED" && body.length === 0) return;
-  const reviewPrompt =
-    `${author} reviewed ${pull_request.html_url} (${reviewState.toLowerCase()}).\n` +
-    (body ? `Review:\n${body}\n` : "") +
-    "Read the review comments on the PR, address the feedback, and push.";
-  await nudgeLaneForIssue(
+  await routeSubmittedReview(
     env,
     stub,
     workspaceRecord.organizationId,
+    session,
     issue,
-    pull_request.html_url,
-    { prompt: reviewPrompt, reason: "review feedback", dedupeKey: marker }
+    {
+      id: review.id,
+      state: (review.state ?? "").toUpperCase(),
+      reviewer: author,
+      body: review.body?.trim() ?? "",
+      prUrl: pull_request.html_url,
+      headSha: pull_request.head.sha,
+    }
   );
 }
 

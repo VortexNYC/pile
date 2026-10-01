@@ -7,7 +7,10 @@ import { resolveAgentEnv } from "./daytona.js";
 import { followupThrottleWindowMs, laneFollowupThrottled } from "./followup.js";
 import { dispatchAgent, getAgentProvider } from "./index.js";
 
-const DELIVERED_TYPES = new Set(["prompt.followup", "prompt.redispatch"]);
+export const DELIVERED_TYPES = new Set([
+  "prompt.followup",
+  "prompt.redispatch",
+]);
 
 // THE lane nudge path — one implementation shared by the sweep (poll
 // backstop) and the GitHub webhook (fast path). sendPrompt through the

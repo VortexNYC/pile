@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 import { createD1 } from "../global/db.js";
 import { getInstallationTokenForRepo } from "../global/github-auth.js";
 import { scrubCaptureText } from "../global/redact.js";
@@ -6,7 +8,11 @@ import { processIncomingMessage } from "../global/support-channels.js";
 import { replyLaneResultToTicket } from "../global/support-escalation.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkerEnv } from "../platform/middleware.js";
-import type { AgentSession, AgentSessionStatus } from "../types/workspace.js";
+import type {
+  AgentSession,
+  AgentSessionStatus,
+  Issue,
+} from "../types/workspace.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
 import type { ComputeBackend } from "./compute.js";
 import { resolveGeneratedConflict } from "./conflict-fix.js";
@@ -18,7 +24,7 @@ import {
   providerKeepsTerminalSandbox,
 } from "./index.js";
 import { getLaneDbProvider, type LaneDbRef } from "./lane-db.js";
-import { nudgeLane } from "./nudge.js";
+import { DELIVERED_TYPES, nudgeLane } from "./nudge.js";
 import type {
   AgentProvider,
   AgentProviderSession,
@@ -642,7 +648,8 @@ async function fireAutomation(
 }
 
 /** Event automations (PILE-211): trigger_value is the event name —
- *  pr.ci_failed, issue.assigned, issue.commented. */
+ *  pr.ci_failed, pr.review, pr.review_changes, issue.assigned,
+ *  issue.commented. */
 async function fireEventAutomations(
   env: WorkerEnv,
   stub: DurableObjectStub<WorkspaceDO>,
@@ -671,6 +678,105 @@ async function fireEventAutomations(
       context
     );
   }
+}
+
+type SessionEvent = Awaited<
+  ReturnType<WorkspaceDO["listAgentSessionEvents"]>
+>[number];
+
+/** A non-approving verdict: changes requested, or a plain comment review
+ *  that actually says something. Approvals and dismissals never ask the
+ *  author lane for a fix. */
+export function reviewRequestsChanges(state: string, body: string): boolean {
+  return (
+    state === "CHANGES_REQUESTED" || (state === "COMMENTED" && body.length > 0)
+  );
+}
+
+/** PILE-274 — the review verdict → action loop, shared by the
+ *  pull_request_review webhook (fast path) and the PR sync (backstop). One
+ *  deduped pr.review detection per review; a new non-approving verdict fires
+ *  `pr.review_changes` event automations; anything actionable nudges the
+ *  authoring lane with the review body (delivery-deduped on the review id,
+ *  so a busy-sandbox rejection retries on later passes). */
+export async function routeSubmittedReview(
+  env: WorkerEnv,
+  stub: DurableObjectStub<WorkspaceDO>,
+  organizationId: string,
+  session: AgentSession | null,
+  issue: Issue | undefined,
+  review: {
+    id: number;
+    state: string;
+    reviewer: string;
+    body: string;
+    prUrl: string;
+    headSha: string | null;
+  },
+  seenEvents?: SessionEvent[]
+): Promise<void> {
+  if (!session) return;
+  const marker = `review-${review.id}`;
+  const seen =
+    seenEvents ??
+    (await stub
+      .listAgentSessionEvents(session.id, { limit: 100, order: "desc" })
+      .catch(() => []));
+  const isNew = !seen.some(
+    (e) =>
+      e.type === "pr.review" &&
+      typeof e.payload === "string" &&
+      e.payload.includes(marker)
+  );
+  if (isNew) {
+    await stub
+      .addAgentSessionEvent({
+        sessionId: session.id,
+        type: "pr.review",
+        message: `${review.reviewer} reviewed ${review.prUrl}: ${review.state.toLowerCase()}`,
+        payload: {
+          prUrl: review.prUrl,
+          headSha: review.headSha,
+          reviewId: marker,
+          state: review.state,
+          reviewer: review.reviewer,
+        },
+      })
+      .catch(() => {});
+  }
+  const requestsChanges = reviewRequestsChanges(review.state, review.body);
+  if (!requestsChanges && review.body.length === 0) return;
+  const prompt =
+    `${review.reviewer} reviewed ${review.prUrl} (${review.state.toLowerCase()}).\n` +
+    (review.body ? `Review:\n${review.body}\n` : "") +
+    "Read the review comments on the PR, address the feedback, and push. " +
+    "Review threads you were sent are resolved once your fix is pushed; " +
+    "reply on a thread instead if you disagree with it.";
+  if (isNew) {
+    await fireEventAutomations(
+      env,
+      stub,
+      organizationId,
+      "pr.review",
+      session,
+      prompt
+    );
+    if (requestsChanges) {
+      await fireEventAutomations(
+        env,
+        stub,
+        organizationId,
+        "pr.review_changes",
+        session,
+        prompt
+      );
+    }
+  }
+  await nudgeLane(env, stub, organizationId, session, issue, review.prUrl, {
+    prompt,
+    reason: "review feedback",
+    dedupeKey: marker,
+  });
 }
 
 export async function sweepAgentSessions(
@@ -1023,6 +1129,273 @@ async function githubApiPut(
     throw new Error(`github PUT ${path} -> ${res.status}`);
   }
   return res.json();
+}
+
+const graphqlEnvelopeSchema = z.object({
+  data: z.unknown().optional(),
+  errors: z.array(z.object({ message: z.string() })).optional(),
+});
+
+async function githubGraphql(
+  ghFetch: typeof fetch,
+  token: string,
+  query: string,
+  variables: Record<string, unknown>
+): Promise<unknown> {
+  const res = await ghFetch("https://api.github.com/graphql", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github+json",
+      "User-Agent": "pile-agent-sweep",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ query, variables }),
+  });
+  if (!res.ok) {
+    throw new Error(`github graphql -> ${res.status}`);
+  }
+  const json = graphqlEnvelopeSchema.parse(await res.json());
+  if (json.errors && json.errors.length > 0) {
+    throw new Error(
+      `github graphql: ${json.errors.map((e) => e.message).join("; ")}`
+    );
+  }
+  return json.data;
+}
+
+const REVIEW_THREADS_QUERY = `query($owner: String!, $repo: String!, $num: Int!) {
+  repository(owner: $owner, name: $repo) {
+    pullRequest(number: $num) {
+      commits(last: 1) { nodes { commit { oid committedDate } } }
+      reviewThreads(first: 100) {
+        nodes {
+          id
+          isResolved
+          comments(first: 1) {
+            nodes {
+              databaseId
+              originalCommit { oid }
+              pullRequestReview { databaseId }
+            }
+          }
+        }
+      }
+    }
+  }
+}`;
+
+const RESOLVE_REVIEW_THREAD_MUTATION = `mutation($threadId: ID!) {
+  resolveReviewThread(input: { threadId: $threadId }) { thread { id } }
+}`;
+
+const reviewThreadSchema = z.object({
+  id: z.string(),
+  isResolved: z.boolean(),
+  comments: z.object({
+    nodes: z.array(
+      z.object({
+        databaseId: z.number().nullable(),
+        originalCommit: z.object({ oid: z.string() }).nullable(),
+        pullRequestReview: z
+          .object({ databaseId: z.number().nullable() })
+          .nullable(),
+      })
+    ),
+  }),
+});
+
+type ReviewThread = z.infer<typeof reviewThreadSchema>;
+
+const reviewThreadsResponseSchema = z.object({
+  repository: z
+    .object({
+      pullRequest: z
+        .object({
+          commits: z.object({
+            nodes: z.array(
+              z.object({
+                commit: z.object({
+                  oid: z.string(),
+                  committedDate: z.string(),
+                }),
+              })
+            ),
+          }),
+          reviewThreads: z.object({ nodes: z.array(reviewThreadSchema) }),
+        })
+        .nullable(),
+    })
+    .nullable(),
+});
+
+function parseEventPayload(e: SessionEvent): Record<string, unknown> | null {
+  if (typeof e.payload !== "string") return null;
+  try {
+    const parsed: unknown = JSON.parse(e.payload);
+    return typeof parsed === "object" && parsed !== null
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Review/comment nudges the author lane actually received, keyed by the
+ *  nudge dedupeKey (`review-<id>` / `comment-<id>`) → earliest delivery. */
+export function reviewDeliveries(events: SessionEvent[]): Map<string, number> {
+  const delivered = new Map<string, number>();
+  for (const e of events) {
+    if (!DELIVERED_TYPES.has(e.type)) continue;
+    const key = parseEventPayload(e)?.key;
+    if (typeof key !== "string") continue;
+    if (!key.startsWith("review-") && !key.startsWith("comment-")) continue;
+    const at = Date.parse(e.createdAt);
+    if (!Number.isFinite(at)) continue;
+    const prior = delivered.get(key);
+    if (prior === undefined || at < prior) delivered.set(key, at);
+  }
+  return delivered;
+}
+
+/** Unresolved threads the author lane was nudged about and has since pushed
+ *  past: the head commit postdates the delivery and isn't the commit the
+ *  thread was opened on. Threads Pile already resolved once are left alone
+ *  so a human re-opening one sticks. */
+export function addressedReviewThreads(input: {
+  threads: ReviewThread[];
+  deliveries: Map<string, number>;
+  headSha: string;
+  headCommittedAt: number;
+  alreadyResolved: Set<string>;
+}): string[] {
+  const out: string[] = [];
+  for (const thread of input.threads) {
+    if (thread.isResolved || input.alreadyResolved.has(thread.id)) continue;
+    const first = thread.comments.nodes[0];
+    if (!first) continue;
+    if (first.originalCommit?.oid === input.headSha) continue;
+    const keys = [
+      first.pullRequestReview?.databaseId != null
+        ? `review-${first.pullRequestReview.databaseId}`
+        : null,
+      first.databaseId != null ? `comment-${first.databaseId}` : null,
+    ];
+    const deliveredAt = keys
+      .map((k) => (k ? input.deliveries.get(k) : undefined))
+      .filter((t): t is number => t !== undefined);
+    if (deliveredAt.length === 0) continue;
+    if (!(input.headCommittedAt > Math.min(...deliveredAt))) continue;
+    out.push(thread.id);
+  }
+  return out;
+}
+
+/** PILE-274 — close the review loop on GitHub: once the author lane pushes
+ *  the fix for feedback it was sent, the matching review threads resolve.
+ *  Recorded as one pr.review_threads_resolved event per pass. */
+async function resolveAddressedReviewThreads(
+  stub: DurableObjectStub<WorkspaceDO>,
+  session: AgentSession,
+  gh: {
+    ghFetch: typeof fetch;
+    token: string;
+    owner: string;
+    repo: string;
+    num: number;
+    prUrl: string;
+    headSha: string;
+    probeTimeoutMs: number;
+  }
+): Promise<void> {
+  try {
+    // Webhook deliveries land on the issue's resolved lane, which can be an
+    // older sibling of the PR's newest session — read the issue's lanes.
+    const lanes: AgentSession[] = await stub
+      .listAgentSessions({ issueId: session.issueId, limit: 5 })
+      .catch(() => []);
+    if (!lanes.some((l) => l.id === session.id)) lanes.push(session);
+    const events = (
+      await Promise.all(
+        lanes.map((l) =>
+          stub
+            .listAgentSessionEvents(l.id, { limit: 100, order: "desc" })
+            .catch(() => [])
+        )
+      )
+    ).flat();
+    const deliveries = reviewDeliveries(events);
+    if (deliveries.size === 0) return;
+    const alreadyResolved = new Set<string>();
+    for (const e of events) {
+      if (e.type !== "pr.review_threads_resolved") continue;
+      const ids = parseEventPayload(e)?.threadIds;
+      if (!Array.isArray(ids)) continue;
+      for (const id of ids) if (typeof id === "string") alreadyResolved.add(id);
+    }
+    const data = reviewThreadsResponseSchema.parse(
+      await withTimeout(
+        githubGraphql(gh.ghFetch, gh.token, REVIEW_THREADS_QUERY, {
+          owner: gh.owner,
+          repo: gh.repo,
+          num: gh.num,
+        }),
+        gh.probeTimeoutMs,
+        "github-review-threads"
+      )
+    );
+    const pull = data.repository?.pullRequest;
+    const head = pull?.commits.nodes.at(-1)?.commit;
+    if (!pull || !head || head.oid !== gh.headSha) return;
+    const headCommittedAt = Date.parse(head.committedDate);
+    if (!Number.isFinite(headCommittedAt)) return;
+    const toResolve = addressedReviewThreads({
+      threads: pull.reviewThreads.nodes,
+      deliveries,
+      headSha: gh.headSha,
+      headCommittedAt,
+      alreadyResolved,
+    });
+    const resolved: string[] = [];
+    for (const threadId of toResolve) {
+      try {
+        await withTimeout(
+          githubGraphql(gh.ghFetch, gh.token, RESOLVE_REVIEW_THREAD_MUTATION, {
+            threadId,
+          }),
+          gh.probeTimeoutMs,
+          "github-resolve-thread"
+        );
+        resolved.push(threadId);
+      } catch (err) {
+        console.error("review thread resolve failed", {
+          session: session.id,
+          prUrl: gh.prUrl,
+          threadId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+    if (resolved.length === 0) return;
+    await stub
+      .addAgentSessionEvent({
+        sessionId: session.id,
+        type: "pr.review_threads_resolved",
+        message: `Resolved ${resolved.length} review thread${resolved.length === 1 ? "" : "s"} on ${gh.prUrl} after the fix landed`,
+        payload: {
+          prUrl: gh.prUrl,
+          headSha: gh.headSha,
+          threadIds: resolved,
+        },
+      })
+      .catch(() => {});
+  } catch (err) {
+    console.error("review thread sync failed", {
+      session: session.id,
+      prUrl: gh.prUrl,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 export function prStateFromPull(pr: Record<string, unknown>): string {
@@ -1392,57 +1765,35 @@ export async function syncOpenPrSessions(
             .catch(() => []);
           for (const review of reviews) {
             if (typeof review.id !== "number") continue;
-            const marker = `review-${review.id}`;
-            const reviewState = (review.state ?? "").toUpperCase();
-            const reviewer = review.user?.login ?? "reviewer";
-            const body = (review.body ?? "").trim();
-            const isNew = !seen.some(
-              (e) =>
-                e.type === "pr.review" &&
-                typeof e.payload === "string" &&
-                e.payload.includes(marker)
+            await routeSubmittedReview(
+              env,
+              stub,
+              organizationId,
+              session,
+              issue,
+              {
+                id: review.id,
+                state: (review.state ?? "").toUpperCase(),
+                reviewer: review.user?.login ?? "reviewer",
+                body: (review.body ?? "").trim(),
+                prUrl,
+                headSha,
+              },
+              seen
             );
-            if (isNew) {
-              await stub
-                .addAgentSessionEvent({
-                  sessionId: session.id,
-                  type: "pr.review",
-                  message: `${reviewer} reviewed ${prUrl}: ${reviewState.toLowerCase()}`,
-                  payload: {
-                    prUrl,
-                    headSha,
-                    reviewId: marker,
-                    state: reviewState,
-                    reviewer,
-                  },
-                })
-                .catch(() => {});
-            }
-            const actionable =
-              reviewState === "CHANGES_REQUESTED" || body.length > 0;
-            if (!actionable) continue;
-            const reviewPrompt =
-              `${reviewer} reviewed ${prUrl} (${reviewState.toLowerCase()}).\n` +
-              (body ? `Review:\n${body}\n` : "") +
-              "Read the review comments on the PR, address the feedback, and push.";
-            if (isNew) {
-              await fireEventAutomations(
-                env,
-                stub,
-                organizationId,
-                "pr.review",
-                session,
-                reviewPrompt
-              );
-            }
-            // Delivery dedupe, not detection: a rejected nudge retries on
-            // later sweeps until the lane actually gets this review.
-            await nudgeLane(env, stub, organizationId, session, issue, prUrl, {
-              prompt: reviewPrompt,
-              reason: "review feedback",
-              dedupeKey: marker,
-            });
           }
+        }
+        if (headSha) {
+          await resolveAddressedReviewThreads(stub, session, {
+            ghFetch,
+            token,
+            owner,
+            repo,
+            num: Number(num),
+            prUrl,
+            headSha,
+            probeTimeoutMs,
+          });
         }
       }
 

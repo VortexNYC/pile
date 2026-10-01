@@ -9,6 +9,7 @@ import { createAdminHeaders } from "../platform/test-auth.js";
 import { MockAgentProvider } from "./harness.js";
 import { registerAgentProvider } from "./index.js";
 import {
+  addressedReviewThreads,
   DEFAULT_INACTIVITY_MINUTES,
   DEFAULT_PROVISION_TIMEOUT_MINUTES,
   DEFAULT_TIMEOUT_MINUTES,
@@ -17,6 +18,7 @@ import {
   parseAgentTimeouts,
   progressIsStale,
   prStateFromPull,
+  reviewRequestsChanges,
   shouldUpdatePrBranch,
   summarizeCheckRuns,
   sweepAgentSessions,
@@ -175,6 +177,85 @@ describe("ingestFailedAgentSession", () => {
       .from(supportTickets)
       .where(eq(supportTickets.organizationId, organizationId));
     expect(after).toHaveLength(1);
+  });
+});
+
+describe("reviewRequestsChanges", () => {
+  it("treats changes requested and substantive comment reviews as non-approving", () => {
+    expect(reviewRequestsChanges("CHANGES_REQUESTED", "")).toBe(true);
+    expect(reviewRequestsChanges("COMMENTED", "nit: rename")).toBe(true);
+    expect(reviewRequestsChanges("COMMENTED", "")).toBe(false);
+    expect(reviewRequestsChanges("APPROVED", "lgtm, one nit")).toBe(false);
+    expect(reviewRequestsChanges("DISMISSED", "")).toBe(false);
+  });
+});
+
+function reviewThreadFixture(
+  id: string,
+  over: {
+    reviewId?: number | null;
+    commentId?: number | null;
+    commit?: string;
+    isResolved?: boolean;
+  } = {}
+) {
+  return {
+    id,
+    isResolved: over.isResolved ?? false,
+    comments: {
+      nodes: [
+        {
+          databaseId: over.commentId ?? null,
+          originalCommit: { oid: over.commit ?? "old" },
+          pullRequestReview:
+            over.reviewId === null ? null : { databaseId: over.reviewId ?? 1 },
+        },
+      ],
+    },
+  };
+}
+
+describe("addressedReviewThreads", () => {
+  const base = {
+    deliveries: new Map([
+      ["review-1", 1_000],
+      ["comment-77", 1_000],
+    ]),
+    headSha: "new",
+    headCommittedAt: 2_000,
+    alreadyResolved: new Set<string>(),
+  };
+
+  it("resolves delivered threads the head commit has moved past", () => {
+    expect(
+      addressedReviewThreads({
+        ...base,
+        threads: [
+          reviewThreadFixture("by-review"),
+          reviewThreadFixture("by-comment", { reviewId: 9, commentId: 77 }),
+          reviewThreadFixture("undelivered", { reviewId: 2 }),
+          reviewThreadFixture("open-on-head", { commit: "new" }),
+          reviewThreadFixture("resolved", { isResolved: true }),
+        ],
+      })
+    ).toEqual(["by-review", "by-comment"]);
+  });
+
+  it("waits for a push after delivery and never re-resolves a thread", () => {
+    expect(
+      addressedReviewThreads({
+        ...base,
+        headCommittedAt: 500,
+        threads: [reviewThreadFixture("early")],
+      })
+    ).toEqual([]);
+    expect(
+      addressedReviewThreads({
+        ...base,
+        alreadyResolved: new Set(["reopened"]),
+        threads: [reviewThreadFixture("reopened")],
+      })
+    ).toEqual([]);
   });
 });
 
@@ -1845,6 +1926,139 @@ describe("syncOpenPrSessions", () => {
     });
 
     expect((await stub.getAgentSession(session.id))?.prState).toBe("open");
+  });
+  // PILE-274 — once the author lane pushes past feedback it was delivered,
+  // the matching review threads resolve (once; untouched otherwise).
+  it("resolves delivered review threads after the author pushes the fix", async () => {
+    const agentId = `mock-review-${crypto.randomUUID().slice(0, 8)}`;
+    const prompts: string[] = [];
+    registerMock(agentId, {
+      sendPrompt: async (_id, prompt) => {
+        prompts.push(prompt);
+        return true;
+      },
+    });
+    const issue = await stub.createIssue({ title: "Review threads" });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+      prUrl: "https://github.com/vortexnyc/pile/pull/950",
+      prState: "open",
+    });
+    let committedDate = "2020-01-01T00:00:00Z";
+    const resolvedThreads: string[] = [];
+    const fetchReview = (async (
+      input: RequestInfo | URL,
+      init?: RequestInit
+    ) => {
+      const url = String(input);
+      if (url.endsWith("/graphql")) {
+        const body = JSON.parse(String(init?.body)) as {
+          query: string;
+          variables: { threadId?: string };
+        };
+        if (body.query.startsWith("mutation")) {
+          resolvedThreads.push(body.variables.threadId ?? "");
+          return new Response(
+            JSON.stringify({
+              data: { resolveReviewThread: { thread: { id: "t" } } },
+            }),
+            { status: 200 }
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            data: {
+              repository: {
+                pullRequest: {
+                  commits: {
+                    nodes: [{ commit: { oid: "fix222", committedDate } }],
+                  },
+                  reviewThreads: {
+                    nodes: [
+                      reviewThreadFixture("T-delivered", {
+                        reviewId: 5001,
+                        commit: "old111",
+                      }),
+                      reviewThreadFixture("T-other", {
+                        reviewId: 6001,
+                        commit: "old111",
+                      }),
+                      reviewThreadFixture("T-done", {
+                        reviewId: 5001,
+                        commit: "old111",
+                        isResolved: true,
+                      }),
+                    ],
+                  },
+                },
+              },
+            },
+          }),
+          { status: 200 }
+        );
+      }
+      if (url.endsWith("/pulls/950")) {
+        return new Response(
+          JSON.stringify({
+            state: "open",
+            merged_at: null,
+            head: { sha: "fix222" },
+          }),
+          { status: 200 }
+        );
+      }
+      if (url.includes("/commits/fix222/check-runs")) {
+        return new Response(
+          JSON.stringify({
+            check_runs: [{ status: "completed", conclusion: "success" }],
+          }),
+          { status: 200 }
+        );
+      }
+      if (url.includes("/pulls/950/reviews")) {
+        return new Response(
+          JSON.stringify([
+            {
+              id: 5001,
+              state: "CHANGES_REQUESTED",
+              body: "rename the helper",
+              user: { login: "human" },
+            },
+          ]),
+          { status: 200 }
+        );
+      }
+      return new Response("not found", { status: 404 });
+    }) as typeof fetch;
+    const deps = {
+      tokenForRepo: async () => "gh-test-token",
+      fetch: fetchReview,
+    };
+
+    // Head predates the delivery: the fix hasn't landed yet.
+    await syncOpenPrSessions(env, stub, organizationId, deps);
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toContain("rename the helper");
+    expect(resolvedThreads).toHaveLength(0);
+
+    committedDate = new Date(Date.now() + 60_000).toISOString();
+    await syncOpenPrSessions(env, stub, organizationId, deps);
+    await syncOpenPrSessions(env, stub, organizationId, deps);
+
+    expect(prompts).toHaveLength(1);
+    expect(resolvedThreads).toEqual(["T-delivered"]);
+    const types = (await stub.listAgentSessionEvents(session.id, {})).map(
+      (e) => e.type
+    );
+    expect(types.filter((t) => t === "pr.review")).toHaveLength(1);
+    expect(
+      types.filter((t) => t === "pr.review_threads_resolved")
+    ).toHaveLength(1);
   });
 });
 

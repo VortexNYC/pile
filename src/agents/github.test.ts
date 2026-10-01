@@ -344,4 +344,81 @@ describe("github pr review → lane nudge (PILE-224)", () => {
     // Completed lanes are resumable — the follow-up is the review→lane loop.
     expect(prompts.length).toBe(before + 1);
   });
+
+  // PILE-274 — a non-approving verdict fires pr.review_changes event
+  // automations; an approval doesn't.
+  it("fires pr.review_changes automations on a non-approving review only", async () => {
+    const s = stub();
+    const target = await s.createIssue({ title: "Review-changes automation" });
+    const automation = await s.createAgentAutomation({
+      name: "on review changes",
+      prompt: "fix it",
+      agentId: "nudge-mock",
+      issueId: target.id,
+      triggerKind: "event",
+      triggerValue: "pr.review_changes",
+    });
+    const reviewBranch = `${BRANCH}-changes`;
+    const issue = await s.createIssue({
+      title: "Changes requested",
+      repo: REPO,
+      branch: reviewBranch,
+    });
+    await s.createAgentSession({
+      issueId: issue.id,
+      agentId: "nudge-mock",
+      provider: "nudge-mock",
+      actorId: "review-user",
+      actorType: "user",
+      status: "running",
+      providerSessionId: "remote-nudge-changes",
+    });
+    const pull = {
+      number: 46,
+      html_url: `https://github.com/${REPO}/pull/46`,
+      head: { ref: reviewBranch, sha: "aaa111", repo: { full_name: REPO } },
+    };
+
+    await processGithubWebhookPayload(
+      createD1(env.D1),
+      env as unknown as WorkerEnv,
+      queuePayload(
+        "pull_request_review",
+        reviewPayload({
+          review: {
+            id: 7101,
+            state: "approved",
+            body: "",
+            user: { login: "reviewer-gh" },
+            html_url: `https://github.com/${REPO}/pull/46#pullrequestreview-7101`,
+          },
+          pull_request: pull,
+        })
+      )
+    );
+    expect(await s.listAgentSessions({ issueId: target.id })).toHaveLength(0);
+
+    const before = prompts.length;
+    await processGithubWebhookPayload(
+      createD1(env.D1),
+      env as unknown as WorkerEnv,
+      queuePayload(
+        "pull_request_review",
+        reviewPayload({
+          review: {
+            id: 7102,
+            state: "changes_requested",
+            body: "handle the empty list",
+            user: { login: "reviewer-gh" },
+            html_url: `https://github.com/${REPO}/pull/46#pullrequestreview-7102`,
+          },
+          pull_request: pull,
+        })
+      )
+    );
+    expect(prompts.length).toBe(before + 1);
+    expect(prompts.at(-1)).toContain("handle the empty list");
+    expect(await s.listAgentSessions({ issueId: target.id })).toHaveLength(1);
+    await s.deleteAgentAutomation(automation!.id);
+  });
 });
