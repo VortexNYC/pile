@@ -10,6 +10,7 @@ import { dirname, join } from "node:path";
 
 import { COMMANDS } from "./commands.js";
 import { fleetCommand, type FleetDeps } from "./fleet.js";
+import { inboxCommand, type InboxDeps } from "./inbox.js";
 
 type Json =
   | null
@@ -1079,6 +1080,7 @@ function printUsage(): void {
     "agent context push --workspace <org> [--dir .]",
     "agent sessions watch <sessionId> --workspace <org>",
     "fleet --workspace <org>",
+    "inbox --workspace <org>",
     "agent dispatch-batch --workspace <org> --file batch.json",
     "issues dispatch <id> --workspace <org> --follow [--timeout <min>]",
   ]) {
@@ -1356,7 +1358,7 @@ async function sessionWatchCommand(
 
 export async function runCli(
   args: readonly string[] = process.argv.slice(2),
-  deps: FleetDeps = {}
+  deps: FleetDeps & InboxDeps = {}
 ): Promise<number> {
   try {
     const { positionals, flags, multi } = parseArgs(args);
@@ -1426,6 +1428,10 @@ export async function runCli(
 
     if (scope === "fleet") {
       return await fleetCommand(flags, deps);
+    }
+
+    if (scope === "inbox" || (scope === "issues" && positionals.length === 1)) {
+      return await inboxCommand(flags, deps);
     }
 
     if (
