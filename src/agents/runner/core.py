@@ -114,6 +114,8 @@ TOKEN_REFRESH_MARGIN_SEC = 300
 REPO_DIR = os.path.join(HOME, 'repo')
 RESULT_FILE = '/tmp/agent-result.json'
 AGENT_LABEL = os.environ.get('AGENT_LABEL', 'Agent')
+# 'plan' lanes (PILE-283) read the repo and report a plan — never push.
+LANE_MODE = os.environ.get('PILE_LANE_MODE', '')
 PR_ERRORS = []
 RUN_STARTED = time.time()
 LANE_RESTRICTED = os.environ.get('PILE_LANE_RESTRICTED') == '1'
@@ -1096,6 +1098,9 @@ def _refuse_default_branch():
 def commit_and_push(agent_env=None):
     # agent_env only feeds the prePush hook; the runner's git never runs
     # through the agent's PATH (or a restricted lane's shims).
+    if LANE_MODE == 'plan':
+        print('plan lane: skipping commit/push')
+        return False
     validate_branch()
     if PUSH_POLICY == 'disabled':
         committed = commit_local(agent_env)

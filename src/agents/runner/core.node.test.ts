@@ -91,6 +91,8 @@ elif mode == "finalize":
     out = {"rc": rc, "prUrl": result["prUrl"], "posts": posts}
 elif mode == "browser":
     out = {"env": mod.__dict__["with_browser_env"]({}), "prompt": mod.__dict__["lane_prompt"]()}
+elif mode == "push":
+    out = {"pushed": mod.__dict__["commit_and_push"](dict(os.environ))}
 else:
     raise AssertionError("unknown mode " + mode)
 
@@ -108,9 +110,10 @@ interface HarnessResult {
   posts?: Array<{ head?: string; base?: string }>;
   env?: Record<string, string>;
   prompt?: string;
+  pushed?: boolean;
 }
 
-function runnerEnv(): NodeJS.ProcessEnv {
+function runnerEnv(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     REPO: "acme/widgets",
@@ -127,7 +130,8 @@ function runnerEnv(): NodeJS.ProcessEnv {
   delete env.PILE_TOKEN_URL;
   delete env.LANE_TOKEN;
   delete env.npm_config_store_dir;
-  return env;
+  delete env.PILE_LANE_MODE;
+  return { ...env, ...extra };
 }
 
 const PYTHON = execFileSync(
@@ -138,17 +142,13 @@ const PYTHON = execFileSync(
 
 function runHarness(
   pulls: Array<Record<string, unknown>>,
-  mode: "find" | "finalize" | "browser",
-  envOverrides: NodeJS.ProcessEnv = {}
+  mode: "find" | "finalize" | "browser" | "push",
+  extraEnv: Record<string, string> = {}
 ): HarnessResult {
   const out = execFileSync(
     PYTHON,
     [HARNESS_PATH, CORE_PATH, JSON.stringify(pulls), mode],
-    {
-      encoding: "utf8",
-      env: { ...runnerEnv(), ...envOverrides },
-      timeout: 30_000,
-    }
+    { encoding: "utf8", env: runnerEnv(extraEnv), timeout: 30_000 }
   );
   const line = out
     .trim()
@@ -265,6 +265,14 @@ describe("runner headless browser (PILE-292)", () => {
     });
     expect(res.env).toEqual({});
     expect(res.prompt).toBe(PROMPT);
+  });
+});
+
+describe("runner plan mode (PILE-283)", () => {
+  it("never commits or pushes a plan lane", () => {
+    // A real push would need git + a remote; the guard returns first.
+    const res = runHarness([], "push", { PILE_LANE_MODE: "plan" });
+    expect(res.pushed).toBe(false);
   });
 });
 
