@@ -436,7 +436,11 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
                 active.session.providerSessionId ?? active.session.id,
                 `${identity.id} commented on ${issue.identifier ?? issue.id}:\n\n${body}`,
                 issue,
-                gitIdentity
+                gitIdentity,
+                {
+                  organizationId,
+                  backupRef: active.session.sandboxBackupRef ?? null,
+                }
               );
               if (delivered) {
                 await issueStub

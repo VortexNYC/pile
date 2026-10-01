@@ -566,11 +566,34 @@ export async function dispatchAgent(
 
     return updated ?? session;
   } catch (error) {
+    // Dispatch-time substrate failure (container spawn 503, RPC transport
+    // reset, compute I/O timeout) is infra-class — it gets the retry path
+    // and feeds the fleet breaker, not the task-failure trail.
+    let infraFailure = false;
+    if (error instanceof VortexError && (error.status === 503 || error.status === 504)) {
+      infraFailure = true;
+    } else {
+      try {
+        const sandboxSdk = (await import(
+          "@cloudflare/sandbox"
+        )) as {
+          isPlatformTransientError?: (e: unknown) => boolean;
+          isDurableObjectCodeUpdateReset?: (e: unknown) => boolean;
+        };
+        infraFailure =
+          sandboxSdk.isPlatformTransientError?.(error) === true ||
+          sandboxSdk.isDurableObjectCodeUpdateReset?.(error) === true;
+      } catch {
+        // Plain-node contexts (generators, tests) can't resolve the SDK —
+        // classification stays task-failure there.
+      }
+    }
     await stub.applyAgentSessionResult(
       session.id,
       {
         status: "failed",
         result: error instanceof Error ? error.message : String(error),
+        infraFailure,
       },
       actor.id
     );

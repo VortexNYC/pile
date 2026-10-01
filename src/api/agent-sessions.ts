@@ -2554,7 +2554,11 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
           session.providerSessionId ?? sessionId,
           prompt,
           issue,
-          gitIdentity
+          gitIdentity,
+          {
+            organizationId,
+            backupRef: session.sandboxBackupRef ?? null,
+          }
         )
       : false;
     if (!delivered) {

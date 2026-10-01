@@ -33,12 +33,16 @@ export interface MockAgentProviderOptions {
   ) => string | Promise<string | null> | null;
   cancel?: (sessionId: string) => void | Promise<void>;
   keepsTerminalSandbox?: boolean;
+  backupTerminalSandbox?: (
+    trackerSessionId: string
+  ) => string | null | Promise<string | null>;
 }
 
 export class MockAgentProvider implements AgentProvider {
   readonly id: string;
   readonly keepsTerminalSandbox: boolean;
   cancel?: (sessionId: string) => Promise<void>;
+  backupTerminalSandbox?: (trackerSessionId: string) => Promise<string | null>;
   private options: MockAgentProviderOptions;
 
   constructor(id: string, options: MockAgentProviderOptions = {}) {
@@ -48,6 +52,11 @@ export class MockAgentProvider implements AgentProvider {
     const cancel = options.cancel;
     if (cancel) {
       this.cancel = async (sessionId) => cancel(sessionId);
+    }
+    const backup = options.backupTerminalSandbox;
+    if (backup) {
+      this.backupTerminalSandbox = async (trackerSessionId) =>
+        backup(trackerSessionId);
     }
   }
 

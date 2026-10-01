@@ -689,6 +689,18 @@ async function reapTerminalArtifacts(
         session.agentId,
         resolveAgentEnv(env, providerConfig ?? undefined)
       );
+      // Snapshot the worktree to R2 before the sandbox dies — a later
+      // follow-up restores it onto a fresh container instead of cold-cloning.
+      if (provider.backupTerminalSandbox) {
+        const backupRef = await provider
+          .backupTerminalSandbox(session.providerSessionId ?? session.id)
+          .catch(() => null);
+        if (backupRef) {
+          await stub
+            .updateAgentSession(session.id, { sandboxBackupRef: backupRef })
+            .catch(() => null);
+        }
+      }
       if (provider.cancel) {
         await provider.cancel(session.providerSessionId ?? session.id);
       }

@@ -98,6 +98,14 @@ export interface ComputeBackend {
     sessionId: string
   ): Promise<string | null>;
   deleteSandbox(sandbox: ComputeSandbox): Promise<void>;
+  /**
+   * Serialize the lane worktree (/workspace/repo) to an R2 backup before the
+   * sandbox is destroyed. Returns a JSON string the caller stores on the
+   * session row; restoreWorktree() revives a fresh sandbox from it.
+   */
+  backupWorktree?(sandbox: ComputeSandbox): Promise<string | null>;
+  /** Spawn a sandbox under `name` and restore a stored worktree backup. */
+  restoreWorktree?(name: string, backupJson: string): Promise<ComputeSandbox>;
   health(): Promise<{ ok: boolean; message?: string }>;
 }
 
@@ -427,6 +435,9 @@ export type SandboxHandle = Pick<
   | "writeFile"
   | "destroy"
   | "getProcessLogs"
+  | "createBackup"
+  | "restoreBackup"
+  | "exec"
 >;
 
 export class CloudflareBackend implements ComputeBackend {
@@ -584,6 +595,56 @@ export class CloudflareBackend implements ComputeBackend {
     } catch {
       return null;
     }
+  }
+
+  async backupWorktree(sandbox: ComputeSandbox): Promise<string | null> {
+    try {
+      const handle = await ioTimeout(
+        this.sandbox(sandbox.name),
+        "sandbox handle"
+      );
+      // Backups only allow /workspace|/home|/tmp|/var/tmp|/app roots — the
+      // lane worktree lives at $HOME/repo (/root, not allowed), so stage a
+      // copy under /tmp first. Credentials stay in $HOME, outside the backup.
+      await ioTimeout(
+        handle.exec(
+          "rm -rf /tmp/pile-worktree && mkdir -p /tmp/pile-worktree && cp -a /root/repo/. /tmp/pile-worktree/"
+        ),
+        "sandbox backup staging"
+      );
+      const backup = await ioTimeout(
+        handle.createBackup({
+          dir: "/tmp/pile-worktree",
+          gitignore: true,
+          excludes: ["node_modules", ".cache", "*.log"],
+          name: `lane-${sandbox.name}`,
+        }),
+        "sandbox createBackup"
+      );
+      return JSON.stringify(backup);
+    } catch {
+      // A wedged or already-gone sandbox just means no backup — the caller
+      // falls back to cold dispatch, same as before this existed.
+      return null;
+    }
+  }
+
+  async restoreWorktree(
+    name: string,
+    backupJson: string
+  ): Promise<ComputeSandbox> {
+    const handle = await ioTimeout(this.sandbox(name), "sandbox handle");
+    await ioTimeout(
+      handle.restoreBackup(JSON.parse(backupJson)),
+      "sandbox restoreBackup"
+    );
+    // The backup restores into its staged /tmp path — land it at the lane's
+    // real worktree so the follow-up runner sees the branch as it left it.
+    await ioTimeout(
+      handle.exec("mkdir -p /root && cp -a /tmp/pile-worktree /root/repo"),
+      "sandbox restore copy"
+    );
+    return { id: name, name, state: "started" };
   }
 
   async deleteSandbox(sandbox: ComputeSandbox): Promise<void> {

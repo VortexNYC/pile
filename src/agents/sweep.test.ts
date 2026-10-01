@@ -159,6 +159,7 @@ describe("ingestFailedAgentSession", () => {
       resultSchemaErrors: null,
       lastReviewedSha: null,
       reviewSummary: null,
+      sandboxBackupRef: null,
     };
     const polled = {
       id: "prov-1",
@@ -1128,7 +1129,9 @@ describe("sweepAgentSessions", () => {
       const agentId = `mock-tcap-${p}-${crypto.randomUUID().slice(0, 4)}`;
       registerMock(agentId, {
         keepsTerminalSandbox: true,
-        cancel: (id) => canceled.push(id),
+        cancel: (id) => {
+          canceled.push(id);
+        },
       });
       const issue = await stub.createIssue({ title: `Cap provider ${p}` });
       for (let i = 0; i < 4; i++) {
@@ -1268,6 +1271,43 @@ describe("sweepAgentSessions", () => {
 
     expect((await stub.getAgentSession(session.id))?.status).toBe("running");
   });
+
+  it("backs up the worktree before reaping a kept sandbox", async () => {
+    const agentId = `mock-backup-${crypto.randomUUID().slice(0, 8)}`;
+    let backedUp = "";
+    registerMock(agentId, {
+      keepsTerminalSandbox: true,
+      backupTerminalSandbox: (id) => {
+        backedUp = id;
+        return `{"backupId":"bk-${id}"}`;
+      },
+      cancel: (id) => {
+        canceled.push(id);
+      },
+    });
+    const canceled: string[] = [];
+    const issue = await stub.createIssue({ title: "Backup on reap" });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "completed",
+    });
+    // Outside the resume window → reap path.
+    await stub.updateAgentSession(session.id, {
+      endedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    });
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    expect(backedUp).toBe(session.providerSessionId ?? session.id);
+    const after = await stub.getAgentSession(session.id);
+    expect(after?.sandboxBackupRef).toBe(`{"backupId":"bk-${session.providerSessionId ?? session.id}"}`);
+    expect(after?.lastStateHash).toBe("reaped");
+  });
+
 });
 
 describe("syncOpenPrSessions", () => {

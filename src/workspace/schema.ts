@@ -812,6 +812,7 @@ export const workspaceAgentSessions = sqliteTable(
     // cloned under ~/xrepo — persisted so queue promotion, retries, and the
     // lane token-refresh route see the same set as the original dispatch.
     secondaryRepos: text("secondary_repos" as string),
+    sandboxBackupRef: text("sandbox_backup_ref" as string),
     // PILE-293 — dispatch-time run budget (minutes) and model tier.
     maxDurationMinutes: integer("max_duration_minutes" as string),
     effort: text("effort" as string, {
