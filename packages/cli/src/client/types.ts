@@ -1399,6 +1399,10 @@ export interface paths {
                         branch?: string | null;
                         instructions?: string;
                         preflight?: boolean;
+                        /** @enum {string} */
+                        effort?: "low" | "medium" | "high" | "max";
+                        /** @description Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue */
+                        maxDuration?: number;
                     };
                 };
             };
@@ -1427,6 +1431,9 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            maxDurationMinutes?: number | null;
+                            /** @enum {string|null} */
+                            effort?: "low" | "medium" | "high" | "max" | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;
@@ -1516,6 +1523,9 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                maxDurationMinutes?: number | null;
+                                /** @enum {string|null} */
+                                effort?: "low" | "medium" | "high" | "max" | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -1607,6 +1617,9 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                maxDurationMinutes?: number | null;
+                                /** @enum {string|null} */
+                                effort?: "low" | "medium" | "high" | "max" | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -1659,6 +1672,9 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                maxDurationMinutes?: number | null;
+                                /** @enum {string|null} */
+                                effort?: "low" | "medium" | "high" | "max" | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -1729,6 +1745,10 @@ export interface paths {
                             branch?: string | null;
                             instructions?: string;
                             queuedAfter?: string;
+                            /** @enum {string} */
+                            effort?: "low" | "medium" | "high" | "max";
+                            /** @description Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue */
+                            maxDuration?: number;
                         }[];
                     };
                 };
@@ -1808,6 +1828,9 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                maxDurationMinutes?: number | null;
+                                /** @enum {string|null} */
+                                effort?: "low" | "medium" | "high" | "max" | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -2006,6 +2029,9 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                maxDurationMinutes?: number | null;
+                                /** @enum {string|null} */
+                                effort?: "low" | "medium" | "high" | "max" | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -2100,6 +2126,9 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            maxDurationMinutes?: number | null;
+                            /** @enum {string|null} */
+                            effort?: "low" | "medium" | "high" | "max" | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;
@@ -2202,6 +2231,9 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            maxDurationMinutes?: number | null;
+                            /** @enum {string|null} */
+                            effort?: "low" | "medium" | "high" | "max" | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;
@@ -2570,6 +2602,9 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            maxDurationMinutes?: number | null;
+                            /** @enum {string|null} */
+                            effort?: "low" | "medium" | "high" | "max" | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;
@@ -2654,6 +2689,9 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            maxDurationMinutes?: number | null;
+                            /** @enum {string|null} */
+                            effort?: "low" | "medium" | "high" | "max" | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;
@@ -2737,6 +2775,9 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                maxDurationMinutes?: number | null;
+                                /** @enum {string|null} */
+                                effort?: "low" | "medium" | "high" | "max" | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -2815,6 +2856,10 @@ export interface paths {
                         agentId?: string;
                         model?: string;
                         repo?: string;
+                        /** @enum {string} */
+                        effort?: "low" | "medium" | "high" | "max";
+                        /** @description Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue */
+                        maxDuration?: number;
                     };
                 };
             };
@@ -2844,6 +2889,9 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                maxDurationMinutes?: number | null;
+                                /** @enum {string|null} */
+                                effort?: "low" | "medium" | "high" | "max" | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -2962,6 +3010,9 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            maxDurationMinutes?: number | null;
+                            /** @enum {string|null} */
+                            effort?: "low" | "medium" | "high" | "max" | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;
@@ -3033,6 +3084,10 @@ export interface paths {
                         context?: string;
                         agentId?: string;
                         model?: string;
+                        /** @enum {string} */
+                        effort?: "low" | "medium" | "high" | "max";
+                        /** @description Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue */
+                        maxDuration?: number;
                     };
                 };
             };
@@ -3061,6 +3116,9 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            maxDurationMinutes?: number | null;
+                            /** @enum {string|null} */
+                            effort?: "low" | "medium" | "high" | "max" | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;

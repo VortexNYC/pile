@@ -808,6 +808,11 @@ export const workspaceAgentSessions = sqliteTable(
     // First transition into a terminal status — the kept-sandbox reaper
     // anchors its resume window here; updatedAt churns on every write.
     endedAt: text("ended_at" as string),
+    // PILE-293 — dispatch-time run budget (minutes) and model tier.
+    maxDurationMinutes: integer("max_duration_minutes" as string),
+    effort: text("effort" as string, {
+      enum: ["low", "medium", "high", "max"],
+    }),
   },
   (table) => [
     index("agent_sessions_organization_idx" as string).on(

@@ -777,6 +777,12 @@ const v44 = `ALTER TABLE agent_sessions ADD COLUMN purpose TEXT`;
 // transition, written once.
 const v45 = `ALTER TABLE agent_sessions ADD COLUMN ended_at TEXT`;
 
+// PILE-293 — per-dispatch run budget: maxDuration overrides the provider
+// timeout for this lane; effort is the model tier it was dispatched at.
+const v46 = `ALTER TABLE agent_sessions ADD COLUMN max_duration_minutes INTEGER
+--> statement-breakpoint
+ALTER TABLE agent_sessions ADD COLUMN effort TEXT`;
+
 export const workspaceMigrations = {
   journal: {
     entries: [
@@ -825,6 +831,7 @@ export const workspaceMigrations = {
       { idx: 42, when: 42, tag: "v43", breakpoints: true },
       { idx: 43, when: 43, tag: "v44", breakpoints: true },
       { idx: 44, when: 44, tag: "v45", breakpoints: true },
+      { idx: 45, when: 45, tag: "v46", breakpoints: true },
     ],
   },
   migrations: {
@@ -873,5 +880,6 @@ export const workspaceMigrations = {
     m0042: v43,
     m0043: v44,
     m0044: v45,
+    m0045: v46,
   },
 } satisfies Parameters<typeof migrate>[1];

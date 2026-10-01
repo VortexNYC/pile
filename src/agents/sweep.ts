@@ -149,7 +149,8 @@ async function cancelSession(
   session: AgentSession,
   provider: AgentProvider | null,
   result: string,
-  probeTimeoutMs: number
+  probeTimeoutMs: number,
+  infraFailure = true
 ): Promise<void> {
   const remoteId = session.providerSessionId ?? session.id;
   try {
@@ -173,8 +174,10 @@ async function cancelSession(
       // A sweep kill is infra-class death: the lane produced no task
       // outcome (timeout, dead air, silence), so it counts toward the
       // provider-unhealthy streak and is retry-eligible. Operator cancels
-      // land through the API without this flag.
-      infraFailure: true,
+      // land through the API without this flag, and so does a dispatch's own
+      // maxDuration budget running out — that's the caller's limit, not a
+      // substrate failure.
+      infraFailure,
     },
     undefined
   );
@@ -225,6 +228,38 @@ export async function ingestFailedAgentSession(
       error: err instanceof Error ? err.message : String(err),
     });
   }
+}
+
+// PILE-293 — a lane that exhausts its dispatch-time maxDuration is canceled
+// and handed to humans on the issue thread instead of redispatched: a retry
+// would spend the same budget again on the same outcome.
+async function escalateBudgetExceeded(
+  stub: DurableObjectStub<WorkspaceDO>,
+  session: AgentSession,
+  maxDurationMinutes: number
+): Promise<void> {
+  const message = `Lane ${session.id} hit its ${maxDurationMinutes}m run budget (maxDuration${session.effort ? `, effort ${session.effort}` : ""}) and was canceled — needs a human: narrow the scope, raise maxDuration/effort, or take it over.`;
+  await stub
+    .addAgentSessionEvent({
+      sessionId: session.id,
+      type: "lane.budget_exceeded",
+      message,
+      payload: { maxDurationMinutes, effort: session.effort ?? null },
+    })
+    .catch(() => {});
+  await stub
+    .createComment({
+      issueId: session.issueId,
+      body: message,
+      externalAuthor: "pile-sweep",
+      externalSource: "budget",
+    })
+    .catch((err: unknown) =>
+      console.error("budget escalation comment failed", {
+        session: session.id,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    );
 }
 
 const MAX_AUTO_RETRIES = 1;
@@ -290,7 +325,11 @@ async function retryDeadLane(
         permissions: [],
       },
       undefined,
-      ctx
+      ctx,
+      {
+        effort: session.effort ?? undefined,
+        maxDurationMinutes: session.maxDurationMinutes ?? undefined,
+      }
     );
     await stub.updateAgentSession(retried.id, {
       retryOf: session.id,
@@ -774,7 +813,28 @@ export async function sweepAgentSessions(
         // The run clock starts at the first `running` transition (startedAt),
         // not at dispatch — a queued lane doesn't eat its own budget.
         const runStart = Date.parse(session.startedAt ?? session.createdAt);
+        // PILE-293 — a dispatch-time maxDuration replaces the provider
+        // timeout for this lane, and running out of it escalates.
+        const budget = session.maxDurationMinutes;
         if (
+          budget !== null &&
+          session.status !== "created" &&
+          Number.isFinite(runStart) &&
+          now - runStart >= budget * 60 * 1000
+        ) {
+          await cancelSession(
+            stub,
+            session,
+            provider,
+            `run budget exhausted after ${budget}m (maxDuration)`,
+            probeTimeoutMs,
+            false
+          );
+          await escalateBudgetExceeded(stub, session, budget);
+          return;
+        }
+        if (
+          budget === null &&
           session.status !== "created" &&
           Number.isFinite(runStart) &&
           now - runStart >= timeoutMinutes * 60 * 1000

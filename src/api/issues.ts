@@ -2,6 +2,11 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 import { eq, and } from "drizzle-orm";
 
+import {
+  dispatchEffortSchema,
+  maxDurationSchema,
+  resolveDispatchEffort,
+} from "../agents/budget.js";
 import { loadProviderConfig } from "../agents/credentials.js";
 import { resolveAgentEnv } from "../agents/daytona.js";
 import { dispatchAgent, getAgentProvider } from "../agents/index.js";
@@ -673,6 +678,12 @@ const dispatchRoute = createRoute({
               // session on the target provider instead of the task lane. It
               // reports missing/ambiguous context back onto the issue thread.
               preflight: z.boolean().optional(),
+              // PILE-293 — run budget. effort is a model tier (low→max);
+              // unset, it follows the issue's priority (preflight: low).
+              // maxDuration (minutes) replaces the provider timeout for this
+              // lane; past it the lane is canceled and escalated.
+              effort: dispatchEffortSchema.optional(),
+              maxDuration: maxDurationSchema.optional(),
             })
             .strict(),
         },
@@ -1424,8 +1435,17 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(dispatchRoute, async (c) => {
-    const { agentId, provider, model, repo, branch, instructions, preflight } =
-      c.req.valid("json");
+    const {
+      agentId,
+      provider,
+      model,
+      repo,
+      branch,
+      instructions,
+      preflight,
+      effort,
+      maxDuration,
+    } = c.req.valid("json");
     const { organizationId, id } = c.req.valid("param");
     const identity = c.get("workspaceIdentity");
     const db = createD1(c.env.D1);
@@ -1501,7 +1521,12 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         message: `Agent "${resolvedAgentId}" is not allowed by .pile/config.json (allowed: ${pileConfig.agents.join(", ")})`,
       });
     }
-    const resolvedModel = model ?? pileConfig?.model;
+    const resolvedEffort = resolveDispatchEffort(
+      effort ?? (preflight ? "low" : undefined),
+      target
+    );
+    const resolvedModel =
+      model ?? pileConfig?.effortModels?.[resolvedEffort] ?? pileConfig?.model;
 
     // VTX-209 — deterministic readiness gate. Advisory only: the report rides
     // the response and gaps are annotated on the thread once, so callers see
@@ -1553,6 +1578,8 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
             envAllowlist: pileConfig?.env,
             purpose: "preflight",
             skipQueue: true,
+            effort: resolvedEffort,
+            maxDurationMinutes: maxDuration,
           }
         )
       : await dispatchAgent(
@@ -1563,7 +1590,12 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
           identity,
           resolvedModel,
           getExecutionCtx(c),
-          { instructions, envAllowlist: pileConfig?.env }
+          {
+            instructions,
+            envAllowlist: pileConfig?.env,
+            effort: resolvedEffort,
+            maxDurationMinutes: maxDuration,
+          }
         );
 
     if (target.repo && target.branch && !preflight) {

@@ -2837,6 +2837,21 @@
                   },
                   "preflight": {
                     "type": "boolean"
+                  },
+                  "effort": {
+                    "type": "string",
+                    "enum": [
+                      "low",
+                      "medium",
+                      "high",
+                      "max"
+                    ]
+                  },
+                  "maxDuration": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1440,
+                    "description": "Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue"
                   }
                 },
                 "additionalProperties": false
@@ -2915,6 +2930,21 @@
                     "purpose": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "maxDurationMinutes": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "effort": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high",
+                        "max",
+                        null
+                      ]
                     },
                     "createdAt": {
                       "type": "string"
@@ -3170,6 +3200,21 @@
                         "purpose": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "maxDurationMinutes": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "effort": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "low",
+                            "medium",
+                            "high",
+                            "max",
+                            null
+                          ]
                         },
                         "createdAt": {
                           "type": "string"
@@ -3429,6 +3474,21 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "maxDurationMinutes": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "effort": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "low",
+                            "medium",
+                            "high",
+                            "max",
+                            null
+                          ]
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -3636,6 +3696,21 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "maxDurationMinutes": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "effort": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "low",
+                            "medium",
+                            "high",
+                            "max",
+                            null
+                          ]
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -3818,6 +3893,21 @@
                         },
                         "queuedAfter": {
                           "type": "string"
+                        },
+                        "effort": {
+                          "type": "string",
+                          "enum": [
+                            "low",
+                            "medium",
+                            "high",
+                            "max"
+                          ]
+                        },
+                        "maxDuration": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 1440,
+                          "description": "Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue"
                         }
                       },
                       "required": [
@@ -4016,6 +4106,21 @@
                               "purpose": {
                                 "type": "string",
                                 "nullable": true
+                              },
+                              "maxDurationMinutes": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "effort": {
+                                "type": "string",
+                                "nullable": true,
+                                "enum": [
+                                  "low",
+                                  "medium",
+                                  "high",
+                                  "max",
+                                  null
+                                ]
                               },
                               "createdAt": {
                                 "type": "string"
@@ -4492,6 +4597,21 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "maxDurationMinutes": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "effort": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "low",
+                            "medium",
+                            "high",
+                            "max",
+                            null
+                          ]
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -4786,6 +4906,21 @@
                         "purpose": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "maxDurationMinutes": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "effort": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "low",
+                            "medium",
+                            "high",
+                            "max",
+                            null
+                          ]
                         },
                         "createdAt": {
                           "type": "string"
@@ -5114,6 +5249,21 @@
                     "purpose": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "maxDurationMinutes": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "effort": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high",
+                        "max",
+                        null
+                      ]
                     },
                     "createdAt": {
                       "type": "string"
@@ -5884,6 +6034,21 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "maxDurationMinutes": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "effort": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high",
+                        "max",
+                        null
+                      ]
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -6098,6 +6263,21 @@
                     "purpose": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "maxDurationMinutes": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "effort": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high",
+                        "max",
+                        null
+                      ]
                     },
                     "createdAt": {
                       "type": "string"
@@ -6317,6 +6497,21 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "maxDurationMinutes": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "effort": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "low",
+                            "medium",
+                            "high",
+                            "max",
+                            null
+                          ]
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -6495,6 +6690,21 @@
                   },
                   "repo": {
                     "type": "string"
+                  },
+                  "effort": {
+                    "type": "string",
+                    "enum": [
+                      "low",
+                      "medium",
+                      "high",
+                      "max"
+                    ]
+                  },
+                  "maxDuration": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1440,
+                    "description": "Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue"
                   }
                 },
                 "required": [
@@ -6578,6 +6788,21 @@
                         "purpose": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "maxDurationMinutes": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "effort": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "low",
+                            "medium",
+                            "high",
+                            "max",
+                            null
+                          ]
                         },
                         "createdAt": {
                           "type": "string"
@@ -6881,6 +7106,21 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "maxDurationMinutes": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "effort": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high",
+                        "max",
+                        null
+                      ]
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -7041,6 +7281,21 @@
                   },
                   "model": {
                     "type": "string"
+                  },
+                  "effort": {
+                    "type": "string",
+                    "enum": [
+                      "low",
+                      "medium",
+                      "high",
+                      "max"
+                    ]
+                  },
+                  "maxDuration": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1440,
+                    "description": "Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue"
                   }
                 },
                 "additionalProperties": false
@@ -7119,6 +7374,21 @@
                     "purpose": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "maxDurationMinutes": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "effort": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high",
+                        "max",
+                        null
+                      ]
                     },
                     "createdAt": {
                       "type": "string"

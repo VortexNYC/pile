@@ -12,6 +12,11 @@ import {
   type AgentSession,
   type Issue,
 } from "../types/workspace.js";
+import {
+  parseEffortModels,
+  resolveDispatchEffort,
+  type DispatchEffort,
+} from "./budget.js";
 import { CfAgentProvider } from "./cf-agent.js";
 import { CodexCliAgentProvider } from "./codex-cli.js";
 import { CodexAgentProvider } from "./codex.js";
@@ -159,6 +164,12 @@ export async function dispatchAgent(
      *  `waiting` behind this session id; the sweep promotes it once the
      *  blocker goes terminal. Wins over the dedupe-derived queueAfter. */
     queueAfter?: string;
+    /** PILE-293 — model tier; defaults from the issue's priority. Picks the
+     *  model via provider config `effortModels` when no model is given. */
+    effort?: DispatchEffort;
+    /** PILE-293 — wall-clock run budget in minutes, enforced by the sweep
+     *  in place of the provider timeout. */
+    maxDurationMinutes?: number;
   }
 ): Promise<AgentSession> {
   const stub = env.WORKSPACE_DURABLE_OBJECT.get(
@@ -180,6 +191,18 @@ export async function dispatchAgent(
   // deployment env before constructing the provider. Fields the workspace
   // hasn't set fall back to env, so self-host defaults still work.
   const providerConfig = await loadProviderConfig(env, stub, agentId);
+  // A promoted session keeps the budget it was queued with.
+  const promoteTarget = options?.promoteSessionId
+    ? await stub.getAgentSession(options.promoteSessionId)
+    : null;
+  const effort = resolveDispatchEffort(
+    options?.effort ?? promoteTarget?.effort,
+    issue
+  );
+  const maxDurationMinutes =
+    options?.maxDurationMinutes ?? promoteTarget?.maxDurationMinutes ?? null;
+  const resolvedModel =
+    model ?? parseEffortModels(providerConfig?.config)?.[effort];
   const provider = getAgentProvider(
     agentId,
     resolveAgentEnv(env, providerConfig ?? undefined)
@@ -231,6 +254,8 @@ export async function dispatchAgent(
         parentSessionId: options?.parentSessionId ?? null,
         spawnDepth: options?.spawnDepth ?? 0,
         purpose: options?.purpose ?? null,
+        effort,
+        maxDurationMinutes,
       });
       await stub
         .addAgentSessionEvent({
@@ -272,7 +297,7 @@ export async function dispatchAgent(
 
   let session: AgentSession;
   if (options?.promoteSessionId) {
-    const promoted = await stub.getAgentSession(options.promoteSessionId);
+    const promoted = promoteTarget;
     if (!promoted || promoted.status !== "waiting") {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -298,6 +323,8 @@ export async function dispatchAgent(
       parentSessionId: options?.parentSessionId ?? null,
       spawnDepth: options?.spawnDepth ?? 0,
       purpose: options?.purpose ?? null,
+      effort,
+      maxDurationMinutes,
     });
   }
 
@@ -371,7 +398,7 @@ export async function dispatchAgent(
     sessionId: session.id,
     actorId: actor.id,
     type: "thought",
-    message: `Dispatching to ${agentId}…`,
+    message: `Dispatching to ${agentId}… (effort ${effort}${resolvedModel ? `, model ${resolvedModel}` : ""}${maxDurationMinutes ? `, max ${maxDurationMinutes}m` : ""})`,
   });
 
   try {
@@ -430,7 +457,7 @@ export async function dispatchAgent(
     const providerSession = await provider.dispatch(
       organizationId,
       issue,
-      model,
+      resolvedModel,
       {
         sessionId: session.id,
         gitIdentity,
@@ -445,6 +472,7 @@ export async function dispatchAgent(
         pileApi,
         instructions: options?.instructions,
         extraEnv,
+        effort,
       }
     );
 

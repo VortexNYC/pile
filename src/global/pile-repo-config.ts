@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { effortModelsSchema } from "../agents/budget.js";
 import type { AppEnv } from "../types/env.js";
 import {
   getInstallationTokenForRepo,
@@ -13,6 +14,9 @@ export const pileRepoConfigSchema = z.object({
   agents: z.array(z.string()).optional(),
   // Default model applied when the dispatch request doesn't pick one.
   model: z.string().optional(),
+  // PILE-293 — model per effort tier; beats `model` when the dispatch's
+  // effort (explicit or priority-derived) has an entry.
+  effortModels: effortModelsSchema.optional(),
   // Setup hook path, relative to the repo root. The runner executes it after
   // clone; defaults to .pile/setup.sh (which runs regardless of this file).
   setup: z.string().optional(),
