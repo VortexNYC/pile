@@ -825,6 +825,27 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "issues similar list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/issues/{id}/similar",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [
+      {
+        name: "limit",
+        flag: "limit",
+      },
+    ],
+    body: [],
+  },
   "issues batch": {
     method: "POST",
     path: "/workspaces/{organizationId}/issues/batch",
@@ -892,6 +913,14 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "mode",
         flag: "mode",
+      },
+      {
+        name: "effort",
+        flag: "effort",
+      },
+      {
+        name: "maxDuration",
+        flag: "max-duration",
       },
       {
         name: "resultSchema",
@@ -1311,6 +1340,14 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "repo",
         flag: "repo",
       },
+      {
+        name: "effort",
+        flag: "effort",
+      },
+      {
+        name: "maxDuration",
+        flag: "max-duration",
+      },
     ],
   },
   "agent sessions prompt create": {
@@ -1360,6 +1397,14 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "model",
         flag: "model",
+      },
+      {
+        name: "effort",
+        flag: "effort",
+      },
+      {
+        name: "maxDuration",
+        flag: "max-duration",
       },
     ],
   },
@@ -9296,6 +9341,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "triage-assignee-id",
       },
       {
+        name: "triageAgentId",
+        flag: "triage-agent-id",
+      },
+      {
         name: "defaultTemplateId",
         flag: "default-template-id",
       },
@@ -9359,6 +9408,10 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "triageAssigneeId",
         flag: "triage-assignee-id",
+      },
+      {
+        name: "triageAgentId",
+        flag: "triage-agent-id",
       },
       {
         name: "defaultTemplateId",
