@@ -2,8 +2,10 @@ name: Artifacts Sync
 
 on:
   push:
-    branches:
-      - "**"
+    branches-ignore:
+      # Merge-queue temp refs are throwaway — pushing them to Artifacts
+      # would burn cloudflare-ci runs on group refs GitHub deletes.
+      - "gh-readonly-queue/**"
   workflow_dispatch:
 
 concurrency:
