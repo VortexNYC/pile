@@ -573,6 +573,43 @@ describe("sweepAgentSessions", () => {
     expect(after?.lastStateHash).not.toBeNull();
     expect(after?.lastProgressAt).not.toBeNull();
   });
+
+  it("self-heals terminal sessions missing endedAt — including reaped rows", async () => {
+    const issue = await stub.createIssue({ title: "endedAt heal" });
+    // PILE-238 population: a terminal row whose write path skipped endedAt.
+    const unhealed = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "mock-endedat",
+      provider: "mock-endedat",
+      actorId: userId,
+      actorType: "user",
+      status: "completed",
+    });
+    // PILE-254 population: the reaped marker written while endedAt was
+    // still null. The old check order skipped the heal for these rows, so
+    // fleet-health's missingEndedAt never drained.
+    const reaped = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "mock-endedat",
+      provider: "mock-endedat",
+      actorId: userId,
+      actorType: "user",
+      status: "failed",
+    });
+    await stub.updateAgentSession(reaped.id, { lastStateHash: "reaped" });
+
+    expect((await stub.getAgentSession(unhealed.id))?.endedAt).toBeNull();
+    expect((await stub.getAgentSession(reaped.id))?.endedAt).toBeNull();
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    expect((await stub.getAgentSession(unhealed.id))?.endedAt).not.toBeNull();
+    const reapedAfter = await stub.getAgentSession(reaped.id);
+    expect(reapedAfter?.endedAt).not.toBeNull();
+    // The heal backfills the anchor without clearing the marker — a reaped
+    // row must not re-enter the teardown/reap path on later passes.
+    expect(reapedAfter?.lastStateHash).toBe("reaped");
+  });
 });
 
 describe("syncOpenPrSessions", () => {
