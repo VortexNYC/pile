@@ -91,7 +91,7 @@ def apply_and_push(codex_bin, task_url):
         return False
     run(['git', '-C', REPO_DIR, 'add', '-A'], env=env, check=True)
     run(['git', '-C', REPO_DIR, 'commit', '-m', f'{AGENT_LABEL} changes for {BRANCH}'], env=env, check=True)
-    run(['git', '-C', REPO_DIR, 'push', 'origin', BRANCH], env=env, check=True)
+    run_transport(['git', '-C', REPO_DIR, 'push', 'origin', BRANCH], env=env)
     return True
 
 

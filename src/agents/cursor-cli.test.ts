@@ -361,6 +361,57 @@ describe("CursorCliAgentProvider", () => {
     expect(result.status).toBe("failed");
     expect(result.result).toBe("cursor-agent -p failed");
     expect(result.prUrl).toBeNull();
+    expect(result.infraFailure).toBeUndefined();
+  });
+
+  it("propagates infraFailure when the runner marks a transport failure", async () => {
+    const sandboxId = "sb-1";
+    const toolboxBase = `https://proxy.app.daytona.io/toolbox/${sandboxId}`;
+    mockFetch([
+      {
+        url: "https://app.daytona.io/api/sandbox",
+        response: () => ({
+          items: [
+            {
+              id: sandboxId,
+              name: "vortex-cursorcli-sess1",
+              state: "started",
+              toolboxProxyUrl: "https://proxy.app.daytona.io/toolbox",
+              labels: { "vortex.session": "sess-1" },
+            },
+          ],
+        }),
+      },
+      {
+        url: `${toolboxBase}/process/session/sess-1`,
+        response: () => ({
+          sessionId: "sess-1",
+          commands: [
+            { id: "cmd-1", command: "python3 /tmp/run.py", exitCode: 1 },
+          ],
+        }),
+      },
+      {
+        url: `${toolboxBase}/process/execute`,
+        method: "POST",
+        response: () => ({
+          result: JSON.stringify({
+            status: "failed",
+            prUrl: "",
+            branch: "ISS-1-add-thing",
+            result: "Command failed: git push returned 128",
+            infraFailure: true,
+          }),
+          exitCode: 0,
+        }),
+      },
+    ]);
+
+    const provider = new CursorCliAgentProvider(cliEnv());
+    const result = await provider.poll("sess-1");
+    expect(result.status).toBe("failed");
+    expect(result.infraFailure).toBe(true);
+    expect(result.result).toBe("Command failed: git push returned 128");
   });
 
   it("cancels by deleting the sandbox", async () => {
