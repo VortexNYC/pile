@@ -10,7 +10,12 @@ import {
   verifySessionToken,
 } from "../agents/credentials.js";
 import { resolveAgentEnv } from "../agents/daytona.js";
-import { dispatchAgent, getAgentProvider } from "../agents/index.js";
+import {
+  dispatchAgent,
+  getAgentProvider,
+  providerKeepsTerminalSandbox,
+} from "../agents/index.js";
+import { sessionHoldsKeptSandbox } from "../agents/sweep.js";
 import { consumeUsage } from "../global/billing.js";
 import { timingSafeEqualHex } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
@@ -1334,7 +1339,6 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     const rows = await stub.listAgentSessions({ limit: 200 });
 
     const TERMINAL = new Set(["completed", "failed", "canceled"]);
-    const RESUME_WINDOW_MS = 4 * 60 * 60 * 1000;
     const UNHEALTHY_STREAK = 3;
     const now = Date.now();
 
@@ -1343,6 +1347,14 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     const kept = new Map<string, number>();
     const streaks = new Map<string, number>();
     const broken = new Set<string>();
+    const keepsCache = new Map<string, boolean>();
+    const keepsSandbox = (agentId: string): boolean => {
+      const cached = keepsCache.get(agentId);
+      if (cached !== undefined) return cached;
+      const keeps = providerKeepsTerminalSandbox(agentId, c.env);
+      keepsCache.set(agentId, keeps);
+      return keeps;
+    };
 
     for (const row of rows) {
       // rows arrive newest-first — a provider's streak is consecutive infra
@@ -1360,15 +1372,11 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         continue;
       }
       if (!row.endedAt) missingEndedAt += 1;
-      // Kept sandboxes only exist on sandbox-CLI providers (hosted agents
-      // leave no container). This is an upper bound — a destroyed sandbox's
-      // session still counts until it ages out of the window.
-      const anchor = Date.parse(row.endedAt ?? row.updatedAt);
-      if (
-        row.agentId.endsWith("-cli") &&
-        Number.isFinite(anchor) &&
-        now - anchor < RESUME_WINDOW_MS
-      ) {
+      // Same set the kept-sandbox cap enforces (PILE-253): providers that
+      // park their sandbox after a terminal result, still inside the resume
+      // window, and not yet reaped — reaped rows stop counting the moment
+      // the sweep destroys the sandbox, not when they age out.
+      if (sessionHoldsKeptSandbox(row, now) && keepsSandbox(row.agentId)) {
         kept.set(row.agentId, (kept.get(row.agentId) ?? 0) + 1);
       }
     }

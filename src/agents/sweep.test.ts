@@ -573,6 +573,80 @@ describe("sweepAgentSessions", () => {
     expect(after?.lastStateHash).not.toBeNull();
     expect(after?.lastProgressAt).not.toBeNull();
   });
+
+  it("reaps the oldest kept sandboxes beyond the per-provider cap", async () => {
+    const agentId = `mock-keep-${crypto.randomUUID().slice(0, 8)}`;
+    const canceled: string[] = [];
+    registerMock(agentId, {
+      keepsTerminalSandbox: true,
+      cancel: (id) => {
+        canceled.push(id);
+      },
+    });
+    const issue = await stub.createIssue({ title: "Kept-sandbox cap" });
+    // Eight terminal sessions still inside the resume window — the cap of
+    // five keeps the newest, so the oldest three must be reaped.
+    const oldestFirst: string[] = [];
+    for (let i = 0; i < 8; i++) {
+      const session = await stub.createAgentSession({
+        issueId: issue.id,
+        agentId,
+        provider: agentId,
+        actorId: userId,
+        actorType: "user",
+        status: "completed",
+      });
+      await stub.updateAgentSession(session.id, {
+        endedAt: new Date(Date.now() - (8 - i) * 60_000).toISOString(),
+      });
+      oldestFirst.push(session.id);
+    }
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    const rows = await stub.listAgentSessions({ issueId: issue.id });
+    const beyondCap = oldestFirst.slice(0, 3).toSorted();
+    expect(
+      rows
+        .filter((r) => r.lastStateHash === "reaped")
+        .map((r) => r.id)
+        .toSorted()
+    ).toEqual(beyondCap);
+    expect(canceled.toSorted()).toEqual(beyondCap);
+    expect(rows.filter((r) => r.lastStateHash !== "reaped")).toHaveLength(5);
+  });
+
+  it("does not count terminal sessions on providers that drop their sandbox", async () => {
+    const agentId = `mock-drop-${crypto.randomUUID().slice(0, 8)}`;
+    const canceled: string[] = [];
+    registerMock(agentId, {
+      cancel: (id) => {
+        canceled.push(id);
+      },
+    });
+    const issue = await stub.createIssue({ title: "No kept sandboxes" });
+    // Past the cap but this provider deletes its sandbox at terminal —
+    // there is nothing kept to bound, so nothing gets force-reaped.
+    for (let i = 0; i < 8; i++) {
+      const session = await stub.createAgentSession({
+        issueId: issue.id,
+        agentId,
+        provider: agentId,
+        actorId: userId,
+        actorType: "user",
+        status: "completed",
+      });
+      await stub.updateAgentSession(session.id, {
+        endedAt: new Date(Date.now() - (8 - i) * 60_000).toISOString(),
+      });
+    }
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    const rows = await stub.listAgentSessions({ issueId: issue.id });
+    expect(canceled).toHaveLength(0);
+    expect(rows.every((r) => r.lastStateHash !== "reaped")).toBe(true);
+  });
 });
 
 describe("syncOpenPrSessions", () => {
