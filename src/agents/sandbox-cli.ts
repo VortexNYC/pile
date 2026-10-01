@@ -19,6 +19,7 @@ import type { ComputeBackend } from "./compute.js";
 import {
   agentCacheUrl,
   agentGithubTokenUrl,
+  agentLaneMcpUrl,
   agentLogToken,
   agentLogUrl,
 } from "./credentials.js";
@@ -283,7 +284,11 @@ export class SandboxCliAgentProvider implements AgentProvider {
       comments?: DispatchComment[];
       instructions?: string;
       pileApi?: { url: string; key: string } | null;
-      lane?: { tokenUrl: string | null; token: string | null };
+      lane?: {
+        tokenUrl: string | null;
+        token: string | null;
+        mcpUrl?: string | null;
+      };
       log?: { url: string | null; token: string | null };
       cacheUrl?: string | null;
       extra?: Record<string, string>;
@@ -313,6 +318,9 @@ export class SandboxCliAgentProvider implements AgentProvider {
         ? {
             PILE_TOKEN_URL: options.lane.tokenUrl,
             LANE_TOKEN: options.lane.token,
+            ...(options.lane.mcpUrl
+              ? { PILE_LANE_MCP_URL: options.lane.mcpUrl }
+              : {}),
           }
         : {}),
       GITHUB_TOKEN: githubToken,
@@ -406,6 +414,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
                   sessionId
                 ),
                 token: logToken,
+                mcpUrl: agentLaneMcpUrl(workerEnv, organizationId, sessionId),
               },
             }
           );
@@ -691,6 +700,11 @@ export class SandboxCliAgentProvider implements AgentProvider {
         lane: sandbox.organizationId
           ? {
               tokenUrl: agentGithubTokenUrl(
+                this.env as WorkerEnv,
+                sandbox.organizationId,
+                trackerSessionId
+              ),
+              mcpUrl: agentLaneMcpUrl(
                 this.env as WorkerEnv,
                 sandbox.organizationId,
                 trackerSessionId

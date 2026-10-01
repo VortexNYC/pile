@@ -1504,6 +1504,42 @@ describe("agent sessions API", () => {
     expect(unknown.status).toBe(404);
   });
 
+  it("guards the lane MCP endpoint with per-session token auth", async () => {
+    const sessionId = crypto.randomUUID();
+    const laneToken = await agentLogToken(
+      env as unknown as WorkerEnv,
+      organizationId,
+      sessionId
+    );
+    const base = `/workspaces/${organizationId}/agent/sessions/${sessionId}/mcp`;
+    const body = JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/list",
+      params: {},
+    });
+
+    const badToken = await app.fetch(
+      request(base, {
+        method: "POST",
+        headers: { Authorization: "Bearer wrong" },
+        body,
+      }),
+      env
+    );
+    expect(badToken.status).toBe(401);
+
+    const unknown = await app.fetch(
+      request(base, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${laneToken}` },
+        body,
+      }),
+      env
+    );
+    expect(unknown.status).toBe(404);
+  });
+
   it("serves the runner pnpm-store cache with per-session token auth", async () => {
     const sessionId = crypto.randomUUID();
     const cacheToken = await agentLogToken(

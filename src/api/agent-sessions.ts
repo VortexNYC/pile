@@ -15,6 +15,7 @@ import {
   getAgentProvider,
   providerKeepsTerminalSandbox,
 } from "../agents/index.js";
+import { createLaneGithub, resolveLaneTier } from "../agents/lane-tools.js";
 import { sessionHoldsKeptSandbox } from "../agents/sweep.js";
 import { consumeUsage } from "../global/billing.js";
 import { timingSafeEqualHex } from "../global/crypto.js";
@@ -25,6 +26,7 @@ import { createRepoBranch } from "../global/repo-branches.js";
 import { githubInstallations } from "../global/schema.js";
 import { replyLaneResultToTicket } from "../global/support-escalation.js";
 import { canAccessTeam } from "../global/teams.js";
+import { handleLaneMcpRequest } from "../mcp/lane-server.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
@@ -1848,6 +1850,74 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         return c.json({ message: "No installation token for repository" }, 502);
       }
       return c.json({ token });
+    }
+  );
+
+  // Lane MCP (PILE-284): purpose-built GitHub/git tools gated per-tool by
+  // the repo's lane tier (`.pile/config.json` → lane.tier). GitHub calls run
+  // here with the installation token; the lane only sees tool results.
+  app.all(
+    "/workspaces/:organizationId/agent/sessions/:sessionId/mcp",
+    async (c) => {
+      const { organizationId, sessionId } = c.req.param();
+      if (
+        !(await verifySessionToken(
+          c.env,
+          c.req.header("authorization"),
+          organizationId,
+          sessionId
+        ))
+      ) {
+        return c.json({ message: "Unauthorized" }, 401);
+      }
+      const stub = getWorkspaceStub(c.env, organizationId);
+      const session = await stub.getAgentSession(sessionId);
+      if (!session) {
+        return c.json({ message: "Session not found" }, 404);
+      }
+      if (["completed", "failed", "canceled"].includes(session.status)) {
+        return c.json({ message: "Session is terminal" }, 409);
+      }
+      const issue = await stub.getIssue(session.issueId);
+      const repoMatch = /^([^/\s]+)\/([^/\s]+)$/.exec(issue?.repo ?? "");
+      if (!issue || !repoMatch) {
+        return c.json({ message: "Session issue has no repository" }, 422);
+      }
+      const [repo, owner, name] = repoMatch;
+      const branch = session.branch ?? issue.branch ?? `issue-${issue.id}`;
+      const config = await fetchPileRepoConfig(c.env, repo, branch);
+      return handleLaneMcpRequest(c.req.raw, {
+        repo,
+        branch,
+        tier: resolveLaneTier(config),
+        github: createLaneGithub(() =>
+          getInstallationTokenForRepo(c.env, owner, name)
+        ),
+        mintPushToken: () =>
+          getInstallationTokenForRepo(c.env, owner, name, {
+            repositories: [name],
+            permissions: { contents: "write", metadata: "read" },
+          }),
+        session: {
+          reportProgress: async (message, payload) => {
+            await stub.addAgentSessionEvent({
+              sessionId,
+              type: "lane.progress",
+              message,
+              payload,
+            });
+            await stub.updateAgentSession(sessionId, {
+              lastProgressAt: new Date().toISOString(),
+            });
+          },
+          setOutput: async (output) => {
+            await stub.updateAgentSession(sessionId, {
+              ...output,
+              lastProgressAt: new Date().toISOString(),
+            });
+          },
+        },
+      });
     }
   );
 

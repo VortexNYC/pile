@@ -31,6 +31,13 @@ export const pileRepoConfigSchema = z.object({
       regen: z.string().nonempty(),
     })
     .optional(),
+  // Lane permission tier (PILE-284) — which purpose-built lane MCP tools a
+  // lane on this repo may call. Defaults to `write` when unset.
+  lane: z
+    .object({
+      tier: z.enum(["read", "review", "write", "maintain"]),
+    })
+    .optional(),
 });
 
 export type PileRepoConfig = z.infer<typeof pileRepoConfigSchema>;

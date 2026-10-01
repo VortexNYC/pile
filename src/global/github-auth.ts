@@ -31,9 +31,20 @@ async function getAppJwt(env: AppEnv): Promise<string | undefined> {
   return jwt;
 }
 
+/**
+ * Optional downscope for a minted installation token — GitHub narrows the
+ * token to these repository names and permissions (never wider than the
+ * installation's own grant).
+ */
+export interface InstallationTokenScope {
+  repositories?: string[];
+  permissions?: Record<string, "read" | "write">;
+}
+
 export async function getInstallationToken(
   env: AppEnv,
-  installationId: string
+  installationId: string,
+  scope?: InstallationTokenScope
 ): Promise<string | undefined> {
   const jwt = await getAppJwt(env);
   if (!jwt) return undefined;
@@ -47,7 +58,9 @@ export async function getInstallationToken(
         Accept: "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
         "User-Agent": GITHUB_USER_AGENT,
+        ...(scope ? { "Content-Type": "application/json" } : {}),
       },
+      ...(scope ? { body: JSON.stringify(scope) } : {}),
     }
   );
   if (!response.ok) return undefined;
@@ -87,9 +100,10 @@ async function getInstallationIdForRepo(
 export async function getInstallationTokenForRepo(
   env: AppEnv,
   owner: string,
-  name: string
+  name: string,
+  scope?: InstallationTokenScope
 ): Promise<string | undefined> {
   const installationId = await getInstallationIdForRepo(env, owner, name);
   if (!installationId) return undefined;
-  return getInstallationToken(env, installationId);
+  return getInstallationToken(env, installationId, scope);
 }
