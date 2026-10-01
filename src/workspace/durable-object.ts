@@ -3714,6 +3714,15 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       .get();
   }
 
+  async getIssueByPrUrl(prUrl: string): Promise<Issue | undefined> {
+    await this.ready;
+    return this.db
+      .select()
+      .from(workspaceIssues)
+      .where(eq(workspaceIssues.prUrl, prUrl))
+      .get();
+  }
+
   async getIssueByExternalRef(externalRef: string): Promise<Issue | undefined> {
     await this.ready;
     return this.db
