@@ -5,7 +5,7 @@ CURSOR_HOME = os.path.join(HOME, '.local', 'share', 'cursor-agent')
 
 
 def agent_env():
-    return with_browser_env(scrub_env(agent_env_base({'CURSOR_API_KEY': os.environ.get('CURSOR_API_KEY', '')})))
+    return with_browser_env(scrubbed_env({'CURSOR_API_KEY': os.environ.get('CURSOR_API_KEY', '')}))
 
 
 def apply_tool_policy():
@@ -26,7 +26,7 @@ def ensure():
         candidate = os.path.join(INSTALL_DIR, name)
         if os.path.exists(candidate):
             return candidate
-    subprocess.run(['bash', '-c', 'curl https://cursor.com/install -fsS | bash'], check=False)
+    subprocess.run(['bash', '-c', 'curl https://cursor.com/install -fsS | bash'], env=scrubbed_env(shims=False), check=False)
     for name in ('cursor-agent', 'agent'):
         candidate = os.path.join(INSTALL_DIR, name)
         if os.path.exists(candidate):
