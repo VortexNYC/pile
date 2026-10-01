@@ -427,21 +427,33 @@ async function reapTerminalArtifacts(
 
   for (const session of recent) {
     if (!TERMINAL_STATUSES.has(session.status)) continue;
-    if (session.lastStateHash === "reaped") continue;
     // PILE-238 — endedAt is the reaper anchor; a write path that skips it
     // (like the applyAgentSessionResult bypass did) silently leaks kept
     // sandboxes. Self-heal stale rows and log so regressions surface.
+    // PILE-254 — the heal must run before the "reaped" skip: rows marked
+    // reaped while endedAt was still null (reaped under the pre-anchor
+    // code) are invisible to a heal ordered after that check but still
+    // counted by fleet-health's missingEndedAt, pinning it forever.
     if (!session.endedAt) {
       console.error("terminal session missing endedAt", {
         session: session.id,
         organizationId,
         status: session.status,
       });
-      await stub.updateAgentSession(session.id, {
-        endedAt: session.updatedAt,
-      });
+      await stub
+        .updateAgentSession(session.id, {
+          endedAt: session.updatedAt,
+        })
+        .catch((err: unknown) => {
+          console.error("endedAt self-heal failed", {
+            session: session.id,
+            organizationId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
       continue;
     }
+    if (session.lastStateHash === "reaped") continue;
     await teardownLaneDbForSession(env, stub, session);
     // Anchor to the terminal transition — updatedAt churns on every write
     // (prState, laneDb teardown, this reaper's marker) and would otherwise
