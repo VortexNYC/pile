@@ -21,6 +21,7 @@ import {
   laneTodosSchema,
   type LaneTodo,
 } from "../agents/lane-progress.js";
+import { resolveResultSchema, sessionLabel } from "../agents/lane-result.js";
 import { sessionHoldsKeptSandbox } from "../agents/sweep.js";
 import { consumeUsage } from "../global/billing.js";
 import { timingSafeEqualHex } from "../global/crypto.js";
@@ -88,6 +89,14 @@ export const agentSessionSchema = z.object({
   prState: z.string().nullable(),
   branch: z.string().nullable(),
   purpose: z.string().nullable().optional(),
+  /** Auto-generated run name for logs and `pile fleet` (PILE-289). */
+  label: z.string().nullable().optional(),
+  /** Dispatch-time JSON Schema (draft-07) the lane's output is validated
+   *  against; `structuredResult` is the validated value, else
+   *  `resultSchemaErrors` lists why it failed. */
+  resultSchema: z.record(z.string(), z.unknown()).nullable().optional(),
+  structuredResult: z.unknown().nullable().optional(),
+  resultSchemaErrors: z.array(z.string()).nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
   lastProgressAt: z.string().nullable().optional(),
@@ -131,6 +140,7 @@ const agentSessionSummarySchema = agentSessionSchema
     updatedAt: true,
     lastProgressAt: true,
     derivedStatus: true,
+    label: true,
   })
   .extend({
     startedAt: z.string().nullable(),
@@ -180,9 +190,40 @@ function deriveSessionStatus(
   return null;
 }
 
-function toSessionResponse(row: AgentSession, activities?: AgentActivity[]) {
+function parseJsonColumn(value: string | null): unknown {
+  if (value === null) return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseJsonObject(value: string | null): Record<string, unknown> | null {
+  const parsed = parseJsonColumn(value);
+  return isJsonObject(parsed) ? parsed : null;
+}
+
+function parseStringArray(value: string | null): string[] | null {
+  const parsed = parseJsonColumn(value);
+  return Array.isArray(parsed)
+    ? parsed.filter((entry): entry is string => typeof entry === "string")
+    : null;
+}
+
+export function toSessionResponse(
+  row: AgentSession,
+  activities?: AgentActivity[]
+) {
   return {
     ...row,
+    resultSchema: parseJsonObject(row.resultSchema),
+    structuredResult: parseJsonColumn(row.structuredResult),
+    resultSchemaErrors: parseStringArray(row.resultSchemaErrors),
     derivedStatus: deriveSessionStatus(row, activities),
     activities: activities?.map(toActivityResponse),
   };
@@ -204,6 +245,7 @@ function toSessionSummary(row: AgentSessionSummary) {
     updatedAt: row.updatedAt,
     endedAt: row.endedAt,
     lastProgressAt: row.lastProgressAt,
+    label: row.label,
     derivedStatus: deriveSessionStatus(row),
   };
 }
@@ -735,6 +777,15 @@ const registerSessionRoute = createRoute({
   },
 });
 
+// PILE-289 — `"lane"` selects the built-in verdict/summary/filesChanged
+// contract; an object is a caller-supplied draft-07 JSON Schema.
+export const resultSchemaInputSchema = z
+  .union([z.literal("lane"), z.record(z.string(), z.unknown())])
+  .openapi({
+    description:
+      'JSON Schema (draft-07) the lane\'s final output must validate against, or "lane" for the built-in {verdict, summary, filesChanged} shape. The validated value lands on session.structuredResult.',
+  });
+
 // PILE-245 — batch dispatch: one call fans out N issues to lanes. Results are
 // per-item (a conflict or missing issue reports in place instead of failing
 // the batch), and `queuedAfter` sequences an item behind a sibling item's
@@ -746,6 +797,7 @@ const dispatchBatchItemSchema = z
     branch: z.string().nullable().optional(),
     instructions: z.string().optional(),
     queuedAfter: z.string().optional(),
+    resultSchema: resultSchemaInputSchema.optional(),
   })
   .strict();
 
@@ -1014,7 +1066,10 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       );
       if (existing) {
         return c.json(
-          { session: existing, ...(await laneUrls(existing.id)) },
+          {
+            session: toSessionResponse(existing),
+            ...(await laneUrls(existing.id)),
+          },
           200
         );
       }
@@ -1030,6 +1085,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       url: input.url ?? null,
       providerSessionId: input.providerSessionId ?? null,
       prUrl: input.prUrl ?? null,
+      label: sessionLabel(issue, input.provider),
       startedAt:
         (input.status ?? "running") === "running"
           ? new Date().toISOString()
@@ -1052,7 +1108,10 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         branch: input.branch ?? null,
       });
     }
-    return c.json({ session, ...(await laneUrls(session.id)) }, 201);
+    return c.json(
+      { session: toSessionResponse(session), ...(await laneUrls(session.id)) },
+      201
+    );
   });
 
   // PILE-245 — items dispatch concurrently; a failure on one is reported in
@@ -1266,6 +1325,9 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
             instructions: item.instructions,
             envAllowlist: pileConfig?.env,
             queueAfter,
+            resultSchema: item.resultSchema
+              ? resolveResultSchema(item.resultSchema)
+              : undefined,
           }
         );
 
@@ -2373,7 +2435,10 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       );
     }
 
-    return c.json({ session: childSession, issue: childAfter ?? child }, 201);
+    return c.json(
+      { session: toSessionResponse(childSession), issue: childAfter ?? child },
+      201
+    );
   });
 
   app.openapi(promptSessionRoute, async (c) => {
