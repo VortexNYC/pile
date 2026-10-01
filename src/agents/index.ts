@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { createD1 } from "../global/db.js";
+import { findLabelNamesByIds } from "../global/labels.js";
 import { organization } from "../global/schema.js";
 import { createAuth } from "../platform/auth.js";
 import { VortexError } from "../platform/errors.js";
@@ -28,7 +29,12 @@ import {
   laneDbConfigForRepo,
   type LaneDbConfig,
 } from "./lane-db.js";
-import type { AgentProvider } from "./provider.js";
+import type { AgentProvider, DispatchComment } from "./provider.js";
+import {
+  extractPathMentions,
+  reviewLensPrompt,
+  selectReviewLenses,
+} from "./review-lens.js";
 
 // Workspace-wide ceiling on live lanes — the container apps are bounded
 // (max_instances) and one lane's provisioning wedge otherwise starves all.
@@ -126,6 +132,34 @@ async function laneDbConfigForOrgRepo(
     parsed = null;
   }
   return laneDbConfigForRepo(parsed, repo);
+}
+
+// PILE-287 — prime the lane's reviewers with domain lenses picked from the
+// issue's labels and the paths its text references. Label lookup fails open:
+// a D1 hiccup costs label-derived lenses, never the dispatch.
+async function reviewLensBrief(
+  env: WorkerEnv,
+  organizationId: string,
+  issue: Issue,
+  comments: DispatchComment[]
+): Promise<string> {
+  const labelIds = (issue.labelIds ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+  const labels = await findLabelNamesByIds(
+    createD1(env.D1),
+    organizationId,
+    labelIds
+  )
+    .then((rows) => rows.map((row) => row.name))
+    .catch(() => []);
+  const paths = extractPathMentions(
+    [issue.title, issue.description ?? "", ...comments.map((c) => c.body)].join(
+      "\n"
+    )
+  );
+  return reviewLensPrompt(selectReviewLenses({ paths, labels }));
 }
 
 export async function dispatchAgent(
@@ -427,6 +461,11 @@ export async function dispatchAgent(
         .catch(() => {});
     }
 
+    const lensSection =
+      issue.repo && options?.purpose !== "preflight"
+        ? await reviewLensBrief(env, organizationId, issue, comments)
+        : null;
+
     const providerSession = await provider.dispatch(
       organizationId,
       issue,
@@ -444,6 +483,7 @@ export async function dispatchAgent(
         comments,
         pileApi,
         instructions: options?.instructions,
+        reviewLenses: lensSection ?? undefined,
         extraEnv,
       }
     );

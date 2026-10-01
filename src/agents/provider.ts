@@ -43,6 +43,9 @@ export interface AgentDispatchContext {
    *  context section — lets an orchestrator pass constraints without
    *  posting an issue comment. */
   instructions?: string;
+  /** Domain-lens reviewer brief (PILE-287), rendered as its own prompt
+   *  section. */
+  reviewLenses?: string;
   /** Additional sandbox env vars (e.g. lane-DB connection strings from
    *  PILE-212 provisioning). Providers merge these into the runner env. */
   extraEnv?: Record<string, string>;

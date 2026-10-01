@@ -62,7 +62,8 @@ function buildPrompt(
   issue: Issue,
   gitIdentity?: GitIdentity | null,
   comments?: DispatchComment[],
-  instructions?: string
+  instructions?: string,
+  reviewLenses?: string
 ): string {
   const repo = issue.repo ?? "this repository";
   const branch = issue.branch ?? `issue-${issue.id}`;
@@ -109,6 +110,7 @@ function buildPrompt(
     "",
     ...identityLines,
     ...(instructions ? ["", "## Dispatch instructions", "", instructions] : []),
+    ...(reviewLenses ? ["", reviewLenses] : []),
     "",
     "Verify proportionate to the diff: run the project's lint/typecheck and any tests covering code you change (the repository's AGENTS.md lists its proof commands); docs/config-only diffs can skip tests. Note honestly in the PR body what you could not run.",
     "Do not attempt to update Pile yourself — an external system will poll your session and write the PR URL and final status back automatically.",
@@ -149,7 +151,8 @@ export class DevinAgentProvider implements AgentProvider {
             issue,
             sessionContext?.gitIdentity,
             sessionContext?.comments,
-            sessionContext?.instructions
+            sessionContext?.instructions,
+            sessionContext?.reviewLenses
           ),
           repos: repo ? [`https://github.com/${repo}`] : undefined,
           bypass_approval: true,

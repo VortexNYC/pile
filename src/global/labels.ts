@@ -24,6 +24,23 @@ export function findLabelsByWorkspaceAndNames(
     .all();
 }
 
+export function findLabelNamesByIds(
+  db: D1Client,
+  organizationId: string,
+  ids: string[]
+) {
+  if (ids.length === 0) {
+    return Promise.resolve([]);
+  }
+  return db
+    .select({ name: labels.name })
+    .from(labels)
+    .where(
+      and(eq(labels.organizationId, organizationId), inArray(labels.id, ids))
+    )
+    .all();
+}
+
 export type SupportLabel = {
   id: string;
   organizationId: string;

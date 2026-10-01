@@ -137,7 +137,8 @@ function buildPrompt(
   comments: DispatchComment[] | undefined,
   pileApi: { url: string; key: string } | null,
   instructions: string | undefined,
-  pushInstruction: string
+  pushInstruction: string,
+  reviewLenses?: string
 ): string {
   const repo = issue.repo ?? "this repository";
   const branch = issue.branch ?? `issue-${issue.id}`;
@@ -179,6 +180,7 @@ function buildPrompt(
     "",
     ...identityLines,
     ...(instructions ? ["", "## Dispatch instructions", "", instructions] : []),
+    ...(reviewLenses ? ["", reviewLenses] : []),
     "",
     pushInstruction,
     "Do not attempt to update Pile yourself — an external system will poll your session and write the status back automatically.",
@@ -282,6 +284,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
     options: {
       comments?: DispatchComment[];
       instructions?: string;
+      reviewLenses?: string;
       pileApi?: { url: string; key: string } | null;
       lane?: { tokenUrl: string | null; token: string | null };
       log?: { url: string | null; token: string | null };
@@ -295,7 +298,8 @@ export class SandboxCliAgentProvider implements AgentProvider {
       options.comments,
       options.pileApi ?? null,
       options.instructions,
-      this.d.pushInstruction ?? DEFAULT_PUSH_INSTRUCTION
+      this.d.pushInstruction ?? DEFAULT_PUSH_INSTRUCTION,
+      options.reviewLenses
     );
     return {
       ...this.d.credentialEnv(credential, this.env),
@@ -392,6 +396,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
             {
               comments: sessionContext?.comments,
               instructions: sessionContext?.instructions,
+              reviewLenses: sessionContext?.reviewLenses,
               pileApi: sessionContext?.pileApi ?? null,
               extra: sessionContext?.extraEnv,
               log: {
