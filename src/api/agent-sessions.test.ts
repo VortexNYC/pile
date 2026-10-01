@@ -40,6 +40,33 @@ function request(
   });
 }
 
+function registerPlanMock() {
+  const agentId = `mock-plan-${crypto.randomUUID().slice(0, 8)}`;
+  const seen: Array<{
+    instructions?: string;
+    extraEnv?: Record<string, string>;
+  }> = [];
+  registerAgentProvider(
+    agentId,
+    () =>
+      new MockAgentProvider(agentId, {
+        dispatch: (_org, dispatchedIssue, _model, ctx) => {
+          seen.push({
+            instructions: ctx?.instructions,
+            extraEnv: ctx?.extraEnv,
+          });
+          return {
+            id: `plan-${crypto.randomUUID()}`,
+            agentId,
+            issueId: dispatchedIssue.id,
+            status: "created" as const,
+          };
+        },
+      })
+  );
+  return { agentId, seen };
+}
+
 describe("agent sessions API", () => {
   let organizationId: string;
   let token: string;
@@ -451,6 +478,166 @@ describe("agent sessions API", () => {
     expect(seenRepo).toBeNull();
     expect(seenInstructions).toContain("do NOT implement");
     expect(seenInstructions).toContain("VortexNYC/pile");
+  });
+
+  describe("plan mode (PILE-283)", () => {
+    function workspaceStub() {
+      return env.WORKSPACE_DURABLE_OBJECT.get(
+        env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+      );
+    }
+
+    async function createIssue(title: string) {
+      const res = await app.fetch(
+        request(`/workspaces/${organizationId}/issues`, {
+          method: "POST",
+          token,
+          body: JSON.stringify({ title }),
+        }),
+        env
+      );
+      expect(res.status).toBe(201);
+      return res.json<{ id: string }>();
+    }
+
+    async function dispatch(issueId: string, body: Record<string, unknown>) {
+      return app.fetch(
+        request(`/workspaces/${organizationId}/issues/${issueId}/dispatch`, {
+          method: "POST",
+          token,
+          body: JSON.stringify(body),
+        }),
+        env
+      );
+    }
+
+    async function comment(issueId: string, body: string) {
+      const res = await app.fetch(
+        request(`/workspaces/${organizationId}/issues/${issueId}/comments`, {
+          method: "POST",
+          token,
+          body: JSON.stringify({ body }),
+        }),
+        env
+      );
+      expect(res.status).toBe(201);
+    }
+
+    async function completeWithPlan(sessionId: string, plan: string) {
+      await workspaceStub().applyAgentSessionResult(sessionId, {
+        status: "completed",
+        result: JSON.stringify({ output_tail: plan }),
+      });
+    }
+
+    it("plan → revise → implement_plan dispatches a build lane from the plan", async () => {
+      const { agentId, seen } = registerPlanMock();
+      const issue = await createIssue(
+        `Plan-mode flow ${crypto.randomUUID().slice(0, 8)}`
+      );
+
+      const planRes = await dispatch(issue.id, { agentId, mode: "plan" });
+      expect(planRes.status).toBe(201);
+      const planSession = await planRes.json<{
+        id: string;
+        purpose?: string | null;
+      }>();
+      expect(planSession.purpose).toBe("plan");
+      expect(seen[0]?.instructions).toContain("PLAN MODE");
+      expect(seen[0]?.extraEnv?.PILE_LANE_MODE).toBe("plan");
+
+      await completeWithPlan(planSession.id, "1. Approach: add a flag");
+      const stub = workspaceStub();
+      const planComments = (await stub.listComments(issue.id)).filter(
+        (c) => c.externalSource === "plan"
+      );
+      expect(planComments).toHaveLength(1);
+      expect(planComments[0]?.externalId).toBe(planSession.id);
+      expect(planComments[0]?.body).toContain("1. Approach: add a flag");
+
+      // PlanEdit: `/plan <feedback>` revises the latest plan.
+      await comment(issue.id, "/plan use a config key instead of a flag");
+      expect(seen).toHaveLength(2);
+      expect(seen[1]?.instructions).toContain(
+        "Previous plan:\n1. Approach: add a flag"
+      );
+      expect(seen[1]?.instructions).toContain(
+        "use a config key instead of a flag"
+      );
+      expect(seen[1]?.extraEnv?.PILE_LANE_MODE).toBe("plan");
+      const revision = (await stub.getActiveAgentSessionForIssue(issue.id))
+        ?.session;
+      expect(revision?.purpose).toBe("plan");
+      if (!revision) throw new Error("revision lane missing");
+      await completeWithPlan(revision.id, "1. Approach: add a config key");
+
+      const buildRes = await dispatch(issue.id, {
+        agentId,
+        mode: "implement_plan",
+      });
+      expect(buildRes.status).toBe(201);
+      const buildSession = await buildRes.json<{
+        id: string;
+        purpose?: string | null;
+      }>();
+      expect(buildSession.purpose ?? null).toBeNull();
+      expect(seen[2]?.instructions).toContain("APPROVED implementation plan");
+      expect(seen[2]?.instructions).toContain("1. Approach: add a config key");
+      expect(seen[2]?.instructions).not.toContain("add a flag");
+      expect(seen[2]?.extraEnv?.PILE_LANE_MODE).toBeUndefined();
+
+      const events = await stub.listAgentSessionEvents(buildSession.id);
+      expect(events.some((e) => e.type === "lane.plan")).toBe(true);
+    });
+
+    it("implement_plan without a plan is rejected", async () => {
+      const { agentId } = registerPlanMock();
+      const issue = await createIssue(
+        `Planless ${crypto.randomUUID().slice(0, 8)}`
+      );
+      const res = await dispatch(issue.id, { agentId, mode: "implement_plan" });
+      expect(res.status).toBe(400);
+    });
+
+    it("adding the plan label dispatches a plan lane", async () => {
+      const { agentId, seen } = registerPlanMock();
+      const issue = await createIssue(
+        `Plan label ${crypto.randomUUID().slice(0, 8)}`
+      );
+      // An earlier lane pins the agent the label trigger reuses.
+      const firstRes = await dispatch(issue.id, { agentId });
+      expect(firstRes.status).toBe(201);
+      const first = await firstRes.json<{ id: string }>();
+      await workspaceStub().applyAgentSessionResult(first.id, {
+        status: "completed",
+        result: "done",
+      });
+      const labelRes = await app.fetch(
+        request(`/workspaces/${organizationId}/labels`, {
+          method: "POST",
+          token,
+          body: JSON.stringify({ name: "Plan" }),
+        }),
+        env
+      );
+      expect(labelRes.status).toBe(201);
+      const label = await labelRes.json<{ id: string }>();
+
+      const patchRes = await app.fetch(
+        request(`/workspaces/${organizationId}/issues/${issue.id}`, {
+          method: "PATCH",
+          token,
+          body: JSON.stringify({ labelIds: [label.id] }),
+        }),
+        env
+      );
+      expect(patchRes.status).toBe(200);
+      const lane = (
+        await workspaceStub().getActiveAgentSessionForIssue(issue.id)
+      )?.session;
+      expect(lane?.purpose).toBe("plan");
+      expect(seen.at(-1)?.extraEnv?.PILE_LANE_MODE).toBe("plan");
+    });
   });
 
   it("sets a repo's default agent via installation PATCH", async () => {

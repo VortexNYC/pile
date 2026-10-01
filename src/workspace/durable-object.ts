@@ -23,6 +23,12 @@ import { migrate } from "drizzle-orm/durable-sqlite/migrator";
 import { alias } from "drizzle-orm/sqlite-core";
 import { z } from "zod";
 
+import {
+  extractPlanText,
+  formatPlanComment,
+  PLAN_COMMENT_SOURCE,
+  PLAN_PURPOSE,
+} from "../agents/plan.js";
 import { createD1 } from "../global/db.js";
 import {
   attachments as globalAttachments,
@@ -2649,8 +2655,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       oldStatus !== "completed" &&
       (result.result || result.prUrl)
     ) {
-      const commentBody =
-        updatedSession.purpose === "preflight"
+      const isPlan = updatedSession.purpose === PLAN_PURPOSE;
+      const commentBody = isPlan
+        ? formatPlanComment(
+            oldSession.agentId,
+            extractPlanText(result.result) || "No plan — see session stream."
+          )
+        : updatedSession.purpose === "preflight"
           ? `Preflight critique by ${oldSession.agentId}:\n\n${result.result ?? "No report — see session stream."}`
           : result.prUrl
             ? `Agent ${oldSession.agentId} completed${result.result ? `: ${result.result}` : ""}\n\n${result.prUrl}`
@@ -2659,7 +2670,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         issueId: issue.id,
         body: commentBody,
         externalAuthor: oldSession.agentId,
-        externalSource: "agent",
+        externalSource: isPlan ? PLAN_COMMENT_SOURCE : "agent",
         externalId: oldSession.id,
       });
       if (comment) {

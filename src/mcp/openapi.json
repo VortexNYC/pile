@@ -2837,6 +2837,14 @@
                   },
                   "preflight": {
                     "type": "boolean"
+                  },
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "build",
+                      "plan",
+                      "implement_plan"
+                    ]
                   }
                 },
                 "additionalProperties": false

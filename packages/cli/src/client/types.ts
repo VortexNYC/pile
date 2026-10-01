@@ -1399,6 +1399,8 @@ export interface paths {
                         branch?: string | null;
                         instructions?: string;
                         preflight?: boolean;
+                        /** @enum {string} */
+                        mode?: "build" | "plan" | "implement_plan";
                     };
                 };
             };

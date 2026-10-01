@@ -45,6 +45,8 @@ GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN', '')
 REPO_DIR = os.path.join(HOME, 'repo')
 RESULT_FILE = '/tmp/agent-result.json'
 AGENT_LABEL = os.environ.get('AGENT_LABEL', 'Agent')
+# 'plan' lanes (PILE-283) read the repo and report a plan — never push.
+LANE_MODE = os.environ.get('PILE_LANE_MODE', '')
 PR_ERRORS = []
 RUN_STARTED = time.time()
 
@@ -256,6 +258,9 @@ def refresh_github_token():
 
 
 def commit_and_push(agent_env):
+    if LANE_MODE == 'plan':
+        print('plan lane: skipping commit/push')
+        return False
     refresh_github_token()
     # Re-set the remote so the just-refreshed token (not the dispatch-time
     # one, possibly >1h stale) is what push authenticates with.

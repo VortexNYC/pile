@@ -89,6 +89,8 @@ elif mode == "finalize":
     with open("/tmp/agent-result.json") as f:
         result = json.load(f)
     out = {"rc": rc, "prUrl": result["prUrl"], "posts": posts}
+elif mode == "push":
+    out = {"pushed": mod.__dict__["commit_and_push"](dict(os.environ))}
 else:
     raise AssertionError("unknown mode " + mode)
 
@@ -104,9 +106,10 @@ interface HarnessResult {
   rc?: number;
   prUrl?: string;
   posts?: Array<{ head?: string; base?: string }>;
+  pushed?: boolean;
 }
 
-function runnerEnv(): NodeJS.ProcessEnv {
+function runnerEnv(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     REPO: "acme/widgets",
@@ -123,17 +126,19 @@ function runnerEnv(): NodeJS.ProcessEnv {
   delete env.PILE_TOKEN_URL;
   delete env.LANE_TOKEN;
   delete env.npm_config_store_dir;
-  return env;
+  delete env.PILE_LANE_MODE;
+  return { ...env, ...extra };
 }
 
 function runHarness(
   pulls: Array<Record<string, unknown>>,
-  mode: "find" | "finalize"
+  mode: "find" | "finalize" | "push",
+  extraEnv: Record<string, string> = {}
 ): HarnessResult {
   const out = execFileSync(
     "python3",
     [HARNESS_PATH, CORE_PATH, JSON.stringify(pulls), mode],
-    { encoding: "utf8", env: runnerEnv(), timeout: 30_000 }
+    { encoding: "utf8", env: runnerEnv(extraEnv), timeout: 30_000 }
   );
   const line = out
     .trim()
@@ -182,5 +187,13 @@ describe("runner PR resolution (PILE-257)", () => {
     const res = runHarness([], "finalize");
     expect(res.rc).toBe(0);
     expect(res.prUrl).toBe(NEW_PR_URL);
+  });
+});
+
+describe("runner plan mode (PILE-283)", () => {
+  it("never commits or pushes a plan lane", () => {
+    // A real push would need git + a remote; the guard returns first.
+    const res = runHarness([], "push", { PILE_LANE_MODE: "plan" });
+    expect(res.pushed).toBe(false);
   });
 });
