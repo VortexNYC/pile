@@ -133,8 +133,14 @@ describe("CursorCliAgentProvider", () => {
 
     const provider = new CursorCliAgentProvider(cliEnv());
     (
-      provider as unknown as { githubToken: (repo: string) => Promise<string> }
-    ).githubToken = vi.fn().mockResolvedValue("gh-token");
+      provider as unknown as {
+        githubToken: (
+          repo: string
+        ) => Promise<{ token: string; expiresAt: string | null }>;
+      }
+    ).githubToken = vi
+      .fn()
+      .mockResolvedValue({ token: "gh-token", expiresAt: null });
 
     const waitUntilCalls: Promise<unknown>[] = [];
     const result = await provider.dispatch("org-1", issueFixture(), "auto", {
@@ -205,8 +211,14 @@ describe("CursorCliAgentProvider", () => {
 
     const provider = new CursorCliAgentProvider(cliEnv());
     (
-      provider as unknown as { githubToken: (repo: string) => Promise<string> }
-    ).githubToken = vi.fn().mockResolvedValue("gh-token");
+      provider as unknown as {
+        githubToken: (
+          repo: string
+        ) => Promise<{ token: string; expiresAt: string | null }>;
+      }
+    ).githubToken = vi
+      .fn()
+      .mockResolvedValue({ token: "gh-token", expiresAt: null });
 
     const waitUntilCalls: Promise<unknown>[] = [];
     await provider.dispatch("org-1", issueFixture(), "auto", {
@@ -277,7 +289,9 @@ describe("CursorCliAgentProvider", () => {
         DISPATCH_SECRET: "dispatch-secret",
       })
     );
-    const githubToken = vi.fn().mockResolvedValue("gh-token");
+    const githubToken = vi
+      .fn()
+      .mockResolvedValue({ token: "gh-token", expiresAt: null });
     (provider as unknown as { githubToken: typeof githubToken }).githubToken =
       githubToken;
 
@@ -292,10 +306,11 @@ describe("CursorCliAgentProvider", () => {
     });
     await Promise.all(waitUntilCalls);
 
-    expect(githubToken).toHaveBeenCalledWith("VortexNYC/pile", {
-      push: "restricted",
-      shell: "disabled",
-    });
+    expect(githubToken).toHaveBeenCalledWith(
+      "VortexNYC/pile",
+      { push: "restricted", shell: "disabled" },
+      { organizationId: "org-1", sessionId: "sess-3" }
+    );
     const createCall = fetchSpy.mock.calls.find(
       ([input, init]) =>
         String(input) === "https://app.daytona.io/api/sandbox" &&

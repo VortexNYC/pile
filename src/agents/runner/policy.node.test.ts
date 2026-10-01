@@ -88,7 +88,9 @@ elif mode == "push":
     out["commits"] = [l for l in log.splitlines() if l]
 else:
     raise AssertionError("unknown mode " + mode)
-print("RESULT:" + json.dumps(out), flush=True)
+# Bypass the runner's redacting stdout tee: assertions need raw values.
+sys.__stdout__.write("RESULT:" + json.dumps(out) + "\\n")
+sys.__stdout__.flush()
 `;
 
 const harnessDir = mkdtempSync(join(tmpdir(), "pile-policy-test-"));

@@ -5,13 +5,17 @@
 // default, follow-up support — never a copied provider class.
 import { z } from "zod";
 
-import { getInstallationTokenForRepo } from "../global/github-auth.js";
+import {
+  getRepoScopedInstallationToken,
+  type RepoScopedToken,
+} from "../global/github-auth.js";
 import {
   DEFAULT_LANE_PERMISSIONS,
   fetchLanePermissions,
   laneTokenPermissions,
   type LanePermissions,
 } from "../global/pile-repo-config.js";
+import { scrubLaneText } from "../global/redact.js";
 import type { AppEnv } from "../platform/env.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkerEnv } from "../platform/middleware.js";
@@ -34,6 +38,7 @@ import {
   closeAgentSessionSpan,
 } from "./daytona.js";
 import type { ActivitySpanOptions } from "./daytona.js";
+import { mintLaneGithubToken } from "./lane-github-token.js";
 import type {
   AgentDispatchContext,
   AgentProvider,
@@ -64,6 +69,10 @@ const runnerResultSchema = z.object({
 });
 
 type RunnerResult = z.infer<typeof runnerResultSchema>;
+
+function maskOptional(text: string | undefined): string | undefined {
+  return text === undefined ? undefined : scrubLaneText(text);
+}
 
 /** What is actually different between sandbox-CLI agents. */
 export interface SandboxCliDescriptor {
@@ -295,23 +304,39 @@ export class SandboxCliAgentProvider implements AgentProvider {
     return computeBackend(this.env, this.d.id);
   }
 
+  // Repo-scoped installation token for one lane, downscoped to the lane's
+  // push tier. With a workspace the token is registered against the session
+  // so the sweep revokes it at run end.
   private async githubToken(
     repo: string,
-    permissions: LanePermissions
-  ): Promise<string> {
+    permissions: LanePermissions,
+    lane: { organizationId: string; sessionId: string } | null
+  ): Promise<RepoScopedToken> {
     const [owner, name] = parseRepo(repo);
-    const token = await getInstallationTokenForRepo(this.env, owner, name, {
-      repositories: [name],
-      permissions: laneTokenPermissions(permissions.push),
-    });
-    if (!token) {
+    const tokenPermissions = laneTokenPermissions(permissions.push);
+    const minted =
+      lane && "WORKSPACE_DURABLE_OBJECT" in this.env
+        ? await mintLaneGithubToken(
+            this.env as WorkerEnv,
+            lane.organizationId,
+            lane.sessionId,
+            repo,
+            tokenPermissions
+          )
+        : await getRepoScopedInstallationToken(
+            this.env,
+            owner,
+            name,
+            tokenPermissions
+          );
+    if (!minted) {
       throw new VortexError({
         code: "CONFIG_ERROR",
         status: 500,
         message: `Could not obtain GitHub installation token for ${repo}`,
       });
     }
-    return token;
+    return minted;
   }
 
   private assertEnforceable(permissions: LanePermissions): void {
@@ -335,7 +360,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
     issue: Issue,
     model: string,
     credential: string,
-    githubToken: string,
+    github: RepoScopedToken | null,
     gitIdentity: GitIdentity | null,
     options: {
       comments?: DispatchComment[];
@@ -346,6 +371,8 @@ export class SandboxCliAgentProvider implements AgentProvider {
       cacheUrl?: string | null;
       extra?: Record<string, string>;
       permissions: LanePermissions;
+      /** Caller env keys (already allowlisted) the agent subprocess may see. */
+      agentEnvKeys?: string[];
     }
   ): Record<string, string> {
     const { permissions } = options;
@@ -384,14 +411,23 @@ export class SandboxCliAgentProvider implements AgentProvider {
         : {}),
       // Below push=enabled the runner mints its token through the lane
       // endpoint instead, so no write token sits in the sandbox env.
-      GITHUB_TOKEN:
-        permissions.push === "enabled" || !laneMint ? githubToken : "",
+      ...(permissions.push === "enabled" || !laneMint
+        ? {
+            GITHUB_TOKEN: github?.token ?? "",
+            ...(github?.expiresAt
+              ? { GITHUB_TOKEN_EXPIRES_AT: github.expiresAt }
+              : {}),
+          }
+        : { GITHUB_TOKEN: "" }),
       PILE_PUSH_POLICY: permissions.push,
       PILE_SHELL_POLICY: permissions.shell,
       // Names the runner keeps (agent CLI auth) / strips (repo-injected
       // secrets) when scrubbing the agent env under shell<enabled.
       PILE_AGENT_CREDENTIAL_ENV: Object.keys(credentialEnv).join(","),
       PILE_EXTRA_ENV_KEYS: Object.keys(options.extra ?? {}).join(","),
+      // The runner hands the agent subprocess an allowlisted env, never its
+      // own — these are the extra keys the repo's config let through.
+      PILE_AGENT_ENV_KEYS: (options.agentEnvKeys ?? []).join(","),
       GIT_AUTHOR_NAME: sanitizeEnv(gitIdentity?.name ?? this.d.displayLabel),
       GIT_AUTHOR_EMAIL: sanitizeEnv(
         gitIdentity?.email ??
@@ -429,9 +465,12 @@ export class SandboxCliAgentProvider implements AgentProvider {
     const compute = this.requireCompute();
     // Repo-less lanes (preflight critiques, analysis) get no clone/push stage
     // and no GitHub token — the agent only reads the prompt and reports back.
-    const githubToken = issue.repo
-      ? await this.githubToken(issue.repo, permissions)
-      : "";
+    const github = issue.repo
+      ? await this.githubToken(issue.repo, permissions, {
+          organizationId,
+          sessionId,
+        })
+      : null;
     const name = this.sandboxName(sessionId);
 
     const spanId = await this.openSpan(
@@ -466,7 +505,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
             issue,
             model,
             credential,
-            githubToken,
+            github,
             gitIdentity,
             {
               comments: sessionContext?.comments,
@@ -474,6 +513,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
               pileApi: sessionContext?.pileApi ?? null,
               extra: sessionContext?.extraEnv,
               permissions,
+              agentEnvKeys: Object.keys(sessionContext?.extraEnv ?? {}),
               log: {
                 url: agentLogUrl(workerEnv, organizationId, sessionId),
                 token: logToken,
@@ -700,7 +740,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
       status,
       // The readable report (last assistant message) beats the raw
       // stream-json tail — it's what lands on issue threads and summaries.
-      result: result.report ?? result.result,
+      result: maskOptional(result.report ?? result.result),
       prUrl,
       prState,
       branch: result.branch ?? null,
@@ -752,15 +792,24 @@ export class SandboxCliAgentProvider implements AgentProvider {
       ? (await fetchLanePermissions(this.env, issue.repo, this.id)).permissions
       : DEFAULT_LANE_PERMISSIONS;
     this.assertEnforceable(permissions);
-    const githubToken = issue.repo
-      ? await this.githubToken(issue.repo, permissions)
-      : "";
+    const github = issue.repo
+      ? await this.githubToken(
+          issue.repo,
+          permissions,
+          sandbox.organizationId
+            ? {
+                organizationId: sandbox.organizationId,
+                sessionId: trackerSessionId,
+              }
+            : null
+        )
+      : null;
     const followupId = `${trackerSessionId}-fu-${Date.now().toString(36)}`;
     const followupEnv = this.buildSandboxEnv(
       issue,
       this.defaultModel(),
       credential,
-      githubToken,
+      github,
       gitIdentity ?? {
         id: "followup",
         organizationId: "",

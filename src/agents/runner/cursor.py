@@ -5,10 +5,7 @@ CURSOR_HOME = os.path.join(HOME, '.local', 'share', 'cursor-agent')
 
 
 def agent_env():
-    env = os.environ.copy()
-    env['HOME'] = HOME
-    env['PATH'] = INSTALL_DIR + ':' + env.get('PATH', '')
-    return scrub_env(env)
+    return scrub_env(agent_env_base({'CURSOR_API_KEY': os.environ.get('CURSOR_API_KEY', '')}))
 
 
 def apply_tool_policy():
@@ -75,7 +72,7 @@ def run_agent(agent_bin):
     events = open('/tmp/agent-events.ndjson', 'a', buffering=1)
     try:
         for line in proc.stdout:
-            events.write(line)
+            events.write(_redact(line))
             tail.append(line)
             try:
                 evt = json.loads(line)
@@ -113,6 +110,7 @@ def main():
     output, report = run_agent(agent_bin)
     pushed = commit_and_push(agent_env()) if REPO else False
     rc = finalize(output, pushed, report=report)
+    revoke_github_token()
     save_pnpm_store()
     stop_log_ship()
     return rc
@@ -123,6 +121,7 @@ if __name__ == '__main__':
         sys.exit(main())
     except Exception as e:
         fail_result(e)
+        revoke_github_token()
         save_pnpm_store()
         stop_log_ship()
         sys.exit(1)

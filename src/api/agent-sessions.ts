@@ -15,6 +15,7 @@ import {
   getAgentProvider,
   providerKeepsTerminalSandbox,
 } from "../agents/index.js";
+import { mintLaneGithubToken } from "../agents/lane-github-token.js";
 import {
   laneReportStepMessage,
   laneTodosSchema,
@@ -30,6 +31,7 @@ import {
   fetchPileRepoConfig,
   laneTokenPermissions,
 } from "../global/pile-repo-config.js";
+import { scrubLaneText } from "../global/redact.js";
 import { createRepoBranch } from "../global/repo-branches.js";
 import { githubInstallations } from "../global/schema.js";
 import { replyLaneResultToTicket } from "../global/support-escalation.js";
@@ -1714,7 +1716,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
           stub.addAgentSessionEvent({
             sessionId,
             type: "log",
-            message: line.slice(0, 2000),
+            message: scrubLaneText(line, [expected]).slice(0, 2000),
           })
         )
       );
@@ -1870,7 +1872,6 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       if (!issue?.repo) {
         return c.json({ message: "Session issue has no repository" }, 422);
       }
-      const [owner, name] = issue.repo.split("/");
       // Re-resolve the lane's push tier on every mint so the refreshed token
       // is never broader than the policy (push=disabled → contents:read).
       const { permissions } = await fetchLanePermissions(
@@ -1878,14 +1879,17 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         issue.repo,
         session.agentId
       );
-      const token = await getInstallationTokenForRepo(c.env, owner, name, {
-        repositories: [name],
-        permissions: laneTokenPermissions(permissions.push),
-      });
-      if (!token) {
+      const minted = await mintLaneGithubToken(
+        c.env,
+        organizationId,
+        sessionId,
+        issue.repo,
+        laneTokenPermissions(permissions.push)
+      );
+      if (!minted) {
         return c.json({ message: "No installation token for repository" }, 502);
       }
-      return c.json({ token });
+      return c.json({ token: minted.token, expiresAt: minted.expiresAt });
     }
   );
 
