@@ -10,6 +10,7 @@ import type { Issue } from "../types/workspace.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
 import { loadProviderConfig } from "./credentials.js";
 import { resolveAgentEnv } from "./daytona.js";
+import { FLEET_UNHEALTHY_STREAK, fleetInfraStreak } from "./fleet-health.js";
 import { dispatchAgent } from "./index.js";
 
 type WorkspaceStub = DurableObjectStub<WorkspaceDO>;
@@ -156,6 +157,16 @@ export async function fireRepoTriggers(
   if (triggers.length === 0) return 0;
   const issue = await target.issue();
   if (!issue) return 0;
+  // An event storm during a capacity outage would dispatch lanes onto the
+  // substrate that's already failing — fleet breaker closes the loop.
+  if ((await fleetInfraStreak(stub)) >= FLEET_UNHEALTHY_STREAK) {
+    console.log("fleet breaker open — repo trigger skipped", {
+      event,
+      organizationId,
+      triggers: triggers.length,
+    });
+    return 0;
+  }
 
   let fired = 0;
   for (const trigger of triggers) {

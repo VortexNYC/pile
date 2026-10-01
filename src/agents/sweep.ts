@@ -12,6 +12,7 @@ import type { ComputeBackend } from "./compute.js";
 import { resolveGeneratedConflict } from "./conflict-fix.js";
 import { loadProviderConfig } from "./credentials.js";
 import { resolveAgentEnv } from "./daytona.js";
+import { FLEET_UNHEALTHY_STREAK, fleetInfraStreak } from "./fleet-health.js";
 import {
   buildHangReport,
   formatHangReport,
@@ -410,6 +411,18 @@ async function retryDeadLane(
   ctx?: { waitUntil: (promise: Promise<unknown>) => void }
 ): Promise<void> {
   if ((session.retryCount ?? 0) >= MAX_AUTO_RETRIES) return;
+  // Fleet-wide breaker: during a substrate outage every retry spends a spawn
+  // attempt on the thing that's failing. Per-agent streaks miss a partial
+  // outage (successes interleave), so this looks across all agents.
+  if ((await fleetInfraStreak(stub)) >= FLEET_UNHEALTHY_STREAK) {
+    await stub.addAgentActivity({
+      sessionId: session.id,
+      actorId: session.actorId,
+      type: "error",
+      message: `fleet breaker open — ${FLEET_UNHEALTHY_STREAK}+ consecutive infra-failure lanes org-wide; redispatch paused`,
+    });
+    return;
+  }
   // A review side lane redispatched through the issue would come back as a
   // full implementation lane; the next PR sync re-requests the review.
   if (session.purpose === REVIEW_PURPOSE) return;
@@ -484,6 +497,16 @@ async function promoteQueuedSessions(
   ctx?: { waitUntil: (promise: Promise<unknown>) => void }
 ): Promise<void> {
   const queued = await stub.listQueuedAgentSessions();
+  if (
+    queued.length > 0 &&
+    (await fleetInfraStreak(stub)) >= FLEET_UNHEALTHY_STREAK
+  ) {
+    console.log("fleet breaker open — queued sessions stay parked", {
+      organizationId,
+      queued: queued.length,
+    });
+    return;
+  }
   for (const session of queued) {
     if (!session.queuedAfter) {
       await stub
