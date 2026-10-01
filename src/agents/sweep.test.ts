@@ -543,6 +543,89 @@ describe("sweepAgentSessions", () => {
     expect(retried?.retryCount).toBe(1);
   });
 
+  it("redispatches once when the runner reports an infra (transport) failure", async () => {
+    const agentId = `mock-infra-${crypto.randomUUID().slice(0, 8)}`;
+    let dispatches = 0;
+    registerMock(agentId, {
+      dispatch: () => {
+        dispatches += 1;
+        return { id: `retried-${dispatches}`, agentId, status: "created" };
+      },
+      // git push exit 128 — the lane's work was fine, the transport died.
+      poll: (id) => ({
+        id,
+        agentId,
+        status: "failed" as const,
+        result: "Command failed: git push returned 128",
+        infraFailure: true,
+      }),
+    });
+    const issue = await stub.createIssue({ title: "Transport flake" });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+    });
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    const after = await stub.getAgentSession(session.id);
+    expect(after?.status).toBe("failed");
+    expect(after?.infraFailure).toBe(1);
+    expect(dispatches).toBe(1);
+    const retried = (await stub.listAgentSessions({ issueId: issue.id })).find(
+      (s) => s.retryOf === session.id
+    );
+    expect(retried).toBeDefined();
+    expect(retried?.retryCount).toBe(1);
+
+    // The retried lane hits the same transport failure — retryCount caps the
+    // churn at one redispatch, no third session is created.
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+    expect(dispatches).toBe(1);
+    const retriedAfter = await stub.getAgentSession(retried!.id);
+    expect(retriedAfter?.status).toBe("failed");
+    expect(retriedAfter?.infraFailure).toBe(1);
+  });
+
+  it("does not retry a provider-reported task failure", async () => {
+    const agentId = `mock-task-${crypto.randomUUID().slice(0, 8)}`;
+    let dispatches = 0;
+    registerMock(agentId, {
+      dispatch: () => {
+        dispatches += 1;
+        return { id: "never", agentId, status: "created" };
+      },
+      poll: (id) => ({
+        id,
+        agentId,
+        status: "failed" as const,
+        result: "agent reported the change could not be made",
+      }),
+    });
+    const issue = await stub.createIssue({ title: "Real task failure" });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+    });
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    const after = await stub.getAgentSession(session.id);
+    expect(after?.status).toBe("failed");
+    expect(after?.infraFailure).toBe(0);
+    expect(dispatches).toBe(0);
+    const siblings = await stub.listAgentSessions({ issueId: issue.id });
+    expect(siblings.find((s) => s.retryOf === session.id)).toBeUndefined();
+  });
+
   it("emits an elicitation when a running lane transitions to waiting", async () => {
     const agentId = `mock-block-${crypto.randomUUID().slice(0, 8)}`;
     registerMock(agentId, {
