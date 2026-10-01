@@ -13,6 +13,7 @@ const CORE_PATH = join(import.meta.dirname, "core.py");
 
 const HARNESS = `
 import json
+import os
 import subprocess
 import sys
 import types
@@ -27,7 +28,8 @@ ns = mod.__dict__
 ns["SHIM_DIR"] = shim_dir
 
 if mode == "env":
-    env = ns["scrubbed_env"](keep=tuple(payload.get("keep", [])), shims=payload.get("shims", True))
+    extra = {k: os.environ[k] for k in payload.get("keep", [])}
+    env = ns["scrubbed_env"](extra, shims=payload.get("shims", True))
     out = {"env": env}
 elif mode == "deny":
     out = {"results": [ns["restricted_denial"](argv) for argv in payload["argvs"]]}
@@ -41,7 +43,8 @@ elif mode == "exec":
 else:
     raise AssertionError("unknown mode " + mode)
 
-print("RESULT:" + json.dumps(out), flush=True)
+sys.__stdout__.write("RESULT:" + json.dumps(out) + "\\n")
+sys.__stdout__.flush()
 `;
 
 const harnessDir = mkdtempSync(join(tmpdir(), "pile-runner-isolation-"));

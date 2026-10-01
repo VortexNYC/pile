@@ -282,6 +282,25 @@ describe("FleetModel", () => {
     expect(vm.logText).toBe("[failed] boom");
   });
 
+  it("shows the server-assigned lane label, falling back to the id", () => {
+    const model = new FleetModel();
+    model.setSessions([
+      session({ id: "a1b2c3d4-x", label: "devin/iss-7-fix-login" }),
+      session({
+        id: "e5f6a7b8-y",
+        issueId: "issue-2",
+        label: null,
+        updatedAt: "2026-09-30T09:00:00.000Z",
+      }),
+    ]);
+    const vm = model.viewModel(NOW, 10);
+    expect(vm.rows.map((r) => r.lane)).toEqual([
+      "devin/iss-7-fix-login",
+      "e5f6a7b8",
+    ]);
+    expect(vm.logTitle).toContain("devin/iss-7-fix-login");
+  });
+
   it("labels issues by identifier once resolved", () => {
     const model = new FleetModel();
     model.setSessions([session({ id: "a", issueId: "uuid-1" })]);

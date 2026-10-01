@@ -95,14 +95,9 @@ Daytona compute path verified live 2026-09-23 (ISS-92) against snapshot vortex-c
 
 ### Lane isolation
 
-The runner (`src/agents/runner/core.py`) holds the lane's provider tokens —
-`GITHUB_TOKEN`, `LANE_TOKEN`, log/cache auth, CLI credential blobs. The agent
-CLI, `.pile/setup.sh`, and CLI installers run with `scrubbed_env()`, never the
-runner's own environment: runner-only vars and anything secret-named
-(`*_TOKEN`, `*_SECRET`, `*_API_KEY`, `*PASSWORD*`, …) are dropped. Exceptions
-are explicit — the scoped read-only `PILE_API_KEY` the prompt references, and
-the CLI's own key where it reads it from env (`CURSOR_API_KEY`). Devin and
-Codex credentials are written to their home dirs before the agent starts.
+Agent CLIs, `.pile/setup.sh`, and CLI installers run with `scrubbed_env()` —
+the allowlisted agent env described under [Lane credential
+posture](#lane-credential-posture), never the runner's own environment.
 
 `LANE_RESTRICTED=1` (deployment env) additionally runs lanes in **restricted
 mode**:
@@ -482,6 +477,33 @@ optional:
 | `model`  | Default model when the dispatch request doesn't name one.                                                                                      |
 | `setup`  | Documented setup hook. `.pile/setup.sh` runs after clone either way.                                                                           |
 | `env`    | Env-var allowlist — caller-supplied `extraEnv` keys not named here are dropped before they reach the lane. Infra env (lane DB etc.) is exempt. |
+
+## Lane credential posture
+
+Sandbox lanes are treated as compromised by default:
+
+- **Per-session GitHub token.** Each lane gets an installation token
+  restricted to the issue's repository. Every mint (dispatch, follow-up,
+  `POST …/sessions/{id}/github-token` refresh) is registered against the
+  session and revokes the token it replaces, so a lane holds at most one
+  live token.
+- **Bound to session lifetime.** The runner revokes its token
+  (`DELETE /installation/token`) and strips it from the git remote at run
+  end; the sweep revokes any token still registered once the session is
+  terminal, including kept follow-up sandboxes. The refresh endpoint refuses
+  terminal sessions.
+- **Refresh before expiry.** The runner gets `GITHUB_TOKEN_EXPIRES_AT` and
+  re-mints through the lane-token endpoint 5 minutes before expiry, plus
+  before clone and push.
+- **Masked output.** The runner masks secret env values, decoded credential
+  blobs, and known token shapes in everything it prints, the result file,
+  and the event stream; the log-ingest endpoint and the provider poll scrub
+  again server-side.
+- **Minimal agent env.** The agent subprocess (and `.pile/setup.sh`) get an
+  allowlisted env: basic process vars, git identity, issue/repo metadata,
+  the Pile API key, the agent's own credential, and the `extraEnv` keys the
+  repo's `env` allowlist admitted. `GITHUB_TOKEN`, the lane token and its
+  URLs, credential blobs, and the runner bundle never reach it.
 
 Repositories that also install the Pile GitHub App get a per-repo default
 agent: `PATCH /workspaces/{org}/github/installations/{id}` with
