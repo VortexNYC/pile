@@ -263,8 +263,9 @@ parent lane if there is one. PR events keep landing after terminal, because
 Other rows that also land on the stream: `session.url` /
 `session.providerSessionId` (same `{field, old, new}` shape), `issue.prUrl` /
 `issue.prState` / `issue.branch` / `issue.status` (issue writeback),
-`lane.queued` / `lane.dedupe` (pre-dispatch dedupe), and `log` (runner log
-lines, message only).
+`lane.queued` / `lane.dedupe` (pre-dispatch dedupe), `lane.tool` (one per
+lane MCP tool call, `{tool, permission, ok}`), and `log` (runner log lines,
+message only).
 
 `session.summary`: the `digest` key appears only when the provider's `result`
 is JSON with a `digest` object, e.g.
@@ -274,6 +275,50 @@ once per run, on the first terminal transition. Later terminal→terminal
 updates (a late poll, a webhook replay, cancel after completion) don't emit it
 again. A follow-up prompt that moves the session back to `running` starts a
 new run, and that run's own terminal transition emits a new summary.
+
+## Lane tools (MCP)
+
+Lanes get a purpose-built MCP server instead of raw `gh`/`git` shell access
+for GitHub operations, so permissions are enforced per tool rather than "has a
+shell or not":
+
+```
+POST /workspaces/{org}/agent/sessions/{id}/mcp
+Authorization: Bearer <lane token>
+```
+
+Same per-session HMAC token as `PILE_LOG_URL`/`PILE_TOKEN_URL`. Sandbox
+runners get the URL as `PILE_LANE_MCP_URL` (with `LANE_TOKEN`), and
+`POST …/agent/sessions/register` returns it as `mcpUrl`. The endpoint is
+stateless streamable HTTP (JSON responses); the GitHub installation token is
+minted server-side, scoped to the session issue's repo, and never returned.
+
+Tools live in `src/agents/lane-tools.ts`. Each declares one permission:
+
+| permission     | tools                                                                                                                                                                                                                                                                                                                                  |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lane:report`  | `get_lane_context`, `report_progress`, `set_output`                                                                                                                                                                                                                                                                                    |
+| `repo:read`    | `get_repository`, `get_file_contents`, `list_pull_requests`, `get_pull_request`, `get_pull_request_diff`, `list_pull_request_files`, `list_pull_request_reviews`, `list_review_comments`, `list_review_threads`, `list_check_runs`, `get_check_run_logs`, `get_issue`, `list_issue_comments`, `find_similar_issues`, `compare_commits` |
+| `pr:write`     | `create_pull_request`, `update_pull_request`, `comment_on_pull_request`, `add_labels`, `update_pull_request_branch` — only on PRs headed at the lane's own branch                                                                                                                                                                      |
+| `review:write` | `create_pull_request_review` (no self-approval), `reply_to_review_comment`, `resolve_review_thread` (lane's PR only)                                                                                                                                                                                                                   |
+| `checks:write` | `rerun_failed_jobs`                                                                                                                                                                                                                                                                                                                    |
+
+Tiers bundle permissions: `readonly` (`repo:read`, `lane:report`), `review`
+(+ `review:write`), `contribute` (+ `pr:write`; the default), `maintain`
+(+ `checks:write`). Set per repo in organization metadata, keyed by
+`owner/name` with a `*` fallback; `deny` removes individual tools:
+
+```json
+{
+  "laneTools": {
+    "*": "readonly",
+    "VortexNYC/pile": { "tier": "maintain", "deny": ["update_pull_request"] }
+  }
+}
+```
+
+Only permitted tools are listed by `tools/list`; the call handler re-checks
+the policy, and every call lands on the lane stream as a `lane.tool` event.
 
 ## Timeouts
 

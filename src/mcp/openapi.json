@@ -3550,13 +3550,18 @@
                     "reportUrl": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "mcpUrl": {
+                      "type": "string",
+                      "nullable": true
                     }
                   },
                   "required": [
                     "session",
                     "laneToken",
                     "logUrl",
-                    "reportUrl"
+                    "reportUrl",
+                    "mcpUrl"
                   ]
                 }
               }
@@ -3757,13 +3762,18 @@
                     "reportUrl": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "mcpUrl": {
+                      "type": "string",
+                      "nullable": true
                     }
                   },
                   "required": [
                     "session",
                     "laneToken",
                     "logUrl",
-                    "reportUrl"
+                    "reportUrl",
+                    "mcpUrl"
                   ]
                 }
               }

@@ -21,6 +21,7 @@ import {
   agentGithubTokenUrl,
   agentLogToken,
   agentLogUrl,
+  agentMcpUrl,
 } from "./credentials.js";
 import {
   writeAgentSessionActivity,
@@ -283,7 +284,11 @@ export class SandboxCliAgentProvider implements AgentProvider {
       comments?: DispatchComment[];
       instructions?: string;
       pileApi?: { url: string; key: string } | null;
-      lane?: { tokenUrl: string | null; token: string | null };
+      lane?: {
+        tokenUrl: string | null;
+        token: string | null;
+        mcpUrl?: string | null;
+      };
       log?: { url: string | null; token: string | null };
       cacheUrl?: string | null;
       extra?: Record<string, string>;
@@ -314,6 +319,9 @@ export class SandboxCliAgentProvider implements AgentProvider {
             PILE_TOKEN_URL: options.lane.tokenUrl,
             LANE_TOKEN: options.lane.token,
           }
+        : {}),
+      ...(options.lane?.mcpUrl && options.lane.token
+        ? { PILE_LANE_MCP_URL: options.lane.mcpUrl }
         : {}),
       GITHUB_TOKEN: githubToken,
       GIT_AUTHOR_NAME: sanitizeEnv(gitIdentity?.name ?? this.d.displayLabel),
@@ -406,6 +414,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
                   sessionId
                 ),
                 token: logToken,
+                mcpUrl: agentMcpUrl(workerEnv, organizationId, sessionId),
               },
             }
           );
@@ -691,6 +700,11 @@ export class SandboxCliAgentProvider implements AgentProvider {
         lane: sandbox.organizationId
           ? {
               tokenUrl: agentGithubTokenUrl(
+                this.env as WorkerEnv,
+                sandbox.organizationId,
+                trackerSessionId
+              ),
+              mcpUrl: agentMcpUrl(
                 this.env as WorkerEnv,
                 sandbox.organizationId,
                 trackerSessionId
