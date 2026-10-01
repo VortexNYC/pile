@@ -457,6 +457,33 @@ optional:
 | `setup`  | Documented setup hook. `.pile/setup.sh` runs after clone either way.                                                                           |
 | `env`    | Env-var allowlist — caller-supplied `extraEnv` keys not named here are dropped before they reach the lane. Infra env (lane DB etc.) is exempt. |
 
+## Lane credential posture
+
+Sandbox lanes are treated as compromised by default:
+
+- **Per-session GitHub token.** Each lane gets an installation token
+  restricted to the issue's repository. Every mint (dispatch, follow-up,
+  `POST …/sessions/{id}/github-token` refresh) is registered against the
+  session and revokes the token it replaces, so a lane holds at most one
+  live token.
+- **Bound to session lifetime.** The runner revokes its token
+  (`DELETE /installation/token`) and strips it from the git remote at run
+  end; the sweep revokes any token still registered once the session is
+  terminal, including kept follow-up sandboxes. The refresh endpoint refuses
+  terminal sessions.
+- **Refresh before expiry.** The runner gets `GITHUB_TOKEN_EXPIRES_AT` and
+  re-mints through the lane-token endpoint 5 minutes before expiry, plus
+  before clone and push.
+- **Masked output.** The runner masks secret env values, decoded credential
+  blobs, and known token shapes in everything it prints, the result file,
+  and the event stream; the log-ingest endpoint and the provider poll scrub
+  again server-side.
+- **Minimal agent env.** The agent subprocess (and `.pile/setup.sh`) get an
+  allowlisted env: basic process vars, git identity, issue/repo metadata,
+  the Pile API key, the agent's own credential, and the `extraEnv` keys the
+  repo's `env` allowlist admitted. `GITHUB_TOKEN`, the lane token and its
+  URLs, credential blobs, and the runner bundle never reach it.
+
 Repositories that also install the Pile GitHub App get a per-repo default
 agent: `PATCH /workspaces/{org}/github/installations/{id}` with
 `{"defaultAgentId": "devin-cli"}`. Dispatch on an issue in that repo uses it
