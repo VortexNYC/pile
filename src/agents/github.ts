@@ -47,6 +47,10 @@ import {
 } from "./repo-triggers.js";
 import { reviewPromptWithContext } from "./review-context.js";
 import {
+  resolveAddressedReviewThreads,
+  reviewAutomationEvents,
+} from "./review-loop.js";
+import {
   REVIEW_CHECK_NAME,
   REVIEW_PURPOSE,
   requestPrReview,
@@ -1021,17 +1025,18 @@ async function processPullRequestReview(
   // delivery semantics (retry until the lane actually has it).
   const session = await resolveLaneForIssue(stub, issue.id);
   const reviewState = (review.state ?? "").toUpperCase();
+  let isNewReview = false;
   if (session) {
     const seen = await stub
       .listAgentSessionEvents(session.id, { limit: 100, order: "desc" })
       .catch(() => []);
-    const isNew = !seen.some(
+    isNewReview = !seen.some(
       (e) =>
         e.type === "pr.review" &&
         typeof e.payload === "string" &&
         e.payload.includes(marker)
     );
-    if (isNew) {
+    if (isNewReview) {
       await stub
         .addAgentSessionEvent({
           sessionId: session.id,
@@ -1082,6 +1087,22 @@ async function processPullRequestReview(
       ghGet: token ? (path) => githubApiGet(fetch, token, path) : null,
     });
   };
+  // PILE-274 — the webhook is usually first to see a review, so it owns
+  // the once-per-review automation fire; the sweep skips reviews it finds
+  // already recorded.
+  if (session && isNewReview) {
+    const automationPrompt = await reviewPrompt();
+    for (const eventName of reviewAutomationEvents(reviewState, body)) {
+      await fireEventAutomations(
+        env,
+        stub,
+        workspaceRecord.organizationId,
+        eventName,
+        issueEventTarget(stub, session.issueId),
+        automationPrompt
+      );
+    }
+  }
   await nudgeLaneForIssue(
     env,
     stub,
@@ -1272,6 +1293,25 @@ async function processPullRequest(
     )
   );
 
+  // PILE-274 fast path: a push to a lane PR may be the fix for review
+  // feedback the lane was sent — resolve those threads now instead of on
+  // the next sweep tick.
+  if (
+    action === "synchronize" &&
+    prState === "open" &&
+    pull_request.head.sha &&
+    pull_request.number !== undefined
+  ) {
+    await resolveThreadsOnPush(env, stub, {
+      organizationId: workspaceRecord.organizationId,
+      repo,
+      branch,
+      prUrl,
+      number: pull_request.number,
+      headSha: pull_request.head.sha,
+    });
+  }
+
   // PILE-273 — fast path for the review lane; the sweep is the backstop.
   const headSha = pull_request.head.sha;
   const baseRef = pull_request.base?.ref;
@@ -1349,6 +1389,48 @@ async function processPullRequest(
   }
 
   return;
+}
+
+async function resolveThreadsOnPush(
+  env: WorkerEnv,
+  stub: WorkspaceStub,
+  pr: {
+    organizationId: string;
+    repo: string;
+    branch: string;
+    prUrl: string;
+    number: number;
+    headSha: string;
+  }
+): Promise<void> {
+  try {
+    await stub.setOrganizationId(pr.organizationId);
+    const issue = await stub.getIssueByBranch(pr.repo, pr.branch);
+    if (!issue) return;
+    const session = await resolveLaneForIssue(stub, issue.id);
+    if (!session) return;
+    const [owner, name] = pr.repo.split("/");
+    if (!owner || !name) return;
+    const token = await getInstallationTokenForRepo(env, owner, name);
+    if (!token) return;
+    await resolveAddressedReviewThreads(
+      stub,
+      session,
+      {
+        owner,
+        repo: name,
+        number: pr.number,
+        prUrl: pr.prUrl,
+        headSha: pr.headSha,
+      },
+      { token, fetch }
+    );
+  } catch (err) {
+    console.error("webhook review thread resolve failed", {
+      prUrl: pr.prUrl,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 async function processGitHubIssue(

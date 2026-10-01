@@ -347,6 +347,95 @@ describe("github pr review → lane nudge (PILE-224)", () => {
     expect(prompts.length).toBe(before + 1);
   });
 
+  it("fires pr.review_changes automations once per non-approve review (PILE-274)", async () => {
+    const s = stub();
+    const dispatched: string[] = [];
+    registerAgentProvider(
+      "review-auto",
+      () =>
+        new MockAgentProvider("review-auto", {
+          dispatch: (_org, issue) => {
+            dispatched.push(issue.id);
+            return { id: "auto-1", agentId: "review-auto", status: "created" };
+          },
+        })
+    );
+    const automation = await s.createAgentAutomation({
+      name: "Fix review",
+      prompt: "address the review",
+      agentId: "review-auto",
+      triggerKind: "event",
+      triggerValue: "pr.review_changes",
+    });
+    const issue = await s.createIssue({
+      title: "Changes requested",
+      repo: REPO,
+      branch: `${BRANCH}-changes`,
+    });
+    await s.createAgentSession({
+      issueId: issue.id,
+      agentId: "nudge-mock",
+      provider: "nudge-mock",
+      actorId: "review-user",
+      actorType: "user",
+      status: "completed",
+      providerSessionId: "remote-changes-1",
+    });
+    const pr = {
+      number: 47,
+      html_url: `https://github.com/${REPO}/pull/47`,
+      head: {
+        ref: `${BRANCH}-changes`,
+        sha: "ccc111",
+        repo: { full_name: REPO },
+      },
+    };
+    const changes = queuePayload(
+      "pull_request_review",
+      reviewPayload({
+        review: {
+          id: 7101,
+          state: "changes_requested",
+          body: "handle the empty case",
+          user: { login: "reviewer-gh" },
+          html_url: `${pr.html_url}#pullrequestreview-7101`,
+        },
+        pull_request: pr,
+      })
+    );
+    await processGithubWebhookPayload(
+      createD1(env.D1),
+      env as unknown as WorkerEnv,
+      changes
+    );
+    // Redelivery of the same review must not fire the automation again.
+    await processGithubWebhookPayload(
+      createD1(env.D1),
+      env as unknown as WorkerEnv,
+      changes
+    );
+    await processGithubWebhookPayload(
+      createD1(env.D1),
+      env as unknown as WorkerEnv,
+      queuePayload(
+        "pull_request_review",
+        reviewPayload({
+          review: {
+            id: 7102,
+            state: "approved",
+            body: "looks good now",
+            user: { login: "reviewer-gh" },
+            html_url: `${pr.html_url}#pullrequestreview-7102`,
+          },
+          pull_request: pr,
+        })
+      )
+    );
+    await s.deleteAgentAutomation(automation!.id);
+
+    expect(dispatched).toEqual([issue.id]);
+  });
+
   it("carries prior verdicts + the range since the last-reviewed sha (PILE-286)", async () => {
     const s = stub();
     const branch = `${BRANCH}-incremental`;

@@ -248,7 +248,9 @@ function buildPrompt(
           "Secondary repositories (shallow clones of each default branch under ~/xrepo/<owner>/<name>):",
           ...secondaryRepos.map((entry) =>
             entry.access === "write"
-              ? `- ${entry.repo} at ~/xrepo/${entry.repo} — writable, on branch ${branch}. Commit changes there; the runner pushes that branch and opens a PR in ${entry.repo}.`
+              ? permissions.push === "disabled"
+                ? `- ${entry.repo} at ~/xrepo/${entry.repo} — writable, on branch ${branch}. Pushing is disabled for this lane; commit there locally.`
+                : `- ${entry.repo} at ~/xrepo/${entry.repo} — writable, on branch ${branch}. Commit changes there; the runner pushes that branch and opens a PR in ${entry.repo}.`
               : `- ${entry.repo} at ~/xrepo/${entry.repo} — read-only reference; do not modify it.`
           ),
         ]
@@ -502,7 +504,15 @@ export class SandboxCliAgentProvider implements AgentProvider {
         : {}),
       ...(options.cacheUrl ? { PILE_CACHE_URL: options.cacheUrl } : {}),
       ...(secondaryRepos.length > 0
-        ? { SECONDARY_REPOS_JSON: JSON.stringify(secondaryRepos) }
+        ? {
+            // Below push=enabled the runner mints these through the lane
+            // endpoint too, so no write token sits in the sandbox env.
+            SECONDARY_REPOS_JSON: JSON.stringify(
+              permissions.push === "enabled" || !laneMint
+                ? secondaryRepos
+                : secondaryRepos.map((entry) => ({ ...entry, token: "" }))
+            ),
+          }
         : {}),
       ...(options.lane?.tokenUrl && options.lane.token
         ? {

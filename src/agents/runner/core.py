@@ -1107,7 +1107,6 @@ def _reset_git_config(repo_dir=REPO_DIR, url=None, with_token=True):
         f.write(
             '[core]\n\trepositoryformatversion = 0\n\tfilemode = true\n\tbare = false\n\tlogallrefupdates = true\n'
             f'[remote "origin"]\n\turl = {url or (remote_url() if with_token else tokenless_remote_url())}\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n'
-
             f'[user]\n\tname = {name}\n\temail = {email}\n'
         )
 
@@ -1187,7 +1186,22 @@ def secondary_dir(repo):
 
 
 def secondary_remote_url(repo, token):
-    return f'https://x-access-token:{token}@github.com/{repo}.git'
+    # Mirrors remote_url()/lock_remote(): only an unrestricted push=enabled
+    # lane keeps the token in the clone's remote; otherwise auth rides
+    # secondary_auth_env's extraheader.
+    if PUSH_POLICY == 'enabled' and not LANE_RESTRICTED:
+        return f'https://x-access-token:{token}@github.com/{repo}.git'
+    return f'https://github.com/{repo}.git'
+
+
+def secondary_auth_env(token):
+    base = _with_git_config(git_env(), NO_HOOKS_GIT_CONFIG)
+    if not token:
+        return base
+    basic = base64.b64encode(f'x-access-token:{token}'.encode()).decode()
+    return _with_git_config(base, [
+        ('http.https://github.com/.extraheader', f'AUTHORIZATION: basic {basic}'),
+    ])
 
 
 def secondary_token(repo, fallback=''):
@@ -1222,18 +1236,19 @@ def clone_secondary_repos():
         token = entry.get('token') or secondary_token(repo)
         if token:
             SECONDARY_TOKENS[repo] = token
-        remote = secondary_remote_url(repo, token)
-        run_transport(['timeout', '300', 'git', 'clone', '--quiet', '--depth', '1', remote, dest])
+        auth_env = secondary_auth_env(token)
+        git = [GIT, '-C', dest] + _GIT_SAFE_FLAGS
+        run_transport(['timeout', '300', GIT] + _GIT_SAFE_FLAGS + ['clone', '--quiet', '--depth', '1', secondary_remote_url(repo, token), dest], env=auth_env)
         if entry.get('access') == 'write':
             # Resume the lane branch when a prior run already pushed it.
-            heads = run_transport(['git', '-C', dest, 'ls-remote', '--heads', 'origin', BRANCH], capture_output=True, text=True)
+            heads = run_transport(git + ['ls-remote', '--heads', 'origin', BRANCH], env=auth_env, capture_output=True, text=True)
             if (heads.stdout or '').strip():
-                run_transport(['timeout', '300', 'git', '-C', dest, 'fetch', '--depth', '1', 'origin', f'+refs/heads/{BRANCH}:refs/remotes/origin/{BRANCH}'])
-                run(['git', '-C', dest, 'checkout', '-B', BRANCH, f'origin/{BRANCH}'], check=True)
+                run_transport(['timeout', '300'] + git + ['fetch', '--depth', '1', 'origin', f'+refs/heads/{BRANCH}:refs/remotes/origin/{BRANCH}'], env=auth_env)
+                run(git + ['checkout', '-B', BRANCH, f'origin/{BRANCH}'], env=git_env(), check=True)
             else:
-                run(['git', '-C', dest, 'checkout', '-b', BRANCH], check=True)
-            run(['git', '-C', dest, 'config', 'user.name', os.environ.get('GIT_AUTHOR_NAME', AGENT_LABEL)], check=True)
-            run(['git', '-C', dest, 'config', 'user.email', os.environ.get('GIT_AUTHOR_EMAIL', 'agent@pile.nyc')], check=True)
+                run(git + ['checkout', '-b', BRANCH], env=git_env(), check=True)
+            run(git + ['config', 'user.name', os.environ.get('GIT_AUTHOR_NAME', AGENT_LABEL)], env=git_env(), check=True)
+            run(git + ['config', 'user.email', os.environ.get('GIT_AUTHOR_EMAIL', 'agent@pile.nyc')], env=git_env(), check=True)
         print(f'cloned secondary repo {repo} ({entry.get("access", "read")}) -> {dest}')
     with open(XREPO_STATE, 'w') as f:
         json.dump([{'repo': e['repo'], 'access': e.get('access', 'read')} for e in entries], f)
@@ -1243,6 +1258,10 @@ def push_secondary_repos(agent_env):
     # Write-mode secondaries: commit leftovers, push the lane branch, open a
     # PR in that repo. A failure here is recorded, not fatal — the primary
     # repo's push and PR already happened.
+    if PUSH_POLICY == 'disabled':
+        if any(e.get('access') == 'write' for e in secondary_repos()):
+            print('push disabled by lane policy — leaving secondary repo changes unpushed')
+        return
     for entry in secondary_repos():
         if entry.get('access') != 'write':
             continue
@@ -1261,7 +1280,7 @@ def push_secondary_repos(agent_env):
                 raise RuntimeError(f'refusing to push lane branch {BRANCH!r}: it is the default branch of {repo}')
             _reset_git_config(dest, secondary_remote_url(repo, token))
             git = [GIT, '-C', dest] + _GIT_SAFE_FLAGS
-            env = _git_env()
+            env = git_env()
             status = run(git + ['status', '--porcelain'], env=env, capture_output=True, text=True, check=True)
             if status.stdout.strip():
                 run(git + ['add', '-A'], env=env, check=True)
@@ -1272,7 +1291,11 @@ def push_secondary_repos(agent_env):
             if (ahead.stdout or '0').strip() == '0':
                 print(f'no changes to push in secondary repo {repo}')
                 continue
-            run_transport(git + ['push', 'origin', f'refs/heads/{BRANCH}:refs/heads/{BRANCH}'], env=env)
+            refspec = f'refs/heads/{BRANCH}:refs/heads/{BRANCH}'
+            # Same shape as push_command(): below push=enabled an explicit URL
+            # so no remote config can widen the push.
+            target = ['origin'] if PUSH_POLICY == 'enabled' else ['--no-follow-tags', f'https://github.com/{repo}.git']
+            run_transport(git + ['push'] + target + [refspec], env=secondary_auth_env(token))
             owner = repo.split('/')[0]
             pulls = github_api('GET', f'/pulls?state=open&head={owner}:{BRANCH}', repo=repo, token=token)
             if pulls:
