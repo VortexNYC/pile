@@ -11310,7 +11310,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdIssuesIdDispatch",
-    "description": "Dispatch issue (POST /workspaces/{organizationId}/issues/{id}/dispatch) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: agentId, provider, model, repo, branch, instructions, preflight, secondaryRepos, effort, maxDuration, resultSchema.",
+    "description": "Dispatch issue (POST /workspaces/{organizationId}/issues/{id}/dispatch) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: agentId, provider, model, repo, branch, instructions, preflight, secondaryRepos, mode, effort, maxDuration, resultSchema.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/issues/{id}/dispatch",
     "inputSchema": {
@@ -11372,6 +11372,14 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "additionalProperties": false
               },
               "maxItems": 5
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "build",
+                "plan",
+                "implement_plan"
+              ]
             },
             "effort": {
               "type": "string",

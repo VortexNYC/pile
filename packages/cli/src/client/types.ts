@@ -1454,6 +1454,8 @@ export interface paths {
                             access?: "read" | "write";
                         }[];
                         /** @enum {string} */
+                        mode?: "build" | "plan" | "implement_plan";
+                        /** @enum {string} */
                         effort?: "low" | "medium" | "high" | "max";
                         /** @description Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue */
                         maxDuration?: number;

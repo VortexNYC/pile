@@ -8,6 +8,8 @@ import {
   laneFollowupThrottled,
 } from "../agents/followup.js";
 import { getAgentProvider } from "../agents/index.js";
+import { triggerPlanMode } from "../agents/plan-dispatch.js";
+import { parsePlanCommand } from "../agents/plan.js";
 import { createD1 } from "../global/db.js";
 import { getInstallationToken } from "../global/github-auth.js";
 import { findGithubInstallation } from "../global/github-installations.js";
@@ -19,6 +21,7 @@ import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
+import { getExecutionCtx } from "./execution-ctx.js";
 import { resolveMentions } from "./mentions.js";
 
 async function getStub(env: WorkerEnv, organizationId: string) {
@@ -361,10 +364,34 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
 
     await issueStub.emitCommentCreated(item, issue, identity.id);
 
+    // PILE-283 — `/plan [feedback]` dispatches (or revises) a plan lane;
+    // `/implement_plan` dispatches a build lane from the latest plan. With a
+    // live lane the comment falls through to the follow-up path below.
+    const planCommand = parsePlanCommand(body);
+    let planHandled = false;
+    if (planCommand) {
+      const live = await issueStub
+        .getActiveAgentSessionForIssue(issue.id)
+        .catch(() => null);
+      if (!live) {
+        planHandled = true;
+        await triggerPlanMode(
+          c.env,
+          db,
+          issueStub,
+          organizationId,
+          issue,
+          identity,
+          planCommand,
+          getExecutionCtx(c)
+        );
+      }
+    }
+
     // PILE-211 — a comment on an issue with a live lane becomes a follow-up
     // prompt when the sandbox is still warm; else it's just a comment the
     // lane never sees (orchestrators use /prompt or /retry explicitly).
-    if (identity.type === "user") {
+    if (identity.type === "user" && !planHandled) {
       const active = await issueStub
         .getActiveAgentSessionForIssue(issue.id)
         .catch(() => null);

@@ -915,6 +915,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "secondary-repos",
       },
       {
+        name: "mode",
+        flag: "mode",
+      },
+      {
         name: "effort",
         flag: "effort",
       },

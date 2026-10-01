@@ -12,6 +12,12 @@ import { resolveAgentEnv } from "../agents/daytona.js";
 import { dispatchAgent, getAgentProvider } from "../agents/index.js";
 import { resolveResultSchema } from "../agents/lane-result.js";
 import {
+  notePlanSource,
+  planLaneOptions,
+  resolveDispatchAgent,
+  triggerPlanLabel,
+} from "../agents/plan-dispatch.js";
+import {
   buildPreflightCritiqueInstructions,
   evaluateDispatchReadiness,
 } from "../agents/preflight.js";
@@ -19,12 +25,11 @@ import { secondaryReposSchema } from "../agents/secondary-repos.js";
 import { consumeUsage } from "../global/billing.js";
 import { createD1 } from "../global/db.js";
 import { deleteIssueReferences } from "../global/issue-data.js";
-import { fetchPileRepoConfig } from "../global/pile-repo-config.js";
 import {
   createRepoBranch,
   suggestBranchName,
 } from "../global/repo-branches.js";
-import { githubInstallations, repoBranches } from "../global/schema.js";
+import { repoBranches } from "../global/schema.js";
 import {
   canAccessTeam,
   getDefaultTeam,
@@ -716,6 +721,11 @@ const dispatchRoute = createRoute({
               // next to the primary checkout. `write` entries get the lane
               // branch pushed and a PR opened in that repo.
               secondaryRepos: secondaryReposSchema.optional(),
+              // PILE-283 — plan mode. "plan" dispatches a lane that posts an
+              // implementation plan on the issue instead of code (re-running
+              // it revises the latest plan, with `instructions` as feedback);
+              // "implement_plan" dispatches a build lane FROM the latest plan.
+              mode: z.enum(["build", "plan", "implement_plan"]).optional(),
               // PILE-293 — run budget. effort is a model tier (low→max);
               // unset, it follows the issue's priority (preflight: low).
               // maxDuration (minutes) replaces the provider timeout for this
@@ -1083,6 +1093,16 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         issue.id
       );
     }
+    await triggerPlanLabel(
+      c.env,
+      db,
+      stub,
+      organizationId,
+      null,
+      issue,
+      identity,
+      getExecutionCtx(c)
+    );
     return c.json(issue, 201);
   });
 
@@ -1412,6 +1432,18 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         issue.id
       );
     }
+    if (input.labelIds !== undefined) {
+      await triggerPlanLabel(
+        c.env,
+        db,
+        stub,
+        organizationId,
+        existing.labelIds,
+        issue,
+        identity,
+        getExecutionCtx(c)
+      );
+    }
     return c.json(issue);
   });
 
@@ -1516,6 +1548,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       branch,
       instructions,
       preflight,
+      mode,
       effort,
       maxDuration,
       resultSchema: resultSchemaInput,
@@ -1561,47 +1594,32 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       branch: branch === undefined ? issue.branch : branch,
     };
 
-    // Explicit agentId wins; otherwise a repo's configured default agent
-    // (github installation row) beats the global "devin" fallback.
-    const repoDefault = target.repo
-      ? (
-          await db
-            .select({ defaultAgentId: githubInstallations.defaultAgentId })
-            .from(githubInstallations)
-            .where(
-              and(
-                eq(githubInstallations.organizationId, organizationId),
-                eq(githubInstallations.repo, target.repo)
-              )
-            )
-            .get()
-        )?.defaultAgentId
-      : undefined;
-    const resolvedAgentId = agentId ?? provider ?? repoDefault ?? "devin";
-
-    // PILE-221 — a repo can commit `.pile/config.json` to declare which
-    // agents may run on it and a default model. Enforcement happens here so
-    // the contract applies to UI, API, and automation dispatches alike.
-    const pileConfig = target.repo
-      ? await fetchPileRepoConfig(c.env, target.repo, target.branch)
-      : null;
-    if (
-      pileConfig?.agents &&
-      pileConfig.agents.length > 0 &&
-      !pileConfig.agents.includes(resolvedAgentId)
-    ) {
+    if (preflight && mode && mode !== "build") {
       throw new VortexError({
         code: "BAD_REQUEST",
         status: 400,
-        message: `Agent "${resolvedAgentId}" is not allowed by .pile/config.json (allowed: ${pileConfig.agents.join(", ")})`,
+        message: "preflight cannot be combined with plan modes",
       });
     }
+
+    // Explicit agentId wins; otherwise a repo's configured default agent
+    // (github installation row) beats the global "devin" fallback. PILE-221
+    // `.pile/config.json` enforcement applies to UI, API, and automation
+    // dispatches alike.
+    const {
+      agentId: resolvedAgentId,
+      model: configuredModel,
+      pileConfig,
+    } = await resolveDispatchAgent(c.env, db, organizationId, target, {
+      agentId: agentId ?? provider,
+      model,
+    });
     const resolvedEffort = resolveDispatchEffort(
       effort ?? (preflight ? "low" : undefined),
       target
     );
     const resolvedModel =
-      model ?? pileConfig?.effortModels?.[resolvedEffort] ?? pileConfig?.model;
+      model ?? pileConfig?.effortModels?.[resolvedEffort] ?? configuredModel;
     const resultSchema = resultSchemaInput
       ? resolveResultSchema(resultSchemaInput)
       : undefined;
@@ -1637,31 +1655,13 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     // Planner-critique mode: a repo-less lane on the SAME target provider
     // reads the ticket and reports what a real lane would need clarified.
     // Runs detached from the repo so it can't implement — critique only.
-    const session = preflight
+    const planMode = mode === "plan" || mode === "implement_plan" ? mode : null;
+    const planOptions = planMode
+      ? await planLaneOptions(stub, target, planMode, instructions ?? null)
+      : null;
+
+    const session = planOptions
       ? await dispatchAgent(
-          effectiveEnv,
-          resolvedAgentId,
-          organizationId,
-          { ...target, repo: null, branch: null },
-          identity,
-          resolvedModel,
-          getExecutionCtx(c),
-          {
-            instructions: [
-              buildPreflightCritiqueInstructions(target),
-              instructions ?? null,
-            ]
-              .filter((line): line is string => line !== null)
-              .join("\n\n"),
-            envAllowlist: pileConfig?.env,
-            purpose: "preflight",
-            skipQueue: true,
-            effort: resolvedEffort,
-            maxDurationMinutes: maxDuration,
-            resultSchema,
-          }
-        )
-      : await dispatchAgent(
           effectiveEnv,
           resolvedAgentId,
           organizationId,
@@ -1670,16 +1670,72 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
           resolvedModel,
           getExecutionCtx(c),
           {
-            instructions,
+            instructions:
+              // `plan` with an existing plan already folds instructions in
+              // as revision feedback.
+              instructions &&
+              (planMode === "implement_plan" || !planOptions.plan)
+                ? `${planOptions.instructions}\n\n${instructions}`
+                : planOptions.instructions,
             envAllowlist: pileConfig?.env,
+            // Infra env (not caller-supplied), so the repo env allowlist
+            // doesn't filter it.
+            extraEnv: planOptions.extraEnv,
+            purpose: planOptions.purpose ?? undefined,
+            skipQueue: planOptions.skipQueue,
             secondaryRepos,
             effort: resolvedEffort,
             maxDurationMinutes: maxDuration,
             resultSchema,
           }
-        );
+        )
+      : preflight
+        ? await dispatchAgent(
+            effectiveEnv,
+            resolvedAgentId,
+            organizationId,
+            { ...target, repo: null, branch: null },
+            identity,
+            resolvedModel,
+            getExecutionCtx(c),
+            {
+              instructions: [
+                buildPreflightCritiqueInstructions(target),
+                instructions ?? null,
+              ]
+                .filter((line): line is string => line !== null)
+                .join("\n\n"),
+              envAllowlist: pileConfig?.env,
+              purpose: "preflight",
+              skipQueue: true,
+              effort: resolvedEffort,
+              maxDurationMinutes: maxDuration,
+              resultSchema,
+            }
+          )
+        : await dispatchAgent(
+            effectiveEnv,
+            resolvedAgentId,
+            organizationId,
+            target,
+            identity,
+            resolvedModel,
+            getExecutionCtx(c),
+            {
+              instructions,
+              envAllowlist: pileConfig?.env,
+              secondaryRepos,
+              effort: resolvedEffort,
+              maxDurationMinutes: maxDuration,
+              resultSchema,
+            }
+          );
 
-    if (target.repo && target.branch && !preflight) {
+    if (planOptions) {
+      await notePlanSource(stub, session, planOptions.plan);
+    }
+
+    if (target.repo && target.branch && !preflight && planMode !== "plan") {
       await createRepoBranch(
         db,
         organizationId,

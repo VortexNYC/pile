@@ -2934,6 +2934,14 @@
                     },
                     "maxItems": 5
                   },
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "build",
+                      "plan",
+                      "implement_plan"
+                    ]
+                  },
                   "effort": {
                     "type": "string",
                     "enum": [
