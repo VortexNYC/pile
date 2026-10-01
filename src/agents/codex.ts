@@ -15,6 +15,7 @@ import type {
   AgentProviderState,
 } from "./provider.js";
 import { probeUrl } from "./provider.js";
+import { DOMAIN_REVIEW_PROMPT } from "./review-prompt.js";
 
 const API_BASE = "https://api.openai.com/v1";
 const BETA_HEADER = "agents=v1";
@@ -101,6 +102,7 @@ function buildInput(issue: Issue, gitIdentity?: GitIdentity | null): unknown {
     ...identityLines,
     "",
     "Implement the requested change. Run the project's test/lint commands. If you open a pull request, include the full PR URL in your final message.",
+    ...(issue.repo ? ["", DOMAIN_REVIEW_PROMPT, ""] : []),
     "Do not attempt to update Pile yourself — an external system will poll your session and write the status back automatically.",
   ].join("\n");
   return {

@@ -42,6 +42,7 @@ import type {
   AgentProviderSession,
   AgentProviderState,
 } from "./provider.js";
+import { DOMAIN_REVIEW_PROMPT } from "./review-prompt.js";
 import { runnerBundle } from "./runner/bundle.js";
 
 const RESULT_PATH = "/tmp/agent-result.json";
@@ -218,6 +219,7 @@ function buildPrompt(
     "",
     pushInstruction,
     ...lanePermissionLines(permissions),
+    ...(issue.repo ? ["", DOMAIN_REVIEW_PROMPT, ""] : []),
     "Do not attempt to update Pile yourself — an external system will poll your session and write the status back automatically.",
     ...(pileApi
       ? [
