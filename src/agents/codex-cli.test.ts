@@ -91,6 +91,17 @@ describe("CodexCliAgentProvider", () => {
     ).rejects.toThrow("CODEX_CLI_ENV_ID is not configured");
   });
 
+  it("refuses lane permission tiers it cannot enforce (PILE-276)", async () => {
+    const provider = new CodexCliAgentProvider(cliEnv());
+    await expect(
+      provider.dispatch("org-1", issueFixture(), "gpt-reserve", {
+        sessionId: "sess-1",
+        gitIdentity: gitIdentityFixture(),
+        permissions: { push: "restricted", shell: "enabled" },
+      })
+    ).rejects.toThrow("cannot enforce lane permissions");
+  });
+
   it("throws when Daytona is not configured", async () => {
     const provider = new CodexCliAgentProvider(
       cliEnv({ DAYTONA_API_KEY: undefined })
