@@ -2613,6 +2613,77 @@
         "summary": "List issue children"
       }
     },
+    "/workspaces/{organizationId}/issues/{id}/similar": {
+      "get": {
+        "tags": [
+          "issues"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Issues whose title/description best match this issue (BM25 over the workspace search index), best first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "similar": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "issue": {
+                            "$ref": "#/components/schemas/Issue"
+                          },
+                          "score": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "issue",
+                          "score"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "similar"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List issue similar"
+      }
+    },
     "/workspaces/{organizationId}/issues/batch": {
       "post": {
         "tags": [
@@ -2838,6 +2909,21 @@
                   "preflight": {
                     "type": "boolean"
                   },
+                  "effort": {
+                    "type": "string",
+                    "enum": [
+                      "low",
+                      "medium",
+                      "high",
+                      "max"
+                    ]
+                  },
+                  "maxDuration": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1440,
+                    "description": "Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue"
+                  },
                   "resultSchema": {
                     "anyOf": [
                       {
@@ -2932,6 +3018,21 @@
                     "purpose": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "maxDurationMinutes": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "effort": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high",
+                        "max",
+                        null
+                      ]
                     },
                     "label": {
                       "type": "string",
@@ -3208,6 +3309,21 @@
                         "purpose": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "maxDurationMinutes": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "effort": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "low",
+                            "medium",
+                            "high",
+                            "max",
+                            null
+                          ]
                         },
                         "label": {
                           "type": "string",
@@ -3488,6 +3604,21 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "maxDurationMinutes": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "effort": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "low",
+                            "medium",
+                            "high",
+                            "max",
+                            null
+                          ]
+                        },
                         "label": {
                           "type": "string",
                           "nullable": true
@@ -3716,6 +3847,21 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "maxDurationMinutes": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "effort": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "low",
+                            "medium",
+                            "high",
+                            "max",
+                            null
+                          ]
+                        },
                         "label": {
                           "type": "string",
                           "nullable": true
@@ -3919,6 +4065,21 @@
                         },
                         "queuedAfter": {
                           "type": "string"
+                        },
+                        "effort": {
+                          "type": "string",
+                          "enum": [
+                            "low",
+                            "medium",
+                            "high",
+                            "max"
+                          ]
+                        },
+                        "maxDuration": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 1440,
+                          "description": "Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue"
                         },
                         "resultSchema": {
                           "anyOf": [
@@ -4134,6 +4295,21 @@
                               "purpose": {
                                 "type": "string",
                                 "nullable": true
+                              },
+                              "maxDurationMinutes": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "effort": {
+                                "type": "string",
+                                "nullable": true,
+                                "enum": [
+                                  "low",
+                                  "medium",
+                                  "high",
+                                  "max",
+                                  null
+                                ]
                               },
                               "label": {
                                 "type": "string",
@@ -4635,6 +4811,21 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "maxDurationMinutes": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "effort": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "low",
+                            "medium",
+                            "high",
+                            "max",
+                            null
+                          ]
+                        },
                         "label": {
                           "type": "string",
                           "nullable": true
@@ -4950,6 +5141,21 @@
                         "purpose": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "maxDurationMinutes": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "effort": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "low",
+                            "medium",
+                            "high",
+                            "max",
+                            null
+                          ]
                         },
                         "label": {
                           "type": "string",
@@ -5303,6 +5509,21 @@
                     "purpose": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "maxDurationMinutes": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "effort": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high",
+                        "max",
+                        null
+                      ]
                     },
                     "label": {
                       "type": "string",
@@ -6094,6 +6315,21 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "maxDurationMinutes": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "effort": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high",
+                        "max",
+                        null
+                      ]
+                    },
                     "label": {
                       "type": "string",
                       "nullable": true
@@ -6329,6 +6565,21 @@
                     "purpose": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "maxDurationMinutes": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "effort": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high",
+                        "max",
+                        null
+                      ]
                     },
                     "label": {
                       "type": "string",
@@ -6569,6 +6820,21 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "maxDurationMinutes": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "effort": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "low",
+                            "medium",
+                            "high",
+                            "max",
+                            null
+                          ]
+                        },
                         "label": {
                           "type": "string",
                           "nullable": true
@@ -6768,6 +7034,21 @@
                   },
                   "repo": {
                     "type": "string"
+                  },
+                  "effort": {
+                    "type": "string",
+                    "enum": [
+                      "low",
+                      "medium",
+                      "high",
+                      "max"
+                    ]
+                  },
+                  "maxDuration": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1440,
+                    "description": "Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue"
                   }
                 },
                 "required": [
@@ -6851,6 +7132,21 @@
                         "purpose": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "maxDurationMinutes": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "effort": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "low",
+                            "medium",
+                            "high",
+                            "max",
+                            null
+                          ]
                         },
                         "label": {
                           "type": "string",
@@ -7175,6 +7471,21 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "maxDurationMinutes": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "effort": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high",
+                        "max",
+                        null
+                      ]
+                    },
                     "label": {
                       "type": "string",
                       "nullable": true
@@ -7356,6 +7667,21 @@
                   },
                   "model": {
                     "type": "string"
+                  },
+                  "effort": {
+                    "type": "string",
+                    "enum": [
+                      "low",
+                      "medium",
+                      "high",
+                      "max"
+                    ]
+                  },
+                  "maxDuration": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1440,
+                    "description": "Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue"
                   }
                 },
                 "additionalProperties": false
@@ -7434,6 +7760,21 @@
                     "purpose": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "maxDurationMinutes": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "effort": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high",
+                        "max",
+                        null
+                      ]
                     },
                     "label": {
                       "type": "string",
@@ -47250,6 +47591,10 @@
                             "type": "string",
                             "nullable": true
                           },
+                          "triageAgentId": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "defaultTemplateId": {
                             "type": "string",
                             "nullable": true
@@ -47278,6 +47623,7 @@
                           "isPublic",
                           "parentAutoClose",
                           "triageAssigneeId",
+                          "triageAgentId",
                           "defaultTemplateId",
                           "defaultRepo",
                           "subIssueAutoClose",
@@ -47332,6 +47678,10 @@
                     "type": "boolean"
                   },
                   "triageAssigneeId": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "triageAgentId": {
                     "type": "string",
                     "nullable": true
                   },
@@ -47391,6 +47741,10 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "triageAgentId": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "defaultTemplateId": {
                       "type": "string",
                       "nullable": true
@@ -47419,6 +47773,7 @@
                     "isPublic",
                     "parentAutoClose",
                     "triageAssigneeId",
+                    "triageAgentId",
                     "defaultTemplateId",
                     "defaultRepo",
                     "subIssueAutoClose",
@@ -47492,6 +47847,10 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "triageAgentId": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "defaultTemplateId": {
                       "type": "string",
                       "nullable": true
@@ -47520,6 +47879,7 @@
                     "isPublic",
                     "parentAutoClose",
                     "triageAssigneeId",
+                    "triageAgentId",
                     "defaultTemplateId",
                     "defaultRepo",
                     "subIssueAutoClose",
@@ -47582,6 +47942,10 @@
                     "type": "string",
                     "nullable": true
                   },
+                  "triageAgentId": {
+                    "type": "string",
+                    "nullable": true
+                  },
                   "defaultTemplateId": {
                     "type": "string",
                     "nullable": true
@@ -47634,6 +47998,10 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "triageAgentId": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "defaultTemplateId": {
                       "type": "string",
                       "nullable": true
@@ -47662,6 +48030,7 @@
                     "isPublic",
                     "parentAutoClose",
                     "triageAssigneeId",
+                    "triageAgentId",
                     "defaultTemplateId",
                     "defaultRepo",
                     "subIssueAutoClose",
@@ -48024,6 +48393,10 @@
                             "type": "string",
                             "nullable": true
                           },
+                          "triageAgentId": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "defaultTemplateId": {
                             "type": "string",
                             "nullable": true
@@ -48052,6 +48425,7 @@
                           "isPublic",
                           "parentAutoClose",
                           "triageAssigneeId",
+                          "triageAgentId",
                           "defaultTemplateId",
                           "defaultRepo",
                           "subIssueAutoClose",
