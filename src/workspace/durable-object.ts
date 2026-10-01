@@ -197,6 +197,8 @@ function hasWorkspaceNamespace(env: AppEnv): env is WorkerEnv {
   return "WORKSPACE_DURABLE_OBJECT" in env;
 }
 
+const LANE_GITHUB_TOKEN_PREFIX = "laneGithubToken:";
+
 export class WorkspaceDO extends DurableObject<AppEnv> {
   private organizationId: string;
   private readonly ready: Promise<void>;
@@ -2003,6 +2005,36 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   getAgentSession(id: string) {
     return data.getAgentSession(this.db, this.organizationId, id);
+  }
+
+  // Encrypted GitHub installation token currently held by each lane, keyed by
+  // session. Swapping returns the previous one so callers can revoke it; the
+  // reaper takes and revokes whatever is left once a session is terminal.
+  async swapLaneGithubToken(
+    sessionId: string,
+    encrypted: string
+  ): Promise<string | null> {
+    const key = `${LANE_GITHUB_TOKEN_PREFIX}${sessionId}`;
+    const previous = await this.ctx.storage.get<string>(key);
+    await this.ctx.storage.put(key, encrypted);
+    return previous ?? null;
+  }
+
+  async takeLaneGithubToken(sessionId: string): Promise<string | null> {
+    const key = `${LANE_GITHUB_TOKEN_PREFIX}${sessionId}`;
+    const encrypted = await this.ctx.storage.get<string>(key);
+    if (encrypted === undefined) return null;
+    await this.ctx.storage.delete(key);
+    return encrypted;
+  }
+
+  async listLaneGithubTokenSessions(): Promise<string[]> {
+    const entries = await this.ctx.storage.list({
+      prefix: LANE_GITHUB_TOKEN_PREFIX,
+    });
+    return [...entries.keys()].map((key) =>
+      key.slice(LANE_GITHUB_TOKEN_PREFIX.length)
+    );
   }
 
   getAgentSessionByProviderSessionId(providerSessionId: string) {
