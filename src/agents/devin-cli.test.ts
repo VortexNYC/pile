@@ -133,8 +133,14 @@ describe("DevinCliAgentProvider", () => {
 
     const provider = new DevinCliAgentProvider(cliEnv());
     (
-      provider as unknown as { githubToken: (repo: string) => Promise<string> }
-    ).githubToken = vi.fn().mockResolvedValue("gh-token");
+      provider as unknown as {
+        githubToken: (
+          repo: string
+        ) => Promise<{ token: string; expiresAt: string | null }>;
+      }
+    ).githubToken = vi
+      .fn()
+      .mockResolvedValue({ token: "gh-token", expiresAt: null });
 
     const waitUntilCalls: Promise<unknown>[] = [];
     const result = await provider.dispatch("org-1", issueFixture(), "swe-2", {
@@ -205,8 +211,14 @@ describe("DevinCliAgentProvider", () => {
 
     const provider = new DevinCliAgentProvider(cliEnv());
     (
-      provider as unknown as { githubToken: (repo: string) => Promise<string> }
-    ).githubToken = vi.fn().mockResolvedValue("gh-token");
+      provider as unknown as {
+        githubToken: (
+          repo: string
+        ) => Promise<{ token: string; expiresAt: string | null }>;
+      }
+    ).githubToken = vi
+      .fn()
+      .mockResolvedValue({ token: "gh-token", expiresAt: null });
 
     const result = await provider.dispatch("org-1", issueFixture(), "swe-2", {
       sessionId: "sess-1",
@@ -413,9 +425,13 @@ describe("DevinCliAgentProvider", () => {
       const provider = new DevinCliAgentProvider(cliEnv());
       (
         provider as unknown as {
-          githubToken: (repo: string) => Promise<string>;
+          githubToken: (
+            repo: string
+          ) => Promise<{ token: string; expiresAt: string | null }>;
         }
-      ).githubToken = vi.fn().mockResolvedValue("gh-token");
+      ).githubToken = vi
+        .fn()
+        .mockResolvedValue({ token: "gh-token", expiresAt: null });
 
       const waitUntilCalls: Promise<unknown>[] = [];
       const result = await provider.dispatch("org-1", issueFixture(), "swe-2", {

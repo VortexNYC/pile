@@ -15,12 +15,14 @@ import {
   getAgentProvider,
   providerKeepsTerminalSandbox,
 } from "../agents/index.js";
+import { mintLaneGithubToken } from "../agents/lane-github-token.js";
 import { sessionHoldsKeptSandbox } from "../agents/sweep.js";
 import { consumeUsage } from "../global/billing.js";
 import { timingSafeEqualHex } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
 import { getInstallationTokenForRepo } from "../global/github-auth.js";
 import { fetchPileRepoConfig } from "../global/pile-repo-config.js";
+import { scrubLaneText } from "../global/redact.js";
 import { createRepoBranch } from "../global/repo-branches.js";
 import { githubInstallations } from "../global/schema.js";
 import { replyLaneResultToTicket } from "../global/support-escalation.js";
@@ -1705,7 +1707,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
           stub.addAgentSessionEvent({
             sessionId,
             type: "log",
-            message: line.slice(0, 2000),
+            message: scrubLaneText(line, [expected]).slice(0, 2000),
           })
         )
       );
@@ -1842,12 +1844,16 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       if (!issue?.repo) {
         return c.json({ message: "Session issue has no repository" }, 422);
       }
-      const [owner, name] = issue.repo.split("/");
-      const token = await getInstallationTokenForRepo(c.env, owner, name);
-      if (!token) {
+      const minted = await mintLaneGithubToken(
+        c.env,
+        organizationId,
+        sessionId,
+        issue.repo
+      );
+      if (!minted) {
         return c.json({ message: "No installation token for repository" }, 502);
       }
-      return c.json({ token });
+      return c.json({ token: minted.token, expiresAt: minted.expiresAt });
     }
   );
 
