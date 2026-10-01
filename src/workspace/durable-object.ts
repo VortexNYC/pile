@@ -89,6 +89,7 @@ import {
 import * as data from "./data/index.js";
 import { filterToSql } from "./filter.js";
 import { workspaceMigrations } from "./migrations.js";
+import { type ReviewVerdict, rollReviewSummary } from "./review-summary.js";
 import { workspaceSchema } from "./schema-map.js";
 import {
   workspaceAgentActivities,
@@ -2188,6 +2189,23 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     input: Parameters<typeof data.updateAgentSession>[3]
   ) {
     return data.updateAgentSession(this.db, this.organizationId, id, input);
+  }
+
+  /** Read-merge-write inside the DO so the webhook and the sweep can both
+   *  record the same review without clobbering each other's verdicts. */
+  async recordLaneReview(sessionId: string, verdict: ReviewVerdict) {
+    const session = await data.getAgentSession(
+      this.db,
+      this.organizationId,
+      sessionId
+    );
+    if (!session) return null;
+    return data.updateAgentSession(
+      this.db,
+      this.organizationId,
+      sessionId,
+      rollReviewSummary(session.reviewSummary, verdict)
+    );
   }
 
   async addAgentActivity(input: data.AgentActivityInput) {

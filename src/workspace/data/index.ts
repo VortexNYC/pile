@@ -1179,6 +1179,8 @@ export async function updateAgentSession(
     spawnDepth: number;
     laneDbRef: string | null;
     endedAt: string | null;
+    lastReviewedSha: string | null;
+    reviewSummary: string | null;
   }>
 ) {
   const existing = await getAgentSession(db, organizationId, id);
@@ -1217,6 +1219,23 @@ export async function updateAgentSession(
   if (input.spawnDepth !== undefined) set.spawnDepth = input.spawnDepth;
   if (input.laneDbRef !== undefined) set.laneDbRef = input.laneDbRef;
   if (input.endedAt !== undefined) set.endedAt = input.endedAt;
+  if (input.lastReviewedSha !== undefined)
+    set.lastReviewedSha = input.lastReviewedSha;
+  if (input.reviewSummary !== undefined)
+    set.reviewSummary = input.reviewSummary;
+  // A retry/redispatch lane inherits the review history of the lane it
+  // replaces, so the next review still range-diffs from the last verdict.
+  if (
+    input.retryOf &&
+    input.reviewSummary === undefined &&
+    existing.reviewSummary === null
+  ) {
+    const source = await getAgentSession(db, organizationId, input.retryOf);
+    if (source?.reviewSummary) {
+      set.reviewSummary = source.reviewSummary;
+      set.lastReviewedSha = source.lastReviewedSha;
+    }
+  }
   await db
     .update(workspaceAgentSessions)
     .set(set)
