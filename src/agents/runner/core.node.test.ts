@@ -242,6 +242,20 @@ describe("runner headless browser (PILE-292)", () => {
     expect(res.prompt).toContain("agent-browser open");
   });
 
+  it("leaves the prompt alone when the lane has no shell", () => {
+    const binDir = join(harnessDir, "browser-bin-noshell");
+    mkdirSync(binDir, { recursive: true });
+    const chromium = join(binDir, "chromium");
+    writeFileSync(chromium, "#!/bin/sh\nexit 0\n");
+    chmodSync(chromium, 0o755);
+    const res = runHarness([], "browser", {
+      PATH: binDir,
+      PROMPT_B64: promptB64,
+      PILE_SHELL_POLICY: "disabled",
+    });
+    expect(res.prompt).toBe(PROMPT);
+  });
+
   it("is a no-op on images without a browser", () => {
     const emptyDir = join(harnessDir, "no-browser-bin");
     mkdirSync(emptyDir, { recursive: true });
