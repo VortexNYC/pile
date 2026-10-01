@@ -10,6 +10,7 @@ import {
 import {
   agentLogToken,
   agentLogUrl,
+  agentMcpUrl,
   agentReportUrl,
   loadProviderConfig,
   verifySessionToken,
@@ -776,6 +777,7 @@ const registerSessionRoute = createRoute({
             laneToken: z.string().nullable(),
             logUrl: z.string().nullable(),
             reportUrl: z.string().nullable(),
+            mcpUrl: z.string().nullable(),
           }),
         },
       },
@@ -789,6 +791,7 @@ const registerSessionRoute = createRoute({
             laneToken: z.string().nullable(),
             logUrl: z.string().nullable(),
             reportUrl: z.string().nullable(),
+            mcpUrl: z.string().nullable(),
           }),
         },
       },
@@ -1083,6 +1086,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       laneToken: await agentLogToken(c.env, organizationId, sessionId),
       logUrl: agentLogUrl(c.env, organizationId, sessionId),
       reportUrl: agentReportUrl(c.env, organizationId, sessionId),
+      mcpUrl: agentMcpUrl(c.env, organizationId, sessionId),
     });
 
     // Idempotent: a retry or a webhook bridge re-registering the same

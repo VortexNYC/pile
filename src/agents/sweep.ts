@@ -59,8 +59,11 @@ export const DEFAULT_PROVISION_TIMEOUT_MINUTES = 10;
 const DEFAULT_PROBE_TIMEOUT_MS = 90_000;
 // Follow-up prompts (PILE-210) can land while a terminal session's sandbox is
 // parked. Past this window the sweep destroys the sandbox and cold dispatch
-// takes over.
-const SANDBOX_RESUME_WINDOW_MS = 4 * 60 * 60 * 1000;
+// takes over. Kept short deliberately: kept-alive sandboxes are real fleet
+// capacity — a lane idle this long almost never resumes meaningfully, and
+// 4h × cap × providers was the largest steady-state consumer of the shared
+// container budget during the 10/01 outage.
+const SANDBOX_RESUME_WINDOW_MS = 45 * 60 * 1000;
 // The reaper only scans terminal sessions inside a bounded window — anything
 // older was reaped already or died of natural causes.
 const SANDBOX_REAP_MAX_AGE_MS = 48 * 60 * 60 * 1000;
@@ -69,6 +72,11 @@ const SANDBOX_REAP_MAX_AGE_MS = 48 * 60 * 60 * 1000;
 // Past this count per provider, the oldest in-window sessions are reaped
 // regardless of their remaining resume window.
 const KEPT_SANDBOX_CAP_PER_PROVIDER = 5;
+// And a hard ceiling across all providers — per-provider caps alone let a
+// workspace hold 5×N warm containers (N = provider count); during the 10/01
+// capacity flap the kept fleet was the largest steady-state consumer of the
+// account's shared container budget.
+const KEPT_SANDBOX_CAP_TOTAL = 12;
 const TERMINAL_STATUSES = new Set<AgentSessionStatus>([
   "completed",
   "failed",
@@ -618,6 +626,13 @@ async function reapTerminalArtifacts(
     if (list.length <= KEPT_SANDBOX_CAP_PER_PROVIDER) continue;
     list.sort((a, b) => a.at - b.at);
     for (const s of list.slice(0, -KEPT_SANDBOX_CAP_PER_PROVIDER)) {
+      forceReap.add(s.id);
+    }
+  }
+  const allInWindow = [...inWindowByProvider.values()].flat();
+  if (allInWindow.length > KEPT_SANDBOX_CAP_TOTAL) {
+    allInWindow.sort((a, b) => a.at - b.at);
+    for (const s of allInWindow.slice(0, -KEPT_SANDBOX_CAP_TOTAL)) {
       forceReap.add(s.id);
     }
   }

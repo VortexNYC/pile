@@ -310,6 +310,20 @@ export function agentReportUrl(
 }
 
 /**
+ * Lane MCP endpoint (PILE-284): purpose-built, permission-scoped GitHub/lane
+ * tools for the running session. Same per-session HMAC bearer as agentLogUrl.
+ */
+export function agentMcpUrl(
+  env: WorkerEnv,
+  organizationId: string,
+  sessionId: string
+): string | null {
+  const base = env.PUBLIC_API_URL ?? env.BETTER_AUTH_URL;
+  if (!base) return null;
+  return `${base.replace(/\/$/, "")}/workspaces/${organizationId}/agent/sessions/${sessionId}/mcp`;
+}
+
+/**
  * Base URL for the runner's pnpm-store cache (GET/PUT keyed by lockfile hash
  * appended as a path segment). Same per-session token auth as agentLogUrl.
  */

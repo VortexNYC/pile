@@ -53,6 +53,7 @@ import { registerIssueHistoryRoutes } from "./issue-history.js";
 import { registerIssueRelationRoutes } from "./issue-relations.js";
 import { registerIssueSubscriberRoutes } from "./issue-subscribers.js";
 import { registerIssueRoutes } from "./issues.js";
+import { registerLaneMcpRoutes } from "./lane-mcp.js";
 import { registerLinearUserRoutes } from "./linear-users.js";
 import { registerMcpServerRoutes } from "./mcp-servers.js";
 import { registerNotificationRoutes } from "./notifications.js";
@@ -153,7 +154,7 @@ app.use("/workspaces/:organizationId/*", async (c, next) => {
   // per-session HMAC token instead of a user/API-key identity — verified
   // inside the route handlers.
   if (
-    /\/agent\/sessions\/[^/]+\/(logs|report|github-token|cache\/pnpm-store\/[a-f0-9]{64}(\/parts\/\d+|\/manifest)?)$/.test(
+    /\/agent\/sessions\/[^/]+\/(logs|report|github-token|mcp|cache\/pnpm-store\/[a-f0-9]{64}(\/parts\/\d+|\/manifest)?)$/.test(
       c.req.path
     ) &&
     (c.req.method === "POST" ||
@@ -202,6 +203,7 @@ registerClipperRoutes(app);
 registerOAuthClientRoutes(app);
 registerIssueRoutes(app);
 registerAgentSessionRoutes(app);
+registerLaneMcpRoutes(app);
 registerAgentProviderRoutes(app);
 registerAgentEnvironmentRoutes(app);
 registerApprovalRoutes(app);
