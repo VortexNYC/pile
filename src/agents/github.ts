@@ -46,10 +46,16 @@ import {
   issueEventTarget,
 } from "./repo-triggers.js";
 import { reviewPromptWithContext } from "./review-context.js";
+import {
+  REVIEW_CHECK_NAME,
+  REVIEW_PURPOSE,
+  requestPrReview,
+} from "./review.js";
 import { fireEventAutomations, githubApiGet } from "./sweep.js";
 
 const pullRequestPayloadSchema = z.object({
   action: z.string(),
+  repository: z.object({ full_name: z.string() }).optional(),
   label: z.object({ name: z.string() }).optional(),
   pull_request: z.object({
     number: z.number().int().optional(),
@@ -61,12 +67,21 @@ const pullRequestPayloadSchema = z.object({
     html_url: z.string(),
     head: z.object({
       ref: z.string(),
+      sha: z.string().optional(),
       repo: z.object({
         full_name: z.string(),
       }),
     }),
+    base: z.object({ ref: z.string() }).optional(),
   }),
 });
+
+const REVIEW_TRIGGER_ACTIONS = new Set([
+  "opened",
+  "synchronize",
+  "reopened",
+  "ready_for_review",
+]);
 
 const checkRunInnerSchema = z.object({
   name: z.string().nullish(),
@@ -906,10 +921,11 @@ async function resolveLaneForIssue(
   // PILE-249 — dead lanes still resolve: a review on a failed/canceled
   // lane's PR gets its detection event plus a prompt.followup_skipped
   // record from nudgeLane instead of silence.
+  const lanes = sessions.filter((s) => s.purpose !== REVIEW_PURPOSE);
   return (
-    sessions.find((s) => s.status === "running" || s.status === "waiting") ??
-    sessions.find((s) => s.status === "completed") ??
-    sessions.find((s) => s.status === "failed" || s.status === "canceled") ??
+    lanes.find((s) => s.status === "running" || s.status === "waiting") ??
+    lanes.find((s) => s.status === "completed") ??
+    lanes.find((s) => s.status === "failed" || s.status === "canceled") ??
     null
   );
 }
@@ -1256,6 +1272,48 @@ async function processPullRequest(
     )
   );
 
+  // PILE-273 — fast path for the review lane; the sweep is the backstop.
+  const headSha = pull_request.head.sha;
+  const baseRef = pull_request.base?.ref;
+  const baseRepo = payload.data.repository?.full_name ?? repo;
+  const pullNumber = pull_request.number;
+  if (
+    !REVIEW_TRIGGER_ACTIONS.has(payload.data.action) ||
+    prState !== "open" ||
+    !headSha ||
+    !baseRef ||
+    pullNumber === undefined
+  ) {
+    return;
+  }
+  await stub.setOrganizationId(workspaceRecord.organizationId);
+  let issue = await stub.getIssueByBranch(repo, branch);
+  for (const identifier of identifiers) {
+    if (issue) break;
+    issue = await stub.getIssueByIdentifier(identifier);
+  }
+  if (!issue) return;
+  const [owner, name] = baseRepo.split("/");
+  const token = await getInstallationTokenForRepo(env, owner, name).catch(
+    () => undefined
+  );
+  if (!token) return;
+  await requestPrReview(
+    env,
+    stub,
+    workspaceRecord.organizationId,
+    issue,
+    {
+      repoFull: baseRepo,
+      pullNumber,
+      prUrl,
+      headSha,
+      baseRef,
+      title: pull_request.title,
+      body: pull_request.body,
+    },
+    token
+  );
   const prEvent =
     action === "opened"
       ? "pr.opened"
@@ -1587,7 +1645,8 @@ async function processCheckRun(
   const { repository } = payload.data;
   const repo = repository.full_name;
   const branch = check_run.head_branch;
-  if (!branch) {
+  // Pile's own review verdict (PILE-273) is not CI state.
+  if (!branch || check_run.name === REVIEW_CHECK_NAME) {
     return;
   }
   const prCheckState =
