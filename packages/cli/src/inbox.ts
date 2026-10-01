@@ -16,6 +16,7 @@ import {
   errorMessage,
   type TextChunk,
   type TuiKey,
+  type TwoPane,
   type TuiPromptOptions,
 } from "./tui.js";
 
@@ -774,17 +775,14 @@ function truncateTitle(title: string): string {
   return title.length > TITLE_MAX ? `${title.slice(0, TITLE_MAX - 1)}…` : title;
 }
 
-async function createOpenTuiInboxView(): Promise<InboxView> {
-  const { ot, renderer } = await createTui("pile inbox");
-  const pane = createTwoPane({
-    ot,
-    renderer,
-    leftTitle: "issues",
-    rightTitle: "detail",
-    leftWidth: "55%",
-    detailWrapMode: "word",
-  });
+export const INBOX_PANE_OPTIONS = {
+  leftTitle: "issues",
+  rightTitle: "detail",
+  leftWidth: "55%",
+  detailWrapMode: "word",
+} as const;
 
+export function createInboxView(pane: TwoPane): InboxView {
   return {
     start: () => pane.start(),
     onKey: (handler) => pane.onKey(handler),
@@ -832,8 +830,16 @@ async function createOpenTuiInboxView(): Promise<InboxView> {
   };
 }
 
+async function createOpenTuiInboxView(): Promise<InboxView> {
+  const { ot, renderer } = await createTui("pile inbox");
+  return createInboxView(
+    createTwoPane({ ot, renderer, ...INBOX_PANE_OPTIONS })
+  );
+}
+
 export type InboxDeps = CliDeps & {
   readonly createInboxView?: () => InboxView | Promise<InboxView>;
+  readonly quitSignal?: Promise<void>;
   readonly now?: () => number;
 };
 
@@ -899,9 +905,13 @@ export async function inboxCommand(
   let stopped = false;
   let inputOpen = false;
   let resolveQuit!: () => void;
-  const quit = new Promise<void>((resolve) => {
+  const ownQuit = new Promise<void>((resolve) => {
     resolveQuit = resolve;
   });
+  const quit =
+    deps.quitSignal !== undefined
+      ? Promise.race([ownQuit, deps.quitSignal])
+      : ownQuit;
 
   const render = () => {
     view.render(model.viewModel(now(), view.tableViewportRows()));

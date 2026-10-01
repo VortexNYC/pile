@@ -14,6 +14,7 @@ import {
   errorMessage,
   type TextChunk,
   type TuiKey,
+  type TwoPane,
 } from "./tui.js";
 
 export type TicketStatus = "todo" | "done" | "snoozed";
@@ -646,17 +647,14 @@ export type InboxView = {
   destroy(): void;
 };
 
-async function createOpenTuiView(): Promise<InboxView> {
-  const { ot, renderer } = await createTui("pile support");
-  const pane = createTwoPane({
-    ot,
-    renderer,
-    leftTitle: "tickets",
-    rightTitle: "ticket",
-    leftWidth: "48%",
-    detailWrapMode: "word",
-  });
+export const SUPPORT_PANE_OPTIONS = {
+  leftTitle: "tickets",
+  rightTitle: "ticket",
+  leftWidth: "48%",
+  detailWrapMode: "word",
+} as const;
 
+export function createSupportView(pane: TwoPane): InboxView {
   return {
     start: () => pane.start(),
     onKey: (handler) => pane.onKey(handler),
@@ -689,8 +687,16 @@ async function createOpenTuiView(): Promise<InboxView> {
   };
 }
 
+async function createOpenTuiView(): Promise<InboxView> {
+  const { ot, renderer } = await createTui("pile support");
+  return createSupportView(
+    createTwoPane({ ot, renderer, ...SUPPORT_PANE_OPTIONS })
+  );
+}
+
 export type InboxDeps = CliDeps & {
   readonly createView?: () => InboxView | Promise<InboxView>;
+  readonly quitSignal?: Promise<void>;
   readonly now?: () => number;
 };
 
@@ -750,9 +756,13 @@ export async function supportCommand(
 
   let stopped = false;
   let resolveQuit!: () => void;
-  const quit = new Promise<void>((resolve) => {
+  const ownQuit = new Promise<void>((resolve) => {
     resolveQuit = resolve;
   });
+  const quit =
+    deps.quitSignal !== undefined
+      ? Promise.race([ownQuit, deps.quitSignal])
+      : ownQuit;
 
   const render = () => {
     view.render(model.viewModel(now(), view.tableViewportRows()));

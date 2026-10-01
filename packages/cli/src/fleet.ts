@@ -20,6 +20,7 @@ import {
   type TextChunk,
   type TuiKey,
   type TuiPromptOptions,
+  type TwoPane,
 } from "./tui.js";
 
 export type FleetSession = {
@@ -888,18 +889,19 @@ export type FleetView = {
   destroy(): void;
 };
 
-async function createOpenTuiView(): Promise<FleetView> {
-  const { ot, renderer } = await createTui("pile fleet");
-  const pane = createTwoPane({
-    ot,
-    renderer,
-    leftTitle: "sessions",
-    rightTitle: "log",
-    leftWidth: "48%",
-    detailWrapMode: "char",
-    detailStickyBottom: true,
-  });
+// Pane layout shared by standalone `pile fleet` and the fleet tab in
+// `pile home`.
+export const FLEET_PANE_OPTIONS = {
+  leftTitle: "sessions",
+  rightTitle: "log",
+  leftWidth: "48%",
+  detailWrapMode: "char",
+  detailStickyBottom: true,
+} as const;
 
+// FleetView painting against an existing two-pane chrome — home injects its
+// own pane; standalone fleet builds one.
+export function createFleetView(pane: TwoPane): FleetView {
   return {
     start: () => pane.start(),
     onKey: (handler) => pane.onKey(handler),
@@ -937,8 +939,17 @@ async function createOpenTuiView(): Promise<FleetView> {
   };
 }
 
+async function createOpenTuiView(): Promise<FleetView> {
+  const { ot, renderer } = await createTui("pile fleet");
+  return createFleetView(
+    createTwoPane({ ot, renderer, ...FLEET_PANE_OPTIONS })
+  );
+}
+
 export type FleetDeps = CliDeps & {
   readonly createView?: () => FleetView | Promise<FleetView>;
+  // Host-provided quit (pile home tears down every screen together).
+  readonly quitSignal?: Promise<void>;
   readonly createSocket?: RealtimeSocketFactory | null;
   readonly now?: () => number;
   readonly reconnect?: {
@@ -1014,9 +1025,13 @@ export async function fleetCommand(
 
   let stopped = false;
   let resolveQuit!: () => void;
-  const quit = new Promise<void>((resolve) => {
+  const ownQuit = new Promise<void>((resolve) => {
     resolveQuit = resolve;
   });
+  const quit =
+    deps.quitSignal !== undefined
+      ? Promise.race([ownQuit, deps.quitSignal])
+      : ownQuit;
 
   const render = () => {
     view.render(model.viewModel(now(), view.tableViewportRows()));

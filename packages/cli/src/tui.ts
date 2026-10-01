@@ -113,6 +113,8 @@ export type TwoPane = {
   // Modal single-line input. Owns the keyboard until submit/cancel.
   promptText(options: TuiPromptOptions): void;
   closeModal(): void;
+  // True while a modal owns the keyboard — hosts defer tab switches.
+  modalOpen(): boolean;
   destroy(): void;
 };
 
@@ -303,6 +305,9 @@ export function createTwoPane(options: TwoPaneOptions): TwoPane {
       renderer.requestRender();
     },
     closeModal,
+    modalOpen() {
+      return modal !== null;
+    },
     destroy() {
       closeModal();
       if (ownsRenderer) {
