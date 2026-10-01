@@ -454,7 +454,11 @@ optional:
   "agents": ["devin", "devin-cli"],
   "model": "swe-2",
   "setup": ".pile/setup.sh",
-  "env": ["DATABASE_URL", "NPM_TOKEN"]
+  "env": ["DATABASE_URL", "NPM_TOKEN"],
+  "hooks": {
+    "setup": "pnpm install --frozen-lockfile",
+    "stop": "pnpm run check"
+  }
 }
 ```
 
@@ -464,6 +468,31 @@ optional:
 | `model`  | Default model when the dispatch request doesn't name one.                                                                                      |
 | `setup`  | Documented setup hook. `.pile/setup.sh` runs after clone either way.                                                                           |
 | `env`    | Env-var allowlist — caller-supplied `extraEnv` keys not named here are dropped before they reach the lane. Infra env (lane DB etc.) is exempt. |
+| `hooks`  | Lane lifecycle hooks — see below.                                                                                                              |
+
+### Lane lifecycle hooks
+
+`hooks` holds bash commands the lane runner (`cursor-cli`, `devin-cli`) reads
+from the lane's own checkout and runs from the repo root. Every hook gets
+`PILE_HOOK`, `PILE_BRANCH`, `PILE_BASE_SHA` and `PILE_CHANGED_FILES` (path to
+a newline-separated list of files changed vs the lane's base — use it to scope
+checks to touched packages) in its env; output streams into the lane
+transcript and each run lands in the session digest under `hooks`.
+
+| hook              | when                                                       | nonzero exit                                                                                                 |
+| ----------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `setup`           | after clone, after `.pile/setup.sh`, before the agent      | logged, lane continues                                                                                       |
+| `postCheckout`    | after every checkout — fresh clone and kept-sandbox resume | logged, lane continues                                                                                       |
+| `prePush`         | before each push                                           | push blocked, lane fails with the hook output                                                                |
+| `stop`            | after each agent turn, before commit/push                  | agent resumes with the failure output and the hook re-runs, up to `stopMaxAttempts` times (default 2, max 5) |
+| `stopMaxAttempts` | —                                                          | cap on stop-hook self-heal resumes                                                                           |
+
+The `stop` hook makes lanes self-verifying: a lane that would have pushed
+without testing gets its own red check back as a prompt and fixes it before
+any PR exists. If the hook is still red after the last attempt the lane pushes
+anyway, `digest.stopHook` records `{status: "failed", attempts, exit}`, and
+the PR body flags it. A malformed `hooks` block is ignored without affecting
+the rest of the file.
 
 ## Lane credential posture
 

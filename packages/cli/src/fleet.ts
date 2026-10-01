@@ -23,6 +23,7 @@ export type FleetSession = {
   readonly prState?: string | null;
   readonly branch?: string | null;
   readonly purpose?: string | null;
+  readonly label?: string | null;
   readonly createdAt: string;
   readonly startedAt?: string | null;
   readonly updatedAt: string;
@@ -82,6 +83,16 @@ function optionalString(value: unknown): string | null {
   return typeof value === "string" ? value : null;
 }
 
+const MAX_LANE_LABEL = 40;
+
+/** Server-assigned run name (PILE-289); legacy rows fall back to the id. */
+export function laneLabel(session: FleetSession): string {
+  const label = session.label ?? session.id.slice(0, 8);
+  return label.length > MAX_LANE_LABEL
+    ? `${label.slice(0, MAX_LANE_LABEL - 1)}…`
+    : label;
+}
+
 function parseFleetSession(value: unknown): FleetSession | null {
   if (!isJsonObject(value)) return null;
   const { id, issueId, agentId, provider, status, createdAt, updatedAt } =
@@ -108,6 +119,7 @@ function parseFleetSession(value: unknown): FleetSession | null {
     prState: optionalString(value.prState),
     branch: optionalString(value.branch),
     purpose: optionalString(value.purpose),
+    label: optionalString(value.label),
     createdAt,
     startedAt: optionalString(value.startedAt),
     updatedAt,
@@ -463,6 +475,7 @@ export type FleetRow = {
   readonly tone: StatusTone;
   readonly issue: string;
   readonly agent: string;
+  readonly lane: string;
   readonly age: string;
   readonly prLabel: string;
   readonly prUrl: string | null;
@@ -786,6 +799,7 @@ export class FleetModel {
       tone: sessionTone(session),
       issue: this.issueLabel(session.issueId),
       agent: session.agentId,
+      lane: laneLabel(session),
       age: formatAge(session.startedAt ?? session.createdAt, now),
       prLabel: shortPrRef(session.prUrl) ?? "",
       prUrl: session.prUrl ?? null,
@@ -835,7 +849,7 @@ export class FleetModel {
       logTitle = "dispatch — pick an agent";
       logText = [...pickerLines, "", hint].join("\n");
     } else if (selected !== null) {
-      logTitle = `${selected.id.slice(0, 8)} · ${this.issueLabel(selected.issueId)} · ${statusLabel(selected)}`;
+      logTitle = `${laneLabel(selected)} · ${this.issueLabel(selected.issueId)} · ${statusLabel(selected)}`;
       if (this.tailForId === selected.id && this.tail !== null) {
         if (this.tail.logs !== null) {
           logText = this.tail.logs;
@@ -1053,7 +1067,7 @@ async function createOpenTuiView(): Promise<FleetView> {
         return [selected ? { ...c, bg: selectedBg } : c];
       };
       const header: TextChunk[][][] = [
-        ["", "STATUS", "ISSUE", "AGENT", "AGE", "PR"].map((h) => [
+        ["", "STATUS", "ISSUE", "AGENT", "LANE", "AGE", "PR"].map((h) => [
           cell(h, HEADER_FG),
         ]),
       ];
@@ -1068,6 +1082,7 @@ async function createOpenTuiView(): Promise<FleetView> {
           paint(row.status, TONE_COLORS[row.tone], selected),
           paint(row.issue, "#93c5fd", selected),
           paint(row.agent, undefined, selected),
+          paint(row.lane, "#9ca3af", selected),
           paint(row.age, "#9ca3af", selected),
           row.prLabel === ""
             ? paint("", undefined, selected)

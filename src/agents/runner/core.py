@@ -5,9 +5,9 @@
 # lane needs that is NOT agent-specific lives here: transcript tee, redact,
 # agent env allowlist, GitHub token refresh/revoke,
 # repo ops, GitHub API, PR creation, lane digest, GitHub token refresh, log
-# shipping, pnpm-store cache, postgres warmup, .pile/setup.sh, optional
-# headless browser. Drivers only define: ensure(), agent_env(), the run
-# mechanism, and main().
+# shipping, pnpm-store cache, postgres warmup, .pile/setup.sh, lane lifecycle
+# hooks, optional headless browser. Drivers only define: ensure(), agent_env(),
+# the run mechanism, and main().
 #
 # Contract with the adapter: the process writes RESULT_FILE
 # (/tmp/agent-result.json) with {status, prUrl, branch, result, report?,
@@ -268,14 +268,157 @@ def resume_repo():
 
 def run_setup_hook(agent_env):
     # Repo-declared environment hook (.pile/setup.sh) — each repo wires its
-    # own toolchain instead of the image hardcoding per-repo steps.
+    # own toolchain instead of the image hardcoding per-repo steps. A
+    # hooks.setup command in .pile/config.json runs right after it.
     hook = os.path.join(REPO_DIR, '.pile', 'setup.sh')
-    if not os.path.exists(hook):
-        return
+    if os.path.exists(hook):
+        t0 = time.time()
+        print('running .pile/setup.sh')
+        result = run(['bash', hook], cwd=REPO_DIR, env=agent_env(), check=False)
+        print(f'[timing] setup.sh: {time.time() - t0:.0f}s exit={result.returncode}')
+    run_hook('setup', agent_env())
+
+
+# Lane lifecycle hooks — the `hooks` block of the checkout's .pile/config.json:
+#   setup         after clone, before the agent (non-fatal)
+#   postCheckout  after every checkout: fresh clone and kept-sandbox resume
+#   prePush       before every push; nonzero blocks the push and fails the lane
+#   stop          after each agent turn; nonzero resumes the agent with the
+#                 failure output (up to stopMaxAttempts), so the lane fixes its
+#                 own broken work instead of opening a red PR
+# Each is a bash command run from the repo root with PILE_HOOK, PILE_BRANCH,
+# PILE_BASE_SHA and PILE_CHANGED_FILES (path to a newline list of files
+# changed vs the lane's base) in its env.
+HOOK_NAMES = ('setup', 'postCheckout', 'prePush', 'stop')
+HOOK_TIMEOUT_SEC = 1800
+HOOK_OUTPUT_TAIL = 8000
+STOP_MAX_ATTEMPTS_DEFAULT = 2
+STOP_MAX_ATTEMPTS_CAP = 5
+CHANGED_FILES_PATH = '/tmp/pile-changed-files'
+HOOK_RUNS = []
+STOP_HOOK = {}
+_LANE_HOOKS = []
+
+
+class HookFailure(RuntimeError):
+    pass
+
+
+def lane_hooks():
+    # Read once per process, after checkout — hooks come from the branch the
+    # lane is working on, not the default branch.
+    if _LANE_HOOKS:
+        return _LANE_HOOKS[0]
+    hooks = {}
+    try:
+        with open(os.path.join(REPO_DIR, '.pile', 'config.json')) as f:
+            raw = json.load(f)
+    except (OSError, ValueError):
+        raw = None
+    block = raw.get('hooks') if isinstance(raw, dict) else None
+    if isinstance(block, dict):
+        for name in HOOK_NAMES:
+            cmd = block.get(name)
+            if isinstance(cmd, str) and cmd.strip():
+                hooks[name] = cmd
+        attempts = block.get('stopMaxAttempts')
+        if isinstance(attempts, int) and not isinstance(attempts, bool) and 0 <= attempts <= STOP_MAX_ATTEMPTS_CAP:
+            hooks['stopMaxAttempts'] = attempts
+    if os.path.isdir(REPO_DIR):
+        _LANE_HOOKS.append(hooks)
+    return hooks
+
+
+def _base_sha():
+    try:
+        with open('/tmp/base_sha') as f:
+            return f.read().strip()
+    except OSError:
+        return ''
+
+
+def _write_changed_files(base):
+    files = set()
+    if base:
+        diff = run(['git', '-C', REPO_DIR, 'diff', '--name-only', base], capture_output=True, text=True, check=False)
+        files.update(l for l in (diff.stdout or '').splitlines() if l)
+    untracked = run(['git', '-C', REPO_DIR, 'ls-files', '--others', '--exclude-standard'], capture_output=True, text=True, check=False)
+    files.update(l for l in (untracked.stdout or '').splitlines() if l)
+    with open(CHANGED_FILES_PATH, 'w') as f:
+        f.write(''.join(l + '\n' for l in sorted(files)))
+
+
+def run_hook(name, env):
+    # Returns (exit_code, redacted output tail), or None when the repo
+    # doesn't declare this hook. Output streams into the lane transcript.
+    cmd = lane_hooks().get(name)
+    if not cmd:
+        return None
+    base = _base_sha()
+    _write_changed_files(base)
+    hook_env = dict(env)
+    hook_env.update({'PILE_HOOK': name, 'PILE_BRANCH': BRANCH, 'PILE_BASE_SHA': base, 'PILE_CHANGED_FILES': CHANGED_FILES_PATH})
+    print(_redact(f'[hook] {name}: {cmd}'))
     t0 = time.time()
-    print('running .pile/setup.sh')
-    result = run(['bash', hook], cwd=REPO_DIR, env=agent_env(), check=False)
-    print(f'[timing] setup.sh: {time.time() - t0:.0f}s exit={result.returncode}')
+    proc = subprocess.Popen(['bash', '-c', cmd], cwd=REPO_DIR, env=hook_env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors='replace')
+    timer = threading.Timer(HOOK_TIMEOUT_SEC, proc.kill)
+    timer.start()
+    tail = []
+    size = 0
+    try:
+        for line in proc.stdout:
+            print(_redact(line), end='')
+            tail.append(line)
+            size += len(line)
+            while size > HOOK_OUTPUT_TAIL and len(tail) > 1:
+                size -= len(tail.pop(0))
+        rc = proc.wait()
+    finally:
+        timer.cancel()
+    timed_out = time.time() - t0 >= HOOK_TIMEOUT_SEC
+    if timed_out:
+        tail.append(f'\n[hook] {name} killed after {HOOK_TIMEOUT_SEC}s\n')
+    duration = round(time.time() - t0)
+    print(f'[hook] {name}: exit={rc} {duration}s')
+    HOOK_RUNS.append({'hook': name, 'exit': rc, 'durationSec': duration})
+    return rc, _redact(''.join(tail))[-HOOK_OUTPUT_TAIL:]
+
+
+def stop_hook_prompt(task, cmd, rc, output, attempt, max_attempts):
+    return (
+        'The repository\'s stop hook (`hooks.stop` in .pile/config.json) failed after your last turn, '
+        'so this work is not done yet. Fix the failures below in this checkout — do not weaken or skip the check — '
+        f'then finish. Self-heal attempt {attempt}/{max_attempts}; nothing has been pushed yet.\n\n'
+        f'Command: {cmd}\nExit code: {rc}\n\nOutput (tail):\n```\n{output}\n```\n\n'
+        f'Original task:\n{task[:4000]}'
+    )
+
+
+def self_heal(env, resume, task=''):
+    # Runs hooks.stop; while it exits nonzero, resume(prompt) hands the
+    # failure back to the agent and the hook re-runs. Returns the last
+    # resume() result, or None when the agent was never resumed. A hook that
+    # still fails after stopMaxAttempts lets the lane push anyway — the
+    # digest and PR body flag it so a human sees the red check up front.
+    hooks = lane_hooks()
+    cmd = hooks.get('stop')
+    if not cmd:
+        return None
+    max_attempts = hooks.get('stopMaxAttempts', STOP_MAX_ATTEMPTS_DEFAULT)
+    resumed = None
+    attempt = 0
+    while True:
+        rc, output = run_hook('stop', env)
+        if rc == 0:
+            STOP_HOOK.update({'status': 'passed', 'attempts': attempt})
+            return resumed
+        if attempt >= max_attempts:
+            STOP_HOOK.update({'status': 'failed', 'attempts': attempt, 'exit': rc})
+            print(f'[hook] stop still failing after {attempt} self-heal attempts — pushing with failure flagged')
+            return resumed
+        attempt += 1
+        print(f'[hook] stop failed (exit {rc}) — resuming agent with the failure ({attempt}/{max_attempts})')
+        resumed = resume(stop_hook_prompt(task, cmd, rc, output, attempt, max_attempts))
 
 
 def find_pr():
@@ -296,11 +439,11 @@ def collect_digest():
     # Run-summary ground truth — Pile merges this into the session.summary
     # event so a human can review 'what did this lane do' at a glance.
     digest = {'durationSec': round(time.time() - RUN_STARTED)}
-    try:
-        with open('/tmp/base_sha') as f:
-            base = f.read().strip()
-    except OSError:
-        base = ''
+    if HOOK_RUNS:
+        digest['hooks'] = list(HOOK_RUNS)
+    if STOP_HOOK:
+        digest['stopHook'] = dict(STOP_HOOK)
+    base = _base_sha()
     if REPO and base:
         files = run(['git', '-C', REPO_DIR, 'diff', '--name-only', f'{base}...HEAD'], capture_output=True, text=True, check=False)
         digest['filesChanged'] = [f for f in (files.stdout or '').splitlines() if f]
@@ -314,6 +457,9 @@ def create_pr(digest=None):
         summary = ''
         if digest and digest.get('filesChanged') is not None:
             summary = f"\n\n---\nLane digest: {len(digest['filesChanged'])} files changed, {digest.get('commits', 0)} commits, ~{digest['durationSec']}s."
+        stop = (digest or {}).get('stopHook') or {}
+        if stop.get('status') == 'failed':
+            summary += f"\n\n**Stop hook still failing** (exit {stop.get('exit')}) after {stop.get('attempts', 0)} self-heal attempts — see the lane transcript."
         body = {
             'title': os.environ['ISSUE_TITLE'],
             'head': BRANCH,
@@ -396,6 +542,9 @@ def commit_and_push(agent_env):
     elif ahead.stdout.strip() == '0':
         print('no changes to commit')
         return False
+    gate = run_hook('prePush', agent_env)
+    if gate and gate[0] != 0:
+        raise HookFailure(f'prePush hook failed (exit {gate[0]}); push blocked:\n{gate[1][-2000:]}')
     run_transport(['git', '-C', REPO_DIR, 'push', 'origin', BRANCH], env=agent_env)
     return True
 

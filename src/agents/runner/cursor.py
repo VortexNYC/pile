@@ -48,8 +48,8 @@ def _render_event(evt):
     return None
 
 
-def run_agent(agent_bin):
-    prompt = lane_prompt()
+def run_agent(agent_bin, prompt=None):
+    prompt = prompt or lane_prompt()
     model = os.environ.get('MODEL', '')
     cmd = [agent_bin, '-p', prompt, '--force', '--trust', '--output-format', 'stream-json']
     if model:
@@ -95,8 +95,14 @@ def main():
     if REPO:
         create_branch()
         clone_repo()
+        run_hook('postCheckout', agent_env())
         warm_pnpm_store()
+        run_setup_hook(agent_env)
     output, report = run_agent(agent_bin)
+    task = base64.b64decode(os.environ['PROMPT_B64']).decode('utf-8')
+    healed = self_heal(agent_env(), lambda p: run_agent(agent_bin, prompt=p), task)
+    if healed is not None:
+        output, report = healed
     pushed = commit_and_push(agent_env()) if REPO else False
     rc = finalize(output, pushed, report=report)
     revoke_github_token()
