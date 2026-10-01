@@ -287,6 +287,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
       log?: { url: string | null; token: string | null };
       cacheUrl?: string | null;
       extra?: Record<string, string>;
+      restricted?: boolean;
     }
   ): Record<string, string> {
     const prompt = buildPrompt(
@@ -309,6 +310,13 @@ export class SandboxCliAgentProvider implements AgentProvider {
         ? { PILE_LOG_URL: options.log.url, PILE_LOG_TOKEN: options.log.token }
         : {}),
       ...(options.cacheUrl ? { PILE_CACHE_URL: options.cacheUrl } : {}),
+      // The runner strips secret-shaped vars from the agent's env; these are
+      // the ones handed to the agent on purpose.
+      PILE_AGENT_ENV_PASSTHROUGH: [
+        ...(options.pileApi ? ["PILE_API_URL", "PILE_API_KEY"] : []),
+        ...Object.keys(options.extra ?? {}),
+      ].join(","),
+      ...(options.restricted ? { PILE_LANE_RESTRICTED: "1" } : {}),
       ...(options.lane?.tokenUrl && options.lane.token
         ? {
             PILE_TOKEN_URL: options.lane.tokenUrl,
@@ -394,6 +402,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
               instructions: sessionContext?.instructions,
               pileApi: sessionContext?.pileApi ?? null,
               extra: sessionContext?.extraEnv,
+              restricted: sessionContext?.restricted,
               log: {
                 url: agentLogUrl(workerEnv, organizationId, sessionId),
                 token: logToken,

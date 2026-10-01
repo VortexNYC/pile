@@ -407,16 +407,44 @@ optional:
   "agents": ["devin", "devin-cli"],
   "model": "swe-2",
   "setup": ".pile/setup.sh",
-  "env": ["DATABASE_URL", "NPM_TOKEN"]
+  "env": ["DATABASE_URL", "NPM_TOKEN"],
+  "restricted": true
 }
 ```
 
-| field    | effect                                                                                                                                         |
-| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `agents` | Allowlist — dispatch with any other agentId is rejected (400).                                                                                 |
-| `model`  | Default model when the dispatch request doesn't name one.                                                                                      |
-| `setup`  | Documented setup hook. `.pile/setup.sh` runs after clone either way.                                                                           |
-| `env`    | Env-var allowlist — caller-supplied `extraEnv` keys not named here are dropped before they reach the lane. Infra env (lane DB etc.) is exempt. |
+| field        | effect                                                                                                                                         |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `agents`     | Allowlist — dispatch with any other agentId is rejected (400).                                                                                 |
+| `model`      | Default model when the dispatch request doesn't name one.                                                                                      |
+| `setup`      | Documented setup hook. `.pile/setup.sh` runs after clone either way.                                                                           |
+| `env`        | Env-var allowlist — caller-supplied `extraEnv` keys not named here are dropped before they reach the lane. Infra env (lane DB etc.) is exempt. |
+| `restricted` | Restricted lane — the agent's `git`/`curl`/`wget`/`gh`/`ssh`-family commands run behind a policy shim (see below).                             |
+
+### Lane exec isolation
+
+The sandbox runner keeps the substrate secrets (GitHub installation token,
+lane/log tokens, provider credentials) to itself. The agent, `.pile/setup.sh`,
+and every shell they spawn run with a scrubbed env: runner keys and any
+secret-shaped name (`*_TOKEN`, `*_SECRET`, `*_API_KEY`, `*_PASSWORD`, …) are
+removed, except the scoped `PILE_API_*` credential and the keys the repo's
+`env` allowlist forwarded. The checkout's `origin` remote is token-free; the
+runner authenticates its own fetch/push with a per-process extraheader. An
+agent CLI that needs its own credential (cursor-agent's `CURSOR_API_KEY`) gets
+it, but non-interactive shells it spawns unset it via `BASH_ENV`.
+
+With `"restricted": true` the runner also puts a policy shim ahead of `git`,
+`curl`, `wget`, `gh`, `ssh`/`scp`/`sftp`, and `nc`/`socat`/`telnet`/`ftp`:
+
+- `git push`, `send-email`, `credential*`, remote mutations, and config/`-c`
+  writes to `remote.*.url`, `credential.*`, `url.*.insteadOf`,
+  `http.*.extraheader`, `core.sshCommand`, `alias.*` exit 126.
+- `curl`/`wget` and URL-taking git commands may only reach localhost, GitHub,
+  the npm/PyPI registries, the Pile API host, and hosts in
+  `PILE_LANE_NET_ALLOW`; proxy/config-file/`--resolve` options are refused.
+- `gh`, `ssh`-family, and raw-socket tools are refused outright.
+
+The shim is a guard against the common CLIs, not a kernel sandbox — the
+scrubbed env is what keeps credentials out of the lane.
 
 Repositories that also install the Pile GitHub App get a per-repo default
 agent: `PATCH /workspaces/{org}/github/installations/{id}` with

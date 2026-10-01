@@ -214,6 +214,8 @@ describe("CursorCliAgentProvider", () => {
       gitIdentity: gitIdentityFixture(),
       waitUntil: (p) => waitUntilCalls.push(p),
       pileApi: { url: "https://pile.nyc", key: "pil_readonly" },
+      extraEnv: { NPM_TOKEN: "npm_repo_allowlisted" },
+      restricted: true,
     });
     await Promise.all(waitUntilCalls);
 
@@ -225,6 +227,10 @@ describe("CursorCliAgentProvider", () => {
     const body = JSON.parse((createCall![1] as RequestInit).body as string);
     expect(body.env.PILE_API_URL).toBe("https://pile.nyc");
     expect(body.env.PILE_API_KEY).toBe("pil_readonly");
+    expect(body.env.PILE_AGENT_ENV_PASSTHROUGH).toBe(
+      "PILE_API_URL,PILE_API_KEY,NPM_TOKEN"
+    );
+    expect(body.env.PILE_LANE_RESTRICTED).toBe("1");
     const prompt = atob(body.env.PROMPT_B64);
     expect(prompt).toContain("$PILE_API_KEY");
     expect(prompt).toContain("/support/tickets/<ticketId>/artifacts");

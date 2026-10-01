@@ -1551,6 +1551,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
               .filter((line): line is string => line !== null)
               .join("\n\n"),
             envAllowlist: pileConfig?.env,
+            restricted: pileConfig?.restricted,
             purpose: "preflight",
             skipQueue: true,
           }
@@ -1563,7 +1564,11 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
           identity,
           resolvedModel,
           getExecutionCtx(c),
-          { instructions, envAllowlist: pileConfig?.env }
+          {
+            instructions,
+            envAllowlist: pileConfig?.env,
+            restricted: pileConfig?.restricted,
+          }
         );
 
     if (target.repo && target.branch && !preflight) {

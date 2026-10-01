@@ -6,12 +6,7 @@ ENV_ID = os.environ['CODEX_CLI_ENV_ID']
 
 
 def agent_env():
-    env = os.environ.copy()
-    env['HOME'] = HOME
-    env['CODEX_HOME'] = CODEX_HOME
-    env['CODEX_INSTALL_DIR'] = INSTALL_DIR
-    env['PATH'] = INSTALL_DIR + ':' + env.get('PATH', '')
-    return env
+    return lane_env(extra={'CODEX_HOME': CODEX_HOME, 'CODEX_INSTALL_DIR': INSTALL_DIR})
 
 
 def ensure():
@@ -91,7 +86,8 @@ def apply_and_push(codex_bin, task_url):
         return False
     run(['git', '-C', REPO_DIR, 'add', '-A'], env=env, check=True)
     run(['git', '-C', REPO_DIR, 'commit', '-m', f'{AGENT_LABEL} changes for {BRANCH}'], env=env, check=True)
-    run_transport(['git', '-C', REPO_DIR, 'push', 'origin', BRANCH], env=env)
+    run(['git', '-C', REPO_DIR, 'remote', 'set-url', 'origin', f'https://github.com/{REPO}.git'], check=False)
+    run_transport(['git', '-C', REPO_DIR, 'push', 'origin', BRANCH], env=git_auth_env())
     return True
 
 

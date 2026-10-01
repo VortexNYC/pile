@@ -5,10 +5,9 @@ CURSOR_HOME = os.path.join(HOME, '.local', 'share', 'cursor-agent')
 
 
 def agent_env():
-    env = os.environ.copy()
-    env['HOME'] = HOME
-    env['PATH'] = INSTALL_DIR + ':' + env.get('PATH', '')
-    return env
+    # cursor-agent authenticates from CURSOR_API_KEY itself; the shells it
+    # spawns still lose it (BASH_ENV unset rc).
+    return lane_env(keep=('CURSOR_API_KEY',))
 
 
 def ensure():

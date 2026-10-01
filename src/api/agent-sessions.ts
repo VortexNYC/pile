@@ -1258,6 +1258,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
           {
             instructions: item.instructions,
             envAllowlist: pileConfig?.env,
+            restricted: pileConfig?.restricted,
             queueAfter,
           }
         );

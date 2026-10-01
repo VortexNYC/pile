@@ -147,6 +147,8 @@ export async function dispatchAgent(
     // `.pile/config.json` env allowlist — caller-supplied extraEnv keys
     // outside the list are dropped (infra env like laneDb is exempt).
     envAllowlist?: string[];
+    /** `.pile/config.json` `restricted` — forwarded to the lane runner. */
+    restricted?: boolean;
     /** Promote a parked `waiting` session instead of creating a fresh row —
      *  the sweep calls this when the queuedAfter blocker goes terminal. */
     promoteSessionId?: string;
@@ -445,6 +447,7 @@ export async function dispatchAgent(
         pileApi,
         instructions: options?.instructions,
         extraEnv,
+        restricted: options?.restricted,
       }
     );
 

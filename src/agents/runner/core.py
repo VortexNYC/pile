@@ -4,8 +4,10 @@
 # codex.py) and shipped to the sandbox as RUNNER_PY_B64. Everything an agent
 # lane needs that is NOT agent-specific lives here: transcript tee, redact,
 # repo ops, GitHub API, PR creation, lane digest, GitHub token refresh, log
-# shipping, pnpm-store cache, postgres warmup, .pile/setup.sh. Drivers only
-# define: ensure(), agent_env(), the run mechanism, and main().
+# shipping, pnpm-store cache, postgres warmup, .pile/setup.sh, and lane exec
+# isolation (lane_env scrubbing + restricted-mode command guard). Drivers only
+# define: ensure(), agent_env() (built on lane_env), the run mechanism, and
+# main().
 #
 # Contract with the adapter: the process writes RESULT_FILE
 # (/tmp/agent-result.json) with {status, prUrl, branch, result, report?,
@@ -16,12 +18,14 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 # Tee everything this runner prints (including the agent subprocess, whose
@@ -47,6 +51,327 @@ RESULT_FILE = '/tmp/agent-result.json'
 AGENT_LABEL = os.environ.get('AGENT_LABEL', 'Agent')
 PR_ERRORS = []
 RUN_STARTED = time.time()
+
+
+# Lane exec isolation (PILE-281). The runner holds the substrate secrets —
+# GitHub token, lane/log tokens, provider credentials — and keeps them to
+# itself: the agent, the setup hook, and every shell they spawn run under
+# lane_env(), which strips them. Tokens are never ambient in the lane.
+RUNNER_SECRET_KEYS = frozenset((
+    'GITHUB_TOKEN', 'GH_TOKEN', 'LANE_TOKEN', 'PILE_TOKEN_URL',
+    'PILE_LOG_TOKEN', 'PILE_LOG_URL', 'PILE_CACHE_URL',
+    'CURSOR_API_KEY', 'DEVIN_CREDENTIALS_B64', 'CODEX_AUTH_JSON_B64',
+    'RUNNER_PY_B64', 'PROMPT_B64', 'PILE_AGENT_ENV_PASSTHROUGH',
+))
+# Anything secret-shaped that isn't a known runner key (provider tokens the
+# compute substrate injected, cloud creds baked into an image) goes too.
+_SECRET_NAME_RE = re.compile(
+    r'(^|_)(TOKEN|SECRET|PASSWORD|PASSWD|API_?KEY|ACCESS_KEY(_ID)?|PRIVATE_KEY|CREDENTIALS?|AUTH_?TOKEN|AUTH_JSON)S?(_|$)',
+    re.IGNORECASE,
+)
+GUARD_DIR = os.environ.get('PILE_GUARD_DIR', '/tmp/pile-guard')
+GUARD_BIN = os.path.join(GUARD_DIR, 'bin')
+_RESTRICTED_MARKER = os.path.join(GUARD_DIR, 'restricted')
+# The marker outlives the process so a follow-up run on a kept sandbox stays
+# restricted even though its env is rebuilt from scratch.
+RESTRICTED = os.environ.get('PILE_LANE_RESTRICTED') == '1' or os.path.exists(_RESTRICTED_MARKER)
+
+
+def _passthrough_keys(env):
+    # Keys the dispatcher deliberately hands the agent — the scoped Pile API
+    # credential and the repo's `.pile/config.json` env allowlist.
+    return {k.strip() for k in env.get('PILE_AGENT_ENV_PASSTHROUGH', '').split(',') if k.strip()}
+
+
+def scrub_env(env, keep=()):
+    keep = set(keep)
+    passthrough = _passthrough_keys(env) | keep
+    out = {}
+    for key, value in env.items():
+        if key in keep:
+            out[key] = value
+        elif key in RUNNER_SECRET_KEYS:
+            continue
+        elif key in passthrough or not _SECRET_NAME_RE.search(key):
+            out[key] = value
+    return out
+
+
+def _write_unset_rc(keys):
+    # `keep` keys must reach the agent binary itself (its own provider
+    # credential) but not the shells it spawns: non-interactive bash sources
+    # BASH_ENV first, so the key is gone before the command runs. A top-level
+    # bash whose stdin is a socket sources ~/.bashrc instead, so hook it too.
+    os.makedirs(GUARD_DIR, exist_ok=True)
+    rc = os.path.join(GUARD_DIR, 'shell-env.sh')
+    with open(rc, 'w') as f:
+        f.write('unset ' + ' '.join(sorted(keys)) + '\n')
+    hook = f'[ -f {shlex.quote(rc)} ] && . {shlex.quote(rc)}\n'
+    bashrc = os.path.join(HOME, '.bashrc')
+    try:
+        with open(bashrc) as f:
+            current = f.read()
+    except FileNotFoundError:
+        current = ''
+    if hook not in current:
+        with open(bashrc, 'w') as f:
+            f.write(hook + current)
+    return rc
+
+
+def lane_env(keep=(), extra=None):
+    if RESTRICTED:
+        install_guard()
+    env = scrub_env(os.environ, keep)
+    env['HOME'] = HOME
+    path = INSTALL_DIR + ':' + env.get('PATH', '')
+    if RESTRICTED:
+        env['PILE_LANE_RESTRICTED'] = '1'
+        path = GUARD_BIN + ':' + path
+    env['PATH'] = path
+    if keep:
+        env['BASH_ENV'] = _write_unset_rc(keep)
+    env.update(extra or {})
+    return env
+
+
+def git_auth_env(base=None):
+    # Runner-only git auth: the token rides a GIT_CONFIG_* extraheader on the
+    # runner's own fetch/push instead of living in .git/config, where the
+    # agent could read it back out of the remote URL.
+    env = dict(os.environ if base is None else base)
+    basic = base64.b64encode(f'x-access-token:{GITHUB_TOKEN}'.encode()).decode()
+    n = int(env.get('GIT_CONFIG_COUNT', '0') or 0)
+    env['GIT_CONFIG_COUNT'] = str(n + 1)
+    env[f'GIT_CONFIG_KEY_{n}'] = 'http.https://github.com/.extraheader'
+    env[f'GIT_CONFIG_VALUE_{n}'] = f'AUTHORIZATION: basic {basic}'
+    return env
+
+
+# Restricted mode: dangerous git/network commands go through a policy shim
+# on PATH ahead of the real binaries. Defense in depth on top of scrub_env —
+# the lane already holds no push credential; the shim makes intent explicit
+# and stops prompt-injected exfil via the common CLIs.
+GUARDED_COMMANDS = (
+    'git', 'gh', 'curl', 'wget', 'ssh', 'scp', 'sftp', 'nc', 'ncat',
+    'netcat', 'socat', 'telnet', 'ftp',
+)
+DEFAULT_ALLOWED_HOSTS = (
+    'github.com', 'codeload.github.com', 'raw.githubusercontent.com',
+    'objects.githubusercontent.com', 'registry.npmjs.org',
+    'registry.yarnpkg.com', 'pypi.org', 'files.pythonhosted.org',
+)
+
+GUARD_PY = r'''
+import os
+import re
+import sys
+import urllib.parse
+
+BLOCKED_TOOLS = {'gh', 'ssh', 'scp', 'sftp', 'nc', 'ncat', 'netcat', 'socat', 'telnet', 'ftp'}
+GIT_BLOCKED_SUBCOMMANDS = {'push', 'send-email', 'daemon', 'http-push', 'credential', 'credential-store', 'credential-cache'}
+GIT_REMOTE_MUTATIONS = {'add', 'set-url', 'rename', 'remove', 'rm', 'set-branches'}
+GIT_URL_SUBCOMMANDS = {'clone', 'fetch', 'pull', 'ls-remote', 'submodule'}
+GIT_DANGEROUS_KEY = re.compile(r'^(remote\..+\.(url|pushurl)|credential(\..*)?|url\..+\.(insteadof|pushinsteadof)|http\..*extraheader|core\.sshcommand|alias\..+)$', re.IGNORECASE)
+GIT_VALUE_GLOBALS = {'-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env'}
+CURL_VALUE_OPTS = {
+    '-o', '--output', '-d', '--data', '--data-binary', '--data-raw', '--data-urlencode', '--data-ascii', '--json',
+    '-H', '--header', '-X', '--request', '-u', '--user', '-A', '--user-agent', '-e', '--referer', '-b', '--cookie',
+    '-c', '--cookie-jar', '-F', '--form', '--form-string', '-T', '--upload-file', '-w', '--write-out', '-m',
+    '--max-time', '--connect-timeout', '-E', '--cert', '--key', '--cacert', '--capath', '-r', '--range', '--retry',
+    '--retry-delay', '--retry-max-time', '-y', '--speed-time', '-Y', '--speed-limit', '-z', '--time-cond',
+    '--limit-rate', '--oauth2-bearer', '-U', '--proxy-user', '--output-dir', '--max-filesize', '--trace',
+    '--trace-ascii', '--stderr', '-D', '--dump-header', '--interface', '--dns-servers',
+}
+CURL_BLOCKED_OPTS = {'-K', '--config', '-x', '--proxy', '--preproxy', '--connect-to', '--resolve', '--socks4', '--socks4a', '--socks5', '--socks5-hostname'}
+WGET_VALUE_OPTS = {
+    '-O', '--output-document', '-o', '--output-file', '-a', '--append-output', '-P', '--directory-prefix',
+    '-U', '--user-agent', '--header', '--post-data', '--post-file', '--body-data', '--body-file', '--method',
+    '--user', '--password', '--http-user', '--http-password', '-t', '--tries', '-T', '--timeout', '-w', '--wait',
+    '--referer', '--load-cookies', '--save-cookies', '-Q', '--quota',
+}
+WGET_BLOCKED_OPTS = {'-i', '--input-file', '-e', '--execute', '--config', '-B', '--base'}
+
+
+LOCAL_HOSTS = {'', 'localhost', '127.0.0.1', '::1', '0.0.0.0'}
+
+
+def host_allowed(host, allowed):
+    host = (host or '').lower().rstrip('.')
+    if host in LOCAL_HOSTS:
+        return True
+    return any(host == a or host.endswith('.' + a) for a in allowed)
+
+
+def url_host(arg, default_scheme=None):
+    if re.match(r'^[A-Za-z][A-Za-z0-9+.-]*://', arg):
+        return urllib.parse.urlsplit(arg).hostname or ''
+    # scp-like git remotes: user@host:path, or a dotted host:path.
+    m = re.match(r'^(?:[^@/\s:]+@([^:/\s]+)|([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+)):(?!//)', arg)
+    if m and default_scheme is None:
+        return m.group(1) or m.group(2)
+    if default_scheme:
+        return urllib.parse.urlsplit(default_scheme + '://' + arg).hostname or ''
+    return None
+
+
+def positionals(args, value_opts, blocked_opts):
+    out = []
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a == '--':
+            out.extend(args[i + 1:])
+            break
+        if a.startswith('--'):
+            name = a.split('=', 1)[0]
+            if name in blocked_opts:
+                raise PermissionError(f'option {name} is not allowed')
+            if name == '--url':
+                out.append(a[6:] if '=' in a else (args[i + 1] if i + 1 < len(args) else ''))
+                i += 1 if '=' in a else 2
+                continue
+            if name in value_opts and '=' not in a:
+                i += 1
+        elif a.startswith('-') and a != '-':
+            # Short-flag cluster (getopt): a value-taking flag consumes the
+            # rest of the cluster, or the next arg when it ends the cluster.
+            for j, ch in enumerate(a[1:]):
+                flag = '-' + ch
+                if flag in blocked_opts:
+                    raise PermissionError(f'option {flag} is not allowed')
+                if flag in value_opts:
+                    if j == len(a) - 2:
+                        i += 1
+                    break
+        else:
+            out.append(a)
+        i += 1
+    return out
+
+
+def check_http(tool, args, allowed):
+    value_opts, blocked = (CURL_VALUE_OPTS, CURL_BLOCKED_OPTS) if tool == 'curl' else (WGET_VALUE_OPTS, WGET_BLOCKED_OPTS)
+    try:
+        urls = positionals(args, value_opts, blocked)
+    except PermissionError as e:
+        return f'{tool}: {e}'
+    for u in urls:
+        host = url_host(u, default_scheme='http')
+        if not host_allowed(host, allowed):
+            return f'{tool}: host {host or u!r} is not on the lane network allowlist'
+    return None
+
+
+def check_git(args, allowed, environ):
+    i = 0
+    n = int(environ.get('GIT_CONFIG_COUNT', '0') or 0)
+    for k in range(n):
+        if GIT_DANGEROUS_KEY.match(environ.get(f'GIT_CONFIG_KEY_{k}', '')):
+            return 'git: GIT_CONFIG_* may not set credential/remote/alias keys'
+    while i < len(args) and args[i].startswith('-'):
+        a = args[i]
+        name = a.split('=', 1)[0]
+        if name in ('-c', '--config-env'):
+            attached = name == '--config-env' and '=' in a
+            val = a.split('=', 1)[1] if attached else (args[i + 1] if i + 1 < len(args) else '')
+            key = val.split('=', 1)[0]
+            if GIT_DANGEROUS_KEY.match(key):
+                return f'git: {name} {key} is not allowed'
+            i += 1 if attached else 2
+            continue
+        i += 2 if a in GIT_VALUE_GLOBALS else 1
+    if i >= len(args):
+        return None
+    sub, rest = args[i], args[i + 1:]
+    if sub in GIT_BLOCKED_SUBCOMMANDS:
+        return f'git {sub} is not allowed — the runner pushes after the agent exits'
+    if sub == 'remote' and rest and rest[0] in GIT_REMOTE_MUTATIONS:
+        return f'git remote {rest[0]} is not allowed'
+    if sub == 'config' and any(GIT_DANGEROUS_KEY.match(a.split('=', 1)[0]) for a in rest):
+        return 'git config may not set credential/remote/alias keys'
+    if sub in GIT_URL_SUBCOMMANDS:
+        for a in rest:
+            if a.startswith('-'):
+                continue
+            host = url_host(a)
+            if host is not None and not host_allowed(host, allowed):
+                return f'git {sub}: host {host!r} is not on the lane network allowlist'
+    return None
+
+
+def check(tool, args, allowed, environ=None):
+    environ = os.environ if environ is None else environ
+    if tool in BLOCKED_TOOLS:
+        return f'{tool} is not allowed'
+    if tool == 'git':
+        return check_git(args, allowed, environ)
+    if tool in ('curl', 'wget'):
+        return check_http(tool, args, allowed)
+    return None
+
+
+def allowed_hosts(path):
+    try:
+        with open(path) as f:
+            return [h.strip().lower() for h in f.read().split(',') if h.strip()]
+    except OSError:
+        return []
+
+
+def real_binary(tool, guard_bin):
+    for d in os.environ.get('PATH', '').split(os.pathsep):
+        if not d or os.path.realpath(d) == os.path.realpath(guard_bin):
+            continue
+        p = os.path.join(d, tool)
+        if os.path.isfile(p) and os.access(p, os.X_OK):
+            return p
+    return None
+
+
+if __name__ == '__main__':
+    here = os.path.dirname(os.path.abspath(__file__))
+    tool, args = sys.argv[1], sys.argv[2:]
+    reason = check(tool, args, allowed_hosts(os.path.join(here, 'allowed-hosts')))
+    if reason:
+        sys.stderr.write(f'pile restricted mode: blocked — {reason}\n')
+        sys.exit(126)
+    real = real_binary(tool, os.path.join(here, 'bin'))
+    if not real:
+        sys.stderr.write(f'{tool}: command not found\n')
+        sys.exit(127)
+    os.execv(real, [tool] + args)
+'''
+
+_guard = {'__name__': 'pile_guard'}
+exec(compile(GUARD_PY, 'pile_guard', 'exec'), _guard)
+guard_check = _guard['check']
+
+
+def lane_allowed_hosts():
+    hosts = list(DEFAULT_ALLOWED_HOSTS)
+    api = os.environ.get('PILE_API_URL')
+    if api:
+        hosts.append(urllib.parse.urlsplit(api).hostname or '')
+    hosts += [h.strip() for h in os.environ.get('PILE_LANE_NET_ALLOW', '').split(',') if h.strip()]
+    return ','.join(sorted({h.lower() for h in hosts if h}))
+
+
+def install_guard():
+    os.makedirs(GUARD_BIN, exist_ok=True)
+    guard_py = os.path.join(GUARD_DIR, 'guard.py')
+    with open(guard_py, 'w') as f:
+        f.write(GUARD_PY)
+    python = sys.executable or 'python3'
+    for tool in GUARDED_COMMANDS:
+        shim = os.path.join(GUARD_BIN, tool)
+        with open(shim, 'w') as f:
+            f.write(f'#!/bin/sh\nexec {python} {guard_py} {tool} "$@"\n')
+        os.chmod(shim, 0o755)
+    with open(os.path.join(GUARD_DIR, 'allowed-hosts'), 'w') as f:
+        f.write(lane_allowed_hosts())
+    with open(_RESTRICTED_MARKER, 'w') as f:
+        f.write('1\n')
 
 
 def _redact(s):
@@ -147,8 +472,8 @@ def clone_repo():
     print(f'[timing] codeload tarball: {time.time() - t0:.0f}s')
     t1 = time.time()
     run(['git', '-C', REPO_DIR, 'init', '-b', BRANCH], check=True)
-    run(['git', '-C', REPO_DIR, 'remote', 'add', 'origin', f'https://x-access-token:{GITHUB_TOKEN}@github.com/{REPO}.git'], check=True)
-    run_transport(['timeout', '300', 'git', '-C', REPO_DIR, '-c', 'http.lowSpeedLimit=1000', '-c', 'http.lowSpeedTime=60', 'fetch', '--depth', '1', 'origin', BRANCH])
+    run(['git', '-C', REPO_DIR, 'remote', 'add', 'origin', f'https://github.com/{REPO}.git'], check=True)
+    run_transport(['timeout', '300', 'git', '-C', REPO_DIR, '-c', 'http.lowSpeedLimit=1000', '-c', 'http.lowSpeedTime=60', 'fetch', '--depth', '1', 'origin', BRANCH], env=git_auth_env())
     run(['git', '-C', REPO_DIR, 'update-ref', f'refs/heads/{BRANCH}', 'FETCH_HEAD'], check=True)
     base = run(['git', '-C', REPO_DIR, 'rev-parse', 'FETCH_HEAD'], capture_output=True, text=True, check=False)
     if base.returncode == 0:
@@ -165,7 +490,8 @@ def resume_repo():
     # Follow-up prompt on a kept sandbox: the checkout and branch survive
     # from the prior run — fetch and fast-forward so the agent resumes on
     # current remote state (its earlier push included).
-    run(['timeout', '120', 'git', '-C', REPO_DIR, 'fetch', '--depth', '50', 'origin', BRANCH], check=False)
+    run(['git', '-C', REPO_DIR, 'remote', 'set-url', 'origin', f'https://github.com/{REPO}.git'], check=False)
+    run(['timeout', '120', 'git', '-C', REPO_DIR, 'fetch', '--depth', '50', 'origin', BRANCH], env=git_auth_env(), check=False)
     run(['git', '-C', REPO_DIR, 'merge', '--ff-only', f'origin/{BRANCH}'], check=False)
 
 
@@ -257,9 +583,10 @@ def refresh_github_token():
 
 def commit_and_push(agent_env):
     refresh_github_token()
-    # Re-set the remote so the just-refreshed token (not the dispatch-time
-    # one, possibly >1h stale) is what push authenticates with.
-    run(['git', '-C', REPO_DIR, 'remote', 'set-url', 'origin', f'https://x-access-token:{GITHUB_TOKEN}@github.com/{REPO}.git'], env=agent_env, check=False)
+    # Token-free remote: push authenticates via git_auth_env() with the
+    # just-refreshed token, and a kept sandbox's legacy token-in-URL remote
+    # is scrubbed before the next agent run can read it.
+    run(['git', '-C', REPO_DIR, 'remote', 'set-url', 'origin', f'https://github.com/{REPO}.git'], check=False)
     status = run(['git', '-C', REPO_DIR, 'status', '--porcelain'], env=agent_env, capture_output=True, text=True, check=True)
     ahead = run(['git', '-C', REPO_DIR, 'rev-list', '--count', f'origin/{BRANCH}..HEAD'], env=agent_env, capture_output=True, text=True, check=True)
     if status.stdout.strip():
@@ -268,7 +595,7 @@ def commit_and_push(agent_env):
     elif ahead.stdout.strip() == '0':
         print('no changes to commit')
         return False
-    run_transport(['git', '-C', REPO_DIR, 'push', 'origin', BRANCH], env=agent_env)
+    run_transport(['git', '-C', REPO_DIR, 'push', 'origin', BRANCH], env=git_auth_env())
     return True
 
 

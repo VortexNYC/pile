@@ -19,6 +19,10 @@ export const pileRepoConfigSchema = z.object({
   // Env-var names a repo allows to be injected into its lanes. Caller-supplied
   // extraEnv keys outside this list are dropped at dispatch time.
   env: z.array(z.string()).optional(),
+  // Restricted lanes (PILE-281): the agent's git/network CLIs run behind a
+  // policy shim — no push, no remote/credential rewrites, egress only to
+  // allowlisted hosts. Env scrubbing of runner secrets applies regardless.
+  restricted: z.boolean().optional(),
   // Deterministic merge-conflict resolution (PILE-251). `generated` lists the
   // paths the repo regenerates from source — its contract artifacts — and
   // `regen` is the shell command that rebuilds them. When every file in a

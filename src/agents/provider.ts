@@ -46,6 +46,9 @@ export interface AgentDispatchContext {
   /** Additional sandbox env vars (e.g. lane-DB connection strings from
    *  PILE-212 provisioning). Providers merge these into the runner env. */
   extraEnv?: Record<string, string>;
+  /** `.pile/config.json` `restricted` — the runner guards the agent's
+   *  git/network commands behind its restricted-mode allowlist. */
+  restricted?: boolean;
 }
 
 export interface AgentProviderHealth {

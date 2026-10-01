@@ -7,10 +7,7 @@ FOLLOWUP_DIR = '/tmp/followups'
 
 
 def agent_env():
-    env = os.environ.copy()
-    env['HOME'] = HOME
-    env['PATH'] = INSTALL_DIR + ':' + env.get('PATH', '')
-    return env
+    return lane_env()
 
 
 def ensure():
