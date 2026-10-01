@@ -580,13 +580,13 @@ alongside the working lane and never counts as the issue's active lane.
 ### `.pile/config.json` fields
 
 | field      | effect                                                                                                                                         |
-  | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-  | `agents`   | Allowlist — dispatch with any other agentId is rejected (400).                                                                                 |
-  | `model`    | Default model when the dispatch request doesn't name one.                                                                                      |
-  | `setup`    | Documented setup hook. `.pile/setup.sh` runs after clone either way.                                                                           |
-  | `env`      | Env-var allowlist — caller-supplied `extraEnv` keys not named here are dropped before they reach the lane. Infra env (lane DB etc.) is exempt. |
-  | `triggers` | Event→lane triggers — see below.                                                                                                               |
-  | `hooks`    | Lane lifecycle hooks — see below.                                                                                                              |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `agents`   | Allowlist — dispatch with any other agentId is rejected (400).                                                                                 |
+| `model`    | Default model when the dispatch request doesn't name one.                                                                                      |
+| `setup`    | Documented setup hook. `.pile/setup.sh` runs after clone either way.                                                                           |
+| `env`      | Env-var allowlist — caller-supplied `extraEnv` keys not named here are dropped before they reach the lane. Infra env (lane DB etc.) is exempt. |
+| `triggers` | Event→lane triggers — see below.                                                                                                               |
+| `hooks`    | Lane lifecycle hooks — see below.                                                                                                              |
 
 ### Event→lane triggers
 
