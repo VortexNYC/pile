@@ -25,6 +25,7 @@ export const MCP_TOOL_ALIASES: Readonly<Record<string, string>> = {
   delete_issue: "deleteWorkspacesOrganizationIdIssuesId",
   get_issue_branch_name: "getWorkspacesOrganizationIdIssuesIdBranchname",
   list_issue_children: "getWorkspacesOrganizationIdIssuesIdChildren",
+  find_similar_issues: "getWorkspacesOrganizationIdIssuesIdSimilar",
   list_issue_activity: "getWorkspacesOrganizationIdIssuesIssueIdActivity",
   list_issue_history: "getWorkspacesOrganizationIdIssuesIssueIdHistory",
   list_issue_relations: "getWorkspacesOrganizationIdIssuesIssueIdRelations",

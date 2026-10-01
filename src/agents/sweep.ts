@@ -31,6 +31,12 @@ import type {
   AgentProviderSession,
   AgentProviderState,
 } from "./provider.js";
+import {
+  type AutomationEventFacts,
+  type AutomationEventTarget,
+  fireRepoTriggers,
+  issueEventTarget,
+} from "./repo-triggers.js";
 
 export const DEFAULT_TIMEOUT_MINUTES = 60;
 export const DEFAULT_INACTIVITY_MINUTES = 20;
@@ -196,7 +202,8 @@ async function cancelSession(
   provider: AgentProvider | null,
   result: string,
   probeTimeoutMs: number,
-  report?: HangReport
+  report?: HangReport,
+  infraFailure = true
 ): Promise<void> {
   const remoteId = session.providerSessionId ?? session.id;
   if (report) {
@@ -235,8 +242,10 @@ async function cancelSession(
       // A sweep kill is infra-class death: the lane produced no task
       // outcome (timeout, dead air, silence), so it counts toward the
       // provider-unhealthy streak and is retry-eligible. Operator cancels
-      // land through the API without this flag.
-      infraFailure: true,
+      // land through the API without this flag, and so does a dispatch's own
+      // maxDuration budget running out — that's the caller's limit, not a
+      // substrate failure.
+      infraFailure,
     },
     undefined
   );
@@ -286,6 +295,70 @@ export async function ingestFailedAgentSession(
       session: session.id,
       error: err instanceof Error ? err.message : String(err),
     });
+  }
+}
+
+// PILE-293 — a lane that exhausts its dispatch-time maxDuration is canceled
+// and escalated the PILE-270 way (issue.escalated + comment + triage) instead
+// of redispatched: a retry would spend the same budget on the same outcome.
+async function escalateBudgetExceeded(
+  stub: DurableObjectStub<WorkspaceDO>,
+  session: AgentSession,
+  maxDurationMinutes: number
+): Promise<void> {
+  const effort = session.effort ? `, effort ${session.effort}` : "";
+  try {
+    await stub.addAgentSessionEvent({
+      sessionId: session.id,
+      type: "issue.escalated",
+      message: `run budget exhausted (${maxDurationMinutes}m${effort}) — escalated to triage`,
+      payload: {
+        issueId: session.issueId,
+        reason: "max_duration",
+        maxDurationMinutes,
+        effort: session.effort ?? null,
+        key: `escalated-${session.id}`,
+      },
+    });
+  } catch (err) {
+    console.error("budget escalation event failed", {
+      session: session.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return;
+  }
+  const body =
+    `**Escalated — run budget exhausted.**\n\n` +
+    `Lane \`${session.agentId}\` (session \`${session.id}\`) hit its ${maxDurationMinutes}m run budget (maxDuration${effort}) and was canceled.\n\n` +
+    "Not retried automatically. Narrow the scope, raise maxDuration/effort and retry, or take it over.";
+  await stub
+    .createComment({
+      issueId: session.issueId,
+      body,
+      externalAuthor: "pile-sweep",
+      externalSource: "budget",
+    })
+    .catch((err: unknown) =>
+      console.error("budget escalation comment failed", {
+        session: session.id,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    );
+  const issue = await stub.getIssue(session.issueId).catch(() => null);
+  if (
+    issue &&
+    issue.status !== "triage" &&
+    issue.status !== "done" &&
+    issue.status !== "canceled"
+  ) {
+    await stub
+      .updateIssue(issue.id, { status: "triage" }, "agent-escalation")
+      .catch((err: unknown) =>
+        console.error("budget escalation status move failed", {
+          session: session.id,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      );
   }
 }
 
@@ -352,7 +425,11 @@ async function retryDeadLane(
         permissions: [],
       },
       undefined,
-      ctx
+      ctx,
+      {
+        effort: session.effort ?? undefined,
+        maxDurationMinutes: session.maxDurationMinutes ?? undefined,
+      }
     );
     await stub.updateAgentSession(retried.id, {
       retryOf: session.id,
@@ -708,16 +785,18 @@ async function fireAutomation(
   }
 }
 
-/** Event automations (PILE-211): trigger_value is the event name —
- *  pr.ci_failed, issue.assigned, issue.commented. */
-async function fireEventAutomations(
+/** Event automations: workspace automations whose trigger_value is the
+ *  event name (PILE-211 — pr.ci_failed, pr.conflict, pr.review, pr.opened,
+ *  …) plus the repo's `.pile/config.json` `triggers` (PILE-275). */
+export async function fireEventAutomations(
   env: WorkerEnv,
   stub: DurableObjectStub<WorkspaceDO>,
   organizationId: string,
   eventName: string,
-  session: AgentSession,
+  target: AutomationEventTarget,
   context?: string,
-  ctx?: { waitUntil: (promise: Promise<unknown>) => void }
+  ctx?: { waitUntil: (promise: Promise<unknown>) => void },
+  facts?: AutomationEventFacts
 ): Promise<void> {
   const automations = await stub.listAgentAutomations({
     enabledOnly: true,
@@ -733,11 +812,16 @@ async function fireEventAutomations(
       organizationId,
       automation.issueId
         ? automation
-        : { ...automation, issueId: session.issueId },
+        : { ...automation, issueId: (await target.issue())?.id ?? null },
       ctx,
       context
     );
   }
+  await fireRepoTriggers(env, stub, organizationId, eventName, target, {
+    context,
+    facts,
+    ctx,
+  });
 }
 
 export async function sweepAgentSessions(
@@ -841,7 +925,29 @@ export async function sweepAgentSessions(
         // The run clock starts at the first `running` transition (startedAt),
         // not at dispatch — a queued lane doesn't eat its own budget.
         const runStart = Date.parse(session.startedAt ?? session.createdAt);
+        // PILE-293 — a dispatch-time maxDuration replaces the provider
+        // timeout for this lane, and running out of it escalates.
+        const budget = session.maxDurationMinutes;
         if (
+          budget !== null &&
+          session.status !== "created" &&
+          Number.isFinite(runStart) &&
+          now - runStart >= budget * 60 * 1000
+        ) {
+          await cancelSession(
+            stub,
+            session,
+            provider,
+            `run budget exhausted after ${budget}m (maxDuration)`,
+            probeTimeoutMs,
+            undefined,
+            false
+          );
+          await escalateBudgetExceeded(stub, session, budget);
+          return;
+        }
+        if (
+          budget === null &&
           session.status !== "created" &&
           Number.isFinite(runStart) &&
           now - runStart >= timeoutMinutes * 60 * 1000
@@ -1309,7 +1415,7 @@ export async function syncOpenPrSessions(
           stub,
           organizationId,
           "pr.ci_failed",
-          session,
+          issueEventTarget(stub, session.issueId),
           ciPrompt
         );
       }
@@ -1393,7 +1499,7 @@ export async function syncOpenPrSessions(
               stub,
               organizationId,
               "pr.conflict",
-              session,
+              issueEventTarget(stub, session.issueId),
               `PR ${prUrl} has merge conflicts. Rebase or merge the base branch and resolve.`
             );
           }
@@ -1527,7 +1633,7 @@ export async function syncOpenPrSessions(
                 stub,
                 organizationId,
                 "pr.review",
-                session,
+                issueEventTarget(stub, session.issueId),
                 reviewPrompt
               );
             }
