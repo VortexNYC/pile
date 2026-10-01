@@ -3,6 +3,7 @@
 # This file is concatenated with a per-agent driver (cursor.py, devin.py,
 # codex.py) and shipped to the sandbox as RUNNER_PY_B64. Everything an agent
 # lane needs that is NOT agent-specific lives here: transcript tee, redact,
+# agent env allowlist, GitHub token refresh/revoke,
 # repo ops, GitHub API, PR creation, lane digest, GitHub token refresh, log
 # shipping, pnpm-store cache, postgres warmup, .pile/setup.sh, lane lifecycle
 # hooks. Drivers only define: ensure(), agent_env(), the run mechanism, and
@@ -13,6 +14,7 @@
 # infraFailure?} — infraFailure marks substrate failures (git transport,
 # codeload, token mint) so the sweep retries instead of failing the task.
 import base64
+import calendar
 import hashlib
 import json
 import os
@@ -25,12 +27,63 @@ import time
 import urllib.error
 import urllib.request
 
+# Credential masking. The lane is assumed compromised: anything it prints —
+# runner commands, agent output, errors — may carry a secret, so every line
+# is masked before it reaches the transcript, the shipped log, or the result
+# file. Exact values of secret-bearing env vars are masked verbatim; known
+# token shapes are masked even when the value was never in our env.
+_SECRET_ENV_RE = re.compile(r'TOKEN|SECRET|PASSWORD|PASSWD|API_KEY|PRIVATE_KEY|CREDENTIALS|AUTH', re.I)
+_MASKS = set()
+_REDACT_PATTERNS = (
+    (re.compile(r'(://[^:/\s@]+:)[^@\s/]+@'), r'\1***@'),
+    (re.compile(r'(Bearer)\s+[A-Za-z0-9\-._~+/]{8,}=*'), r'\1 ***'),
+    (re.compile(r'(authorization:\s*token)\s+\S+', re.I), r'\1 ***'),
+    (re.compile(r'(x-access-token:)\s*[^@\s]+'), r'\1***'),
+    (re.compile(r'(authorization:\s*basic\s+)\S+', re.I), r'\1***'),
+    (re.compile(r'\b(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_.-]+'), r'\1_***'),
+    (re.compile(r'\bgithub_pat_[A-Za-z0-9_]+'), 'github_pat_***'),
+    (re.compile(r'\bsk-[A-Za-z0-9_-]{16,}'), 'sk-***'),
+    (re.compile(r'\bxox[baprs]-[A-Za-z0-9-]{8,}'), 'xox-***'),
+    (re.compile(r'\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{4,}'), 'jwt-***'),
+)
+
+
+def add_mask(value):
+    if isinstance(value, str) and len(value) >= 8:
+        _MASKS.add(value)
+
+
+def mask_credential_blob(raw):
+    # Credential files (devin credentials.toml, codex auth.json) are decoded
+    # inside the sandbox — mask every long quoted value they contain.
+    text = raw.decode('utf-8', 'replace') if isinstance(raw, bytes) else raw
+    for value in re.findall(r'"([^"\s]{16,})"', text):
+        add_mask(value)
+
+
+for _key, _value in os.environ.items():
+    if _SECRET_ENV_RE.search(_key):
+        add_mask(_value)
+
+
+def _redact(s):
+    if not isinstance(s, str):
+        s = str(s)
+    for value in sorted(_MASKS, key=len, reverse=True):
+        if value in s:
+            s = s.replace(value, '***')
+    for pattern, repl in _REDACT_PATTERNS:
+        s = pattern.sub(repl, s)
+    return s
+
+
 # Tee everything this runner prints (including the agent subprocess, whose
 # output flows through sys.stdout) to a transcript file Pile can read live.
 class _Tee:
     def __init__(self, *streams):
         self.streams = streams
     def write(self, s):
+        s = _redact(s)
         for st in self.streams:
             st.write(s)
     def flush(self):
@@ -43,17 +96,23 @@ INSTALL_DIR = os.path.join(HOME, '.local', 'bin')
 REPO = os.environ.get('REPO', '')
 BRANCH = os.environ.get('BRANCH', '')
 GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN', '')
+
+
+def _parse_expiry(value):
+    try:
+        return calendar.timegm(time.strptime(value or '', '%Y-%m-%dT%H:%M:%SZ'))
+    except ValueError:
+        return 0
+
+
+GITHUB_TOKEN_EXPIRES_AT = _parse_expiry(os.environ.get('GITHUB_TOKEN_EXPIRES_AT'))
+# Re-mint this long before expiry so no GitHub call races the TTL.
+TOKEN_REFRESH_MARGIN_SEC = 300
 REPO_DIR = os.path.join(HOME, 'repo')
 RESULT_FILE = '/tmp/agent-result.json'
 AGENT_LABEL = os.environ.get('AGENT_LABEL', 'Agent')
 PR_ERRORS = []
 RUN_STARTED = time.time()
-
-
-def _redact(s):
-    s = re.sub(r'(Bearer|x-access-token:)\s*\S+', r'\1 ***', s)
-    s = re.sub(r'ghs_[A-Za-z0-9_.-]+', 'ghs_***', s)
-    return s
 
 
 def run(cmd, cwd=None, env=None, check=False, **kwargs):
@@ -62,6 +121,42 @@ def run(cmd, cwd=None, env=None, check=False, **kwargs):
     if check and result.returncode != 0:
         raise RuntimeError(f'Command failed: {_redact(str(cmd))} returned {result.returncode}; stdout={_redact(result.stdout or "")}; stderr={_redact(result.stderr or "")}')
     return result
+
+
+# Env the agent subprocess may see. Everything else — the GitHub token, the
+# lane token and its URLs, the agent credential blobs, the runner bundle —
+# stays in the runner. Repo-allowlisted extra keys arrive via
+# PILE_AGENT_ENV_KEYS; runner-only keys can never be re-admitted that way.
+_AGENT_ENV_ALLOW = frozenset((
+    'PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'LANG', 'LANGUAGE', 'TERM', 'TZ',
+    'TMPDIR', 'HOSTNAME', 'PWD', 'CI', 'DEBIAN_FRONTEND',
+    'SSL_CERT_FILE', 'SSL_CERT_DIR', 'NODE_EXTRA_CA_CERTS', 'REQUESTS_CA_BUNDLE', 'CURL_CA_BUNDLE',
+    'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'http_proxy', 'https_proxy', 'no_proxy',
+    'NVM_DIR', 'NODE_OPTIONS', 'GOPATH', 'GOROOT', 'CARGO_HOME', 'RUSTUP_HOME', 'VIRTUAL_ENV',
+    'npm_config_store_dir',
+    'GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL',
+    'REPO', 'BRANCH', 'ISSUE_TITLE', 'ISSUE_IDENTIFIER', 'AGENT_LABEL', 'MODEL',
+    'PILE_API_URL', 'PILE_API_KEY',
+))
+_AGENT_ENV_ALLOW_PREFIXES = ('LC_', 'XDG_')
+_RUNNER_ONLY_ENV = frozenset((
+    'GITHUB_TOKEN', 'GITHUB_TOKEN_EXPIRES_AT', 'GH_TOKEN', 'LANE_TOKEN', 'PILE_TOKEN_URL',
+    'PILE_LOG_TOKEN', 'PILE_LOG_URL', 'PILE_CACHE_URL', 'PILE_AGENT_ENV_KEYS',
+    'RUNNER_PY_B64', 'PROMPT_B64', 'DEVIN_CREDENTIALS_B64', 'CODEX_AUTH_JSON_B64', 'FOLLOWUP',
+))
+
+
+def agent_env_base(extra=None):
+    allowed = set(_AGENT_ENV_ALLOW)
+    allowed.update(k.strip() for k in os.environ.get('PILE_AGENT_ENV_KEYS', '').split(',') if k.strip())
+    env = {
+        k: v for k, v in os.environ.items()
+        if k not in _RUNNER_ONLY_ENV and (k in allowed or k.startswith(_AGENT_ENV_ALLOW_PREFIXES))
+    }
+    env['HOME'] = HOME
+    env['PATH'] = INSTALL_DIR + ':' + os.environ.get('PATH', '')
+    env.update(extra or {})
+    return env
 
 
 class TransportError(RuntimeError):
@@ -90,6 +185,7 @@ def run_transport(cmd, **kwargs):
 
 
 def github_api(method, path, body=None):
+    ensure_fresh_github_token()
     owner, name = REPO.split('/')
     url = f'https://api.github.com/repos/{owner}/{name}{path}'
     headers = {
@@ -391,7 +487,9 @@ def refresh_github_token():
         req = urllib.request.Request(url, headers={'Authorization': 'Bearer ' + token, 'User-Agent': 'pile-agent-runner/1.0'}, method='POST')
         with urllib.request.urlopen(req, timeout=30) as resp:
             data = json.load(resp)
+        add_mask(data['token'])
         globals()['GITHUB_TOKEN'] = data['token']
+        globals()['GITHUB_TOKEN_EXPIRES_AT'] = _parse_expiry(data.get('expiresAt'))
         _TRANSPORT_NOTES.clear()
         print('github token refreshed')
     except Exception as e:
@@ -400,6 +498,35 @@ def refresh_github_token():
         # retried lane's failure shows the mint failure as the cause.
         _TRANSPORT_NOTES.append(f'github token refresh failed: {e}')
         print('github token refresh failed:', e)
+
+
+def ensure_fresh_github_token():
+    # refreshGitToken hook: re-mint ahead of expiry instead of letting a
+    # long-running lane's GitHub calls start failing mid-run.
+    expires_at = globals()['GITHUB_TOKEN_EXPIRES_AT']
+    if expires_at and expires_at - time.time() < TOKEN_REFRESH_MARGIN_SEC:
+        refresh_github_token()
+
+
+def revoke_github_token():
+    # Run end: kill the installation token now rather than leaving it live
+    # for the rest of its ~1h TTL in a sandbox that may be kept for
+    # follow-ups. Pile's sweep revokes server-side too; this is the fast path.
+    token = globals()['GITHUB_TOKEN']
+    if not token:
+        return
+    globals()['GITHUB_TOKEN'] = ''
+    if REPO and os.path.isdir(os.path.join(REPO_DIR, '.git')):
+        run(['git', '-C', REPO_DIR, 'remote', 'set-url', 'origin', f'https://github.com/{REPO}.git'], check=False)
+    try:
+        req = urllib.request.Request(
+            'https://api.github.com/installation/token', method='DELETE',
+            headers={'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json',
+                     'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'pile-agent-runner/1.0'})
+        urllib.request.urlopen(req, timeout=15)
+        print('github token revoked')
+    except Exception as e:
+        print('github token revoke failed:', e)
 
 
 def commit_and_push(agent_env):
@@ -574,9 +701,9 @@ def read_transcript(fallback=''):
 
 
 def write_result(status, pr_url='', result='', report=None, infra=False):
-    payload = {'status': status, 'prUrl': pr_url, 'branch': BRANCH, 'result': result}
+    payload = {'status': status, 'prUrl': pr_url, 'branch': BRANCH, 'result': _redact(result)}
     if report:
-        payload['report'] = report
+        payload['report'] = _redact(report)
     if infra:
         payload['infraFailure'] = True
     with open(RESULT_FILE, 'w') as f:
