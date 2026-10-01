@@ -1983,21 +1983,16 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       // PILE-294 — `?repo=` naming one of the session's secondary repos mints
       // for that repo; anything outside the session's repo set is refused.
       const requested = c.req.query("repo")?.toLowerCase();
+      // `?repo=` naming a declared secondary mints for that repo. Any other
+      // value — including case-drifting matches to the session repo — falls
+      // back to the session's own repo rather than 403ing, so a token refresh
+      // can never brick a live lane over naming drift. Either way the minted
+      // token is scoped only to repos the session already owns.
       const secondaryRepo = requested
         ? parseStoredSecondaryRepos(session.secondaryRepos).find(
             (entry) => entry.repo.toLowerCase() === requested
           )?.repo
         : undefined;
-      if (
-        requested &&
-        requested !== issue.repo.toLowerCase() &&
-        !secondaryRepo
-      ) {
-        return c.json(
-          { message: "Repository is not part of this session" },
-          403
-        );
-      }
       const secondary = !!secondaryRepo;
       const targetRepo = secondaryRepo ?? issue.repo;
       // Re-resolve the lane's push tier on every mint so the refreshed token

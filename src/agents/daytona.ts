@@ -66,6 +66,22 @@ function parseConfigEnvId(
   return undefined;
 }
 
+function parseConfigCredentialPool(
+  configJson: string | null | undefined
+): string | undefined {
+  if (!configJson) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(configJson);
+    if (typeof parsed === "object" && parsed !== null) {
+      const pool = (parsed as Record<string, unknown>).credentialPool;
+      if (Array.isArray(pool)) return JSON.stringify(pool);
+    }
+  } catch {
+    // ignore malformed config JSON
+  }
+  return undefined;
+}
+
 function parseConfigComputeProvider(
   configJson: string | null | undefined
 ): string | undefined {
@@ -98,6 +114,10 @@ export function resolveAgentEnv(
     CURSOR_CLI_MODEL: parseConfigModel(config.config) ?? env.CURSOR_CLI_MODEL,
     CODEX_CLI_ENV_ID: parseConfigEnvId(config.config) ?? env.CODEX_CLI_ENV_ID,
     DEVIN_CLI_CREDENTIALS_B64: config.token ?? env.DEVIN_CLI_CREDENTIALS_B64,
+    CLAUDE_CODE_OAUTH_TOKEN: config.token ?? env.CLAUDE_CODE_OAUTH_TOKEN,
+    CLAUDE_CLI_MODEL: parseConfigModel(config.config) ?? env.CLAUDE_CLI_MODEL,
+    AGENT_CREDENTIAL_POOL:
+      parseConfigCredentialPool(config.config) ?? env.AGENT_CREDENTIAL_POOL,
     DEVIN_CLI_MODEL: parseConfigModel(config.config) ?? env.DEVIN_CLI_MODEL,
     DEVIN_ORG_ID: config.providerOrgId ?? env.DEVIN_ORG_ID,
     DAYTONA_API_KEY: config.computeApiKey ?? env.DAYTONA_API_KEY,

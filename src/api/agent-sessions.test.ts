@@ -1659,6 +1659,38 @@ describe("agent sessions API", () => {
     expect(got?.result).toBe("done via hook");
   });
 
+  it("redacts credential pool secrets from provider config responses", async () => {
+    const put = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/providers/mock`, {
+        method: "PUT",
+        token,
+        body: JSON.stringify({
+          config: {
+            model: "sonnet",
+            credentialPool: [
+              {
+                kind: "claudeSubscription",
+                secret: "sk-ant-oat01-secret",
+                label: "max",
+                purposes: ["review"],
+              },
+            ],
+          },
+        }),
+      }),
+      env
+    );
+    expect(put.status).toBe(200);
+    const saved = await put.json<{
+      config: { model?: string; credentialPool?: unknown };
+    }>();
+    expect(saved.config.model).toBe("sonnet");
+    expect(saved.config.credentialPool).toEqual([
+      { kind: "claudeSubscription", label: "max", purposes: ["review"] },
+    ]);
+    expect(JSON.stringify(saved)).not.toContain("sk-ant-oat01-secret");
+  });
+
   it("accepts inbound provider webhooks with a configured secret", async () => {
     const put = await app.fetch(
       request(`/workspaces/${organizationId}/agent/providers/mock`, {

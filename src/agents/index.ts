@@ -22,6 +22,7 @@ import {
   type DispatchEffort,
 } from "./budget.js";
 import { CfAgentProvider } from "./cf-agent.js";
+import { ClaudeCliAgentProvider } from "./claude-cli.js";
 import { CodexCliAgentProvider } from "./codex-cli.js";
 import { CodexAgentProvider } from "./codex.js";
 import { computeBackend } from "./compute.js";
@@ -54,6 +55,7 @@ const providers: Record<string, (env: WorkerEnv) => AgentProvider> = {
   "codex-cli": (env) => new CodexCliAgentProvider(env),
   "devin-cli": (env) => new DevinCliAgentProvider(env),
   "cursor-cli": (env) => new CursorCliAgentProvider(env),
+  "claude-cli": (env) => new ClaudeCliAgentProvider(env),
   "cf-agent": (env) => new CfAgentProvider(env, "cf-agent"),
   cursor: (env) => new CursorAgentProvider(env),
   flue: (env) => new CfAgentProvider(env, "flue"),
@@ -173,6 +175,9 @@ export async function dispatchAgent(
      *  `waiting` behind this session id; the sweep promotes it once the
      *  blocker goes terminal. Wins over the dedupe-derived queueAfter. */
     queueAfter?: string;
+    /** Side lanes (PILE-273 review) run alongside the issue's working lane
+     *  instead of conflicting with it. */
+    concurrent?: boolean;
     /** Sibling repos cloned into the lane next to issue.repo (PILE-294).
      *  Persisted on the session row; promote/retry callers pass the stored
      *  set back in. */
@@ -247,7 +252,11 @@ export async function dispatchAgent(
     : null;
 
   const active = await stub.getActiveAgentSessionForIssue(issue.id);
-  if (active && active.session.id !== options?.promoteSessionId) {
+  if (
+    active &&
+    !options?.concurrent &&
+    active.session.id !== options?.promoteSessionId
+  ) {
     throw new VortexError({
       code: "CONFLICT",
       status: 409,
@@ -534,6 +543,7 @@ export async function dispatchAgent(
             .filter((part): part is string => part !== null && part !== "")
             .join("\n\n") || undefined,
         extraEnv,
+        purpose: options?.purpose,
         secondaryRepos,
         permissions: lanePermissions.permissions,
         effort,
