@@ -152,6 +152,10 @@ describe("ingestFailedAgentSession", () => {
       endedAt: null,
       maxDurationMinutes: null,
       effort: null,
+      label: null,
+      resultSchema: null,
+      structuredResult: null,
+      resultSchemaErrors: null,
     };
     const polled = {
       id: "prov-1",

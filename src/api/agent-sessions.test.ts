@@ -164,6 +164,131 @@ describe("agent sessions API", () => {
     expect(missingRes.status).toBe(404);
   });
 
+  it("validates lane output against a dispatch result schema and labels the run", async () => {
+    let seenInstructions: string | undefined;
+    registerAgentProvider(
+      "mock-structured",
+      () =>
+        new MockAgentProvider("mock-structured", {
+          dispatch: async (_org, issue, _model, ctx) => {
+            seenInstructions = ctx?.instructions;
+            return {
+              id: `structured-${issue.id}`,
+              agentId: "mock-structured",
+              issueId: issue.id,
+              status: "running",
+            };
+          },
+        })
+    );
+
+    const createIssue = async (title: string) => {
+      const res = await app.fetch(
+        request(`/workspaces/${organizationId}/issues`, {
+          method: "POST",
+          token,
+          body: JSON.stringify({ title }),
+        }),
+        env
+      );
+      expect(res.status).toBe(201);
+      return res.json<{ id: string; identifier: string }>();
+    };
+    const dispatch = (issueId: string, body: Record<string, unknown>) =>
+      app.fetch(
+        request(`/workspaces/${organizationId}/issues/${issueId}/dispatch`, {
+          method: "POST",
+          token,
+          body: JSON.stringify({ agentId: "mock-structured", ...body }),
+        }),
+        env
+      );
+    const patch = (sessionId: string, result: string) =>
+      app.fetch(
+        request(`/workspaces/${organizationId}/agent/sessions/${sessionId}`, {
+          method: "PATCH",
+          token,
+          body: JSON.stringify({ status: "completed", result }),
+        }),
+        env
+      );
+    type StructuredSession = {
+      id: string;
+      label: string | null;
+      resultSchema: Record<string, unknown> | null;
+      structuredResult: unknown;
+      resultSchemaErrors: string[] | null;
+    };
+
+    const ok = await createIssue("Structured result happy path");
+    const okRes = await dispatch(ok.id, { resultSchema: "lane" });
+    expect(okRes.status).toBe(201);
+    const okSession = await okRes.json<StructuredSession>();
+    expect(okSession.label).toBe(
+      `mock-structured/${ok.identifier.toLowerCase()}-structured-result-happy-path`
+    );
+    expect(okSession.resultSchema?.required).toEqual([
+      "verdict",
+      "summary",
+      "filesChanged",
+    ]);
+    expect(okSession.structuredResult).toBeNull();
+    expect(seenInstructions).toContain("## Structured result");
+
+    const value = {
+      verdict: "pass",
+      summary: "Implemented",
+      filesChanged: ["src/a.ts"],
+    };
+    const okPatch = await patch(
+      okSession.id,
+      `All done.\n\n\`\`\`json\n${JSON.stringify(value)}\n\`\`\``
+    );
+    expect(okPatch.status).toBe(200);
+    const okDone = await okPatch.json<StructuredSession>();
+    expect(okDone.structuredResult).toEqual(value);
+    expect(okDone.resultSchemaErrors).toBeNull();
+
+    const eventsRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${okSession.id}/events`,
+        { token }
+      ),
+      env
+    );
+    const { events } = await eventsRes.json<{
+      events: { type: string; payload: Record<string, unknown> | null }[];
+    }>();
+    expect(
+      events.find((e) => e.type === "session.structured_result")?.payload
+    ).toEqual({ valid: true, value });
+    expect(
+      events.find((e) => e.type === "session.summary")?.payload
+    ).toMatchObject({ structuredResult: value, label: okSession.label });
+
+    const bad = await createIssue("Structured result mismatch");
+    const badRes = await dispatch(bad.id, {
+      resultSchema: {
+        $schema: "http://json-schema.org/draft-07/schema#",
+        type: "object",
+        required: ["ok"],
+        properties: { ok: { type: "boolean" } },
+      },
+    });
+    expect(badRes.status).toBe(201);
+    const badSession = await badRes.json<StructuredSession>();
+    const badPatch = await patch(badSession.id, JSON.stringify({ ok: "yes" }));
+    const badDone = await badPatch.json<StructuredSession>();
+    expect(badDone.structuredResult).toBeNull();
+    expect(badDone.resultSchemaErrors?.[0]).toMatch(/^ok: /);
+
+    const invalid = await createIssue("Structured result invalid schema");
+    const invalidRes = await dispatch(invalid.id, {
+      resultSchema: { type: "bogus" },
+    });
+    expect(invalidRes.status).toBe(400);
+  });
+
   it("serves light summary rows with ?summary=1 while the default list keeps blobs", async () => {
     const issueRes = await app.fetch(
       request(`/workspaces/${organizationId}/issues`, {
@@ -1791,6 +1916,95 @@ describe("agent sessions API", () => {
       env
     );
     expect(after.status).toBe(409);
+  });
+
+  it("keeps a live progress comment on the issue for a reporting lane (PILE-290)", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const issue = await stub.createIssue({
+      title: "Progress comment test",
+      repo: "VortexNYC/pile",
+    });
+    const reg = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/sessions/register`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          issueId: issue.id,
+          provider: "progress-bot",
+          status: "created",
+          url: "https://example.com/run/progress",
+        }),
+      }),
+      env
+    );
+    const { session, laneToken } = await reg.json<{
+      session: { id: string };
+      laneToken: string;
+    }>();
+    const report = (body: unknown) =>
+      app.fetch(
+        request(
+          `/workspaces/${organizationId}/agent/sessions/${session.id}/report`,
+          {
+            method: "POST",
+            headers: { Authorization: `Bearer ${laneToken}` },
+            body: JSON.stringify(body),
+          }
+        ),
+        env
+      );
+    const progressComments = async () =>
+      (await stub.listComments(issue.id)).filter(
+        (c) => c.externalId === `${session.id}:progress`
+      );
+
+    expect(await progressComments()).toHaveLength(0);
+
+    // First `running` report posts the comment immediately.
+    expect(
+      (await report({ status: "running", step: "Reading issue" })).status
+    ).toBe(200);
+    let [progress] = await progressComments();
+    expect(progress?.body).toContain("is on it");
+    expect(progress?.body).toContain("https://example.com/run/progress");
+    expect(progress?.body).toContain("Current step: Reading issue");
+    expect(progress?.body).toContain("ETA:");
+
+    // Task-list reports edit the same comment in place.
+    expect(
+      (
+        await report({
+          todos: [
+            { content: "Reading issue", status: "completed" },
+            { content: "Writing tests", status: "in_progress" },
+          ],
+        })
+      ).status
+    ).toBe(200);
+    const edited = await progressComments();
+    expect(edited).toHaveLength(1);
+    progress = edited[0];
+    expect(progress?.body).toContain("Current step: Writing tests");
+    expect(progress?.body).toContain("- [x] Reading issue");
+    expect(progress?.body).toContain("- [ ] Writing tests _(in progress)_");
+
+    expect(
+      (await report({ todos: [{ content: "", status: "nope" }] })).status
+    ).toBe(400);
+
+    // Terminal: progress comment freezes; the result comment still lands.
+    expect(
+      (await report({ status: "completed", result: "shipped" })).status
+    ).toBe(200);
+    const final = await progressComments();
+    expect(final).toHaveLength(1);
+    expect(final[0]?.body).toContain("completed** after");
+    expect(final[0]?.body).not.toContain("ETA:");
+    const all = await stub.listComments(issue.id);
+    expect(all.some((c) => c.body.includes("completed: shipped"))).toBe(true);
   });
 
   it("lets a lane token read back its own session and events (PILE-232)", async () => {

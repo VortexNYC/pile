@@ -1403,6 +1403,10 @@ export interface paths {
                         effort?: "low" | "medium" | "high" | "max";
                         /** @description Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue */
                         maxDuration?: number;
+                        /** @description JSON Schema (draft-07) the lane's final output must validate against, or "lane" for the built-in {verdict, summary, filesChanged} shape. The validated value lands on session.structuredResult. */
+                        resultSchema?: "lane" | {
+                            [key: string]: unknown;
+                        };
                     };
                 };
             };
@@ -1434,6 +1438,12 @@ export interface paths {
                             maxDurationMinutes?: number | null;
                             /** @enum {string|null} */
                             effort?: "low" | "medium" | "high" | "max" | null;
+                            label?: string | null;
+                            resultSchema?: {
+                                [key: string]: unknown;
+                            } | null;
+                            structuredResult?: unknown;
+                            resultSchemaErrors?: string[] | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;
@@ -1526,6 +1536,12 @@ export interface paths {
                                 maxDurationMinutes?: number | null;
                                 /** @enum {string|null} */
                                 effort?: "low" | "medium" | "high" | "max" | null;
+                                label?: string | null;
+                                resultSchema?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                structuredResult?: unknown;
+                                resultSchemaErrors?: string[] | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -1620,6 +1636,12 @@ export interface paths {
                                 maxDurationMinutes?: number | null;
                                 /** @enum {string|null} */
                                 effort?: "low" | "medium" | "high" | "max" | null;
+                                label?: string | null;
+                                resultSchema?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                structuredResult?: unknown;
+                                resultSchemaErrors?: string[] | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -1675,6 +1697,12 @@ export interface paths {
                                 maxDurationMinutes?: number | null;
                                 /** @enum {string|null} */
                                 effort?: "low" | "medium" | "high" | "max" | null;
+                                label?: string | null;
+                                resultSchema?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                structuredResult?: unknown;
+                                resultSchemaErrors?: string[] | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -1749,6 +1777,10 @@ export interface paths {
                             effort?: "low" | "medium" | "high" | "max";
                             /** @description Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue */
                             maxDuration?: number;
+                            /** @description JSON Schema (draft-07) the lane's final output must validate against, or "lane" for the built-in {verdict, summary, filesChanged} shape. The validated value lands on session.structuredResult. */
+                            resultSchema?: "lane" | {
+                                [key: string]: unknown;
+                            };
                         }[];
                     };
                 };
@@ -1831,6 +1863,12 @@ export interface paths {
                                 maxDurationMinutes?: number | null;
                                 /** @enum {string|null} */
                                 effort?: "low" | "medium" | "high" | "max" | null;
+                                label?: string | null;
+                                resultSchema?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                structuredResult?: unknown;
+                                resultSchemaErrors?: string[] | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -1867,6 +1905,7 @@ export interface paths {
                                 lastProgressAt?: string | null;
                                 /** @enum {string|null} */
                                 derivedStatus?: "stalled" | "needs_input" | null;
+                                label?: string | null;
                                 startedAt: string | null;
                                 endedAt: string | null;
                             }[];
@@ -2032,6 +2071,12 @@ export interface paths {
                                 maxDurationMinutes?: number | null;
                                 /** @enum {string|null} */
                                 effort?: "low" | "medium" | "high" | "max" | null;
+                                label?: string | null;
+                                resultSchema?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                structuredResult?: unknown;
+                                resultSchemaErrors?: string[] | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -2129,6 +2174,12 @@ export interface paths {
                             maxDurationMinutes?: number | null;
                             /** @enum {string|null} */
                             effort?: "low" | "medium" | "high" | "max" | null;
+                            label?: string | null;
+                            resultSchema?: {
+                                [key: string]: unknown;
+                            } | null;
+                            structuredResult?: unknown;
+                            resultSchemaErrors?: string[] | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;
@@ -2163,6 +2214,7 @@ export interface paths {
                             lastProgressAt?: string | null;
                             /** @enum {string|null} */
                             derivedStatus?: "stalled" | "needs_input" | null;
+                            label?: string | null;
                             startedAt: string | null;
                             endedAt: string | null;
                         };
@@ -2234,6 +2286,12 @@ export interface paths {
                             maxDurationMinutes?: number | null;
                             /** @enum {string|null} */
                             effort?: "low" | "medium" | "high" | "max" | null;
+                            label?: string | null;
+                            resultSchema?: {
+                                [key: string]: unknown;
+                            } | null;
+                            structuredResult?: unknown;
+                            resultSchemaErrors?: string[] | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;
@@ -2605,6 +2663,12 @@ export interface paths {
                             maxDurationMinutes?: number | null;
                             /** @enum {string|null} */
                             effort?: "low" | "medium" | "high" | "max" | null;
+                            label?: string | null;
+                            resultSchema?: {
+                                [key: string]: unknown;
+                            } | null;
+                            structuredResult?: unknown;
+                            resultSchemaErrors?: string[] | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;
@@ -2692,6 +2756,12 @@ export interface paths {
                             maxDurationMinutes?: number | null;
                             /** @enum {string|null} */
                             effort?: "low" | "medium" | "high" | "max" | null;
+                            label?: string | null;
+                            resultSchema?: {
+                                [key: string]: unknown;
+                            } | null;
+                            structuredResult?: unknown;
+                            resultSchemaErrors?: string[] | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;
@@ -2778,6 +2848,12 @@ export interface paths {
                                 maxDurationMinutes?: number | null;
                                 /** @enum {string|null} */
                                 effort?: "low" | "medium" | "high" | "max" | null;
+                                label?: string | null;
+                                resultSchema?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                structuredResult?: unknown;
+                                resultSchemaErrors?: string[] | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -2892,6 +2968,12 @@ export interface paths {
                                 maxDurationMinutes?: number | null;
                                 /** @enum {string|null} */
                                 effort?: "low" | "medium" | "high" | "max" | null;
+                                label?: string | null;
+                                resultSchema?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                structuredResult?: unknown;
+                                resultSchemaErrors?: string[] | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -3013,6 +3095,12 @@ export interface paths {
                             maxDurationMinutes?: number | null;
                             /** @enum {string|null} */
                             effort?: "low" | "medium" | "high" | "max" | null;
+                            label?: string | null;
+                            resultSchema?: {
+                                [key: string]: unknown;
+                            } | null;
+                            structuredResult?: unknown;
+                            resultSchemaErrors?: string[] | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;
@@ -3119,6 +3207,12 @@ export interface paths {
                             maxDurationMinutes?: number | null;
                             /** @enum {string|null} */
                             effort?: "low" | "medium" | "high" | "max" | null;
+                            label?: string | null;
+                            resultSchema?: {
+                                [key: string]: unknown;
+                            } | null;
+                            structuredResult?: unknown;
+                            resultSchemaErrors?: string[] | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;

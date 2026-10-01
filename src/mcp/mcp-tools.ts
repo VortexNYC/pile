@@ -8908,6 +8908,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                     "minimum": 1,
                     "maximum": 1440,
                     "description": "Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue"
+                  },
+                  "resultSchema": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "lane"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": {
+                          "nullable": true
+                        }
+                      }
+                    ],
+                    "description": "JSON Schema (draft-07) the lane's final output must validate against, or \"lane\" for the built-in {verdict, summary, filesChanged} shape. The validated value lands on session.structuredResult."
                   }
                 },
                 "required": [
@@ -11238,7 +11255,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdIssuesIdDispatch",
-    "description": "Dispatch issue (POST /workspaces/{organizationId}/issues/{id}/dispatch) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: agentId, provider, model, repo, branch, instructions, preflight, effort, maxDuration.",
+    "description": "Dispatch issue (POST /workspaces/{organizationId}/issues/{id}/dispatch) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: agentId, provider, model, repo, branch, instructions, preflight, effort, maxDuration, resultSchema.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/issues/{id}/dispatch",
     "inputSchema": {
@@ -11290,6 +11307,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "minimum": 1,
               "maximum": 1440,
               "description": "Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue"
+            },
+            "resultSchema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "lane"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": {
+                    "nullable": true
+                  }
+                }
+              ],
+              "description": "JSON Schema (draft-07) the lane's final output must validate against, or \"lane\" for the built-in {verdict, summary, filesChanged} shape. The validated value lands on session.structuredResult."
             }
           },
           "additionalProperties": false

@@ -897,6 +897,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "maxDuration",
         flag: "max-duration",
       },
+      {
+        name: "resultSchema",
+        flag: "result-schema",
+      },
     ],
   },
   "issues assign create": {

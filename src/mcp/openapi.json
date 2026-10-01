@@ -2852,6 +2852,23 @@
                     "minimum": 1,
                     "maximum": 1440,
                     "description": "Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue"
+                  },
+                  "resultSchema": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "lane"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": {
+                          "nullable": true
+                        }
+                      }
+                    ],
+                    "description": "JSON Schema (draft-07) the lane's final output must validate against, or \"lane\" for the built-in {verdict, summary, filesChanged} shape. The validated value lands on session.structuredResult."
                   }
                 },
                 "additionalProperties": false
@@ -2945,6 +2962,27 @@
                         "max",
                         null
                       ]
+                    },
+                    "label": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resultSchema": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "structuredResult": {
+                      "nullable": true
+                    },
+                    "resultSchemaErrors": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "string"
+                      }
                     },
                     "createdAt": {
                       "type": "string"
@@ -3215,6 +3253,27 @@
                             "max",
                             null
                           ]
+                        },
+                        "label": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "resultSchema": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        },
+                        "structuredResult": {
+                          "nullable": true
+                        },
+                        "resultSchemaErrors": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "string"
+                          }
                         },
                         "createdAt": {
                           "type": "string"
@@ -3489,6 +3548,27 @@
                             null
                           ]
                         },
+                        "label": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "resultSchema": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        },
+                        "structuredResult": {
+                          "nullable": true
+                        },
+                        "resultSchemaErrors": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -3711,6 +3791,27 @@
                             null
                           ]
                         },
+                        "label": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "resultSchema": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        },
+                        "structuredResult": {
+                          "nullable": true
+                        },
+                        "resultSchemaErrors": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -3908,6 +4009,23 @@
                           "minimum": 1,
                           "maximum": 1440,
                           "description": "Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue"
+                        },
+                        "resultSchema": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "lane"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "additionalProperties": {
+                                "nullable": true
+                              }
+                            }
+                          ],
+                          "description": "JSON Schema (draft-07) the lane's final output must validate against, or \"lane\" for the built-in {verdict, summary, filesChanged} shape. The validated value lands on session.structuredResult."
                         }
                       },
                       "required": [
@@ -4122,6 +4240,27 @@
                                   null
                                 ]
                               },
+                              "label": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "resultSchema": {
+                                "type": "object",
+                                "nullable": true,
+                                "additionalProperties": {
+                                  "nullable": true
+                                }
+                              },
+                              "structuredResult": {
+                                "nullable": true
+                              },
+                              "resultSchemaErrors": {
+                                "type": "array",
+                                "nullable": true,
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
                               "createdAt": {
                                 "type": "string"
                               },
@@ -4295,6 +4434,10 @@
                                   "needs_input",
                                   null
                                 ]
+                              },
+                              "label": {
+                                "type": "string",
+                                "nullable": true
                               },
                               "startedAt": {
                                 "type": "string",
@@ -4612,6 +4755,27 @@
                             null
                           ]
                         },
+                        "label": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "resultSchema": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        },
+                        "structuredResult": {
+                          "nullable": true
+                        },
+                        "resultSchemaErrors": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -4922,6 +5086,27 @@
                             null
                           ]
                         },
+                        "label": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "resultSchema": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        },
+                        "structuredResult": {
+                          "nullable": true
+                        },
+                        "resultSchemaErrors": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -5084,6 +5269,10 @@
                             "needs_input",
                             null
                           ]
+                        },
+                        "label": {
+                          "type": "string",
+                          "nullable": true
                         },
                         "startedAt": {
                           "type": "string",
@@ -5264,6 +5453,27 @@
                         "max",
                         null
                       ]
+                    },
+                    "label": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resultSchema": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "structuredResult": {
+                      "nullable": true
+                    },
+                    "resultSchemaErrors": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "string"
+                      }
                     },
                     "createdAt": {
                       "type": "string"
@@ -6049,6 +6259,27 @@
                         null
                       ]
                     },
+                    "label": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resultSchema": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "structuredResult": {
+                      "nullable": true
+                    },
+                    "resultSchemaErrors": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -6278,6 +6509,27 @@
                         "max",
                         null
                       ]
+                    },
+                    "label": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resultSchema": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "structuredResult": {
+                      "nullable": true
+                    },
+                    "resultSchemaErrors": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "string"
+                      }
                     },
                     "createdAt": {
                       "type": "string"
@@ -6511,6 +6763,27 @@
                             "max",
                             null
                           ]
+                        },
+                        "label": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "resultSchema": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        },
+                        "structuredResult": {
+                          "nullable": true
+                        },
+                        "resultSchemaErrors": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "string"
+                          }
                         },
                         "createdAt": {
                           "type": "string"
@@ -6803,6 +7076,27 @@
                             "max",
                             null
                           ]
+                        },
+                        "label": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "resultSchema": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        },
+                        "structuredResult": {
+                          "nullable": true
+                        },
+                        "resultSchemaErrors": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "string"
+                          }
                         },
                         "createdAt": {
                           "type": "string"
@@ -7121,6 +7415,27 @@
                         null
                       ]
                     },
+                    "label": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resultSchema": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "structuredResult": {
+                      "nullable": true
+                    },
+                    "resultSchemaErrors": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -7389,6 +7704,27 @@
                         "max",
                         null
                       ]
+                    },
+                    "label": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resultSchema": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "structuredResult": {
+                      "nullable": true
+                    },
+                    "resultSchemaErrors": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "string"
+                      }
                     },
                     "createdAt": {
                       "type": "string"

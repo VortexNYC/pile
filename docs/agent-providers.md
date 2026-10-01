@@ -197,6 +197,42 @@ cancel`, Devin `DELETE /sessions/{id}`), then the local session is marked
 and, when a new `prUrl` appears, records it as a session **artifact** (same
 path as `POST …/artifacts`).
 
+### Issue progress comment (PILE-290)
+
+Every non-preflight lane keeps **one** comment on its issue
+(`externalSource: "agent"`, `externalId: "{sessionId}:progress"`) that is
+edited in place rather than re-posted — observability for anyone not running
+`pile fleet`. It is posted when the lane first reports `running` and shows:
+
+- the session link (provider URL, else the Pile session route) and the
+  `pile agent sessions watch` command;
+- the current step — the newest `action`/`thought`/`response`/`error`/
+  `elicitation` activity;
+- elapsed time plus an ETA from the median duration of the agent's last
+  20 completed lanes in the workspace (flagged once overdue);
+- branch / PR and the latest task list, when reported.
+
+Activity edits refresh it immediately except `thought`/`response`, which are
+throttled to one edit per 30s; no-op polls refresh elapsed/ETA at most every
+5 minutes. On a terminal status it freezes with the final duration; the
+separate completion/failure result comment still posts.
+
+External lanes feed it through `POST …/agent/sessions/{id}/report` with two
+optional fields alongside `status`/`result`/`prUrl`/`branch`:
+
+```json
+{
+  "step": "Running tests",
+  "todos": [
+    { "content": "Read issue", "status": "completed" },
+    { "content": "Run tests", "status": "in_progress" }
+  ]
+}
+```
+
+`todos` (≤50 items, `pending | in_progress | completed`) replaces the
+displayed list wholesale; invalid lists return 400.
+
 ## Lane events
 
 Every lane (agent session) has an append-only event stream in the workspace
@@ -418,6 +454,33 @@ optional:
 | `model`  | Default model when the dispatch request doesn't name one.                                                                                      |
 | `setup`  | Documented setup hook. `.pile/setup.sh` runs after clone either way.                                                                           |
 | `env`    | Env-var allowlist — caller-supplied `extraEnv` keys not named here are dropped before they reach the lane. Infra env (lane DB etc.) is exempt. |
+
+## Lane credential posture
+
+Sandbox lanes are treated as compromised by default:
+
+- **Per-session GitHub token.** Each lane gets an installation token
+  restricted to the issue's repository. Every mint (dispatch, follow-up,
+  `POST …/sessions/{id}/github-token` refresh) is registered against the
+  session and revokes the token it replaces, so a lane holds at most one
+  live token.
+- **Bound to session lifetime.** The runner revokes its token
+  (`DELETE /installation/token`) and strips it from the git remote at run
+  end; the sweep revokes any token still registered once the session is
+  terminal, including kept follow-up sandboxes. The refresh endpoint refuses
+  terminal sessions.
+- **Refresh before expiry.** The runner gets `GITHUB_TOKEN_EXPIRES_AT` and
+  re-mints through the lane-token endpoint 5 minutes before expiry, plus
+  before clone and push.
+- **Masked output.** The runner masks secret env values, decoded credential
+  blobs, and known token shapes in everything it prints, the result file,
+  and the event stream; the log-ingest endpoint and the provider poll scrub
+  again server-side.
+- **Minimal agent env.** The agent subprocess (and `.pile/setup.sh`) get an
+  allowlisted env: basic process vars, git identity, issue/repo metadata,
+  the Pile API key, the agent's own credential, and the `extraEnv` keys the
+  repo's `env` allowlist admitted. `GITHUB_TOKEN`, the lane token and its
+  URLs, credential blobs, and the runner bundle never reach it.
 
 Repositories that also install the Pile GitHub App get a per-repo default
 agent: `PATCH /workspaces/{org}/github/installations/{id}` with

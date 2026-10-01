@@ -12,6 +12,7 @@ import {
   isNotNull,
   isNull,
   lte,
+  ne,
   or,
   sql,
 } from "drizzle-orm";
@@ -945,6 +946,8 @@ export interface AgentSessionInput {
   purpose?: string | null;
   maxDurationMinutes?: number | null;
   effort?: "low" | "medium" | "high" | "max" | null;
+  label?: string | null;
+  resultSchema?: string | null;
 }
 
 export async function createAgentSession(
@@ -976,6 +979,8 @@ export async function createAgentSession(
     purpose: input.purpose ?? null,
     maxDurationMinutes: input.maxDurationMinutes ?? null,
     effort: input.effort ?? null,
+    label: input.label ?? null,
+    resultSchema: input.resultSchema ?? null,
     updatedAt: ts,
   });
   const row = await db
@@ -1072,6 +1077,38 @@ export function listAgentSessions(
     .all();
 }
 
+/** Timing of the agent's most recent completed lanes — the ETA baseline on
+ *  lane progress comments (PILE-290). Preflight critiques are excluded. */
+export function listRecentLaneTimings(
+  db: WorkspaceDb,
+  organizationId: string,
+  agentId: string,
+  limit = 20
+) {
+  return db
+    .select({
+      createdAt: workspaceAgentSessions.createdAt,
+      startedAt: workspaceAgentSessions.startedAt,
+      endedAt: workspaceAgentSessions.endedAt,
+    })
+    .from(workspaceAgentSessions)
+    .where(
+      and(
+        eq(workspaceAgentSessions.organizationId, organizationId),
+        eq(workspaceAgentSessions.agentId, agentId),
+        eq(workspaceAgentSessions.status, "completed"),
+        isNotNull(workspaceAgentSessions.endedAt),
+        or(
+          isNull(workspaceAgentSessions.purpose),
+          ne(workspaceAgentSessions.purpose, "preflight")
+        )
+      )
+    )
+    .orderBy(desc(workspaceAgentSessions.endedAt))
+    .limit(limit)
+    .all();
+}
+
 // Lane-row scalars only (PILE-256): list consumers like the fleet TUI and
 // dashboards poll this shape — `result`, `lastStateHash`, and the
 // actor/retry/lane internals stay on the detail routes. `lastProgressAt` is
@@ -1089,6 +1126,7 @@ const agentSessionSummaryColumns = {
   updatedAt: workspaceAgentSessions.updatedAt,
   endedAt: workspaceAgentSessions.endedAt,
   lastProgressAt: workspaceAgentSessions.lastProgressAt,
+  label: workspaceAgentSessions.label,
 };
 
 export type AgentSessionSummary = Pick<
