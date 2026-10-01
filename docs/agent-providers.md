@@ -56,7 +56,7 @@ Devin account, bypassing the organization sessions API entirely.
 
 ## Compute (optional, per-workspace)
 
-The headless CLI providers (`codex-cli`, `devin-cli`, `cursor-cli`) provision a
+The headless CLI providers (`codex-cli`, `devin-cli`, `cursor-cli`, `claude-cli`) provision a
 dedicated sandbox per session on your own compute provider (Daytona is the
 reference integration). The `compute*` fields override the deployment-level
 env vars:
@@ -102,6 +102,66 @@ deployment each workspace brings its own. Sandboxes are deleted when the
 session reaches a terminal state, with an `autoStopInterval` safety ceiling
 on Daytona (`sleepAfter` on Cloudflare).
 Daytona compute path verified live 2026-09-23 (ISS-92) against snapshot vortex-cli-runner-v2 and sandbox label scheme vortex.session.
+
+## Claude Code (`claude-cli`)
+
+Runs Claude Code headless (`claude -p --output-format stream-json`) in a
+sandbox, same runner/result contract as the other CLI providers. Set `token`
+(or `CLAUDE_CODE_OAUTH_TOKEN`) to the output of `claude setup-token` so the
+lane rides a Claude Pro/Max subscription instead of per-token API billing; an
+`sk-ant-api` key also works and is passed as `ANTHROPIC_API_KEY`.
+`config.model` / `CLAUDE_CLI_MODEL` overrides the default `sonnet`. With
+`COMPUTE_PROVIDER=cloudflare` it uses the shared `SANDBOX` binding and
+installs the CLI per run.
+
+## Subscription credential pool (PILE-285)
+
+`claude-cli` and `codex-cli` accept an ordered credential pool so cheap
+review/triage lanes can ride subscriptions with fallback. Set it per
+workspace as `config.credentialPool` in the provider upsert (encrypted at
+rest with the rest of `config`; responses return entries without `secret`),
+or deployment-wide as `AGENT_CREDENTIAL_POOL` (JSON array):
+
+```json
+[
+  {
+    "kind": "claudeSubscription",
+    "secret": "sk-ant-oat01-…",
+    "label": "max-1",
+    "purposes": ["review", "preflight"]
+  },
+  {
+    "kind": "claudeSubscription",
+    "secret": "<~/.claude/.credentials.json>",
+    "label": "max-2"
+  },
+  { "kind": "anthropicApiKey", "secret": "sk-ant-api03-…", "label": "metered" }
+]
+```
+
+| kind                 | secret                                                      | consumed by                      |
+| -------------------- | ----------------------------------------------------------- | -------------------------------- |
+| `claudeSubscription` | `claude setup-token` token or `~/.claude/.credentials.json` | `claude-cli`                     |
+| `anthropicApiKey`    | `sk-ant-api…` key (per-token billing)                       | `claude-cli`                     |
+| `codexOAuth`         | ChatGPT-login `~/.codex/auth.json` (raw or base64)          | `codex-cli`                      |
+| `geminiOAuth`        | `~/.gemini/oauth_creds.json`                                | probed only — no Gemini lane yet |
+
+On dispatch the provider walks its kinds in pool order and takes the first
+entry that (a) lists the lane's `purpose` in `purposes` (entries without
+`purposes` serve every lane) and (b) passes the offline subscription probe:
+
+- `ok` — token present and not expiring within 60s (or no expiry recorded).
+- `refreshable` — access token expired but a refresh token is stored; the
+  CLI refreshes it on first call (Codex: `exp` decoded from the
+  `tokens.access_token` JWT; Claude/Gemini: `expiresAt` / `expiry_date`).
+- `expired` / `invalid` — skipped.
+
+The choice (label, kind, probe state, skipped entries) is logged as a
+`status` lane event. If no entry qualifies, the provider's single configured
+credential (`token`) is the last fallback; otherwise dispatch fails with
+every candidate's reason. Provider health reports each entry's probe state
+and expiry. Refreshed tokens live only in the sandbox and are not written
+back to the pool.
 
 ### Lane isolation
 
