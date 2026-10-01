@@ -13,6 +13,7 @@ import {
   sortFleetSessions,
   statusLabel,
   type FleetKey,
+  type FleetPromptOptions,
   type FleetSession,
   type FleetView,
   type FleetViewModel,
@@ -34,6 +35,7 @@ function session(overrides: Partial<FleetSession> = {}): FleetSession {
 function createFakeView(viewportRows = 20) {
   const rendered: FleetViewModel[] = [];
   let keyHandler: ((key: FleetKey) => void) | null = null;
+  let prompt: FleetPromptOptions | null = null;
   const view: FleetView = {
     start() {},
     render(model) {
@@ -45,6 +47,9 @@ function createFakeView(viewportRows = 20) {
     tableViewportRows() {
       return viewportRows;
     },
+    promptText(options) {
+      prompt = options;
+    },
     destroy: vi.fn(),
   };
   return {
@@ -52,6 +57,19 @@ function createFakeView(viewportRows = 20) {
     rendered,
     press(name: string, modifiers: Partial<FleetKey> = {}) {
       keyHandler?.({ name, ctrl: false, shift: false, ...modifiers });
+    },
+    prompt() {
+      return prompt;
+    },
+    submitPrompt(value: string) {
+      const p = prompt;
+      prompt = null;
+      p?.onSubmit(value);
+    },
+    cancelPrompt() {
+      const p = prompt;
+      prompt = null;
+      p?.onCancel();
     },
   };
 }
@@ -377,44 +395,104 @@ describe("pile fleet", () => {
         endedAt: "2026-09-30T11:30:00.000Z",
       }),
     ];
-    return vi.fn().mockImplementation((url: URL | string) => {
-      const pathname = new URL(typeof url === "string" ? url : url.href)
-        .pathname;
-      if (pathname === "/workspaces/ws-1/agent/sessions") {
-        return jsonResponse({ sessions });
-      }
-      if (pathname === "/workspaces/ws-1/agent/fleet-health") {
-        return jsonResponse({
-          live: 1,
-          missingEndedAt: 0,
-          providers: [
-            {
-              agentId: "devin-cli",
-              live: 1,
-              keptSandboxes: 0,
-              infraStreak: 0,
-              unhealthy: false,
-            },
-          ],
-        });
-      }
-      if (pathname === "/workspaces/ws-1/agent/sessions/sess-live/state") {
-        return jsonResponse({
-          session: sessions[0],
-          provider: { state: "running", logs: "lane-one\nstill going" },
-        });
-      }
-      if (pathname === "/workspaces/ws-1/agent/sessions/sess-done/state") {
-        return Promise.resolve(new Response("gone", { status: 400 }));
-      }
-      if (pathname === "/workspaces/ws-1/issues/issue-live") {
-        return jsonResponse({ id: "issue-live", identifier: "ISS-10" });
-      }
-      if (pathname === "/workspaces/ws-1/issues/issue-done") {
-        return jsonResponse({ id: "issue-done", identifier: "ISS-11" });
-      }
-      return Promise.resolve(new Response("not found", { status: 404 }));
-    });
+    return vi
+      .fn()
+      .mockImplementation((url: URL | string, init?: RequestInit) => {
+        const pathname = new URL(typeof url === "string" ? url : url.href)
+          .pathname;
+        if (pathname === "/workspaces/ws-1/agent/sessions") {
+          return jsonResponse({ sessions });
+        }
+        if (pathname === "/workspaces/ws-1/agent/fleet-health") {
+          return jsonResponse({
+            live: 1,
+            missingEndedAt: 0,
+            providers: [
+              {
+                agentId: "devin-cli",
+                live: 1,
+                keptSandboxes: 0,
+                infraStreak: 0,
+                unhealthy: false,
+              },
+            ],
+          });
+        }
+        if (pathname === "/workspaces/ws-1/agent/sessions/sess-live/state") {
+          return jsonResponse({
+            session: sessions[0],
+            provider: { state: "running", logs: "lane-one\nstill going" },
+          });
+        }
+        if (pathname === "/workspaces/ws-1/agent/sessions/sess-done/state") {
+          return Promise.resolve(new Response("gone", { status: 400 }));
+        }
+        if (pathname === "/workspaces/ws-1/issues/issue-live") {
+          return jsonResponse({ id: "issue-live", identifier: "ISS-10" });
+        }
+        if (pathname === "/workspaces/ws-1/issues/issue-done") {
+          return jsonResponse({ id: "issue-done", identifier: "ISS-11" });
+        }
+        if (pathname === "/workspaces/ws-1/agent/setup-status") {
+          return jsonResponse({
+            githubConnected: true,
+            providers: [
+              {
+                agentId: "devin",
+                credentials: "workspace",
+                computeProvider: "daytona",
+                computeCredentials: "deployment",
+                missing: [],
+                ready: true,
+              },
+              {
+                agentId: "devin-cli",
+                credentials: "workspace",
+                computeProvider: "daytona",
+                computeCredentials: "deployment",
+                missing: [],
+                ready: true,
+              },
+              {
+                agentId: "cursor",
+                credentials: "none",
+                computeProvider: "daytona",
+                computeCredentials: "none",
+                missing: ["credentials", "compute credentials"],
+                ready: false,
+              },
+            ],
+          });
+        }
+        if (pathname === "/workspaces/ws-1/agent/dispatch-batch") {
+          const body =
+            typeof init?.body === "string"
+              ? (JSON.parse(init.body) as { items?: { issueId: string }[] })
+              : {};
+          return jsonResponse({
+            batchId: "batch-12345678",
+            results: (body.items ?? []).map((item) => ({
+              issueId: item.issueId,
+              sessionId: `sess-${item.issueId}`,
+              status: "created",
+              error: null,
+            })),
+          });
+        }
+        if (pathname.endsWith("/cancel")) {
+          return jsonResponse({ id: "sess-live", status: "canceled" });
+        }
+        if (pathname.endsWith("/prompt")) {
+          return jsonResponse({ id: "sess-live", status: "running" });
+        }
+        if (pathname.endsWith("/retry")) {
+          return jsonResponse(
+            session({ id: "sess-retry", status: "created" }),
+            201
+          );
+        }
+        return Promise.resolve(new Response("not found", { status: 404 }));
+      });
   }
 
   it("exits 1 without --workspace", async () => {
@@ -528,5 +606,299 @@ describe("pile fleet", () => {
     press("q");
     expect(await done).toBe(0);
     expect(view.destroy).toHaveBeenCalled();
+  });
+
+  it("x cancels the selected running lane", async () => {
+    const mockFetch = createFleetFetch();
+    const { view, rendered, press } = createFakeView();
+
+    const done = runCli(
+      ["fleet", "--workspace", "ws-1", "--interval", "60000"],
+      { fetch: mockFetch, createView: () => view, now: () => NOW }
+    );
+    await waitForRender(rendered, (m) => m.logText.includes("lane-one"));
+
+    press("x");
+    await waitForRender(rendered, (m) =>
+      m.statusLine.includes("cancel sent → sess-liv")
+    );
+    const calls = mockFetch.mock.calls.map(
+      ([url]) =>
+        new URL(typeof url === "string" ? url : (url as URL).href).pathname
+    );
+    expect(calls).toContain("/workspaces/ws-1/agent/sessions/sess-live/cancel");
+
+    press("q");
+    expect(await done).toBe(0);
+  });
+
+  it("x on a terminal lane does not hit the API", async () => {
+    const mockFetch = createFleetFetch();
+    const { view, rendered, press } = createFakeView();
+
+    const done = runCli(
+      ["fleet", "--workspace", "ws-1", "--interval", "60000"],
+      { fetch: mockFetch, createView: () => view, now: () => NOW }
+    );
+    await waitForRender(rendered, (m) => m.logText.includes("lane-one"));
+
+    press("j"); // select the failed lane
+    await waitForRender(rendered, (m) => m.selectedId === "sess-done");
+    press("x");
+    await waitForRender(rendered, (m) =>
+      m.statusLine.includes("lane already failed")
+    );
+    const calls = mockFetch.mock.calls.map(
+      ([url]) =>
+        new URL(typeof url === "string" ? url : (url as URL).href).pathname
+    );
+    expect(calls).not.toContain(
+      "/workspaces/ws-1/agent/sessions/sess-done/cancel"
+    );
+
+    press("q");
+    expect(await done).toBe(0);
+  });
+
+  it("n sends a follow-up prompt to the selected lane", async () => {
+    const mockFetch = createFleetFetch();
+    const { view, rendered, press, prompt, submitPrompt } = createFakeView();
+
+    const done = runCli(
+      ["fleet", "--workspace", "ws-1", "--interval", "60000"],
+      { fetch: mockFetch, createView: () => view, now: () => NOW }
+    );
+    await waitForRender(rendered, (m) => m.logText.includes("lane-one"));
+
+    press("n");
+    await waitForRender(rendered, (m) => m.mode === "input");
+    expect(prompt()?.title).toContain("nudge sess-liv");
+
+    submitPrompt("also update the changelog");
+    await waitForRender(rendered, (m) =>
+      m.statusLine.includes("nudged sess-liv")
+    );
+    const promptCall = mockFetch.mock.calls.find(([url]) =>
+      new URL(
+        typeof url === "string" ? url : (url as URL).href
+      ).pathname.endsWith("/prompt")
+    );
+    expect(promptCall).toBeDefined();
+    expect(JSON.parse(String(promptCall?.[1]?.body))).toEqual({
+      prompt: "also update the changelog",
+    });
+
+    press("q");
+    expect(await done).toBe(0);
+  });
+
+  it("R retries a failed lane", async () => {
+    const mockFetch = createFleetFetch();
+    const { view, rendered, press } = createFakeView();
+
+    const done = runCli(
+      ["fleet", "--workspace", "ws-1", "--interval", "60000"],
+      { fetch: mockFetch, createView: () => view, now: () => NOW }
+    );
+    await waitForRender(rendered, (m) => m.logText.includes("lane-one"));
+
+    press("j"); // select the failed lane
+    await waitForRender(rendered, (m) => m.selectedId === "sess-done");
+    press("r", { shift: true });
+    await waitForRender(rendered, (m) =>
+      m.statusLine.includes("retry → sess-ret created")
+    );
+    const calls = mockFetch.mock.calls.map(
+      ([url]) =>
+        new URL(typeof url === "string" ? url : (url as URL).href).pathname
+    );
+    expect(calls).toContain("/workspaces/ws-1/agent/sessions/sess-done/retry");
+
+    press("q");
+    expect(await done).toBe(0);
+  });
+
+  it("R on a live lane does not hit the API", async () => {
+    const mockFetch = createFleetFetch();
+    const { view, rendered, press } = createFakeView();
+
+    const done = runCli(
+      ["fleet", "--workspace", "ws-1", "--interval", "60000"],
+      { fetch: mockFetch, createView: () => view, now: () => NOW }
+    );
+    await waitForRender(rendered, (m) => m.logText.includes("lane-one"));
+
+    press("r", { shift: true });
+    await waitForRender(rendered, (m) =>
+      m.statusLine.includes("lane still running")
+    );
+    const calls = mockFetch.mock.calls.map(
+      ([url]) =>
+        new URL(typeof url === "string" ? url : (url as URL).href).pathname
+    );
+    expect(calls.filter((p) => p.endsWith("/retry"))).toEqual([]);
+
+    press("q");
+    expect(await done).toBe(0);
+  });
+
+  it("d dispatches the selected issue through the agent picker and batch endpoint", async () => {
+    const mockFetch = createFleetFetch();
+    const { view, rendered, press, prompt, submitPrompt } = createFakeView();
+
+    const done = runCli(
+      ["fleet", "--workspace", "ws-1", "--interval", "60000"],
+      { fetch: mockFetch, createView: () => view, now: () => NOW }
+    );
+    await waitForRender(rendered, (m) => m.logText.includes("lane-one"));
+
+    press("d");
+    const picker = await waitForRender(
+      rendered,
+      (m) => m.mode === "picker" && m.pickerLines.length > 0
+    );
+    expect(picker.logTitle).toContain("pick an agent");
+    expect(picker.pickerLines.join("\n")).toContain("devin-cli");
+
+    press("j"); // past "(default)" to the first agent
+    press("j"); // devin-cli
+    press("return");
+    await waitForRender(rendered, (m) => m.mode === "input");
+    expect(prompt()?.title).toContain("dispatch 1 issue → devin-cli");
+
+    submitPrompt("feat/override");
+    await waitForRender(rendered, (m) =>
+      m.statusLine.includes("1/1 dispatched")
+    );
+    const batchCall = mockFetch.mock.calls.find(([url]) =>
+      new URL(
+        typeof url === "string" ? url : (url as URL).href
+      ).pathname.endsWith("/dispatch-batch")
+    );
+    expect(JSON.parse(String(batchCall?.[1]?.body))).toEqual({
+      items: [
+        {
+          issueId: "issue-live",
+          agentId: "devin-cli",
+          branch: "feat/override",
+        },
+      ],
+    });
+
+    press("q");
+    expect(await done).toBe(0);
+  });
+
+  it("d fans marked issues out as one batch", async () => {
+    const mockFetch = createFleetFetch();
+    const { view, rendered, press, submitPrompt } = createFakeView();
+
+    const done = runCli(
+      ["fleet", "--workspace", "ws-1", "--interval", "60000"],
+      { fetch: mockFetch, createView: () => view, now: () => NOW }
+    );
+    await waitForRender(rendered, (m) => m.rows.length === 2);
+
+    press("space");
+    press("j");
+    press("space");
+    const marked = await waitForRender(
+      rendered,
+      (m) => m.markCount === 2 && m.rows.every((r) => r.marked)
+    );
+    expect(marked.statusLine).toContain("(2)");
+
+    press("d");
+    await waitForRender(
+      rendered,
+      (m) => m.mode === "picker" && m.pickerLines.length > 0
+    );
+    press("return"); // "(default)" agent
+    await waitForRender(rendered, (m) => m.mode === "input");
+    submitPrompt(""); // keep the issues' branches
+    await waitForRender(rendered, (m) =>
+      m.statusLine.includes("2/2 dispatched")
+    );
+
+    const batchCalls = mockFetch.mock.calls.filter(([url]) =>
+      new URL(
+        typeof url === "string" ? url : (url as URL).href
+      ).pathname.endsWith("/dispatch-batch")
+    );
+    expect(batchCalls).toHaveLength(1);
+    expect(JSON.parse(String(batchCalls[0]?.[1]?.body))).toEqual({
+      items: [{ issueId: "issue-live" }, { issueId: "issue-done" }],
+    });
+    // dispatched issues lose their marks
+    await waitForRender(rendered, (m) => m.markCount === 0);
+
+    press("q");
+    expect(await done).toBe(0);
+  });
+
+  it("custom… option prompts for an agent id before the branch override", async () => {
+    const mockFetch = createFleetFetch();
+    const { view, rendered, press, prompt, submitPrompt } = createFakeView();
+
+    const done = runCli(
+      ["fleet", "--workspace", "ws-1", "--interval", "60000"],
+      { fetch: mockFetch, createView: () => view, now: () => NOW }
+    );
+    await waitForRender(rendered, (m) => m.logText.includes("lane-one"));
+
+    press("d");
+    const picker = await waitForRender(
+      rendered,
+      (m) => m.mode === "picker" && m.pickerLines.length > 0
+    );
+    // last option is the custom escape hatch
+    for (let i = 0; i < picker.pickerLines.length - 1; i += 1) press("j");
+    press("return");
+    await waitForRender(rendered, (m) => m.mode === "input");
+    expect(prompt()?.title).toBe("agent id");
+
+    submitPrompt("flue");
+    await waitForRender(rendered, (m) => m.mode === "input");
+    expect(prompt()?.title).toContain("dispatch 1 issue → flue");
+
+    submitPrompt("");
+    await waitForRender(rendered, (m) =>
+      m.statusLine.includes("1/1 dispatched")
+    );
+    const batchCall = mockFetch.mock.calls.find(([url]) =>
+      new URL(
+        typeof url === "string" ? url : (url as URL).href
+      ).pathname.endsWith("/dispatch-batch")
+    );
+    expect(JSON.parse(String(batchCall?.[1]?.body))).toEqual({
+      items: [{ issueId: "issue-live", agentId: "flue" }],
+    });
+
+    press("q");
+    expect(await done).toBe(0);
+  });
+
+  it("escape closes the agent picker without dispatching", async () => {
+    const mockFetch = createFleetFetch();
+    const { view, rendered, press } = createFakeView();
+
+    const done = runCli(
+      ["fleet", "--workspace", "ws-1", "--interval", "60000"],
+      { fetch: mockFetch, createView: () => view, now: () => NOW }
+    );
+    await waitForRender(rendered, (m) => m.logText.includes("lane-one"));
+
+    press("d");
+    await waitForRender(rendered, (m) => m.mode === "picker");
+    press("escape");
+    await waitForRender(rendered, (m) => m.mode === "list");
+    const calls = mockFetch.mock.calls.map(
+      ([url]) =>
+        new URL(typeof url === "string" ? url : (url as URL).href).pathname
+    );
+    expect(calls.filter((p) => p.endsWith("/dispatch-batch"))).toEqual([]);
+
+    press("q");
+    expect(await done).toBe(0);
   });
 });
