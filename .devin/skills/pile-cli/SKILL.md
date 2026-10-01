@@ -26,6 +26,7 @@ The `pile` CLI is a generated, OpenAPI-backed command-line client for Pile. It s
 
 - List issues: `pile issues list --workspace <org>`
 - Create an issue: `pile issues create --workspace <org> --title "..." --team-id <team>`
+- Triage support tickets in a TUI: `pile support --workspace <org>` (alias `pile support inbox`; j/k select, d done, t todo, s/S snooze, f filter)
 - List support tickets: `pile support tickets list --workspace <org>`
 - Create a support ticket: `pile support tickets create --workspace <org> --customer-id ... --title "..."`
 - Make an arbitrary request: `pile request GET /workspaces/<org>/issues`
