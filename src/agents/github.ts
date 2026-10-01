@@ -28,10 +28,18 @@ import { VortexError } from "../platform/errors.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import type { Issue } from "../types/workspace.js";
 import { nudgeLane } from "./nudge.js";
+import {
+  type AutomationEventTarget,
+  automationEventTarget,
+  issueEventTarget,
+} from "./repo-triggers.js";
+import { fireEventAutomations } from "./sweep.js";
 
 const pullRequestPayloadSchema = z.object({
   action: z.string(),
+  label: z.object({ name: z.string() }).optional(),
   pull_request: z.object({
+    number: z.number().int().optional(),
     title: z.string(),
     body: z.string().nullable(),
     state: z.string(),
@@ -132,6 +140,8 @@ const issueCommentPayloadSchema = z.object({
   action: z.enum(["created", "edited", "deleted"]),
   issue: z.object({
     number: z.number().int(),
+    title: z.string().optional(),
+    html_url: z.string().optional(),
     pull_request: z
       .object({
         url: z.string(),
@@ -143,6 +153,7 @@ const issueCommentPayloadSchema = z.object({
     body: z.string(),
     user: z.object({
       login: z.string(),
+      type: z.string().optional(),
     }),
     html_url: z.string(),
     created_at: z.string(),
@@ -190,6 +201,7 @@ const pullRequestReviewCommentPayloadSchema = z.object({
     body: z.string(),
     user: z.object({
       login: z.string(),
+      type: z.string().optional(),
     }),
     html_url: z.string(),
     path: z.string(),
@@ -215,6 +227,7 @@ const issuePayloadSchema = z.object({
     "milestoned",
     "demilestoned",
   ]),
+  label: z.object({ name: z.string() }).optional(),
   issue: z.object({
     number: z.number().int(),
     title: z.string(),
@@ -498,7 +511,31 @@ async function processIssueComment(
   const repo = repository.full_name;
 
   if (issue.pull_request) {
-    // PR issue comments are handled with PR review comments for mapping.
+    // PR conversation comments aren't mirrored onto issues, but they can
+    // still mention.
+    if (action !== "created") return;
+    const record = await findWorkspaceByRepo(db, repo);
+    if (!record) return;
+    const prStub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(record.organizationId)
+    );
+    await prStub.setOrganizationId(record.organizationId);
+    await fireMention(
+      env,
+      prStub,
+      record.organizationId,
+      prEventTarget(
+        prStub,
+        repo,
+        {
+          number: issue.number,
+          title: issue.title ?? `${repo}#${issue.number}`,
+          htmlUrl: issue.html_url ?? comment.html_url,
+        },
+        null
+      ),
+      comment
+    );
     return;
   }
 
@@ -526,6 +563,13 @@ async function processIssueComment(
       createdAt: comment.created_at,
       updatedAt: comment.updated_at,
     });
+    await fireMention(
+      env,
+      stub,
+      organizationId,
+      issueEventTarget(stub, issueId),
+      comment
+    );
   }
 
   if (action === "edited") {
@@ -555,6 +599,62 @@ async function processIssueComment(
 }
 
 type WorkspaceStub = ReturnType<WorkerEnv["WORKSPACE_DURABLE_OBJECT"]["get"]>;
+
+// PR events land on the issue that owns the PR branch; PRs without one get a
+// deterministic per-PR issue, created only once an automation matches.
+function prEventTarget(
+  stub: WorkspaceStub,
+  repo: string,
+  pr: { number?: number; title: string; htmlUrl: string; body?: string | null },
+  branch: string | null
+): AutomationEventTarget {
+  return automationEventTarget(async () => {
+    const owned = branch
+      ? await stub.getIssueByBranch(repo, branch)
+      : undefined;
+    if (owned) return owned;
+    if (pr.number === undefined) return null;
+    return stub.createIssue(
+      {
+        id: `repo:github:${repo.replace(/\//g, ":")}:pr:${pr.number}`,
+        title: pr.title,
+        description: [pr.htmlUrl, pr.body ?? ""].filter(Boolean).join("\n\n"),
+        repo,
+        branch,
+      },
+      "github"
+    );
+  }, repo);
+}
+
+// `mention` fires for human comments carrying an @-handle; per-trigger
+// handle matching happens in matchRepoTriggers. Bot comments never fire, so
+// a lane quoting a handle can't re-trigger itself.
+async function fireMention(
+  env: WorkerEnv,
+  stub: WorkspaceStub,
+  organizationId: string,
+  target: AutomationEventTarget,
+  comment: {
+    body: string;
+    html_url: string;
+    user: { login: string; type?: string };
+  }
+): Promise<void> {
+  const bot =
+    comment.user.type === "Bot" || comment.user.login.endsWith("[bot]");
+  if (bot || !/@[\w-]/.test(comment.body)) return;
+  await fireEventAutomations(
+    env,
+    stub,
+    organizationId,
+    "mention",
+    target,
+    `${comment.user.login} mentioned you on ${comment.html_url}:\n\n${comment.body}`,
+    undefined,
+    { body: comment.body }
+  );
+}
 
 // Resolve the lane for an issue: a live session first, else the most
 // recent completed one — kept-sandbox providers resume completed lanes on
@@ -788,6 +888,13 @@ async function processPullRequestReviewComment(
         dedupeKey: `comment-${comment.id}`,
       }
     );
+    await fireMention(
+      env,
+      stub,
+      workspaceRecord.organizationId,
+      automationEventTarget(async () => issue, repo),
+      comment
+    );
   }
 
   if (action === "edited") {
@@ -844,7 +951,7 @@ async function processPullRequest(
     });
   }
 
-  const { pull_request } = payload.data;
+  const { action, label, pull_request } = payload.data;
   const repo = pull_request.head.repo.full_name;
   const branch = pull_request.head.ref;
   const prUrl = pull_request.html_url;
@@ -879,6 +986,40 @@ async function processPullRequest(
       )
     )
   );
+
+  const prEvent =
+    action === "opened"
+      ? "pr.opened"
+      : action === "synchronize"
+        ? "pr.synchronize"
+        : action === "labeled"
+          ? "label.added"
+          : null;
+  if (prEvent) {
+    await stub.setOrganizationId(workspaceRecord.organizationId);
+    await fireEventAutomations(
+      env,
+      stub,
+      workspaceRecord.organizationId,
+      prEvent,
+      prEventTarget(
+        stub,
+        repo,
+        {
+          number: pull_request.number,
+          title: pull_request.title,
+          htmlUrl: prUrl,
+          body: pull_request.body,
+        },
+        branch
+      ),
+      prEvent === "label.added"
+        ? `Label "${label?.name ?? ""}" was added to ${prUrl} (branch ${branch}).`
+        : `PR ${prUrl} (branch ${branch}): ${pull_request.title}`,
+      undefined,
+      { label: label?.name }
+    );
+  }
 
   return;
 }
@@ -970,6 +1111,17 @@ async function processGitHubIssue(
         "github"
       );
       await createRepoIssue(db, organizationId, repo, issue.number, created.id);
+      if (action === "opened") {
+        await stub.setOrganizationId(organizationId);
+        await fireEventAutomations(
+          env,
+          stub,
+          organizationId,
+          "issue.created",
+          automationEventTarget(async () => created, repo),
+          `GitHub issue ${issue.html_url} was opened: ${issue.title}`
+        );
+      }
     }
     return;
   }
@@ -1052,6 +1204,19 @@ async function processGitHubIssue(
           status: 404,
           message: "Mapped issue not found in workspace",
         });
+      }
+      if (action === "labeled" && payload.data.label) {
+        await stub.setOrganizationId(organizationId);
+        await fireEventAutomations(
+          env,
+          stub,
+          organizationId,
+          "label.added",
+          automationEventTarget(async () => updated, repo),
+          `Label "${payload.data.label.name}" was added to ${issue.html_url}.`,
+          undefined,
+          { label: payload.data.label.name }
+        );
       }
     }
     return;
