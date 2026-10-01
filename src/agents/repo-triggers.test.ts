@@ -21,6 +21,7 @@ import {
   mentionsHandle,
   repoTriggerEvent,
 } from "./repo-triggers.js";
+import { fireEventAutomations } from "./sweep.js";
 
 const REPO = "VortexNYC/pile-triggers";
 let ORG = "";
@@ -252,5 +253,43 @@ describe("fireRepoTriggers (PILE-275)", () => {
     expect(
       await stub().getIssue("repo:github:VortexNYC:pile-triggers:pr:77")
     ).toBeUndefined();
+  });
+});
+
+describe("ci.failed self-feed guard (PILE-304)", () => {
+  it("skipRepoTriggers stands repo triggers down while automations still run", async () => {
+    const issue = await stub().createIssue({
+      title: "CI red on trigger lane",
+      repo: REPO,
+    });
+    await fireEventAutomations(
+      env as unknown as WorkerEnv,
+      stub(),
+      ORG,
+      "pr.opened",
+      automationEventTarget(async () => issue, REPO),
+      undefined,
+      undefined,
+      undefined,
+      { skipRepoTriggers: true, loadConfig: async () => CONFIG }
+    );
+    expect(await stub().listAgentSessions({ issueId: issue.id })).toHaveLength(
+      0
+    );
+
+    // Without the guard the same event dispatches normally.
+    await fireEventAutomations(
+      env as unknown as WorkerEnv,
+      stub(),
+      ORG,
+      "pr.opened",
+      automationEventTarget(async () => issue, REPO),
+      undefined,
+      undefined,
+      undefined,
+      { loadConfig: async () => CONFIG }
+    );
+    const sessions = await stub().listAgentSessions({ issueId: issue.id });
+    expect(sessions.at(-1)?.purpose).toBe("trigger:pr.opened");
   });
 });

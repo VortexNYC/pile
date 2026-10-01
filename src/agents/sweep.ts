@@ -1,5 +1,6 @@
 import { createD1 } from "../global/db.js";
 import { getInstallationTokenForRepo } from "../global/github-auth.js";
+import type { PileRepoConfig } from "../global/pile-repo-config.js";
 import { scrubCaptureText } from "../global/redact.js";
 import { organization } from "../global/schema.js";
 import { processIncomingMessage } from "../global/support-channels.js";
@@ -866,7 +867,11 @@ export async function fireEventAutomations(
   target: AutomationEventTarget,
   context?: string,
   ctx?: { waitUntil: (promise: Promise<unknown>) => void },
-  facts?: AutomationEventFacts
+  facts?: AutomationEventFacts,
+  opts?: {
+    skipRepoTriggers?: boolean;
+    loadConfig?: (repo: string) => Promise<PileRepoConfig | null>;
+  }
 ): Promise<void> {
   const automations = await stub.listAgentAutomations({
     enabledOnly: true,
@@ -887,11 +892,14 @@ export async function fireEventAutomations(
       context
     );
   }
-  await fireRepoTriggers(env, stub, organizationId, eventName, target, {
-    context,
-    facts,
-    ctx,
-  });
+  if (!opts?.skipRepoTriggers) {
+    await fireRepoTriggers(env, stub, organizationId, eventName, target, {
+      context,
+      facts,
+      ctx,
+      loadConfig: opts?.loadConfig,
+    });
+  }
 }
 
 export async function sweepAgentSessions(
@@ -1495,7 +1503,14 @@ export async function syncOpenPrSessions(
           organizationId,
           "pr.ci_failed",
           issueEventTarget(stub, session.issueId),
-          ciPrompt
+          ciPrompt,
+          undefined,
+          undefined,
+          // A lane spawned by a trigger firing its own ci.failed → trigger
+          // → another trigger lane is the self-feed loop. Workspace
+          // automations still run; repo-trigger dispatching stands down and
+          // the nudge path below owns the in-place fix.
+          { skipRepoTriggers: session.purpose?.startsWith("trigger:") === true }
         );
       }
       // The nudge retries every sweep while CI is red — delivery dedupe
