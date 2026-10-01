@@ -2652,9 +2652,11 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       const commentBody =
         updatedSession.purpose === "preflight"
           ? `Preflight critique by ${oldSession.agentId}:\n\n${result.result ?? "No report — see session stream."}`
-          : result.prUrl
-            ? `Agent ${oldSession.agentId} completed${result.result ? `: ${result.result}` : ""}\n\n${result.prUrl}`
-            : `Agent ${oldSession.agentId} completed: ${result.result}`;
+          : updatedSession.purpose === "review"
+            ? `PR review by ${oldSession.agentId}:\n\n${result.result ?? "No report — see session stream."}`
+            : result.prUrl
+              ? `Agent ${oldSession.agentId} completed${result.result ? `: ${result.result}` : ""}\n\n${result.prUrl}`
+              : `Agent ${oldSession.agentId} completed: ${result.result}`;
       const comment = await this.createComment({
         issueId: issue.id,
         body: commentBody,

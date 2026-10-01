@@ -1,4 +1,5 @@
 {
+  "review": {},
   "conflict": {
     "generated": [
       "src/mcp/openapi.json",

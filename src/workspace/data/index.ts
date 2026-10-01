@@ -1477,8 +1477,11 @@ export async function getActiveAgentSessionForIssue(
     issueId,
     limit: 20,
   });
+  // Review side lanes (PILE-273) never own the issue.
   const active = sessions.find(
-    (s) => !["completed", "failed", "canceled"].includes(s.status)
+    (s) =>
+      s.purpose !== "review" &&
+      !["completed", "failed", "canceled"].includes(s.status)
   );
   if (!active) return null;
   const activities = await listAgentActivities(db, active.id, { limit: 50 });

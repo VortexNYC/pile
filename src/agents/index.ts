@@ -159,6 +159,9 @@ export async function dispatchAgent(
      *  `waiting` behind this session id; the sweep promotes it once the
      *  blocker goes terminal. Wins over the dedupe-derived queueAfter. */
     queueAfter?: string;
+    /** Side lanes (PILE-273 review) run alongside the issue's working lane
+     *  instead of conflicting with it. */
+    concurrent?: boolean;
   }
 ): Promise<AgentSession> {
   const stub = env.WORKSPACE_DURABLE_OBJECT.get(
@@ -192,7 +195,11 @@ export async function dispatchAgent(
     : null;
 
   const active = await stub.getActiveAgentSessionForIssue(issue.id);
-  if (active && active.session.id !== options?.promoteSessionId) {
+  if (
+    active &&
+    !options?.concurrent &&
+    active.session.id !== options?.promoteSessionId
+  ) {
     throw new VortexError({
       code: "CONFLICT",
       status: 409,

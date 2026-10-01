@@ -8,6 +8,7 @@ import {
 } from "../global/crypto.js";
 import { findOrCreateCycleByName } from "../global/cycles.js";
 import { createD1, type D1Client } from "../global/db.js";
+import { getInstallationTokenForRepo } from "../global/github-auth.js";
 import {
   createGithubInstallation,
   deleteGithubInstallation,
@@ -28,10 +29,17 @@ import { VortexError } from "../platform/errors.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import type { Issue } from "../types/workspace.js";
 import { nudgeLane } from "./nudge.js";
+import {
+  REVIEW_CHECK_NAME,
+  REVIEW_PURPOSE,
+  requestPrReview,
+} from "./review.js";
 
 const pullRequestPayloadSchema = z.object({
   action: z.string(),
+  repository: z.object({ full_name: z.string() }).optional(),
   pull_request: z.object({
+    number: z.number().optional(),
     title: z.string(),
     body: z.string().nullable(),
     state: z.string(),
@@ -40,12 +48,21 @@ const pullRequestPayloadSchema = z.object({
     html_url: z.string(),
     head: z.object({
       ref: z.string(),
+      sha: z.string().optional(),
       repo: z.object({
         full_name: z.string(),
       }),
     }),
+    base: z.object({ ref: z.string() }).optional(),
   }),
 });
+
+const REVIEW_TRIGGER_ACTIONS = new Set([
+  "opened",
+  "synchronize",
+  "reopened",
+  "ready_for_review",
+]);
 
 const checkRunInnerSchema = z.object({
   name: z.string().nullish(),
@@ -571,10 +588,11 @@ async function resolveLaneForIssue(
   // PILE-249 — dead lanes still resolve: a review on a failed/canceled
   // lane's PR gets its detection event plus a prompt.followup_skipped
   // record from nudgeLane instead of silence.
+  const lanes = sessions.filter((s) => s.purpose !== REVIEW_PURPOSE);
   return (
-    sessions.find((s) => s.status === "running" || s.status === "waiting") ??
-    sessions.find((s) => s.status === "completed") ??
-    sessions.find((s) => s.status === "failed" || s.status === "canceled") ??
+    lanes.find((s) => s.status === "running" || s.status === "waiting") ??
+    lanes.find((s) => s.status === "completed") ??
+    lanes.find((s) => s.status === "failed" || s.status === "canceled") ??
     null
   );
 }
@@ -880,7 +898,48 @@ async function processPullRequest(
     )
   );
 
-  return;
+  // PILE-273 — fast path for the review lane; the sweep is the backstop.
+  const headSha = pull_request.head.sha;
+  const baseRef = pull_request.base?.ref;
+  const baseRepo = payload.data.repository?.full_name ?? repo;
+  const pullNumber = pull_request.number;
+  if (
+    !REVIEW_TRIGGER_ACTIONS.has(payload.data.action) ||
+    prState !== "open" ||
+    !headSha ||
+    !baseRef ||
+    pullNumber === undefined
+  ) {
+    return;
+  }
+  await stub.setOrganizationId(workspaceRecord.organizationId);
+  let issue = await stub.getIssueByBranch(repo, branch);
+  for (const identifier of identifiers) {
+    if (issue) break;
+    issue = await stub.getIssueByIdentifier(identifier);
+  }
+  if (!issue) return;
+  const [owner, name] = baseRepo.split("/");
+  const token = await getInstallationTokenForRepo(env, owner, name).catch(
+    () => undefined
+  );
+  if (!token) return;
+  await requestPrReview(
+    env,
+    stub,
+    workspaceRecord.organizationId,
+    issue,
+    {
+      repoFull: baseRepo,
+      pullNumber,
+      prUrl,
+      headSha,
+      baseRef,
+      title: pull_request.title,
+      body: pull_request.body,
+    },
+    token
+  );
 }
 
 async function processGitHubIssue(
@@ -1153,7 +1212,8 @@ async function processCheckRun(
   const { repository } = payload.data;
   const repo = repository.full_name;
   const branch = check_run.head_branch;
-  if (!branch) {
+  // Pile's own review verdict (PILE-273) is not CI state.
+  if (!branch || check_run.name === REVIEW_CHECK_NAME) {
     return;
   }
   const prCheckState =
