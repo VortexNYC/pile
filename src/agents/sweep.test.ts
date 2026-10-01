@@ -1343,6 +1343,210 @@ describe("syncOpenPrSessions", () => {
     expect(types).not.toContain("pr.conflict_fix");
   });
 
+  // PILE-269 — conflicts on completed lanes' PRs must reach the lane even
+  // when the stored prState isn't exactly "open".
+  it("nudges a completed lane whose stored prState is not 'open'", async () => {
+    const agentId = `mock-done-${crypto.randomUUID().slice(0, 8)}`;
+    const prompts: string[] = [];
+    registerMock(agentId, {
+      sendPrompt: async (_id, prompt) => {
+        prompts.push(prompt);
+        return true;
+      },
+    });
+    const issue = await stub.createIssue({ title: "Completed lane conflict" });
+    const older = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "failed",
+      prUrl: "https://github.com/vortexnyc/pile/pull/893",
+      prState: "open",
+    });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "completed",
+      prUrl: "https://github.com/vortexnyc/pile/pull/893",
+      prState: "draft",
+    });
+    const fetchSrc = ghFetchDeterministicConflict(
+      893,
+      "done1",
+      ["packages/cli/src/cli.ts"],
+      ["packages/cli/src/cli.ts"]
+    );
+    const deps = {
+      tokenForRepo: async () => "gh-test-token",
+      fetch: fetchSrc as typeof fetch,
+      compute: () => fakeComputeBackend({ state: "running" }),
+    };
+
+    await syncOpenPrSessions(env, stub, organizationId, deps);
+    await syncOpenPrSessions(env, stub, organizationId, deps);
+
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toContain("merge conflicts");
+    const types = (await stub.listAgentSessionEvents(session.id, {})).map(
+      (e) => e.type
+    );
+    expect(types.filter((t) => t === "pr.conflict")).toHaveLength(1);
+    expect(types.filter((t) => t === "pr.conflict_lane")).toHaveLength(1);
+    expect(types).toContain("prompt.followup");
+    // One pass per PR: the older sibling sharing the prUrl isn't re-probed.
+    const olderTypes = (await stub.listAgentSessionEvents(older.id, {})).map(
+      (e) => e.type
+    );
+    expect(olderTypes).not.toContain("pr.conflict");
+    expect((await stub.getAgentSession(session.id))?.status).toBe("running");
+    expect((await stub.getAgentSession(session.id))?.prState).toBe("open");
+  });
+
+  it("redispatches a completed lane when its kept sandbox rejects the nudge", async () => {
+    const agentId = `mock-gone-${crypto.randomUUID().slice(0, 8)}`;
+    const instructions: Array<string | undefined> = [];
+    registerMock(agentId, {
+      sendPrompt: async () => false,
+      dispatch: (_org, dispatchedIssue, _model, ctx) => {
+        instructions.push(ctx?.instructions);
+        return {
+          id: `redispatched-${instructions.length}`,
+          agentId,
+          issueId: dispatchedIssue.id,
+          status: "created",
+        };
+      },
+    });
+    const issue = await stub.createIssue({ title: "Reaped sandbox conflict" });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "completed",
+      prUrl: "https://github.com/vortexnyc/pile/pull/894",
+      prState: "open",
+    });
+    const fetchSrc = ghFetchDeterministicConflict(
+      894,
+      "gone1",
+      ["packages/cli/src/fleet.ts"],
+      ["packages/cli/src/fleet.ts"]
+    );
+
+    await syncOpenPrSessions(env, stub, organizationId, {
+      tokenForRepo: async () => "gh-test-token",
+      fetch: fetchSrc as typeof fetch,
+      compute: () => fakeComputeBackend({ state: "running" }),
+    });
+
+    expect(instructions).toHaveLength(1);
+    expect(instructions[0]).toContain("merge conflicts");
+    const events = await stub.listAgentSessionEvents(session.id, {});
+    const types = events.map((e) => e.type);
+    expect(types).toContain("pr.conflict_lane");
+    expect(types).toContain("prompt.followup_failed");
+    expect(types).toContain("prompt.redispatch");
+    const lanes = await stub.listAgentSessions({ issueId: issue.id });
+    const fresh = lanes.find((l) => l.id !== session.id);
+    expect(fresh?.retryOf).toBe(session.id);
+
+    // The redispatch counts as delivery for this headSha — no second lane.
+    await stub.applyAgentSessionResult(fresh?.id ?? "", {
+      status: "completed",
+    });
+    await syncOpenPrSessions(env, stub, organizationId, {
+      tokenForRepo: async () => "gh-test-token",
+      fetch: fetchSrc as typeof fetch,
+      compute: () => fakeComputeBackend({ state: "running" }),
+    });
+    expect(instructions).toHaveLength(1);
+  });
+
+  it("cold-dispatches a reaped completed lane without probing the sandbox", async () => {
+    const agentId = `mock-reaped-${crypto.randomUUID().slice(0, 8)}`;
+    let probes = 0;
+    let dispatches = 0;
+    registerMock(agentId, {
+      sendPrompt: async () => {
+        probes += 1;
+        return true;
+      },
+      dispatch: (_org, dispatchedIssue) => {
+        dispatches += 1;
+        return {
+          id: `reaped-redispatch-${dispatches}`,
+          agentId,
+          issueId: dispatchedIssue.id,
+          status: "created",
+        };
+      },
+    });
+    const issue = await stub.createIssue({ title: "Reaped lane conflict" });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "completed",
+      prUrl: "https://github.com/vortexnyc/pile/pull/895",
+      prState: "open",
+    });
+    await stub.updateAgentSession(session.id, { lastStateHash: "reaped" });
+    const fetchSrc = ghFetchDeterministicConflict(
+      895,
+      "reaped1",
+      ["packages/cli/src/cli.ts"],
+      ["packages/cli/src/cli.ts"]
+    );
+
+    await syncOpenPrSessions(env, stub, organizationId, {
+      tokenForRepo: async () => "gh-test-token",
+      fetch: fetchSrc as typeof fetch,
+      compute: () => fakeComputeBackend({ state: "running" }),
+    });
+
+    expect(probes).toBe(0);
+    expect(dispatches).toBe(1);
+    const types = (await stub.listAgentSessionEvents(session.id, {})).map(
+      (e) => e.type
+    );
+    expect(types).toContain("prompt.redispatch");
+    expect(types).not.toContain("prompt.followup_failed");
+  });
+
+  it("serves the most recent timeline window, not the first entries", async () => {
+    const issue = await stub.createIssue({ title: "Long timeline" });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "mock-timeline",
+      provider: "mock-timeline",
+      actorId: userId,
+      actorType: "user",
+      status: "completed",
+    });
+    for (let i = 0; i < 120; i += 1) {
+      await stub.addAgentSessionEvent({
+        sessionId: session.id,
+        type: "pr.conflict",
+        message: `e-${i}`,
+        payload: {},
+      });
+    }
+    const timeline = await stub.listAgentTimeline(session.id, { limit: 100 });
+    const messages = timeline.map((row) => row.message);
+    expect(timeline).toHaveLength(100);
+    expect(messages).toContain("e-119");
+    expect(messages).not.toContain("e-0");
+  });
+
   it("falls back to the lane when the fixer reports source conflicts", async () => {
     const agentId = `mock-fixfail-${crypto.randomUUID().slice(0, 8)}`;
     const prompts: string[] = [];

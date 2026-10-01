@@ -1039,9 +1039,14 @@ function agentSessionListConditions(
   if (options.status) {
     conditions.push(eq(workspaceAgentSessions.status, options.status));
   }
+  // "Not known closed", not `= 'open'` (PILE-269): drafts, unreported
+  // (null) and provider-cased states ("OPEN") still need the sweep to
+  // reconcile them from GitHub — an exact match silently dropped them.
   if (options.openPr) {
     conditions.push(isNotNull(workspaceAgentSessions.prUrl));
-    conditions.push(eq(workspaceAgentSessions.prState, "open"));
+    conditions.push(
+      sql`lower(coalesce(${workspaceAgentSessions.prState}, 'open')) not in ('merged', 'closed')`
+    );
   }
   return conditions;
 }
@@ -1326,13 +1331,17 @@ export async function addAgentActivity(
 export function listAgentActivities(
   db: WorkspaceDb,
   sessionId: string,
-  options: { limit?: number } = {}
+  options: { limit?: number; order?: "asc" | "desc" } = {}
 ) {
   return db
     .select()
     .from(workspaceAgentActivities)
     .where(eq(workspaceAgentActivities.sessionId, sessionId))
-    .orderBy(workspaceAgentActivities.createdAt)
+    .orderBy(
+      options.order === "desc"
+        ? desc(workspaceAgentActivities.createdAt)
+        : workspaceAgentActivities.createdAt
+    )
     .limit(options.limit ?? 100)
     .all();
 }
@@ -1420,7 +1429,10 @@ export function listAgentSessionEvents(
 /** One chronological stream for a lane: activity spans (thoughts,
  *  responses, elicitations) interleaved with lifecycle events
  *  (pr.review, pr.ci_failed, prompt.followup, ...). The single
- *  developer-facing timeline — dedupe and delivery evidence live here. */
+ *  developer-facing timeline — dedupe and delivery evidence live here.
+ *  Returns the most recent `limit` entries, oldest first (PILE-269): a
+ *  head-of-stream window froze long lanes at their first 100 entries, so
+ *  post-terminal pr.conflict / nudge events never showed up. */
 export function listAgentTimeline(
   db: WorkspaceDb,
   sessionId: string,
@@ -1428,8 +1440,8 @@ export function listAgentTimeline(
 ) {
   const limit = options.limit ?? 100;
   const [activities, events] = [
-    listAgentActivities(db, sessionId, { limit }),
-    listAgentSessionEvents(db, sessionId, { limit }),
+    listAgentActivities(db, sessionId, { limit, order: "desc" }),
+    listAgentSessionEvents(db, sessionId, { limit, order: "desc" }),
   ];
   const merged = [
     ...activities.map((row) => ({ kind: "activity" as const, ...row })),
@@ -1442,7 +1454,7 @@ export function listAgentTimeline(
     const bi = typeof b.id === "number" ? b.id : 0;
     return ai - bi;
   });
-  return merged.slice(0, limit);
+  return merged.slice(-limit);
 }
 
 export async function getAgentSessionWithActivities(

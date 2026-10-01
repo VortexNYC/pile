@@ -1102,7 +1102,21 @@ export async function syncOpenPrSessions(
   const tokenForRepo = deps.tokenForRepo ?? getInstallationTokenForRepo;
   const ghFetch = deps.fetch ?? fetch;
   const probeTimeoutMs = deps.probeTimeoutMs ?? DEFAULT_PROBE_TIMEOUT_MS;
-  const sessions = await stub.listAgentSessions({ openPr: true, limit: 50 });
+  // One pass per PR, newest session first (PILE-269): retries and
+  // follow-up lanes share a prUrl, and without the collapse those
+  // duplicates filled the window and starved older completed lanes.
+  const candidates = await stub.listAgentSessions({
+    openPr: true,
+    limit: 200,
+  });
+  const byPr = new Map<string, AgentSession>();
+  for (const session of candidates) {
+    if (session.prUrl && !byPr.has(session.prUrl)) {
+      byPr.set(session.prUrl, session);
+    }
+  }
+  const sessions = [...byPr.values()].slice(0, 50);
+  const tokens = new Map<string, Promise<string | undefined>>();
   for (const session of sessions) {
     const prUrl = session.prUrl;
     if (!prUrl) continue;
@@ -1110,7 +1124,13 @@ export async function syncOpenPrSessions(
     if (!match) continue;
     const [, owner, repo, num] = match;
     try {
-      const token = await tokenForRepo(env, owner, repo);
+      const repoKey = `${owner}/${repo}`;
+      let tokenP = tokens.get(repoKey);
+      if (!tokenP) {
+        tokenP = tokenForRepo(env, owner, repo);
+        tokens.set(repoKey, tokenP);
+      }
+      const token = await tokenP;
       if (!token) continue;
       const pr = (await withTimeout(
         githubApiGet(ghFetch, token, `/repos/${owner}/${repo}/pulls/${num}`),
@@ -1213,6 +1233,9 @@ export async function syncOpenPrSessions(
       // it has computed mergeability (null = still computing; skip those).
       // Deduped per headSha via the pr.conflict event, same pattern as
       // pr.review_requested below.
+      if (state === "open" && pr.mergeable === null) {
+        console.log("pr mergeability pending", { session: session.id, prUrl });
+      }
       if (state === "open" && pr.mergeable === false && issue) {
         const seen = await stub
           .listAgentSessionEvents(session.id, { limit: 100, order: "desc" })
