@@ -304,6 +304,8 @@ parent lane if there is one. PR events keep landing after terminal, because
 | `pr.review_requested`                  | PR is open and has requested reviewers. Deduped per `headSha`.                                                                                                                                                                                                                                                                                                             | `{prUrl, headSha, reviewers}` (count)                                       |
 | `pr.review`                            | A submitted GitHub review is seen (webhook fast path or PR sync backstop). One row per review id; a new one fires `pr.review` event automations, and a non-approving verdict (changes requested, or a comment review with a body) also fires `pr.review_changes`. Reviews with feedback nudge the authoring lane with the review body (delivery-deduped on `review-<id>`). | `{prUrl, headSha, reviewId, state, reviewer}`                               |
 | `pr.review_threads_resolved`           | PR sync saw the author lane push past review feedback it was delivered (head commit newer than the delivery, not the thread's original commit) and resolved those GitHub review threads. Each thread is resolved at most once.                                                                                                                                             | `{prUrl, headSha, threadIds[]}`                                             |
+| `review.requested`                     | PR review lane (PILE-273) dispatched for a PR head. Written on the repo-less `purpose: "review"` session; the `pile-review` check run is created `in_progress` first. One per `headSha`.                                                                                                                                                                                   | `{prUrl, repo, pullNumber, headSha, checkRunId}`                            |
+| `review.published`                     | The sweep published a terminal review session: `pile-review` completed (approve→success, comment→neutral, request-changes→failure; failed lane→neutral) and the verdict comment posted.                                                                                                                                                                                    | `{prUrl, headSha, verdict, conclusion, commentUrl, checkRunId}`             |
 | `pr.merged` / `pr.closed` / `pr.draft` | PR sync sees the PR state change to a non-`open` value.                                                                                                                                                                                                                                                                                                                    | `{prUrl, prState, headSha}`                                                 |
 | `prompt.followup`                      | A follow-up prompt was delivered to the live lane: `POST …/prompt`, an issue comment, a PR review, or a CI/conflict nudge.                                                                                                                                                                                                                                                 | `{prompt}` (route) · `{commentId}` · `{issueId}` · `{issueId, prUrl}`       |
 | `prompt.followup_failed`               | The provider rejected a PR-review or CI/conflict follow-up.                                                                                                                                                                                                                                                                                                                | `{issueId}` or `{issueId, prUrl}`                                           |
@@ -487,14 +489,41 @@ optional:
 }
 ```
 
-| field      | effect                                                                                                                                         |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `agents`   | Allowlist — dispatch with any other agentId is rejected (400).                                                                                 |
-| `model`    | Default model when the dispatch request doesn't name one.                                                                                      |
-| `setup`    | Documented setup hook. `.pile/setup.sh` runs after clone either way.                                                                           |
-| `env`      | Env-var allowlist — caller-supplied `extraEnv` keys not named here are dropped before they reach the lane. Infra env (lane DB etc.) is exempt. |
-| `triggers` | Event→lane triggers — see below.                                                                                                               |
-| `hooks`    | Lane lifecycle hooks — see below.                                                                                                              |
+| field    | effect                                                                                                                                         |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `agents` | Allowlist — dispatch with any other agentId is rejected (400).                                                                                 |
+| `model`  | Default model when the dispatch request doesn't name one.                                                                                      |
+| `setup`  | Documented setup hook. `.pile/setup.sh` runs after clone either way.                                                                           |
+| `env`    | Env-var allowlist — caller-supplied `extraEnv` keys not named here are dropped before they reach the lane. Infra env (lane DB etc.) is exempt. |
+| `review` | Opt-in PR review lane (`{agent?, model?}`, read from the PR's base ref). See below.                                                            |
+
+### PR review lane (PILE-273)
+
+With `review` set, every `pull_request` `opened`/`synchronize`/`reopened`/
+`ready_for_review` on a branch Pile tracks (webhook fast path, PR sync as
+backstop) dispatches one repo-less review session per `headSha` —
+`purpose: "review"`, agent `review.agent` (default `devin-cli`), model
+`review.model` (else the provider default) — with the PR diff inlined. It runs
+alongside the working lane and never counts as the issue's active lane.
+
+- A `pile-review` check run is created `in_progress` with the installation
+  token, then completed when the session ends: approve → `success`, comment →
+  `neutral`, request-changes → `failure` (so a required `pile-review` gates
+  the merge queue). A lane that fails or is canceled completes it `neutral`.
+- The verdict lands as a PR comment using the callout ladder:
+  `[!CAUTION]` will break → `[!IMPORTANT]` must address → ℹ️ minor → ✅ clean.
+- Diffs touching only `conflict.generated` paths get a `skipped` check run and
+  no lane; mixed diffs exclude the generated files from the inlined diff.
+- `pile-review` is excluded from Pile's CI state, so a request-changes verdict
+  never fires the CI-failure nudge.
+  | field      | effect                                                                                                                                         |
+  | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `agents`   | Allowlist — dispatch with any other agentId is rejected (400).                                                                                 |
+  | `model`    | Default model when the dispatch request doesn't name one.                                                                                      |
+  | `setup`    | Documented setup hook. `.pile/setup.sh` runs after clone either way.                                                                           |
+  | `env`      | Env-var allowlist — caller-supplied `extraEnv` keys not named here are dropped before they reach the lane. Infra env (lane DB etc.) is exempt. |
+  | `triggers` | Event→lane triggers — see below.                                                                                                               |
+  | `hooks`    | Lane lifecycle hooks — see below.                                                                                                              |
 
 ### Event→lane triggers
 

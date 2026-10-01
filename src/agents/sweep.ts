@@ -44,6 +44,12 @@ import {
   issueEventTarget,
 } from "./repo-triggers.js";
 import { reviewPromptWithContext } from "./review-context.js";
+import {
+  publishReviewVerdicts,
+  REVIEW_CHECK_NAME,
+  REVIEW_PURPOSE,
+  requestPrReview,
+} from "./review.js";
 import { parseStoredSecondaryRepos } from "./secondary-repos.js";
 
 export const DEFAULT_TIMEOUT_MINUTES = 60;
@@ -406,6 +412,9 @@ async function retryDeadLane(
   ctx?: { waitUntil: (promise: Promise<unknown>) => void }
 ): Promise<void> {
   if ((session.retryCount ?? 0) >= MAX_AUTO_RETRIES) return;
+  // A review side lane redispatched through the issue would come back as a
+  // full implementation lane; the next PR sync re-requests the review.
+  if (session.purpose === REVIEW_PURPOSE) return;
   const streak = await providerInfraStreak(stub, session.agentId);
   if (streak >= PROVIDER_UNHEALTHY_STREAK) {
     await stub.addAgentActivity({
@@ -1178,7 +1187,10 @@ export async function sweepAgentSessions(
             await teardownLaneDbForSession(env, stub, session);
             // PILE-223 — escalated tickets get the lane's result posted
             // back to the customer thread.
-            if (polled.status === "completed" || polled.status === "failed") {
+            if (
+              (polled.status === "completed" || polled.status === "failed") &&
+              session.purpose !== REVIEW_PURPOSE
+            ) {
               await replyLaneResultToTicket(
                 env,
                 d1,
@@ -1766,6 +1778,7 @@ export async function syncOpenPrSessions(
         conclusion?: string | null;
         details_url?: string;
       }> = [];
+      let hasReviewCheck = false;
       if (headSha) {
         const checks = (await withTimeout(
           githubApiGet(
@@ -1776,7 +1789,12 @@ export async function syncOpenPrSessions(
           probeTimeoutMs,
           "github-checks"
         )) as { check_runs?: typeof checkRuns };
-        checkRuns = checks.check_runs ?? [];
+        // Pile's own review verdict is not CI — a request-changes review must
+        // not read as a red build and nudge the lane as a CI failure.
+        checkRuns = (checks.check_runs ?? []).filter(
+          (c) => c.name !== REVIEW_CHECK_NAME
+        );
+        hasReviewCheck = checkRuns.length !== (checks.check_runs ?? []).length;
         checkState = summarizeCheckRuns(checkRuns);
       }
       const failingChecks = checkRuns.filter(
@@ -2057,6 +2075,35 @@ export async function syncOpenPrSessions(
         }
       }
 
+      // PILE-273 — sweep backstop for the review lane: a missed or failed
+      // pull_request webhook still gets one review per headSha.
+      const base = pr.base as Record<string, unknown> | undefined;
+      if (
+        state === "open" &&
+        headSha &&
+        !hasReviewCheck &&
+        issue &&
+        typeof base?.ref === "string"
+      ) {
+        await requestPrReview(
+          env,
+          stub,
+          organizationId,
+          issue,
+          {
+            repoFull: repoKey,
+            pullNumber: Number(num),
+            prUrl,
+            headSha,
+            baseRef: base.ref,
+            title: typeof pr.title === "string" ? pr.title : null,
+            body: typeof pr.body === "string" ? pr.body : null,
+          },
+          token,
+          { fetch: ghFetch }
+        );
+      }
+
       const reviewers = pr.requested_reviewers;
       if (
         Array.isArray(reviewers) &&
@@ -2109,4 +2156,21 @@ export async function syncOpenPrSessions(
       });
     }
   }
+
+  await publishReviewVerdicts(stub, {
+    fetch: ghFetch,
+    tokenForRepo: (owner, name) => {
+      const repoKey = `${owner}/${name}`;
+      let tokenP = tokens.get(repoKey);
+      if (!tokenP) {
+        tokenP = tokenForRepo(env, owner, name);
+        tokens.set(repoKey, tokenP);
+      }
+      return tokenP;
+    },
+  }).catch((err) => {
+    console.error("pile-review publish pass failed", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  });
 }

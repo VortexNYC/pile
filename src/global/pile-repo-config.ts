@@ -100,6 +100,16 @@ export const pileRepoConfigSchema = z.object({
       regen: z.string().nonempty(),
     })
     .optional(),
+  // Automated PR review lane (PILE-273). Present = enabled: every PR
+  // open/synchronize on a Pile-tracked branch gets a repo-less review session
+  // (`agent`, default devin-cli; `model` overrides the provider default) that
+  // publishes a verdict comment and a `pile-review` check run.
+  review: z
+    .object({
+      agent: z.string().optional(),
+      model: z.string().optional(),
+    })
+    .optional(),
   // Lane permission policy (PILE-276). Top-level tiers apply to every agent;
   // `providers.<agentId>` overrides them per provider. Unset fields default
   // to "enabled".
