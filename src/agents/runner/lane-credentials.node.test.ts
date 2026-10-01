@@ -83,11 +83,18 @@ interface HarnessResult {
   tokenAfter: string;
 }
 
+// Exactly `vars` and nothing inherited from the test process.
+function isolatedEnv(vars: Record<string, string>): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  for (const key of Object.keys(env)) delete env[key];
+  return Object.assign(env, vars);
+}
+
 function runHarness(): HarnessResult {
   const out = execFileSync("python3", [HARNESS_PATH, CORE_PATH], {
     encoding: "utf8",
-    env: {
-      PATH: process.env.PATH,
+    env: isolatedEnv({
+      PATH: process.env.PATH ?? "",
       HOME: tmpdir(),
       REPO: "acme/widgets",
       BRANCH: "issue-280",
@@ -101,7 +108,7 @@ function runHarness(): HarnessResult {
       UNLISTED_VAR: "nope",
       PILE_API_KEY: "pil_apikey",
       PILE_AGENT_ENV_KEYS: "DATABASE_URL,GITHUB_TOKEN",
-    },
+    }),
     timeout: 30_000,
   });
   const line = out.split("\n").find((l) => l.startsWith("RESULT:"));
