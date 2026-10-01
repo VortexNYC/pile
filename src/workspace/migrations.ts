@@ -777,6 +777,12 @@ const v44 = `ALTER TABLE agent_sessions ADD COLUMN purpose TEXT`;
 // transition, written once.
 const v45 = `ALTER TABLE agent_sessions ADD COLUMN ended_at TEXT`;
 
+// PILE-293 — per-dispatch run budget: maxDuration overrides the provider
+// timeout for this lane; effort is the model tier it was dispatched at.
+const v47 = `ALTER TABLE agent_sessions ADD COLUMN max_duration_minutes INTEGER
+--> statement-breakpoint
+ALTER TABLE agent_sessions ADD COLUMN effort TEXT`;
+
 // PILE-289 — session labels + structured lane results.
 const v46 = `ALTER TABLE agent_sessions ADD COLUMN label TEXT
 --> statement-breakpoint
@@ -835,6 +841,7 @@ export const workspaceMigrations = {
       { idx: 43, when: 43, tag: "v44", breakpoints: true },
       { idx: 44, when: 44, tag: "v45", breakpoints: true },
       { idx: 45, when: 45, tag: "v46", breakpoints: true },
+      { idx: 46, when: 46, tag: "v47", breakpoints: true },
     ],
   },
   migrations: {
@@ -884,5 +891,6 @@ export const workspaceMigrations = {
     m0043: v44,
     m0044: v45,
     m0045: v46,
+    m0046: v47,
   },
 } satisfies Parameters<typeof migrate>[1];

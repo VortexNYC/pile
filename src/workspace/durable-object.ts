@@ -32,6 +32,13 @@ import {
   typicalLaneDurationMs,
 } from "../agents/lane-progress.js";
 import { evaluateLaneResult } from "../agents/lane-result.js";
+import {
+  dispatchTriageLane,
+  formatTriageComment,
+  parseTriageReport,
+  planTriageApplication,
+  TRIAGE_PURPOSE,
+} from "../agents/triage.js";
 import { createD1 } from "../global/db.js";
 import {
   attachments as globalAttachments,
@@ -57,9 +64,11 @@ import {
 } from "../global/schema.js";
 import { safeJSON } from "../global/team-metadata.js";
 import { getDefaultTeam, getTeamById } from "../global/teams.js";
+import { listLabels } from "../global/workspace-entities.js";
 import { getWorkspaceMembership } from "../global/workspaces.js";
 import { getWorkspaceById } from "../global/workspaces.js";
 import { VortexError } from "../platform/errors.js";
+import type { WorkerEnv } from "../platform/middleware.js";
 import { notifySlack } from "../slack/bot.js";
 import type { AppEnv } from "../types/env.js";
 import {
@@ -110,6 +119,7 @@ import {
   indexIssueDocument,
   indexDocumentSearchDocument,
   documentToSearchDocument,
+  findSimilarIssues,
   insertMultiple as insertSearchDocs,
   issueToSearchDocument,
   removeIssueDocuments,
@@ -182,6 +192,10 @@ function validateIssueResolution(
     );
   }
   return resolution;
+}
+
+function hasWorkspaceNamespace(env: AppEnv): env is WorkerEnv {
+  return "WORKSPACE_DURABLE_OBJECT" in env;
 }
 
 const LANE_GITHUB_TOKEN_PREFIX = "laneGithubToken:";
@@ -1830,6 +1844,25 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return { issueIds, documentIds };
   }
 
+  async findSimilarIssues(
+    issueId: string,
+    teamIds: string[],
+    limit = 10
+  ): Promise<Array<{ issue: Issue; score: number }>> {
+    await this.ready;
+    const issue = await this.getIssue(issueId);
+    if (!issue) return [];
+    const index = await this.ensureSearchIndex();
+    const hits = await findSimilarIssues(index, issue, teamIds, limit);
+    const matches = await Promise.all(
+      hits.map((hit) => this.getIssue(hit.issueId))
+    );
+    return hits.flatMap((hit, i) => {
+      const match = matches[i];
+      return match ? [{ issue: match, score: hit.score }] : [];
+    });
+  }
+
   // Extract [[doc slug/id]] and ISSUE-KEY references from content.
   // Runs synchronously inside the caller's transactionSync block.
   private syncDocumentLinks(
@@ -2224,7 +2257,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   ): Promise<void> {
     try {
       const session = await this.getAgentSession(sessionId);
-      if (!session || session.purpose === "preflight") return;
+      if (
+        !session ||
+        session.purpose === "preflight" ||
+        session.purpose === TRIAGE_PURPOSE
+      ) {
+        return;
+      }
       const externalId = laneProgressExternalId(session.id);
       const existingRef = await this.findCommentByExternalId(
         "agent",
@@ -2730,6 +2769,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       (newStatus === "created" ||
         newStatus === "running" ||
         newStatus === "waiting") &&
+      updatedSession.purpose !== TRIAGE_PURPOSE &&
       notStartedStatuses.includes(issue.status) &&
       !terminalIssueStatuses.has(issue.status)
     ) {
@@ -2827,12 +2867,25 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       oldStatus !== "completed" &&
       (result.result || result.prUrl)
     ) {
-      const commentBody =
-        updatedSession.purpose === "preflight"
-          ? `Preflight critique by ${oldSession.agentId}:\n\n${result.result ?? "No report — see session stream."}`
-          : result.prUrl
-            ? `Agent ${oldSession.agentId} completed${result.result ? `: ${result.result}` : ""}\n\n${result.prUrl}`
-            : `Agent ${oldSession.agentId} completed: ${result.result}`;
+      let commentIssue = updatedIssue ?? issue;
+      let commentBody: string;
+      if (updatedSession.purpose === TRIAGE_PURPOSE) {
+        const triage = await this.applyTriageReport(
+          commentIssue,
+          updatedSession,
+          result.result,
+          actorId
+        );
+        commentBody = triage.body;
+        commentIssue = triage.issue;
+      } else {
+        commentBody =
+          updatedSession.purpose === "preflight"
+            ? `Preflight critique by ${oldSession.agentId}:\n\n${result.result ?? "No report — see session stream."}`
+            : result.prUrl
+              ? `Agent ${oldSession.agentId} completed${result.result ? `: ${result.result}` : ""}\n\n${result.prUrl}`
+              : `Agent ${oldSession.agentId} completed: ${result.result}`;
+      }
       const comment = await this.createComment({
         issueId: issue.id,
         body: commentBody,
@@ -2841,7 +2894,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         externalId: oldSession.id,
       });
       if (comment) {
-        await this.emitCommentCreated(comment, updatedIssue ?? issue, actorId);
+        await this.emitCommentCreated(comment, commentIssue, actorId);
       }
     }
 
@@ -3369,7 +3422,97 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       actorId
     );
     this.audit("issue.created", "issue", issue.id, actorId);
+    this.startTriageLane(issue, actorId);
     return issue;
+  }
+
+  // PILE-282 — fire-and-forget: a triage-lane failure (provider down, team
+  // not configured) must never fail issue creation.
+  private startTriageLane(issue: Issue, actorId?: string) {
+    if (!hasWorkspaceNamespace(this.env)) return;
+    const env = this.env;
+    this.ctx.waitUntil(
+      dispatchTriageLane(env, this.organizationId, issue, actorId).catch(
+        (err: unknown) => {
+          console.warn(
+            `triage lane dispatch failed for ${issue.id}: ${err instanceof Error ? err.message : String(err)}`
+          );
+        }
+      )
+    );
+  }
+
+  private async applyTriageReport(
+    issue: Issue,
+    session: AgentSession,
+    resultText: string | null | undefined,
+    actorId?: string
+  ): Promise<{ body: string; issue: Issue }> {
+    const report = parseTriageReport(resultText);
+    if (!report) {
+      return {
+        body: `Triage by ${session.agentId}:\n\n${resultText ?? "No report — see session stream."}`,
+        issue,
+      };
+    }
+    const labels = (
+      await listLabels(createD1(this.env.D1), this.organizationId)
+    ).filter((label) => label.kind === "issue");
+    const plan = planTriageApplication(report, issue, labels);
+    let current = issue;
+    if (plan.addedLabelNames.length > 0) {
+      current =
+        (await this.updateIssue(
+          issue.id,
+          { labelIds: plan.labelIds.join(",") },
+          actorId
+        )) ?? issue;
+    }
+    const existing = new Set(
+      (await this.listIssueRelations(issue.id)).map((r) => r.toIssueId)
+    );
+    const requested = [
+      ...plan.duplicates.map((identifier) => ({
+        identifier,
+        type: "duplicate" as const,
+      })),
+      ...plan.similar.map((identifier) => ({
+        identifier,
+        type: "similar" as const,
+      })),
+    ];
+    const targets = await Promise.all(
+      requested.map(
+        async ({ identifier }) =>
+          (await this.getIssueByIdentifier(identifier)) ??
+          (await this.getIssueByIdentifier(identifier.toUpperCase()))
+      )
+    );
+    const linked = { duplicates: [] as string[], similar: [] as string[] };
+    const toCreate: Array<{ toIssueId: string; type: string }> = [];
+    requested.forEach(({ identifier, type }, i) => {
+      const target = targets[i];
+      if (!target || target.id === issue.id) return;
+      if (!existing.has(target.id)) {
+        toCreate.push({ toIssueId: target.id, type });
+        existing.add(target.id);
+      }
+      linked[type === "duplicate" ? "duplicates" : "similar"].push(
+        target.identifier ?? identifier
+      );
+    });
+    await Promise.all(
+      toCreate.map((relation) =>
+        this.createIssueRelation({ fromIssueId: issue.id, ...relation })
+      )
+    );
+    return {
+      body: formatTriageComment(session.agentId, report, {
+        labels: plan.addedLabelNames,
+        ...linked,
+      }),
+      issue: current,
+    };
   }
 
   async rolloverCycles(): Promise<{
