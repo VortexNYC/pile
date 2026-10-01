@@ -28,6 +28,7 @@ vp run knip
 - **No `eslint-disable`, `biome-ignore`, or `@ts-ignore`.** Fix the actual error.
 - **Native-first.** Use Hono/Drizzle/Zod/Better Auth primitives; do not hand-roll OpenAPI or runtime mocks.
 - **No AI attribution** in commits, PRs, or generated files.
+- **Tests ride with source.** A PR that changes `src/` must change a `*.test.ts`, or carry a `No tests: <reason>` line in its description. The `diff-coverage` workflow enforces this (`vp run diff-coverage` locally, against `origin/main`).
 
 ## Important gotchas
 
