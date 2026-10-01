@@ -91,7 +91,7 @@ function makeRemote(remotes: string, repo: string): string {
 }
 
 describe("runner secondary repos (PILE-294)", () => {
-  it("clones under ~/xrepo and pushes + opens a PR for write entries", () => {
+  function runLane(extra: Record<string, string> = {}) {
     const root = mkdtempSync(join(tmpdir(), "pile-xrepo-"));
     const remotes = join(root, "remotes");
     const home = join(root, "home");
@@ -121,6 +121,7 @@ describe("runner secondary repos (PILE-294)", () => {
       ]),
       TEST_REMOTES: remotes,
       TEST_CANARY: canary,
+      ...extra,
     };
     for (const key of [
       "PILE_LOG_URL",
@@ -153,6 +154,11 @@ describe("runner secondary repos (PILE-294)", () => {
       remote: string;
     };
 
+    return { res, home, vortex, canary };
+  }
+
+  it("clones under ~/xrepo and pushes + opens a PR for write entries", () => {
+    const { res, home, vortex, canary } = runLane();
     expect(res.errors).toEqual([]);
     expect(existsSync(canary)).toBe(false);
     expect(existsSync(join(home, "xrepo", "acme", "docs", "README.md"))).toBe(
@@ -172,5 +178,17 @@ describe("runner secondary repos (PILE-294)", () => {
     expect(res.agentEnvKeys).not.toContain("SECONDARY_REPOS_JSON");
     expect(res.revoked).toEqual([true, true]);
     expect(res.remote).toBe("https://github.com/acme/vortex.git");
+  });
+
+  it("leaves write entries unpushed when the lane's push tier is disabled", () => {
+    const { res, home, vortex } = runLane({ PILE_PUSH_POLICY: "disabled" });
+
+    expect(res.errors).toEqual([]);
+    expect(existsSync(join(home, "xrepo", "acme", "vortex", "README.md"))).toBe(
+      true
+    );
+    expect(git(vortex, "branch", "--list", LANE_BRANCH)).toBe("");
+    expect(res.calls.filter((c) => c.method === "POST")).toEqual([]);
+    expect(res.digest.secondaryPrs ?? []).toEqual([]);
   });
 });
