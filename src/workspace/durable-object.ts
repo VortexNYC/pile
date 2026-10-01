@@ -23,6 +23,14 @@ import { migrate } from "drizzle-orm/durable-sqlite/migrator";
 import { alias } from "drizzle-orm/sqlite-core";
 import { z } from "zod";
 
+import {
+  LANE_PROGRESS_HEARTBEAT_MS,
+  LANE_PROGRESS_THROTTLE_MS,
+  laneProgressExternalId,
+  laneProgressFromActivities,
+  renderLaneProgressComment,
+  typicalLaneDurationMs,
+} from "../agents/lane-progress.js";
 import { createD1 } from "../global/db.js";
 import { sanitizeLaneResult } from "../global/lane-guard.js";
 import {
@@ -175,6 +183,8 @@ function validateIssueResolution(
   }
   return resolution;
 }
+
+const LANE_GITHUB_TOKEN_PREFIX = "laneGithubToken:";
 
 export class WorkspaceDO extends DurableObject<AppEnv> {
   private organizationId: string;
@@ -1965,6 +1975,36 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.getAgentSession(this.db, this.organizationId, id);
   }
 
+  // Encrypted GitHub installation token currently held by each lane, keyed by
+  // session. Swapping returns the previous one so callers can revoke it; the
+  // reaper takes and revokes whatever is left once a session is terminal.
+  async swapLaneGithubToken(
+    sessionId: string,
+    encrypted: string
+  ): Promise<string | null> {
+    const key = `${LANE_GITHUB_TOKEN_PREFIX}${sessionId}`;
+    const previous = await this.ctx.storage.get<string>(key);
+    await this.ctx.storage.put(key, encrypted);
+    return previous ?? null;
+  }
+
+  async takeLaneGithubToken(sessionId: string): Promise<string | null> {
+    const key = `${LANE_GITHUB_TOKEN_PREFIX}${sessionId}`;
+    const encrypted = await this.ctx.storage.get<string>(key);
+    if (encrypted === undefined) return null;
+    await this.ctx.storage.delete(key);
+    return encrypted;
+  }
+
+  async listLaneGithubTokenSessions(): Promise<string[]> {
+    const entries = await this.ctx.storage.list({
+      prefix: LANE_GITHUB_TOKEN_PREFIX,
+    });
+    return [...entries.keys()].map((key) =>
+      key.slice(LANE_GITHUB_TOKEN_PREFIX.length)
+    );
+  }
+
   getAgentSessionByProviderSessionId(providerSessionId: string) {
     return data.getAgentSessionByProviderSessionId(
       this.db,
@@ -2124,6 +2164,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       message: activity.message,
       payload: { activity },
     });
+    await this.syncLaneProgressComment(input.sessionId, {
+      create: false,
+      throttleMs:
+        input.type === "thought" || input.type === "response"
+          ? LANE_PROGRESS_THROTTLE_MS
+          : 0,
+    });
     // PILE-229 handoff: an elicitation is the lane asking a human. Mark it on
     // the event stream and notify the issue's human owner — the assignee when
     // it's a user, else the actor who dispatched the lane.
@@ -2165,6 +2212,82 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       }
     }
     return activity;
+  }
+
+  /** PILE-290 — the lane's live progress comment on its issue. Created the
+   *  first time the lane reports `running` (`create`), then edited in place:
+   *  session link, current step, elapsed + ETA, reported task list. Never
+   *  throws — observability must not break the session write path. */
+  private async syncLaneProgressComment(
+    sessionId: string,
+    options: { create: boolean; throttleMs?: number; actorId?: string }
+  ): Promise<void> {
+    try {
+      const session = await this.getAgentSession(sessionId);
+      if (!session || session.purpose === "preflight") return;
+      const externalId = laneProgressExternalId(session.id);
+      const existingRef = await this.findCommentByExternalId(
+        "agent",
+        externalId
+      );
+      const existing = existingRef
+        ? await this.getComment(existingRef.id)
+        : undefined;
+      if (!existing && !(options.create && session.status === "running")) {
+        return;
+      }
+      const now = Date.now();
+      if (
+        existing &&
+        options.throttleMs &&
+        now - Date.parse(existing.updatedAt) < options.throttleMs
+      ) {
+        return;
+      }
+      const issue = await this.getIssue(session.issueId);
+      if (!issue) return;
+      const activities = await data.listAgentActivities(this.db, session.id, {
+        limit: 50,
+        order: "desc",
+      });
+      const { step, todos } = laneProgressFromActivities(activities);
+      const typical = typicalLaneDurationMs(
+        await data.listRecentLaneTimings(
+          this.db,
+          this.organizationId,
+          session.agentId
+        )
+      );
+      const body = renderLaneProgressComment({
+        session,
+        step,
+        todos,
+        typical,
+        apiBaseUrl: this.env.PUBLIC_API_URL ?? this.env.BETTER_AUTH_URL,
+        now,
+      });
+      if (existing) {
+        if (existing.body === body) return;
+        const updated = await this.updateComment(existing.id, { body });
+        if (updated) await this.emitCommentUpdated(updated, issue);
+        return;
+      }
+      const comment = await this.createComment({
+        issueId: issue.id,
+        body,
+        externalAuthor: session.agentId,
+        externalSource: "agent",
+        externalId,
+      });
+      if (comment) {
+        await this.emitCommentCreated(comment, issue, options.actorId);
+      }
+    } catch (err) {
+      console.error("lane progress comment sync failed", {
+        sessionId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   async closeAgentActivity(id: string) {
@@ -2312,7 +2435,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.deleteAgentEnvironmentFile(this.db, this.organizationId, path);
   }
 
-  listAgentActivities(sessionId: string, options: { limit?: number } = {}) {
+  listAgentActivities(
+    sessionId: string,
+    options: { limit?: number; order?: "asc" | "desc" } = {}
+  ) {
     return data.listAgentActivities(this.db, sessionId, options);
   }
 
@@ -2693,6 +2819,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         await this.emitCommentCreated(comment, updatedIssue ?? issue, actorId);
       }
     }
+
+    await this.syncLaneProgressComment(sessionId, {
+      create: true,
+      actorId,
+      throttleMs:
+        sessionEventPayloads.length > 0 ? 0 : LANE_PROGRESS_HEARTBEAT_MS,
+    });
 
     await Promise.all(
       sessionEventPayloads.map((event) => this.addAgentSessionEvent(event))
@@ -4359,7 +4492,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       prCheckState,
       updatedAt: new Date().toISOString(),
     };
-    if (status !== undefined && !isTerminalStatus(old.status)) {
+    // Triage is a human queue (PILE-270 escalations land there): PR
+    // activity only pulls an issue out of it once the PR is merged/closed.
+    if (
+      status !== undefined &&
+      !isTerminalStatus(old.status) &&
+      (old.status !== "triage" || isTerminalStatus(status))
+    ) {
       set.status = status;
     }
 

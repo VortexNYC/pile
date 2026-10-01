@@ -6,12 +6,7 @@ ENV_ID = os.environ['CODEX_CLI_ENV_ID']
 
 
 def agent_env():
-    env = os.environ.copy()
-    env['HOME'] = HOME
-    env['CODEX_HOME'] = CODEX_HOME
-    env['CODEX_INSTALL_DIR'] = INSTALL_DIR
-    env['PATH'] = INSTALL_DIR + ':' + env.get('PATH', '')
-    return strip_runner_secrets(env)
+    return agent_env_base({'CODEX_HOME': CODEX_HOME, 'CODEX_INSTALL_DIR': INSTALL_DIR, 'CODEX_CLI_ENV_ID': ENV_ID})
 
 
 def ensure():
@@ -21,25 +16,27 @@ def ensure():
     os.makedirs(INSTALL_DIR, exist_ok=True)
     install_url = 'https://raw.githubusercontent.com/openai/codex/main/scripts/install/install.sh'
     install_script = subprocess.run(['curl', '-fsSL', install_url], check=True, capture_output=True, text=True).stdout
-    env = os.environ.copy()
+    env = agent_env()
     env['CODEX_NON_INTERACTIVE'] = '1'
-    env['CODEX_INSTALL_DIR'] = INSTALL_DIR
-    env['CODEX_HOME'] = CODEX_HOME
     subprocess.run(['sh'], input=install_script, env=env, check=True, text=True)
     return codex_bin
 
 
 def write_codex_home(auth_b64, model):
     os.makedirs(CODEX_HOME, exist_ok=True)
+    auth = base64.b64decode(auth_b64)
+    mask_credential_blob(auth)
     with open(os.path.join(CODEX_HOME, 'auth.json'), 'wb') as f:
-        f.write(base64.b64decode(auth_b64))
+        f.write(auth)
     with open(os.path.join(CODEX_HOME, 'config.toml'), 'w') as f:
         f.write(f'model = "{model}"\n')
         f.write('approval_policy = "never"\n')
         f.write('sandbox_mode = "danger-full-access"\n')
         f.write('[shell_environment_policy]\n')
+        # Codex's shell tool sees the allowlisted agent env (it inherits the
+        # codex process env, which is already agent_env()); the default
+        # excludes additionally drop *KEY*/*SECRET*/*TOKEN* names.
         f.write('inherit = "all"\n')
-        f.write('ignore_default_excludes = true\n')
 
 
 def submit_task(codex_bin):
@@ -104,6 +101,7 @@ def main():
     summary = task.get('summary', {}) if isinstance(task.get('summary'), dict) else {}
     result_text = json.dumps({'status': task.get('status'), 'files_changed': summary.get('files_changed', 0), 'lines_added': summary.get('lines_added', 0), 'lines_removed': summary.get('lines_removed', 0), 'transcript': read_transcript()})
     write_result('completed' if task.get('status') in ('ready', 'applied') else 'failed', pr_url, result_text)
+    revoke_github_token()
     stop_log_ship()
     return 0
 
@@ -113,5 +111,6 @@ if __name__ == '__main__':
         sys.exit(main())
     except Exception as e:
         fail_result(e)
+        revoke_github_token()
         stop_log_ship()
         sys.exit(1)

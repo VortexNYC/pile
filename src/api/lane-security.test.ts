@@ -226,7 +226,10 @@ describe("lane security: Pile endpoints reachable with a lane token", () => {
         }
       );
       expect(res.status).toBe(200);
-      expect(await res.json()).toEqual({ token: FAKE_INSTALLATION_TOKEN });
+      expect(await res.json()).toEqual({
+        token: FAKE_INSTALLATION_TOKEN,
+        expiresAt: null,
+      });
       expect(lookedUp).toEqual([
         "https://api.github.com/repos/VortexNYC/pile/installation",
       ]);
@@ -270,7 +273,7 @@ describe("lane security: Pile endpoints reachable with a lane token", () => {
       );
       expect(events.status).toBe(200);
       const text = await events.text();
-      expect(text).toContain("ghs_***");
+      expect(text).toContain("[REDACTED]");
       expect(text).not.toContain(FAKE_INSTALLATION_TOKEN);
       expect(text).not.toContain("github_pat_11ABCDEFG");
       expect(text).not.toContain(laneToken);
@@ -294,7 +297,7 @@ describe("lane security: Pile endpoints reachable with a lane token", () => {
       );
       expect(res.status).toBe(200);
       const body = await res.json<{ session: { result: string | null } }>();
-      expect(body.session.result).toContain("ghs_***");
+      expect(body.session.result).toContain("[REDACTED]");
       expect(body.session.result).not.toContain(FAKE_INSTALLATION_TOKEN);
     });
   });

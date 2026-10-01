@@ -3,7 +3,10 @@ import { z } from "zod";
 
 import type { AppEnv } from "../types/env.js";
 
-const tokenResponseSchema = z.object({ token: z.string() });
+const tokenResponseSchema = z.object({
+  token: z.string(),
+  expires_at: z.string().optional(),
+});
 const installationSchema = z.object({ id: z.number() });
 
 export const GITHUB_USER_AGENT = "vortex-agent";
@@ -31,11 +34,17 @@ async function getAppJwt(env: AppEnv): Promise<string | undefined> {
   return jwt;
 }
 
-export async function getInstallationToken(
+export interface RepoScopedToken {
+  token: string;
+  /** ISO timestamp GitHub reports for the token's expiry (~1h after mint). */
+  expiresAt: string | null;
+}
+
+async function createInstallationAccessToken(
   env: AppEnv,
   installationId: string,
-  repositories?: string[]
-): Promise<string | undefined> {
+  body?: { repositories: string[] }
+): Promise<RepoScopedToken | undefined> {
   const jwt = await getAppJwt(env);
   if (!jwt) return undefined;
 
@@ -48,9 +57,9 @@ export async function getInstallationToken(
         Accept: "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
         "User-Agent": GITHUB_USER_AGENT,
-        ...(repositories ? { "Content-Type": "application/json" } : {}),
+        ...(body ? { "Content-Type": "application/json" } : {}),
       },
-      ...(repositories ? { body: JSON.stringify({ repositories }) } : {}),
+      ...(body ? { body: JSON.stringify(body) } : {}),
     }
   );
   if (!response.ok) return undefined;
@@ -58,7 +67,17 @@ export async function getInstallationToken(
   const raw: unknown = await response.json();
   const parsed = tokenResponseSchema.safeParse(raw);
   if (!parsed.success) return undefined;
-  return parsed.data.token;
+  return {
+    token: parsed.data.token,
+    expiresAt: parsed.data.expires_at ?? null,
+  };
+}
+
+export async function getInstallationToken(
+  env: AppEnv,
+  installationId: string
+): Promise<string | undefined> {
+  return (await createInstallationAccessToken(env, installationId))?.token;
 }
 
 async function getInstallationIdForRepo(
@@ -94,7 +113,38 @@ export async function getInstallationTokenForRepo(
 ): Promise<string | undefined> {
   const installationId = await getInstallationIdForRepo(env, owner, name);
   if (!installationId) return undefined;
-  // Scoped to the one repo: lanes hold this token, so it must not reach
-  // sibling repos on the same installation.
-  return getInstallationToken(env, installationId, [name]);
+  return getInstallationToken(env, installationId);
+}
+
+/**
+ * Installation token restricted to a single repository — what agent lanes
+ * get, so a compromised lane can't reach the installation's other repos.
+ */
+export async function getRepoScopedInstallationToken(
+  env: AppEnv,
+  owner: string,
+  name: string
+): Promise<RepoScopedToken | undefined> {
+  const installationId = await getInstallationIdForRepo(env, owner, name);
+  if (!installationId) return undefined;
+  return createInstallationAccessToken(env, installationId, {
+    repositories: [name],
+  });
+}
+
+/**
+ * Revoke an installation token before its TTL. Authenticated with the token
+ * itself; a 401 means it is already dead, which counts as revoked.
+ */
+export async function revokeInstallationToken(token: string): Promise<boolean> {
+  const response = await fetch("https://api.github.com/installation/token", {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      "User-Agent": GITHUB_USER_AGENT,
+    },
+  });
+  return response.status === 204 || response.status === 401;
 }
