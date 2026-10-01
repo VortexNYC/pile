@@ -43,6 +43,7 @@ import {
   fireRepoTriggers,
   issueEventTarget,
 } from "./repo-triggers.js";
+import { reviewPromptWithContext } from "./review-context.js";
 
 export const DEFAULT_TIMEOUT_MINUTES = 60;
 export const DEFAULT_INACTIVITY_MINUTES = 20;
@@ -863,13 +864,20 @@ export async function routeSubmittedReview(
     body: string;
     prUrl: string;
     headSha: string | null;
+    /** Head sha the review was submitted against (review.commit_id). */
+    sha: string | null;
+    repoFull: string;
   },
-  seenEvents?: SessionEvent[]
-): Promise<void> {
-  if (!session) return;
+  opts: {
+    seenEvents?: SessionEvent[];
+    reviewSummary?: string | null;
+    ghGet?: () => Promise<((path: string) => Promise<unknown>) | null>;
+  } = {}
+): Promise<string | null> {
+  if (!session) return opts.reviewSummary ?? null;
   const marker = `review-${review.id}`;
   const seen =
-    seenEvents ??
+    opts.seenEvents ??
     (await stub
       .listAgentSessionEvents(session.id, { limit: 100, order: "desc" })
       .catch(() => []));
@@ -879,6 +887,7 @@ export async function routeSubmittedReview(
       typeof e.payload === "string" &&
       e.payload.includes(marker)
   );
+  let reviewSummary = opts.reviewSummary ?? session.reviewSummary;
   if (isNew) {
     await stub
       .addAgentSessionEvent({
@@ -894,15 +903,44 @@ export async function routeSubmittedReview(
         },
       })
       .catch(() => {});
+    // PILE-286 — every verdict (approvals too) rolls into the lane's
+    // snapshot; lastReviewedSha anchors the next review's range diff.
+    const recorded = await stub
+      .recordLaneReview(session.id, {
+        reviewId: review.id,
+        reviewer: review.reviewer,
+        state: review.state,
+        sha: review.sha,
+        excerpt: review.body,
+      })
+      .catch(() => null);
+    if (recorded) reviewSummary = recorded.reviewSummary;
   }
   const requestsChanges = reviewRequestsChanges(review.state, review.body);
-  if (!requestsChanges && review.body.length === 0) return;
-  const prompt =
-    `${review.reviewer} reviewed ${review.prUrl} (${review.state.toLowerCase()}).\n` +
-    (review.body ? `Review:\n${review.body}\n` : "") +
-    "Read the review comments on the PR, address the feedback, and push. " +
-    "Review threads you were sent are resolved once your fix is pushed; " +
-    "reply on a thread instead if you disagree with it.";
+  if (!requestsChanges && review.body.length === 0) return reviewSummary;
+  const summaryForPrompt = reviewSummary;
+  let built: Promise<string> | null = null;
+  const prompt = () => {
+    built ??= (async () => {
+      const ghGet = opts.ghGet ? await opts.ghGet().catch(() => null) : null;
+      const base = await reviewPromptWithContext({
+        reviewer: review.reviewer,
+        prUrl: review.prUrl,
+        state: review.state,
+        body: review.body,
+        reviewId: review.id,
+        sha: review.sha,
+        reviewSummary: summaryForPrompt,
+        repoFull: review.repoFull,
+        ghGet,
+      });
+      return (
+        `${base} Review threads you were sent are resolved once your fix ` +
+        "is pushed; reply on a thread instead if you disagree with it."
+      );
+    })();
+    return built;
+  };
   if (isNew) {
     await fireEventAutomations(
       env,
@@ -910,7 +948,7 @@ export async function routeSubmittedReview(
       organizationId,
       "pr.review",
       issueEventTarget(stub, session.issueId),
-      prompt
+      await prompt()
     );
     if (requestsChanges) {
       await fireEventAutomations(
@@ -919,7 +957,7 @@ export async function routeSubmittedReview(
         organizationId,
         "pr.review_changes",
         issueEventTarget(stub, session.issueId),
-        prompt
+        await prompt()
       );
     }
   }
@@ -929,6 +967,7 @@ export async function routeSubmittedReview(
     dedupeKey: marker,
     headSha: review.headSha,
   });
+  return reviewSummary;
 }
 
 export async function sweepAgentSessions(
@@ -1290,7 +1329,7 @@ export async function sweepAgentSessions(
 const GITHUB_PR_URL_RE =
   /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/;
 
-async function githubApiGet(
+export async function githubApiGet(
   ghFetch: typeof fetch,
   token: string,
   path: string
@@ -1960,15 +1999,17 @@ export async function syncOpenPrSessions(
           id?: number;
           state?: string;
           body?: string;
+          commit_id?: string | null;
           user?: { login?: string };
         }> | null;
         if (reviews && reviews.length > 0) {
           const seen = await stub
             .listAgentSessionEvents(session.id, { limit: 100, order: "desc" })
             .catch(() => []);
+          let reviewSummary = session.reviewSummary;
           for (const review of reviews) {
             if (typeof review.id !== "number") continue;
-            await routeSubmittedReview(
+            reviewSummary = await routeSubmittedReview(
               env,
               stub,
               organizationId,
@@ -1981,8 +2022,19 @@ export async function syncOpenPrSessions(
                 body: (review.body ?? "").trim(),
                 prUrl,
                 headSha,
+                sha: review.commit_id ?? headSha,
+                repoFull: `${owner}/${repo}`,
               },
-              seen
+              {
+                seenEvents: seen,
+                reviewSummary,
+                ghGet: async () => (path) =>
+                  withTimeout(
+                    githubApiGet(ghFetch, token, path),
+                    probeTimeoutMs,
+                    "github-compare"
+                  ),
+              }
             );
           }
         }

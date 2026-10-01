@@ -8,6 +8,7 @@ import {
 } from "../global/crypto.js";
 import { findOrCreateCycleByName } from "../global/cycles.js";
 import { createD1, type D1Client } from "../global/db.js";
+import { getInstallationTokenForRepo } from "../global/github-auth.js";
 import {
   createGithubInstallation,
   deleteGithubInstallation,
@@ -38,13 +39,17 @@ import {
   isTrustedAssociation,
   parsePileMention,
 } from "./mention.js";
-import { nudgeLane } from "./nudge.js";
+import { nudgeLane, type NudgeOptions } from "./nudge.js";
 import {
   type AutomationEventTarget,
   automationEventTarget,
   issueEventTarget,
 } from "./repo-triggers.js";
-import { fireEventAutomations, routeSubmittedReview } from "./sweep.js";
+import {
+  fireEventAutomations,
+  githubApiGet,
+  routeSubmittedReview,
+} from "./sweep.js";
 
 const pullRequestPayloadSchema = z.object({
   action: z.string(),
@@ -186,6 +191,7 @@ const pullRequestReviewPayloadSchema = z.object({
     body: z.string().nullable(),
     user: z.object({ login: z.string() }).nullable(),
     html_url: z.string(),
+    commit_id: z.string().nullish(),
   }),
   pull_request: z.object({
     number: z.number().int(),
@@ -920,12 +926,7 @@ async function nudgeLaneForIssue(
   organizationId: string,
   issue: Issue,
   prUrl: string,
-  opts: {
-    prompt: string;
-    reason: string;
-    dedupeKey?: string;
-    headSha?: string | null;
-  }
+  opts: NudgeOptions
 ): Promise<void> {
   try {
     const session = await resolveLaneForIssue(stub, issue.id);
@@ -1018,6 +1019,18 @@ async function processPullRequestReview(
       body: review.body?.trim() ?? "",
       prUrl: pull_request.html_url,
       headSha: pull_request.head.sha,
+      sha: review.commit_id ?? pull_request.head.sha,
+      repoFull: repo,
+    },
+    {
+      reviewSummary: session?.reviewSummary ?? null,
+      ghGet: async () => {
+        const [owner = "", name = ""] = repo.split("/");
+        const token = await getInstallationTokenForRepo(env, owner, name).catch(
+          () => undefined
+        );
+        return token ? (path) => githubApiGet(fetch, token, path) : null;
+      },
     }
   );
 }

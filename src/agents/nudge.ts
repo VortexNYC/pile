@@ -22,12 +22,13 @@ export const MAX_NUDGES_PER_LANE = 5;
 // break the chain and get a fresh budget.
 const LANE_CHAIN_MAX_DEPTH = 10;
 
-type NudgeOpts = {
-  prompt: string;
+export interface NudgeOptions {
+  /** A thunk defers expensive prompt context until delivery is attempted. */
+  prompt: string | (() => Promise<string>);
   reason: string;
   dedupeKey?: string;
   headSha?: string | null;
-};
+}
 
 type SessionEvent = Awaited<
   ReturnType<WorkspaceDO["listAgentSessionEvents"]>
@@ -119,7 +120,7 @@ async function escalateLane(
   session: AgentSession,
   issue: Issue,
   prUrl: string,
-  opts: NudgeOpts,
+  opts: NudgeOptions,
   why: string,
   rounds: NudgeRound[]
 ): Promise<void> {
@@ -198,7 +199,7 @@ export async function nudgeLane(
   session: AgentSession,
   issue: Issue | undefined,
   prUrl: string,
-  opts: NudgeOpts
+  opts: NudgeOptions
 ): Promise<void> {
   const dedupeKey = opts.dedupeKey;
   const seen = await stub
@@ -300,6 +301,13 @@ export async function nudgeLane(
         .catch(() => {});
       return;
     }
+    // Resolved only once delivery is actually attempted — lazy prompts
+    // (review range diffs) cost a GitHub call per build.
+    const resolved = {
+      ...opts,
+      prompt:
+        typeof opts.prompt === "string" ? opts.prompt : await opts.prompt(),
+    };
     // A reaped kept sandbox can't take a follow-up — go straight to the
     // cold dispatch instead of probing a sandbox we know is gone.
     if (session.status === "completed" && session.lastStateHash === "reaped") {
@@ -310,7 +318,7 @@ export async function nudgeLane(
         session,
         issue,
         prUrl,
-        opts,
+        resolved,
         "kept sandbox reaped",
         skipNoted
       );
@@ -321,7 +329,7 @@ export async function nudgeLane(
       : null;
     const delivered = await provider.sendPrompt(
       session.providerSessionId ?? session.id,
-      opts.prompt,
+      resolved.prompt,
       issue,
       gitIdentity
     );
@@ -362,7 +370,7 @@ export async function nudgeLane(
         session,
         issue,
         prUrl,
-        opts,
+        resolved,
         "kept sandbox unavailable",
         skipNoted
       );
@@ -383,7 +391,7 @@ async function redispatchCompletedLane(
   session: AgentSession,
   issue: Issue,
   prUrl: string,
-  opts: NudgeOpts,
+  opts: NudgeOptions & { prompt: string },
   cause: string,
   skipNoted: boolean
 ): Promise<void> {
