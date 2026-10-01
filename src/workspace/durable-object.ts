@@ -4357,7 +4357,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       prCheckState,
       updatedAt: new Date().toISOString(),
     };
-    if (status !== undefined && !isTerminalStatus(old.status)) {
+    // Triage is a human queue (PILE-270 escalations land there): PR
+    // activity only pulls an issue out of it once the PR is merged/closed.
+    if (
+      status !== undefined &&
+      !isTerminalStatus(old.status) &&
+      (old.status !== "triage" || isTerminalStatus(status))
+    ) {
       set.status = status;
     }
 

@@ -8,6 +8,7 @@ import { createWorkspace } from "../global/workspaces.js";
 import { createAdminHeaders } from "../platform/test-auth.js";
 import { MockAgentProvider } from "./harness.js";
 import { registerAgentProvider } from "./index.js";
+import { MAX_NUDGES_PER_HEAD_SHA, MAX_NUDGES_PER_LANE } from "./nudge.js";
 import {
   DEFAULT_INACTIVITY_MINUTES,
   DEFAULT_PROVISION_TIMEOUT_MINUTES,
@@ -318,6 +319,29 @@ async function ghFetchFailing(input: RequestInfo | URL) {
     );
   }
   return new Response("not found", { status: 404 });
+}
+
+function ghFetchFailingPr(num: number, sha: string) {
+  return async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.endsWith(`/pulls/${num}`)) {
+      return new Response(
+        JSON.stringify({ state: "open", merged_at: null, head: { sha } }),
+        { status: 200 }
+      );
+    }
+    if (url.includes(`/commits/${sha}/check-runs`)) {
+      return new Response(
+        JSON.stringify({
+          check_runs: [
+            { name: "typecheck", status: "completed", conclusion: "failure" },
+          ],
+        }),
+        { status: 200 }
+      );
+    }
+    return new Response("not found", { status: 404 });
+  };
 }
 
 async function ghFetchConflict(input: RequestInfo | URL) {
@@ -1825,6 +1849,179 @@ describe("syncOpenPrSessions", () => {
     });
 
     expect(updates).toHaveLength(0);
+  });
+
+  describe("nudge budget (PILE-270)", () => {
+    async function budgetLane(num: number, title: string) {
+      const agentId = `mock-budget-${crypto.randomUUID().slice(0, 8)}`;
+      const prompts: string[] = [];
+      registerMock(agentId, {
+        sendPrompt: async (_id, prompt) => {
+          prompts.push(prompt);
+          return true;
+        },
+      });
+      const issue = await stub.createIssue({ title });
+      await stub.updateIssue(issue.id, { status: "in_progress" });
+      const prUrl = `https://github.com/vortexnyc/pile/pull/${num}`;
+      const session = await stub.createAgentSession({
+        issueId: issue.id,
+        agentId,
+        provider: agentId,
+        actorId: userId,
+        actorType: "user",
+        status: "running",
+        prUrl,
+        prState: "open",
+      });
+      return { agentId, prompts, issue, prUrl, session };
+    }
+
+    async function seedRounds(
+      sessionId: string,
+      issueId: string,
+      prUrl: string,
+      shas: string[]
+    ) {
+      for (const [i, sha] of shas.entries()) {
+        await stub.addAgentSessionEvent({
+          sessionId,
+          type: "prompt.followup",
+          message: `CI failure delivered as follow-up prompt (${i})`,
+          payload: { issueId, prUrl, headSha: sha, key: `seed-${sha}-${i}` },
+        });
+      }
+    }
+
+    it("escalates once when the per-lane cap is exhausted", async () => {
+      const { prompts, issue, prUrl, session } = await budgetLane(
+        2701,
+        "Budget lane cap"
+      );
+      await seedRounds(
+        session.id,
+        issue.id,
+        prUrl,
+        Array.from({ length: MAX_NUDGES_PER_LANE }, (_, i) => `old${i}`)
+      );
+      const fetchSrc = ghFetchFailingPr(2701, "cap1");
+
+      for (let pass = 0; pass < 2; pass++) {
+        await syncOpenPrSessions(env, stub, organizationId, {
+          tokenForRepo: async () => "gh-test-token",
+          fetch: fetchSrc as typeof fetch,
+        });
+      }
+
+      expect(prompts).toHaveLength(0);
+      const events = await stub.listAgentSessionEvents(session.id, {});
+      const escalated = events.filter((e) => e.type === "issue.escalated");
+      expect(escalated).toHaveLength(1);
+      expect(escalated[0]!.payload).toContain(`escalated-${session.id}`);
+      const comments = await stub.listComments(issue.id);
+      const escalationComments = comments.filter((c) =>
+        c.body.includes("Escalated")
+      );
+      expect(escalationComments).toHaveLength(1);
+      expect(escalationComments[0]!.body).toContain(session.agentId);
+      expect(escalationComments[0]!.body).toContain("CI failure");
+      expect(escalationComments[0]!.body).toContain("old0");
+      expect((await stub.getIssue(issue.id))?.status).toBe("triage");
+    });
+
+    it("escalates when one headSha exhausts its nudge rounds", async () => {
+      const { prompts, issue, prUrl, session } = await budgetLane(
+        2702,
+        "Budget sha cap"
+      );
+      await seedRounds(
+        session.id,
+        issue.id,
+        prUrl,
+        Array.from({ length: MAX_NUDGES_PER_HEAD_SHA }, () => "sha2702")
+      );
+
+      await syncOpenPrSessions(env, stub, organizationId, {
+        tokenForRepo: async () => "gh-test-token",
+        fetch: ghFetchFailingPr(2702, "sha2702") as typeof fetch,
+      });
+
+      expect(prompts).toHaveLength(0);
+      const types = (await stub.listAgentSessionEvents(session.id, {})).map(
+        (e) => e.type
+      );
+      expect(types).toContain("issue.escalated");
+      expect((await stub.getIssue(issue.id))?.status).toBe("triage");
+    });
+
+    it("carries the budget across nudge redispatches, not human retries", async () => {
+      const { prompts, issue, prUrl, session } = await budgetLane(
+        2703,
+        "Budget redispatch chain"
+      );
+      const parent = await stub.createAgentSession({
+        issueId: issue.id,
+        agentId: session.agentId,
+        provider: session.agentId,
+        actorId: userId,
+        actorType: "user",
+        status: "completed",
+      });
+      await stub.updateAgentSession(session.id, { retryOf: parent.id });
+      await seedRounds(
+        parent.id,
+        issue.id,
+        prUrl,
+        Array.from({ length: MAX_NUDGES_PER_LANE }, (_, i) => `p${i}`)
+      );
+      const fetchSrc = ghFetchFailingPr(2703, "chain1");
+
+      // No prompt.redispatch link: a human retry gets a fresh budget.
+      await syncOpenPrSessions(env, stub, organizationId, {
+        tokenForRepo: async () => "gh-test-token",
+        fetch: fetchSrc as typeof fetch,
+      });
+      expect(prompts).toHaveLength(1);
+
+      const linked = await budgetLane(2704, "Budget redispatch linked");
+      const linkedParent = await stub.createAgentSession({
+        issueId: linked.issue.id,
+        agentId: linked.agentId,
+        provider: linked.agentId,
+        actorId: userId,
+        actorType: "user",
+        status: "completed",
+      });
+      await stub.updateAgentSession(linked.session.id, {
+        retryOf: linkedParent.id,
+      });
+      await seedRounds(
+        linkedParent.id,
+        linked.issue.id,
+        linked.prUrl,
+        Array.from({ length: MAX_NUDGES_PER_LANE - 1 }, (_, i) => `l${i}`)
+      );
+      await stub.addAgentSessionEvent({
+        sessionId: linkedParent.id,
+        type: "prompt.redispatch",
+        message: "merge conflict redispatched",
+        payload: {
+          issueId: linked.issue.id,
+          prUrl: linked.prUrl,
+          redispatchedAs: linked.session.id,
+        },
+      });
+
+      await syncOpenPrSessions(env, stub, organizationId, {
+        tokenForRepo: async () => "gh-test-token",
+        fetch: ghFetchFailingPr(2704, "chain2") as typeof fetch,
+      });
+      expect(linked.prompts).toHaveLength(0);
+      const types = (
+        await stub.listAgentSessionEvents(linked.session.id, {})
+      ).map((e) => e.type);
+      expect(types).toContain("issue.escalated");
+    });
   });
 
   it("leaves sessions alone when the repo has no installation", async () => {

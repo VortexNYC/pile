@@ -1227,6 +1227,7 @@ export async function syncOpenPrSessions(
           prompt: ciPrompt,
           reason: "CI failure",
           dedupeKey: `ci-${headSha ?? "unknown"}`,
+          headSha,
         });
       }
       // PILE-230: merge-conflict awareness. GitHub reports mergeable:false once
@@ -1308,6 +1309,7 @@ export async function syncOpenPrSessions(
               "Rebase (or merge the base branch), resolve the conflicts, and push.",
             reason: "merge conflict",
             dedupeKey: `conflict-${headSha ?? "unknown"}`,
+            headSha,
           });
         }
       }
@@ -1441,6 +1443,7 @@ export async function syncOpenPrSessions(
               prompt: reviewPrompt,
               reason: "review feedback",
               dedupeKey: marker,
+              headSha,
             });
           }
         }
