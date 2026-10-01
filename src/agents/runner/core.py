@@ -6,9 +6,9 @@
 # agent env allowlist, GitHub token refresh/revoke,
 # repo ops, GitHub API, PR creation, lane digest, GitHub token refresh, log
 # shipping, pnpm-store cache, postgres warmup, .pile/setup.sh, lane lifecycle
-# hooks, and lane isolation (scrubbed agent env + restricted-mode command
-# shims). Drivers only define: ensure(), agent_env(), the run mechanism, and
-# main().
+# hooks, lane isolation (scrubbed agent env + restricted-mode command shims),
+# optional headless browser. Drivers only define: ensure(), agent_env(), the
+# run mechanism, and main().
 #
 # Contract with the adapter: the process writes RESULT_FILE
 # (/tmp/agent-result.json) with {status, prUrl, branch, result, report?,
@@ -114,6 +114,8 @@ TOKEN_REFRESH_MARGIN_SEC = 300
 REPO_DIR = os.path.join(HOME, 'repo')
 RESULT_FILE = '/tmp/agent-result.json'
 AGENT_LABEL = os.environ.get('AGENT_LABEL', 'Agent')
+# 'plan' lanes (PILE-283) read the repo and report a plan — never push.
+LANE_MODE = os.environ.get('PILE_LANE_MODE', '')
 PR_ERRORS = []
 RUN_STARTED = time.time()
 LANE_RESTRICTED = os.environ.get('PILE_LANE_RESTRICTED') == '1'
@@ -1096,6 +1098,9 @@ def _refuse_default_branch():
 def commit_and_push(agent_env=None):
     # agent_env only feeds the prePush hook; the runner's git never runs
     # through the agent's PATH (or a restricted lane's shims).
+    if LANE_MODE == 'plan':
+        print('plan lane: skipping commit/push')
+        return False
     validate_branch()
     if PUSH_POLICY == 'disabled':
         committed = commit_local(agent_env)
@@ -1170,6 +1175,59 @@ def ensure_postgres():
     run(['su', 'postgres', '-c', "psql -c \"ALTER USER postgres PASSWORD 'postgres'\""], check=False)
     run(['su', 'postgres', '-c', 'createdb vortex_dev'], check=False)
     print(f'[timing] postgres up: {time.time() - t0:.0f}s')
+
+
+# Optional headless browser (PILE-292). Images built with LANE_BROWSER=1
+# bake Google Chrome + agent-browser so UI-touching lanes can run e2e suites and
+# screenshot their work instead of shipping blind. Absent = no-op.
+BROWSER_CANDIDATES = ('chromium', 'chromium-browser', 'google-chrome-stable', 'google-chrome')
+# Lanes run as root in a container with no usable /dev/shm.
+BROWSER_ARGS = '--no-sandbox,--disable-dev-shm-usage'
+
+
+def find_browser():
+    for name in BROWSER_CANDIDATES:
+        path = shutil.which(name)
+        if path:
+            return path
+    return None
+
+
+def with_browser_env(env):
+    path = find_browser()
+    if not path:
+        return env
+    env.setdefault('PILE_BROWSER', path)
+    env.setdefault('CHROME_PATH', path)
+    env.setdefault('PUPPETEER_EXECUTABLE_PATH', path)
+    env.setdefault('AGENT_BROWSER_EXECUTABLE_PATH', path)
+    env.setdefault('AGENT_BROWSER_ARGS', BROWSER_ARGS)
+    return env
+
+
+def browser_prompt_note():
+    path = find_browser()
+    if not path or SHELL_POLICY == 'disabled':
+        return ''
+    lines = [
+        '',
+        '## Headless browser',
+        '',
+        f'A headless Chrome is installed at $PILE_BROWSER ({path}). If your change touches UI, verify it visually before finishing: start the dev server, load the affected page, take a screenshot, and look at it.',
+    ]
+    if shutil.which('agent-browser'):
+        lines.append('`agent-browser` is on PATH and preconfigured for it: `agent-browser open http://localhost:5173 && agent-browser wait --load networkidle && agent-browser screenshot /tmp/shot.png` (also `snapshot -i`, `click`, `fill`; `agent-browser close` when done).')
+    lines += [
+        'One-shot screenshot: `"$PILE_BROWSER" --headless=new --no-sandbox --disable-dev-shm-usage --window-size=1280,800 --screenshot=/tmp/shot.png <url>`.',
+        'For Playwright/Puppeteer e2e suites, launch with `executablePath: process.env.PILE_BROWSER` and args `--no-sandbox`, `--disable-dev-shm-usage` instead of downloading a browser.',
+        'Do not commit screenshots unless the task asks for them.',
+    ]
+    return '\n'.join(lines)
+
+
+def lane_prompt():
+    prompt = base64.b64decode(os.environ['PROMPT_B64']).decode('utf-8')
+    return prompt + browser_prompt_note()
 
 
 # Push appended transcript lines back to Pile so they land in the session
