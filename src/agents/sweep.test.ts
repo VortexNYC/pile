@@ -513,6 +513,130 @@ describe("sweepAgentSessions", () => {
     expect(dispatches).toBe(0);
     const siblings = await stub.listAgentSessions({ issueId: issue.id });
     expect(siblings.find((s) => s.retryOf === session.id)).toBeUndefined();
+
+    // Task failures still annotate the issue — no auto-retry, but no
+    // silence either (PILE-268).
+    const comments = await stub.listComments(issue.id);
+    expect(comments).toHaveLength(1);
+    expect(comments[0]?.body).toContain("failed");
+    expect(comments[0]?.body).toContain("could not be made");
+  });
+
+  it("annotates the issue and redispatches once when a lane stalls out", async () => {
+    const agentId = `mock-stall-${crypto.randomUUID().slice(0, 8)}`;
+    let dispatches = 0;
+    const issue = await stub.createIssue({ title: "Stalled lane" });
+    // 40m of dead air on a 20m inactivity window — the PILE-267 freeze.
+    const stale = new Date(Date.now() - 40 * 60 * 1000).toISOString();
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+      url: "https://provider.example/run/1",
+      createdAt: stale,
+      startedAt: stale,
+    });
+    registerMock(agentId, {
+      dispatch: () => {
+        dispatches += 1;
+        return { id: `retried-${dispatches}`, agentId, status: "created" };
+      },
+      // A frozen lane reports nothing new — the poll echoes the row's
+      // stored state exactly so only the inactivity verdict can kill it.
+      poll: (id) => ({
+        id,
+        agentId,
+        status: "running" as const,
+        result: null,
+        url: id === session.id ? session.url : null,
+        prUrl: null,
+      }),
+      // MockAgentProvider always exposes getState (null by default); a
+      // null state hashes to "null", so seed that hash — otherwise the
+      // first stale probe counts as fresh progress and survival.
+      getState: () => null,
+    });
+    await stub.updateAgentSession(session.id, {
+      lastProgressAt: stale,
+      lastStateHash: "null",
+    });
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    const after = await stub.getAgentSession(session.id);
+    expect(after?.status).toBe("canceled");
+    expect(after?.infraFailure).toBe(1);
+
+    // The death lands on the issue: outcome + reason + session pointer.
+    const comments = await stub.listComments(issue.id);
+    expect(comments).toHaveLength(1);
+    expect(comments[0]?.body).toContain("canceled");
+    expect(comments[0]?.body).toContain("inactive");
+    expect(comments[0]?.body).toContain(session.id);
+    expect(comments[0]?.body).toContain("https://provider.example/run/1");
+
+    // Stall-class deaths get exactly one redispatch.
+    const siblings = await stub.listAgentSessions({ issueId: issue.id });
+    const retried = siblings.find((s) => s.retryOf === session.id);
+    expect(retried).toBeDefined();
+    expect(retried?.retryCount).toBe(1);
+    expect(dispatches).toBe(1);
+
+    // The retried lane stalls too — the guard caps churn at one redispatch.
+    await stub.updateAgentSession(retried!.id, {
+      status: "running",
+      startedAt: stale,
+      lastProgressAt: stale,
+      lastStateHash: "null",
+    });
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    expect((await stub.getAgentSession(retried!.id))?.status).toBe("canceled");
+    expect(dispatches).toBe(1);
+    const all = await stub.listAgentSessions({ issueId: issue.id });
+    expect(all.find((s) => s.retryOf === retried!.id)).toBeUndefined();
+    // Two lanes died, each annotated.
+    expect(await stub.listComments(issue.id)).toHaveLength(2);
+  });
+
+  it("annotates and retries a lane the provider reported canceled", async () => {
+    const agentId = `mock-pc-${crypto.randomUUID().slice(0, 8)}`;
+    registerMock(agentId, {
+      dispatch: () => ({ id: "retry-1", agentId, status: "created" }),
+      poll: (id) => ({
+        id,
+        agentId,
+        status: "canceled" as const,
+        result: "runner terminated",
+      }),
+    });
+    const issue = await stub.createIssue({ title: "Provider canceled" });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+    });
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    const after = await stub.getAgentSession(session.id);
+    expect(after?.status).toBe("canceled");
+    expect(after?.infraFailure).toBe(1);
+    const comments = await stub.listComments(issue.id);
+    expect(comments).toHaveLength(1);
+    expect(comments[0]?.body).toContain("canceled");
+    expect(comments[0]?.body).toContain("runner terminated");
+    const retried = (await stub.listAgentSessions({ issueId: issue.id })).find(
+      (s) => s.retryOf === session.id
+    );
+    expect(retried).toBeDefined();
+    expect(retried?.retryCount).toBe(1);
   });
 
   it("emits an elicitation when a running lane transitions to waiting", async () => {
