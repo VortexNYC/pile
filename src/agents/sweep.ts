@@ -39,6 +39,10 @@ import {
 } from "./repo-triggers.js";
 import { reviewPromptWithContext } from "./review-context.js";
 import {
+  resolveAddressedReviewThreads,
+  reviewAutomationEvents,
+} from "./review-loop.js";
+import {
   publishReviewVerdicts,
   REVIEW_CHECK_NAME,
   REVIEW_PURPOSE,
@@ -801,8 +805,9 @@ async function fireAutomation(
 }
 
 /** Event automations: workspace automations whose trigger_value is the
- *  event name (PILE-211 — pr.ci_failed, pr.conflict, pr.review, pr.opened,
- *  …) plus the repo's `.pile/config.json` `triggers` (PILE-275). */
+ *  event name (PILE-211 — pr.ci_failed, pr.conflict, pr.review,
+ *  pr.review_changes, pr.opened, …) plus the repo's `.pile/config.json`
+ *  `triggers` (PILE-275). */
 export async function fireEventAutomations(
   env: WorkerEnv,
   stub: DurableObjectStub<WorkspaceDO>,
@@ -1687,14 +1692,19 @@ export async function syncOpenPrSessions(
               return built;
             };
             if (isNew) {
-              await fireEventAutomations(
-                env,
-                stub,
-                organizationId,
-                "pr.review",
-                issueEventTarget(stub, session.issueId),
-                await reviewPrompt()
-              );
+              for (const eventName of reviewAutomationEvents(
+                reviewState,
+                body
+              )) {
+                await fireEventAutomations(
+                  env,
+                  stub,
+                  organizationId,
+                  eventName,
+                  issueEventTarget(stub, session.issueId),
+                  await reviewPrompt()
+                );
+              }
             }
             // Delivery dedupe, not detection: a rejected nudge retries on
             // later sweeps until the lane actually gets this review.
@@ -1706,6 +1716,15 @@ export async function syncOpenPrSessions(
             });
           }
         }
+      }
+
+      if (state === "open" && headSha) {
+        await resolveAddressedReviewThreads(
+          stub,
+          session,
+          { owner, repo, number: Number(num), prUrl, headSha },
+          { token, fetch: ghFetch, timeoutMs: probeTimeoutMs }
+        );
       }
 
       // PILE-273 — sweep backstop for the review lane: a missed or failed
