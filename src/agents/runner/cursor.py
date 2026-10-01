@@ -8,7 +8,7 @@ def agent_env():
     env = os.environ.copy()
     env['HOME'] = HOME
     env['PATH'] = INSTALL_DIR + ':' + env.get('PATH', '')
-    return env
+    return with_browser_env(env)
 
 
 def ensure():
@@ -52,7 +52,7 @@ def _render_event(evt):
 
 
 def run_agent(agent_bin):
-    prompt = base64.b64decode(os.environ['PROMPT_B64']).decode('utf-8')
+    prompt = lane_prompt()
     model = os.environ.get('MODEL', '')
     cmd = [agent_bin, '-p', prompt, '--force', '--trust', '--output-format', 'stream-json']
     if model:

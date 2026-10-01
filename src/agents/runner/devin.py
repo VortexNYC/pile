@@ -10,7 +10,7 @@ def agent_env():
     env = os.environ.copy()
     env['HOME'] = HOME
     env['PATH'] = INSTALL_DIR + ':' + env.get('PATH', '')
-    return env
+    return with_browser_env(env)
 
 
 def ensure():
@@ -58,7 +58,7 @@ def inject_followups(proc):
 
 
 def run_agent(devin_bin, prompt=None):
-    prompt = prompt or base64.b64decode(os.environ['PROMPT_B64']).decode('utf-8')
+    prompt = prompt or lane_prompt()
     model = os.environ.get('MODEL', 'swe-2')
     proc = subprocess.Popen(
         [devin_bin, '-p', prompt, '--model', model, '--permission-mode', 'dangerous', '--respect-workspace-trust', 'false'],
