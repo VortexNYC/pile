@@ -443,7 +443,63 @@ export type SandboxHandle = Pick<
 export class CloudflareBackend implements ComputeBackend {
   readonly kind = "cloudflare" as const;
 
-  constructor(private getHandle: (name: string) => Promise<SandboxHandle>) {}
+  constructor(
+    private getHandle: (name: string) => Promise<SandboxHandle>,
+    private env?: AppEnv
+  ) {}
+
+  /**
+   * Shared account-level admission (PILE-302): cloudflare-ci's scheduler DO
+   * is the one ledger that sees CI containers AND lane sandboxes, so a pile
+   * spawn can't race a CI build into "WebSocket upgrade failed: 503" land.
+   * Opt-in via CF_ADMISSION_URL/TOKEN; unreachable endpoints fail open —
+   * a dead admission service must not take the lane fleet down with it.
+   */
+  private async admit(name: string): Promise<void> {
+    const url = this.env?.CF_ADMISSION_URL;
+    const token = this.env?.CF_ADMISSION_TOKEN;
+    if (!url || !token) return;
+    try {
+      const res = await fetch(`${url}/admin/sandbox/admit`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${token}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ name, pool: "EXTERNAL", ttlMs: 2 * 3600_000 }),
+      });
+      if (res.status === 429) {
+        const detail = (await res.json().catch(() => null)) as {
+          reason?: string;
+        } | null;
+        throw new VortexError({
+          code: "RATE_LIMITED",
+          status: 503,
+          message: `sandbox admission denied: ${detail?.reason ?? "account capacity"}`,
+        });
+      }
+      if (!res.ok) {
+        console.warn("sandbox admission endpoint failed-open", res.status);
+      }
+    } catch (err) {
+      if (err instanceof VortexError) throw err;
+      console.warn("sandbox admission unreachable — failing open", err);
+    }
+  }
+
+  private async releaseAdmission(name: string): Promise<void> {
+    const url = this.env?.CF_ADMISSION_URL;
+    const token = this.env?.CF_ADMISSION_TOKEN;
+    if (!url || !token) return;
+    await fetch(`${url}/admin/sandbox/release`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ name }),
+    }).catch(() => {});
+  }
 
   private sandbox(name: string): Promise<SandboxHandle> {
     return this.getHandle(name);
@@ -456,6 +512,7 @@ export class CloudflareBackend implements ComputeBackend {
     agentLabel: string;
     env: Record<string, string>;
   }): Promise<ComputeSandbox> {
+    await this.admit(opts.name);
     return {
       id: opts.name,
       name: opts.name,
@@ -633,6 +690,7 @@ export class CloudflareBackend implements ComputeBackend {
     name: string,
     backupJson: string
   ): Promise<ComputeSandbox> {
+    await this.admit(name);
     const handle = await ioTimeout(this.sandbox(name), "sandbox handle");
     await ioTimeout(
       handle.restoreBackup(JSON.parse(backupJson)),
@@ -648,10 +706,16 @@ export class CloudflareBackend implements ComputeBackend {
   }
 
   async deleteSandbox(sandbox: ComputeSandbox): Promise<void> {
-    await ioTimeout(
-      (await ioTimeout(this.sandbox(sandbox.name), "sandbox handle")).destroy(),
-      "sandbox destroy"
-    );
+    try {
+      await ioTimeout(
+        (
+          await ioTimeout(this.sandbox(sandbox.name), "sandbox handle")
+        ).destroy(),
+        "sandbox destroy"
+      );
+    } finally {
+      await this.releaseAdmission(sandbox.name);
+    }
   }
 
   async health(): Promise<{ ok: boolean; message?: string }> {
@@ -699,7 +763,7 @@ export function computeBackend(env: AppEnv, agentId?: string): ComputeBackend {
         sleepAfter: CF_SLEEP_AFTER,
         normalizeId: true,
       });
-    });
+    }, env);
   }
   const config = daytonaConfig(env);
   if (!config) {
