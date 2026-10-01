@@ -16,6 +16,11 @@ import {
   providerKeepsTerminalSandbox,
 } from "../agents/index.js";
 import { mintLaneGithubToken } from "../agents/lane-github-token.js";
+import {
+  laneReportStepMessage,
+  laneTodosSchema,
+  type LaneTodo,
+} from "../agents/lane-progress.js";
 import { sessionHoldsKeptSandbox } from "../agents/sweep.js";
 import { consumeUsage } from "../global/billing.js";
 import { timingSafeEqualHex } from "../global/crypto.js";
@@ -1773,6 +1778,25 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
           return c.json({ message: "Invalid status" }, 400);
         }
         update.status = input.status as AgentSessionStatus;
+      }
+      // PILE-290 — `step` / `todos` drive the lane's live progress comment
+      // on the issue; they land as an `action` activity.
+      const step = typeof input.step === "string" ? input.step : undefined;
+      let todos: LaneTodo[] | undefined;
+      if (input.todos !== undefined) {
+        const parsed = laneTodosSchema.safeParse(input.todos);
+        if (!parsed.success) {
+          return c.json({ message: "Invalid todos" }, 400);
+        }
+        todos = parsed.data;
+      }
+      if (step?.trim() || todos) {
+        await stub.addAgentActivity({
+          sessionId,
+          type: "action",
+          message: laneReportStepMessage(step, todos).slice(0, 2000),
+          payload: todos ? { todos } : undefined,
+        });
       }
       if (update.status !== undefined) {
         if (
