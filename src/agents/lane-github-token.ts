@@ -6,6 +6,7 @@
 // dies with the run instead of living out GitHub's ~1h TTL.
 import {
   getRepoScopedInstallationToken,
+  type InstallationTokenScope,
   revokeInstallationToken,
   type RepoScopedToken,
 } from "../global/github-auth.js";
@@ -35,11 +36,17 @@ export async function mintLaneGithubToken(
   env: WorkerEnv,
   organizationId: string,
   sessionId: string,
-  repo: string
+  repo: string,
+  permissions?: InstallationTokenScope["permissions"]
 ): Promise<RepoScopedToken | undefined> {
   const [owner, name] = repo.split("/");
   if (!owner || !name) return undefined;
-  const minted = await getRepoScopedInstallationToken(env, owner, name);
+  const minted = await getRepoScopedInstallationToken(
+    env,
+    owner,
+    name,
+    permissions
+  );
   if (!minted) return undefined;
   const stub = env.WORKSPACE_DURABLE_OBJECT.get(
     env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)

@@ -39,18 +39,19 @@ import {
   isTrustedAssociation,
   parsePileMention,
 } from "./mention.js";
-import { nudgeLane } from "./nudge.js";
+import { nudgeLane, type NudgeOptions } from "./nudge.js";
 import {
   type AutomationEventTarget,
   automationEventTarget,
   issueEventTarget,
 } from "./repo-triggers.js";
+import { reviewPromptWithContext } from "./review-context.js";
 import {
   REVIEW_CHECK_NAME,
   REVIEW_PURPOSE,
   requestPrReview,
 } from "./review.js";
-import { fireEventAutomations } from "./sweep.js";
+import { fireEventAutomations, githubApiGet } from "./sweep.js";
 
 const pullRequestPayloadSchema = z.object({
   action: z.string(),
@@ -202,6 +203,7 @@ const pullRequestReviewPayloadSchema = z.object({
     body: z.string().nullable(),
     user: z.object({ login: z.string() }).nullable(),
     html_url: z.string(),
+    commit_id: z.string().nullish(),
   }),
   pull_request: z.object({
     number: z.number().int(),
@@ -937,12 +939,7 @@ async function nudgeLaneForIssue(
   organizationId: string,
   issue: Issue,
   prUrl: string,
-  opts: {
-    prompt: string;
-    reason: string;
-    dedupeKey?: string;
-    headSha?: string | null;
-  }
+  opts: NudgeOptions
 ): Promise<void> {
   try {
     const session = await resolveLaneForIssue(stub, issue.id);
@@ -1053,11 +1050,38 @@ async function processPullRequestReview(
   }
 
   const body = review.body?.trim() ?? "";
+  // PILE-286 — every verdict (approvals too) rolls into the lane's
+  // snapshot; lastReviewedSha anchors the next review's range diff.
+  const reviewSha = review.commit_id ?? pull_request.head.sha;
+  const recorded = session
+    ? await stub
+        .recordLaneReview(session.id, {
+          reviewId: review.id,
+          reviewer: author,
+          state: reviewState,
+          sha: reviewSha,
+          excerpt: body,
+        })
+        .catch(() => null)
+    : null;
   if (reviewState !== "CHANGES_REQUESTED" && body.length === 0) return;
-  const reviewPrompt =
-    `${author} reviewed ${pull_request.html_url} (${reviewState.toLowerCase()}).\n` +
-    (body ? `Review:\n${body}\n` : "") +
-    "Read the review comments on the PR, address the feedback, and push.";
+  const [owner = "", name = ""] = repo.split("/");
+  const reviewPrompt = async () => {
+    const token = await getInstallationTokenForRepo(env, owner, name).catch(
+      () => undefined
+    );
+    return reviewPromptWithContext({
+      reviewer: author,
+      prUrl: pull_request.html_url,
+      state: reviewState,
+      body,
+      reviewId: review.id,
+      sha: reviewSha,
+      reviewSummary: recorded?.reviewSummary ?? session?.reviewSummary ?? null,
+      repoFull: repo,
+      ghGet: token ? (path) => githubApiGet(fetch, token, path) : null,
+    });
+  };
   await nudgeLaneForIssue(
     env,
     stub,

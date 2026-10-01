@@ -37,6 +37,7 @@ import {
   fireRepoTriggers,
   issueEventTarget,
 } from "./repo-triggers.js";
+import { reviewPromptWithContext } from "./review-context.js";
 import {
   publishReviewVerdicts,
   REVIEW_CHECK_NAME,
@@ -1195,7 +1196,7 @@ export async function sweepAgentSessions(
 const GITHUB_PR_URL_RE =
   /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/;
 
-async function githubApiGet(
+export async function githubApiGet(
   ghFetch: typeof fetch,
   token: string,
   path: string
@@ -1604,18 +1605,22 @@ export async function syncOpenPrSessions(
           id?: number;
           state?: string;
           body?: string;
+          commit_id?: string | null;
           user?: { login?: string };
         }> | null;
         if (reviews && reviews.length > 0) {
           const seen = await stub
             .listAgentSessionEvents(session.id, { limit: 100, order: "desc" })
             .catch(() => []);
+          let reviewSummary = session.reviewSummary;
           for (const review of reviews) {
             if (typeof review.id !== "number") continue;
-            const marker = `review-${review.id}`;
+            const reviewId = review.id;
+            const marker = `review-${reviewId}`;
             const reviewState = (review.state ?? "").toUpperCase();
             const reviewer = review.user?.login ?? "reviewer";
             const body = (review.body ?? "").trim();
+            const reviewSha = review.commit_id ?? headSha;
             const isNew = !seen.some(
               (e) =>
                 e.type === "pr.review" &&
@@ -1638,13 +1643,44 @@ export async function syncOpenPrSessions(
                 })
                 .catch(() => {});
             }
+            // PILE-286 — roll each newly detected verdict into the lane's
+            // snapshot (the webhook may already have; the merge is keyed
+            // by review id).
+            if (isNew) {
+              const recorded = await stub
+                .recordLaneReview(session.id, {
+                  reviewId,
+                  reviewer,
+                  state: reviewState,
+                  sha: reviewSha,
+                  excerpt: body,
+                })
+                .catch(() => null);
+              if (recorded) reviewSummary = recorded.reviewSummary;
+            }
             const actionable =
               reviewState === "CHANGES_REQUESTED" || body.length > 0;
             if (!actionable) continue;
-            const reviewPrompt =
-              `${reviewer} reviewed ${prUrl} (${reviewState.toLowerCase()}).\n` +
-              (body ? `Review:\n${body}\n` : "") +
-              "Read the review comments on the PR, address the feedback, and push.";
+            let built: Promise<string> | null = null;
+            const reviewPrompt = () => {
+              built ??= reviewPromptWithContext({
+                reviewer,
+                prUrl,
+                state: reviewState,
+                body,
+                reviewId,
+                sha: reviewSha,
+                reviewSummary,
+                repoFull: `${owner}/${repo}`,
+                ghGet: (path) =>
+                  withTimeout(
+                    githubApiGet(ghFetch, token, path),
+                    probeTimeoutMs,
+                    "github-compare"
+                  ),
+              });
+              return built;
+            };
             if (isNew) {
               await fireEventAutomations(
                 env,
@@ -1652,7 +1688,7 @@ export async function syncOpenPrSessions(
                 organizationId,
                 "pr.review",
                 issueEventTarget(stub, session.issueId),
-                reviewPrompt
+                await reviewPrompt()
               );
             }
             // Delivery dedupe, not detection: a rejected nudge retries on

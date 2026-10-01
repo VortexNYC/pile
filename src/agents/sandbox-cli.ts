@@ -10,6 +10,12 @@ import {
   type RepoScopedToken,
 } from "../global/github-auth.js";
 import { isSafeLaneBranch } from "../global/lane-guard.js";
+import {
+  DEFAULT_LANE_PERMISSIONS,
+  fetchLanePermissions,
+  laneTokenPermissions,
+  type LanePermissions,
+} from "../global/pile-repo-config.js";
 import { scrubLaneText } from "../global/redact.js";
 import type { AppEnv } from "../platform/env.js";
 import { VortexError } from "../platform/errors.js";
@@ -96,6 +102,35 @@ export interface SandboxCliDescriptor {
   /** Prompt tail override — default tells the agent not to push (the runner
    *  does); codex cloud tasks need different wording. */
   pushInstruction?: string;
+  /** The agent runs outside the Pile sandbox (codex cloud) with its own git
+   *  credentials — lane permission tiers below "enabled" can't be enforced,
+   *  so such dispatches are refused. */
+  externalExecution?: boolean;
+}
+
+function lanePermissionLines(permissions: LanePermissions): string[] {
+  if (permissions.push === "enabled" && permissions.shell === "enabled") {
+    return [];
+  }
+  return [
+    "",
+    `Lane permissions (.pile/config.json): push=${permissions.push}, shell=${permissions.shell}.`,
+    ...(permissions.push === "disabled"
+      ? [
+          "Pushing is disabled for this lane: nothing will be pushed and no pull request will be opened. Leave your work committed locally and summarize it in your final answer.",
+        ]
+      : []),
+    ...(permissions.shell === "disabled"
+      ? [
+          "Shell commands are disabled for this lane — use file read/edit tools only; do not try to run tests, linters, or git.",
+        ]
+      : []),
+    ...(permissions.shell === "restricted"
+      ? [
+          "Secrets are stripped from the shell environment — suites that need credentials will not work; note that and move on.",
+        ]
+      : []),
+  ];
 }
 
 function encodeBase64(input: string): string {
@@ -148,7 +183,8 @@ function buildPrompt(
   comments: DispatchComment[] | undefined,
   pileApi: { url: string; key: string } | null,
   instructions: string | undefined,
-  pushInstruction: string
+  pushInstruction: string,
+  permissions: LanePermissions
 ): string {
   const repo = issue.repo ?? "this repository";
   const branch = issue.branch ?? `issue-${issue.id}`;
@@ -192,6 +228,7 @@ function buildPrompt(
     ...(instructions ? ["", "## Dispatch instructions", "", instructions] : []),
     "",
     pushInstruction,
+    ...lanePermissionLines(permissions),
     ...(issue.repo ? ["", DOMAIN_REVIEW_PROMPT, ""] : []),
     "Do not attempt to update Pile yourself — an external system will poll your session and write the status back automatically.",
     ...(pileApi
@@ -268,22 +305,31 @@ export class SandboxCliAgentProvider implements AgentProvider {
     return computeBackend(this.env, this.d.id);
   }
 
-  // Repo-scoped installation token for one lane. With a workspace the token
-  // is registered against the session so the sweep revokes it at run end.
+  // Repo-scoped installation token for one lane, downscoped to the lane's
+  // push tier. With a workspace the token is registered against the session
+  // so the sweep revokes it at run end.
   private async githubToken(
     repo: string,
+    permissions: LanePermissions,
     lane: { organizationId: string; sessionId: string } | null
   ): Promise<RepoScopedToken> {
     const [owner, name] = parseRepo(repo);
+    const tokenPermissions = laneTokenPermissions(permissions.push);
     const minted =
       lane && "WORKSPACE_DURABLE_OBJECT" in this.env
         ? await mintLaneGithubToken(
             this.env as WorkerEnv,
             lane.organizationId,
             lane.sessionId,
-            repo
+            repo,
+            tokenPermissions
           )
-        : await getRepoScopedInstallationToken(this.env, owner, name);
+        : await getRepoScopedInstallationToken(
+            this.env,
+            owner,
+            name,
+            tokenPermissions
+          );
     if (!minted) {
       throw new VortexError({
         code: "CONFIG_ERROR",
@@ -292,6 +338,19 @@ export class SandboxCliAgentProvider implements AgentProvider {
       });
     }
     return minted;
+  }
+
+  private assertEnforceable(permissions: LanePermissions): void {
+    if (
+      this.d.externalExecution &&
+      (permissions.push !== "enabled" || permissions.shell !== "enabled")
+    ) {
+      throw new VortexError({
+        code: "CONFIG_ERROR",
+        status: 422,
+        message: `${this.id} runs outside the Pile sandbox and cannot enforce lane permissions push=${permissions.push} shell=${permissions.shell}`,
+      });
+    }
   }
 
   private sandboxName(sessionId: string): string {
@@ -312,24 +371,33 @@ export class SandboxCliAgentProvider implements AgentProvider {
       log?: { url: string | null; token: string | null };
       cacheUrl?: string | null;
       extra?: Record<string, string>;
+      permissions: LanePermissions;
       /** Caller env keys (already allowlisted) the agent subprocess may see. */
       agentEnvKeys?: string[];
     }
   ): Record<string, string> {
+    const { permissions } = options;
+    // The scoped Pile credential is an env-var secret: lanes whose shell is
+    // below "enabled" never receive it.
+    const pileApi =
+      permissions.shell === "enabled" ? (options.pileApi ?? null) : null;
     const prompt = buildPrompt(
       issue,
       gitIdentity,
       options.comments,
-      options.pileApi ?? null,
+      pileApi,
       options.instructions,
-      this.d.pushInstruction ?? DEFAULT_PUSH_INSTRUCTION
+      this.d.pushInstruction ?? DEFAULT_PUSH_INSTRUCTION,
+      permissions
     );
+    const credentialEnv = this.d.credentialEnv(credential, this.env);
+    const laneMint = Boolean(options.lane?.tokenUrl && options.lane.token);
     return {
-      ...this.d.credentialEnv(credential, this.env),
-      ...(options.pileApi
+      ...credentialEnv,
+      ...(pileApi
         ? {
-            PILE_API_URL: options.pileApi.url,
-            PILE_API_KEY: options.pileApi.key,
+            PILE_API_URL: pileApi.url,
+            PILE_API_KEY: pileApi.key,
           }
         : {}),
       ...(options.log?.url && options.log.token
@@ -342,10 +410,22 @@ export class SandboxCliAgentProvider implements AgentProvider {
             LANE_TOKEN: options.lane.token,
           }
         : {}),
-      GITHUB_TOKEN: github?.token ?? "",
-      ...(github?.expiresAt
-        ? { GITHUB_TOKEN_EXPIRES_AT: github.expiresAt }
-        : {}),
+      // Below push=enabled the runner mints its token through the lane
+      // endpoint instead, so no write token sits in the sandbox env.
+      ...(permissions.push === "enabled" || !laneMint
+        ? {
+            GITHUB_TOKEN: github?.token ?? "",
+            ...(github?.expiresAt
+              ? { GITHUB_TOKEN_EXPIRES_AT: github.expiresAt }
+              : {}),
+          }
+        : { GITHUB_TOKEN: "" }),
+      PILE_PUSH_POLICY: permissions.push,
+      PILE_SHELL_POLICY: permissions.shell,
+      // Names the runner keeps (agent CLI auth) / strips (repo-injected
+      // secrets) when scrubbing the agent env under shell<enabled.
+      PILE_AGENT_CREDENTIAL_ENV: Object.keys(credentialEnv).join(","),
+      PILE_EXTRA_ENV_KEYS: Object.keys(options.extra ?? {}).join(","),
       // The runner hands the agent subprocess an allowlisted env, never its
       // own — these are the extra keys the repo's config let through.
       PILE_AGENT_ENV_KEYS: (options.agentEnvKeys ?? []).join(","),
@@ -382,11 +462,15 @@ export class SandboxCliAgentProvider implements AgentProvider {
   ) {
     const credential = this.d.requireAuth(this.env);
     this.d.requireConfig?.(this.env);
+    const permissions = sessionContext?.permissions ?? DEFAULT_LANE_PERMISSIONS;
     const compute = this.requireCompute();
     // Repo-less lanes (preflight critiques, analysis) get no clone/push stage
     // and no GitHub token — the agent only reads the prompt and reports back.
     const github = issue.repo
-      ? await this.githubToken(issue.repo, { organizationId, sessionId })
+      ? await this.githubToken(issue.repo, permissions, {
+          organizationId,
+          sessionId,
+        })
       : null;
     const name = this.sandboxName(sessionId);
 
@@ -429,6 +513,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
               instructions: sessionContext?.instructions,
               pileApi: sessionContext?.pileApi ?? null,
               extra: sessionContext?.extraEnv,
+              permissions,
               agentEnvKeys: Object.keys(sessionContext?.extraEnv ?? {}),
               log: {
                 url: agentLogUrl(workerEnv, organizationId, sessionId),
@@ -537,6 +622,9 @@ export class SandboxCliAgentProvider implements AgentProvider {
         message: `Git identity is required for ${this.id}`,
       });
     }
+    this.assertEnforceable(
+      sessionContext?.permissions ?? DEFAULT_LANE_PERMISSIONS
+    );
     const envModel = this.env[this.d.modelEnv];
     const effectiveModel =
       model ??
@@ -708,9 +796,14 @@ export class SandboxCliAgentProvider implements AgentProvider {
     }
 
     const credential = this.d.requireAuth(this.env);
+    const permissions = issue.repo
+      ? (await fetchLanePermissions(this.env, issue.repo, this.id)).permissions
+      : DEFAULT_LANE_PERMISSIONS;
+    this.assertEnforceable(permissions);
     const github = issue.repo
       ? await this.githubToken(
           issue.repo,
+          permissions,
           sandbox.organizationId
             ? {
                 organizationId: sandbox.organizationId,
@@ -739,6 +832,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
       {
         instructions: prompt,
         extra: { FOLLOWUP: "1" },
+        permissions,
         // org may be absent when the sandbox was found via result file — no
         // lane token without it, refresh just no-ops in the runner.
         lane: sandbox.organizationId
