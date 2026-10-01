@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/tsconfig",
   "extends": "@pile/tsconfig/base.json",
   "compilerOptions": {
-    "lib": ["ES2022"],
+    "lib": ["ES2023"],
     "types": ["node"]
   },
   "include": ["src/**/*.ts"]
