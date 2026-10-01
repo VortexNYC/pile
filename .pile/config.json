@@ -12,5 +12,9 @@
       "src/agents/runner/bundle.ts"
     ],
     "regen": "pnpm install --frozen-lockfile && pnpm run mcp:generate && pnpm run client:generate && pnpm run cli:generate && pnpm run capture:bundle && pnpm run chat:bundle && pnpm run docs:bundle && pnpm run runner:bundle"
+  },
+  "hooks": {
+    "setup": "pnpm install --frozen-lockfile --prefer-offline",
+    "stop": "pnpm run check"
   }
 }
