@@ -912,6 +912,26 @@ export class SandboxCliAgentProvider implements AgentProvider {
   }
 
   /**
+   * Snapshot /workspace/repo to R2 before the kept sandbox is destroyed —
+   * the ref lands on session.sandboxBackupRef and sendPrompt's restore path
+   * revives the lane on a fresh container instead of a cold clone.
+   */
+  async backupTerminalSandbox(
+    trackerSessionId: string
+  ): Promise<string | null> {
+    if (!this.d.followup) return null;
+    const compute = this.requireCompute();
+    if (!compute.backupWorktree) return null;
+    const sandbox = await compute.findSandbox(
+      trackerSessionId,
+      this.sandboxName(trackerSessionId),
+      RESULT_PATH
+    );
+    if (!sandbox || sandbox.state !== "started") return null;
+    return compute.backupWorktree(sandbox);
+  }
+
+  /**
    * Follow-up prompt: inject into a running runner via /tmp/followups, or
    * start a `${sessionId}-fu-*` process on the kept sandbox in FOLLOWUP
    * mode — skips clone, resumes the branch, runs the new instruction,
@@ -921,15 +941,41 @@ export class SandboxCliAgentProvider implements AgentProvider {
     trackerSessionId: string,
     prompt: string,
     issue: Issue,
-    gitIdentity?: GitIdentity | null
+    gitIdentity?: GitIdentity | null,
+    ctx?: { organizationId?: string; backupRef?: string | null }
   ): Promise<boolean> {
     if (!this.d.followup) return false;
     const compute = this.requireCompute();
-    const sandbox = await compute.findSandbox(
+    const name = this.sandboxName(trackerSessionId);
+    let sandbox = await compute.findSandbox(
       trackerSessionId,
-      this.sandboxName(trackerSessionId),
+      name,
       RESULT_PATH
     );
+    // Dead sandbox but a worktree backup exists — cold-spawn + restore so the
+    // follow-up resumes the lane's branch/diff rather than a fresh clone.
+    if (!sandbox && ctx?.backupRef && compute.restoreWorktree) {
+      try {
+        sandbox = await compute.restoreWorktree(name, ctx.backupRef);
+        if (ctx.organizationId) sandbox.organizationId = ctx.organizationId;
+        await this.note(
+          ctx.organizationId,
+          trackerSessionId,
+          "action",
+          "sandbox restored from worktree backup for follow-up",
+          { sandbox: sandbox.id }
+        );
+      } catch (err) {
+        await this.note(
+          ctx.organizationId,
+          trackerSessionId,
+          "error",
+          "worktree restore failed — caller should cold-dispatch",
+          { error: err instanceof Error ? err.message : String(err) }
+        );
+        return false;
+      }
+    }
     if (!sandbox || sandbox.state !== "started") return false;
     if ((await compute.runnerBusy?.(sandbox, trackerSessionId)) === true) {
       // Mid-run injection: the runner's watcher thread feeds files dropped in

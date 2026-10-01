@@ -1183,6 +1183,7 @@ export async function updateAgentSession(
     endedAt: string | null;
     lastReviewedSha: string | null;
     reviewSummary: string | null;
+    sandboxBackupRef: string | null;
   }>
 ) {
   const existing = await getAgentSession(db, organizationId, id);
@@ -1220,6 +1221,8 @@ export async function updateAgentSession(
     set.parentSessionId = input.parentSessionId;
   if (input.spawnDepth !== undefined) set.spawnDepth = input.spawnDepth;
   if (input.laneDbRef !== undefined) set.laneDbRef = input.laneDbRef;
+  if (input.sandboxBackupRef !== undefined)
+    set.sandboxBackupRef = input.sandboxBackupRef;
   if (input.endedAt !== undefined) set.endedAt = input.endedAt;
   if (input.lastReviewedSha !== undefined)
     set.lastReviewedSha = input.lastReviewedSha;

@@ -114,8 +114,15 @@ export interface AgentProvider {
     trackerSessionId: string,
     prompt: string,
     issue: Issue,
-    gitIdentity?: GitIdentity | null
+    gitIdentity?: GitIdentity | null,
+    ctx?: { organizationId?: string; backupRef?: string | null }
   ): Promise<boolean>;
+  /**
+   * Snapshot the lane's worktree to durable storage before its kept sandbox
+   * is destroyed (reaper or window expiry). Returns a backup ref the session
+   * row stores; sendPrompt revives the lane by restoring it.
+   */
+  backupTerminalSandbox?(trackerSessionId: string): Promise<string | null>;
   /**
    * Optional live state for the provider and underlying compute. Used by the
    * session state endpoint to expose raw provider/compute details.

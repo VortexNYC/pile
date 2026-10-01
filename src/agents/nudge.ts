@@ -328,7 +328,11 @@ export async function nudgeLane(
       session.providerSessionId ?? session.id,
       resolved.prompt,
       issue,
-      gitIdentity
+      gitIdentity,
+      {
+        organizationId,
+        backupRef: session.sandboxBackupRef ?? null,
+      }
     );
     await stub
       .addAgentSessionEvent({
