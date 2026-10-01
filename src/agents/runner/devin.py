@@ -146,6 +146,7 @@ def main():
         output = run_turn(devin_bin)
         output = drain_followups(devin_bin) or output
         pushed = commit_and_push(agent_env()) if REPO else False
+        push_secondary_repos(agent_env())
         return finalize(output, pushed)
     if not REPO:
         # Repo-less lane — research/docs/design work. The agent runs in an
@@ -157,12 +158,14 @@ def main():
         return finalize(output, False)
     create_branch()
     clone_repo()
+    clone_secondary_repos()
     run_hook('postCheckout', agent_env())
     run_setup_hook(agent_env)
     ensure_postgres()
     output = run_turn(devin_bin)
     output = drain_followups(devin_bin) or output
     pushed = commit_and_push(agent_env())
+    push_secondary_repos(agent_env())
     return finalize(output, pushed)
 
 

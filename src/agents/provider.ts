@@ -5,6 +5,7 @@ import type {
   Issue,
 } from "../types/workspace.js";
 import type { DispatchEffort } from "./budget.js";
+import type { SecondaryRepo } from "./secondary-repos.js";
 
 export interface AgentProviderSession extends AgentSessionResult {
   id: string;
@@ -48,8 +49,14 @@ export interface AgentDispatchContext {
   /** Additional sandbox env vars (e.g. lane-DB connection strings from
    *  PILE-212 provisioning). Providers merge these into the runner env. */
   extraEnv?: Record<string, string>;
+  /** Sibling repos cloned next to the primary checkout (PILE-294). Only
+   *  providers with `supportsSecondaryRepos` receive a non-empty list. */
+  secondaryRepos?: SecondaryRepo[];
   /** Lane push/shell tiers (PILE-276); absent means fully enabled. */
   permissions?: LanePermissions;
+  /** PILE-293 — model tier the lane was dispatched at. The model is already
+   *  resolved from it; providers with a native effort knob may also use it. */
+  effort?: DispatchEffort;
   /** PILE-293 — model tier the lane was dispatched at. The model is already
    *  resolved from it; providers with a native effort knob may also use it. */
   effort?: DispatchEffort;
@@ -81,6 +88,9 @@ export interface AgentProvider {
    * that destroy the container at terminal, or never had one, omit this.
    */
   readonly keepsTerminalSandbox?: boolean;
+  /** True when the provider clones `secondaryRepos` into the lane (PILE-294).
+   *  Dispatches carrying secondary repos are rejected for other providers. */
+  readonly supportsSecondaryRepos?: boolean;
   dispatch(
     organizationId: string,
     issue: Issue,

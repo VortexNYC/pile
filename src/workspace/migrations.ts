@@ -792,6 +792,9 @@ ALTER TABLE agent_sessions ADD COLUMN structured_result TEXT
 --> statement-breakpoint
 ALTER TABLE agent_sessions ADD COLUMN result_schema_errors TEXT`;
 
+// PILE-294 — cross-repo lanes: sibling repos cloned under ~/xrepo.
+const v49 = `ALTER TABLE agent_sessions ADD COLUMN secondary_repos TEXT`;
+
 // PILE-286 — incremental review: the head sha the lane's PR was last
 // reviewed at, plus a rolling JSON snapshot of review verdicts, so a
 // follow-up review only re-derives context for the range since that sha.
@@ -850,6 +853,7 @@ export const workspaceMigrations = {
       { idx: 45, when: 45, tag: "v46", breakpoints: true },
       { idx: 46, when: 46, tag: "v47", breakpoints: true },
       { idx: 47, when: 47, tag: "v48", breakpoints: true },
+      { idx: 48, when: 48, tag: "v49", breakpoints: true },
     ],
   },
   migrations: {
@@ -901,5 +905,6 @@ export const workspaceMigrations = {
     m0045: v46,
     m0046: v47,
     m0047: v48,
+    m0048: v49,
   },
 } satisfies Parameters<typeof migrate>[1];

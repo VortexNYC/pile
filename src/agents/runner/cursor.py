@@ -105,6 +105,7 @@ def main():
     if REPO:
         create_branch()
         clone_repo()
+        clone_secondary_repos()
         run_hook('postCheckout', agent_env())
         warm_pnpm_store()
         run_setup_hook(agent_env)
@@ -115,6 +116,7 @@ def main():
     if healed is not None:
         output, report = healed
     pushed = commit_and_push(agent_env()) if REPO else False
+    push_secondary_repos(agent_env())
     rc = finalize(output, pushed, report=report)
     revoke_github_token()
     save_pnpm_store()
