@@ -222,7 +222,7 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
         message: "Issue not found",
       });
     }
-    const items = await issueStub.listComments(issueId);
+    const items = await issueStub.listComments(issue.id);
     return c.json({ comments: items });
   });
 
@@ -257,7 +257,7 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
     }
     const mentions = await resolveMentions(db, organizationId, body);
     const created = await issueStub.createComment({
-      issueId,
+      issueId: issue.id,
       authorId: identity.id,
       body,
       mentions,
@@ -273,13 +273,13 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
 
     await issueStub.indexComment({
       id: item.id,
-      issueId,
+      issueId: issue.id,
       teamId: issue.teamId,
       body: item.body,
       createdAt: item.createdAt,
     });
 
-    const mapping = await findRepoIssueByIssueId(db, issueId);
+    const mapping = await findRepoIssueByIssueId(db, issue.id);
     if (mapping) {
       if (mapping.source === "github") {
         const installation = await findGithubInstallation(db, mapping.repo);
@@ -366,7 +366,7 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
     // lane never sees (orchestrators use /prompt or /retry explicitly).
     if (identity.type === "user") {
       const active = await issueStub
-        .getActiveAgentSessionForIssue(issueId)
+        .getActiveAgentSessionForIssue(issue.id)
         .catch(() => null);
       if (
         active &&
@@ -407,7 +407,7 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
                 : null;
               const delivered = await provider.sendPrompt(
                 active.session.providerSessionId ?? active.session.id,
-                `${identity.id} commented on ${issue.identifier ?? issueId}:\n\n${body}`,
+                `${identity.id} commented on ${issue.identifier ?? issue.id}:\n\n${body}`,
                 issue,
                 gitIdentity
               );
@@ -430,7 +430,7 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
           }
         } catch (err) {
           console.error("comment follow-up prompt failed", {
-            issueId,
+            issueId: issue.id,
             error: err instanceof Error ? err.message : String(err),
           });
         }
@@ -444,21 +444,14 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId, issueId, id } = c.req.valid("param");
     const identity = c.var.workspaceIdentity;
     const db = createD1(c.env.D1);
-    const item = await (await getStub(c.env, organizationId)).getComment(id);
-    if (!item || item.issueId !== issueId) {
+    const issueStub = await getStub(c.env, organizationId);
+    const item = await issueStub.getComment(id);
+    const issue = item ? await issueStub.getIssue(issueId) : undefined;
+    if (!item || !issue || item.issueId !== issue.id) {
       throw new VortexError({
         code: "NOT_FOUND",
         status: 404,
         message: "Comment not found",
-      });
-    }
-    const issueStub = await getStub(c.env, organizationId);
-    const issue = await issueStub.getIssue(item.issueId);
-    if (!issue) {
-      throw new VortexError({
-        code: "NOT_FOUND",
-        status: 404,
-        message: "Issue not found",
       });
     }
     const allowed = await canAccessTeam(db, issue.teamId, identity);
@@ -477,23 +470,14 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
     const { body } = c.req.valid("json");
     const identity = c.var.workspaceIdentity;
     const db = createD1(c.env.D1);
-    const existing = await (
-      await getStub(c.env, organizationId)
-    ).getComment(id);
-    if (!existing || existing.issueId !== issueId) {
+    const issueStub = await getStub(c.env, organizationId);
+    const existing = await issueStub.getComment(id);
+    const issue = existing ? await issueStub.getIssue(issueId) : undefined;
+    if (!existing || !issue || existing.issueId !== issue.id) {
       throw new VortexError({
         code: "NOT_FOUND",
         status: 404,
         message: "Comment not found",
-      });
-    }
-    const issueStub = await getStub(c.env, organizationId);
-    const issue = await issueStub.getIssue(existing.issueId);
-    if (!issue) {
-      throw new VortexError({
-        code: "NOT_FOUND",
-        status: 404,
-        message: "Issue not found",
       });
     }
     const allowed = await canAccessTeam(db, issue.teamId, identity);
@@ -520,23 +504,14 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId, issueId, id } = c.req.valid("param");
     const identity = c.var.workspaceIdentity;
     const db = createD1(c.env.D1);
-    const existing = await (
-      await getStub(c.env, organizationId)
-    ).getComment(id);
-    if (!existing || existing.issueId !== issueId) {
+    const issueStub = await getStub(c.env, organizationId);
+    const existing = await issueStub.getComment(id);
+    const issue = existing ? await issueStub.getIssue(issueId) : undefined;
+    if (!existing || !issue || existing.issueId !== issue.id) {
       throw new VortexError({
         code: "NOT_FOUND",
         status: 404,
         message: "Comment not found",
-      });
-    }
-    const issueStub = await getStub(c.env, organizationId);
-    const issue = await issueStub.getIssue(existing.issueId);
-    if (!issue) {
-      throw new VortexError({
-        code: "NOT_FOUND",
-        status: 404,
-        message: "Issue not found",
       });
     }
     const allowed = await canAccessTeam(db, issue.teamId, identity);
@@ -548,7 +523,7 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
     await issueStub.deleteComment(id);
-    await issueStub.emitCommentDeleted(id, issueId);
+    await issueStub.emitCommentDeleted(id, issue.id);
     return c.body(null, 204);
   });
 
@@ -558,19 +533,12 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
     const db = createD1(c.env.D1);
     const stub = await getStub(c.env, organizationId);
     const existing = await stub.getComment(id);
-    if (!existing || existing.issueId !== issueId) {
+    const issue = existing ? await stub.getIssue(issueId) : undefined;
+    if (!existing || !issue || existing.issueId !== issue.id) {
       throw new VortexError({
         code: "NOT_FOUND",
         status: 404,
         message: "Comment not found",
-      });
-    }
-    const issue = await stub.getIssue(issueId);
-    if (!issue) {
-      throw new VortexError({
-        code: "NOT_FOUND",
-        status: 404,
-        message: "Issue not found",
       });
     }
     const allowed = await canAccessTeam(db, issue.teamId, identity);
@@ -591,19 +559,12 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
     const db = createD1(c.env.D1);
     const stub = await getStub(c.env, organizationId);
     const existing = await stub.getComment(id);
-    if (!existing || existing.issueId !== issueId) {
+    const issue = existing ? await stub.getIssue(issueId) : undefined;
+    if (!existing || !issue || existing.issueId !== issue.id) {
       throw new VortexError({
         code: "NOT_FOUND",
         status: 404,
         message: "Comment not found",
-      });
-    }
-    const issue = await stub.getIssue(issueId);
-    if (!issue) {
-      throw new VortexError({
-        code: "NOT_FOUND",
-        status: 404,
-        message: "Issue not found",
       });
     }
     const allowed = await canAccessTeam(db, issue.teamId, identity);

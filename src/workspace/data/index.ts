@@ -2561,6 +2561,7 @@ export async function createExternalLink(
   await db.insert(externalLinks).values({
     id,
     organizationId,
+    issueId: input.entityType === "issue" ? input.entityId : "",
     entityType: input.entityType,
     entityId: input.entityId,
     url: input.url,

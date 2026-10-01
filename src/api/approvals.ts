@@ -4,7 +4,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
-import { getWorkspaceStub } from "./stub.js";
+import { getWorkspaceStub, resolveIssueRef } from "./stub.js";
 
 const approvalSchema = z.object({
   id: z.string(),
@@ -95,7 +95,7 @@ export function registerApprovalRoutes(app: OpenAPIHono<AppContext>) {
     const { approverId, comment } = c.req.valid("json");
     const stub = getWorkspaceStub(c.env, organizationId);
     const item = await stub.createIssueApproval({
-      issueId,
+      issueId: await resolveIssueRef(stub, issueId),
       requestedById: c.get("workspaceIdentity").id,
       approverId,
       comment,
@@ -106,7 +106,9 @@ export function registerApprovalRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listApprovalsRoute, async (c) => {
     const { organizationId, issueId } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
-    const items = await stub.listIssueApprovals(issueId);
+    const items = await stub.listIssueApprovals(
+      await resolveIssueRef(stub, issueId)
+    );
     return c.json({ approvals: items });
   });
 

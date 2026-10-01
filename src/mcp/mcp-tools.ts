@@ -6296,7 +6296,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string"
             },
             "description": {
-              "type": "string"
+              "type": "string",
+              "nullable": true
             },
             "status": {
               "type": "string",
@@ -6359,22 +6360,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "nullable": true
             },
             "projectId": {
-              "type": "string"
+              "type": "string",
+              "nullable": true
             },
             "cycleId": {
-              "type": "string"
+              "type": "string",
+              "nullable": true
             },
             "labelIds": {
               "type": "array",
+              "nullable": true,
               "items": {
                 "type": "string"
               }
             },
             "repo": {
-              "type": "string"
+              "type": "string",
+              "nullable": true
             },
             "branch": {
-              "type": "string"
+              "type": "string",
+              "nullable": true
             }
           }
         }
@@ -8879,7 +8885,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                     "type": "string"
                   },
                   "branch": {
-                    "type": "string"
+                    "type": "string",
+                    "nullable": true
                   },
                   "instructions": {
                     "type": "string"
@@ -10911,7 +10918,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string"
             },
             "description": {
-              "type": "string"
+              "type": "string",
+              "nullable": true
             },
             "status": {
               "type": "string",
@@ -10974,22 +10982,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "nullable": true
             },
             "projectId": {
-              "type": "string"
+              "type": "string",
+              "nullable": true
             },
             "cycleId": {
-              "type": "string"
+              "type": "string",
+              "nullable": true
             },
             "labelIds": {
               "type": "array",
+              "nullable": true,
               "items": {
                 "type": "string"
               }
             },
             "repo": {
-              "type": "string"
+              "type": "string",
+              "nullable": true
             },
             "branch": {
-              "type": "string"
+              "type": "string",
+              "nullable": true
             }
           },
           "required": [
@@ -11045,7 +11058,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                   "type": "string"
                 },
                 "description": {
-                  "type": "string"
+                  "type": "string",
+                  "nullable": true
                 },
                 "status": {
                   "type": "string",
@@ -11108,22 +11122,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                   "nullable": true
                 },
                 "projectId": {
-                  "type": "string"
+                  "type": "string",
+                  "nullable": true
                 },
                 "cycleId": {
-                  "type": "string"
+                  "type": "string",
+                  "nullable": true
                 },
                 "labelIds": {
                   "type": "array",
+                  "nullable": true,
                   "items": {
                     "type": "string"
                   }
                 },
                 "repo": {
-                  "type": "string"
+                  "type": "string",
+                  "nullable": true
                 },
                 "branch": {
-                  "type": "string"
+                  "type": "string",
+                  "nullable": true
                 }
               }
             }
@@ -11199,10 +11218,12 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string"
             },
             "repo": {
-              "type": "string"
+              "type": "string",
+              "nullable": true
             },
             "branch": {
-              "type": "string"
+              "type": "string",
+              "nullable": true
             },
             "instructions": {
               "type": "string"

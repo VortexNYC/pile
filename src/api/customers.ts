@@ -4,7 +4,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
-import { getWorkspaceStub } from "./stub.js";
+import { getWorkspaceStub, resolveIssueRef } from "./stub.js";
 
 const customerSchema = z.object({
   id: z.string(),
@@ -540,7 +540,14 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId } = c.req.valid("param");
     const query = c.req.valid("query");
     const stub = getWorkspaceStub(c.env, organizationId);
-    return c.json({ needs: await stub.listCustomerNeeds(query) });
+    const needs = await stub.listCustomerNeeds({
+      ...query,
+      issueId:
+        query.issueId === undefined
+          ? undefined
+          : await resolveIssueRef(stub, query.issueId),
+    });
+    return c.json({ needs });
   });
 
   app.openapi(createNeedRoute, async (c) => {
@@ -548,7 +555,17 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     const input = c.req.valid("json");
     const identity = c.var.workspaceIdentity;
     const stub = getWorkspaceStub(c.env, organizationId);
-    return c.json(await stub.createCustomerNeed(input, identity.id), 201);
+    const need = await stub.createCustomerNeed(
+      {
+        ...input,
+        issueId:
+          input.issueId === undefined
+            ? undefined
+            : await resolveIssueRef(stub, input.issueId),
+      },
+      identity.id
+    );
+    return c.json(need, 201);
   });
 
   app.openapi(getNeedRoute, async (c) => {
@@ -564,7 +581,17 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     const input = c.req.valid("json");
     const identity = c.var.workspaceIdentity;
     const stub = getWorkspaceStub(c.env, organizationId);
-    const need = await stub.updateCustomerNeed(id, input, identity.id);
+    const need = await stub.updateCustomerNeed(
+      id,
+      {
+        ...input,
+        issueId:
+          input.issueId === undefined
+            ? undefined
+            : await resolveIssueRef(stub, input.issueId),
+      },
+      identity.id
+    );
     if (!need) return notFound("Need not found");
     return c.json(need);
   });

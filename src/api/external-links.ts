@@ -7,7 +7,7 @@ import { getProject } from "../global/workspace-entities.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
-import { getWorkspaceStub } from "./stub.js";
+import { getWorkspaceStub, resolveIssueRef } from "./stub.js";
 
 const entityTypeSchema = z.enum(["issue", "project", "customer", "document"]);
 
@@ -140,7 +140,7 @@ async function checkEntityAccess(
           status: 404,
           message: "Entity not found",
         });
-      return;
+      return issue.id;
     }
     case "project": {
       const project = await getProject(db, organizationId, entityId);
@@ -150,7 +150,7 @@ async function checkEntityAccess(
           status: 404,
           message: "Project not found",
         });
-      return;
+      return entityId;
     }
     case "customer": {
       const customer = await stub.getCustomer(entityId);
@@ -160,7 +160,7 @@ async function checkEntityAccess(
           status: 404,
           message: "Customer not found",
         });
-      return;
+      return entityId;
     }
     case "document": {
       const doc = await stub.getDocument(entityId);
@@ -170,7 +170,7 @@ async function checkEntityAccess(
           status: 404,
           message: "Document not found",
         });
-      return;
+      return entityId;
     }
     default:
       throw new VortexError({
@@ -188,7 +188,11 @@ export function registerExternalLinkRoutes(app: OpenAPIHono<AppContext>) {
     const stub = getWorkspaceStub(c.env, organizationId);
     const links = await stub.listExternalLinks({
       entityType: entityType ?? undefined,
-      entityId: entityId ?? undefined,
+      entityId:
+        entityId === undefined ||
+        (entityType !== undefined && entityType !== "issue")
+          ? entityId
+          : await resolveIssueRef(stub, entityId),
     });
     return c.json({ links });
   });
@@ -198,7 +202,7 @@ export function registerExternalLinkRoutes(app: OpenAPIHono<AppContext>) {
     const input = c.req.valid("json");
     const identity = c.var.workspaceIdentity;
     const db = createD1(c.env.D1);
-    await checkEntityAccess(
+    const entityId = await checkEntityAccess(
       c.env,
       db,
       organizationId,
@@ -210,7 +214,7 @@ export function registerExternalLinkRoutes(app: OpenAPIHono<AppContext>) {
     const link = await stub.createExternalLink(
       {
         entityType: input.entityType,
-        entityId: input.entityId,
+        entityId,
         url: input.url,
         label: input.label ?? null,
       },
