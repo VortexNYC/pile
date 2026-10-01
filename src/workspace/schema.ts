@@ -812,6 +812,11 @@ export const workspaceAgentSessions = sqliteTable(
     // cloned under ~/xrepo — persisted so queue promotion, retries, and the
     // lane token-refresh route see the same set as the original dispatch.
     secondaryRepos: text("secondary_repos" as string),
+    // PILE-293 — dispatch-time run budget (minutes) and model tier.
+    maxDurationMinutes: integer("max_duration_minutes" as string),
+    effort: text("effort" as string, {
+      enum: ["low", "medium", "high", "max"],
+    }),
     // PILE-289 — run name for logs/`pile fleet`, and the dispatch-time
     // JSON Schema (draft-07) the lane's final output is validated against.
     // structuredResult holds the validated JSON; resultSchemaErrors the
