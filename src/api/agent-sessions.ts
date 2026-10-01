@@ -10,7 +10,12 @@ import {
   verifySessionToken,
 } from "../agents/credentials.js";
 import { resolveAgentEnv } from "../agents/daytona.js";
-import { dispatchAgent, getAgentProvider } from "../agents/index.js";
+import {
+  dispatchAgent,
+  getAgentProvider,
+  providerKeepsTerminalSandbox,
+} from "../agents/index.js";
+import { sessionHoldsKeptSandbox } from "../agents/sweep.js";
 import { consumeUsage } from "../global/billing.js";
 import { timingSafeEqualHex } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
@@ -28,6 +33,7 @@ import {
   type AgentSessionStatus,
   type Issue,
 } from "../types/workspace.js";
+import type { AgentSessionSummary } from "../workspace/data/index.js";
 import type {
   workspaceAgentActivities,
   workspaceAgentSessions,
@@ -35,7 +41,7 @@ import type {
 import { captureSessionPrArtifact } from "./agent-artifacts.js";
 import { getExecutionCtx } from "./execution-ctx.js";
 import { fetchGitHubCheckRuns, fetchGitHubPull, parsePrUrl } from "./pr.js";
-import { getWorkspaceStub } from "./stub.js";
+import { getWorkspaceStub, resolveIssueRef } from "./stub.js";
 
 const agentActivityTypeSchema = z.enum([
   "thought",
@@ -101,6 +107,29 @@ export const agentSessionSchema = z.object({
     .optional(),
 });
 
+// PILE-256 — `?summary=1` list/get shape: lane-row scalars only. `result`,
+// `activities`, `lastStateHash`, actor ids, and retry/lane bookkeeping stay
+// on the full shape so polling dashboards and the fleet TUI stop shipping
+// multi-KB blobs per row.
+const agentSessionSummarySchema = agentSessionSchema
+  .pick({
+    id: true,
+    issueId: true,
+    agentId: true,
+    provider: true,
+    status: true,
+    prUrl: true,
+    prState: true,
+    createdAt: true,
+    updatedAt: true,
+    lastProgressAt: true,
+    derivedStatus: true,
+  })
+  .extend({
+    startedAt: z.string().nullable(),
+    endedAt: z.string().nullable(),
+  });
+
 const agentActivitySchema = z.object({
   id: z.string(),
   sessionId: z.string(),
@@ -127,7 +156,7 @@ const STALLED_PROGRESS_MS = 15 * 60 * 1000;
 /** Durable fields only are stored; display status is derived at read —
  *  same rule as AO: never mark dead, just surface ambiguity. */
 function deriveSessionStatus(
-  row: AgentSession,
+  row: Pick<AgentSession, "status" | "prUrl" | "lastProgressAt">,
   activities?: AgentActivity[]
 ): "stalled" | "needs_input" | null {
   if (row.status !== "running") return null;
@@ -152,6 +181,30 @@ function toSessionResponse(row: AgentSession, activities?: AgentActivity[]) {
   };
 }
 
+// Whitelist, not spread: callers may pass a full row (detail route) or the
+// projected summary row (list route) — either way only scalars leave.
+function toSessionSummary(row: AgentSessionSummary) {
+  return {
+    id: row.id,
+    issueId: row.issueId,
+    agentId: row.agentId,
+    provider: row.provider,
+    status: row.status,
+    prUrl: row.prUrl,
+    prState: row.prState,
+    createdAt: row.createdAt,
+    startedAt: row.startedAt,
+    updatedAt: row.updatedAt,
+    endedAt: row.endedAt,
+    lastProgressAt: row.lastProgressAt,
+    derivedStatus: deriveSessionStatus(row),
+  };
+}
+
+function isSummaryQuery(value: string | undefined): boolean {
+  return value === "1" || value === "true";
+}
+
 const listSessionsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/agent/sessions",
@@ -162,14 +215,19 @@ const listSessionsRoute = createRoute({
     query: z.object({
       issueId: z.string().optional(),
       limit: z.string().optional(),
+      summary: z.string().optional(),
     }),
   },
   responses: {
     200: {
-      description: "Agent sessions list",
+      description:
+        "Agent sessions list. Pass `?summary=1` for lane-row scalars only (no result/activity blobs) — the shape `pile fleet` polls.",
       content: {
         "application/json": {
-          schema: z.object({ sessions: z.array(agentSessionSchema) }),
+          schema: z.union([
+            z.object({ sessions: z.array(agentSessionSchema) }),
+            z.object({ sessions: z.array(agentSessionSummarySchema) }),
+          ]),
         },
       },
     },
@@ -285,12 +343,16 @@ const getSessionRoute = createRoute({
   middleware: [rls("read", "agent:read")],
   request: {
     params: z.object({ organizationId: z.string(), sessionId: z.string() }),
+    query: z.object({ summary: z.string().optional() }),
   },
   responses: {
     200: {
-      description: "Agent session with activities",
+      description:
+        "Agent session with activities. Pass `?summary=1` for lane-row scalars only.",
       content: {
-        "application/json": { schema: agentSessionSchema },
+        "application/json": {
+          schema: z.union([agentSessionSchema, agentSessionSummarySchema]),
+        },
       },
     },
     404: { description: "Session not found" },
@@ -674,7 +736,7 @@ const dispatchBatchItemSchema = z
   .object({
     issueId: z.string().min(1),
     agentId: z.string().optional(),
-    branch: z.string().optional(),
+    branch: z.string().nullable().optional(),
     instructions: z.string().optional(),
     queuedAfter: z.string().optional(),
   })
@@ -952,7 +1014,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     }
 
     const session = await stub.createAgentSession({
-      issueId: input.issueId,
+      issueId: issue.id,
       agentId: input.provider,
       provider: input.provider,
       actorId: identity.id,
@@ -1010,20 +1072,35 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
 
     const batchId = crypto.randomUUID();
 
+    // Items may name issues by UUID or KEY-N identifier — normalize to the
+    // canonical UUID so dedup and queuedAfter edges can't diverge by form.
+    const canonicalIssueIds = await Promise.all(
+      items.map((item) => resolveIssueRef(stub, item.issueId))
+    );
+    const canonicalQueuedAfter = await Promise.all(
+      items.map((item) =>
+        item.queuedAfter === undefined
+          ? Promise.resolve(undefined)
+          : resolveIssueRef(stub, item.queuedAfter)
+      )
+    );
+
     // First occurrence wins — the one-active-session-per-issue guard would
     // race if two items dispatched the same issue concurrently.
     const firstIndexByIssueId = new Map<string, number>();
-    items.forEach((item, index) => {
-      if (!firstIndexByIssueId.has(item.issueId)) {
-        firstIndexByIssueId.set(item.issueId, index);
+    items.forEach((_item, index) => {
+      const key = canonicalIssueIds[index];
+      if (!firstIndexByIssueId.has(key)) {
+        firstIndexByIssueId.set(key, index);
       }
     });
 
     // Intra-batch dependency edges (queuedAfter naming a sibling issueId).
     // Chains that loop would deadlock the awaits below — flag them up front.
-    const siblingDep = items.map((item, index) => {
-      if (item.queuedAfter === undefined) return undefined;
-      const dep = firstIndexByIssueId.get(item.queuedAfter);
+    const siblingDep = items.map((_item, index) => {
+      const ref = canonicalQueuedAfter[index];
+      if (ref === undefined) return undefined;
+      const dep = firstIndexByIssueId.get(ref);
       return dep !== undefined && dep !== index ? dep : undefined;
     });
     const cyclic = new Set<number>();
@@ -1054,8 +1131,10 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       index: number
     ): Promise<DispatchBatchItemResult> => {
       const issueId = item.issueId;
+      const canonicalIssueId = canonicalIssueIds[index];
+      const queuedAfter = canonicalQueuedAfter[index];
       try {
-        if (firstIndexByIssueId.get(issueId) !== index) {
+        if (firstIndexByIssueId.get(canonicalIssueId) !== index) {
           return dispatchBatchItemError(issueId, "Duplicate issueId in batch");
         }
         if (cyclic.has(index)) {
@@ -1064,7 +1143,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
             "queuedAfter forms a dependency cycle in this batch"
           );
         }
-        if (item.queuedAfter === issueId) {
+        if (queuedAfter !== undefined && queuedAfter === canonicalIssueId) {
           return dispatchBatchItemError(
             issueId,
             "Cannot queue an item behind itself"
@@ -1072,7 +1151,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         }
 
         let queueAfter: string | undefined;
-        if (item.queuedAfter !== undefined) {
+        if (queuedAfter !== undefined) {
           const sibling = siblingDep[index];
           if (sibling !== undefined) {
             const upstream = await deferred[sibling].promise;
@@ -1085,15 +1164,14 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
             queueAfter = upstream.sessionId;
           } else {
             // A session id, or the issueId of an issue with a live session.
-            const named = await stub.getAgentSession(item.queuedAfter);
+            const named = await stub.getAgentSession(queuedAfter);
             if (named) {
               if (!["completed", "failed", "canceled"].includes(named.status)) {
                 queueAfter = named.id;
               }
             } else {
-              const live = await stub.getActiveAgentSessionForIssue(
-                item.queuedAfter
-              );
+              const live =
+                await stub.getActiveAgentSessionForIssue(queuedAfter);
               if (!live) {
                 return dispatchBatchItemError(
                   issueId,
@@ -1122,7 +1200,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         }
         const target: Issue = {
           ...issue,
-          branch: item.branch ?? issue.branch,
+          branch: item.branch === undefined ? issue.branch : item.branch,
         };
 
         // Explicit agentId wins; otherwise the repo's configured default
@@ -1241,13 +1319,26 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId } = c.req.valid("param");
     const query = c.req.valid("query");
     const stub = getWorkspaceStub(c.env, organizationId);
+    if (isSummaryQuery(query.summary)) {
+      const rows = await stub.listAgentSessionSummaries({
+        issueId: query.issueId,
+        limit: query.limit ? Number(query.limit) : undefined,
+      });
+      return c.json({ sessions: rows.map(toSessionSummary) }, 200);
+    }
     const rows = await stub.listAgentSessions({
-      issueId: query.issueId,
+      issueId:
+        query.issueId === undefined
+          ? undefined
+          : await resolveIssueRef(stub, query.issueId),
       limit: query.limit ? Number(query.limit) : undefined,
     });
-    return c.json({
-      sessions: rows.map((row) => toSessionResponse(row, undefined)),
-    });
+    return c.json(
+      {
+        sessions: rows.map((row) => toSessionResponse(row, undefined)),
+      },
+      200
+    );
   });
 
   app.openapi(agentStatsRoute, async (c) => {
@@ -1315,7 +1406,6 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     const rows = await stub.listAgentSessions({ limit: 200 });
 
     const TERMINAL = new Set(["completed", "failed", "canceled"]);
-    const RESUME_WINDOW_MS = 4 * 60 * 60 * 1000;
     const UNHEALTHY_STREAK = 3;
     const now = Date.now();
 
@@ -1324,6 +1414,14 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     const kept = new Map<string, number>();
     const streaks = new Map<string, number>();
     const broken = new Set<string>();
+    const keepsCache = new Map<string, boolean>();
+    const keepsSandbox = (agentId: string): boolean => {
+      const cached = keepsCache.get(agentId);
+      if (cached !== undefined) return cached;
+      const keeps = providerKeepsTerminalSandbox(agentId, c.env);
+      keepsCache.set(agentId, keeps);
+      return keeps;
+    };
 
     for (const row of rows) {
       // rows arrive newest-first — a provider's streak is consecutive infra
@@ -1341,15 +1439,11 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         continue;
       }
       if (!row.endedAt) missingEndedAt += 1;
-      // Kept sandboxes only exist on sandbox-CLI providers (hosted agents
-      // leave no container). This is an upper bound — a destroyed sandbox's
-      // session still counts until it ages out of the window.
-      const anchor = Date.parse(row.endedAt ?? row.updatedAt);
-      if (
-        row.agentId.endsWith("-cli") &&
-        Number.isFinite(anchor) &&
-        now - anchor < RESUME_WINDOW_MS
-      ) {
+      // Same set the kept-sandbox cap enforces (PILE-253): providers that
+      // park their sandbox after a terminal result, still inside the resume
+      // window, and not yet reaped — reaped rows stop counting the moment
+      // the sweep destroys the sandbox, not when they age out.
+      if (sessionHoldsKeptSandbox(row, now) && keepsSandbox(row.agentId)) {
         kept.set(row.agentId, (kept.get(row.agentId) ?? 0) + 1);
       }
     }
@@ -1376,7 +1470,9 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(issueLiveRoute, async (c) => {
     const { organizationId, issueId } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
-    const live = await stub.getActiveAgentSessionForIssue(issueId);
+    const live = await stub.getActiveAgentSessionForIssue(
+      await resolveIssueRef(stub, issueId)
+    );
     return c.json({
       session: live ? toSessionResponse(live.session, live.activities) : null,
       activities: live?.activities.map(toActivityResponse) ?? [],
@@ -1385,12 +1481,20 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(getSessionRoute, async (c) => {
     const { organizationId, sessionId } = c.req.valid("param");
+    const { summary } = c.req.valid("query");
     const stub = getWorkspaceStub(c.env, organizationId);
+    if (isSummaryQuery(summary)) {
+      const row = await stub.getAgentSession(sessionId);
+      if (!row) {
+        return c.json({ message: "Session not found" }, 404);
+      }
+      return c.json(toSessionSummary(row), 200);
+    }
     const session = await stub.getAgentSessionWithActivities(sessionId);
     if (!session) {
       return c.json({ message: "Session not found" }, 404);
     }
-    return c.json(toSessionResponse(session, session.activities));
+    return c.json(toSessionResponse(session, session.activities), 200);
   });
 
   app.openapi(getSessionEventsRoute, async (c) => {
@@ -2368,6 +2472,10 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     const stub = getWorkspaceStub(c.env, organizationId);
     const automation = await stub.createAgentAutomation({
       ...body,
+      issueId:
+        body.issueId === undefined
+          ? undefined
+          : await resolveIssueRef(stub, body.issueId),
       enabled: true,
       createdBy: identity.id,
     });

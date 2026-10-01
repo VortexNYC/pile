@@ -142,11 +142,11 @@ export function registerIssueRelationRoutes(app: OpenAPIHono<AppContext>) {
     await assertIssueAccess(db, issue, identity);
     const outgoing =
       direction === undefined || direction === "outgoing"
-        ? await stub.listIssueRelations(issueId)
+        ? await stub.listIssueRelations(issue.id)
         : [];
     const incoming =
       direction === undefined || direction === "incoming"
-        ? await stub.listInverseIssueRelations(issueId)
+        ? await stub.listInverseIssueRelations(issue.id)
         : [];
     return c.json({
       relations: outgoing,
@@ -168,8 +168,8 @@ export function registerIssueRelationRoutes(app: OpenAPIHono<AppContext>) {
     await assertIssueAccess(db, fromIssue, identity);
     await assertIssueAccess(db, toIssue, identity);
     const relation = await stub.createIssueRelation({
-      fromIssueId: issueId,
-      toIssueId,
+      fromIssueId: fromIssue.id,
+      toIssueId: toIssue.id,
       type,
     });
     return c.json(relation, 201);

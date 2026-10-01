@@ -170,6 +170,15 @@ Write-back is push-style: the worker PATCHes the session and POSTs activities;
 
 ## Watching a session
 
+`GET /workspaces/{org}/agent/sessions` returns the full session rows —
+including `result` text — which gets heavy on poll loops. Pass `?summary=1`
+(also on `GET …/agent/sessions/{id}`) for lane-row scalars only: `id`,
+`issueId`, `agentId`, `provider`, `status`, `prUrl`, `prState`, the
+timestamps, and the derived `stalled` badge. `pile fleet` and
+`pile agent sessions watch` already use it; dashboards and other polling
+consumers should too. Push consumers can subscribe to `/realtime` or the
+session event stream instead of polling.
+
 `GET /workspaces/{org}/agent/sessions/{id}/stream` streams the activity log as
 a Vercel AI SDK **UI-message-stream** (`x-vercel-ai-ui-message-stream: v1`)
 SSE feed: `thought`→`reasoning-*`, `response`→`text-*`, `error`→`error`,
@@ -224,7 +233,7 @@ parent lane if there is one. PR events keep landing after terminal, because
 | `pr.merged` / `pr.closed` / `pr.draft` | PR sync sees the PR state change to a non-`open` value.                                                                                                                      | `{prUrl, prState, headSha}`                                                 |
 | `prompt.followup`                      | A follow-up prompt was delivered to the live lane: `POST …/prompt`, an issue comment, a PR review, or a CI/conflict nudge.                                                   | `{prompt}` (route) · `{commentId}` · `{issueId}` · `{issueId, prUrl}`       |
 | `prompt.followup_failed`               | The provider rejected a PR-review or CI/conflict follow-up.                                                                                                                  | `{issueId}` or `{issueId, prUrl}`                                           |
-| `prompt.followup_skipped`              | A follow-up was throttled because a nudge already went out inside the provider's throttle window.                                                                            | `{commentId}` · `{issueId}` · `{issueId, prUrl}`                            |
+| `prompt.followup_skipped`              | A follow-up was throttled inside the provider's throttle window, or had nowhere to land — lane not resumable (`failed`/`canceled`) or the provider has no follow-up channel. | `{commentId}` · `{issueId}` · `{issueId, prUrl}`                            |
 | `child.terminal`                       | A child lane (`parentSessionId` set) reaches terminal. Written on the **parent's** stream.                                                                                   | `{childSessionId, childIssueId, status, prUrl, branch, result}` (≤2000 chr) |
 | `agent_session.created`                | `createAgentSession` ran for an issue. This is a realtime/webhook event (`emit`), **not** a session-stream row. Siblings: `agent_session.updated/completed/failed/canceled`. | `{session, issue}`                                                          |
 

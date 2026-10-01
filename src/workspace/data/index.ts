@@ -1019,15 +1019,16 @@ export function getAgentSessionByProviderSessionId(
     .get();
 }
 
-export function listAgentSessions(
-  db: WorkspaceDb,
+type ListAgentSessionsOptions = {
+  issueId?: string;
+  status?: AgentSessionStatus;
+  openPr?: boolean;
+  limit?: number;
+};
+
+function agentSessionListConditions(
   organizationId: string,
-  options: {
-    issueId?: string;
-    status?: AgentSessionStatus;
-    openPr?: boolean;
-    limit?: number;
-  } = {}
+  options: ListAgentSessionsOptions
 ) {
   const conditions = [
     eq(workspaceAgentSessions.organizationId, organizationId),
@@ -1042,10 +1043,59 @@ export function listAgentSessions(
     conditions.push(isNotNull(workspaceAgentSessions.prUrl));
     conditions.push(eq(workspaceAgentSessions.prState, "open"));
   }
+  return conditions;
+}
+
+export function listAgentSessions(
+  db: WorkspaceDb,
+  organizationId: string,
+  options: ListAgentSessionsOptions = {}
+) {
   return db
     .select()
     .from(workspaceAgentSessions)
-    .where(and(...conditions))
+    .where(and(...agentSessionListConditions(organizationId, options)))
+    .orderBy(
+      desc(workspaceAgentSessions.createdAt),
+      desc(workspaceAgentSessions.id)
+    )
+    .limit(options.limit ?? 100)
+    .all();
+}
+
+// Lane-row scalars only (PILE-256): list consumers like the fleet TUI and
+// dashboards poll this shape — `result`, `lastStateHash`, and the
+// actor/retry/lane internals stay on the detail routes. `lastProgressAt` is
+// projected so the API can still derive the `stalled` badge.
+const agentSessionSummaryColumns = {
+  id: workspaceAgentSessions.id,
+  issueId: workspaceAgentSessions.issueId,
+  agentId: workspaceAgentSessions.agentId,
+  provider: workspaceAgentSessions.provider,
+  status: workspaceAgentSessions.status,
+  prUrl: workspaceAgentSessions.prUrl,
+  prState: workspaceAgentSessions.prState,
+  createdAt: workspaceAgentSessions.createdAt,
+  startedAt: workspaceAgentSessions.startedAt,
+  updatedAt: workspaceAgentSessions.updatedAt,
+  endedAt: workspaceAgentSessions.endedAt,
+  lastProgressAt: workspaceAgentSessions.lastProgressAt,
+};
+
+export type AgentSessionSummary = Pick<
+  typeof workspaceAgentSessions.$inferSelect,
+  keyof typeof agentSessionSummaryColumns
+>;
+
+export function listAgentSessionSummaries(
+  db: WorkspaceDb,
+  organizationId: string,
+  options: ListAgentSessionsOptions = {}
+) {
+  return db
+    .select(agentSessionSummaryColumns)
+    .from(workspaceAgentSessions)
+    .where(and(...agentSessionListConditions(organizationId, options)))
     .orderBy(
       desc(workspaceAgentSessions.createdAt),
       desc(workspaceAgentSessions.id)
@@ -2511,6 +2561,7 @@ export async function createExternalLink(
   await db.insert(externalLinks).values({
     id,
     organizationId,
+    issueId: input.entityType === "issue" ? input.entityId : "",
     entityType: input.entityType,
     entityId: input.entityId,
     url: input.url,

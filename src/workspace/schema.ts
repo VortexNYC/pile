@@ -1016,6 +1016,12 @@ export const externalLinks = sqliteTable(
   {
     id: text("id" as string).primaryKey(),
     organizationId: text("organization_id" as string).notNull(),
+    // Legacy NOT NULL column from the pre-v24 `issue_external_links` table —
+    // SQLite can't relax it, so inserts keep it populated ("" for non-issue
+    // entities). Reads all go through entity_type/entity_id.
+    issueId: text("issue_id" as string)
+      .notNull()
+      .default(""),
     entityType: text("entity_type" as string).notNull(),
     entityId: text("entity_id" as string).notNull(),
     url: text("url" as string).notNull(),

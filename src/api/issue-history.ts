@@ -3,6 +3,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
+import { resolveIssueRef } from "./stub.js";
 
 const historySchema = z.object({
   id: z.string(),
@@ -42,7 +43,9 @@ export function registerIssueHistoryRoutes(app: OpenAPIHono<AppContext>) {
     const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(
       c.env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
     );
-    const items = await stub.listIssueHistory(issueId);
+    const items = await stub.listIssueHistory(
+      await resolveIssueRef(stub, issueId)
+    );
     return c.json({ history: items });
   });
 }

@@ -10,6 +10,10 @@ import type {
 // open-PR coverage: an open PR that already names this issue's identifier and
 // has no live session is a hard block (duplicate work), while a PR owned by a
 // live sibling lane parks the new session behind it via queuedAfter.
+// PILE-249 — the block lifts when the covering PR still has unresolved review
+// feedback (a reviewer's latest decision is CHANGES_REQUESTED): the lane has
+// real work left, so a retry must be able to spin a session back up on the
+// same branch instead of dead-ending here.
 
 const GITHUB_PULLS_RE = /^([^/]+)\/([^/]+)$/;
 
@@ -25,11 +29,19 @@ interface GhPullFile {
   filename: string;
 }
 
+interface GhReview {
+  state?: string;
+  user?: { login?: string } | null;
+}
+
 export interface DedupeCoverage {
   prUrl: string;
   prNumber: number;
   overlap: "identifier" | "keywords";
   ownerSessionId: string | null;
+  /** The covering PR carries unresolved CHANGES_REQUESTED feedback — the
+   *  lane has work left, so coverage does not hard-block dispatch. */
+  changesRequested?: boolean;
 }
 
 export interface DedupeCollision {
@@ -77,6 +89,22 @@ function pullMatches(
   const lower = haystack.toLowerCase();
   const hits = tokens.filter((t) => lower.includes(t));
   return hits.length >= 2 ? "keywords" : null;
+}
+
+/** True while at least one reviewer's latest decisional review is still
+ *  CHANGES_REQUESTED. COMMENTED/PENDING aren't decisions; a later APPROVED
+ *  or DISMISSED from the same reviewer settles it. Mirrors GitHub's
+ *  reviewDecision rollup closely enough for the dedupe gate. */
+function hasOutstandingChangeRequests(reviews: GhReview[]): boolean {
+  const latest = new Map<string, string>();
+  for (const review of reviews) {
+    const login = review.user?.login;
+    const state = review.state?.toUpperCase();
+    if (!login || !state) continue;
+    if (state === "COMMENTED" || state === "PENDING") continue;
+    latest.set(login, state);
+  }
+  return [...latest.values()].includes("CHANGES_REQUESTED");
 }
 
 async function ghGet(
@@ -154,21 +182,34 @@ export async function checkDispatchDedupe(
     const overlap = pullMatches(pull, identifier, tokens);
     if (!overlap) continue;
     const ownerSessionId = ownerByPrUrl.get(pull.html_url) ?? null;
-    result.coverage.push({
+    const entry: DedupeCoverage = {
       prUrl: pull.html_url,
       prNumber: pull.number,
       overlap,
       ownerSessionId,
-    });
+    };
+    result.coverage.push(entry);
     if (overlap !== "identifier") continue;
     if (ownerSessionId) {
       result.queueAfter = ownerSessionId;
-    } else {
-      result.hardBlock = {
-        reason: `Open PR ${pull.html_url} already covers ${identifier ?? issue.title} with no live session`,
-        prUrl: pull.html_url,
-      };
+      continue;
     }
+    // PILE-249 — before hard-blocking, check whether the covering PR still
+    // has work: unresolved CHANGES_REQUESTED means a new session should
+    // resume the lane branch, not dead-end on "PR already covers issue".
+    const reviews = (await ghGet(
+      ghFetch,
+      token,
+      `/repos/${owner}/${name}/pulls/${pull.number}/reviews?per_page=100`
+    )) as GhReview[];
+    if (Array.isArray(reviews) && hasOutstandingChangeRequests(reviews)) {
+      entry.changesRequested = true;
+      continue;
+    }
+    result.hardBlock = {
+      reason: `Open PR ${pull.html_url} already covers ${identifier ?? issue.title} with no live session`,
+      prUrl: pull.html_url,
+    };
   }
 
   // Collision check — only against live lanes on the same repo whose PR file

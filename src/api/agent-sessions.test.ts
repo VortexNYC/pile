@@ -164,6 +164,132 @@ describe("agent sessions API", () => {
     expect(missingRes.status).toBe(404);
   });
 
+  it("serves light summary rows with ?summary=1 while the default list keeps blobs", async () => {
+    const issueRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ title: "Summary list target" }),
+      }),
+      env
+    );
+    expect(issueRes.status).toBe(201);
+    const issue = await issueRes.json<{ id: string }>();
+
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    // Terminal statuses only — live lanes count against the workspace's
+    // dispatch ceiling and would break later dispatch tests.
+    const blob = "result-blob ".repeat(400);
+    for (let i = 0; i < 100; i++) {
+      await stub.createAgentSession({
+        issueId: issue.id,
+        agentId: "mock",
+        provider: "mock",
+        actorId: "user-1",
+        actorType: "user",
+        status: i % 2 === 0 ? "completed" : "failed",
+        result: `${i} ${blob}`,
+        prUrl:
+          i % 2 === 0
+            ? `https://github.com/VortexNYC/pile/pull/${i + 1}`
+            : null,
+        prState: i % 2 === 0 ? "open" : null,
+        startedAt: new Date().toISOString(),
+      });
+    }
+
+    const fullRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions?issueId=${issue.id}&limit=100`,
+        { token }
+      ),
+      env
+    );
+    expect(fullRes.status).toBe(200);
+    const fullText = await fullRes.text();
+    const full = JSON.parse(fullText) as {
+      sessions: Record<string, unknown>[];
+    };
+    expect(full.sessions).toHaveLength(100);
+    expect(full.sessions[0]).toHaveProperty("result");
+    // sanity: with result blobs the full list is heavy — what `summary=1`
+    // exists to avoid.
+    expect(fullText.length).toBeGreaterThan(20 * 1024);
+
+    const summaryRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions?issueId=${issue.id}&limit=100&summary=1`,
+        { token }
+      ),
+      env
+    );
+    expect(summaryRes.status).toBe(200);
+    const summaryText = await summaryRes.text();
+    const { sessions } = JSON.parse(summaryText) as {
+      sessions: Record<string, unknown>[];
+    };
+    expect(sessions).toHaveLength(100);
+    for (const s of sessions) {
+      expect(s.issueId).toBe(issue.id);
+      expect(s).toHaveProperty("id");
+      expect(s).toHaveProperty("agentId");
+      expect(s).toHaveProperty("status");
+      expect(s).toHaveProperty("prUrl");
+      expect(s).toHaveProperty("createdAt");
+      expect(s).toHaveProperty("updatedAt");
+      expect(s).toHaveProperty("derivedStatus");
+      expect(s).not.toHaveProperty("result");
+      expect(s).not.toHaveProperty("activities");
+      expect(s).not.toHaveProperty("organizationId");
+      expect(s).not.toHaveProperty("actorId");
+      expect(s).not.toHaveProperty("providerSessionId");
+      expect(s).not.toHaveProperty("lastStateHash");
+      expect(s).not.toHaveProperty("laneDbRef");
+    }
+    expect(summaryText.length).toBeLessThan(48 * 1024);
+    expect(summaryText.length * 8).toBeLessThan(fullText.length);
+  });
+
+  it("serves a summary detail with ?summary=1", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    const session = await stub.createAgentSession({
+      issueId: "issue-summary-detail",
+      agentId: "mock",
+      provider: "mock",
+      actorId: "user-1",
+      actorType: "user",
+      result: "blob ".repeat(200),
+    });
+
+    const res = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}?summary=1`,
+        { token }
+      ),
+      env
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json<Record<string, unknown>>();
+    expect(body.id).toBe(session.id);
+    expect(body.status).toBe("created");
+    expect(body).not.toHaveProperty("result");
+    expect(body).not.toHaveProperty("activities");
+    expect(body).not.toHaveProperty("actorId");
+
+    const missing = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/00000000-0000-0000-0000-000000000000?summary=1`,
+        { token }
+      ),
+      env
+    );
+    expect(missing.status).toBe(404);
+  });
+
   it("dispatches an agent on a repo-less issue (research/docs/design work)", async () => {
     const issueRes = await app.fetch(
       request(`/workspaces/${organizationId}/issues`, {
@@ -501,6 +627,79 @@ describe("agent sessions API", () => {
     expect(dispatchRes.status).toBe(201);
     expect(captured?.repo).toBe("VortexNYC/pile");
     expect(captured?.branch).toBe("iss-42");
+  });
+
+  it("retries a completed session into a new session on the same lane branch", async () => {
+    const agentId = `mock-retry-${crypto.randomUUID().slice(0, 8)}`;
+    let seenBranch: string | null | undefined;
+    registerAgentProvider(
+      agentId,
+      () =>
+        new MockAgentProvider(agentId, {
+          dispatch: (_org, dispatchedIssue) => {
+            seenBranch = dispatchedIssue.branch;
+            return {
+              id: `rs-${crypto.randomUUID()}`,
+              agentId,
+              issueId: dispatchedIssue.id,
+              status: "created" as const,
+            };
+          },
+        })
+    );
+
+    const issueRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          title: "Retry lane",
+          repo: "acme/roadmap",
+          branch: "lane/pile-249",
+        }),
+      }),
+      env
+    );
+    expect(issueRes.status).toBe(201);
+    const issue = await issueRes.json<{ id: string }>();
+
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: "user-1",
+      actorType: "user",
+      status: "completed",
+      result: "opened a PR",
+    });
+
+    const retryRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/retry`,
+        {
+          method: "POST",
+          token,
+          body: JSON.stringify({ context: "address the review feedback" }),
+        }
+      ),
+      env
+    );
+    expect(retryRes.status).toBe(201);
+    const retried = await retryRes.json<{
+      id: string;
+      issueId: string;
+      status: string;
+    }>();
+    expect(retried.id).not.toBe(session.id);
+    expect(retried.issueId).toBe(issue.id);
+    // The lane branch is already on the issue — the new session resumes it.
+    expect(seenBranch).toBe("lane/pile-249");
+    const stored = await stub.getAgentSession(retried.id);
+    expect(stored?.retryOf).toBe(session.id);
+    expect(stored?.retryCount).toBe(1);
   });
 
   it("appends an activity and updates session state", async () => {
@@ -1890,6 +2089,63 @@ describe("agent sessions API", () => {
       expect(body.results[0].error).toBe("Issue not found");
       expect(body.results[1].sessionId).toBeNull();
       expect(body.results[1].error).toContain("queuedAfter target failed");
+    });
+  });
+
+  describe("fleet-health", () => {
+    it("counts only unreaped in-window sessions on sandbox-keeping providers", async () => {
+      const keepId = `mock-kept-${crypto.randomUUID().slice(0, 8)}`;
+      const dropId = `mock-gone-${crypto.randomUUID().slice(0, 8)}`;
+      registerAgentProvider(
+        keepId,
+        () => new MockAgentProvider(keepId, { keepsTerminalSandbox: true })
+      );
+      registerAgentProvider(dropId, () => new MockAgentProvider(dropId));
+
+      const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+        env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+      );
+      await stub.setOrganizationId(organizationId);
+      const issue = await stub.createIssue({ title: "Fleet kept" });
+      const terminal = async (agentId: string, reaped = false) => {
+        const session = await stub.createAgentSession({
+          issueId: issue.id,
+          agentId,
+          provider: agentId,
+          actorId: "user-1",
+          actorType: "user",
+          status: "completed",
+        });
+        await stub.updateAgentSession(session.id, {
+          endedAt: new Date().toISOString(),
+          ...(reaped ? { lastStateHash: "reaped" } : {}),
+        });
+      };
+      await terminal(keepId);
+      await terminal(keepId);
+      // Destroyed by the reaper — must drop out of the count now, not when
+      // the row ages out of the resume window (PILE-253).
+      await terminal(keepId, true);
+      // This provider deletes its sandbox at terminal — never a kept
+      // sandbox regardless of the resume window.
+      await terminal(dropId);
+
+      const res = await app.fetch(
+        request(`/workspaces/${organizationId}/agent/fleet-health`, {
+          token,
+        }),
+        env
+      );
+      expect(res.status).toBe(200);
+      const body = await res.json<{
+        providers: { agentId: string; keptSandboxes: number }[];
+      }>();
+      expect(
+        body.providers.find((p) => p.agentId === keepId)?.keptSandboxes
+      ).toBe(2);
+      expect(
+        body.providers.find((p) => p.agentId === dropId)?.keptSandboxes ?? 0
+      ).toBe(0);
     });
   });
 });

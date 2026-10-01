@@ -1808,7 +1808,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdAgentSessions",
-    "description": "List agent sessions (GET /workspaces/{organizationId}/agent/sessions) Path params (top-level, required): organizationId. Query params (top-level, optional): issueId, limit.",
+    "description": "List agent sessions (GET /workspaces/{organizationId}/agent/sessions) Path params (top-level, required): organizationId. Query params (top-level, optional): issueId, limit, summary.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/agent/sessions",
     "inputSchema": {
@@ -1822,6 +1822,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         },
         "limit": {
           "type": "string"
+        },
+        "summary": {
+          "type": "string"
         }
       },
       "required": [
@@ -1831,7 +1834,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdAgentSessionsSessionId",
-    "description": "Get agent session (GET /workspaces/{organizationId}/agent/sessions/{sessionId}) Path params (top-level, required): organizationId, sessionId.",
+    "description": "Get agent session (GET /workspaces/{organizationId}/agent/sessions/{sessionId}) Path params (top-level, required): organizationId, sessionId. Query params (top-level, optional): summary.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/agent/sessions/{sessionId}",
     "inputSchema": {
@@ -1841,6 +1844,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "type": "string"
         },
         "sessionId": {
+          "type": "string"
+        },
+        "summary": {
           "type": "string"
         }
       },
@@ -6290,7 +6296,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string"
             },
             "description": {
-              "type": "string"
+              "type": "string",
+              "nullable": true
             },
             "status": {
               "type": "string",
@@ -6353,22 +6360,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "nullable": true
             },
             "projectId": {
-              "type": "string"
+              "type": "string",
+              "nullable": true
             },
             "cycleId": {
-              "type": "string"
+              "type": "string",
+              "nullable": true
             },
             "labelIds": {
               "type": "array",
+              "nullable": true,
               "items": {
                 "type": "string"
               }
             },
             "repo": {
-              "type": "string"
+              "type": "string",
+              "nullable": true
             },
             "branch": {
-              "type": "string"
+              "type": "string",
+              "nullable": true
             }
           }
         }
@@ -8873,7 +8885,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                     "type": "string"
                   },
                   "branch": {
-                    "type": "string"
+                    "type": "string",
+                    "nullable": true
                   },
                   "instructions": {
                     "type": "string"
@@ -10905,7 +10918,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string"
             },
             "description": {
-              "type": "string"
+              "type": "string",
+              "nullable": true
             },
             "status": {
               "type": "string",
@@ -10968,22 +10982,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "nullable": true
             },
             "projectId": {
-              "type": "string"
+              "type": "string",
+              "nullable": true
             },
             "cycleId": {
-              "type": "string"
+              "type": "string",
+              "nullable": true
             },
             "labelIds": {
               "type": "array",
+              "nullable": true,
               "items": {
                 "type": "string"
               }
             },
             "repo": {
-              "type": "string"
+              "type": "string",
+              "nullable": true
             },
             "branch": {
-              "type": "string"
+              "type": "string",
+              "nullable": true
             }
           },
           "required": [
@@ -11039,7 +11058,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                   "type": "string"
                 },
                 "description": {
-                  "type": "string"
+                  "type": "string",
+                  "nullable": true
                 },
                 "status": {
                   "type": "string",
@@ -11102,22 +11122,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                   "nullable": true
                 },
                 "projectId": {
-                  "type": "string"
+                  "type": "string",
+                  "nullable": true
                 },
                 "cycleId": {
-                  "type": "string"
+                  "type": "string",
+                  "nullable": true
                 },
                 "labelIds": {
                   "type": "array",
+                  "nullable": true,
                   "items": {
                     "type": "string"
                   }
                 },
                 "repo": {
-                  "type": "string"
+                  "type": "string",
+                  "nullable": true
                 },
                 "branch": {
-                  "type": "string"
+                  "type": "string",
+                  "nullable": true
                 }
               }
             }
@@ -11193,10 +11218,12 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string"
             },
             "repo": {
-              "type": "string"
+              "type": "string",
+              "nullable": true
             },
             "branch": {
-              "type": "string"
+              "type": "string",
+              "nullable": true
             },
             "instructions": {
               "type": "string"

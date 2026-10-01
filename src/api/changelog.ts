@@ -15,6 +15,7 @@ import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { publicRateLimit } from "../platform/rate-limit.js";
 import { rls } from "../platform/rls.js";
+import { getWorkspaceStub, resolveIssueRef } from "./stub.js";
 
 const orgParam = z.object({ organizationId: z.string() });
 const entryIdParam = z.object({
@@ -238,6 +239,25 @@ function escapeXml(s: string): string {
     .replaceAll('"', "&quot;");
 }
 
+// Changelog links name issues by UUID or KEY-N identifier — store UUIDs.
+async function resolveLinkIssueIds(
+  env: AppContext["Bindings"],
+  organizationId: string,
+  links: { ticketId?: string; issueId?: string }[] | undefined
+) {
+  if (!links) return undefined;
+  const stub = getWorkspaceStub(env, organizationId);
+  return Promise.all(
+    links.map(async (link) => ({
+      ...link,
+      issueId:
+        link.issueId === undefined
+          ? undefined
+          : await resolveIssueRef(stub, link.issueId),
+    }))
+  );
+}
+
 export function registerChangelogRoutes(app: OpenAPIHono<AppContext>) {
   // RSS feed — plain Hono route, not OpenAPI (XML body, not JSON).
   app.get("/workspaces/:organizationId/changelog.rss", async (c) => {
@@ -290,7 +310,10 @@ ${items}
     const { organizationId } = c.req.valid("param");
     const body = c.req.valid("json");
     const db = createD1(c.env.D1);
-    const entry = await createChangelogEntry(db, organizationId, body);
+    const entry = await createChangelogEntry(db, organizationId, {
+      ...body,
+      links: await resolveLinkIssueIds(c.env, organizationId, body.links),
+    });
     return c.json({ entry }, 201);
   });
 
@@ -306,7 +329,10 @@ ${items}
     const { organizationId, entryId } = c.req.valid("param");
     const body = c.req.valid("json");
     const db = createD1(c.env.D1);
-    const entry = await updateChangelogEntry(db, organizationId, entryId, body);
+    const entry = await updateChangelogEntry(db, organizationId, entryId, {
+      ...body,
+      links: await resolveLinkIssueIds(c.env, organizationId, body.links),
+    });
     if (!entry) entryNotFound();
     return c.json({ entry });
   });
