@@ -23,6 +23,14 @@ import { migrate } from "drizzle-orm/durable-sqlite/migrator";
 import { alias } from "drizzle-orm/sqlite-core";
 import { z } from "zod";
 
+import {
+  LANE_PROGRESS_HEARTBEAT_MS,
+  LANE_PROGRESS_THROTTLE_MS,
+  laneProgressExternalId,
+  laneProgressFromActivities,
+  renderLaneProgressComment,
+  typicalLaneDurationMs,
+} from "../agents/lane-progress.js";
 import { createD1 } from "../global/db.js";
 import {
   attachments as globalAttachments,
@@ -2123,6 +2131,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       message: activity.message,
       payload: { activity },
     });
+    await this.syncLaneProgressComment(input.sessionId, {
+      create: false,
+      throttleMs:
+        input.type === "thought" || input.type === "response"
+          ? LANE_PROGRESS_THROTTLE_MS
+          : 0,
+    });
     // PILE-229 handoff: an elicitation is the lane asking a human. Mark it on
     // the event stream and notify the issue's human owner — the assignee when
     // it's a user, else the actor who dispatched the lane.
@@ -2164,6 +2179,82 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       }
     }
     return activity;
+  }
+
+  /** PILE-290 — the lane's live progress comment on its issue. Created the
+   *  first time the lane reports `running` (`create`), then edited in place:
+   *  session link, current step, elapsed + ETA, reported task list. Never
+   *  throws — observability must not break the session write path. */
+  private async syncLaneProgressComment(
+    sessionId: string,
+    options: { create: boolean; throttleMs?: number; actorId?: string }
+  ): Promise<void> {
+    try {
+      const session = await this.getAgentSession(sessionId);
+      if (!session || session.purpose === "preflight") return;
+      const externalId = laneProgressExternalId(session.id);
+      const existingRef = await this.findCommentByExternalId(
+        "agent",
+        externalId
+      );
+      const existing = existingRef
+        ? await this.getComment(existingRef.id)
+        : undefined;
+      if (!existing && !(options.create && session.status === "running")) {
+        return;
+      }
+      const now = Date.now();
+      if (
+        existing &&
+        options.throttleMs &&
+        now - Date.parse(existing.updatedAt) < options.throttleMs
+      ) {
+        return;
+      }
+      const issue = await this.getIssue(session.issueId);
+      if (!issue) return;
+      const activities = await data.listAgentActivities(this.db, session.id, {
+        limit: 50,
+        order: "desc",
+      });
+      const { step, todos } = laneProgressFromActivities(activities);
+      const typical = typicalLaneDurationMs(
+        await data.listRecentLaneTimings(
+          this.db,
+          this.organizationId,
+          session.agentId
+        )
+      );
+      const body = renderLaneProgressComment({
+        session,
+        step,
+        todos,
+        typical,
+        apiBaseUrl: this.env.PUBLIC_API_URL ?? this.env.BETTER_AUTH_URL,
+        now,
+      });
+      if (existing) {
+        if (existing.body === body) return;
+        const updated = await this.updateComment(existing.id, { body });
+        if (updated) await this.emitCommentUpdated(updated, issue);
+        return;
+      }
+      const comment = await this.createComment({
+        issueId: issue.id,
+        body,
+        externalAuthor: session.agentId,
+        externalSource: "agent",
+        externalId,
+      });
+      if (comment) {
+        await this.emitCommentCreated(comment, issue, options.actorId);
+      }
+    } catch (err) {
+      console.error("lane progress comment sync failed", {
+        sessionId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   async closeAgentActivity(id: string) {
@@ -2696,6 +2787,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         await this.emitCommentCreated(comment, updatedIssue ?? issue, actorId);
       }
     }
+
+    await this.syncLaneProgressComment(sessionId, {
+      create: true,
+      actorId,
+      throttleMs:
+        sessionEventPayloads.length > 0 ? 0 : LANE_PROGRESS_HEARTBEAT_MS,
+    });
 
     await Promise.all(
       sessionEventPayloads.map((event) => this.addAgentSessionEvent(event))
