@@ -27,6 +27,10 @@ import {
   type LaneTodo,
 } from "../agents/lane-progress.js";
 import { resolveResultSchema, sessionLabel } from "../agents/lane-result.js";
+import {
+  parseStoredSecondaryRepos,
+  secondaryReposSchema,
+} from "../agents/secondary-repos.js";
 import { sessionHoldsKeptSandbox } from "../agents/sweep.js";
 import { consumeUsage } from "../global/billing.js";
 import { timingSafeEqualHex } from "../global/crypto.js";
@@ -99,6 +103,8 @@ export const agentSessionSchema = z.object({
   prState: z.string().nullable(),
   branch: z.string().nullable(),
   purpose: z.string().nullable().optional(),
+  // JSON [{repo, access}] — see secondaryRepoSchema.
+  secondaryRepos: z.string().nullable().optional(),
   maxDurationMinutes: z.number().int().nullable().optional(),
   effort: dispatchEffortSchema.nullable().optional(),
   /** Auto-generated run name for logs and `pile fleet` (PILE-289). */
@@ -811,6 +817,7 @@ const dispatchBatchItemSchema = z
     branch: z.string().nullable().optional(),
     instructions: z.string().optional(),
     queuedAfter: z.string().optional(),
+    secondaryRepos: secondaryReposSchema.optional(),
     // PILE-293 — run budget: effort picks the model tier (defaults from the
     // issue's priority); maxDuration (minutes) cancels + escalates the lane.
     effort: dispatchEffortSchema.optional(),
@@ -1347,6 +1354,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
             instructions: item.instructions,
             envAllowlist: pileConfig?.env,
             queueAfter,
+            secondaryRepos: item.secondaryRepos,
             effort,
             maxDurationMinutes: item.maxDuration,
             resultSchema: item.resultSchema
@@ -1941,7 +1949,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
   // Fresh GitHub installation token for live lanes — the token baked at
   // dispatch expires ~1h in, so the runner re-mints through here right before
   // push. Same per-session HMAC bearer auth as log ingest; returns a token
-  // scoped to the session issue's repo only.
+  // for the session issue's repo, or one of its secondary repos.
   app.post(
     "/workspaces/:organizationId/agent/sessions/:sessionId/github-token",
     async (c) => {
@@ -1968,6 +1976,26 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       if (!issue?.repo) {
         return c.json({ message: "Session issue has no repository" }, 422);
       }
+      // PILE-294 — `?repo=` naming one of the session's secondary repos mints
+      // for that repo; anything outside the session's repo set is refused.
+      const requested = c.req.query("repo")?.toLowerCase();
+      const secondaryRepo = requested
+        ? parseStoredSecondaryRepos(session.secondaryRepos).find(
+            (entry) => entry.repo.toLowerCase() === requested
+          )?.repo
+        : undefined;
+      if (
+        requested &&
+        requested !== issue.repo.toLowerCase() &&
+        !secondaryRepo
+      ) {
+        return c.json(
+          { message: "Repository is not part of this session" },
+          403
+        );
+      }
+      const secondary = !!secondaryRepo;
+      const targetRepo = secondaryRepo ?? issue.repo;
       // Re-resolve the lane's push tier on every mint so the refreshed token
       // is never broader than the policy (push=disabled → contents:read).
       const { permissions } = await fetchLanePermissions(
@@ -1979,8 +2007,8 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         c.env,
         organizationId,
         sessionId,
-        issue.repo,
-        laneTokenPermissions(permissions.push)
+        targetRepo,
+        { secondary, permissions: laneTokenPermissions(permissions.push) }
       );
       if (!minted) {
         return c.json({ message: "No installation token for repository" }, 502);
@@ -2597,6 +2625,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       getExecutionCtx(c),
       {
         instructions: instructions || undefined,
+        secondaryRepos: parseStoredSecondaryRepos(session.secondaryRepos),
         effort: body.effort ?? session.effort ?? undefined,
         maxDurationMinutes:
           body.maxDuration ?? session.maxDurationMinutes ?? undefined,

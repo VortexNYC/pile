@@ -46,6 +46,19 @@ No new routes. Existing routes updated:
 5. **Failures are recorded, not rolled back.** A failed session becomes `failed` with an `error` activity. The issue stays in its current status for a human to recover.
 6. **Lifecycle events are emitted.** `agent_session.created/updated/completed/failed/canceled` are emitted through the existing `emit` path, which also delivers webhooks.
 
+## Plan Mode (PILE-283)
+
+Lanes can draft an approved approach before any code is written.
+
+- **Dispatch `mode`** on `POST /issues/{id}/dispatch`: `build` (default), `plan`, `implement_plan`.
+  - `plan` dispatches a lane with `purpose: "plan"` and `PILE_LANE_MODE=plan`. The runner never commits, pushes, or opens a PR for it. If the issue already has a plan, the new lane revises it, and `instructions` is used as the feedback (PlanEdit).
+  - `implement_plan` dispatches a normal build lane, with the latest plan included as approved instructions. Returns `400` if the issue has no plan.
+- **Plan comment.** When a plan lane completes, it posts its plan as an issue comment (`externalSource: "plan"`, `externalId: <plan session id>`). The newest such comment is the plan that `implement_plan` builds.
+- **Comment triggers** (only when the issue has no live lane): `/plan [feedback]` drafts or revises the plan; `/implement_plan` approves the latest plan and dispatches a build lane from it. If a lane is live, the comment is treated as a normal follow-up.
+- **Label trigger.** Adding a label named `plan` to an issue with no live lane dispatches a plan lane.
+- Triggers reuse the agent from the issue's most recent lane, then the repo default agent, then `devin`. All of these are still gated by the `.pile/config.json` allowlist. A trigger that fails posts a `plan-mode` notice comment.
+- Build lanes dispatched from a plan record a `lane.plan` session event that points to the plan's comment and session.
+
 ## Provider Parity
 
 - `devin.ts`: `poll` extracts `prUrl`/`prState` from `pull_requests[0]`; `url` remains the Devin session dashboard link.

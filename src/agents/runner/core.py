@@ -6,9 +6,9 @@
 # agent env allowlist, GitHub token refresh/revoke,
 # repo ops, GitHub API, PR creation, lane digest, GitHub token refresh, log
 # shipping, pnpm-store cache, postgres warmup, .pile/setup.sh, lane lifecycle
-# hooks, and lane isolation (scrubbed agent env + restricted-mode command
-# shims). Drivers only define: ensure(), agent_env(), the run mechanism, and
-# main().
+# hooks, lane isolation (scrubbed agent env + restricted-mode command shims),
+# optional headless browser. Drivers only define: ensure(), agent_env(), the
+# run mechanism, and main().
 #
 # Contract with the adapter: the process writes RESULT_FILE
 # (/tmp/agent-result.json) with {status, prUrl, branch, result, report?,
@@ -114,7 +114,12 @@ TOKEN_REFRESH_MARGIN_SEC = 300
 REPO_DIR = os.path.join(HOME, 'repo')
 RESULT_FILE = '/tmp/agent-result.json'
 AGENT_LABEL = os.environ.get('AGENT_LABEL', 'Agent')
+# 'plan' lanes (PILE-283) read the repo and report a plan — never push.
+LANE_MODE = os.environ.get('PILE_LANE_MODE', '')
 PR_ERRORS = []
+SECONDARY_PRS = []
+# Live secondary-repo tokens by repo, so run end can revoke them too.
+SECONDARY_TOKENS = {}
 RUN_STARTED = time.time()
 LANE_RESTRICTED = os.environ.get('PILE_LANE_RESTRICTED') == '1'
 SHIM_DIR = '/tmp/pile-shims'
@@ -319,7 +324,7 @@ _AGENT_ENV_ALLOW = frozenset((
 _AGENT_ENV_ALLOW_PREFIXES = ('LC_', 'XDG_')
 _RUNNER_ONLY_ENV = frozenset((
     'GITHUB_TOKEN', 'GITHUB_TOKEN_EXPIRES_AT', 'GH_TOKEN', 'LANE_TOKEN', 'PILE_TOKEN_URL',
-    'PILE_LOG_TOKEN', 'PILE_LOG_URL', 'PILE_CACHE_URL', 'PILE_AGENT_ENV_KEYS',
+    'PILE_LOG_TOKEN', 'PILE_LOG_URL', 'PILE_CACHE_URL', 'PILE_AGENT_ENV_KEYS', 'SECONDARY_REPOS_JSON',
     'RUNNER_PY_B64', 'PROMPT_B64', 'DEVIN_CREDENTIALS_B64', 'CODEX_AUTH_JSON_B64', 'FOLLOWUP',
 ))
 
@@ -612,14 +617,16 @@ def run_transport(cmd, **kwargs):
         raise TransportError(detail) from e
 
 
-def github_api(method, path, body=None):
-    if not GITHUB_TOKEN:
-        refresh_github_token()
-    ensure_fresh_github_token()
-    owner, name = REPO.split('/')
+def github_api(method, path, body=None, repo=None, token=None):
+    if token is None:
+        if not GITHUB_TOKEN:
+            refresh_github_token()
+        ensure_fresh_github_token()
+        token = GITHUB_TOKEN
+    owner, name = (repo or REPO).split('/')
     url = f'https://api.github.com/repos/{owner}/{name}{path}'
     headers = {
-        'Authorization': f'Bearer {GITHUB_TOKEN}',
+        'Authorization': f'Bearer {token}',
         'Accept': 'application/vnd.github+json',
         'Content-Type': 'application/json',
         'X-GitHub-Api-Version': '2022-11-28',
@@ -635,9 +642,9 @@ def github_api(method, path, body=None):
         raise
 
 
-def default_branch():
-    repo = github_api('GET', '')
-    return repo.get('default_branch', 'main')
+def default_branch(repo=None, token=None):
+    info = github_api('GET', '', repo=repo, token=token) if repo else github_api('GET', '')
+    return info.get('default_branch', 'main')
 
 
 def create_branch():
@@ -927,6 +934,8 @@ def collect_digest():
         digest['filesChanged'] = [f for f in (files.stdout or '').splitlines() if f]
         commits = run(['git', '-C', REPO_DIR, 'rev-list', '--count', f'{base}..HEAD'], env=git_env(), capture_output=True, text=True, check=False)
         digest['commits'] = int((commits.stdout or '0').strip() or 0)
+    if SECONDARY_PRS:
+        digest['secondaryPrs'] = list(SECONDARY_PRS)
     return digest
 
 
@@ -935,6 +944,8 @@ def create_pr(digest=None):
         summary = ''
         if digest and digest.get('filesChanged') is not None:
             summary = f"\n\n---\nLane digest: {len(digest['filesChanged'])} files changed, {digest.get('commits', 0)} commits, ~{digest['durationSec']}s."
+        if SECONDARY_PRS:
+            summary += '\n\nCross-repo PRs:\n' + '\n'.join(f"- {p['repo']}: {p['prUrl']}" for p in SECONDARY_PRS)
         stop = (digest or {}).get('stopHook') or {}
         if stop.get('status') == 'failed':
             summary += f"\n\n**Stop hook still failing** (exit {stop.get('exit')}) after {stop.get('attempts', 0)} self-heal attempts — see the lane transcript."
@@ -1019,25 +1030,39 @@ def ensure_fresh_github_token():
         refresh_github_token()
 
 
-def revoke_github_token():
-    # Run end: kill the installation token now rather than leaving it live
-    # for the rest of its ~1h TTL in a sandbox that may be kept for
-    # follow-ups. Pile's sweep revokes server-side too; this is the fast path.
-    token = globals()['GITHUB_TOKEN']
-    if not token:
-        return
-    globals()['GITHUB_TOKEN'] = ''
-    if REPO and os.path.isdir(os.path.join(REPO_DIR, '.git')):
-        run(['git', '-C', REPO_DIR, 'remote', 'set-url', 'origin', f'https://github.com/{REPO}.git'], check=False)
+def _revoke_installation_token(token, label):
     try:
         req = urllib.request.Request(
             'https://api.github.com/installation/token', method='DELETE',
             headers={'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json',
                      'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'pile-agent-runner/1.0'})
         urllib.request.urlopen(req, timeout=15)
-        print('github token revoked')
+        print(f'{label} revoked')
     except Exception as e:
-        print('github token revoke failed:', e)
+        print(f'{label} revoke failed:', e)
+
+
+def revoke_github_token():
+    # Run end: kill the installation token now rather than leaving it live
+    # for the rest of its ~1h TTL in a sandbox that may be kept for
+    # follow-ups. Pile's sweep revokes server-side too; this is the fast path.
+    revoke_secondary_tokens()
+    token = globals()['GITHUB_TOKEN']
+    if not token:
+        return
+    globals()['GITHUB_TOKEN'] = ''
+    if REPO and os.path.isdir(os.path.join(REPO_DIR, '.git')):
+        run(['git', '-C', REPO_DIR, 'remote', 'set-url', 'origin', f'https://github.com/{REPO}.git'], check=False)
+    _revoke_installation_token(token, 'github token')
+
+
+def revoke_secondary_tokens():
+    for repo, token in list(SECONDARY_TOKENS.items()):
+        SECONDARY_TOKENS.pop(repo, None)
+        dest = secondary_dir(repo)
+        if os.path.isdir(os.path.join(dest, '.git')):
+            run([GIT, '-C', dest] + _GIT_SAFE_FLAGS + ['remote', 'set-url', 'origin', f'https://github.com/{repo}.git'], env=_git_env(), check=False)
+        _revoke_installation_token(token, f'github token for {repo}')
 
 
 # The agent had the checkout, $HOME and its PATH to itself, so .git/config,
@@ -1066,8 +1091,10 @@ def _git_env():
     return env
 
 
-def _reset_git_config(with_token=True):
-    git_dir = os.path.join(REPO_DIR, '.git')
+def _reset_git_config(repo_dir=REPO_DIR, url=None, with_token=True):
+    # url pins the remote verbatim (secondary repos); otherwise with_token
+    # picks the policy URL — tokenless under restricted lanes.
+    git_dir = os.path.join(repo_dir, '.git')
     if os.path.islink(git_dir) or not os.path.isdir(git_dir):
         raise RuntimeError('refusing to push: .git is not a plain directory')
     config_path = os.path.join(git_dir, 'config')
@@ -1079,7 +1106,8 @@ def _reset_git_config(with_token=True):
     with open(config_path, 'w') as f:
         f.write(
             '[core]\n\trepositoryformatversion = 0\n\tfilemode = true\n\tbare = false\n\tlogallrefupdates = true\n'
-            f'[remote "origin"]\n\turl = {remote_url() if with_token else tokenless_remote_url()}\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n'
+            f'[remote "origin"]\n\turl = {url or (remote_url() if with_token else tokenless_remote_url())}\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n'
+
             f'[user]\n\tname = {name}\n\temail = {email}\n'
         )
 
@@ -1096,6 +1124,9 @@ def _refuse_default_branch():
 def commit_and_push(agent_env=None):
     # agent_env only feeds the prePush hook; the runner's git never runs
     # through the agent's PATH (or a restricted lane's shims).
+    if LANE_MODE == 'plan':
+        print('plan lane: skipping commit/push')
+        return False
     validate_branch()
     if PUSH_POLICY == 'disabled':
         committed = commit_local(agent_env)
@@ -1128,6 +1159,138 @@ def commit_and_push(agent_env=None):
         return True
     finally:
         lock_remote()
+
+
+# Cross-repo lanes (PILE-294): sibling repos cloned under ~/xrepo/<owner>/<name>.
+# SECONDARY_REPOS_JSON = [{repo, access: read|write, token}] at dispatch; the
+# tokenless list is persisted so a follow-up run on a kept sandbox can push.
+XREPO_DIR = os.path.join(HOME, 'xrepo')
+XREPO_STATE = os.path.join(XREPO_DIR, '.pile-xrepo.json')
+
+
+def secondary_repos():
+    raw = os.environ.get('SECONDARY_REPOS_JSON', '')
+    if raw:
+        entries = [e for e in json.loads(raw) if isinstance(e, dict) and e.get('repo')]
+        for e in entries:
+            add_mask(e.get('token'))
+        return entries
+    try:
+        with open(XREPO_STATE) as f:
+            return [dict(e, token='') for e in json.load(f)]
+    except (OSError, ValueError):
+        return []
+
+
+def secondary_dir(repo):
+    return os.path.join(XREPO_DIR, *repo.split('/'))
+
+
+def secondary_remote_url(repo, token):
+    return f'https://x-access-token:{token}@github.com/{repo}.git'
+
+
+def secondary_token(repo, fallback=''):
+    # Same lane-token re-mint as refresh_github_token, scoped by ?repo= to one
+    # of this session's secondary repos. Falls back to the dispatch-time token.
+    url = os.environ.get('PILE_TOKEN_URL')
+    token = os.environ.get('LANE_TOKEN')
+    if not (url and token):
+        return fallback
+    try:
+        req = urllib.request.Request(url + '?repo=' + urllib.parse.quote(repo, safe=''), headers={'Authorization': 'Bearer ' + token, 'User-Agent': 'pile-agent-runner/1.0'}, method='POST')
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            fresh = json.load(resp)['token']
+        add_mask(fresh)
+        return fresh
+    except Exception as e:
+        print(f'github token refresh failed for {repo}:', e)
+        return fallback
+
+
+def clone_secondary_repos():
+    entries = secondary_repos()
+    if not entries:
+        return
+    os.makedirs(XREPO_DIR, exist_ok=True)
+    for entry in entries:
+        repo = entry['repo']
+        dest = secondary_dir(repo)
+        if os.path.exists(dest):
+            shutil.rmtree(dest)
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        token = entry.get('token') or secondary_token(repo)
+        if token:
+            SECONDARY_TOKENS[repo] = token
+        remote = secondary_remote_url(repo, token)
+        run_transport(['timeout', '300', 'git', 'clone', '--quiet', '--depth', '1', remote, dest])
+        if entry.get('access') == 'write':
+            # Resume the lane branch when a prior run already pushed it.
+            heads = run_transport(['git', '-C', dest, 'ls-remote', '--heads', 'origin', BRANCH], capture_output=True, text=True)
+            if (heads.stdout or '').strip():
+                run_transport(['timeout', '300', 'git', '-C', dest, 'fetch', '--depth', '1', 'origin', f'+refs/heads/{BRANCH}:refs/remotes/origin/{BRANCH}'])
+                run(['git', '-C', dest, 'checkout', '-B', BRANCH, f'origin/{BRANCH}'], check=True)
+            else:
+                run(['git', '-C', dest, 'checkout', '-b', BRANCH], check=True)
+            run(['git', '-C', dest, 'config', 'user.name', os.environ.get('GIT_AUTHOR_NAME', AGENT_LABEL)], check=True)
+            run(['git', '-C', dest, 'config', 'user.email', os.environ.get('GIT_AUTHOR_EMAIL', 'agent@pile.nyc')], check=True)
+        print(f'cloned secondary repo {repo} ({entry.get("access", "read")}) -> {dest}')
+    with open(XREPO_STATE, 'w') as f:
+        json.dump([{'repo': e['repo'], 'access': e.get('access', 'read')} for e in entries], f)
+
+
+def push_secondary_repos(agent_env):
+    # Write-mode secondaries: commit leftovers, push the lane branch, open a
+    # PR in that repo. A failure here is recorded, not fatal — the primary
+    # repo's push and PR already happened.
+    for entry in secondary_repos():
+        if entry.get('access') != 'write':
+            continue
+        repo = entry['repo']
+        dest = secondary_dir(repo)
+        if not os.path.isdir(os.path.join(dest, '.git')):
+            continue
+        try:
+            validate_branch()
+            token = secondary_token(repo, SECONDARY_TOKENS.get(repo) or entry.get('token', ''))
+            if token:
+                SECONDARY_TOKENS[repo] = token
+            # Same hardened push as commit_and_push: ~/xrepo was agent-writable.
+            base = default_branch(repo, token)
+            if BRANCH == base:
+                raise RuntimeError(f'refusing to push lane branch {BRANCH!r}: it is the default branch of {repo}')
+            _reset_git_config(dest, secondary_remote_url(repo, token))
+            git = [GIT, '-C', dest] + _GIT_SAFE_FLAGS
+            env = _git_env()
+            status = run(git + ['status', '--porcelain'], env=env, capture_output=True, text=True, check=True)
+            if status.stdout.strip():
+                run(git + ['add', '-A'], env=env, check=True)
+                run(git + ['commit', '-m', f'{AGENT_LABEL} changes for {BRANCH}'], env=env, check=True)
+            remote_head = run(git + ['rev-parse', '--verify', '--quiet', f'refs/remotes/origin/{BRANCH}'], env=env, capture_output=True, text=True, check=False)
+            base_ref = f'refs/remotes/origin/{BRANCH}' if remote_head.returncode == 0 else 'refs/remotes/origin/HEAD'
+            ahead = run(git + ['rev-list', '--count', f'{base_ref}..refs/heads/{BRANCH}'], env=env, capture_output=True, text=True, check=False)
+            if (ahead.stdout or '0').strip() == '0':
+                print(f'no changes to push in secondary repo {repo}')
+                continue
+            run_transport(git + ['push', 'origin', f'refs/heads/{BRANCH}:refs/heads/{BRANCH}'], env=env)
+            owner = repo.split('/')[0]
+            pulls = github_api('GET', f'/pulls?state=open&head={owner}:{BRANCH}', repo=repo, token=token)
+            if pulls:
+                pr_url = pulls[0]['html_url']
+            else:
+                primary = f' alongside {REPO}' if REPO else ''
+                pr = github_api('POST', '/pulls', {
+                    'title': os.environ.get('ISSUE_TITLE', BRANCH),
+                    'head': BRANCH,
+                    'base': base,
+                    'body': f'Part of {os.environ.get("ISSUE_IDENTIFIER", BRANCH)} — cross-repo change{primary}.\n\nGenerated with {AGENT_LABEL}',
+                }, repo=repo, token=token)
+                pr_url = pr['html_url']
+            SECONDARY_PRS.append({'repo': repo, 'prUrl': pr_url})
+            print(f'secondary repo {repo} PR: {pr_url}')
+        except Exception as e:
+            print(f'secondary push failed for {repo}:', _redact(str(e)))
+            PR_ERRORS.append(f'secondary {repo}: {_redact(str(e))}')
 
 
 def local_patch():
@@ -1170,6 +1333,59 @@ def ensure_postgres():
     run(['su', 'postgres', '-c', "psql -c \"ALTER USER postgres PASSWORD 'postgres'\""], check=False)
     run(['su', 'postgres', '-c', 'createdb vortex_dev'], check=False)
     print(f'[timing] postgres up: {time.time() - t0:.0f}s')
+
+
+# Optional headless browser (PILE-292). Images built with LANE_BROWSER=1
+# bake Google Chrome + agent-browser so UI-touching lanes can run e2e suites and
+# screenshot their work instead of shipping blind. Absent = no-op.
+BROWSER_CANDIDATES = ('chromium', 'chromium-browser', 'google-chrome-stable', 'google-chrome')
+# Lanes run as root in a container with no usable /dev/shm.
+BROWSER_ARGS = '--no-sandbox,--disable-dev-shm-usage'
+
+
+def find_browser():
+    for name in BROWSER_CANDIDATES:
+        path = shutil.which(name)
+        if path:
+            return path
+    return None
+
+
+def with_browser_env(env):
+    path = find_browser()
+    if not path:
+        return env
+    env.setdefault('PILE_BROWSER', path)
+    env.setdefault('CHROME_PATH', path)
+    env.setdefault('PUPPETEER_EXECUTABLE_PATH', path)
+    env.setdefault('AGENT_BROWSER_EXECUTABLE_PATH', path)
+    env.setdefault('AGENT_BROWSER_ARGS', BROWSER_ARGS)
+    return env
+
+
+def browser_prompt_note():
+    path = find_browser()
+    if not path or SHELL_POLICY == 'disabled':
+        return ''
+    lines = [
+        '',
+        '## Headless browser',
+        '',
+        f'A headless Chrome is installed at $PILE_BROWSER ({path}). If your change touches UI, verify it visually before finishing: start the dev server, load the affected page, take a screenshot, and look at it.',
+    ]
+    if shutil.which('agent-browser'):
+        lines.append('`agent-browser` is on PATH and preconfigured for it: `agent-browser open http://localhost:5173 && agent-browser wait --load networkidle && agent-browser screenshot /tmp/shot.png` (also `snapshot -i`, `click`, `fill`; `agent-browser close` when done).')
+    lines += [
+        'One-shot screenshot: `"$PILE_BROWSER" --headless=new --no-sandbox --disable-dev-shm-usage --window-size=1280,800 --screenshot=/tmp/shot.png <url>`.',
+        'For Playwright/Puppeteer e2e suites, launch with `executablePath: process.env.PILE_BROWSER` and args `--no-sandbox`, `--disable-dev-shm-usage` instead of downloading a browser.',
+        'Do not commit screenshots unless the task asks for them.',
+    ]
+    return '\n'.join(lines)
+
+
+def lane_prompt():
+    prompt = base64.b64decode(os.environ['PROMPT_B64']).decode('utf-8')
+    return prompt + browser_prompt_note()
 
 
 # Push appended transcript lines back to Pile so they land in the session
