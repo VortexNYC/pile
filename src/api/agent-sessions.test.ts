@@ -164,6 +164,132 @@ describe("agent sessions API", () => {
     expect(missingRes.status).toBe(404);
   });
 
+  it("serves light summary rows with ?summary=1 while the default list keeps blobs", async () => {
+    const issueRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ title: "Summary list target" }),
+      }),
+      env
+    );
+    expect(issueRes.status).toBe(201);
+    const issue = await issueRes.json<{ id: string }>();
+
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    // Terminal statuses only — live lanes count against the workspace's
+    // dispatch ceiling and would break later dispatch tests.
+    const blob = "result-blob ".repeat(400);
+    for (let i = 0; i < 100; i++) {
+      await stub.createAgentSession({
+        issueId: issue.id,
+        agentId: "mock",
+        provider: "mock",
+        actorId: "user-1",
+        actorType: "user",
+        status: i % 2 === 0 ? "completed" : "failed",
+        result: `${i} ${blob}`,
+        prUrl:
+          i % 2 === 0
+            ? `https://github.com/VortexNYC/pile/pull/${i + 1}`
+            : null,
+        prState: i % 2 === 0 ? "open" : null,
+        startedAt: new Date().toISOString(),
+      });
+    }
+
+    const fullRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions?issueId=${issue.id}&limit=100`,
+        { token }
+      ),
+      env
+    );
+    expect(fullRes.status).toBe(200);
+    const fullText = await fullRes.text();
+    const full = JSON.parse(fullText) as {
+      sessions: Record<string, unknown>[];
+    };
+    expect(full.sessions).toHaveLength(100);
+    expect(full.sessions[0]).toHaveProperty("result");
+    // sanity: with result blobs the full list is heavy — what `summary=1`
+    // exists to avoid.
+    expect(fullText.length).toBeGreaterThan(20 * 1024);
+
+    const summaryRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions?issueId=${issue.id}&limit=100&summary=1`,
+        { token }
+      ),
+      env
+    );
+    expect(summaryRes.status).toBe(200);
+    const summaryText = await summaryRes.text();
+    const { sessions } = JSON.parse(summaryText) as {
+      sessions: Record<string, unknown>[];
+    };
+    expect(sessions).toHaveLength(100);
+    for (const s of sessions) {
+      expect(s.issueId).toBe(issue.id);
+      expect(s).toHaveProperty("id");
+      expect(s).toHaveProperty("agentId");
+      expect(s).toHaveProperty("status");
+      expect(s).toHaveProperty("prUrl");
+      expect(s).toHaveProperty("createdAt");
+      expect(s).toHaveProperty("updatedAt");
+      expect(s).toHaveProperty("derivedStatus");
+      expect(s).not.toHaveProperty("result");
+      expect(s).not.toHaveProperty("activities");
+      expect(s).not.toHaveProperty("organizationId");
+      expect(s).not.toHaveProperty("actorId");
+      expect(s).not.toHaveProperty("providerSessionId");
+      expect(s).not.toHaveProperty("lastStateHash");
+      expect(s).not.toHaveProperty("laneDbRef");
+    }
+    expect(summaryText.length).toBeLessThan(48 * 1024);
+    expect(summaryText.length * 8).toBeLessThan(fullText.length);
+  });
+
+  it("serves a summary detail with ?summary=1", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    const session = await stub.createAgentSession({
+      issueId: "issue-summary-detail",
+      agentId: "mock",
+      provider: "mock",
+      actorId: "user-1",
+      actorType: "user",
+      result: "blob ".repeat(200),
+    });
+
+    const res = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}?summary=1`,
+        { token }
+      ),
+      env
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json<Record<string, unknown>>();
+    expect(body.id).toBe(session.id);
+    expect(body.status).toBe("created");
+    expect(body).not.toHaveProperty("result");
+    expect(body).not.toHaveProperty("activities");
+    expect(body).not.toHaveProperty("actorId");
+
+    const missing = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/00000000-0000-0000-0000-000000000000?summary=1`,
+        { token }
+      ),
+      env
+    );
+    expect(missing.status).toBe(404);
+  });
+
   it("dispatches an agent on a repo-less issue (research/docs/design work)", async () => {
     const issueRes = await app.fetch(
       request(`/workspaces/${organizationId}/issues`, {

@@ -899,6 +899,10 @@ describe("CLI integration", () => {
 
     expect(exitCode).toBe(124);
     expect(log).toHaveBeenCalledWith("status: running");
+    const fallbackReq = mockFetch.mock.calls
+      .map(([url]) => new URL(typeof url === "string" ? url : url.href))
+      .find((u) => u.pathname === "/workspaces/ws-1/agent/sessions/sess-1");
+    expect(fallbackReq?.searchParams.get("summary")).toBe("1");
     log.mockRestore();
     error.mockRestore();
   });

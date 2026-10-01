@@ -170,6 +170,15 @@ Write-back is push-style: the worker PATCHes the session and POSTs activities;
 
 ## Watching a session
 
+`GET /workspaces/{org}/agent/sessions` returns the full session rows —
+including `result` text — which gets heavy on poll loops. Pass `?summary=1`
+(also on `GET …/agent/sessions/{id}`) for lane-row scalars only: `id`,
+`issueId`, `agentId`, `provider`, `status`, `prUrl`, `prState`, the
+timestamps, and the derived `stalled` badge. `pile fleet` and
+`pile agent sessions watch` already use it; dashboards and other polling
+consumers should too. Push consumers can subscribe to `/realtime` or the
+session event stream instead of polling.
+
 `GET /workspaces/{org}/agent/sessions/{id}/stream` streams the activity log as
 a Vercel AI SDK **UI-message-stream** (`x-vercel-ai-ui-message-stream: v1`)
 SSE feed: `thought`→`reasoning-*`, `response`→`text-*`, `error`→`error`,
