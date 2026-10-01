@@ -2837,6 +2837,23 @@
                   },
                   "preflight": {
                     "type": "boolean"
+                  },
+                  "resultSchema": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "lane"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": {
+                          "nullable": true
+                        }
+                      }
+                    ],
+                    "description": "JSON Schema (draft-07) the lane's final output must validate against, or \"lane\" for the built-in {verdict, summary, filesChanged} shape. The validated value lands on session.structuredResult."
                   }
                 },
                 "additionalProperties": false
@@ -2915,6 +2932,27 @@
                     "purpose": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "label": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resultSchema": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "structuredResult": {
+                      "nullable": true
+                    },
+                    "resultSchemaErrors": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "string"
+                      }
                     },
                     "createdAt": {
                       "type": "string"
@@ -3170,6 +3208,27 @@
                         "purpose": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "label": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "resultSchema": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        },
+                        "structuredResult": {
+                          "nullable": true
+                        },
+                        "resultSchemaErrors": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "string"
+                          }
                         },
                         "createdAt": {
                           "type": "string"
@@ -3429,6 +3488,27 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "label": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "resultSchema": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        },
+                        "structuredResult": {
+                          "nullable": true
+                        },
+                        "resultSchemaErrors": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -3641,6 +3721,27 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "label": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "resultSchema": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        },
+                        "structuredResult": {
+                          "nullable": true
+                        },
+                        "resultSchemaErrors": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -3828,6 +3929,23 @@
                         },
                         "queuedAfter": {
                           "type": "string"
+                        },
+                        "resultSchema": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "lane"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "additionalProperties": {
+                                "nullable": true
+                              }
+                            }
+                          ],
+                          "description": "JSON Schema (draft-07) the lane's final output must validate against, or \"lane\" for the built-in {verdict, summary, filesChanged} shape. The validated value lands on session.structuredResult."
                         }
                       },
                       "required": [
@@ -4027,6 +4145,27 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "label": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "resultSchema": {
+                                "type": "object",
+                                "nullable": true,
+                                "additionalProperties": {
+                                  "nullable": true
+                                }
+                              },
+                              "structuredResult": {
+                                "nullable": true
+                              },
+                              "resultSchemaErrors": {
+                                "type": "array",
+                                "nullable": true,
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
                               "createdAt": {
                                 "type": "string"
                               },
@@ -4200,6 +4339,10 @@
                                   "needs_input",
                                   null
                                 ]
+                              },
+                              "label": {
+                                "type": "string",
+                                "nullable": true
                               },
                               "startedAt": {
                                 "type": "string",
@@ -4502,6 +4645,27 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "label": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "resultSchema": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        },
+                        "structuredResult": {
+                          "nullable": true
+                        },
+                        "resultSchemaErrors": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -4797,6 +4961,27 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "label": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "resultSchema": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        },
+                        "structuredResult": {
+                          "nullable": true
+                        },
+                        "resultSchemaErrors": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -4959,6 +5144,10 @@
                             "needs_input",
                             null
                           ]
+                        },
+                        "label": {
+                          "type": "string",
+                          "nullable": true
                         },
                         "startedAt": {
                           "type": "string",
@@ -5124,6 +5313,27 @@
                     "purpose": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "label": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resultSchema": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "structuredResult": {
+                      "nullable": true
+                    },
+                    "resultSchemaErrors": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "string"
+                      }
                     },
                     "createdAt": {
                       "type": "string"
@@ -5894,6 +6104,27 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "label": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resultSchema": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "structuredResult": {
+                      "nullable": true
+                    },
+                    "resultSchemaErrors": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -6108,6 +6339,27 @@
                     "purpose": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "label": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resultSchema": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "structuredResult": {
+                      "nullable": true
+                    },
+                    "resultSchemaErrors": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "string"
+                      }
                     },
                     "createdAt": {
                       "type": "string"
@@ -6326,6 +6578,27 @@
                         "purpose": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "label": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "resultSchema": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        },
+                        "structuredResult": {
+                          "nullable": true
+                        },
+                        "resultSchemaErrors": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "string"
+                          }
                         },
                         "createdAt": {
                           "type": "string"
@@ -6588,6 +6861,27 @@
                         "purpose": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "label": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "resultSchema": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        },
+                        "structuredResult": {
+                          "nullable": true
+                        },
+                        "resultSchemaErrors": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "string"
+                          }
                         },
                         "createdAt": {
                           "type": "string"
@@ -6891,6 +7185,27 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "label": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resultSchema": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "structuredResult": {
+                      "nullable": true
+                    },
+                    "resultSchemaErrors": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -7129,6 +7444,27 @@
                     "purpose": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "label": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resultSchema": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "structuredResult": {
+                      "nullable": true
+                    },
+                    "resultSchemaErrors": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "string"
+                      }
                     },
                     "createdAt": {
                       "type": "string"

@@ -889,6 +889,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "preflight",
         flag: "preflight",
       },
+      {
+        name: "resultSchema",
+        flag: "result-schema",
+      },
     ],
   },
   "issues assign create": {
