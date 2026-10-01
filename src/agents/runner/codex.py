@@ -82,19 +82,7 @@ def apply_and_push(codex_bin, task_url):
     if result.returncode != 0:
         print('codex cloud apply failed:', result.returncode, result.stdout, result.stderr)
         return False
-    env = runner_env()
-    status = run(['git', '-C', REPO_DIR, 'status', '--porcelain'], env=env, capture_output=True, text=True, check=True)
-    if not status.stdout.strip():
-        print('no changes to commit')
-        return False
-    run(['git', '-C', REPO_DIR, 'add', '-A'], env=env, check=True)
-    run(['git', '-C', REPO_DIR, 'commit', '-m', f'{AGENT_LABEL} changes for {BRANCH}'], env=env, check=True)
-    set_remote(True)
-    try:
-        run_transport(['git', '-C', REPO_DIR, 'push', 'origin', BRANCH], env=env)
-    finally:
-        lock_remote()
-    return True
+    return commit_and_push(agent_env())
 
 
 def main():
