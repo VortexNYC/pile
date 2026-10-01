@@ -35,7 +35,7 @@ import type {
 import { captureSessionPrArtifact } from "./agent-artifacts.js";
 import { getExecutionCtx } from "./execution-ctx.js";
 import { fetchGitHubCheckRuns, fetchGitHubPull, parsePrUrl } from "./pr.js";
-import { getWorkspaceStub } from "./stub.js";
+import { getWorkspaceStub, resolveIssueRef } from "./stub.js";
 
 const agentActivityTypeSchema = z.enum([
   "thought",
@@ -674,7 +674,7 @@ const dispatchBatchItemSchema = z
   .object({
     issueId: z.string().min(1),
     agentId: z.string().optional(),
-    branch: z.string().optional(),
+    branch: z.string().nullable().optional(),
     instructions: z.string().optional(),
     queuedAfter: z.string().optional(),
   })
@@ -952,7 +952,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     }
 
     const session = await stub.createAgentSession({
-      issueId: input.issueId,
+      issueId: issue.id,
       agentId: input.provider,
       provider: input.provider,
       actorId: identity.id,
@@ -1010,20 +1010,35 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
 
     const batchId = crypto.randomUUID();
 
+    // Items may name issues by UUID or KEY-N identifier — normalize to the
+    // canonical UUID so dedup and queuedAfter edges can't diverge by form.
+    const canonicalIssueIds = await Promise.all(
+      items.map((item) => resolveIssueRef(stub, item.issueId))
+    );
+    const canonicalQueuedAfter = await Promise.all(
+      items.map((item) =>
+        item.queuedAfter === undefined
+          ? Promise.resolve(undefined)
+          : resolveIssueRef(stub, item.queuedAfter)
+      )
+    );
+
     // First occurrence wins — the one-active-session-per-issue guard would
     // race if two items dispatched the same issue concurrently.
     const firstIndexByIssueId = new Map<string, number>();
-    items.forEach((item, index) => {
-      if (!firstIndexByIssueId.has(item.issueId)) {
-        firstIndexByIssueId.set(item.issueId, index);
+    items.forEach((_item, index) => {
+      const key = canonicalIssueIds[index];
+      if (!firstIndexByIssueId.has(key)) {
+        firstIndexByIssueId.set(key, index);
       }
     });
 
     // Intra-batch dependency edges (queuedAfter naming a sibling issueId).
     // Chains that loop would deadlock the awaits below — flag them up front.
-    const siblingDep = items.map((item, index) => {
-      if (item.queuedAfter === undefined) return undefined;
-      const dep = firstIndexByIssueId.get(item.queuedAfter);
+    const siblingDep = items.map((_item, index) => {
+      const ref = canonicalQueuedAfter[index];
+      if (ref === undefined) return undefined;
+      const dep = firstIndexByIssueId.get(ref);
       return dep !== undefined && dep !== index ? dep : undefined;
     });
     const cyclic = new Set<number>();
@@ -1054,8 +1069,10 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       index: number
     ): Promise<DispatchBatchItemResult> => {
       const issueId = item.issueId;
+      const canonicalIssueId = canonicalIssueIds[index];
+      const queuedAfter = canonicalQueuedAfter[index];
       try {
-        if (firstIndexByIssueId.get(issueId) !== index) {
+        if (firstIndexByIssueId.get(canonicalIssueId) !== index) {
           return dispatchBatchItemError(issueId, "Duplicate issueId in batch");
         }
         if (cyclic.has(index)) {
@@ -1064,7 +1081,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
             "queuedAfter forms a dependency cycle in this batch"
           );
         }
-        if (item.queuedAfter === issueId) {
+        if (queuedAfter !== undefined && queuedAfter === canonicalIssueId) {
           return dispatchBatchItemError(
             issueId,
             "Cannot queue an item behind itself"
@@ -1072,7 +1089,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         }
 
         let queueAfter: string | undefined;
-        if (item.queuedAfter !== undefined) {
+        if (queuedAfter !== undefined) {
           const sibling = siblingDep[index];
           if (sibling !== undefined) {
             const upstream = await deferred[sibling].promise;
@@ -1085,15 +1102,14 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
             queueAfter = upstream.sessionId;
           } else {
             // A session id, or the issueId of an issue with a live session.
-            const named = await stub.getAgentSession(item.queuedAfter);
+            const named = await stub.getAgentSession(queuedAfter);
             if (named) {
               if (!["completed", "failed", "canceled"].includes(named.status)) {
                 queueAfter = named.id;
               }
             } else {
-              const live = await stub.getActiveAgentSessionForIssue(
-                item.queuedAfter
-              );
+              const live =
+                await stub.getActiveAgentSessionForIssue(queuedAfter);
               if (!live) {
                 return dispatchBatchItemError(
                   issueId,
@@ -1122,7 +1138,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         }
         const target: Issue = {
           ...issue,
-          branch: item.branch ?? issue.branch,
+          branch: item.branch === undefined ? issue.branch : item.branch,
         };
 
         // Explicit agentId wins; otherwise the repo's configured default
@@ -1242,7 +1258,10 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     const query = c.req.valid("query");
     const stub = getWorkspaceStub(c.env, organizationId);
     const rows = await stub.listAgentSessions({
-      issueId: query.issueId,
+      issueId:
+        query.issueId === undefined
+          ? undefined
+          : await resolveIssueRef(stub, query.issueId),
       limit: query.limit ? Number(query.limit) : undefined,
     });
     return c.json({
@@ -1376,7 +1395,9 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(issueLiveRoute, async (c) => {
     const { organizationId, issueId } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
-    const live = await stub.getActiveAgentSessionForIssue(issueId);
+    const live = await stub.getActiveAgentSessionForIssue(
+      await resolveIssueRef(stub, issueId)
+    );
     return c.json({
       session: live ? toSessionResponse(live.session, live.activities) : null,
       activities: live?.activities.map(toActivityResponse) ?? [],
@@ -2368,6 +2389,10 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     const stub = getWorkspaceStub(c.env, organizationId);
     const automation = await stub.createAgentAutomation({
       ...body,
+      issueId:
+        body.issueId === undefined
+          ? undefined
+          : await resolveIssueRef(stub, body.issueId),
       enabled: true,
       createdBy: identity.id,
     });

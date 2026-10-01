@@ -81,7 +81,7 @@ export async function createSlackComment(
   }
 
   const comment = await stub.createComment({
-    issueId,
+    issueId: issue.id,
     body: values.body,
     internal: values.internal ?? false,
     externalId: values.externalId,
@@ -100,7 +100,7 @@ export async function createSlackComment(
 
   await stub.indexComment({
     id: comment.id,
-    issueId,
+    issueId: issue.id,
     teamId: issue.teamId,
     body: comment.body,
     createdAt: comment.createdAt,

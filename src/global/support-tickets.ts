@@ -276,9 +276,11 @@ export async function createTicket(
   const priority: SupportTicketPriority = input.priority ?? "medium";
   const externalSource: SupportTicketSource = input.externalSource ?? "manual";
 
+  let resolvedIssueId = input.issueId ?? null;
   if (input.issueId && env) {
     const stub = getWorkspaceStub(env, input.organizationId);
     await stub.setOrganizationId(input.organizationId);
+    // Accepts the issue UUID or its KEY-N identifier; store the UUID.
     const issue = await stub.getIssue(input.issueId);
     if (!issue) {
       throw new VortexError({
@@ -287,6 +289,7 @@ export async function createTicket(
         message: "Issue not found in workspace",
       });
     }
+    resolvedIssueId = issue.id;
   }
 
   const now = new Date().toISOString();
@@ -304,7 +307,7 @@ export async function createTicket(
     status,
     priority,
     sourceChannel: input.sourceChannel,
-    issueId: input.issueId ?? null,
+    issueId: resolvedIssueId,
     snoozedUntil: input.snoozedUntil ?? null,
     lastCustomerMessageAt: null,
     lastAgentMessageAt: null,
@@ -746,9 +749,11 @@ export async function updateTicket(
     return null;
   }
 
+  let resolvedIssueId = input.issueId;
   if (input.issueId && env) {
     const stub = getWorkspaceStub(env, organizationId);
     await stub.setOrganizationId(organizationId);
+    // Accepts the issue UUID or its KEY-N identifier; store the UUID.
     const issue = await stub.getIssue(input.issueId);
     if (!issue) {
       throw new VortexError({
@@ -757,6 +762,7 @@ export async function updateTicket(
         message: "Issue not found in workspace",
       });
     }
+    resolvedIssueId = issue.id;
   }
 
   const now = new Date().toISOString();
@@ -769,21 +775,21 @@ export async function updateTicket(
 
   const eventsToCreate: (typeof supportTicketEvents.$inferInsert)[] = [];
 
-  if (input.issueId !== undefined && input.issueId !== existing.issueId) {
-    updates.issueId = input.issueId;
+  if (resolvedIssueId !== undefined && resolvedIssueId !== existing.issueId) {
+    updates.issueId = resolvedIssueId;
     const actorType = input.actorType ?? "user";
     const actorId = input.actorId ?? null;
-    if (!existing.issueId && input.issueId) {
+    if (!existing.issueId && resolvedIssueId) {
       eventsToCreate.push({
         id: crypto.randomUUID(),
         ticketId,
         type: "link_added",
         actorType,
         actorId,
-        metadata: JSON.stringify({ issueId: input.issueId }),
+        metadata: JSON.stringify({ issueId: resolvedIssueId }),
         createdAt: now,
       });
-    } else if (existing.issueId && !input.issueId) {
+    } else if (existing.issueId && !resolvedIssueId) {
       eventsToCreate.push({
         id: crypto.randomUUID(),
         ticketId,
@@ -795,8 +801,8 @@ export async function updateTicket(
       });
     } else if (
       existing.issueId &&
-      input.issueId &&
-      existing.issueId !== input.issueId
+      resolvedIssueId &&
+      existing.issueId !== resolvedIssueId
     ) {
       eventsToCreate.push({
         id: crypto.randomUUID(),
@@ -806,7 +812,7 @@ export async function updateTicket(
         actorId,
         metadata: JSON.stringify({
           fromIssueId: existing.issueId,
-          toIssueId: input.issueId,
+          toIssueId: resolvedIssueId,
         }),
         createdAt: now,
       });

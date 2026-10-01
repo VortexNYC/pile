@@ -3,6 +3,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
+import { resolveIssueRef } from "./stub.js";
 
 const activitySchema = z.discriminatedUnion("kind", [
   z.object({
@@ -58,10 +59,11 @@ const issueActivityRoute = createRoute({
 
 export function registerActivityRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(issueActivityRoute, async (c) => {
-    const { organizationId, issueId } = c.req.valid("param");
+    const { organizationId, issueId: issueRef } = c.req.valid("param");
 
     const doId = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId);
     const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(doId);
+    const issueId = await resolveIssueRef(stub, issueRef);
     const history = await stub.listIssueHistory(issueId);
     const comments = await stub.listComments(issueId);
     const sessions = await stub.listAgentSessions({ issueId });
