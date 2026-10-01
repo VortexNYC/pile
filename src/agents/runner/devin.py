@@ -7,7 +7,8 @@ FOLLOWUP_DIR = '/tmp/followups'
 
 
 def agent_env():
-    return scrub_env(agent_env_base())
+    # Credentials live in DEVIN_HOME on disk; DEVIN_CREDENTIALS_B64 stays runner-only.
+    return scrubbed_env()
 
 
 def apply_tool_policy():
@@ -22,10 +23,11 @@ def permission_mode():
     return 'accept-edits' if SHELL_POLICY == 'disabled' else 'dangerous'
 
 
+
 def ensure():
     devin_bin = shutil.which('devin') or os.path.join(INSTALL_DIR, 'devin')
     if not os.path.exists(devin_bin):
-        subprocess.run(['bash', '-c', 'curl -fsSL https://cli.devin.ai/install.sh | bash'], check=False)
+        subprocess.run(['bash', '-c', 'curl -fsSL https://cli.devin.ai/install.sh | bash'], env=scrubbed_env(shims=False), check=False)
     # installer exits non-zero when its interactive wizard bails without a TTY; verify the binary directly
     result = subprocess.run([devin_bin, '--version'], capture_output=True, text=True)
     if result.returncode != 0:

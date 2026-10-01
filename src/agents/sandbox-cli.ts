@@ -151,6 +151,17 @@ function parseRepo(repo: string): [string, string] {
   return [parts[0], parts[1]];
 }
 
+function laneRestrictionEnv(env: AppEnv): Record<string, string> {
+  const flag = env.LANE_RESTRICTED?.trim().toLowerCase();
+  if (flag !== "1" && flag !== "true") return {};
+  return {
+    PILE_LANE_RESTRICTED: "1",
+    ...(env.LANE_NET_ALLOWLIST
+      ? { PILE_NET_ALLOWLIST: sanitizeEnv(env.LANE_NET_ALLOWLIST) }
+      : {}),
+  };
+}
+
 function sanitizeEnv(value: string): string {
   return value
     .replaceAll("\r\n", " ")
@@ -448,6 +459,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
       RUNNER_PY_B64: encodeBase64(
         runnerBundle.core + "\n" + runnerBundle[this.d.driver]
       ),
+      ...laneRestrictionEnv(this.env),
       ...options.extra,
     };
   }
