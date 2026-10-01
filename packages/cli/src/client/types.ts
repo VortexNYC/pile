@@ -1725,6 +1725,7 @@ export interface paths {
                             laneToken: string | null;
                             logUrl: string | null;
                             reportUrl: string | null;
+                            mcpUrl: string | null;
                         };
                     };
                 };
@@ -1787,6 +1788,7 @@ export interface paths {
                             laneToken: string | null;
                             logUrl: string | null;
                             reportUrl: string | null;
+                            mcpUrl: string | null;
                         };
                     };
                 };
