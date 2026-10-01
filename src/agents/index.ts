@@ -22,6 +22,7 @@ import {
   type DispatchEffort,
 } from "./budget.js";
 import { CfAgentProvider } from "./cf-agent.js";
+import { ClaudeCliAgentProvider } from "./claude-cli.js";
 import { CodexCliAgentProvider } from "./codex-cli.js";
 import { CodexAgentProvider } from "./codex.js";
 import { computeBackend } from "./compute.js";
@@ -54,6 +55,7 @@ const providers: Record<string, (env: WorkerEnv) => AgentProvider> = {
   "codex-cli": (env) => new CodexCliAgentProvider(env),
   "devin-cli": (env) => new DevinCliAgentProvider(env),
   "cursor-cli": (env) => new CursorCliAgentProvider(env),
+  "claude-cli": (env) => new ClaudeCliAgentProvider(env),
   "cf-agent": (env) => new CfAgentProvider(env, "cf-agent"),
   cursor: (env) => new CursorAgentProvider(env),
   flue: (env) => new CfAgentProvider(env, "flue"),
@@ -541,6 +543,7 @@ export async function dispatchAgent(
             .filter((part): part is string => part !== null && part !== "")
             .join("\n\n") || undefined,
         extraEnv,
+        purpose: options?.purpose,
         secondaryRepos,
         permissions: lanePermissions.permissions,
         effort,

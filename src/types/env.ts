@@ -37,6 +37,13 @@ export interface AppEnv {
   FEEDBACK_CHANNEL_ID?: string;
   /** Days before capture artifacts (R2 objects + attachment rows) are swept by the cron. Defaults to 30. */
   CAPTURE_ARTIFACT_RETENTION_DAYS?: string;
+  /** JSON credential pool (PILE-285): ordered `{kind, secret, label?, purposes?}`
+   *  entries — Claude Code / Codex / Gemini subscription logins with fallback. */
+  AGENT_CREDENTIAL_POOL?: string;
+  /** `claude setup-token` OAuth token (or `sk-ant-api` key) for the `claude-cli` provider. */
+  CLAUDE_CODE_OAUTH_TOKEN?: string;
+  /** Claude Code model override (defaults to `sonnet`). */
+  CLAUDE_CLI_MODEL?: string;
   /** Base64-encoded `~/.codex/auth.json` for the `codex-cli` provider. */
   CODEX_AUTH_JSON_B64?: string;
   /** Codex CLI model override (defaults to `gpt-reserve`). */
