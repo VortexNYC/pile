@@ -152,6 +152,7 @@ describe("ingestFailedAgentSession", () => {
       laneDbRef: null,
       purpose: null,
       endedAt: null,
+      secondaryRepos: null,
       maxDurationMinutes: null,
       effort: null,
       label: null,

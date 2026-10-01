@@ -39,6 +39,10 @@ import {
 } from "./lane-db.js";
 import { buildResultSchemaInstructions, sessionLabel } from "./lane-result.js";
 import type { AgentProvider } from "./provider.js";
+import {
+  validateSecondaryRepos,
+  type SecondaryRepo,
+} from "./secondary-repos.js";
 
 // Workspace-wide ceiling on live lanes — the container apps are bounded
 // (max_instances) and one lane's provisioning wedge otherwise starves all.
@@ -169,6 +173,10 @@ export async function dispatchAgent(
      *  `waiting` behind this session id; the sweep promotes it once the
      *  blocker goes terminal. Wins over the dedupe-derived queueAfter. */
     queueAfter?: string;
+    /** Sibling repos cloned into the lane next to issue.repo (PILE-294).
+     *  Persisted on the session row; promote/retry callers pass the stored
+     *  set back in. */
+    secondaryRepos?: SecondaryRepo[];
     /** PILE-293 — model tier; defaults from the issue's priority. Picks the
      *  model via provider config `effortModels` when no model is given. */
     effort?: DispatchEffort;
@@ -218,6 +226,20 @@ export async function dispatchAgent(
     resolveAgentEnv(env, providerConfig ?? undefined)
   );
 
+  const secondaryRepos = validateSecondaryRepos(
+    issue.repo,
+    options?.secondaryRepos
+  );
+  if (secondaryRepos.length > 0 && !provider.supportsSecondaryRepos) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: `Agent provider ${agentId} does not support secondaryRepos`,
+    });
+  }
+  const storedSecondaryRepos =
+    secondaryRepos.length > 0 ? JSON.stringify(secondaryRepos) : null;
+
   const gitIdentity = issue.repo
     ? ((await stub.getGitIdentityByRepo(issue.repo)) ??
       (await stub.getGitIdentityByRepo(DEFAULT_GIT_IDENTITY_REPO)) ??
@@ -264,6 +286,7 @@ export async function dispatchAgent(
         parentSessionId: options?.parentSessionId ?? null,
         spawnDepth: options?.spawnDepth ?? 0,
         purpose: options?.purpose ?? null,
+        secondaryRepos: storedSecondaryRepos,
         effort,
         maxDurationMinutes,
         label,
@@ -335,6 +358,7 @@ export async function dispatchAgent(
       parentSessionId: options?.parentSessionId ?? null,
       spawnDepth: options?.spawnDepth ?? 0,
       purpose: options?.purpose ?? null,
+      secondaryRepos: storedSecondaryRepos,
       effort,
       maxDurationMinutes,
       label,
@@ -510,6 +534,7 @@ export async function dispatchAgent(
             .filter((part): part is string => part !== null && part !== "")
             .join("\n\n") || undefined,
         extraEnv,
+        secondaryRepos,
         permissions: lanePermissions.permissions,
         effort,
       }
