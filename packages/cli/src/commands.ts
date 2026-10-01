@@ -825,6 +825,27 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "issues similar list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/issues/{id}/similar",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [
+      {
+        name: "limit",
+        flag: "limit",
+      },
+    ],
+    body: [],
+  },
   "issues batch": {
     method: "POST",
     path: "/workspaces/{organizationId}/issues/batch",
@@ -9288,6 +9309,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "triage-assignee-id",
       },
       {
+        name: "triageAgentId",
+        flag: "triage-agent-id",
+      },
+      {
         name: "defaultTemplateId",
         flag: "default-template-id",
       },
@@ -9351,6 +9376,10 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "triageAssigneeId",
         flag: "triage-assignee-id",
+      },
+      {
+        name: "triageAgentId",
+        flag: "triage-agent-id",
       },
       {
         name: "defaultTemplateId",

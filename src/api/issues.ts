@@ -638,6 +638,34 @@ const getIssueChildrenRoute = createRoute({
   },
 });
 
+const similarIssuesRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/issues/{id}/similar",
+  tags: ["issues"],
+  middleware: [rls("read")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+    query: z.object({
+      limit: z.coerce.number().int().min(1).max(50).optional(),
+    }),
+  },
+  responses: {
+    200: {
+      description:
+        "Issues whose title/description best match this issue (BM25 over the workspace search index), best first",
+      content: {
+        "application/json": {
+          schema: z.object({
+            similar: z.array(
+              z.object({ issue: issueApiSchema, score: z.number() })
+            ),
+          }),
+        },
+      },
+    },
+  },
+});
+
 const dispatchPreflightSchema = z.object({
   ready: z.boolean(),
   missing: z.array(z.string()),
@@ -1224,6 +1252,38 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       visibleTeamIds.includes(child.teamId)
     );
     return c.json({ issues: visibleChildren });
+  });
+
+  app.openapi(similarIssuesRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const { limit } = c.req.valid("query");
+    const identity = c.get("workspaceIdentity");
+    const db = createD1(c.env.D1);
+    const stub = await getStub(c.env, organizationId);
+    const issue = await stub.getIssue(id);
+    if (!issue) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Issue not found",
+      });
+    }
+    await assertIssueAccess(db, issue, identity);
+    const visibleTeamIds = await loadVisibleTeamIds(
+      db,
+      organizationId,
+      identity
+    );
+    const similar = await stub.findSimilarIssues(
+      issue.id,
+      visibleTeamIds,
+      limit ?? 10
+    );
+    return c.json({
+      similar: similar.filter((hit) =>
+        visibleTeamIds.includes(hit.issue.teamId)
+      ),
+    });
   });
 
   app.openapi(updateIssueRoute, async (c) => {
