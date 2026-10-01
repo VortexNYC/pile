@@ -24,6 +24,7 @@ import {
   providerKeepsTerminalSandbox,
 } from "./index.js";
 import { getLaneDbProvider, type LaneDbRef } from "./lane-db.js";
+import { reapLaneGithubTokens } from "./lane-github-token.js";
 import { nudgeLane } from "./nudge.js";
 import type {
   AgentProvider,
@@ -466,6 +467,11 @@ async function reapTerminalArtifacts(
   organizationId: string,
   now: number
 ): Promise<void> {
+  // Lane GitHub tokens die with the session, independent of whether the
+  // sandbox itself is kept for follow-ups.
+  await reapLaneGithubTokens(env, stub).catch((err: unknown) => {
+    console.error("lane github token reap failed:", err);
+  });
   const recent = await stub.listAgentSessions({ limit: 200 });
   // PILE-239/253 — first pass: terminal sessions inside the resume window on
   // providers that park their sandbox are the kept-sandbox population per
