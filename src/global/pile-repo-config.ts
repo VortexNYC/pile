@@ -100,6 +100,10 @@ export const pileRepoConfigSchema = z.object({
       regen: z.string().nonempty(),
     })
     .optional(),
+  // PILE-310 — lane preview tunnels: when a lane's terminal result carries a
+  // PR, open a cloudflared quick tunnel to this port on the kept sandbox and
+  // post the *.trycloudflare.com URL as a PR comment.
+  preview: z.object({ port: z.number().int().positive() }).optional(),
   // Automated PR review lane (PILE-273). Present = enabled: every PR
   // open/synchronize on a Pile-tracked branch gets a repo-less review session
   // (`agent`, default devin-cli; `model` overrides the provider default) that

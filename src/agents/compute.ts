@@ -117,6 +117,8 @@ export interface ComputeBackend {
   backupWorktree?(sandbox: ComputeSandbox): Promise<string | null>;
   /** Spawn a sandbox under `name` and restore a stored worktree backup. */
   restoreWorktree?(name: string, backupJson: string): Promise<ComputeSandbox>;
+  /** Public URL for a port on the sandbox — quick tunnel, lives as long as the container. */
+  previewUrl?(sandbox: ComputeSandbox, port: number): Promise<string | null>;
   health(): Promise<{ ok: boolean; message?: string }>;
 }
 
@@ -449,6 +451,7 @@ export type SandboxHandle = Pick<
   | "createBackup"
   | "restoreBackup"
   | "exec"
+  | "tunnels"
 >;
 
 export class CloudflareBackend implements ComputeBackend {
@@ -742,6 +745,25 @@ export class CloudflareBackend implements ComputeBackend {
       "sandbox restore copy"
     );
     return { id: name, name, state: "started" };
+  }
+
+  async previewUrl(
+    sandbox: ComputeSandbox,
+    port: number
+  ): Promise<string | null> {
+    try {
+      const handle = await ioTimeout(
+        this.sandbox(sandbox.name),
+        "sandbox handle"
+      );
+      const info = await ioTimeout(
+        handle.tunnels.get(port),
+        "sandbox tunnel get"
+      );
+      return info.url;
+    } catch {
+      return null;
+    }
   }
 
   async deleteSandbox(sandbox: ComputeSandbox): Promise<void> {
