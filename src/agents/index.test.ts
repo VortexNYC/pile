@@ -742,4 +742,64 @@ describe("agent providers", () => {
       )
     ).rejects.toThrow("does not support secondaryRepos");
   });
+
+  it("picks the effort-tier model from issue priority and persists the budget", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)
+    );
+    await stub.setOrganizationId(actor.organizationId);
+    await stub.upsertAgentProviderConfig({
+      agentId: "mock-effort",
+      config: { effortModels: { low: "cheap-model", max: "big-model" } },
+    });
+    let captured: { model?: string; effort?: string } = {};
+    registerAgentProvider(
+      "mock-effort",
+      () =>
+        new MockAgentProvider("mock-effort", {
+          dispatch: (_org, issue, model, ctx) => {
+            captured = { model, effort: ctx?.effort };
+            return {
+              id: `run-${issue.id}`,
+              agentId: "mock-effort",
+              status: "created",
+            };
+          },
+        })
+    );
+
+    const triage = await stub.createIssue({
+      title: "Low-priority triage",
+      priority: "low",
+    });
+    const cheap = await dispatchAgent(
+      env,
+      "mock-effort",
+      actor.organizationId,
+      triage,
+      actor,
+      undefined,
+      undefined,
+      { maxDurationMinutes: 15 }
+    );
+    expect(captured).toEqual({ model: "cheap-model", effort: "low" });
+    expect(cheap.effort).toBe("low");
+    expect(cheap.maxDurationMinutes).toBe(15);
+
+    const urgent = await stub.createIssue({
+      title: "Urgent with explicit model",
+      priority: "urgent",
+    });
+    const pinned = await dispatchAgent(
+      env,
+      "mock-effort",
+      actor.organizationId,
+      urgent,
+      actor,
+      "explicit-model"
+    );
+    expect(captured).toEqual({ model: "explicit-model", effort: "max" });
+    expect(pinned.effort).toBe("max");
+    expect(pinned.maxDurationMinutes).toBeNull();
+  });
 });

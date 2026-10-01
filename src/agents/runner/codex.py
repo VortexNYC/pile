@@ -6,7 +6,7 @@ ENV_ID = os.environ['CODEX_CLI_ENV_ID']
 
 
 def agent_env():
-    return agent_env_base({'CODEX_HOME': CODEX_HOME, 'CODEX_INSTALL_DIR': INSTALL_DIR, 'CODEX_CLI_ENV_ID': ENV_ID})
+    return scrub_env(agent_env_base({'CODEX_HOME': CODEX_HOME, 'CODEX_INSTALL_DIR': INSTALL_DIR, 'CODEX_CLI_ENV_ID': ENV_ID}))
 
 
 def ensure():
@@ -82,17 +82,14 @@ def apply_and_push(codex_bin, task_url):
     if result.returncode != 0:
         print('codex cloud apply failed:', result.returncode, result.stdout, result.stderr)
         return False
-    status = run(['git', '-C', REPO_DIR, 'status', '--porcelain'], env=env, capture_output=True, text=True, check=True)
-    if not status.stdout.strip():
-        print('no changes to commit')
-        return False
-    run(['git', '-C', REPO_DIR, 'add', '-A'], env=env, check=True)
-    run(['git', '-C', REPO_DIR, 'commit', '-m', f'{AGENT_LABEL} changes for {BRANCH}'], env=env, check=True)
-    run_transport(['git', '-C', REPO_DIR, 'push', 'origin', BRANCH], env=env)
-    return True
+    return commit_and_push(env)
 
 
 def main():
+    # Cloud tasks run in OpenAI's environment with its own git credentials;
+    # Pile refuses the dispatch below enabled, this is the runner backstop.
+    if PUSH_POLICY != 'enabled' or SHELL_POLICY != 'enabled':
+        raise RuntimeError(f'codex cloud cannot enforce lane permissions push={PUSH_POLICY} shell={SHELL_POLICY}')
     auth_b64 = os.environ['CODEX_AUTH_JSON_B64']
     model = os.environ.get('MODEL', 'gpt-reserve')
     write_codex_home(auth_b64, model)

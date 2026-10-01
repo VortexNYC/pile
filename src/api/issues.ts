@@ -2,6 +2,11 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 import { eq, and } from "drizzle-orm";
 
+import {
+  dispatchEffortSchema,
+  maxDurationSchema,
+  resolveDispatchEffort,
+} from "../agents/budget.js";
 import { loadProviderConfig } from "../agents/credentials.js";
 import { resolveAgentEnv } from "../agents/daytona.js";
 import { dispatchAgent, getAgentProvider } from "../agents/index.js";
@@ -644,6 +649,34 @@ const getIssueChildrenRoute = createRoute({
   },
 });
 
+const similarIssuesRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/issues/{id}/similar",
+  tags: ["issues"],
+  middleware: [rls("read")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+    query: z.object({
+      limit: z.coerce.number().int().min(1).max(50).optional(),
+    }),
+  },
+  responses: {
+    200: {
+      description:
+        "Issues whose title/description best match this issue (BM25 over the workspace search index), best first",
+      content: {
+        "application/json": {
+          schema: z.object({
+            similar: z.array(
+              z.object({ issue: issueApiSchema, score: z.number() })
+            ),
+          }),
+        },
+      },
+    },
+  },
+});
+
 const dispatchPreflightSchema = z.object({
   ready: z.boolean(),
   missing: z.array(z.string()),
@@ -683,6 +716,12 @@ const dispatchRoute = createRoute({
               // next to the primary checkout. `write` entries get the lane
               // branch pushed and a PR opened in that repo.
               secondaryRepos: secondaryReposSchema.optional(),
+              // PILE-293 — run budget. effort is a model tier (low→max);
+              // unset, it follows the issue's priority (preflight: low).
+              // maxDuration (minutes) replaces the provider timeout for this
+              // lane; past it the lane is canceled and escalated.
+              effort: dispatchEffortSchema.optional(),
+              maxDuration: maxDurationSchema.optional(),
               // PILE-289 — validate the lane's final output; automations
               // read session.structuredResult instead of scraping prose.
               resultSchema: resultSchemaInputSchema.optional(),
@@ -1239,6 +1278,38 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     return c.json({ issues: visibleChildren });
   });
 
+  app.openapi(similarIssuesRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const { limit } = c.req.valid("query");
+    const identity = c.get("workspaceIdentity");
+    const db = createD1(c.env.D1);
+    const stub = await getStub(c.env, organizationId);
+    const issue = await stub.getIssue(id);
+    if (!issue) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Issue not found",
+      });
+    }
+    await assertIssueAccess(db, issue, identity);
+    const visibleTeamIds = await loadVisibleTeamIds(
+      db,
+      organizationId,
+      identity
+    );
+    const similar = await stub.findSimilarIssues(
+      issue.id,
+      visibleTeamIds,
+      limit ?? 10
+    );
+    return c.json({
+      similar: similar.filter((hit) =>
+        visibleTeamIds.includes(hit.issue.teamId)
+      ),
+    });
+  });
+
   app.openapi(updateIssueRoute, async (c) => {
     const input = c.req.valid("json");
     const { organizationId, id } = c.req.valid("param");
@@ -1445,6 +1516,8 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       branch,
       instructions,
       preflight,
+      effort,
+      maxDuration,
       resultSchema: resultSchemaInput,
       secondaryRepos,
     } = c.req.valid("json");
@@ -1523,7 +1596,12 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         message: `Agent "${resolvedAgentId}" is not allowed by .pile/config.json (allowed: ${pileConfig.agents.join(", ")})`,
       });
     }
-    const resolvedModel = model ?? pileConfig?.model;
+    const resolvedEffort = resolveDispatchEffort(
+      effort ?? (preflight ? "low" : undefined),
+      target
+    );
+    const resolvedModel =
+      model ?? pileConfig?.effortModels?.[resolvedEffort] ?? pileConfig?.model;
     const resultSchema = resultSchemaInput
       ? resolveResultSchema(resultSchemaInput)
       : undefined;
@@ -1578,6 +1656,8 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
             envAllowlist: pileConfig?.env,
             purpose: "preflight",
             skipQueue: true,
+            effort: resolvedEffort,
+            maxDurationMinutes: maxDuration,
             resultSchema,
           }
         )
@@ -1592,8 +1672,10 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
           {
             instructions,
             envAllowlist: pileConfig?.env,
-            resultSchema,
             secondaryRepos,
+            effort: resolvedEffort,
+            maxDurationMinutes: maxDuration,
+            resultSchema,
           }
         );
 

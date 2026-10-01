@@ -1,8 +1,10 @@
+import type { LanePermissions } from "../global/pile-repo-config.js";
 import type {
   AgentSessionResult,
   GitIdentity,
   Issue,
 } from "../types/workspace.js";
+import type { DispatchEffort } from "./budget.js";
 import type { SecondaryRepo } from "./secondary-repos.js";
 
 export interface AgentProviderSession extends AgentSessionResult {
@@ -50,6 +52,11 @@ export interface AgentDispatchContext {
   /** Sibling repos cloned next to the primary checkout (PILE-294). Only
    *  providers with `supportsSecondaryRepos` receive a non-empty list. */
   secondaryRepos?: SecondaryRepo[];
+  /** Lane push/shell tiers (PILE-276); absent means fully enabled. */
+  permissions?: LanePermissions;
+  /** PILE-293 — model tier the lane was dispatched at. The model is already
+   *  resolved from it; providers with a native effort knob may also use it. */
+  effort?: DispatchEffort;
 }
 
 export interface AgentProviderHealth {

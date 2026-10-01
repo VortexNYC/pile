@@ -3,6 +3,11 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { and, eq, type InferSelectModel } from "drizzle-orm";
 
 import {
+  dispatchEffortSchema,
+  maxDurationSchema,
+  resolveDispatchEffort,
+} from "../agents/budget.js";
+import {
   agentLogToken,
   agentLogUrl,
   agentReportUrl,
@@ -31,7 +36,12 @@ import { consumeUsage } from "../global/billing.js";
 import { timingSafeEqualHex } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
 import { getInstallationTokenForRepo } from "../global/github-auth.js";
-import { fetchPileRepoConfig } from "../global/pile-repo-config.js";
+import { prUrlOnRepo } from "../global/lane-guard.js";
+import {
+  fetchLanePermissions,
+  fetchPileRepoConfig,
+  laneTokenPermissions,
+} from "../global/pile-repo-config.js";
 import { scrubLaneText } from "../global/redact.js";
 import { createRepoBranch } from "../global/repo-branches.js";
 import { githubInstallations } from "../global/schema.js";
@@ -95,6 +105,8 @@ export const agentSessionSchema = z.object({
   purpose: z.string().nullable().optional(),
   // JSON [{repo, access}] — see secondaryRepoSchema.
   secondaryRepos: z.string().nullable().optional(),
+  maxDurationMinutes: z.number().int().nullable().optional(),
+  effort: dispatchEffortSchema.nullable().optional(),
   /** Auto-generated run name for logs and `pile fleet` (PILE-289). */
   label: z.string().nullable().optional(),
   /** Dispatch-time JSON Schema (draft-07) the lane's output is validated
@@ -699,6 +711,8 @@ const createChildSessionRoute = createRoute({
             agentId: z.string().optional(),
             model: z.string().optional(),
             repo: z.string().optional(),
+            effort: dispatchEffortSchema.optional(),
+            maxDuration: maxDurationSchema.optional(),
           }),
         },
       },
@@ -804,6 +818,10 @@ const dispatchBatchItemSchema = z
     instructions: z.string().optional(),
     queuedAfter: z.string().optional(),
     secondaryRepos: secondaryReposSchema.optional(),
+    // PILE-293 — run budget: effort picks the model tier (defaults from the
+    // issue's priority); maxDuration (minutes) cancels + escalates the lane.
+    effort: dispatchEffortSchema.optional(),
+    maxDuration: maxDurationSchema.optional(),
     resultSchema: resultSchemaInputSchema.optional(),
   })
   .strict();
@@ -910,6 +928,9 @@ const retrySessionRoute = createRoute({
               context: z.string().optional(),
               agentId: z.string().optional(),
               model: z.string().optional(),
+              // Defaults to the original session's budget.
+              effort: dispatchEffortSchema.optional(),
+              maxDuration: maxDurationSchema.optional(),
             })
             .strict(),
         },
@@ -1320,19 +1341,22 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
           c.env,
           providerConfig ?? undefined
         );
+        const effort = resolveDispatchEffort(item.effort, target);
         const session = await dispatchAgent(
           effectiveEnv,
           resolvedAgentId,
           organizationId,
           target,
           identity,
-          pileConfig?.model,
+          pileConfig?.effortModels?.[effort] ?? pileConfig?.model,
           getExecutionCtx(c),
           {
             instructions: item.instructions,
             envAllowlist: pileConfig?.env,
             queueAfter,
             secondaryRepos: item.secondaryRepos,
+            effort,
+            maxDurationMinutes: item.maxDuration,
             resultSchema: item.resultSchema
               ? resolveResultSchema(item.resultSchema)
               : undefined,
@@ -1835,6 +1859,20 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         const value = input[key];
         if (typeof value === "string") update[key] = value;
       }
+      if (update.result !== undefined) {
+        update.result = scrubLaneText(update.result, [
+          c.req.header("authorization")?.replace(/^Bearer\s+/i, ""),
+        ]);
+      }
+      if (update.prUrl !== undefined) {
+        const issue = await stub.getIssue(session.issueId);
+        if (issue?.repo && !prUrlOnRepo(update.prUrl, issue.repo)) {
+          return c.json(
+            { message: "prUrl is not a pull request on the session repo" },
+            400
+          );
+        }
+      }
       if (typeof input.status === "string") {
         const allowed = new Set<string>([
           "created",
@@ -1954,12 +1992,19 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
           403
         );
       }
+      // Re-resolve the lane's push tier on every mint so the refreshed token
+      // is never broader than the policy (push=disabled → contents:read).
+      const { permissions } = await fetchLanePermissions(
+        c.env,
+        issue.repo,
+        session.agentId
+      );
       const minted = await mintLaneGithubToken(
         c.env,
         organizationId,
         sessionId,
         targetRepo,
-        { secondary }
+        { secondary, permissions: laneTokenPermissions(permissions.push) }
       );
       if (!minted) {
         return c.json({ message: "No installation token for repository" }, 502);
@@ -2446,7 +2491,12 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       identity,
       body.model,
       getExecutionCtx(c),
-      { parentSessionId: session.id, spawnDepth: nextDepth }
+      {
+        parentSessionId: session.id,
+        spawnDepth: nextDepth,
+        effort: body.effort,
+        maxDurationMinutes: body.maxDuration,
+      }
     );
 
     const childAfter = await stub.getIssue(child.id);
@@ -2572,6 +2622,9 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       {
         instructions: instructions || undefined,
         secondaryRepos: parseStoredSecondaryRepos(session.secondaryRepos),
+        effort: body.effort ?? session.effort ?? undefined,
+        maxDurationMinutes:
+          body.maxDuration ?? session.maxDurationMinutes ?? undefined,
       }
     );
     await stub.updateAgentSession(retried.id, {

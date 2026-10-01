@@ -777,6 +777,12 @@ const v44 = `ALTER TABLE agent_sessions ADD COLUMN purpose TEXT`;
 // transition, written once.
 const v45 = `ALTER TABLE agent_sessions ADD COLUMN ended_at TEXT`;
 
+// PILE-293 — per-dispatch run budget: maxDuration overrides the provider
+// timeout for this lane; effort is the model tier it was dispatched at.
+const v47 = `ALTER TABLE agent_sessions ADD COLUMN max_duration_minutes INTEGER
+--> statement-breakpoint
+ALTER TABLE agent_sessions ADD COLUMN effort TEXT`;
+
 // PILE-289 — session labels + structured lane results.
 const v46 = `ALTER TABLE agent_sessions ADD COLUMN label TEXT
 --> statement-breakpoint
@@ -787,7 +793,14 @@ ALTER TABLE agent_sessions ADD COLUMN structured_result TEXT
 ALTER TABLE agent_sessions ADD COLUMN result_schema_errors TEXT`;
 
 // PILE-294 — cross-repo lanes: sibling repos cloned under ~/xrepo.
-const v47 = `ALTER TABLE agent_sessions ADD COLUMN secondary_repos TEXT`;
+const v49 = `ALTER TABLE agent_sessions ADD COLUMN secondary_repos TEXT`;
+
+// PILE-286 — incremental review: the head sha the lane's PR was last
+// reviewed at, plus a rolling JSON snapshot of review verdicts, so a
+// follow-up review only re-derives context for the range since that sha.
+const v48 = `ALTER TABLE agent_sessions ADD COLUMN last_reviewed_sha TEXT
+--> statement-breakpoint
+ALTER TABLE agent_sessions ADD COLUMN review_summary TEXT`;
 
 export const workspaceMigrations = {
   journal: {
@@ -839,6 +852,8 @@ export const workspaceMigrations = {
       { idx: 44, when: 44, tag: "v45", breakpoints: true },
       { idx: 45, when: 45, tag: "v46", breakpoints: true },
       { idx: 46, when: 46, tag: "v47", breakpoints: true },
+      { idx: 47, when: 47, tag: "v48", breakpoints: true },
+      { idx: 48, when: 48, tag: "v49", breakpoints: true },
     ],
   },
   migrations: {
@@ -889,5 +904,7 @@ export const workspaceMigrations = {
     m0044: v45,
     m0045: v46,
     m0046: v47,
+    m0047: v48,
+    m0048: v49,
   },
 } satisfies Parameters<typeof migrate>[1];
