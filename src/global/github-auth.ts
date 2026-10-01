@@ -34,26 +34,23 @@ async function getAppJwt(env: AppEnv): Promise<string | undefined> {
   return jwt;
 }
 
+export interface InstallationTokenScope {
+  /** Restrict the token to these repository names (same installation). */
+  repositories?: string[];
+  /** Downscope the token below the installation's grant. */
+  permissions?: Record<string, "read" | "write">;
+}
+
 export interface RepoScopedToken {
   token: string;
   /** ISO timestamp GitHub reports for the token's expiry (~1h after mint). */
   expiresAt: string | null;
 }
 
-/**
- * Optional downscope for a minted installation token — GitHub narrows the
- * token to these repository names and permissions (never wider than the
- * installation's own grant).
- */
-export interface InstallationTokenScope {
-  repositories?: string[];
-  permissions?: Record<string, "read" | "write">;
-}
-
 async function createInstallationAccessToken(
   env: AppEnv,
   installationId: string,
-  body?: InstallationTokenScope
+  scope?: InstallationTokenScope
 ): Promise<RepoScopedToken | undefined> {
   const jwt = await getAppJwt(env);
   if (!jwt) return undefined;
@@ -67,9 +64,9 @@ async function createInstallationAccessToken(
         Accept: "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
         "User-Agent": GITHUB_USER_AGENT,
-        ...(body ? { "Content-Type": "application/json" } : {}),
+        ...(scope ? { "Content-Type": "application/json" } : {}),
       },
-      ...(body ? { body: JSON.stringify(body) } : {}),
+      ...(scope ? { body: JSON.stringify(scope) } : {}),
     }
   );
   if (!response.ok) return undefined;
@@ -136,12 +133,14 @@ export async function getInstallationTokenForRepo(
 export async function getRepoScopedInstallationToken(
   env: AppEnv,
   owner: string,
-  name: string
+  name: string,
+  permissions?: InstallationTokenScope["permissions"]
 ): Promise<RepoScopedToken | undefined> {
   const installationId = await getInstallationIdForRepo(env, owner, name);
   if (!installationId) return undefined;
   return createInstallationAccessToken(env, installationId, {
     repositories: [name],
+    ...(permissions ? { permissions } : {}),
   });
 }
 

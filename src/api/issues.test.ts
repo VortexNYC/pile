@@ -925,3 +925,53 @@ describe("issues API", () => {
     expect(issue.status).toBe("triage");
   });
 });
+
+describe("similar issues API", () => {
+  it("ranks issues by title/description overlap and excludes the issue itself", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const create = async (title: string, description?: string) => {
+      const res = await fetch(
+        `/workspaces/${organizationId}/issues`,
+        { method: "POST", body: JSON.stringify({ title, description }) },
+        token
+      );
+      expect(res.status).toBe(201);
+      return z
+        .object({ id: z.string(), identifier: z.string() })
+        .parse(await res.json());
+    };
+    const match = await create(
+      "Webhook retries flood the delivery queue",
+      "Outbound webhook retries never back off"
+    );
+    await create("Dark mode toggle in settings");
+    const issue = await create(
+      "Webhook delivery retries need backoff",
+      "Retries hammer the queue"
+    );
+
+    const res = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.identifier}/similar?limit=5`,
+      {},
+      token
+    );
+    expect(res.status).toBe(200);
+    const body = z
+      .object({
+        similar: z.array(
+          z.object({ issue: z.object({ id: z.string() }), score: z.number() })
+        ),
+      })
+      .parse(await res.json());
+    const ids = body.similar.map((hit) => hit.issue.id);
+    expect(ids[0]).toBe(match.id);
+    expect(ids).not.toContain(issue.id);
+
+    const missing = await fetch(
+      `/workspaces/${organizationId}/issues/NOPE-1/similar`,
+      {},
+      token
+    );
+    expect(missing.status).toBe(404);
+  });
+});

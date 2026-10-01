@@ -5,7 +5,17 @@ CURSOR_HOME = os.path.join(HOME, '.local', 'share', 'cursor-agent')
 
 
 def agent_env():
-    return agent_env_base({'CURSOR_API_KEY': os.environ.get('CURSOR_API_KEY', '')})
+    return scrubbed_env({'CURSOR_API_KEY': os.environ.get('CURSOR_API_KEY', '')})
+
+
+def apply_tool_policy():
+    # shell=disabled at the tool surface: cursor-agent's global config deny
+    # wins over any allow (and over a repo's .cursor/cli.json), even with
+    # --force.
+    if SHELL_POLICY != 'disabled':
+        return
+    deny_in_cli_config(os.path.join(HOME, '.cursor', 'cli-config.json'),
+                       ['Shell(*)'], base={'version': 1, 'editor': {'vimMode': False}})
 
 
 def ensure():
@@ -16,7 +26,7 @@ def ensure():
         candidate = os.path.join(INSTALL_DIR, name)
         if os.path.exists(candidate):
             return candidate
-    subprocess.run(['bash', '-c', 'curl https://cursor.com/install -fsS | bash'], check=False)
+    subprocess.run(['bash', '-c', 'curl https://cursor.com/install -fsS | bash'], env=scrubbed_env(shims=False), check=False)
     for name in ('cursor-agent', 'agent'):
         candidate = os.path.join(INSTALL_DIR, name)
         if os.path.exists(candidate):
@@ -98,6 +108,7 @@ def main():
         run_hook('postCheckout', agent_env())
         warm_pnpm_store()
         run_setup_hook(agent_env)
+    apply_tool_policy()
     output, report = run_agent(agent_bin)
     task = base64.b64decode(os.environ['PROMPT_B64']).decode('utf-8')
     healed = self_heal(agent_env(), lambda p: run_agent(agent_bin, prompt=p), task)

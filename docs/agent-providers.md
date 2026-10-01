@@ -93,6 +93,29 @@ session reaches a terminal state, with an `autoStopInterval` safety ceiling
 on Daytona (`sleepAfter` on Cloudflare).
 Daytona compute path verified live 2026-09-23 (ISS-92) against snapshot vortex-cli-runner-v2 and sandbox label scheme vortex.session.
 
+### Lane isolation
+
+Agent CLIs, `.pile/setup.sh`, and CLI installers run with `scrubbed_env()` —
+the allowlisted agent env described under [Lane credential
+posture](#lane-credential-posture), never the runner's own environment.
+
+`LANE_RESTRICTED=1` (deployment env) additionally runs lanes in **restricted
+mode**:
+
+- PATH shims for `git`, `curl`, `wget`, `gh`, `ssh`, `scp`, `rsync`, `nc`, …
+  refuse `git push`/`send-pack`/`credential`, remote mutation
+  (`git remote add|set-url|…`), credential/remote/url/alias config
+  (`git config`, `-c`, `GIT_CONFIG_*`), network-only tools outright, and
+  `curl`/`wget` to hosts off the allowlist (GitHub, npm, PyPI, localhost, the
+  Pile API host, plus `LANE_NET_ALLOWLIST` — comma-separated). Blocked
+  commands exit `126` with `pile restricted lane: … blocked: <reason>`.
+- The GitHub token is kept out of `.git/config` while the agent runs; the
+  runner sets it only around its own fetch/push.
+
+Shims are a guardrail on the agent's PATH, not a kernel sandbox — the hard
+boundary is that no credential is reachable from the agent's env or repo
+config.
+
 ## Cursor Cloud Agents
 
 The `cursor` provider targets Cursor's Cloud Agents v1 API
@@ -452,13 +475,56 @@ optional:
 }
 ```
 
-| field    | effect                                                                                                                                         |
-| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `agents` | Allowlist — dispatch with any other agentId is rejected (400).                                                                                 |
-| `model`  | Default model when the dispatch request doesn't name one.                                                                                      |
-| `setup`  | Documented setup hook. `.pile/setup.sh` runs after clone either way.                                                                           |
-| `env`    | Env-var allowlist — caller-supplied `extraEnv` keys not named here are dropped before they reach the lane. Infra env (lane DB etc.) is exempt. |
-| `hooks`  | Lane lifecycle hooks — see below.                                                                                                              |
+| field      | effect                                                                                                                                         |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `agents`   | Allowlist — dispatch with any other agentId is rejected (400).                                                                                 |
+| `model`    | Default model when the dispatch request doesn't name one.                                                                                      |
+| `setup`    | Documented setup hook. `.pile/setup.sh` runs after clone either way.                                                                           |
+| `env`      | Env-var allowlist — caller-supplied `extraEnv` keys not named here are dropped before they reach the lane. Infra env (lane DB etc.) is exempt. |
+| `triggers` | Event→lane triggers — see below.                                                                                                               |
+| `hooks`    | Lane lifecycle hooks — see below.                                                                                                              |
+
+### Event→lane triggers
+
+`triggers` maps repo events to lane dispatches — one primitive for review,
+triage, plan, mention, and future event-driven lanes:
+
+```json
+{
+  "triggers": [
+    { "on": "pr.opened", "agent": "devin-cli", "prompt": "Review this PR." },
+    { "on": "issue.created", "agent": "devin", "prompt": "Triage this issue." },
+    {
+      "on": "label.added",
+      "label": "needs-plan",
+      "agent": "devin",
+      "model": "swe-2",
+      "prompt": "Write an implementation plan."
+    },
+    { "on": "mention", "agent": "devin-cli", "prompt": "Answer the mention." }
+  ]
+}
+```
+
+| `on`             | fires when                                                                                                                                                                                                      |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `issue.created`  | A GitHub issue is opened in the repo (and mirrored into Pile).                                                                                                                                                  |
+| `pr.opened`      | A pull request is opened.                                                                                                                                                                                       |
+| `pr.synchronize` | New commits are pushed to a pull request.                                                                                                                                                                       |
+| `ci.failed`      | The sweep sees a lane PR's checks go red (`pr.ci_failed`).                                                                                                                                                      |
+| `mention`        | A comment on a mirrored issue or PR contains `handle` (default `@pile`). Only repo owners/members/collaborators and linked Pile users fire it; bots never do. Runs alongside the built-in `@pile` lane routing. |
+| `label.added`    | A label is added to a mirrored issue or a PR — only `label` when set, any label otherwise.                                                                                                                      |
+
+Each matching trigger dispatches `agent` (subject to the `agents` allowlist)
+with `prompt` plus the event details as lane instructions; `model` falls back
+to the top-level `model`, and the `env` allowlist applies. PR events land on
+the issue that owns the PR branch; other PRs get a per-PR issue
+(`repo:github:<owner>:<repo>:pr:<n>`), created only when a trigger matches.
+Triggers are read from the repo's default branch, never the PR head, and are
+processed by the same `fireEventAutomations` path as workspace event
+automations — which accept these event names as `triggerValue` too. Dispatch
+keeps the one-active-lane-per-issue guard, so an event on an issue whose lane
+is still running is skipped (logged).
 
 ### Lane lifecycle hooks
 
