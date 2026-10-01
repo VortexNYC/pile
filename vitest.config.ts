@@ -57,7 +57,7 @@ export default defineConfig({
           name: "node",
           environment: "node",
           globals: true,
-          include: ["src/**/*.node.test.ts"],
+          include: ["src/**/*.node.test.ts", "scripts/**/*.node.test.ts"],
         },
       },
     ],
