@@ -603,4 +603,89 @@ describe("WorkspaceDO", () => {
     );
     expect(ownerAfter?.prState).toBe("open");
   });
+
+  it("creates a document with 50+ issue-key references without error", async () => {
+    const stub = getStub();
+    const issue = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Many-refs link target" })
+    );
+    const refs = Array.from({ length: 60 }, (_, i) => `FAKE-${i + 1}`);
+    const doc = await withWorkspace(stub, (instance) =>
+      instance.createDocument({
+        title: "Doc with many refs",
+        content: [issue.identifier, ...refs].join(" "),
+        contentFormat: "markdown",
+        createdById: "user-1",
+      })
+    );
+    const links = await withWorkspace(stub, (instance) =>
+      instance.listDocumentLinks({ documentId: doc.id })
+    );
+    expect(links).toHaveLength(1);
+    expect(links[0]).toMatchObject({
+      targetType: "issue",
+      targetId: issue.id,
+    });
+  });
+
+  it("deduplicates repeated issue references into a single link", async () => {
+    const stub = getStub();
+    const issue = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Deduped link target" })
+    );
+    const doc = await withWorkspace(stub, (instance) =>
+      instance.createDocument({
+        title: "Doc with duplicate refs",
+        content: Array(10).fill(issue.identifier).join(" "),
+        contentFormat: "markdown",
+        createdById: "user-1",
+      })
+    );
+    const links = await withWorkspace(stub, (instance) =>
+      instance.listDocumentLinks({ documentId: doc.id })
+    );
+    expect(links).toHaveLength(1);
+    expect(links[0].targetId).toBe(issue.id);
+  });
+
+  it("links [[slug]] references once and clears stale links on update", async () => {
+    const stub = getStub();
+    const slug = `linked-${crypto.randomUUID()}`;
+    const target = await withWorkspace(stub, (instance) =>
+      instance.createDocument({
+        title: "Link target doc",
+        slug,
+        contentFormat: "markdown",
+        createdById: "user-1",
+      })
+    );
+    const doc = await withWorkspace(stub, (instance) =>
+      instance.createDocument({
+        title: "Linker doc",
+        content: `see [[${slug}]] and again [[${slug}]]`,
+        contentFormat: "markdown",
+        createdById: "user-1",
+      })
+    );
+    let links = await withWorkspace(stub, (instance) =>
+      instance.listDocumentLinks({ documentId: doc.id })
+    );
+    expect(links).toHaveLength(1);
+    expect(links[0]).toMatchObject({
+      targetType: "document",
+      targetId: target.id,
+    });
+
+    await withWorkspace(stub, (instance) =>
+      instance.updateDocument(
+        doc.id,
+        { content: "no references left", contentFormat: "markdown" },
+        "user-1"
+      )
+    );
+    links = await withWorkspace(stub, (instance) =>
+      instance.listDocumentLinks({ documentId: doc.id })
+    );
+    expect(links).toHaveLength(0);
+  });
 });
