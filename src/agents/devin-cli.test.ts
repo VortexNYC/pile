@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppEnv } from "../platform/env.js";
 import type { GitIdentity, Issue } from "../types/workspace.js";
 import { DevinCliAgentProvider } from "./devin-cli.js";
+import { DOMAIN_REVIEW_PROMPT } from "./review-prompt.js";
 
 function cliEnv(overrides?: Partial<AppEnv>): AppEnv {
   return {
@@ -229,6 +230,7 @@ describe("DevinCliAgentProvider", () => {
     );
     expect(prompt).toContain("## Dispatch instructions");
     expect(prompt).toContain("Only touch src/api — no deploys");
+    expect(prompt).toContain(DOMAIN_REVIEW_PROMPT);
   });
 
   it("polls running while command is in progress", async () => {
