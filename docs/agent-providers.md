@@ -444,7 +444,11 @@ optional:
   "agents": ["devin", "devin-cli"],
   "model": "swe-2",
   "setup": ".pile/setup.sh",
-  "env": ["DATABASE_URL", "NPM_TOKEN"]
+  "env": ["DATABASE_URL", "NPM_TOKEN"],
+  "hooks": {
+    "setup": "pnpm install --frozen-lockfile",
+    "stop": "pnpm run check"
+  }
 }
 ```
 
@@ -455,6 +459,7 @@ optional:
 | `setup`    | Documented setup hook. `.pile/setup.sh` runs after clone either way.                                                                           |
 | `env`      | Env-var allowlist — caller-supplied `extraEnv` keys not named here are dropped before they reach the lane. Infra env (lane DB etc.) is exempt. |
 | `triggers` | Event→lane triggers — see below.                                                                                                               |
+| `hooks`    | Lane lifecycle hooks — see below.                                                                                                              |
 
 ### Event→lane triggers
 
@@ -478,14 +483,14 @@ triage, plan, mention, and future event-driven lanes:
 }
 ```
 
-| `on`             | fires when                                                                                      |
-| ---------------- | ----------------------------------------------------------------------------------------------- |
-| `issue.created`  | A GitHub issue is opened in the repo (and mirrored into Pile).                                  |
-| `pr.opened`      | A pull request is opened.                                                                       |
-| `pr.synchronize` | New commits are pushed to a pull request.                                                       |
-| `ci.failed`      | The sweep sees a lane PR's checks go red (`pr.ci_failed`).                                      |
-| `mention`        | A human comment on a mirrored issue or PR contains `handle` (default `@pile`). Bots never fire. |
-| `label.added`    | A label is added to a mirrored issue or a PR — only `label` when set, any label otherwise.      |
+| `on`             | fires when                                                                                                                                                                                                      |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `issue.created`  | A GitHub issue is opened in the repo (and mirrored into Pile).                                                                                                                                                  |
+| `pr.opened`      | A pull request is opened.                                                                                                                                                                                       |
+| `pr.synchronize` | New commits are pushed to a pull request.                                                                                                                                                                       |
+| `ci.failed`      | The sweep sees a lane PR's checks go red (`pr.ci_failed`).                                                                                                                                                      |
+| `mention`        | A comment on a mirrored issue or PR contains `handle` (default `@pile`). Only repo owners/members/collaborators and linked Pile users fire it; bots never do. Runs alongside the built-in `@pile` lane routing. |
+| `label.added`    | A label is added to a mirrored issue or a PR — only `label` when set, any label otherwise.                                                                                                                      |
 
 Each matching trigger dispatches `agent` (subject to the `agents` allowlist)
 with `prompt` plus the event details as lane instructions; `model` falls back
@@ -497,6 +502,30 @@ processed by the same `fireEventAutomations` path as workspace event
 automations — which accept these event names as `triggerValue` too. Dispatch
 keeps the one-active-lane-per-issue guard, so an event on an issue whose lane
 is still running is skipped (logged).
+
+### Lane lifecycle hooks
+
+`hooks` holds bash commands the lane runner (`cursor-cli`, `devin-cli`) reads
+from the lane's own checkout and runs from the repo root. Every hook gets
+`PILE_HOOK`, `PILE_BRANCH`, `PILE_BASE_SHA` and `PILE_CHANGED_FILES` (path to
+a newline-separated list of files changed vs the lane's base — use it to scope
+checks to touched packages) in its env; output streams into the lane
+transcript and each run lands in the session digest under `hooks`.
+
+| hook              | when                                                       | nonzero exit                                                                                                 |
+| ----------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `setup`           | after clone, after `.pile/setup.sh`, before the agent      | logged, lane continues                                                                                       |
+| `postCheckout`    | after every checkout — fresh clone and kept-sandbox resume | logged, lane continues                                                                                       |
+| `prePush`         | before each push                                           | push blocked, lane fails with the hook output                                                                |
+| `stop`            | after each agent turn, before commit/push                  | agent resumes with the failure output and the hook re-runs, up to `stopMaxAttempts` times (default 2, max 5) |
+| `stopMaxAttempts` | —                                                          | cap on stop-hook self-heal resumes                                                                           |
+
+The `stop` hook makes lanes self-verifying: a lane that would have pushed
+without testing gets its own red check back as a prompt and fixes it before
+any PR exists. If the hook is still red after the last attempt the lane pushes
+anyway, `digest.stopHook` records `{status: "failed", attempts, exit}`, and
+the PR body flags it. A malformed `hooks` block is ignored without affecting
+the rest of the file.
 
 ## Lane credential posture
 

@@ -59,6 +59,24 @@ export const pileRepoConfigSchema = z.object({
     .optional(),
   // Event→lane triggers (PILE-275), processed by fireEventAutomations.
   triggers: z.array(pileRepoTriggerSchema).optional(),
+  // Lane lifecycle hooks (PILE-279). Bash commands the lane runner reads
+  // from the checkout and runs from the repo root: `setup` after clone,
+  // `postCheckout` after every checkout (clone or kept-sandbox resume),
+  // `prePush` before each push (nonzero blocks it), and `stop` after each
+  // agent turn — nonzero resumes the agent with the hook output, up to
+  // `stopMaxAttempts` times, so the lane fixes its own failures pre-PR.
+  // A malformed block is dropped rather than invalidating the whole file —
+  // the allowlists above must keep applying.
+  hooks: z
+    .object({
+      setup: z.string().nonempty().optional(),
+      postCheckout: z.string().nonempty().optional(),
+      prePush: z.string().nonempty().optional(),
+      stop: z.string().nonempty().optional(),
+      stopMaxAttempts: z.number().int().min(0).max(5).optional(),
+    })
+    .optional()
+    .catch(undefined),
 });
 
 export type PileRepoConfig = z.infer<typeof pileRepoConfigSchema>;

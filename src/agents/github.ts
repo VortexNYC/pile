@@ -12,10 +12,13 @@ import {
   createGithubInstallation,
   deleteGithubInstallation,
   deleteGithubInstallationsByInstallationId,
+  findGithubInstallation,
   findWorkspaceByRepo,
 } from "../global/github-installations.js";
 import { findUserByGithubLogin } from "../global/github-users.js";
 import { findLabelsByWorkspaceAndNames } from "../global/labels.js";
+import { fetchPileRepoConfig } from "../global/pile-repo-config.js";
+import { createRepoBranch } from "../global/repo-branches.js";
 import {
   createRepoIssue,
   deleteRepoIssue,
@@ -27,6 +30,14 @@ import { enqueueWebhook } from "../global/webhook-queue.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import type { Issue } from "../types/workspace.js";
+import { loadProviderConfig } from "./credentials.js";
+import { resolveAgentEnv } from "./daytona.js";
+import { dispatchAgent } from "./index.js";
+import {
+  buildMentionPrompt,
+  isTrustedAssociation,
+  parsePileMention,
+} from "./mention.js";
 import { nudgeLane } from "./nudge.js";
 import {
   type AutomationEventTarget,
@@ -155,6 +166,7 @@ const issueCommentPayloadSchema = z.object({
       login: z.string(),
       type: z.string().optional(),
     }),
+    author_association: z.string().optional(),
     html_url: z.string(),
     created_at: z.string(),
     updated_at: z.string(),
@@ -163,6 +175,8 @@ const issueCommentPayloadSchema = z.object({
     full_name: z.string(),
   }),
 });
+
+type IssueCommentPayload = z.infer<typeof issueCommentPayloadSchema>;
 
 const pullRequestReviewPayloadSchema = z.object({
   action: z.enum(["submitted", "edited", "dismissed"]),
@@ -204,6 +218,7 @@ const pullRequestReviewCommentPayloadSchema = z.object({
       login: z.string(),
       type: z.string().optional(),
     }),
+    author_association: z.string().optional(),
     html_url: z.string(),
     path: z.string(),
     created_at: z.string(),
@@ -512,9 +527,11 @@ async function processIssueComment(
   const repo = repository.full_name;
 
   if (issue.pull_request) {
-    // PR conversation comments aren't mirrored onto issues, but they can
-    // still mention.
+    // PR conversation comments aren't mirrored — only an @pile mention on a
+    // lane's PR is acted on (and mirrored so the ask is visible in Pile).
+    // Repo `mention` triggers fire too.
     if (action !== "created") return;
+    await routePrMention(env, db, payload.data);
     const record = await findWorkspaceByRepo(db, repo);
     if (!record) return;
     const prStub = env.WORKSPACE_DURABLE_OBJECT.get(
@@ -523,6 +540,7 @@ async function processIssueComment(
     await prStub.setOrganizationId(record.organizationId);
     await fireMention(
       env,
+      db,
       prStub,
       record.organizationId,
       prEventTarget(
@@ -564,8 +582,17 @@ async function processIssueComment(
       createdAt: comment.created_at,
       updatedAt: comment.updated_at,
     });
+    const pileIssue = await stub.getIssue(issueId);
+    if (pileIssue) {
+      await routePileMention(env, db, stub, organizationId, pileIssue, {
+        targetUrl: issue.html_url ?? comment.html_url,
+        isPullRequest: false,
+        comment,
+      });
+    }
     await fireMention(
       env,
+      db,
       stub,
       organizationId,
       issueEventTarget(stub, issueId),
@@ -633,6 +660,7 @@ function prEventTarget(
 // a lane quoting a handle can't re-trigger itself.
 async function fireMention(
   env: WorkerEnv,
+  db: D1Client,
   stub: WorkspaceStub,
   organizationId: string,
   target: AutomationEventTarget,
@@ -640,11 +668,18 @@ async function fireMention(
     body: string;
     html_url: string;
     user: { login: string; type?: string };
+    author_association?: string;
   }
 ): Promise<void> {
   const bot =
     comment.user.type === "Bot" || comment.user.login.endsWith("[bot]");
   if (bot || !/@[\w-]/.test(comment.body)) return;
+  if (
+    !isTrustedAssociation(comment.author_association) &&
+    !(await findUserByGithubLogin(db, organizationId, comment.user.login))
+  ) {
+    return;
+  }
   await fireEventAutomations(
     env,
     stub,
@@ -655,6 +690,202 @@ async function fireMention(
     undefined,
     { body: comment.body }
   );
+}
+
+async function routePrMention(
+  env: WorkerEnv,
+  db: D1Client,
+  data: IssueCommentPayload
+): Promise<void> {
+  const { issue, comment, repository } = data;
+  if (!parsePileMention(comment.body)) return;
+  const workspaceRecord = await findWorkspaceByRepo(db, repository.full_name);
+  if (!workspaceRecord) return;
+  const organizationId = workspaceRecord.organizationId;
+  const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+    env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+  );
+  await stub.setOrganizationId(organizationId);
+
+  // issue_comment carries no head ref — resolve the lane's issue by the PR
+  // URL it recorded, falling back to an identifier in the PR title.
+  const prUrl = issue.html_url ?? comment.html_url.replace(/#.*$/, "");
+  let pileIssue = await stub.getIssueByPrUrl(prUrl);
+  if (!pileIssue && issue.title) {
+    const candidates = await Promise.all(
+      parseIssueIdentifiers(issue.title).map((identifier) =>
+        stub.getIssueByIdentifier(identifier)
+      )
+    );
+    pileIssue = candidates.find((candidate) => candidate !== undefined);
+  }
+  if (!pileIssue) return;
+
+  const externalId = comment.id.toString();
+  const existing = await stub.findCommentByExternalId("github", externalId);
+  if (!existing) {
+    await stub.createComment({
+      issueId: pileIssue.id,
+      body: comment.body,
+      externalId,
+      externalSource: "github",
+      externalAuthor: comment.user.login,
+      createdAt: comment.created_at,
+      updatedAt: comment.updated_at,
+    });
+  }
+
+  await routePileMention(env, db, stub, organizationId, pileIssue, {
+    targetUrl: prUrl,
+    isPullRequest: true,
+    comment,
+  });
+}
+
+// PILE-278 — `@pile <request>` on a GitHub issue/PR: resume the issue's
+// lane with the request + thread as a follow-up, or cold-dispatch one when
+// there's no resumable lane. Never throws — a dispatch failure must not
+// fail (and re-deliver) the comment sync.
+async function routePileMention(
+  env: WorkerEnv,
+  db: D1Client,
+  stub: WorkspaceStub,
+  organizationId: string,
+  issue: Issue,
+  ctx: {
+    targetUrl: string;
+    isPullRequest: boolean;
+    comment: IssueCommentPayload["comment"];
+  }
+): Promise<void> {
+  const { comment } = ctx;
+  const mention = parsePileMention(comment.body);
+  if (!mention) return;
+  // Lanes comment through the GitHub App; a bot echoing "@pile" must not
+  // loop back into a dispatch.
+  if (comment.user.type === "Bot") return;
+
+  const author = comment.user.login;
+  const linked = await findUserByGithubLogin(db, organizationId, author);
+  if (!linked && !isTrustedAssociation(comment.author_association)) {
+    console.warn("@pile mention ignored: untrusted commenter", {
+      issueId: issue.id,
+      author,
+      association: comment.author_association ?? null,
+    });
+    return;
+  }
+
+  try {
+    const thread = (await stub.listComments(issue.id))
+      .filter((c) => c.externalId !== comment.id.toString())
+      .toSorted((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .map((c) => ({
+        author: c.externalAuthor ?? c.authorId ?? "unknown",
+        body: c.body,
+      }));
+    const prompt = buildMentionPrompt({
+      author,
+      commentUrl: comment.html_url,
+      targetUrl: ctx.targetUrl,
+      isPullRequest: ctx.isPullRequest,
+      request: mention.request,
+      thread,
+    });
+    const dedupeKey = `mention-${comment.id}`;
+    const reason = "@pile mention";
+    const prUrl = ctx.isPullRequest
+      ? ctx.targetUrl
+      : (issue.prUrl ?? ctx.targetUrl);
+
+    const session = await resolveLaneForIssue(stub, issue.id);
+    if (
+      session &&
+      (session.status === "running" ||
+        session.status === "waiting" ||
+        session.status === "completed")
+    ) {
+      await nudgeLane(env, stub, organizationId, session, issue, prUrl, {
+        prompt,
+        reason,
+        dedupeKey,
+      });
+      return;
+    }
+
+    const installation = issue.repo
+      ? await findGithubInstallation(db, issue.repo)
+      : undefined;
+    const repoDefault =
+      installation?.organizationId === organizationId
+        ? installation.defaultAgentId
+        : undefined;
+    const agentId = repoDefault ?? session?.agentId ?? "devin";
+    const pileConfig = issue.repo
+      ? await fetchPileRepoConfig(env, issue.repo, issue.branch)
+      : null;
+    if (
+      pileConfig?.agents &&
+      pileConfig.agents.length > 0 &&
+      !pileConfig.agents.includes(agentId)
+    ) {
+      console.warn("@pile mention dispatch blocked by .pile/config.json", {
+        issueId: issue.id,
+        agentId,
+      });
+      return;
+    }
+    const providerConfig = await loadProviderConfig(env, stub, agentId);
+    const dispatched = await dispatchAgent(
+      resolveAgentEnv(env, providerConfig ?? undefined),
+      agentId,
+      organizationId,
+      issue,
+      linked
+        ? { id: linked.userId, organizationId, type: "user", permissions: [] }
+        : {
+            id: `github:${author}`,
+            organizationId,
+            type: "agent",
+            permissions: [],
+          },
+      pileConfig?.model,
+      undefined,
+      { instructions: prompt, envAllowlist: pileConfig?.env }
+    );
+    if (session) {
+      await stub
+        .updateAgentSession(dispatched.id, { retryOf: session.id })
+        .catch(() => null);
+    }
+    await stub
+      .addAgentSessionEvent({
+        sessionId: dispatched.id,
+        type: "mention.dispatch",
+        message: `Dispatched from ${author}'s @pile mention (${comment.html_url})`,
+        payload: {
+          issueId: issue.id,
+          key: dedupeKey,
+          commentUrl: comment.html_url,
+        },
+      })
+      .catch(() => {});
+    if (issue.repo && issue.branch && dispatched.status !== "waiting") {
+      await createRepoBranch(
+        db,
+        organizationId,
+        issue.repo,
+        issue.branch,
+        issue.id
+      );
+    }
+  } catch (err) {
+    console.error("@pile mention routing failed", {
+      issueId: issue.id,
+      commentId: comment.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 // Resolve the lane for an issue: a live session first, else the most
@@ -902,6 +1133,7 @@ async function processPullRequestReviewComment(
     );
     await fireMention(
       env,
+      db,
       stub,
       workspaceRecord.organizationId,
       automationEventTarget(async () => issue, repo),

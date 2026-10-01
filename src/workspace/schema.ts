@@ -808,6 +808,14 @@ export const workspaceAgentSessions = sqliteTable(
     // First transition into a terminal status — the kept-sandbox reaper
     // anchors its resume window here; updatedAt churns on every write.
     endedAt: text("ended_at" as string),
+    // PILE-289 — run name for logs/`pile fleet`, and the dispatch-time
+    // JSON Schema (draft-07) the lane's final output is validated against.
+    // structuredResult holds the validated JSON; resultSchemaErrors the
+    // JSON array of validation failures. At most one of the two is set.
+    label: text("label" as string),
+    resultSchema: text("result_schema" as string),
+    structuredResult: text("structured_result" as string),
+    resultSchemaErrors: text("result_schema_errors" as string),
   },
   (table) => [
     index("agent_sessions_organization_idx" as string).on(

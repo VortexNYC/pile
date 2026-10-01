@@ -1399,6 +1399,10 @@ export interface paths {
                         branch?: string | null;
                         instructions?: string;
                         preflight?: boolean;
+                        /** @description JSON Schema (draft-07) the lane's final output must validate against, or "lane" for the built-in {verdict, summary, filesChanged} shape. The validated value lands on session.structuredResult. */
+                        resultSchema?: "lane" | {
+                            [key: string]: unknown;
+                        };
                     };
                 };
             };
@@ -1427,6 +1431,12 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            label?: string | null;
+                            resultSchema?: {
+                                [key: string]: unknown;
+                            } | null;
+                            structuredResult?: unknown;
+                            resultSchemaErrors?: string[] | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;
@@ -1516,6 +1526,12 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                label?: string | null;
+                                resultSchema?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                structuredResult?: unknown;
+                                resultSchemaErrors?: string[] | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -1607,6 +1623,12 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                label?: string | null;
+                                resultSchema?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                structuredResult?: unknown;
+                                resultSchemaErrors?: string[] | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -1659,6 +1681,12 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                label?: string | null;
+                                resultSchema?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                structuredResult?: unknown;
+                                resultSchemaErrors?: string[] | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -1729,6 +1757,10 @@ export interface paths {
                             branch?: string | null;
                             instructions?: string;
                             queuedAfter?: string;
+                            /** @description JSON Schema (draft-07) the lane's final output must validate against, or "lane" for the built-in {verdict, summary, filesChanged} shape. The validated value lands on session.structuredResult. */
+                            resultSchema?: "lane" | {
+                                [key: string]: unknown;
+                            };
                         }[];
                     };
                 };
@@ -1808,6 +1840,12 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                label?: string | null;
+                                resultSchema?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                structuredResult?: unknown;
+                                resultSchemaErrors?: string[] | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -1844,6 +1882,7 @@ export interface paths {
                                 lastProgressAt?: string | null;
                                 /** @enum {string|null} */
                                 derivedStatus?: "stalled" | "needs_input" | null;
+                                label?: string | null;
                                 startedAt: string | null;
                                 endedAt: string | null;
                             }[];
@@ -2006,6 +2045,12 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                label?: string | null;
+                                resultSchema?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                structuredResult?: unknown;
+                                resultSchemaErrors?: string[] | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -2100,6 +2145,12 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            label?: string | null;
+                            resultSchema?: {
+                                [key: string]: unknown;
+                            } | null;
+                            structuredResult?: unknown;
+                            resultSchemaErrors?: string[] | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;
@@ -2134,6 +2185,7 @@ export interface paths {
                             lastProgressAt?: string | null;
                             /** @enum {string|null} */
                             derivedStatus?: "stalled" | "needs_input" | null;
+                            label?: string | null;
                             startedAt: string | null;
                             endedAt: string | null;
                         };
@@ -2202,6 +2254,12 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            label?: string | null;
+                            resultSchema?: {
+                                [key: string]: unknown;
+                            } | null;
+                            structuredResult?: unknown;
+                            resultSchemaErrors?: string[] | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;
@@ -2570,6 +2628,12 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            label?: string | null;
+                            resultSchema?: {
+                                [key: string]: unknown;
+                            } | null;
+                            structuredResult?: unknown;
+                            resultSchemaErrors?: string[] | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;
@@ -2654,6 +2718,12 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            label?: string | null;
+                            resultSchema?: {
+                                [key: string]: unknown;
+                            } | null;
+                            structuredResult?: unknown;
+                            resultSchemaErrors?: string[] | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;
@@ -2737,6 +2807,12 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                label?: string | null;
+                                resultSchema?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                structuredResult?: unknown;
+                                resultSchemaErrors?: string[] | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -2844,6 +2920,12 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                label?: string | null;
+                                resultSchema?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                structuredResult?: unknown;
+                                resultSchemaErrors?: string[] | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -2962,6 +3044,12 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            label?: string | null;
+                            resultSchema?: {
+                                [key: string]: unknown;
+                            } | null;
+                            structuredResult?: unknown;
+                            resultSchemaErrors?: string[] | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;
@@ -3061,6 +3149,12 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            label?: string | null;
+                            resultSchema?: {
+                                [key: string]: unknown;
+                            } | null;
+                            structuredResult?: unknown;
+                            resultSchemaErrors?: string[] | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;

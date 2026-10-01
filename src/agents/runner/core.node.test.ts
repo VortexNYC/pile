@@ -184,3 +184,207 @@ describe("runner PR resolution (PILE-257)", () => {
     expect(res.prUrl).toBe(NEW_PR_URL);
   });
 });
+
+// PILE-279 — lane lifecycle hooks. Each case gets a fresh HOME so REPO_DIR
+// is a throwaway git checkout carrying the case's .pile/config.json.
+const HOOKS_HARNESS = `
+import json
+import os
+import subprocess
+import sys
+import types
+
+core_path, config_json, mode = sys.argv[1], sys.argv[2], sys.argv[3]
+
+mod = types.ModuleType("pile_runner_core")
+mod.__dict__["__file__"] = core_path
+with open(core_path) as f:
+    exec(compile(f.read(), core_path, "exec"), mod.__dict__)
+ns = mod.__dict__
+repo = ns["REPO_DIR"]
+branch = ns["BRANCH"]
+
+def git(*args):
+    return subprocess.run(["git", "-C", repo, *args], check=True, capture_output=True, text=True).stdout.strip()
+
+os.makedirs(os.path.join(repo, ".pile"), exist_ok=True)
+with open(os.path.join(repo, ".pile", "config.json"), "w") as f:
+    f.write(config_json)
+git("init", "-q", "-b", branch)
+git("config", "user.name", "t")
+git("config", "user.email", "t@example.com")
+git("remote", "add", "origin", "https://example.invalid/acme/widgets.git")
+git("add", "-A")
+git("commit", "-q", "-m", "base")
+base = git("rev-parse", "HEAD")
+git("update-ref", "refs/remotes/origin/" + branch, base)
+with open("/tmp/base_sha", "w") as f:
+    f.write(base)
+with open(os.path.join(repo, "changed.txt"), "w") as f:
+    f.write("x")
+
+env = os.environ.copy()
+prompts = []
+
+def resume(prompt):
+    prompts.append(prompt)
+    with open(os.path.join(repo, "fixed"), "w") as f:
+        f.write("1")
+    return "resumed-%d" % len(prompts)
+
+posts = []
+
+def fake_github_api(method, path, body=None):
+    if method == "GET" and path == "":
+        return {"default_branch": "main"}
+    if method == "GET" and path.startswith("/pulls"):
+        return []
+    if method == "POST" and path == "/pulls":
+        posts.append(body)
+        return {"html_url": "https://github.com/acme/widgets/pull/1"}
+    raise AssertionError("unexpected github_api call: %s %s" % (method, path))
+
+ns["github_api"] = fake_github_api
+
+if mode == "parse":
+    out = {"hooks": ns["lane_hooks"]()}
+elif mode == "run":
+    res = ns["run_hook"]("postCheckout", env)
+    missing = ns["run_hook"]("prePush", env)
+    out = {"exit": res[0], "output": res[1], "missing": missing, "runs": ns["HOOK_RUNS"]}
+elif mode == "heal":
+    healed = ns["self_heal"](env, resume, "the original task")
+    out = {"healed": healed, "prompts": prompts, "stop": ns["STOP_HOOK"]}
+elif mode == "heal_finalize":
+    healed = ns["self_heal"](env, resume, "the original task")
+    for stale in ("/tmp/agent-result.json",):
+        try:
+            os.remove(stale)
+        except OSError:
+            pass
+    ns["finalize"]("tail", True)
+    with open("/tmp/agent-result.json") as f:
+        result = json.load(f)
+    digest = json.loads(result["result"])["digest"]
+    out = {"healed": healed, "prompts": prompts, "digest": digest, "posts": posts}
+elif mode == "prepush":
+    try:
+        ns["commit_and_push"](env)
+        out = {"raised": None}
+    except ns["HookFailure"] as e:
+        out = {"raised": str(e)}
+    out["log"] = git("log", "--format=%s")
+else:
+    raise AssertionError("unknown mode " + mode)
+
+print("RESULT:" + json.dumps(out), flush=True)
+`;
+
+const HOOKS_HARNESS_PATH = join(harnessDir, "hooks-harness.py");
+writeFileSync(HOOKS_HARNESS_PATH, HOOKS_HARNESS);
+
+function runHooksHarness(
+  config: Record<string, unknown>,
+  mode: "parse" | "run" | "heal" | "heal_finalize" | "prepush"
+): Record<string, unknown> {
+  const home = mkdtempSync(join(tmpdir(), "pile-runner-hooks-"));
+  const out = execFileSync(
+    "python3",
+    [HOOKS_HARNESS_PATH, CORE_PATH, JSON.stringify(config), mode],
+    { encoding: "utf8", env: { ...runnerEnv(), HOME: home }, timeout: 30_000 }
+  );
+  const line = out
+    .trim()
+    .split("\n")
+    .find((l) => l.startsWith("RESULT:"));
+  if (!line) {
+    throw new Error(`hooks harness emitted no RESULT line:\n${out}`);
+  }
+  return JSON.parse(line.slice("RESULT:".length)) as Record<string, unknown>;
+}
+
+describe("runner lane hooks (PILE-279)", () => {
+  it("reads only well-formed hooks from .pile/config.json", () => {
+    const res = runHooksHarness(
+      {
+        hooks: {
+          setup: "pnpm install",
+          postCheckout: "",
+          prePush: 42,
+          stop: "pnpm run check",
+          stopMaxAttempts: 9,
+        },
+      },
+      "parse"
+    );
+    expect(res.hooks).toEqual({
+      setup: "pnpm install",
+      stop: "pnpm run check",
+    });
+  });
+
+  it("runs a hook from the repo root with lane context in its env", () => {
+    const res = runHooksHarness(
+      {
+        hooks: {
+          postCheckout:
+            'echo "$PILE_HOOK $PILE_BRANCH $(basename "$PWD")"; cat "$PILE_CHANGED_FILES"; test -n "$PILE_BASE_SHA"; exit 3',
+        },
+      },
+      "run"
+    );
+    expect(res.exit).toBe(3);
+    expect(res.output).toContain(`postCheckout ${LANE_BRANCH} repo`);
+    expect(res.output).toContain("changed.txt");
+    expect(res.missing).toBeNull();
+    expect(res.runs).toEqual([
+      { hook: "postCheckout", exit: 3, durationSec: expect.any(Number) },
+    ]);
+  });
+
+  it("resumes the agent with the stop hook failure until it passes", () => {
+    const res = runHooksHarness(
+      {
+        hooks: { stop: "test -f fixed || { echo 'lint: 2 errors'; exit 1; }" },
+      },
+      "heal"
+    );
+    expect(res.healed).toBe("resumed-1");
+    expect(res.stop).toEqual({ status: "passed", attempts: 1 });
+    const prompts = res.prompts as string[];
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toContain("lint: 2 errors");
+    expect(prompts[0]).toContain("Exit code: 1");
+    expect(prompts[0]).toContain("the original task");
+  });
+
+  it("does not resume when the stop hook passes first time", () => {
+    const res = runHooksHarness({ hooks: { stop: "true" } }, "heal");
+    expect(res.healed).toBeNull();
+    expect(res.prompts).toEqual([]);
+    expect(res.stop).toEqual({ status: "passed", attempts: 0 });
+  });
+
+  it("flags a stop hook that stays red after stopMaxAttempts", () => {
+    const res = runHooksHarness(
+      { hooks: { stop: "echo still broken; exit 2", stopMaxAttempts: 1 } },
+      "heal_finalize"
+    );
+    expect(res.healed).toBe("resumed-1");
+    expect(res.prompts).toHaveLength(1);
+    const digest = res.digest as Record<string, unknown>;
+    expect(digest.stopHook).toEqual({ status: "failed", attempts: 1, exit: 2 });
+    const posts = res.posts as Array<{ body: string }>;
+    expect(posts[0]?.body).toContain("Stop hook still failing");
+  });
+
+  it("blocks the push when prePush exits nonzero", () => {
+    const res = runHooksHarness(
+      { hooks: { prePush: "echo 'tests failed'; exit 1" } },
+      "prepush"
+    );
+    expect(res.raised).toContain("prePush hook failed (exit 1)");
+    expect(res.raised).toContain("tests failed");
+    expect(res.log).toBe(`Devin changes for ${LANE_BRANCH}\nbase`);
+  });
+});
