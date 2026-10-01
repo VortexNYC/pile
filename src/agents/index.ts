@@ -29,6 +29,10 @@ import {
   type LaneDbConfig,
 } from "./lane-db.js";
 import type { AgentProvider } from "./provider.js";
+import {
+  validateSecondaryRepos,
+  type SecondaryRepo,
+} from "./secondary-repos.js";
 
 // Workspace-wide ceiling on live lanes — the container apps are bounded
 // (max_instances) and one lane's provisioning wedge otherwise starves all.
@@ -159,6 +163,10 @@ export async function dispatchAgent(
      *  `waiting` behind this session id; the sweep promotes it once the
      *  blocker goes terminal. Wins over the dedupe-derived queueAfter. */
     queueAfter?: string;
+    /** Sibling repos cloned into the lane next to issue.repo (PILE-294).
+     *  Persisted on the session row; promote/retry callers pass the stored
+     *  set back in. */
+    secondaryRepos?: SecondaryRepo[];
   }
 ): Promise<AgentSession> {
   const stub = env.WORKSPACE_DURABLE_OBJECT.get(
@@ -184,6 +192,20 @@ export async function dispatchAgent(
     agentId,
     resolveAgentEnv(env, providerConfig ?? undefined)
   );
+
+  const secondaryRepos = validateSecondaryRepos(
+    issue.repo,
+    options?.secondaryRepos
+  );
+  if (secondaryRepos.length > 0 && !provider.supportsSecondaryRepos) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: `Agent provider ${agentId} does not support secondaryRepos`,
+    });
+  }
+  const storedSecondaryRepos =
+    secondaryRepos.length > 0 ? JSON.stringify(secondaryRepos) : null;
 
   const gitIdentity = issue.repo
     ? ((await stub.getGitIdentityByRepo(issue.repo)) ??
@@ -231,6 +253,7 @@ export async function dispatchAgent(
         parentSessionId: options?.parentSessionId ?? null,
         spawnDepth: options?.spawnDepth ?? 0,
         purpose: options?.purpose ?? null,
+        secondaryRepos: storedSecondaryRepos,
       });
       await stub
         .addAgentSessionEvent({
@@ -298,6 +321,7 @@ export async function dispatchAgent(
       parentSessionId: options?.parentSessionId ?? null,
       spawnDepth: options?.spawnDepth ?? 0,
       purpose: options?.purpose ?? null,
+      secondaryRepos: storedSecondaryRepos,
     });
   }
 
@@ -445,6 +469,7 @@ export async function dispatchAgent(
         pileApi,
         instructions: options?.instructions,
         extraEnv,
+        secondaryRepos,
       }
     );
 

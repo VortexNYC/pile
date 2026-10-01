@@ -2837,6 +2837,31 @@
                   },
                   "preflight": {
                     "type": "boolean"
+                  },
+                  "secondaryRepos": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "repo": {
+                          "type": "string",
+                          "pattern": "^[A-Za-z0-9_.-]+\\/[A-Za-z0-9_.-]+$"
+                        },
+                        "access": {
+                          "type": "string",
+                          "enum": [
+                            "read",
+                            "write"
+                          ],
+                          "default": "read"
+                        }
+                      },
+                      "required": [
+                        "repo"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 5
                   }
                 },
                 "additionalProperties": false
@@ -2913,6 +2938,10 @@
                       "nullable": true
                     },
                     "purpose": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "secondaryRepos": {
                       "type": "string",
                       "nullable": true
                     },
@@ -3168,6 +3197,10 @@
                           "nullable": true
                         },
                         "purpose": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "secondaryRepos": {
                           "type": "string",
                           "nullable": true
                         },
@@ -3429,6 +3462,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "secondaryRepos": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -3636,6 +3673,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "secondaryRepos": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -3818,6 +3859,31 @@
                         },
                         "queuedAfter": {
                           "type": "string"
+                        },
+                        "secondaryRepos": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "repo": {
+                                "type": "string",
+                                "pattern": "^[A-Za-z0-9_.-]+\\/[A-Za-z0-9_.-]+$"
+                              },
+                              "access": {
+                                "type": "string",
+                                "enum": [
+                                  "read",
+                                  "write"
+                                ],
+                                "default": "read"
+                              }
+                            },
+                            "required": [
+                              "repo"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "maxItems": 5
                         }
                       },
                       "required": [
@@ -4014,6 +4080,10 @@
                                 "nullable": true
                               },
                               "purpose": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "secondaryRepos": {
                                 "type": "string",
                                 "nullable": true
                               },
@@ -4492,6 +4562,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "secondaryRepos": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -4784,6 +4858,10 @@
                           "nullable": true
                         },
                         "purpose": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "secondaryRepos": {
                           "type": "string",
                           "nullable": true
                         },
@@ -5112,6 +5190,10 @@
                       "nullable": true
                     },
                     "purpose": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "secondaryRepos": {
                       "type": "string",
                       "nullable": true
                     },
@@ -5884,6 +5966,10 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "secondaryRepos": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -6096,6 +6182,10 @@
                       "nullable": true
                     },
                     "purpose": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "secondaryRepos": {
                       "type": "string",
                       "nullable": true
                     },
@@ -6314,6 +6404,10 @@
                           "nullable": true
                         },
                         "purpose": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "secondaryRepos": {
                           "type": "string",
                           "nullable": true
                         },
@@ -6576,6 +6670,10 @@
                           "nullable": true
                         },
                         "purpose": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "secondaryRepos": {
                           "type": "string",
                           "nullable": true
                         },
@@ -6881,6 +6979,10 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "secondaryRepos": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -7117,6 +7219,10 @@
                       "nullable": true
                     },
                     "purpose": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "secondaryRepos": {
                       "type": "string",
                       "nullable": true
                     },

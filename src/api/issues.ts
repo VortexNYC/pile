@@ -9,6 +9,7 @@ import {
   buildPreflightCritiqueInstructions,
   evaluateDispatchReadiness,
 } from "../agents/preflight.js";
+import { secondaryReposSchema } from "../agents/secondary-repos.js";
 import { consumeUsage } from "../global/billing.js";
 import { createD1 } from "../global/db.js";
 import { deleteIssueReferences } from "../global/issue-data.js";
@@ -673,6 +674,10 @@ const dispatchRoute = createRoute({
               // session on the target provider instead of the task lane. It
               // reports missing/ambiguous context back onto the issue thread.
               preflight: z.boolean().optional(),
+              // PILE-294 — sibling repos cloned under ~/xrepo/<owner>/<name>
+              // next to the primary checkout. `write` entries get the lane
+              // branch pushed and a PR opened in that repo.
+              secondaryRepos: secondaryReposSchema.optional(),
             })
             .strict(),
         },
@@ -1424,8 +1429,16 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
   });
 
   app.openapi(dispatchRoute, async (c) => {
-    const { agentId, provider, model, repo, branch, instructions, preflight } =
-      c.req.valid("json");
+    const {
+      agentId,
+      provider,
+      model,
+      repo,
+      branch,
+      instructions,
+      preflight,
+      secondaryRepos,
+    } = c.req.valid("json");
     const { organizationId, id } = c.req.valid("param");
     const identity = c.get("workspaceIdentity");
     const db = createD1(c.env.D1);
@@ -1563,7 +1576,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
           identity,
           resolvedModel,
           getExecutionCtx(c),
-          { instructions, envAllowlist: pileConfig?.env }
+          { instructions, envAllowlist: pileConfig?.env, secondaryRepos }
         );
 
     if (target.repo && target.branch && !preflight) {

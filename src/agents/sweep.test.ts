@@ -149,6 +149,7 @@ describe("ingestFailedAgentSession", () => {
       laneDbRef: null,
       purpose: null,
       endedAt: null,
+      secondaryRepos: null,
     };
     const polled = {
       id: "prov-1",

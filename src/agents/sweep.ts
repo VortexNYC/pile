@@ -24,6 +24,7 @@ import type {
   AgentProviderSession,
   AgentProviderState,
 } from "./provider.js";
+import { parseStoredSecondaryRepos } from "./secondary-repos.js";
 
 export const DEFAULT_TIMEOUT_MINUTES = 60;
 export const DEFAULT_INACTIVITY_MINUTES = 20;
@@ -290,7 +291,8 @@ async function retryDeadLane(
         permissions: [],
       },
       undefined,
-      ctx
+      ctx,
+      { secondaryRepos: parseStoredSecondaryRepos(session.secondaryRepos) }
     );
     await stub.updateAgentSession(retried.id, {
       retryOf: session.id,
@@ -362,7 +364,10 @@ async function promoteQueuedSessions(
         },
         undefined,
         ctx,
-        { promoteSessionId: session.id }
+        {
+          promoteSessionId: session.id,
+          secondaryRepos: parseStoredSecondaryRepos(session.secondaryRepos),
+        }
       );
     } catch (err) {
       console.error("queued session promotion failed", {

@@ -1399,6 +1399,14 @@ export interface paths {
                         branch?: string | null;
                         instructions?: string;
                         preflight?: boolean;
+                        secondaryRepos?: {
+                            repo: string;
+                            /**
+                             * @default read
+                             * @enum {string}
+                             */
+                            access?: "read" | "write";
+                        }[];
                     };
                 };
             };
@@ -1427,6 +1435,7 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            secondaryRepos?: string | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;
@@ -1516,6 +1525,7 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                secondaryRepos?: string | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -1607,6 +1617,7 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                secondaryRepos?: string | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -1659,6 +1670,7 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                secondaryRepos?: string | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -1729,6 +1741,14 @@ export interface paths {
                             branch?: string | null;
                             instructions?: string;
                             queuedAfter?: string;
+                            secondaryRepos?: {
+                                repo: string;
+                                /**
+                                 * @default read
+                                 * @enum {string}
+                                 */
+                                access?: "read" | "write";
+                            }[];
                         }[];
                     };
                 };
@@ -1808,6 +1828,7 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                secondaryRepos?: string | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -2006,6 +2027,7 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                secondaryRepos?: string | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -2100,6 +2122,7 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            secondaryRepos?: string | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;
@@ -2202,6 +2225,7 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            secondaryRepos?: string | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;
@@ -2570,6 +2594,7 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            secondaryRepos?: string | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;
@@ -2654,6 +2679,7 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            secondaryRepos?: string | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;
@@ -2737,6 +2763,7 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                secondaryRepos?: string | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -2844,6 +2871,7 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                secondaryRepos?: string | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -2962,6 +2990,7 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            secondaryRepos?: string | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;
@@ -3061,6 +3090,7 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            secondaryRepos?: string | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;

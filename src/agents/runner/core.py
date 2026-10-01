@@ -22,6 +22,7 @@ import sys
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 # Tee everything this runner prints (including the agent subprocess, whose
@@ -46,6 +47,7 @@ REPO_DIR = os.path.join(HOME, 'repo')
 RESULT_FILE = '/tmp/agent-result.json'
 AGENT_LABEL = os.environ.get('AGENT_LABEL', 'Agent')
 PR_ERRORS = []
+SECONDARY_PRS = []
 RUN_STARTED = time.time()
 
 
@@ -88,8 +90,8 @@ def run_transport(cmd, **kwargs):
         raise TransportError(detail) from e
 
 
-def github_api(method, path, body=None):
-    owner, name = REPO.split('/')
+def github_api(method, path, body=None, repo=None):
+    owner, name = (repo or REPO).split('/')
     url = f'https://api.github.com/repos/{owner}/{name}{path}'
     headers = {
         'Authorization': f'Bearer {GITHUB_TOKEN}',
@@ -108,9 +110,9 @@ def github_api(method, path, body=None):
         raise
 
 
-def default_branch():
-    repo = github_api('GET', '')
-    return repo.get('default_branch', 'main')
+def default_branch(repo=None):
+    info = github_api('GET', '', repo=repo) if repo else github_api('GET', '')
+    return info.get('default_branch', 'main')
 
 
 def create_branch():
@@ -209,6 +211,8 @@ def collect_digest():
         digest['filesChanged'] = [f for f in (files.stdout or '').splitlines() if f]
         commits = run(['git', '-C', REPO_DIR, 'rev-list', '--count', f'{base}..HEAD'], capture_output=True, text=True, check=False)
         digest['commits'] = int((commits.stdout or '0').strip() or 0)
+    if SECONDARY_PRS:
+        digest['secondaryPrs'] = list(SECONDARY_PRS)
     return digest
 
 
@@ -217,6 +221,8 @@ def create_pr(digest=None):
         summary = ''
         if digest and digest.get('filesChanged') is not None:
             summary = f"\n\n---\nLane digest: {len(digest['filesChanged'])} files changed, {digest.get('commits', 0)} commits, ~{digest['durationSec']}s."
+        if SECONDARY_PRS:
+            summary += '\n\nCross-repo PRs:\n' + '\n'.join(f"- {p['repo']}: {p['prUrl']}" for p in SECONDARY_PRS)
         body = {
             'title': os.environ['ISSUE_TITLE'],
             'head': BRANCH,
@@ -270,6 +276,119 @@ def commit_and_push(agent_env):
         return False
     run_transport(['git', '-C', REPO_DIR, 'push', 'origin', BRANCH], env=agent_env)
     return True
+
+
+# Cross-repo lanes (PILE-294): sibling repos cloned under ~/xrepo/<owner>/<name>.
+# SECONDARY_REPOS_JSON = [{repo, access: read|write, token}] at dispatch; the
+# tokenless list is persisted so a follow-up run on a kept sandbox can push.
+XREPO_DIR = os.path.join(HOME, 'xrepo')
+XREPO_STATE = os.path.join(XREPO_DIR, '.pile-xrepo.json')
+
+
+def secondary_repos():
+    raw = os.environ.get('SECONDARY_REPOS_JSON', '')
+    if raw:
+        return [e for e in json.loads(raw) if isinstance(e, dict) and e.get('repo')]
+    try:
+        with open(XREPO_STATE) as f:
+            return [dict(e, token='') for e in json.load(f)]
+    except (OSError, ValueError):
+        return []
+
+
+def secondary_dir(repo):
+    return os.path.join(XREPO_DIR, *repo.split('/'))
+
+
+def secondary_token(repo, fallback=''):
+    # Same lane-token re-mint as refresh_github_token, scoped by ?repo= to one
+    # of this session's secondary repos. Falls back to the dispatch-time token.
+    url = os.environ.get('PILE_TOKEN_URL')
+    token = os.environ.get('LANE_TOKEN')
+    if not (url and token):
+        return fallback
+    try:
+        req = urllib.request.Request(url + '?repo=' + urllib.parse.quote(repo, safe=''), headers={'Authorization': 'Bearer ' + token, 'User-Agent': 'pile-agent-runner/1.0'}, method='POST')
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return json.load(resp)['token']
+    except Exception as e:
+        print(f'github token refresh failed for {repo}:', e)
+        return fallback
+
+
+def clone_secondary_repos():
+    entries = secondary_repos()
+    if not entries:
+        return
+    os.makedirs(XREPO_DIR, exist_ok=True)
+    for entry in entries:
+        repo = entry['repo']
+        dest = secondary_dir(repo)
+        if os.path.exists(dest):
+            shutil.rmtree(dest)
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        token = entry.get('token') or secondary_token(repo)
+        remote = f'https://x-access-token:{token}@github.com/{repo}.git'
+        run_transport(['timeout', '300', 'git', 'clone', '--quiet', '--depth', '1', remote, dest])
+        if entry.get('access') == 'write':
+            # Resume the lane branch when a prior run already pushed it.
+            heads = run_transport(['git', '-C', dest, 'ls-remote', '--heads', 'origin', BRANCH], capture_output=True, text=True)
+            if (heads.stdout or '').strip():
+                run_transport(['timeout', '300', 'git', '-C', dest, 'fetch', '--depth', '1', 'origin', f'+refs/heads/{BRANCH}:refs/remotes/origin/{BRANCH}'])
+                run(['git', '-C', dest, 'checkout', '-B', BRANCH, f'origin/{BRANCH}'], check=True)
+            else:
+                run(['git', '-C', dest, 'checkout', '-b', BRANCH], check=True)
+            run(['git', '-C', dest, 'config', 'user.name', os.environ.get('GIT_AUTHOR_NAME', AGENT_LABEL)], check=True)
+            run(['git', '-C', dest, 'config', 'user.email', os.environ.get('GIT_AUTHOR_EMAIL', 'agent@pile.nyc')], check=True)
+        print(f'cloned secondary repo {repo} ({entry.get("access", "read")}) -> {dest}')
+    with open(XREPO_STATE, 'w') as f:
+        json.dump([{'repo': e['repo'], 'access': e.get('access', 'read')} for e in entries], f)
+
+
+def push_secondary_repos(agent_env):
+    # Write-mode secondaries: commit leftovers, push the lane branch, open a
+    # PR in that repo. A failure here is recorded, not fatal — the primary
+    # repo's push and PR already happened.
+    for entry in secondary_repos():
+        if entry.get('access') != 'write':
+            continue
+        repo = entry['repo']
+        dest = secondary_dir(repo)
+        if not os.path.isdir(os.path.join(dest, '.git')):
+            continue
+        try:
+            token = secondary_token(repo, entry.get('token', ''))
+            if token:
+                run(['git', '-C', dest, 'remote', 'set-url', 'origin', f'https://x-access-token:{token}@github.com/{repo}.git'], env=agent_env, check=False)
+            status = run(['git', '-C', dest, 'status', '--porcelain'], env=agent_env, capture_output=True, text=True, check=True)
+            if status.stdout.strip():
+                run(['git', '-C', dest, 'add', '-A'], env=agent_env, check=True)
+                run(['git', '-C', dest, 'commit', '-m', f'{AGENT_LABEL} changes for {BRANCH}'], env=agent_env, check=True)
+            remote_head = run(['git', '-C', dest, 'rev-parse', '--verify', '--quiet', f'refs/remotes/origin/{BRANCH}'], env=agent_env, capture_output=True, text=True, check=False)
+            base_ref = f'origin/{BRANCH}' if remote_head.returncode == 0 else 'origin/HEAD'
+            ahead = run(['git', '-C', dest, 'rev-list', '--count', f'{base_ref}..HEAD'], env=agent_env, capture_output=True, text=True, check=False)
+            if (ahead.stdout or '0').strip() == '0':
+                print(f'no changes to push in secondary repo {repo}')
+                continue
+            run_transport(['git', '-C', dest, 'push', 'origin', f'HEAD:refs/heads/{BRANCH}'], env=agent_env)
+            owner = repo.split('/')[0]
+            pulls = github_api('GET', f'/pulls?state=open&head={owner}:{BRANCH}', repo=repo)
+            if pulls:
+                pr_url = pulls[0]['html_url']
+            else:
+                primary = f' alongside {REPO}' if REPO else ''
+                pr = github_api('POST', '/pulls', {
+                    'title': os.environ.get('ISSUE_TITLE', BRANCH),
+                    'head': BRANCH,
+                    'base': default_branch(repo),
+                    'body': f'Part of {os.environ.get("ISSUE_IDENTIFIER", BRANCH)} — cross-repo change{primary}.\n\nGenerated with {AGENT_LABEL}',
+                }, repo=repo)
+                pr_url = pr['html_url']
+            SECONDARY_PRS.append({'repo': repo, 'prUrl': pr_url})
+            print(f'secondary repo {repo} PR: {pr_url}')
+        except Exception as e:
+            print(f'secondary push failed for {repo}:', _redact(str(e)))
+            PR_ERRORS.append(f'secondary {repo}: {_redact(str(e))}')
 
 
 def ensure_postgres():

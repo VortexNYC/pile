@@ -98,9 +98,11 @@ def main():
     if REPO:
         create_branch()
         clone_repo()
+        clone_secondary_repos()
         warm_pnpm_store()
     output, report = run_agent(agent_bin)
     pushed = commit_and_push(agent_env()) if REPO else False
+    push_secondary_repos(agent_env())
     rc = finalize(output, pushed, report=report)
     save_pnpm_store()
     stop_log_ship()

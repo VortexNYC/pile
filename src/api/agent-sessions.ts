@@ -15,6 +15,10 @@ import {
   getAgentProvider,
   providerKeepsTerminalSandbox,
 } from "../agents/index.js";
+import {
+  parseStoredSecondaryRepos,
+  secondaryReposSchema,
+} from "../agents/secondary-repos.js";
 import { sessionHoldsKeptSandbox } from "../agents/sweep.js";
 import { consumeUsage } from "../global/billing.js";
 import { timingSafeEqualHex } from "../global/crypto.js";
@@ -81,6 +85,8 @@ export const agentSessionSchema = z.object({
   prState: z.string().nullable(),
   branch: z.string().nullable(),
   purpose: z.string().nullable().optional(),
+  // JSON [{repo, access}] — see secondaryRepoSchema.
+  secondaryRepos: z.string().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
   lastProgressAt: z.string().nullable().optional(),
@@ -739,6 +745,7 @@ const dispatchBatchItemSchema = z
     branch: z.string().nullable().optional(),
     instructions: z.string().optional(),
     queuedAfter: z.string().optional(),
+    secondaryRepos: secondaryReposSchema.optional(),
   })
   .strict();
 
@@ -1259,6 +1266,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
             instructions: item.instructions,
             envAllowlist: pileConfig?.env,
             queueAfter,
+            secondaryRepos: item.secondaryRepos,
           }
         );
 
@@ -1815,7 +1823,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
   // Fresh GitHub installation token for live lanes — the token baked at
   // dispatch expires ~1h in, so the runner re-mints through here right before
   // push. Same per-session HMAC bearer auth as log ingest; returns a token
-  // scoped to the session issue's repo only.
+  // for the session issue's repo, or one of its secondary repos.
   app.post(
     "/workspaces/:organizationId/agent/sessions/:sessionId/github-token",
     async (c) => {
@@ -1842,7 +1850,22 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       if (!issue?.repo) {
         return c.json({ message: "Session issue has no repository" }, 422);
       }
-      const [owner, name] = issue.repo.split("/");
+      // PILE-294 — `?repo=` mints for one of the session's secondary repos;
+      // anything outside that set is refused.
+      const requested = c.req.query("repo");
+      const targetRepo =
+        requested && requested.toLowerCase() !== issue.repo.toLowerCase()
+          ? parseStoredSecondaryRepos(session.secondaryRepos).find(
+              (entry) => entry.repo.toLowerCase() === requested.toLowerCase()
+            )?.repo
+          : issue.repo;
+      if (!targetRepo) {
+        return c.json(
+          { message: "Repository is not part of this session" },
+          403
+        );
+      }
+      const [owner, name] = targetRepo.split("/");
       const token = await getInstallationTokenForRepo(c.env, owner, name);
       if (!token) {
         return c.json({ message: "No installation token for repository" }, 502);
@@ -2449,7 +2472,10 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       identity,
       body.model,
       getExecutionCtx(c),
-      { instructions: instructions || undefined }
+      {
+        instructions: instructions || undefined,
+        secondaryRepos: parseStoredSecondaryRepos(session.secondaryRepos),
+      }
     );
     await stub.updateAgentSession(retried.id, {
       retryOf: session.id,
