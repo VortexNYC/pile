@@ -5,13 +5,10 @@ CODEX_HOME = os.path.join(HOME, '.codex')
 ENV_ID = os.environ['CODEX_CLI_ENV_ID']
 
 
-def agent_env():
-    env = os.environ.copy()
-    env['HOME'] = HOME
-    env['CODEX_HOME'] = CODEX_HOME
-    env['CODEX_INSTALL_DIR'] = INSTALL_DIR
-    env['PATH'] = INSTALL_DIR + ':' + env.get('PATH', '')
-    return env
+def agent_env(shims=True):
+    # Auth lives in CODEX_HOME on disk; CODEX_AUTH_JSON_B64 stays runner-only.
+    # scrubbed_env = allowlist base + lane-tier secret scrub + PATH shims.
+    return scrubbed_env({'CODEX_HOME': CODEX_HOME, 'CODEX_INSTALL_DIR': INSTALL_DIR, 'CODEX_CLI_ENV_ID': ENV_ID}, shims=shims)
 
 
 def ensure():
@@ -21,25 +18,27 @@ def ensure():
     os.makedirs(INSTALL_DIR, exist_ok=True)
     install_url = 'https://raw.githubusercontent.com/openai/codex/main/scripts/install/install.sh'
     install_script = subprocess.run(['curl', '-fsSL', install_url], check=True, capture_output=True, text=True).stdout
-    env = os.environ.copy()
+    env = agent_env(shims=False)
     env['CODEX_NON_INTERACTIVE'] = '1'
-    env['CODEX_INSTALL_DIR'] = INSTALL_DIR
-    env['CODEX_HOME'] = CODEX_HOME
     subprocess.run(['sh'], input=install_script, env=env, check=True, text=True)
     return codex_bin
 
 
 def write_codex_home(auth_b64, model):
     os.makedirs(CODEX_HOME, exist_ok=True)
+    auth = base64.b64decode(auth_b64)
+    mask_credential_blob(auth)
     with open(os.path.join(CODEX_HOME, 'auth.json'), 'wb') as f:
-        f.write(base64.b64decode(auth_b64))
+        f.write(auth)
     with open(os.path.join(CODEX_HOME, 'config.toml'), 'w') as f:
         f.write(f'model = "{model}"\n')
         f.write('approval_policy = "never"\n')
         f.write('sandbox_mode = "danger-full-access"\n')
         f.write('[shell_environment_policy]\n')
+        # Codex's shell tool sees the allowlisted agent env (it inherits the
+        # codex process env, which is already agent_env()); the default
+        # excludes additionally drop *KEY*/*SECRET*/*TOKEN* names.
         f.write('inherit = "all"\n')
-        f.write('ignore_default_excludes = true\n')
 
 
 def submit_task(codex_bin):
@@ -80,22 +79,18 @@ def poll_task(codex_bin, task_url):
 
 
 def apply_and_push(codex_bin, task_url):
-    env = agent_env()
-    result = run([codex_bin, 'cloud', 'apply', task_url], cwd=REPO_DIR, env=env, check=False)
+    result = run([codex_bin, 'cloud', 'apply', task_url], cwd=REPO_DIR, env=agent_env(), check=False)
     if result.returncode != 0:
         print('codex cloud apply failed:', result.returncode, result.stdout, result.stderr)
         return False
-    status = run(['git', '-C', REPO_DIR, 'status', '--porcelain'], env=env, capture_output=True, text=True, check=True)
-    if not status.stdout.strip():
-        print('no changes to commit')
-        return False
-    run(['git', '-C', REPO_DIR, 'add', '-A'], env=env, check=True)
-    run(['git', '-C', REPO_DIR, 'commit', '-m', f'{AGENT_LABEL} changes for {BRANCH}'], env=env, check=True)
-    run_transport(['git', '-C', REPO_DIR, 'push', 'origin', BRANCH], env=env)
-    return True
+    return commit_and_push(agent_env())
 
 
 def main():
+    # Cloud tasks run in OpenAI's environment with its own git credentials;
+    # Pile refuses the dispatch below enabled, this is the runner backstop.
+    if PUSH_POLICY != 'enabled' or SHELL_POLICY != 'enabled':
+        raise RuntimeError(f'codex cloud cannot enforce lane permissions push={PUSH_POLICY} shell={SHELL_POLICY}')
     auth_b64 = os.environ['CODEX_AUTH_JSON_B64']
     model = os.environ.get('MODEL', 'gpt-reserve')
     write_codex_home(auth_b64, model)
@@ -111,6 +106,7 @@ def main():
     summary = task.get('summary', {}) if isinstance(task.get('summary'), dict) else {}
     result_text = json.dumps({'status': task.get('status'), 'files_changed': summary.get('files_changed', 0), 'lines_added': summary.get('lines_added', 0), 'lines_removed': summary.get('lines_removed', 0), 'transcript': read_transcript()})
     write_result('completed' if task.get('status') in ('ready', 'applied') else 'failed', pr_url, result_text)
+    revoke_github_token()
     stop_log_ship()
     return 0
 
@@ -120,5 +116,6 @@ if __name__ == '__main__':
         sys.exit(main())
     except Exception as e:
         fail_result(e)
+        revoke_github_token()
         stop_log_ship()
         sys.exit(1)

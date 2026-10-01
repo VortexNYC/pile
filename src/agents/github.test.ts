@@ -1,7 +1,9 @@
 import { env } from "cloudflare:test";
+import { eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { createD1 } from "../global/db.js";
+import { createRepoIssue } from "../global/repo-issues.js";
 import { githubInstallations, user as userTable } from "../global/schema.js";
 import { createDefaultTeam } from "../global/teams.js";
 import { createWorkspace } from "../global/workspaces.js";
@@ -343,5 +345,243 @@ describe("github pr review → lane nudge (PILE-224)", () => {
     );
     // Completed lanes are resumable — the follow-up is the review→lane loop.
     expect(prompts.length).toBe(before + 1);
+  });
+
+  it("carries prior verdicts + the range since the last-reviewed sha (PILE-286)", async () => {
+    const s = stub();
+    const branch = `${BRANCH}-incremental`;
+    const issue = await s.createIssue({
+      title: "Incremental review",
+      repo: REPO,
+      branch,
+    });
+    const session = await s.createAgentSession({
+      issueId: issue.id,
+      agentId: "nudge-mock",
+      provider: "nudge-mock",
+      actorId: "review-user",
+      actorType: "user",
+      status: "running",
+      providerSessionId: "remote-nudge-incremental",
+    });
+    await s.recordLaneReview(session.id, {
+      reviewId: 8001,
+      reviewer: "reviewer-gh",
+      state: "CHANGES_REQUESTED",
+      sha: "aaa1111aaaa",
+      excerpt: "needs a regression test",
+    });
+
+    await processGithubWebhookPayload(
+      createD1(env.D1),
+      env as unknown as WorkerEnv,
+      queuePayload(
+        "pull_request_review",
+        reviewPayload({
+          review: {
+            id: 8002,
+            state: "changes_requested",
+            body: "test still misses the null branch",
+            user: { login: "reviewer-gh" },
+            html_url: `https://github.com/${REPO}/pull/46#pullrequestreview-8002`,
+            commit_id: "bbb2222bbbb",
+          },
+          pull_request: {
+            number: 46,
+            html_url: `https://github.com/${REPO}/pull/46`,
+            head: {
+              ref: branch,
+              sha: "bbb2222bbbb",
+              repo: { full_name: REPO },
+            },
+          },
+        })
+      )
+    );
+
+    const prompt = prompts.at(-1) ?? "";
+    expect(prompt).toContain("test still misses the null branch");
+    expect(prompt).toContain(
+      "- reviewer-gh changes_requested @aaa1111: needs a regression test"
+    );
+    expect(prompt).toContain("git log aaa1111aaaa..bbb2222bbbb");
+    const after = await s.getAgentSession(session.id);
+    expect(after?.lastReviewedSha).toBe("bbb2222bbbb");
+  });
+});
+
+function prCommentPayload(over: {
+  number?: number;
+  body?: string;
+  id?: number;
+  association?: string;
+  userType?: string;
+  title?: string;
+}) {
+  const number = over.number ?? 50;
+  return {
+    action: "created",
+    issue: {
+      number,
+      title: over.title ?? "some PR",
+      html_url: `https://github.com/${REPO}/pull/${number}`,
+      pull_request: {
+        url: `https://api.github.com/repos/${REPO}/pulls/${number}`,
+      },
+    },
+    comment: {
+      id: over.id ?? 50_000 + number,
+      body: over.body ?? "@pile fix the typo in your PR",
+      user: { login: "human-gh", type: over.userType ?? "User" },
+      author_association: over.association ?? "MEMBER",
+      html_url: `https://github.com/${REPO}/pull/${number}#issuecomment-1`,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    repository: { full_name: REPO },
+  };
+}
+
+describe("github @pile mention → lane (PILE-278)", () => {
+  const prompts: string[] = [];
+  const dispatched: Array<{ issueId: string; instructions?: string }> = [];
+
+  beforeAll(async () => {
+    if (!ORG) await seedWorkspace();
+    registerAgentProvider(
+      "mention-mock",
+      () =>
+        new MockAgentProvider("mention-mock", {
+          sendPrompt: (_id, prompt) => {
+            prompts.push(prompt);
+            return true;
+          },
+          dispatch: (_org, issue, _model, ctx) => {
+            dispatched.push({
+              issueId: issue.id,
+              instructions: ctx?.instructions,
+            });
+            return {
+              id: `mention-remote-${issue.id}`,
+              agentId: "mention-mock",
+              issueId: issue.id,
+              status: "created",
+            };
+          },
+        })
+    );
+  });
+
+  async function laneWithPr(number: number, status: "running" | "failed") {
+    const s = stub();
+    const branch = `lane/mention-${number}`;
+    const issue = await s.createIssue({
+      title: `Mention lane ${number}`,
+      repo: REPO,
+      branch,
+    });
+    await s.updatePrState(
+      REPO,
+      branch,
+      `https://github.com/${REPO}/pull/${number}`,
+      "open",
+      "github"
+    );
+    const session = await s.createAgentSession({
+      issueId: issue.id,
+      agentId: "mention-mock",
+      provider: "mention-mock",
+      actorId: "review-user",
+      actorType: "user",
+      status,
+      providerSessionId: `remote-mention-${number}`,
+    });
+    return { issue, session };
+  }
+
+  function deliver(body: unknown) {
+    return processGithubWebhookPayload(
+      createD1(env.D1),
+      env as unknown as WorkerEnv,
+      queuePayload("issue_comment", body)
+    );
+  }
+
+  it("resumes the PR's lane with the mention and mirrors it to the thread", async () => {
+    const { issue } = await laneWithPr(50, "running");
+    const before = prompts.length;
+    await deliver(prCommentPayload({ number: 50 }));
+    expect(prompts.length).toBe(before + 1);
+    expect(prompts.at(-1)).toContain("fix the typo in your PR");
+    expect(prompts.at(-1)).toContain("human-gh mentioned @pile");
+    expect(prompts.at(-1)).toContain(`pull/50`);
+    const comments = await stub().listComments(issue.id);
+    expect(comments.some((c) => c.body.includes("fix the typo"))).toBe(true);
+  });
+
+  it("delivers a redelivered mention only once", async () => {
+    await laneWithPr(51, "running");
+    const before = prompts.length;
+    const body = prCommentPayload({ number: 51 });
+    await deliver(body);
+    await deliver(body);
+    expect(prompts.length).toBe(before + 1);
+  });
+
+  it("ignores PR comments without a mention, from bots, or from outsiders", async () => {
+    await laneWithPr(52, "running");
+    const before = prompts.length;
+    await deliver(prCommentPayload({ number: 52, body: "lgtm", id: 1 }));
+    await deliver(prCommentPayload({ number: 52, userType: "Bot", id: 2 }));
+    await deliver(prCommentPayload({ number: 52, association: "NONE", id: 3 }));
+    expect(prompts.length).toBe(before);
+  });
+
+  it("cold-dispatches a new lane when the PR's lane is dead", async () => {
+    const { issue, session } = await laneWithPr(53, "failed");
+    const before = dispatched.length;
+    await deliver(
+      prCommentPayload({ number: 53, body: "@pile retry with a smaller diff" })
+    );
+    expect(dispatched.length).toBe(before + 1);
+    expect(dispatched.at(-1)?.issueId).toBe(issue.id);
+    expect(dispatched.at(-1)?.instructions).toContain(
+      "retry with a smaller diff"
+    );
+    const sessions = await stub().listAgentSessions({ issueId: issue.id });
+    const fresh = sessions.find((s) => s.id !== session.id);
+    expect(fresh?.retryOf).toBe(session.id);
+  });
+
+  it("dispatches on a mention in a synced GitHub issue with no lane yet", async () => {
+    const db = createD1(env.D1);
+    await db
+      .update(githubInstallations)
+      .set({ defaultAgentId: "mention-mock" })
+      .where(eq(githubInstallations.repo, REPO));
+    const issue = await stub().createIssue({
+      title: "Synced GH issue",
+      repo: REPO,
+    });
+    await createRepoIssue(db, ORG, REPO, 900, issue.id);
+    const before = dispatched.length;
+    await deliver({
+      action: "created",
+      issue: { number: 900, html_url: `https://github.com/${REPO}/issues/900` },
+      comment: {
+        id: 90_001,
+        body: "@pile please take this one",
+        user: { login: "human-gh", type: "User" },
+        author_association: "OWNER",
+        html_url: `https://github.com/${REPO}/issues/900#issuecomment-90001`,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      repository: { full_name: REPO },
+    });
+    expect(dispatched.length).toBe(before + 1);
+    expect(dispatched.at(-1)?.issueId).toBe(issue.id);
+    expect(dispatched.at(-1)?.instructions).toContain("please take this one");
+    expect(dispatched.at(-1)?.instructions).toContain("issues/900");
   });
 });

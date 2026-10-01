@@ -2613,6 +2613,77 @@
         "summary": "List issue children"
       }
     },
+    "/workspaces/{organizationId}/issues/{id}/similar": {
+      "get": {
+        "tags": [
+          "issues"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Issues whose title/description best match this issue (BM25 over the workspace search index), best first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "similar": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "issue": {
+                            "$ref": "#/components/schemas/Issue"
+                          },
+                          "score": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "issue",
+                          "score"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "similar"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List issue similar"
+      }
+    },
     "/workspaces/{organizationId}/issues/batch": {
       "post": {
         "tags": [
@@ -2837,6 +2908,38 @@
                   },
                   "preflight": {
                     "type": "boolean"
+                  },
+                  "effort": {
+                    "type": "string",
+                    "enum": [
+                      "low",
+                      "medium",
+                      "high",
+                      "max"
+                    ]
+                  },
+                  "maxDuration": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1440,
+                    "description": "Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue"
+                  },
+                  "resultSchema": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "lane"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": {
+                          "nullable": true
+                        }
+                      }
+                    ],
+                    "description": "JSON Schema (draft-07) the lane's final output must validate against, or \"lane\" for the built-in {verdict, summary, filesChanged} shape. The validated value lands on session.structuredResult."
                   }
                 },
                 "additionalProperties": false
@@ -2915,6 +3018,42 @@
                     "purpose": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "maxDurationMinutes": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "effort": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high",
+                        "max",
+                        null
+                      ]
+                    },
+                    "label": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resultSchema": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "structuredResult": {
+                      "nullable": true
+                    },
+                    "resultSchemaErrors": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "string"
+                      }
                     },
                     "createdAt": {
                       "type": "string"
@@ -3170,6 +3309,42 @@
                         "purpose": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "maxDurationMinutes": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "effort": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "low",
+                            "medium",
+                            "high",
+                            "max",
+                            null
+                          ]
+                        },
+                        "label": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "resultSchema": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        },
+                        "structuredResult": {
+                          "nullable": true
+                        },
+                        "resultSchemaErrors": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "string"
+                          }
                         },
                         "createdAt": {
                           "type": "string"
@@ -3429,6 +3604,42 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "maxDurationMinutes": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "effort": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "low",
+                            "medium",
+                            "high",
+                            "max",
+                            null
+                          ]
+                        },
+                        "label": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "resultSchema": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        },
+                        "structuredResult": {
+                          "nullable": true
+                        },
+                        "resultSchemaErrors": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -3636,6 +3847,42 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "maxDurationMinutes": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "effort": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "low",
+                            "medium",
+                            "high",
+                            "max",
+                            null
+                          ]
+                        },
+                        "label": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "resultSchema": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        },
+                        "structuredResult": {
+                          "nullable": true
+                        },
+                        "resultSchemaErrors": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -3818,6 +4065,38 @@
                         },
                         "queuedAfter": {
                           "type": "string"
+                        },
+                        "effort": {
+                          "type": "string",
+                          "enum": [
+                            "low",
+                            "medium",
+                            "high",
+                            "max"
+                          ]
+                        },
+                        "maxDuration": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 1440,
+                          "description": "Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue"
+                        },
+                        "resultSchema": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "lane"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "additionalProperties": {
+                                "nullable": true
+                              }
+                            }
+                          ],
+                          "description": "JSON Schema (draft-07) the lane's final output must validate against, or \"lane\" for the built-in {verdict, summary, filesChanged} shape. The validated value lands on session.structuredResult."
                         }
                       },
                       "required": [
@@ -4017,6 +4296,42 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "maxDurationMinutes": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "effort": {
+                                "type": "string",
+                                "nullable": true,
+                                "enum": [
+                                  "low",
+                                  "medium",
+                                  "high",
+                                  "max",
+                                  null
+                                ]
+                              },
+                              "label": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "resultSchema": {
+                                "type": "object",
+                                "nullable": true,
+                                "additionalProperties": {
+                                  "nullable": true
+                                }
+                              },
+                              "structuredResult": {
+                                "nullable": true
+                              },
+                              "resultSchemaErrors": {
+                                "type": "array",
+                                "nullable": true,
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
                               "createdAt": {
                                 "type": "string"
                               },
@@ -4190,6 +4505,10 @@
                                   "needs_input",
                                   null
                                 ]
+                              },
+                              "label": {
+                                "type": "string",
+                                "nullable": true
                               },
                               "startedAt": {
                                 "type": "string",
@@ -4492,6 +4811,42 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "maxDurationMinutes": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "effort": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "low",
+                            "medium",
+                            "high",
+                            "max",
+                            null
+                          ]
+                        },
+                        "label": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "resultSchema": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        },
+                        "structuredResult": {
+                          "nullable": true
+                        },
+                        "resultSchemaErrors": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -4787,6 +5142,42 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "maxDurationMinutes": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "effort": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "low",
+                            "medium",
+                            "high",
+                            "max",
+                            null
+                          ]
+                        },
+                        "label": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "resultSchema": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        },
+                        "structuredResult": {
+                          "nullable": true
+                        },
+                        "resultSchemaErrors": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -4949,6 +5340,10 @@
                             "needs_input",
                             null
                           ]
+                        },
+                        "label": {
+                          "type": "string",
+                          "nullable": true
                         },
                         "startedAt": {
                           "type": "string",
@@ -5114,6 +5509,42 @@
                     "purpose": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "maxDurationMinutes": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "effort": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high",
+                        "max",
+                        null
+                      ]
+                    },
+                    "label": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resultSchema": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "structuredResult": {
+                      "nullable": true
+                    },
+                    "resultSchemaErrors": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "string"
+                      }
                     },
                     "createdAt": {
                       "type": "string"
@@ -5884,6 +6315,42 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "maxDurationMinutes": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "effort": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high",
+                        "max",
+                        null
+                      ]
+                    },
+                    "label": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resultSchema": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "structuredResult": {
+                      "nullable": true
+                    },
+                    "resultSchemaErrors": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -6098,6 +6565,42 @@
                     "purpose": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "maxDurationMinutes": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "effort": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high",
+                        "max",
+                        null
+                      ]
+                    },
+                    "label": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resultSchema": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "structuredResult": {
+                      "nullable": true
+                    },
+                    "resultSchemaErrors": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "string"
+                      }
                     },
                     "createdAt": {
                       "type": "string"
@@ -6317,6 +6820,42 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "maxDurationMinutes": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "effort": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "low",
+                            "medium",
+                            "high",
+                            "max",
+                            null
+                          ]
+                        },
+                        "label": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "resultSchema": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        },
+                        "structuredResult": {
+                          "nullable": true
+                        },
+                        "resultSchemaErrors": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -6495,6 +7034,21 @@
                   },
                   "repo": {
                     "type": "string"
+                  },
+                  "effort": {
+                    "type": "string",
+                    "enum": [
+                      "low",
+                      "medium",
+                      "high",
+                      "max"
+                    ]
+                  },
+                  "maxDuration": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1440,
+                    "description": "Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue"
                   }
                 },
                 "required": [
@@ -6578,6 +7132,42 @@
                         "purpose": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "maxDurationMinutes": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "effort": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "low",
+                            "medium",
+                            "high",
+                            "max",
+                            null
+                          ]
+                        },
+                        "label": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "resultSchema": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        },
+                        "structuredResult": {
+                          "nullable": true
+                        },
+                        "resultSchemaErrors": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "string"
+                          }
                         },
                         "createdAt": {
                           "type": "string"
@@ -6881,6 +7471,42 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "maxDurationMinutes": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "effort": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high",
+                        "max",
+                        null
+                      ]
+                    },
+                    "label": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resultSchema": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "structuredResult": {
+                      "nullable": true
+                    },
+                    "resultSchemaErrors": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -7041,6 +7667,21 @@
                   },
                   "model": {
                     "type": "string"
+                  },
+                  "effort": {
+                    "type": "string",
+                    "enum": [
+                      "low",
+                      "medium",
+                      "high",
+                      "max"
+                    ]
+                  },
+                  "maxDuration": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1440,
+                    "description": "Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue"
                   }
                 },
                 "additionalProperties": false
@@ -7119,6 +7760,42 @@
                     "purpose": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "maxDurationMinutes": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "effort": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high",
+                        "max",
+                        null
+                      ]
+                    },
+                    "label": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resultSchema": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "structuredResult": {
+                      "nullable": true
+                    },
+                    "resultSchemaErrors": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "string"
+                      }
                     },
                     "createdAt": {
                       "type": "string"
@@ -46914,6 +47591,10 @@
                             "type": "string",
                             "nullable": true
                           },
+                          "triageAgentId": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "defaultTemplateId": {
                             "type": "string",
                             "nullable": true
@@ -46942,6 +47623,7 @@
                           "isPublic",
                           "parentAutoClose",
                           "triageAssigneeId",
+                          "triageAgentId",
                           "defaultTemplateId",
                           "defaultRepo",
                           "subIssueAutoClose",
@@ -46996,6 +47678,10 @@
                     "type": "boolean"
                   },
                   "triageAssigneeId": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "triageAgentId": {
                     "type": "string",
                     "nullable": true
                   },
@@ -47055,6 +47741,10 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "triageAgentId": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "defaultTemplateId": {
                       "type": "string",
                       "nullable": true
@@ -47083,6 +47773,7 @@
                     "isPublic",
                     "parentAutoClose",
                     "triageAssigneeId",
+                    "triageAgentId",
                     "defaultTemplateId",
                     "defaultRepo",
                     "subIssueAutoClose",
@@ -47156,6 +47847,10 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "triageAgentId": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "defaultTemplateId": {
                       "type": "string",
                       "nullable": true
@@ -47184,6 +47879,7 @@
                     "isPublic",
                     "parentAutoClose",
                     "triageAssigneeId",
+                    "triageAgentId",
                     "defaultTemplateId",
                     "defaultRepo",
                     "subIssueAutoClose",
@@ -47246,6 +47942,10 @@
                     "type": "string",
                     "nullable": true
                   },
+                  "triageAgentId": {
+                    "type": "string",
+                    "nullable": true
+                  },
                   "defaultTemplateId": {
                     "type": "string",
                     "nullable": true
@@ -47298,6 +47998,10 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "triageAgentId": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "defaultTemplateId": {
                       "type": "string",
                       "nullable": true
@@ -47326,6 +48030,7 @@
                     "isPublic",
                     "parentAutoClose",
                     "triageAssigneeId",
+                    "triageAgentId",
                     "defaultTemplateId",
                     "defaultRepo",
                     "subIssueAutoClose",
@@ -47688,6 +48393,10 @@
                             "type": "string",
                             "nullable": true
                           },
+                          "triageAgentId": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "defaultTemplateId": {
                             "type": "string",
                             "nullable": true
@@ -47716,6 +48425,7 @@
                           "isPublic",
                           "parentAutoClose",
                           "triageAssigneeId",
+                          "triageAgentId",
                           "defaultTemplateId",
                           "defaultRepo",
                           "subIssueAutoClose",

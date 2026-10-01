@@ -31,6 +31,7 @@ const descriptor: SandboxCliDescriptor = {
   modelEnv: "CODEX_CLI_MODEL",
   // Cloud tasks always operate on a repo — no repo-less lanes.
   requiresRepo: true,
+  externalExecution: true,
   pushInstruction:
     "Implement the requested change. Verify proportionate to the diff: always run the project's lint/typecheck (for example `pnpm run check`) when the toolchain exists; when you change code, add or extend tests covering the change and run the relevant suites; skip tests entirely when the diff is docs/config-only. Do not burn time on suites that need network egress the sandbox lacks — note the limitation and move on. Make commits with clear messages. Push your changes to the current branch and open a GitHub pull request. Include the full PR URL in your final message.",
   requireAuth(env) {

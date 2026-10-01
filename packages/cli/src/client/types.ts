@@ -1298,6 +1298,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/issues/{id}/similar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List issue similar */
+        get: {
+            parameters: {
+                query?: {
+                    limit?: number;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Issues whose title/description best match this issue (BM25 over the workspace search index), best first */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            similar: {
+                                issue: components["schemas"]["Issue"];
+                                score: number;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/issues/batch": {
         parameters: {
             query?: never;
@@ -1399,6 +1445,14 @@ export interface paths {
                         branch?: string | null;
                         instructions?: string;
                         preflight?: boolean;
+                        /** @enum {string} */
+                        effort?: "low" | "medium" | "high" | "max";
+                        /** @description Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue */
+                        maxDuration?: number;
+                        /** @description JSON Schema (draft-07) the lane's final output must validate against, or "lane" for the built-in {verdict, summary, filesChanged} shape. The validated value lands on session.structuredResult. */
+                        resultSchema?: "lane" | {
+                            [key: string]: unknown;
+                        };
                     };
                 };
             };
@@ -1427,6 +1481,15 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            maxDurationMinutes?: number | null;
+                            /** @enum {string|null} */
+                            effort?: "low" | "medium" | "high" | "max" | null;
+                            label?: string | null;
+                            resultSchema?: {
+                                [key: string]: unknown;
+                            } | null;
+                            structuredResult?: unknown;
+                            resultSchemaErrors?: string[] | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;
@@ -1516,6 +1579,15 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                maxDurationMinutes?: number | null;
+                                /** @enum {string|null} */
+                                effort?: "low" | "medium" | "high" | "max" | null;
+                                label?: string | null;
+                                resultSchema?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                structuredResult?: unknown;
+                                resultSchemaErrors?: string[] | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -1607,6 +1679,15 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                maxDurationMinutes?: number | null;
+                                /** @enum {string|null} */
+                                effort?: "low" | "medium" | "high" | "max" | null;
+                                label?: string | null;
+                                resultSchema?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                structuredResult?: unknown;
+                                resultSchemaErrors?: string[] | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -1659,6 +1740,15 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                maxDurationMinutes?: number | null;
+                                /** @enum {string|null} */
+                                effort?: "low" | "medium" | "high" | "max" | null;
+                                label?: string | null;
+                                resultSchema?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                structuredResult?: unknown;
+                                resultSchemaErrors?: string[] | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -1729,6 +1819,14 @@ export interface paths {
                             branch?: string | null;
                             instructions?: string;
                             queuedAfter?: string;
+                            /** @enum {string} */
+                            effort?: "low" | "medium" | "high" | "max";
+                            /** @description Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue */
+                            maxDuration?: number;
+                            /** @description JSON Schema (draft-07) the lane's final output must validate against, or "lane" for the built-in {verdict, summary, filesChanged} shape. The validated value lands on session.structuredResult. */
+                            resultSchema?: "lane" | {
+                                [key: string]: unknown;
+                            };
                         }[];
                     };
                 };
@@ -1808,6 +1906,15 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                maxDurationMinutes?: number | null;
+                                /** @enum {string|null} */
+                                effort?: "low" | "medium" | "high" | "max" | null;
+                                label?: string | null;
+                                resultSchema?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                structuredResult?: unknown;
+                                resultSchemaErrors?: string[] | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -1844,6 +1951,7 @@ export interface paths {
                                 lastProgressAt?: string | null;
                                 /** @enum {string|null} */
                                 derivedStatus?: "stalled" | "needs_input" | null;
+                                label?: string | null;
                                 startedAt: string | null;
                                 endedAt: string | null;
                             }[];
@@ -2006,6 +2114,15 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                maxDurationMinutes?: number | null;
+                                /** @enum {string|null} */
+                                effort?: "low" | "medium" | "high" | "max" | null;
+                                label?: string | null;
+                                resultSchema?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                structuredResult?: unknown;
+                                resultSchemaErrors?: string[] | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -2100,6 +2217,15 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            maxDurationMinutes?: number | null;
+                            /** @enum {string|null} */
+                            effort?: "low" | "medium" | "high" | "max" | null;
+                            label?: string | null;
+                            resultSchema?: {
+                                [key: string]: unknown;
+                            } | null;
+                            structuredResult?: unknown;
+                            resultSchemaErrors?: string[] | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;
@@ -2134,6 +2260,7 @@ export interface paths {
                             lastProgressAt?: string | null;
                             /** @enum {string|null} */
                             derivedStatus?: "stalled" | "needs_input" | null;
+                            label?: string | null;
                             startedAt: string | null;
                             endedAt: string | null;
                         };
@@ -2202,6 +2329,15 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            maxDurationMinutes?: number | null;
+                            /** @enum {string|null} */
+                            effort?: "low" | "medium" | "high" | "max" | null;
+                            label?: string | null;
+                            resultSchema?: {
+                                [key: string]: unknown;
+                            } | null;
+                            structuredResult?: unknown;
+                            resultSchemaErrors?: string[] | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;
@@ -2570,6 +2706,15 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            maxDurationMinutes?: number | null;
+                            /** @enum {string|null} */
+                            effort?: "low" | "medium" | "high" | "max" | null;
+                            label?: string | null;
+                            resultSchema?: {
+                                [key: string]: unknown;
+                            } | null;
+                            structuredResult?: unknown;
+                            resultSchemaErrors?: string[] | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;
@@ -2654,6 +2799,15 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            maxDurationMinutes?: number | null;
+                            /** @enum {string|null} */
+                            effort?: "low" | "medium" | "high" | "max" | null;
+                            label?: string | null;
+                            resultSchema?: {
+                                [key: string]: unknown;
+                            } | null;
+                            structuredResult?: unknown;
+                            resultSchemaErrors?: string[] | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;
@@ -2737,6 +2891,15 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                maxDurationMinutes?: number | null;
+                                /** @enum {string|null} */
+                                effort?: "low" | "medium" | "high" | "max" | null;
+                                label?: string | null;
+                                resultSchema?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                structuredResult?: unknown;
+                                resultSchemaErrors?: string[] | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -2815,6 +2978,10 @@ export interface paths {
                         agentId?: string;
                         model?: string;
                         repo?: string;
+                        /** @enum {string} */
+                        effort?: "low" | "medium" | "high" | "max";
+                        /** @description Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue */
+                        maxDuration?: number;
                     };
                 };
             };
@@ -2844,6 +3011,15 @@ export interface paths {
                                 prState: string | null;
                                 branch: string | null;
                                 purpose?: string | null;
+                                maxDurationMinutes?: number | null;
+                                /** @enum {string|null} */
+                                effort?: "low" | "medium" | "high" | "max" | null;
+                                label?: string | null;
+                                resultSchema?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                structuredResult?: unknown;
+                                resultSchemaErrors?: string[] | null;
                                 createdAt: string;
                                 updatedAt: string;
                                 lastProgressAt?: string | null;
@@ -2962,6 +3138,15 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            maxDurationMinutes?: number | null;
+                            /** @enum {string|null} */
+                            effort?: "low" | "medium" | "high" | "max" | null;
+                            label?: string | null;
+                            resultSchema?: {
+                                [key: string]: unknown;
+                            } | null;
+                            structuredResult?: unknown;
+                            resultSchemaErrors?: string[] | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;
@@ -3033,6 +3218,10 @@ export interface paths {
                         context?: string;
                         agentId?: string;
                         model?: string;
+                        /** @enum {string} */
+                        effort?: "low" | "medium" | "high" | "max";
+                        /** @description Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue */
+                        maxDuration?: number;
                     };
                 };
             };
@@ -3061,6 +3250,15 @@ export interface paths {
                             prState: string | null;
                             branch: string | null;
                             purpose?: string | null;
+                            maxDurationMinutes?: number | null;
+                            /** @enum {string|null} */
+                            effort?: "low" | "medium" | "high" | "max" | null;
+                            label?: string | null;
+                            resultSchema?: {
+                                [key: string]: unknown;
+                            } | null;
+                            structuredResult?: unknown;
+                            resultSchemaErrors?: string[] | null;
                             createdAt: string;
                             updatedAt: string;
                             lastProgressAt?: string | null;
@@ -23148,6 +23346,7 @@ export interface paths {
                                 isPublic: boolean;
                                 parentAutoClose: boolean;
                                 triageAssigneeId: string | null;
+                                triageAgentId: string | null;
                                 defaultTemplateId: string | null;
                                 defaultRepo: string | null;
                                 subIssueAutoClose: boolean;
@@ -23178,6 +23377,7 @@ export interface paths {
                         isPublic?: boolean;
                         parentAutoClose?: boolean;
                         triageAssigneeId?: string | null;
+                        triageAgentId?: string | null;
                         defaultTemplateId?: string | null;
                         defaultRepo?: string | null;
                         subIssueAutoClose?: boolean;
@@ -23201,6 +23401,7 @@ export interface paths {
                             isPublic: boolean;
                             parentAutoClose: boolean;
                             triageAssigneeId: string | null;
+                            triageAgentId: string | null;
                             defaultTemplateId: string | null;
                             defaultRepo: string | null;
                             subIssueAutoClose: boolean;
@@ -23253,6 +23454,7 @@ export interface paths {
                             isPublic: boolean;
                             parentAutoClose: boolean;
                             triageAssigneeId: string | null;
+                            triageAgentId: string | null;
                             defaultTemplateId: string | null;
                             defaultRepo: string | null;
                             subIssueAutoClose: boolean;
@@ -23315,6 +23517,7 @@ export interface paths {
                         isPublic?: boolean;
                         parentAutoClose?: boolean;
                         triageAssigneeId?: string | null;
+                        triageAgentId?: string | null;
                         defaultTemplateId?: string | null;
                         defaultRepo?: string | null;
                         subIssueAutoClose?: boolean;
@@ -23338,6 +23541,7 @@ export interface paths {
                             isPublic: boolean;
                             parentAutoClose: boolean;
                             triageAssigneeId: string | null;
+                            triageAgentId: string | null;
                             defaultTemplateId: string | null;
                             defaultRepo: string | null;
                             subIssueAutoClose: boolean;
@@ -23542,6 +23746,7 @@ export interface paths {
                                 isPublic: boolean;
                                 parentAutoClose: boolean;
                                 triageAssigneeId: string | null;
+                                triageAgentId: string | null;
                                 defaultTemplateId: string | null;
                                 defaultRepo: string | null;
                                 subIssueAutoClose: boolean;

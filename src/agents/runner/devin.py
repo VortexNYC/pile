@@ -7,16 +7,27 @@ FOLLOWUP_DIR = '/tmp/followups'
 
 
 def agent_env():
-    env = os.environ.copy()
-    env['HOME'] = HOME
-    env['PATH'] = INSTALL_DIR + ':' + env.get('PATH', '')
-    return env
+    # Credentials live in DEVIN_HOME on disk; DEVIN_CREDENTIALS_B64 stays runner-only.
+    return scrubbed_env()
+
+
+def apply_tool_policy():
+    # shell=disabled at the tool surface: deny the exec tool in the user
+    # config and drop out of bypass mode so the deny can't be auto-approved.
+    if SHELL_POLICY != 'disabled':
+        return
+    deny_in_cli_config(os.path.join(HOME, '.config', 'devin', 'config.json'), ['exec'])
+
+
+def permission_mode():
+    return 'accept-edits' if SHELL_POLICY == 'disabled' else 'dangerous'
+
 
 
 def ensure():
     devin_bin = shutil.which('devin') or os.path.join(INSTALL_DIR, 'devin')
     if not os.path.exists(devin_bin):
-        subprocess.run(['bash', '-c', 'curl -fsSL https://cli.devin.ai/install.sh | bash'], check=False)
+        subprocess.run(['bash', '-c', 'curl -fsSL https://cli.devin.ai/install.sh | bash'], env=scrubbed_env(shims=False), check=False)
     # installer exits non-zero when its interactive wizard bails without a TTY; verify the binary directly
     result = subprocess.run([devin_bin, '--version'], capture_output=True, text=True)
     if result.returncode != 0:
@@ -28,8 +39,10 @@ def ensure():
 def write_devin_home(creds_b64):
     os.makedirs(DEVIN_HOME, exist_ok=True)
     creds_path = os.path.join(DEVIN_HOME, 'credentials.toml')
+    creds = base64.b64decode(creds_b64)
+    mask_credential_blob(creds)
     with open(creds_path, 'wb') as f:
-        f.write(base64.b64decode(creds_b64))
+        f.write(creds)
     os.chmod(creds_path, 0o600)
 
 
@@ -61,7 +74,7 @@ def run_agent(devin_bin, prompt=None):
     prompt = prompt or base64.b64decode(os.environ['PROMPT_B64']).decode('utf-8')
     model = os.environ.get('MODEL', 'swe-2')
     proc = subprocess.Popen(
-        [devin_bin, '-p', prompt, '--model', model, '--permission-mode', 'dangerous', '--respect-workspace-trust', 'false'],
+        [devin_bin, '-p', prompt, '--model', model, '--permission-mode', permission_mode(), '--respect-workspace-trust', 'false'],
         cwd=REPO_DIR, env=agent_env(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.PIPE, text=True
     )
     threading.Thread(target=inject_followups, args=(proc,), daemon=True).start()
@@ -78,7 +91,7 @@ def run_agent(devin_bin, prompt=None):
     output = ''.join(tail)[-4000:]
     print('devin exit:', proc.returncode)
     if proc.returncode != 0:
-        raise RuntimeError(f'devin -p failed ({proc.returncode}): {output[-500:]}')
+        raise RuntimeError(f'devin -p failed ({proc.returncode}): {_redact(output[-500:])}')
     return output
 
 
@@ -97,9 +110,18 @@ def drain_followups(devin_bin):
             text = f.read()
         os.rename(path, path[:-7] + '.drained')
         print('running queued follow-up prompt:', name)
-        output = run_agent(devin_bin, prompt=text)
+        output = run_turn(devin_bin, prompt=text)
         commit_and_push(agent_env())
     return output
+
+
+def run_turn(devin_bin, prompt=None):
+    # One agent turn, gated by the repo's stop hook: a failing hook resumes
+    # devin with the failure before anything is pushed.
+    task = prompt or base64.b64decode(os.environ['PROMPT_B64']).decode('utf-8')
+    output = run_agent(devin_bin, prompt=prompt)
+    healed = self_heal(agent_env(), lambda p: run_agent(devin_bin, prompt=p), task)
+    return output if healed is None else healed
 
 
 def main():
@@ -107,6 +129,7 @@ def main():
     creds_b64 = os.environ['DEVIN_CREDENTIALS_B64']
     write_devin_home(creds_b64)
     devin_bin = ensure()
+    apply_tool_policy()
     if os.environ.get('FOLLOWUP') == '1':
         # Resume path: sandbox was kept after the prior run. Drop the stale
         # result file so a mid-run poll can't serve the previous outcome.
@@ -117,9 +140,10 @@ def main():
         ensure_postgres()
         if REPO:
             resume_repo()
+            run_hook('postCheckout', agent_env())
         else:
             os.makedirs(REPO_DIR, exist_ok=True)
-        output = run_agent(devin_bin)
+        output = run_turn(devin_bin)
         output = drain_followups(devin_bin) or output
         pushed = commit_and_push(agent_env()) if REPO else False
         return finalize(output, pushed)
@@ -133,9 +157,10 @@ def main():
         return finalize(output, False)
     create_branch()
     clone_repo()
+    run_hook('postCheckout', agent_env())
     run_setup_hook(agent_env)
     ensure_postgres()
-    output = run_agent(devin_bin)
+    output = run_turn(devin_bin)
     output = drain_followups(devin_bin) or output
     pushed = commit_and_push(agent_env())
     return finalize(output, pushed)
@@ -143,7 +168,9 @@ def main():
 
 if __name__ == '__main__':
     try:
-        sys.exit(main())
+        rc = main()
     except Exception as e:
         fail_result(e)
-        sys.exit(1)
+        rc = 1
+    revoke_github_token()
+    sys.exit(rc)

@@ -253,3 +253,91 @@ export async function searchDocuments(
   });
   return result.hits.map((hit) => hit.document.documentId);
 }
+
+export interface SimilarIssueHit {
+  issueId: string;
+  score: number;
+}
+
+const SIMILAR_QUERY_MAX_TERMS = 24;
+
+const SIMILAR_STOP_WORDS = new Set([
+  "about",
+  "after",
+  "also",
+  "been",
+  "before",
+  "being",
+  "does",
+  "from",
+  "have",
+  "into",
+  "just",
+  "more",
+  "only",
+  "should",
+  "some",
+  "than",
+  "that",
+  "their",
+  "them",
+  "then",
+  "there",
+  "these",
+  "they",
+  "this",
+  "when",
+  "where",
+  "which",
+  "while",
+  "will",
+  "with",
+  "would",
+]);
+
+/** Significant terms of an issue (title first, then description) used as the
+ *  similarity query. Short words and stop words carry no signal for BM25. */
+export function similarityTerms(
+  title: string,
+  description?: string | null
+): string[] {
+  const words = `${title}\n${description ?? ""}`
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]+/g, " ")
+    .split(" ")
+    .filter((w) => w.length >= 4 && !SIMILAR_STOP_WORDS.has(w));
+  return [...new Set(words)].slice(0, SIMILAR_QUERY_MAX_TERMS);
+}
+
+/** Issues whose title/description best match the given issue's text, ranked
+ *  by BM25. Comments and documents are not considered; the issue itself is
+ *  excluded. */
+export async function findSimilarIssues(
+  index: WorkspaceSearchIndex,
+  issue: Pick<Issue, "id" | "title" | "description">,
+  teamIds: string[],
+  limit = 10
+): Promise<SimilarIssueHit[]> {
+  const terms = similarityTerms(issue.title, issue.description);
+  if (terms.length === 0) return [];
+  const result = await search(index, {
+    term: terms.join(" "),
+    properties: ["title", "description"],
+    boost: { title: 2, description: 1 },
+    tolerance: 0,
+    where:
+      teamIds.length > 0
+        ? { kind: "issue", teamId: teamIds }
+        : { kind: "issue" },
+    limit: limit + 1,
+  });
+  const hits: SimilarIssueHit[] = [];
+  for (const hit of result.hits) {
+    const doc = hit.document as SearchDocument;
+    const issueId = doc.issueId || doc.id;
+    if (issueId === issue.id) continue;
+    hits.push({ issueId, score: hit.score });
+    if (hits.length >= limit) break;
+  }
+  return hits;
+}

@@ -58,6 +58,10 @@ export interface AppEnv {
   CURSOR_API_KEY?: string;
   /** Cursor CLI model override (defaults to the CLI's own default). */
   CURSOR_CLI_MODEL?: string;
+  /** "1"/"true" runs sandbox-CLI lanes in restricted mode: PATH shims refuse credential/remote git ops and off-allowlist network tools, and the GitHub token stays out of `.git/config` while the agent runs. */
+  LANE_RESTRICTED?: string;
+  /** Extra comma-separated hosts restricted lanes may reach with curl/wget, on top of the runner defaults. */
+  LANE_NET_ALLOWLIST?: string;
   FLUE_WORKER?: Fetcher;
   TOKEN_HASH_SECRET?: string;
   SLACK_CLIENT_ID?: string;

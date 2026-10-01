@@ -8,14 +8,18 @@ import {
 } from "../global/crypto.js";
 import { findOrCreateCycleByName } from "../global/cycles.js";
 import { createD1, type D1Client } from "../global/db.js";
+import { getInstallationTokenForRepo } from "../global/github-auth.js";
 import {
   createGithubInstallation,
   deleteGithubInstallation,
   deleteGithubInstallationsByInstallationId,
+  findGithubInstallation,
   findWorkspaceByRepo,
 } from "../global/github-installations.js";
 import { findUserByGithubLogin } from "../global/github-users.js";
 import { findLabelsByWorkspaceAndNames } from "../global/labels.js";
+import { fetchPileRepoConfig } from "../global/pile-repo-config.js";
+import { createRepoBranch } from "../global/repo-branches.js";
 import {
   createRepoIssue,
   deleteRepoIssue,
@@ -27,11 +31,28 @@ import { enqueueWebhook } from "../global/webhook-queue.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import type { Issue } from "../types/workspace.js";
-import { nudgeLane } from "./nudge.js";
+import { loadProviderConfig } from "./credentials.js";
+import { resolveAgentEnv } from "./daytona.js";
+import { dispatchAgent } from "./index.js";
+import {
+  buildMentionPrompt,
+  isTrustedAssociation,
+  parsePileMention,
+} from "./mention.js";
+import { nudgeLane, type NudgeOptions } from "./nudge.js";
+import {
+  type AutomationEventTarget,
+  automationEventTarget,
+  issueEventTarget,
+} from "./repo-triggers.js";
+import { reviewPromptWithContext } from "./review-context.js";
+import { fireEventAutomations, githubApiGet } from "./sweep.js";
 
 const pullRequestPayloadSchema = z.object({
   action: z.string(),
+  label: z.object({ name: z.string() }).optional(),
   pull_request: z.object({
+    number: z.number().int().optional(),
     title: z.string(),
     body: z.string().nullable(),
     state: z.string(),
@@ -132,6 +153,8 @@ const issueCommentPayloadSchema = z.object({
   action: z.enum(["created", "edited", "deleted"]),
   issue: z.object({
     number: z.number().int(),
+    title: z.string().optional(),
+    html_url: z.string().optional(),
     pull_request: z
       .object({
         url: z.string(),
@@ -143,7 +166,9 @@ const issueCommentPayloadSchema = z.object({
     body: z.string(),
     user: z.object({
       login: z.string(),
+      type: z.string().optional(),
     }),
+    author_association: z.string().optional(),
     html_url: z.string(),
     created_at: z.string(),
     updated_at: z.string(),
@@ -153,6 +178,8 @@ const issueCommentPayloadSchema = z.object({
   }),
 });
 
+type IssueCommentPayload = z.infer<typeof issueCommentPayloadSchema>;
+
 const pullRequestReviewPayloadSchema = z.object({
   action: z.enum(["submitted", "edited", "dismissed"]),
   review: z.object({
@@ -161,6 +188,7 @@ const pullRequestReviewPayloadSchema = z.object({
     body: z.string().nullable(),
     user: z.object({ login: z.string() }).nullable(),
     html_url: z.string(),
+    commit_id: z.string().nullish(),
   }),
   pull_request: z.object({
     number: z.number().int(),
@@ -191,7 +219,9 @@ const pullRequestReviewCommentPayloadSchema = z.object({
     body: z.string(),
     user: z.object({
       login: z.string(),
+      type: z.string().optional(),
     }),
+    author_association: z.string().optional(),
     html_url: z.string(),
     path: z.string(),
     created_at: z.string(),
@@ -216,6 +246,7 @@ const issuePayloadSchema = z.object({
     "milestoned",
     "demilestoned",
   ]),
+  label: z.object({ name: z.string() }).optional(),
   issue: z.object({
     number: z.number().int(),
     title: z.string(),
@@ -499,7 +530,34 @@ async function processIssueComment(
   const repo = repository.full_name;
 
   if (issue.pull_request) {
-    // PR issue comments are handled with PR review comments for mapping.
+    // PR conversation comments aren't mirrored — only an @pile mention on a
+    // lane's PR is acted on (and mirrored so the ask is visible in Pile).
+    // Repo `mention` triggers fire too.
+    if (action !== "created") return;
+    await routePrMention(env, db, payload.data);
+    const record = await findWorkspaceByRepo(db, repo);
+    if (!record) return;
+    const prStub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(record.organizationId)
+    );
+    await prStub.setOrganizationId(record.organizationId);
+    await fireMention(
+      env,
+      db,
+      prStub,
+      record.organizationId,
+      prEventTarget(
+        prStub,
+        repo,
+        {
+          number: issue.number,
+          title: issue.title ?? `${repo}#${issue.number}`,
+          htmlUrl: issue.html_url ?? comment.html_url,
+        },
+        null
+      ),
+      comment
+    );
     return;
   }
 
@@ -527,6 +585,22 @@ async function processIssueComment(
       createdAt: comment.created_at,
       updatedAt: comment.updated_at,
     });
+    const pileIssue = await stub.getIssue(issueId);
+    if (pileIssue) {
+      await routePileMention(env, db, stub, organizationId, pileIssue, {
+        targetUrl: issue.html_url ?? comment.html_url,
+        isPullRequest: false,
+        comment,
+      });
+    }
+    await fireMention(
+      env,
+      db,
+      stub,
+      organizationId,
+      issueEventTarget(stub, issueId),
+      comment
+    );
   }
 
   if (action === "edited") {
@@ -556,6 +630,266 @@ async function processIssueComment(
 }
 
 type WorkspaceStub = ReturnType<WorkerEnv["WORKSPACE_DURABLE_OBJECT"]["get"]>;
+
+// PR events land on the issue that owns the PR branch; PRs without one get a
+// deterministic per-PR issue, created only once an automation matches.
+function prEventTarget(
+  stub: WorkspaceStub,
+  repo: string,
+  pr: { number?: number; title: string; htmlUrl: string; body?: string | null },
+  branch: string | null
+): AutomationEventTarget {
+  return automationEventTarget(async () => {
+    const owned = branch
+      ? await stub.getIssueByBranch(repo, branch)
+      : undefined;
+    if (owned) return owned;
+    if (pr.number === undefined) return null;
+    return stub.createIssue(
+      {
+        id: `repo:github:${repo.replace(/\//g, ":")}:pr:${pr.number}`,
+        title: pr.title,
+        description: [pr.htmlUrl, pr.body ?? ""].filter(Boolean).join("\n\n"),
+        repo,
+        branch,
+      },
+      "github"
+    );
+  }, repo);
+}
+
+// `mention` fires for human comments carrying an @-handle; per-trigger
+// handle matching happens in matchRepoTriggers. Bot comments never fire, so
+// a lane quoting a handle can't re-trigger itself.
+async function fireMention(
+  env: WorkerEnv,
+  db: D1Client,
+  stub: WorkspaceStub,
+  organizationId: string,
+  target: AutomationEventTarget,
+  comment: {
+    body: string;
+    html_url: string;
+    user: { login: string; type?: string };
+    author_association?: string;
+  }
+): Promise<void> {
+  const bot =
+    comment.user.type === "Bot" || comment.user.login.endsWith("[bot]");
+  if (bot || !/@[\w-]/.test(comment.body)) return;
+  if (
+    !isTrustedAssociation(comment.author_association) &&
+    !(await findUserByGithubLogin(db, organizationId, comment.user.login))
+  ) {
+    return;
+  }
+  await fireEventAutomations(
+    env,
+    stub,
+    organizationId,
+    "mention",
+    target,
+    `${comment.user.login} mentioned you on ${comment.html_url}:\n\n${comment.body}`,
+    undefined,
+    { body: comment.body }
+  );
+}
+
+async function routePrMention(
+  env: WorkerEnv,
+  db: D1Client,
+  data: IssueCommentPayload
+): Promise<void> {
+  const { issue, comment, repository } = data;
+  if (!parsePileMention(comment.body)) return;
+  const workspaceRecord = await findWorkspaceByRepo(db, repository.full_name);
+  if (!workspaceRecord) return;
+  const organizationId = workspaceRecord.organizationId;
+  const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+    env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+  );
+  await stub.setOrganizationId(organizationId);
+
+  // issue_comment carries no head ref — resolve the lane's issue by the PR
+  // URL it recorded, falling back to an identifier in the PR title.
+  const prUrl = issue.html_url ?? comment.html_url.replace(/#.*$/, "");
+  let pileIssue = await stub.getIssueByPrUrl(prUrl);
+  if (!pileIssue && issue.title) {
+    const candidates = await Promise.all(
+      parseIssueIdentifiers(issue.title).map((identifier) =>
+        stub.getIssueByIdentifier(identifier)
+      )
+    );
+    pileIssue = candidates.find((candidate) => candidate !== undefined);
+  }
+  if (!pileIssue) return;
+
+  const externalId = comment.id.toString();
+  const existing = await stub.findCommentByExternalId("github", externalId);
+  if (!existing) {
+    await stub.createComment({
+      issueId: pileIssue.id,
+      body: comment.body,
+      externalId,
+      externalSource: "github",
+      externalAuthor: comment.user.login,
+      createdAt: comment.created_at,
+      updatedAt: comment.updated_at,
+    });
+  }
+
+  await routePileMention(env, db, stub, organizationId, pileIssue, {
+    targetUrl: prUrl,
+    isPullRequest: true,
+    comment,
+  });
+}
+
+// PILE-278 — `@pile <request>` on a GitHub issue/PR: resume the issue's
+// lane with the request + thread as a follow-up, or cold-dispatch one when
+// there's no resumable lane. Never throws — a dispatch failure must not
+// fail (and re-deliver) the comment sync.
+async function routePileMention(
+  env: WorkerEnv,
+  db: D1Client,
+  stub: WorkspaceStub,
+  organizationId: string,
+  issue: Issue,
+  ctx: {
+    targetUrl: string;
+    isPullRequest: boolean;
+    comment: IssueCommentPayload["comment"];
+  }
+): Promise<void> {
+  const { comment } = ctx;
+  const mention = parsePileMention(comment.body);
+  if (!mention) return;
+  // Lanes comment through the GitHub App; a bot echoing "@pile" must not
+  // loop back into a dispatch.
+  if (comment.user.type === "Bot") return;
+
+  const author = comment.user.login;
+  const linked = await findUserByGithubLogin(db, organizationId, author);
+  if (!linked && !isTrustedAssociation(comment.author_association)) {
+    console.warn("@pile mention ignored: untrusted commenter", {
+      issueId: issue.id,
+      author,
+      association: comment.author_association ?? null,
+    });
+    return;
+  }
+
+  try {
+    const thread = (await stub.listComments(issue.id))
+      .filter((c) => c.externalId !== comment.id.toString())
+      .toSorted((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .map((c) => ({
+        author: c.externalAuthor ?? c.authorId ?? "unknown",
+        body: c.body,
+      }));
+    const prompt = buildMentionPrompt({
+      author,
+      commentUrl: comment.html_url,
+      targetUrl: ctx.targetUrl,
+      isPullRequest: ctx.isPullRequest,
+      request: mention.request,
+      thread,
+    });
+    const dedupeKey = `mention-${comment.id}`;
+    const reason = "@pile mention";
+    const prUrl = ctx.isPullRequest
+      ? ctx.targetUrl
+      : (issue.prUrl ?? ctx.targetUrl);
+
+    const session = await resolveLaneForIssue(stub, issue.id);
+    if (
+      session &&
+      (session.status === "running" ||
+        session.status === "waiting" ||
+        session.status === "completed")
+    ) {
+      await nudgeLane(env, stub, organizationId, session, issue, prUrl, {
+        prompt,
+        reason,
+        dedupeKey,
+      });
+      return;
+    }
+
+    const installation = issue.repo
+      ? await findGithubInstallation(db, issue.repo)
+      : undefined;
+    const repoDefault =
+      installation?.organizationId === organizationId
+        ? installation.defaultAgentId
+        : undefined;
+    const agentId = repoDefault ?? session?.agentId ?? "devin";
+    const pileConfig = issue.repo
+      ? await fetchPileRepoConfig(env, issue.repo, issue.branch)
+      : null;
+    if (
+      pileConfig?.agents &&
+      pileConfig.agents.length > 0 &&
+      !pileConfig.agents.includes(agentId)
+    ) {
+      console.warn("@pile mention dispatch blocked by .pile/config.json", {
+        issueId: issue.id,
+        agentId,
+      });
+      return;
+    }
+    const providerConfig = await loadProviderConfig(env, stub, agentId);
+    const dispatched = await dispatchAgent(
+      resolveAgentEnv(env, providerConfig ?? undefined),
+      agentId,
+      organizationId,
+      issue,
+      linked
+        ? { id: linked.userId, organizationId, type: "user", permissions: [] }
+        : {
+            id: `github:${author}`,
+            organizationId,
+            type: "agent",
+            permissions: [],
+          },
+      pileConfig?.model,
+      undefined,
+      { instructions: prompt, envAllowlist: pileConfig?.env }
+    );
+    if (session) {
+      await stub
+        .updateAgentSession(dispatched.id, { retryOf: session.id })
+        .catch(() => null);
+    }
+    await stub
+      .addAgentSessionEvent({
+        sessionId: dispatched.id,
+        type: "mention.dispatch",
+        message: `Dispatched from ${author}'s @pile mention (${comment.html_url})`,
+        payload: {
+          issueId: issue.id,
+          key: dedupeKey,
+          commentUrl: comment.html_url,
+        },
+      })
+      .catch(() => {});
+    if (issue.repo && issue.branch && dispatched.status !== "waiting") {
+      await createRepoBranch(
+        db,
+        organizationId,
+        issue.repo,
+        issue.branch,
+        issue.id
+      );
+    }
+  } catch (err) {
+    console.error("@pile mention routing failed", {
+      issueId: issue.id,
+      commentId: comment.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
 
 // Resolve the lane for an issue: a live session first, else the most
 // recent completed one — kept-sandbox providers resume completed lanes on
@@ -589,12 +923,7 @@ async function nudgeLaneForIssue(
   organizationId: string,
   issue: Issue,
   prUrl: string,
-  opts: {
-    prompt: string;
-    reason: string;
-    dedupeKey?: string;
-    headSha?: string | null;
-  }
+  opts: NudgeOptions
 ): Promise<void> {
   try {
     const session = await resolveLaneForIssue(stub, issue.id);
@@ -705,11 +1034,38 @@ async function processPullRequestReview(
   }
 
   const body = review.body?.trim() ?? "";
+  // PILE-286 — every verdict (approvals too) rolls into the lane's
+  // snapshot; lastReviewedSha anchors the next review's range diff.
+  const reviewSha = review.commit_id ?? pull_request.head.sha;
+  const recorded = session
+    ? await stub
+        .recordLaneReview(session.id, {
+          reviewId: review.id,
+          reviewer: author,
+          state: reviewState,
+          sha: reviewSha,
+          excerpt: body,
+        })
+        .catch(() => null)
+    : null;
   if (reviewState !== "CHANGES_REQUESTED" && body.length === 0) return;
-  const reviewPrompt =
-    `${author} reviewed ${pull_request.html_url} (${reviewState.toLowerCase()}).\n` +
-    (body ? `Review:\n${body}\n` : "") +
-    "Read the review comments on the PR, address the feedback, and push.";
+  const [owner = "", name = ""] = repo.split("/");
+  const reviewPrompt = async () => {
+    const token = await getInstallationTokenForRepo(env, owner, name).catch(
+      () => undefined
+    );
+    return reviewPromptWithContext({
+      reviewer: author,
+      prUrl: pull_request.html_url,
+      state: reviewState,
+      body,
+      reviewId: review.id,
+      sha: reviewSha,
+      reviewSummary: recorded?.reviewSummary ?? session?.reviewSummary ?? null,
+      repoFull: repo,
+      ghGet: token ? (path) => githubApiGet(fetch, token, path) : null,
+    });
+  };
   await nudgeLaneForIssue(
     env,
     stub,
@@ -800,6 +1156,14 @@ async function processPullRequestReviewComment(
         headSha: pull_request.head.sha ?? null,
       }
     );
+    await fireMention(
+      env,
+      db,
+      stub,
+      workspaceRecord.organizationId,
+      automationEventTarget(async () => issue, repo),
+      comment
+    );
   }
 
   if (action === "edited") {
@@ -856,7 +1220,7 @@ async function processPullRequest(
     });
   }
 
-  const { pull_request } = payload.data;
+  const { action, label, pull_request } = payload.data;
   const repo = pull_request.head.repo.full_name;
   const branch = pull_request.head.ref;
   const prUrl = pull_request.html_url;
@@ -891,6 +1255,40 @@ async function processPullRequest(
       )
     )
   );
+
+  const prEvent =
+    action === "opened"
+      ? "pr.opened"
+      : action === "synchronize"
+        ? "pr.synchronize"
+        : action === "labeled"
+          ? "label.added"
+          : null;
+  if (prEvent) {
+    await stub.setOrganizationId(workspaceRecord.organizationId);
+    await fireEventAutomations(
+      env,
+      stub,
+      workspaceRecord.organizationId,
+      prEvent,
+      prEventTarget(
+        stub,
+        repo,
+        {
+          number: pull_request.number,
+          title: pull_request.title,
+          htmlUrl: prUrl,
+          body: pull_request.body,
+        },
+        branch
+      ),
+      prEvent === "label.added"
+        ? `Label "${label?.name ?? ""}" was added to ${prUrl} (branch ${branch}).`
+        : `PR ${prUrl} (branch ${branch}): ${pull_request.title}`,
+      undefined,
+      { label: label?.name }
+    );
+  }
 
   return;
 }
@@ -982,6 +1380,17 @@ async function processGitHubIssue(
         "github"
       );
       await createRepoIssue(db, organizationId, repo, issue.number, created.id);
+      if (action === "opened") {
+        await stub.setOrganizationId(organizationId);
+        await fireEventAutomations(
+          env,
+          stub,
+          organizationId,
+          "issue.created",
+          automationEventTarget(async () => created, repo),
+          `GitHub issue ${issue.html_url} was opened: ${issue.title}`
+        );
+      }
     }
     return;
   }
@@ -1064,6 +1473,19 @@ async function processGitHubIssue(
           status: 404,
           message: "Mapped issue not found in workspace",
         });
+      }
+      if (action === "labeled" && payload.data.label) {
+        await stub.setOrganizationId(organizationId);
+        await fireEventAutomations(
+          env,
+          stub,
+          organizationId,
+          "label.added",
+          automationEventTarget(async () => updated, repo),
+          `Label "${payload.data.label.name}" was added to ${issue.html_url}.`,
+          undefined,
+          { label: payload.data.label.name }
+        );
       }
     }
     return;

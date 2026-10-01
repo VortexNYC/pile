@@ -91,6 +91,17 @@ describe("CodexCliAgentProvider", () => {
     ).rejects.toThrow("CODEX_CLI_ENV_ID is not configured");
   });
 
+  it("refuses lane permission tiers it cannot enforce (PILE-276)", async () => {
+    const provider = new CodexCliAgentProvider(cliEnv());
+    await expect(
+      provider.dispatch("org-1", issueFixture(), "gpt-reserve", {
+        sessionId: "sess-1",
+        gitIdentity: gitIdentityFixture(),
+        permissions: { push: "restricted", shell: "enabled" },
+      })
+    ).rejects.toThrow("cannot enforce lane permissions");
+  });
+
   it("throws when Daytona is not configured", async () => {
     const provider = new CodexCliAgentProvider(
       cliEnv({ DAYTONA_API_KEY: undefined })
@@ -146,8 +157,14 @@ describe("CodexCliAgentProvider", () => {
 
     const provider = new CodexCliAgentProvider(cliEnv());
     (
-      provider as unknown as { githubToken: (repo: string) => Promise<string> }
-    ).githubToken = vi.fn().mockResolvedValue("gh-token");
+      provider as unknown as {
+        githubToken: (
+          repo: string
+        ) => Promise<{ token: string; expiresAt: string | null }>;
+      }
+    ).githubToken = vi
+      .fn()
+      .mockResolvedValue({ token: "gh-token", expiresAt: null });
 
     const waitUntilCalls: Promise<unknown>[] = [];
     const result = await provider.dispatch(

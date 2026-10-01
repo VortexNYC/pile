@@ -31,7 +31,16 @@ import {
   renderLaneProgressComment,
   typicalLaneDurationMs,
 } from "../agents/lane-progress.js";
+import { evaluateLaneResult } from "../agents/lane-result.js";
+import {
+  dispatchTriageLane,
+  formatTriageComment,
+  parseTriageReport,
+  planTriageApplication,
+  TRIAGE_PURPOSE,
+} from "../agents/triage.js";
 import { createD1 } from "../global/db.js";
+import { sanitizeLaneResult } from "../global/lane-guard.js";
 import {
   attachments as globalAttachments,
   agentActivities as globalAgentActivities,
@@ -56,9 +65,11 @@ import {
 } from "../global/schema.js";
 import { safeJSON } from "../global/team-metadata.js";
 import { getDefaultTeam, getTeamById } from "../global/teams.js";
+import { listLabels } from "../global/workspace-entities.js";
 import { getWorkspaceMembership } from "../global/workspaces.js";
 import { getWorkspaceById } from "../global/workspaces.js";
 import { VortexError } from "../platform/errors.js";
+import type { WorkerEnv } from "../platform/middleware.js";
 import { notifySlack } from "../slack/bot.js";
 import type { AppEnv } from "../types/env.js";
 import {
@@ -78,6 +89,7 @@ import {
 import * as data from "./data/index.js";
 import { filterToSql } from "./filter.js";
 import { workspaceMigrations } from "./migrations.js";
+import { type ReviewVerdict, rollReviewSummary } from "./review-summary.js";
 import { workspaceSchema } from "./schema-map.js";
 import {
   workspaceAgentActivities,
@@ -109,6 +121,7 @@ import {
   indexIssueDocument,
   indexDocumentSearchDocument,
   documentToSearchDocument,
+  findSimilarIssues,
   insertMultiple as insertSearchDocs,
   issueToSearchDocument,
   removeIssueDocuments,
@@ -182,6 +195,12 @@ function validateIssueResolution(
   }
   return resolution;
 }
+
+function hasWorkspaceNamespace(env: AppEnv): env is WorkerEnv {
+  return "WORKSPACE_DURABLE_OBJECT" in env;
+}
+
+const LANE_GITHUB_TOKEN_PREFIX = "laneGithubToken:";
 
 export class WorkspaceDO extends DurableObject<AppEnv> {
   private organizationId: string;
@@ -1827,6 +1846,25 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return { issueIds, documentIds };
   }
 
+  async findSimilarIssues(
+    issueId: string,
+    teamIds: string[],
+    limit = 10
+  ): Promise<Array<{ issue: Issue; score: number }>> {
+    await this.ready;
+    const issue = await this.getIssue(issueId);
+    if (!issue) return [];
+    const index = await this.ensureSearchIndex();
+    const hits = await findSimilarIssues(index, issue, teamIds, limit);
+    const matches = await Promise.all(
+      hits.map((hit) => this.getIssue(hit.issueId))
+    );
+    return hits.flatMap((hit, i) => {
+      const match = matches[i];
+      return match ? [{ issue: match, score: hit.score }] : [];
+    });
+  }
+
   // Extract [[doc slug/id]] and ISSUE-KEY references from content.
   // Runs synchronously inside the caller's transactionSync block.
   private syncDocumentLinks(
@@ -1970,6 +2008,36 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   getAgentSession(id: string) {
     return data.getAgentSession(this.db, this.organizationId, id);
+  }
+
+  // Encrypted GitHub installation token currently held by each lane, keyed by
+  // session. Swapping returns the previous one so callers can revoke it; the
+  // reaper takes and revokes whatever is left once a session is terminal.
+  async swapLaneGithubToken(
+    sessionId: string,
+    encrypted: string
+  ): Promise<string | null> {
+    const key = `${LANE_GITHUB_TOKEN_PREFIX}${sessionId}`;
+    const previous = await this.ctx.storage.get<string>(key);
+    await this.ctx.storage.put(key, encrypted);
+    return previous ?? null;
+  }
+
+  async takeLaneGithubToken(sessionId: string): Promise<string | null> {
+    const key = `${LANE_GITHUB_TOKEN_PREFIX}${sessionId}`;
+    const encrypted = await this.ctx.storage.get<string>(key);
+    if (encrypted === undefined) return null;
+    await this.ctx.storage.delete(key);
+    return encrypted;
+  }
+
+  async listLaneGithubTokenSessions(): Promise<string[]> {
+    const entries = await this.ctx.storage.list({
+      prefix: LANE_GITHUB_TOKEN_PREFIX,
+    });
+    return [...entries.keys()].map((key) =>
+      key.slice(LANE_GITHUB_TOKEN_PREFIX.length)
+    );
   }
 
   getAgentSessionByProviderSessionId(providerSessionId: string) {
@@ -2123,6 +2191,23 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.updateAgentSession(this.db, this.organizationId, id, input);
   }
 
+  /** Read-merge-write inside the DO so the webhook and the sweep can both
+   *  record the same review without clobbering each other's verdicts. */
+  async recordLaneReview(sessionId: string, verdict: ReviewVerdict) {
+    const session = await data.getAgentSession(
+      this.db,
+      this.organizationId,
+      sessionId
+    );
+    if (!session) return null;
+    return data.updateAgentSession(
+      this.db,
+      this.organizationId,
+      sessionId,
+      rollReviewSummary(session.reviewSummary, verdict)
+    );
+  }
+
   async addAgentActivity(input: data.AgentActivityInput) {
     const activity = await data.addAgentActivity(this.db, input);
     await data.addAgentSessionEvent(this.db, {
@@ -2191,7 +2276,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   ): Promise<void> {
     try {
       const session = await this.getAgentSession(sessionId);
-      if (!session || session.purpose === "preflight") return;
+      if (
+        !session ||
+        session.purpose === "preflight" ||
+        session.purpose === TRIAGE_PURPOSE
+      ) {
+        return;
+      }
       const externalId = laneProgressExternalId(session.id);
       const existingRef = await this.findCommentByExternalId(
         "agent",
@@ -2423,7 +2514,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   async applyAgentSessionResult(
     sessionId: string,
-    result: AgentSessionResult,
+    rawResult: AgentSessionResult,
     actorId?: string
   ): Promise<AgentSession | undefined> {
     await this.ready;
@@ -2431,6 +2522,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (!oldSession) return undefined;
 
     const issue = await this.getIssue(oldSession.issueId);
+    const result = sanitizeLaneResult(rawResult, issue?.repo ?? null);
 
     const terminal = new Set<AgentSessionStatus>([
       "completed",
@@ -2440,6 +2532,27 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const oldStatus = oldSession.status as AgentSessionStatus;
     const newStatus = result.status;
     const becameTerminal = !terminal.has(oldStatus) && terminal.has(newStatus);
+
+    // PILE-289 — validate the lane's final output against the dispatch-time
+    // result schema. Only finished runs are judged; mid-run polls carry
+    // partial text that would always fail.
+    const structuredSet: Record<string, string | null> = {};
+    if (
+      oldSession.resultSchema &&
+      typeof result.result === "string" &&
+      (newStatus === "completed" || newStatus === "failed")
+    ) {
+      const evaluation = evaluateLaneResult(
+        oldSession.resultSchema,
+        result.result
+      );
+      structuredSet.structuredResult = evaluation.valid
+        ? JSON.stringify(evaluation.value)
+        : null;
+      structuredSet.resultSchemaErrors = evaluation.valid
+        ? null
+        : JSON.stringify(evaluation.errors);
+    }
 
     const buildSessionEventPayloads = (
       updatedSession: AgentSession
@@ -2465,6 +2578,28 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           });
         }
       }
+      if (
+        updatedSession.structuredResult !== oldSession.structuredResult ||
+        updatedSession.resultSchemaErrors !== oldSession.resultSchemaErrors
+      ) {
+        const valid = updatedSession.structuredResult !== null;
+        payloads.push({
+          sessionId,
+          type: "session.structured_result",
+          message: valid
+            ? "Lane result matched the result schema"
+            : "Lane result failed result-schema validation",
+          payload: valid
+            ? {
+                valid,
+                value: JSON.parse(updatedSession.structuredResult ?? "null"),
+              }
+            : {
+                valid,
+                errors: JSON.parse(updatedSession.resultSchemaErrors ?? "[]"),
+              },
+        });
+      }
       if (becameTerminal) {
         payloads.push({
           sessionId,
@@ -2483,7 +2618,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           prUrl: updatedSession.prUrl ?? null,
           branch: updatedSession.branch ?? null,
           agentId: updatedSession.agentId,
+          label: updatedSession.label ?? null,
         };
+        if (updatedSession.structuredResult !== null) {
+          summary.structuredResult = JSON.parse(
+            updatedSession.structuredResult
+          );
+        }
         try {
           const parsed = JSON.parse(updatedSession.result ?? "") as {
             digest?: Record<string, unknown>;
@@ -2528,6 +2669,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       if (result.prUrl) set.prUrl = result.prUrl;
       if (result.prState) set.prState = result.prState;
       if (result.branch) set.branch = result.branch;
+      Object.assign(set, structuredSet);
       const rows = await this.db
         .update(workspaceAgentSessions)
         .set(set)
@@ -2568,6 +2710,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (result.prUrl) set.prUrl = result.prUrl;
     if (result.prState) set.prState = result.prState;
     if (result.branch) set.branch = result.branch;
+    Object.assign(set, structuredSet);
 
     const updatedSession = await this.db
       .update(workspaceAgentSessions)
@@ -2646,6 +2789,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       (newStatus === "created" ||
         newStatus === "running" ||
         newStatus === "waiting") &&
+      updatedSession.purpose !== TRIAGE_PURPOSE &&
       notStartedStatuses.includes(issue.status) &&
       !terminalIssueStatuses.has(issue.status)
     ) {
@@ -2743,12 +2887,25 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       oldStatus !== "completed" &&
       (result.result || result.prUrl)
     ) {
-      const commentBody =
-        updatedSession.purpose === "preflight"
-          ? `Preflight critique by ${oldSession.agentId}:\n\n${result.result ?? "No report — see session stream."}`
-          : result.prUrl
-            ? `Agent ${oldSession.agentId} completed${result.result ? `: ${result.result}` : ""}\n\n${result.prUrl}`
-            : `Agent ${oldSession.agentId} completed: ${result.result}`;
+      let commentIssue = updatedIssue ?? issue;
+      let commentBody: string;
+      if (updatedSession.purpose === TRIAGE_PURPOSE) {
+        const triage = await this.applyTriageReport(
+          commentIssue,
+          updatedSession,
+          result.result,
+          actorId
+        );
+        commentBody = triage.body;
+        commentIssue = triage.issue;
+      } else {
+        commentBody =
+          updatedSession.purpose === "preflight"
+            ? `Preflight critique by ${oldSession.agentId}:\n\n${result.result ?? "No report — see session stream."}`
+            : result.prUrl
+              ? `Agent ${oldSession.agentId} completed${result.result ? `: ${result.result}` : ""}\n\n${result.prUrl}`
+              : `Agent ${oldSession.agentId} completed: ${result.result}`;
+      }
       const comment = await this.createComment({
         issueId: issue.id,
         body: commentBody,
@@ -2757,7 +2914,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         externalId: oldSession.id,
       });
       if (comment) {
-        await this.emitCommentCreated(comment, updatedIssue ?? issue, actorId);
+        await this.emitCommentCreated(comment, commentIssue, actorId);
       }
     }
 
@@ -3285,7 +3442,97 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       actorId
     );
     this.audit("issue.created", "issue", issue.id, actorId);
+    this.startTriageLane(issue, actorId);
     return issue;
+  }
+
+  // PILE-282 — fire-and-forget: a triage-lane failure (provider down, team
+  // not configured) must never fail issue creation.
+  private startTriageLane(issue: Issue, actorId?: string) {
+    if (!hasWorkspaceNamespace(this.env)) return;
+    const env = this.env;
+    this.ctx.waitUntil(
+      dispatchTriageLane(env, this.organizationId, issue, actorId).catch(
+        (err: unknown) => {
+          console.warn(
+            `triage lane dispatch failed for ${issue.id}: ${err instanceof Error ? err.message : String(err)}`
+          );
+        }
+      )
+    );
+  }
+
+  private async applyTriageReport(
+    issue: Issue,
+    session: AgentSession,
+    resultText: string | null | undefined,
+    actorId?: string
+  ): Promise<{ body: string; issue: Issue }> {
+    const report = parseTriageReport(resultText);
+    if (!report) {
+      return {
+        body: `Triage by ${session.agentId}:\n\n${resultText ?? "No report — see session stream."}`,
+        issue,
+      };
+    }
+    const labels = (
+      await listLabels(createD1(this.env.D1), this.organizationId)
+    ).filter((label) => label.kind === "issue");
+    const plan = planTriageApplication(report, issue, labels);
+    let current = issue;
+    if (plan.addedLabelNames.length > 0) {
+      current =
+        (await this.updateIssue(
+          issue.id,
+          { labelIds: plan.labelIds.join(",") },
+          actorId
+        )) ?? issue;
+    }
+    const existing = new Set(
+      (await this.listIssueRelations(issue.id)).map((r) => r.toIssueId)
+    );
+    const requested = [
+      ...plan.duplicates.map((identifier) => ({
+        identifier,
+        type: "duplicate" as const,
+      })),
+      ...plan.similar.map((identifier) => ({
+        identifier,
+        type: "similar" as const,
+      })),
+    ];
+    const targets = await Promise.all(
+      requested.map(
+        async ({ identifier }) =>
+          (await this.getIssueByIdentifier(identifier)) ??
+          (await this.getIssueByIdentifier(identifier.toUpperCase()))
+      )
+    );
+    const linked = { duplicates: [] as string[], similar: [] as string[] };
+    const toCreate: Array<{ toIssueId: string; type: string }> = [];
+    requested.forEach(({ identifier, type }, i) => {
+      const target = targets[i];
+      if (!target || target.id === issue.id) return;
+      if (!existing.has(target.id)) {
+        toCreate.push({ toIssueId: target.id, type });
+        existing.add(target.id);
+      }
+      linked[type === "duplicate" ? "duplicates" : "similar"].push(
+        target.identifier ?? identifier
+      );
+    });
+    await Promise.all(
+      toCreate.map((relation) =>
+        this.createIssueRelation({ fromIssueId: issue.id, ...relation })
+      )
+    );
+    return {
+      body: formatTriageComment(session.agentId, report, {
+        labels: plan.addedLabelNames,
+        ...linked,
+      }),
+      issue: current,
+    };
   }
 
   async rolloverCycles(): Promise<{
@@ -3627,6 +3874,15 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       .where(
         and(eq(workspaceIssues.repo, repo), eq(workspaceIssues.branch, branch))
       )
+      .get();
+  }
+
+  async getIssueByPrUrl(prUrl: string): Promise<Issue | undefined> {
+    await this.ready;
+    return this.db
+      .select()
+      .from(workspaceIssues)
+      .where(eq(workspaceIssues.prUrl, prUrl))
       .get();
   }
 

@@ -3176,6 +3176,32 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdIssuesIdSimilar",
+    "description": "List issue similar (GET /workspaces/{organizationId}/issues/{id}/similar) Path params (top-level, required): organizationId, id. Query params (top-level, optional): limit.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/issues/{id}/similar",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdIssuesIssueIdActivity",
     "description": "List issue activity (GET /workspaces/{organizationId}/issues/{issueId}/activity) Path params (top-level, required): organizationId, issueId.",
     "method": "GET",
@@ -7419,7 +7445,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdTeamsId",
-    "description": "Update team (PATCH /workspaces/{organizationId}/teams/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: key, name, isPublic, parentAutoClose, triageAssigneeId, defaultTemplateId, defaultRepo, subIssueAutoClose.",
+    "description": "Update team (PATCH /workspaces/{organizationId}/teams/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: key, name, isPublic, parentAutoClose, triageAssigneeId, triageAgentId, defaultTemplateId, defaultRepo, subIssueAutoClose.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/teams/{id}",
     "inputSchema": {
@@ -7449,6 +7475,10 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "boolean"
             },
             "triageAssigneeId": {
+              "type": "string",
+              "nullable": true
+            },
+            "triageAgentId": {
               "type": "string",
               "nullable": true
             },
@@ -8893,6 +8923,38 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                   },
                   "queuedAfter": {
                     "type": "string"
+                  },
+                  "effort": {
+                    "type": "string",
+                    "enum": [
+                      "low",
+                      "medium",
+                      "high",
+                      "max"
+                    ]
+                  },
+                  "maxDuration": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1440,
+                    "description": "Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue"
+                  },
+                  "resultSchema": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "lane"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": {
+                          "nullable": true
+                        }
+                      }
+                    ],
+                    "description": "JSON Schema (draft-07) the lane's final output must validate against, or \"lane\" for the built-in {verdict, summary, filesChanged} shape. The validated value lands on session.structuredResult."
                   }
                 },
                 "required": [
@@ -9158,7 +9220,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdAgentSessionsSessionIdChildren",
-    "description": "Create agent session children (POST /workspaces/{organizationId}/agent/sessions/{sessionId}/children) Path params (top-level, required): organizationId, sessionId. Request body goes in the \"body\" object; fields: title*, description, agentId, model, repo (* = required).",
+    "description": "Create agent session children (POST /workspaces/{organizationId}/agent/sessions/{sessionId}/children) Path params (top-level, required): organizationId, sessionId. Request body goes in the \"body\" object; fields: title*, description, agentId, model, repo, effort, maxDuration (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/agent/sessions/{sessionId}/children",
     "inputSchema": {
@@ -9188,6 +9250,21 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "repo": {
               "type": "string"
+            },
+            "effort": {
+              "type": "string",
+              "enum": [
+                "low",
+                "medium",
+                "high",
+                "max"
+              ]
+            },
+            "maxDuration": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1440,
+              "description": "Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue"
             }
           },
           "required": [
@@ -9258,7 +9335,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdAgentSessionsSessionIdRetry",
-    "description": "Create agent session retry (POST /workspaces/{organizationId}/agent/sessions/{sessionId}/retry) Path params (top-level, required): organizationId, sessionId. Request body goes in the \"body\" object; fields: context, agentId, model.",
+    "description": "Create agent session retry (POST /workspaces/{organizationId}/agent/sessions/{sessionId}/retry) Path params (top-level, required): organizationId, sessionId. Request body goes in the \"body\" object; fields: context, agentId, model, effort, maxDuration.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/agent/sessions/{sessionId}/retry",
     "inputSchema": {
@@ -9281,6 +9358,21 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "model": {
               "type": "string"
+            },
+            "effort": {
+              "type": "string",
+              "enum": [
+                "low",
+                "medium",
+                "high",
+                "max"
+              ]
+            },
+            "maxDuration": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1440,
+              "description": "Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue"
             }
           },
           "additionalProperties": false
@@ -11193,7 +11285,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdIssuesIdDispatch",
-    "description": "Dispatch issue (POST /workspaces/{organizationId}/issues/{id}/dispatch) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: agentId, provider, model, repo, branch, instructions, preflight.",
+    "description": "Dispatch issue (POST /workspaces/{organizationId}/issues/{id}/dispatch) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: agentId, provider, model, repo, branch, instructions, preflight, effort, maxDuration, resultSchema.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/issues/{id}/dispatch",
     "inputSchema": {
@@ -11230,6 +11322,38 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "preflight": {
               "type": "boolean"
+            },
+            "effort": {
+              "type": "string",
+              "enum": [
+                "low",
+                "medium",
+                "high",
+                "max"
+              ]
+            },
+            "maxDuration": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1440,
+              "description": "Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue"
+            },
+            "resultSchema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "lane"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": {
+                    "nullable": true
+                  }
+                }
+              ],
+              "description": "JSON Schema (draft-07) the lane's final output must validate against, or \"lane\" for the built-in {verdict, summary, filesChanged} shape. The validated value lands on session.structuredResult."
             }
           },
           "additionalProperties": false
@@ -14617,7 +14741,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdTeams",
-    "description": "Create team (POST /workspaces/{organizationId}/teams) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: key*, name*, isPublic, parentAutoClose, triageAssigneeId, defaultTemplateId, defaultRepo, subIssueAutoClose (* = required).",
+    "description": "Create team (POST /workspaces/{organizationId}/teams) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: key*, name*, isPublic, parentAutoClose, triageAssigneeId, triageAgentId, defaultTemplateId, defaultRepo, subIssueAutoClose (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/teams",
     "inputSchema": {
@@ -14644,6 +14768,10 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "boolean"
             },
             "triageAssigneeId": {
+              "type": "string",
+              "nullable": true
+            },
+            "triageAgentId": {
               "type": "string",
               "nullable": true
             },
