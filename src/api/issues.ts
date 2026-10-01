@@ -216,7 +216,7 @@ const createIssueSchema = z.object({
   externalRef: z.string().min(1).max(255).nullable().optional(),
   teamId: z.string().optional(),
   teamKey: z.string().optional(),
-  description: z.string().optional(),
+  description: z.string().nullable().optional(),
   status: z.enum(ISSUE_STATUSES).optional(),
   priority: z.enum(ISSUE_PRIORITIES).optional(),
   resolution: z.enum(ISSUE_RESOLUTIONS).nullable().optional(),
@@ -227,14 +227,15 @@ const createIssueSchema = z.object({
   templateId: z.string().optional(),
   snoozedUntil: z.string().nullable().optional(),
   assigneeId: z.string().nullable().optional(),
-  projectId: z.string().optional(),
-  cycleId: z.string().optional(),
+  projectId: z.string().nullable().optional(),
+  cycleId: z.string().nullable().optional(),
   labelIds: z
     .array(z.string())
+    .nullable()
     .optional()
     .transform((ids) => (ids && ids.length > 0 ? ids.join(",") : null)),
-  repo: z.string().optional(),
-  branch: z.string().optional(),
+  repo: z.string().nullable().optional(),
+  branch: z.string().nullable().optional(),
 }) satisfies z.ZodType<IssueInput>;
 
 const updateIssueSchema = createIssueSchema.partial();
@@ -660,12 +661,13 @@ const dispatchRoute = createRoute({
               provider: z.string().optional(),
               model: z.string().optional(),
               // Dispatch-time overrides: repo/branch win over the issue's
-              // stored fields for this run only; instructions are appended
-              // to the prompt's context section.
-              repo: z.string().optional(),
+              // stored fields for this run only; explicit null clears the
+              // stored value; instructions are appended to the prompt's
+              // context section.
+              repo: z.string().nullable().optional(),
               // The lane's WORKING branch (created off the repo default and
               // pushed by the runner) — not the base. PILE-241.
-              branch: z.string().optional(),
+              branch: z.string().nullable().optional(),
               instructions: z.string().optional(),
               // VTX-209 — when true, dispatch a repo-less planner-critique
               // session on the target provider instead of the task lane. It
@@ -782,6 +784,10 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         args.search = view.search;
       }
     }
+    if (typeof args.parentId === "string") {
+      // parentId accepts the UUID or the KEY-N identifier.
+      args.parentId = (await stub.getIssue(args.parentId))?.id ?? args.parentId;
+    }
     args.teamIds = visibleTeamIds;
     const issues = await stub.listIssues(args);
     const nextCursor =
@@ -885,6 +891,9 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     args.isDraft = false;
     args.hideSnoozed =
       query.includeSnoozed === undefined ? true : args.hideSnoozed;
+    if (typeof args.parentId === "string") {
+      args.parentId = (await stub.getIssue(args.parentId))?.id ?? args.parentId;
+    }
     args.teamIds = visibleTeamIds;
     const issues = await stub.listIssues(args);
     const nextCursor =
@@ -976,7 +985,10 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     const issue = await stub.createIssue(
       {
         ...rest,
-        description: input.description ?? templateDefaults.description,
+        description:
+          input.description === undefined
+            ? templateDefaults.description
+            : input.description,
         status: input.status ?? templateDefaults.status,
         priority: input.priority ?? templateDefaults.priority,
         estimate:
@@ -987,11 +999,25 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
           input.assigneeId === undefined
             ? templateDefaults.assigneeId
             : input.assigneeId,
-        projectId: input.projectId ?? templateDefaults.projectId,
-        cycleId: input.cycleId ?? templateDefaults.cycleId,
-        labelIds: input.labelIds ?? templateDefaults.labelIds,
+        projectId:
+          input.projectId === undefined
+            ? templateDefaults.projectId
+            : input.projectId,
+        cycleId:
+          input.cycleId === undefined
+            ? templateDefaults.cycleId
+            : input.cycleId,
+        labelIds:
+          input.labelIds === undefined
+            ? templateDefaults.labelIds
+            : input.labelIds,
         teamId: resolvedTeamId,
-        repo: input.repo ?? teamRecord?.defaultRepo ?? undefined,
+        // Explicit null wins over the team default — the caller is clearing
+        // the field, not leaving it unset.
+        repo:
+          input.repo === undefined
+            ? (teamRecord?.defaultRepo ?? undefined)
+            : input.repo,
         branch: input.branch,
       },
       identity.id
@@ -1188,7 +1214,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
     await assertIssueAccess(db, issue, identity);
-    const children = await stub.getIssueChildren(id);
+    const children = await stub.getIssueChildren(issue.id);
     const visibleTeamIds = await loadVisibleTeamIds(
       db,
       organizationId,
@@ -1242,7 +1268,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
           hint: `Parent ${parent.identifier} is already a sub-issue`,
         });
       }
-      const children = await stub.getIssueChildren(id);
+      const children = await stub.getIssueChildren(existing.id);
       if (children.length > 0) {
         throw new VortexError({
           code: "BAD_REQUEST",
@@ -1251,7 +1277,9 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
           hint: `Children: ${children.map((child) => child.identifier).join(", ")}`,
         });
       }
-      if (await wouldCreateCycle(stub, id, input.parentId, new Set<string>())) {
+      if (
+        await wouldCreateCycle(stub, existing.id, parent.id, new Set<string>())
+      ) {
         throw new VortexError({
           code: "BAD_REQUEST",
           status: 400,
@@ -1261,7 +1289,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     }
     if (typeof input.externalRef === "string") {
       const existingByRef = await stub.getIssueByExternalRef(input.externalRef);
-      if (existingByRef && existingByRef.id !== id) {
+      if (existingByRef && existingByRef.id !== existing.id) {
         throw new VortexError({
           code: "CONFLICT",
           status: 409,
@@ -1271,7 +1299,11 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       }
     }
     validateIssueState(input.status ?? existing.status, input.resolution);
-    const issue = await stub.updateIssue(id, { ...input, teamId }, identity.id);
+    const issue = await stub.updateIssue(
+      existing.id,
+      { ...input, teamId },
+      identity.id
+    );
     if (!issue) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -1310,8 +1342,9 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       await assertTeamAccess(db, organizationId, patch.teamId, identity);
     }
 
+    let parent: Issue | undefined;
     if (patch.parentId !== undefined && patch.parentId !== null) {
-      const parent = await stub.getIssue(patch.parentId);
+      parent = await stub.getIssue(patch.parentId);
       if (!parent) {
         throw new VortexError({
           code: "BAD_REQUEST",
@@ -1347,14 +1380,20 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       validateIssueState(patch.status ?? issue.status, patch.resolution);
     }
 
-    if (patch.parentId !== undefined && patch.parentId !== null) {
-      const parentId: string = patch.parentId;
+    if (parent) {
+      const parentId: string = parent.id;
       await Promise.all(
-        ids.map((id) => wouldCreateCycle(stub, id, parentId, new Set<string>()))
+        validIssues.map((issue) =>
+          wouldCreateCycle(stub, issue.id, parentId, new Set<string>())
+        )
       );
     }
 
-    const issues = await stub.batchUpdateIssues(ids, patch, identity.id);
+    const issues = await stub.batchUpdateIssues(
+      validIssues.map((issue) => issue.id),
+      patch,
+      identity.id
+    );
     return c.json({ issues });
   });
 
@@ -1372,7 +1411,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
     await assertIssueAccess(db, existing, identity);
-    const deleted = await stub.deleteIssue(id, identity.id);
+    const deleted = await stub.deleteIssue(existing.id, identity.id);
     if (!deleted) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -1380,7 +1419,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         message: "Issue not found",
       });
     }
-    await deleteIssueReferences(db, organizationId, id);
+    await deleteIssueReferences(db, organizationId, existing.id);
     return c.body(null, 204);
   });
 
@@ -1423,8 +1462,8 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     }
     const target: Issue = {
       ...issue,
-      repo: repo ?? issue.repo,
-      branch: branch ?? issue.branch,
+      repo: repo === undefined ? issue.repo : repo,
+      branch: branch === undefined ? issue.branch : branch,
     };
 
     // Explicit agentId wins; otherwise a repo's configured default agent
@@ -1556,7 +1595,11 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     }
     await assertIssueAccess(db, existing, identity);
 
-    const issue = await stub.updateIssue(id, { assigneeId }, identity.id);
+    const issue = await stub.updateIssue(
+      existing.id,
+      { assigneeId },
+      identity.id
+    );
     if (!issue) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -1569,7 +1612,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     if (assigneeId === null) {
       // Unassign kills the lane (PILE-211): cancel any live session on this
       // issue — the issue is the orchestration surface.
-      const active = await stub.getActiveAgentSessionForIssue(id);
+      const active = await stub.getActiveAgentSessionForIssue(issue.id);
       if (active) {
         const providerConfig = await loadProviderConfig(
           c.env,

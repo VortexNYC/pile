@@ -67,6 +67,13 @@ export async function probeUrl(
 
 export interface AgentProvider {
   id: string;
+  /**
+   * True when a terminal session leaves its sandbox parked for follow-up
+   * resumes (PILE-210) — the population the kept-sandbox cap and the
+   * fleet-health keptSandboxes count must agree on (PILE-253). Providers
+   * that destroy the container at terminal, or never had one, omit this.
+   */
+  readonly keepsTerminalSandbox?: boolean;
   dispatch(
     organizationId: string,
     issue: Issue,

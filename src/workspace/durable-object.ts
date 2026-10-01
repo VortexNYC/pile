@@ -125,15 +125,17 @@ async function resolveParent(
   issueId: string
 ): Promise<Issue | null> {
   if (parentId === null) return null;
-  if (parentId === issueId) {
+  const parent = await getIssue(parentId);
+  if (!parent) {
+    throw VortexError.fromCode("BAD_REQUEST", "Parent issue not found");
+  }
+  // Compare canonical ids — a parentId given as the issue's own identifier
+  // (KEY-123) must not slip past the self-parent check.
+  if (parent.id === issueId) {
     throw VortexError.fromCode(
       "BAD_REQUEST",
       "An issue cannot be its own parent"
     );
-  }
-  const parent = await getIssue(parentId);
-  if (!parent) {
-    throw VortexError.fromCode("BAD_REQUEST", "Parent issue not found");
   }
   return parent;
 }
@@ -3423,13 +3425,17 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     };
   }
 
+  // Accepts the issue's UUID or its human identifier (`KEY-123`) — agents and
+  // humans think in identifiers, internals store UUIDs.
   async getIssue(id: string): Promise<Issue | undefined> {
     await this.ready;
-    return this.db
+    const byId = await this.db
       .select()
       .from(workspaceIssues)
       .where(eq(workspaceIssues.id, id))
       .get();
+    if (byId) return byId;
+    return this.getIssueByIdentifier(id);
   }
 
   async getIssueChildren(id: string): Promise<Issue[]> {
@@ -3678,7 +3684,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         const hasChildren = await this.db
           .select({ id: workspaceIssues.id })
           .from(workspaceIssues)
-          .where(eq(workspaceIssues.parentId, id))
+          .where(eq(workspaceIssues.parentId, old.id))
           .limit(1)
           .get();
         if (hasChildren) {
@@ -3691,8 +3697,8 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         if (
           await wouldCreateCycle(
             (parentIssueId) => this.getIssue(parentIssueId),
-            id,
-            patch.parentId,
+            old.id,
+            parent.id,
             new Set<string>()
           )
         ) {
@@ -3701,7 +3707,8 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
             "Parent would create a cycle"
           );
         }
-        newParentId = patch.parentId;
+        // Store the canonical UUID — callers may pass the human identifier.
+        newParentId = parent.id;
       }
     }
 
@@ -3767,7 +3774,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const issue = await this.db
       .update(workspaceIssues)
       .set(set)
-      .where(eq(workspaceIssues.id, id))
+      .where(eq(workspaceIssues.id, old.id))
       .returning()
       .get();
     if (!issue) return undefined;
@@ -3905,9 +3912,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   async deleteIssue(id: string, actorId?: string): Promise<boolean> {
     await this.ready;
     const old = await this.getIssue(id);
+    if (!old) return false;
+    // `id` may be the human identifier — cascade against the canonical UUID.
+    const issueId = old.id;
     const deleted = await this.db
       .delete(workspaceIssues)
-      .where(eq(workspaceIssues.id, id))
+      .where(eq(workspaceIssues.id, issueId))
       .returning()
       .get();
     if (!deleted) return false;
@@ -3916,30 +3926,30 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       await this.db
         .select({ id: workspaceComments.id })
         .from(workspaceComments)
-        .where(eq(workspaceComments.issueId, id))
+        .where(eq(workspaceComments.issueId, issueId))
         .all()
     ).map((row) => row.id);
     await this.db
       .delete(workspaceIssueHistory)
-      .where(eq(workspaceIssueHistory.issueId, id));
+      .where(eq(workspaceIssueHistory.issueId, issueId));
     await this.db
       .delete(workspaceComments)
-      .where(eq(workspaceComments.issueId, id));
+      .where(eq(workspaceComments.issueId, issueId));
     await this.db
       .delete(workspaceIssueSubscribers)
-      .where(eq(workspaceIssueSubscribers.issueId, id));
+      .where(eq(workspaceIssueSubscribers.issueId, issueId));
     await this.db
       .delete(workspaceIssueRelations)
       .where(
         or(
-          eq(workspaceIssueRelations.fromIssueId, id),
-          eq(workspaceIssueRelations.toIssueId, id)
+          eq(workspaceIssueRelations.fromIssueId, issueId),
+          eq(workspaceIssueRelations.toIssueId, issueId)
         )
       );
     await this.db
       .delete(workspaceIssueApprovals)
-      .where(eq(workspaceIssueApprovals.issueId, id));
-    const reactionTargets = [id, ...commentIds];
+      .where(eq(workspaceIssueApprovals.issueId, issueId));
+    const reactionTargets = [issueId, ...commentIds];
     if (reactionTargets.length > 0) {
       await this.db
         .delete(workspaceReactions)
@@ -3947,15 +3957,15 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     }
     await this.db
       .delete(workspaceAttachments)
-      .where(eq(workspaceAttachments.issueId, id));
+      .where(eq(workspaceAttachments.issueId, issueId));
     await this.db
       .delete(workspaceNotifications)
-      .where(eq(workspaceNotifications.issueId, id));
+      .where(eq(workspaceNotifications.issueId, issueId));
     const sessionIds = (
       await this.db
         .select({ id: workspaceAgentSessions.id })
         .from(workspaceAgentSessions)
-        .where(eq(workspaceAgentSessions.issueId, id))
+        .where(eq(workspaceAgentSessions.issueId, issueId))
         .all()
     ).map((row) => row.id);
     if (sessionIds.length > 0) {
@@ -3968,25 +3978,23 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     }
 
     const index = await this.ensureSearchIndex();
-    await removeIssueDocuments(index, id);
+    await removeIssueDocuments(index, issueId);
 
-    if (old?.isDraft) {
+    if (old.isDraft) {
       await this.emit({
         type: "draft.deleted",
         organizationId: this.organizationId,
-        issueId: id,
+        issueId,
       });
     }
     await this.emit({
       type: "issue.deleted",
       organizationId: this.organizationId,
-      issueId: id,
+      issueId,
     });
-    if (old) {
-      await this.notifyIssueEvent(old, "issue_deleted", actorId);
-    }
-    this.audit("issue.deleted", "issue", id, actorId, {
-      title: { from: old?.title, to: null },
+    await this.notifyIssueEvent(old, "issue_deleted", actorId);
+    this.audit("issue.deleted", "issue", issueId, actorId, {
+      title: { from: old.title, to: null },
     });
     return true;
   }

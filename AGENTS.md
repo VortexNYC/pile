@@ -32,6 +32,7 @@ vp run knip
 ## Important gotchas
 
 - `WorkspaceDO` is branded as `Rpc.DurableObjectBranded` so `DurableObjectStub<WorkspaceDO>` exposes its methods directly. Do not add `as unknown as` casts to DO stubs.
+- Vitest 4 ignores `vitest.workspace.ts`; projects are declared in `test.projects` inside `vitest.config.ts`. `*.node.test.ts` files run under the plain Node pool (the `node` project) — use that suffix for tests that need `node:child_process` or other APIs workerd lacks.
 - Durable Object SQLite requires `new_sqlite_classes` in the `[[migrations]]` section of `wrangler.toml`. `new_classes` is not enough and will fail at runtime.
 - Keep `compatibility_date` pinned to a date the installed `workerd` binary supports. It is currently aligned to `2026-07-30` for `workerd 1.20260730.1`; do not use a later date.
 - The `wrangler.toml` file is the canonical, committed config and is not git-ignored. Do not move it to `wrangler.toml.example`.
