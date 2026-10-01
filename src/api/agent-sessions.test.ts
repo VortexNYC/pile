@@ -164,6 +164,131 @@ describe("agent sessions API", () => {
     expect(missingRes.status).toBe(404);
   });
 
+  it("validates lane output against a dispatch result schema and labels the run", async () => {
+    let seenInstructions: string | undefined;
+    registerAgentProvider(
+      "mock-structured",
+      () =>
+        new MockAgentProvider("mock-structured", {
+          dispatch: async (_org, issue, _model, ctx) => {
+            seenInstructions = ctx?.instructions;
+            return {
+              id: `structured-${issue.id}`,
+              agentId: "mock-structured",
+              issueId: issue.id,
+              status: "running",
+            };
+          },
+        })
+    );
+
+    const createIssue = async (title: string) => {
+      const res = await app.fetch(
+        request(`/workspaces/${organizationId}/issues`, {
+          method: "POST",
+          token,
+          body: JSON.stringify({ title }),
+        }),
+        env
+      );
+      expect(res.status).toBe(201);
+      return res.json<{ id: string; identifier: string }>();
+    };
+    const dispatch = (issueId: string, body: Record<string, unknown>) =>
+      app.fetch(
+        request(`/workspaces/${organizationId}/issues/${issueId}/dispatch`, {
+          method: "POST",
+          token,
+          body: JSON.stringify({ agentId: "mock-structured", ...body }),
+        }),
+        env
+      );
+    const patch = (sessionId: string, result: string) =>
+      app.fetch(
+        request(`/workspaces/${organizationId}/agent/sessions/${sessionId}`, {
+          method: "PATCH",
+          token,
+          body: JSON.stringify({ status: "completed", result }),
+        }),
+        env
+      );
+    type StructuredSession = {
+      id: string;
+      label: string | null;
+      resultSchema: Record<string, unknown> | null;
+      structuredResult: unknown;
+      resultSchemaErrors: string[] | null;
+    };
+
+    const ok = await createIssue("Structured result happy path");
+    const okRes = await dispatch(ok.id, { resultSchema: "lane" });
+    expect(okRes.status).toBe(201);
+    const okSession = await okRes.json<StructuredSession>();
+    expect(okSession.label).toBe(
+      `mock-structured/${ok.identifier.toLowerCase()}-structured-result-happy-path`
+    );
+    expect(okSession.resultSchema?.required).toEqual([
+      "verdict",
+      "summary",
+      "filesChanged",
+    ]);
+    expect(okSession.structuredResult).toBeNull();
+    expect(seenInstructions).toContain("## Structured result");
+
+    const value = {
+      verdict: "pass",
+      summary: "Implemented",
+      filesChanged: ["src/a.ts"],
+    };
+    const okPatch = await patch(
+      okSession.id,
+      `All done.\n\n\`\`\`json\n${JSON.stringify(value)}\n\`\`\``
+    );
+    expect(okPatch.status).toBe(200);
+    const okDone = await okPatch.json<StructuredSession>();
+    expect(okDone.structuredResult).toEqual(value);
+    expect(okDone.resultSchemaErrors).toBeNull();
+
+    const eventsRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${okSession.id}/events`,
+        { token }
+      ),
+      env
+    );
+    const { events } = await eventsRes.json<{
+      events: { type: string; payload: Record<string, unknown> | null }[];
+    }>();
+    expect(
+      events.find((e) => e.type === "session.structured_result")?.payload
+    ).toEqual({ valid: true, value });
+    expect(
+      events.find((e) => e.type === "session.summary")?.payload
+    ).toMatchObject({ structuredResult: value, label: okSession.label });
+
+    const bad = await createIssue("Structured result mismatch");
+    const badRes = await dispatch(bad.id, {
+      resultSchema: {
+        $schema: "http://json-schema.org/draft-07/schema#",
+        type: "object",
+        required: ["ok"],
+        properties: { ok: { type: "boolean" } },
+      },
+    });
+    expect(badRes.status).toBe(201);
+    const badSession = await badRes.json<StructuredSession>();
+    const badPatch = await patch(badSession.id, JSON.stringify({ ok: "yes" }));
+    const badDone = await badPatch.json<StructuredSession>();
+    expect(badDone.structuredResult).toBeNull();
+    expect(badDone.resultSchemaErrors?.[0]).toMatch(/^ok: /);
+
+    const invalid = await createIssue("Structured result invalid schema");
+    const invalidRes = await dispatch(invalid.id, {
+      resultSchema: { type: "bogus" },
+    });
+    expect(invalidRes.status).toBe(400);
+  });
+
   it("serves light summary rows with ?summary=1 while the default list keeps blobs", async () => {
     const issueRes = await app.fetch(
       request(`/workspaces/${organizationId}/issues`, {

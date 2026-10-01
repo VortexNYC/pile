@@ -23,6 +23,7 @@ import { migrate } from "drizzle-orm/durable-sqlite/migrator";
 import { alias } from "drizzle-orm/sqlite-core";
 import { z } from "zod";
 
+import { evaluateLaneResult } from "../agents/lane-result.js";
 import { createD1 } from "../global/db.js";
 import {
   attachments as globalAttachments,
@@ -2347,6 +2348,27 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const newStatus = result.status;
     const becameTerminal = !terminal.has(oldStatus) && terminal.has(newStatus);
 
+    // PILE-289 — validate the lane's final output against the dispatch-time
+    // result schema. Only finished runs are judged; mid-run polls carry
+    // partial text that would always fail.
+    const structuredSet: Record<string, string | null> = {};
+    if (
+      oldSession.resultSchema &&
+      typeof result.result === "string" &&
+      (newStatus === "completed" || newStatus === "failed")
+    ) {
+      const evaluation = evaluateLaneResult(
+        oldSession.resultSchema,
+        result.result
+      );
+      structuredSet.structuredResult = evaluation.valid
+        ? JSON.stringify(evaluation.value)
+        : null;
+      structuredSet.resultSchemaErrors = evaluation.valid
+        ? null
+        : JSON.stringify(evaluation.errors);
+    }
+
     const buildSessionEventPayloads = (
       updatedSession: AgentSession
     ): data.AgentSessionEventInput[] => {
@@ -2371,6 +2393,28 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           });
         }
       }
+      if (
+        updatedSession.structuredResult !== oldSession.structuredResult ||
+        updatedSession.resultSchemaErrors !== oldSession.resultSchemaErrors
+      ) {
+        const valid = updatedSession.structuredResult !== null;
+        payloads.push({
+          sessionId,
+          type: "session.structured_result",
+          message: valid
+            ? "Lane result matched the result schema"
+            : "Lane result failed result-schema validation",
+          payload: valid
+            ? {
+                valid,
+                value: JSON.parse(updatedSession.structuredResult ?? "null"),
+              }
+            : {
+                valid,
+                errors: JSON.parse(updatedSession.resultSchemaErrors ?? "[]"),
+              },
+        });
+      }
       if (becameTerminal) {
         payloads.push({
           sessionId,
@@ -2389,7 +2433,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           prUrl: updatedSession.prUrl ?? null,
           branch: updatedSession.branch ?? null,
           agentId: updatedSession.agentId,
+          label: updatedSession.label ?? null,
         };
+        if (updatedSession.structuredResult !== null) {
+          summary.structuredResult = JSON.parse(
+            updatedSession.structuredResult
+          );
+        }
         try {
           const parsed = JSON.parse(updatedSession.result ?? "") as {
             digest?: Record<string, unknown>;
@@ -2434,6 +2484,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       if (result.prUrl) set.prUrl = result.prUrl;
       if (result.prState) set.prState = result.prState;
       if (result.branch) set.branch = result.branch;
+      Object.assign(set, structuredSet);
       const rows = await this.db
         .update(workspaceAgentSessions)
         .set(set)
@@ -2474,6 +2525,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (result.prUrl) set.prUrl = result.prUrl;
     if (result.prState) set.prState = result.prState;
     if (result.branch) set.branch = result.branch;
+    Object.assign(set, structuredSet);
 
     const updatedSession = await this.db
       .update(workspaceAgentSessions)
