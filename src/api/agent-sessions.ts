@@ -1425,10 +1425,11 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
 
     for (const row of rows) {
       // rows arrive newest-first — a provider's streak is consecutive infra
-      // failures from the top; any other session (running, completed, …)
+      // deaths from the top (substrate failures AND sweep stall-cancels,
+      // both infraFailure=1); any other session (running, completed, …)
       // ends it, matching the sweep's unhealthy check.
       if (!broken.has(row.agentId)) {
-        if (row.status === "failed" && row.infraFailure === 1) {
+        if (row.infraFailure === 1 && TERMINAL.has(row.status)) {
           streaks.set(row.agentId, (streaks.get(row.agentId) ?? 0) + 1);
         } else {
           broken.add(row.agentId);

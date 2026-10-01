@@ -10,7 +10,8 @@ import { dirname, join } from "node:path";
 
 import { COMMANDS } from "./commands.js";
 import { fleetCommand, type FleetDeps } from "./fleet.js";
-import { supportCommand, type InboxDeps } from "./support.js";
+import { inboxCommand, type InboxDeps } from "./inbox.js";
+import { supportCommand, type InboxDeps as SupportDeps } from "./support.js";
 
 type Json =
   | null
@@ -1081,6 +1082,7 @@ function printUsage(): void {
     "agent sessions watch <sessionId> --workspace <org>",
     "fleet --workspace <org>",
     "support --workspace <org>",
+    "inbox --workspace <org>",
     "agent dispatch-batch --workspace <org> --file batch.json",
     "issues dispatch <id> --workspace <org> --follow [--timeout <min>]",
   ]) {
@@ -1358,7 +1360,7 @@ async function sessionWatchCommand(
 
 export async function runCli(
   args: readonly string[] = process.argv.slice(2),
-  deps: FleetDeps | InboxDeps = {}
+  deps: FleetDeps | SupportDeps | InboxDeps = {}
 ): Promise<number> {
   try {
     const { positionals, flags, multi } = parseArgs(args);
@@ -1438,7 +1440,11 @@ export async function runCli(
       (positionals.length === 1 ||
         (positionals[1] === "inbox" && positionals.length === 2))
     ) {
-      return await supportCommand(flags, deps as InboxDeps);
+      return await supportCommand(flags, deps as SupportDeps);
+    }
+
+    if (scope === "inbox" || (scope === "issues" && positionals.length === 1)) {
+      return await inboxCommand(flags, deps);
     }
 
     if (
