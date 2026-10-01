@@ -7,10 +7,7 @@ FOLLOWUP_DIR = '/tmp/followups'
 
 
 def agent_env():
-    env = os.environ.copy()
-    env['HOME'] = HOME
-    env['PATH'] = INSTALL_DIR + ':' + env.get('PATH', '')
-    return env
+    return agent_env_base()
 
 
 def ensure():
@@ -28,8 +25,10 @@ def ensure():
 def write_devin_home(creds_b64):
     os.makedirs(DEVIN_HOME, exist_ok=True)
     creds_path = os.path.join(DEVIN_HOME, 'credentials.toml')
+    creds = base64.b64decode(creds_b64)
+    mask_credential_blob(creds)
     with open(creds_path, 'wb') as f:
-        f.write(base64.b64decode(creds_b64))
+        f.write(creds)
     os.chmod(creds_path, 0o600)
 
 
@@ -78,7 +77,7 @@ def run_agent(devin_bin, prompt=None):
     output = ''.join(tail)[-4000:]
     print('devin exit:', proc.returncode)
     if proc.returncode != 0:
-        raise RuntimeError(f'devin -p failed ({proc.returncode}): {output[-500:]}')
+        raise RuntimeError(f'devin -p failed ({proc.returncode}): {_redact(output[-500:])}')
     return output
 
 
@@ -143,7 +142,9 @@ def main():
 
 if __name__ == '__main__':
     try:
-        sys.exit(main())
+        rc = main()
     except Exception as e:
         fail_result(e)
-        sys.exit(1)
+        rc = 1
+    revoke_github_token()
+    sys.exit(rc)
