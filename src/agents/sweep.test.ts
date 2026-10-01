@@ -1119,6 +1119,45 @@ describe("sweepAgentSessions", () => {
     expect(rows.filter((r) => r.lastStateHash !== "reaped")).toHaveLength(5);
   });
 
+  it("reaps kept sandboxes beyond the org-wide total cap", async () => {
+    const canceled: string[] = [];
+    // 4 providers × 4 kept sessions each = 16 warm sandboxes; the org cap
+    // (12) reaps the oldest 4 even though no provider exceeds its own cap.
+    const oldestFirst: string[] = [];
+    for (let p = 0; p < 4; p++) {
+      const agentId = `mock-tcap-${p}-${crypto.randomUUID().slice(0, 4)}`;
+      registerMock(agentId, {
+        keepsTerminalSandbox: true,
+        cancel: (id) => canceled.push(id),
+      });
+      const issue = await stub.createIssue({ title: `Cap provider ${p}` });
+      for (let i = 0; i < 4; i++) {
+        const session = await stub.createAgentSession({
+          issueId: issue.id,
+          agentId,
+          provider: agentId,
+          actorId: userId,
+          actorType: "user",
+          status: "completed",
+        });
+        await stub.updateAgentSession(session.id, {
+          endedAt: new Date(
+            Date.now() - (16 - p * 4 - i) * 60_000
+          ).toISOString(),
+        });
+        oldestFirst.push(session.id);
+      }
+    }
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    // 4 providers × 4 sessions each stays under every per-provider cap —
+    // only the org-wide cap reaps here. canceled collects just my mocks'
+    // cancel calls, so it is exactly the set of my sessions the sweep killed.
+    expect(canceled.length).toBeGreaterThanOrEqual(4);
+    expect(canceled).toEqual(expect.arrayContaining(oldestFirst.slice(0, 4)));
+  });
+
   it("does not count terminal sessions on providers that drop their sandbox", async () => {
     const agentId = `mock-drop-${crypto.randomUUID().slice(0, 8)}`;
     const canceled: string[] = [];
@@ -2442,6 +2481,113 @@ describe("syncOpenPrSessions", () => {
     });
     expect(inherited?.lastReviewedSha).toBe("rev2222");
     expect(inherited?.reviewSummary).toBe(after?.reviewSummary);
+  });
+});
+
+describe("fleet breaker (provision-outage brake)", () => {
+  const fleetUserId = "user-fleet-breaker";
+  let fleetOrgId = "";
+  let fleetStub: ReturnType<typeof env.WORKSPACE_DURABLE_OBJECT.get>;
+
+  beforeAll(async () => {
+    const db = createD1(env.D1);
+    const now = new Date();
+    await db
+      .insert(userTable)
+      .values({
+        id: fleetUserId,
+        name: "Fleet Breaker",
+        email: `${fleetUserId}@example.com`,
+        emailVerified: false,
+        image: null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing({ target: [userTable.email] });
+    const headers = await createAdminHeaders(env, fleetUserId);
+    const workspace = await createWorkspace(db, env, headers, {
+      name: "Fleet breaker",
+      slug: `fleet-breaker-${crypto.randomUUID()}`,
+      key: `FL${crypto.randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase()}`,
+      ownerId: fleetUserId,
+    });
+    fleetOrgId = workspace!.id;
+    fleetStub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(fleetOrgId)
+    );
+    await fleetStub.setOrganizationId(fleetOrgId);
+  });
+
+  it("parks queued promotion and auto-retry while provision timeouts streak", async () => {
+    const agentId = `mock-fleet-${crypto.randomUUID().slice(0, 8)}`;
+    let dispatches = 0;
+    registerMock(agentId, {
+      dispatch: () => {
+        dispatches += 1;
+        return { id: `fleet-${dispatches}`, agentId, status: "created" };
+      },
+      poll: (id) => ({ id, agentId, status: "created" }),
+    });
+    await fleetStub.upsertAgentProviderConfig({
+      agentId,
+      config: { provisionTimeout: 0 },
+    });
+
+    // Seed the outage signature directly: FLEET_UNHEALTHY_STREAK consecutive
+    // provision-timeout deaths. (Seeding rather than driving four real
+    // promote→timeout cycles keeps the test off sweep timing.)
+    for (let i = 0; i < 4; i++) {
+      const issue = await fleetStub.createIssue({ title: `Drained ${i}` });
+      const dead = await fleetStub.createAgentSession({
+        issueId: issue.id,
+        agentId,
+        provider: agentId,
+        actorId: fleetUserId,
+        actorType: "user",
+        status: "created",
+      });
+      await fleetStub.applyAgentSessionResult(dead.id, {
+        status: "failed",
+        result: "provision timed out after 10m (runner never started)",
+        infraFailure: true,
+      });
+    }
+
+    // A queued lane stays parked — no promotion dispatch while open.
+    const queuedIssue = await fleetStub.createIssue({ title: "Queued" });
+    const queued = await fleetStub.createAgentSession({
+      issueId: queuedIssue.id,
+      agentId,
+      provider: agentId,
+      actorId: fleetUserId,
+      actorType: "user",
+      status: "waiting",
+    });
+    const before = dispatches;
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+    const queuedAfter = await fleetStub.getAgentSession(queued.id);
+    expect(queuedAfter?.status).toBe("waiting");
+
+    // A lane that dies now is marked infra-failed but never retried.
+    const issue = await fleetStub.createIssue({ title: "Dies into breaker" });
+    const session = await fleetStub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: fleetUserId,
+      actorType: "user",
+      status: "created",
+    });
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+    const after = await fleetStub.getAgentSession(session.id);
+    expect(after?.status).toBe("failed");
+    expect(after?.infraFailure).toBe(1);
+    expect(dispatches).toBe(before);
+    expect(
+      (await fleetStub.listAgentSessions({ issueId: issue.id })).some(
+        (s) => s.retryOf === session.id
+      )
+    ).toBe(false);
   });
 });
 
