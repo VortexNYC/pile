@@ -344,6 +344,117 @@ async function ghFetchConflict(input: RequestInfo | URL) {
   return new Response("not found", { status: 404 });
 }
 
+// PILE-251 fixtures: PR 890 conflicts only on files the repo declares as
+// generated; PR 891 conflicts on a real source file too.
+const GENERATED_CONFLICT_FILES = [
+  "src/mcp/openapi.json",
+  "src/mcp/mcp-tools.ts",
+];
+const PILE_CONFIG_B64 = btoa(
+  JSON.stringify({
+    conflict: {
+      generated: GENERATED_CONFLICT_FILES,
+      regen: "pnpm regen",
+    },
+  })
+);
+
+function ghFetchDeterministicConflict(
+  pullNumber: number,
+  headSha: string,
+  headSideFiles: string[],
+  baseSideFiles: string[]
+) {
+  return async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.endsWith(`/pulls/${pullNumber}`)) {
+      return new Response(
+        JSON.stringify({
+          state: "open",
+          merged_at: null,
+          mergeable: false,
+          head: {
+            sha: headSha,
+            ref: "issue-x",
+            repo: { full_name: "vortexnyc/pile" },
+          },
+          base: { ref: "main", sha: "mainold" },
+        }),
+        { status: 200 }
+      );
+    }
+    if (url.includes(`/commits/${headSha}/check-runs`)) {
+      return new Response(
+        JSON.stringify({
+          check_runs: [{ status: "completed", conclusion: "success" }],
+        }),
+        { status: 200 }
+      );
+    }
+    if (url.includes("/contents/.pile/config.json")) {
+      return new Response(
+        JSON.stringify({ content: PILE_CONFIG_B64, encoding: "base64" }),
+        { status: 200 }
+      );
+    }
+    if (url.includes("/branches/")) {
+      return new Response(JSON.stringify({ commit: { sha: "basetip" } }), {
+        status: 200,
+      });
+    }
+    if (url.includes(`/compare/basetip...${headSha}`)) {
+      return new Response(
+        JSON.stringify({
+          merge_base_commit: { sha: "mb" },
+          files: headSideFiles.map((filename) => ({ filename })),
+        }),
+        { status: 200 }
+      );
+    }
+    if (url.includes(`/compare/${headSha}...basetip`)) {
+      return new Response(
+        JSON.stringify({
+          merge_base_commit: { sha: "mb" },
+          files: baseSideFiles.map((filename) => ({ filename })),
+        }),
+        { status: 200 }
+      );
+    }
+    return new Response("not found", { status: 404 });
+  };
+}
+
+function fakeComputeBackend(opts: {
+  state?: "pending" | "running" | { exitCode: number };
+  resultFile?: string | null;
+  gone?: boolean;
+  started?: string[];
+}) {
+  const started = opts.started ?? [];
+  return {
+    kind: "cloudflare" as const,
+    createSandbox: async (o: { name: string }) => ({
+      id: o.name,
+      name: o.name,
+      state: "started",
+    }),
+    findSandbox: async (sessionId: string, name: string) =>
+      opts.gone ? null : { id: name, name, state: "started" },
+    startRunner: async (
+      _sandbox: unknown,
+      processId: string,
+      command: string
+    ) => {
+      started.push(`${processId}:${command.slice(0, 40)}`);
+    },
+    runnerState: async () => opts.state ?? "running",
+    readFile: async () => opts.resultFile ?? null,
+    writeFile: async () => {},
+    deleteSandbox: async () => {},
+    health: async () => ({ ok: true }),
+  };
+}
+
 describe("sweepAgentSessions", () => {
   const userId = "user-sweep-loop";
   let organizationId = "";
@@ -513,6 +624,130 @@ describe("sweepAgentSessions", () => {
     expect(dispatches).toBe(0);
     const siblings = await stub.listAgentSessions({ issueId: issue.id });
     expect(siblings.find((s) => s.retryOf === session.id)).toBeUndefined();
+
+    // Task failures still annotate the issue — no auto-retry, but no
+    // silence either (PILE-268).
+    const comments = await stub.listComments(issue.id);
+    expect(comments).toHaveLength(1);
+    expect(comments[0]?.body).toContain("failed");
+    expect(comments[0]?.body).toContain("could not be made");
+  });
+
+  it("annotates the issue and redispatches once when a lane stalls out", async () => {
+    const agentId = `mock-stall-${crypto.randomUUID().slice(0, 8)}`;
+    let dispatches = 0;
+    const issue = await stub.createIssue({ title: "Stalled lane" });
+    // 40m of dead air on a 20m inactivity window — the PILE-267 freeze.
+    const stale = new Date(Date.now() - 40 * 60 * 1000).toISOString();
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+      url: "https://provider.example/run/1",
+      createdAt: stale,
+      startedAt: stale,
+    });
+    registerMock(agentId, {
+      dispatch: () => {
+        dispatches += 1;
+        return { id: `retried-${dispatches}`, agentId, status: "created" };
+      },
+      // A frozen lane reports nothing new — the poll echoes the row's
+      // stored state exactly so only the inactivity verdict can kill it.
+      poll: (id) => ({
+        id,
+        agentId,
+        status: "running" as const,
+        result: null,
+        url: id === session.id ? session.url : null,
+        prUrl: null,
+      }),
+      // MockAgentProvider always exposes getState (null by default); a
+      // null state hashes to "null", so seed that hash — otherwise the
+      // first stale probe counts as fresh progress and survival.
+      getState: () => null,
+    });
+    await stub.updateAgentSession(session.id, {
+      lastProgressAt: stale,
+      lastStateHash: "null",
+    });
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    const after = await stub.getAgentSession(session.id);
+    expect(after?.status).toBe("canceled");
+    expect(after?.infraFailure).toBe(1);
+
+    // The death lands on the issue: outcome + reason + session pointer.
+    const comments = await stub.listComments(issue.id);
+    expect(comments).toHaveLength(1);
+    expect(comments[0]?.body).toContain("canceled");
+    expect(comments[0]?.body).toContain("inactive");
+    expect(comments[0]?.body).toContain(session.id);
+    expect(comments[0]?.body).toContain("https://provider.example/run/1");
+
+    // Stall-class deaths get exactly one redispatch.
+    const siblings = await stub.listAgentSessions({ issueId: issue.id });
+    const retried = siblings.find((s) => s.retryOf === session.id);
+    expect(retried).toBeDefined();
+    expect(retried?.retryCount).toBe(1);
+    expect(dispatches).toBe(1);
+
+    // The retried lane stalls too — the guard caps churn at one redispatch.
+    await stub.updateAgentSession(retried!.id, {
+      status: "running",
+      startedAt: stale,
+      lastProgressAt: stale,
+      lastStateHash: "null",
+    });
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    expect((await stub.getAgentSession(retried!.id))?.status).toBe("canceled");
+    expect(dispatches).toBe(1);
+    const all = await stub.listAgentSessions({ issueId: issue.id });
+    expect(all.find((s) => s.retryOf === retried!.id)).toBeUndefined();
+    // Two lanes died, each annotated.
+    expect(await stub.listComments(issue.id)).toHaveLength(2);
+  });
+
+  it("annotates and retries a lane the provider reported canceled", async () => {
+    const agentId = `mock-pc-${crypto.randomUUID().slice(0, 8)}`;
+    registerMock(agentId, {
+      dispatch: () => ({ id: "retry-1", agentId, status: "created" }),
+      poll: (id) => ({
+        id,
+        agentId,
+        status: "canceled" as const,
+        result: "runner terminated",
+      }),
+    });
+    const issue = await stub.createIssue({ title: "Provider canceled" });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+    });
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    const after = await stub.getAgentSession(session.id);
+    expect(after?.status).toBe("canceled");
+    expect(after?.infraFailure).toBe(1);
+    const comments = await stub.listComments(issue.id);
+    expect(comments).toHaveLength(1);
+    expect(comments[0]?.body).toContain("canceled");
+    expect(comments[0]?.body).toContain("runner terminated");
+    const retried = (await stub.listAgentSessions({ issueId: issue.id })).find(
+      (s) => s.retryOf === session.id
+    );
+    expect(retried).toBeDefined();
+    expect(retried?.retryCount).toBe(1);
   });
 
   it("emits an elicitation when a running lane transitions to waiting", async () => {
@@ -986,6 +1221,191 @@ describe("syncOpenPrSessions", () => {
       fetch: ghFetchConflict as typeof fetch,
     });
     expect(prompts).toHaveLength(0);
+  });
+
+  it("resolves a generated-only conflict with the scripted fixer, no lane", async () => {
+    const agentId = `mock-genfix-${crypto.randomUUID().slice(0, 8)}`;
+    const prompts: string[] = [];
+    const dispatches: string[] = [];
+    registerMock(agentId, {
+      dispatch: (_org, issue) => {
+        dispatches.push(issue.id);
+        return { id: "dispatched", agentId, status: "created" };
+      },
+      sendPrompt: async (_id, prompt) => {
+        prompts.push(prompt);
+        return true;
+      },
+    });
+    const issue = await stub.createIssue({ title: "Generated conflict" });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+      prUrl: "https://github.com/vortexnyc/pile/pull/890",
+      prState: "open",
+    });
+    const fetchGen = ghFetchDeterministicConflict(
+      890,
+      "gen1",
+      [...GENERATED_CONFLICT_FILES, "README.md"],
+      [...GENERATED_CONFLICT_FILES, "package.json"]
+    );
+    const started: string[] = [];
+    // Phase 1: fixer launches. Phase 2: process exited with a resolved result.
+    let phase: "running" | "done" = "running";
+    const compute = () =>
+      fakeComputeBackend(
+        phase === "done"
+          ? {
+              state: { exitCode: 0 },
+              resultFile: JSON.stringify({ outcome: "resolved", detail: "" }),
+            }
+          : { state: "running", started }
+      );
+
+    await syncOpenPrSessions(env, stub, organizationId, {
+      tokenForRepo: async () => "gh-test-token",
+      fetch: fetchGen as typeof fetch,
+      compute,
+    });
+
+    // No follow-up prompt, no new lane — the fixer sandbox owns the conflict.
+    expect(prompts).toHaveLength(0);
+    expect(dispatches).toHaveLength(0);
+    expect(started.some((c) => c.startsWith(`fix-${session.id}`))).toBe(true);
+    const events = await stub.listAgentSessionEvents(session.id, {});
+    const fixStarted = events.find(
+      (e) => e.type === "pr.conflict_fix" && e.payload?.includes('"started"')
+    );
+    expect(fixStarted).toBeDefined();
+
+    // Fixer finishes on a later sweep — resolved is recorded, still no nudge.
+    phase = "done";
+    await syncOpenPrSessions(env, stub, organizationId, {
+      tokenForRepo: async () => "gh-test-token",
+      fetch: fetchGen as typeof fetch,
+      compute,
+    });
+    const after = await stub.listAgentSessionEvents(session.id, {});
+    const resolved = after.find(
+      (e) => e.type === "pr.conflict_fix" && e.payload?.includes('"resolved"')
+    );
+    expect(resolved).toBeDefined();
+    expect(prompts).toHaveLength(0);
+  });
+
+  it("nudges the lane when a real source file is in the conflict set", async () => {
+    const agentId = `mock-srcfix-${crypto.randomUUID().slice(0, 8)}`;
+    const prompts: string[] = [];
+    registerMock(agentId, {
+      sendPrompt: async (_id, prompt) => {
+        prompts.push(prompt);
+        return true;
+      },
+    });
+    const issue = await stub.createIssue({ title: "Source conflict" });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+      prUrl: "https://github.com/vortexnyc/pile/pull/891",
+      prState: "open",
+    });
+    // Both sides touched a source file alongside the generated artifacts.
+    const fetchSrc = ghFetchDeterministicConflict(
+      891,
+      "src2",
+      ["src/mcp/openapi.json", "packages/cli/src/cli.ts"],
+      ["src/mcp/openapi.json", "packages/cli/src/cli.ts"]
+    );
+    const compute = () => fakeComputeBackend({ state: "running" });
+
+    await syncOpenPrSessions(env, stub, organizationId, {
+      tokenForRepo: async () => "gh-test-token",
+      fetch: fetchSrc as typeof fetch,
+      compute,
+    });
+
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toContain("merge conflicts");
+    const events = await stub.listAgentSessionEvents(session.id, {});
+    const types = events.map((e) => e.type);
+    expect(types).toContain("pr.conflict");
+    expect(types).toContain("pr.conflict_lane");
+    expect(types).toContain("prompt.followup");
+    expect(types).not.toContain("pr.conflict_fix");
+  });
+
+  it("falls back to the lane when the fixer reports source conflicts", async () => {
+    const agentId = `mock-fixfail-${crypto.randomUUID().slice(0, 8)}`;
+    const prompts: string[] = [];
+    registerMock(agentId, {
+      sendPrompt: async (_id, prompt) => {
+        prompts.push(prompt);
+        return true;
+      },
+    });
+    const issue = await stub.createIssue({ title: "Fixer source conflict" });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+      prUrl: "https://github.com/vortexnyc/pile/pull/892",
+      prState: "open",
+    });
+    // Detection sees only generated candidates, but the real merge inside the
+    // fixer finds a source file too (the candidates set is a superset check —
+    // the script is the exact verdict).
+    const fetchFix = ghFetchDeterministicConflict(
+      892,
+      "gen3",
+      [...GENERATED_CONFLICT_FILES],
+      [...GENERATED_CONFLICT_FILES]
+    );
+    let phase: "running" | "done" = "running";
+    const compute = () =>
+      fakeComputeBackend(
+        phase === "done"
+          ? {
+              state: { exitCode: 0 },
+              resultFile: JSON.stringify({
+                outcome: "source_conflict",
+                detail: " packages/cli/src/cli.ts",
+              }),
+            }
+          : { state: "running" }
+      );
+
+    await syncOpenPrSessions(env, stub, organizationId, {
+      tokenForRepo: async () => "gh-test-token",
+      fetch: fetchFix as typeof fetch,
+      compute,
+    });
+    expect(prompts).toHaveLength(0);
+
+    phase = "done";
+    await syncOpenPrSessions(env, stub, organizationId, {
+      tokenForRepo: async () => "gh-test-token",
+      fetch: fetchFix as typeof fetch,
+      compute,
+    });
+
+    expect(prompts).toHaveLength(1);
+    const events = await stub.listAgentSessionEvents(session.id, {});
+    const types = events.map((e) => e.type);
+    expect(types).toContain("pr.conflict_fix");
+    expect(types).toContain("pr.conflict_lane");
+    expect(types).toContain("prompt.followup");
   });
 
   it("update-branches a managed lane PR that is behind the base", async () => {

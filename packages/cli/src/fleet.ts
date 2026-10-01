@@ -50,6 +50,28 @@ export type SessionTail = {
   readonly error: string | null;
 };
 
+export type FleetAgent = {
+  readonly agentId: string;
+  readonly ready: boolean;
+  readonly missing: readonly string[];
+};
+
+export type DispatchBatchItem = {
+  readonly issueId: string;
+  readonly agentId?: string;
+  readonly branch?: string;
+};
+
+export type DispatchBatchResult = {
+  readonly batchId: string;
+  readonly results: readonly {
+    readonly issueId: string;
+    readonly sessionId: string | null;
+    readonly status: string | null;
+    readonly error: string | null;
+  }[];
+};
+
 const TERMINAL_SESSION_STATUSES = new Set(["completed", "failed", "canceled"]);
 
 export function isTerminalStatus(status: string): boolean {
@@ -127,11 +149,49 @@ function parseFleetHealth(value: unknown): FleetHealth | null {
   };
 }
 
+function parseFleetAgent(value: unknown): FleetAgent | null {
+  if (!isJsonObject(value) || typeof value.agentId !== "string") return null;
+  const missing = Array.isArray(value.missing)
+    ? value.missing.filter((m): m is string => typeof m === "string")
+    : [];
+  return {
+    agentId: value.agentId,
+    ready: value.ready === true,
+    missing,
+  };
+}
+
+function parseDispatchBatchResult(value: unknown): DispatchBatchResult | null {
+  if (!isJsonObject(value) || typeof value.batchId !== "string") return null;
+  if (!Array.isArray(value.results)) return null;
+  const results = value.results
+    .map((r) => {
+      if (!isJsonObject(r) || typeof r.issueId !== "string") return null;
+      return {
+        issueId: r.issueId,
+        sessionId: optionalString(r.sessionId),
+        status: optionalString(r.status),
+        error: optionalString(r.error),
+      };
+    })
+    .filter((r): r is NonNullable<typeof r> => r !== null);
+  return { batchId: value.batchId, results };
+}
+
 export type FleetApi = {
   listSessions(limit: number): Promise<FleetSession[]>;
   getSessionTail(sessionId: string): Promise<SessionTail>;
   fleetHealth(): Promise<FleetHealth>;
   getIssueIdentifier(issueId: string): Promise<string | null>;
+  // Lane actions — all of these are API calls; the TUI never shells out to
+  // git/GitHub directly (PILE-263).
+  listAgents(): Promise<FleetAgent[]>;
+  dispatchBatch(
+    items: readonly DispatchBatchItem[]
+  ): Promise<DispatchBatchResult>;
+  cancelSession(sessionId: string): Promise<void>;
+  promptSession(sessionId: string, prompt: string): Promise<void>;
+  retrySession(sessionId: string): Promise<FleetSession | null>;
 };
 
 export function createFleetApi(options: {
@@ -142,8 +202,14 @@ export function createFleetApi(options: {
 }): FleetApi {
   const { doFetch, apiKey, workspace } = options;
   const baseUrl = options.baseUrl.replace(/\/$/u, "");
+  const base = `${baseUrl}/workspaces/${workspace}`;
   const headers = new Headers({ Authorization: `Bearer ${apiKey}` });
-  const sessionsBase = `${baseUrl}/workspaces/${workspace}/agent/sessions`;
+  const sessionsBase = `${base}/agent/sessions`;
+  const jsonHeaders = () =>
+    new Headers({
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    });
 
   return {
     async listSessions(limit) {
@@ -223,6 +289,101 @@ export function createFleetApi(options: {
       return isJsonObject(parsed) && typeof parsed.identifier === "string"
         ? parsed.identifier
         : null;
+    },
+
+    async listAgents() {
+      // setup-status reports every catalog agent with a ready flag — the
+      // picker dims the ones missing credentials. Falls back to the
+      // configured-providers list when the token can't read setup-status.
+      const statusRes = await doFetch(`${base}/agent/setup-status`, {
+        headers,
+      });
+      if (statusRes.ok) {
+        const parsed = parseJson(await statusRes.text());
+        if (!isJsonObject(parsed) || !Array.isArray(parsed.providers)) {
+          throw new Error("Unexpected /agent/setup-status response");
+        }
+        const agents = parsed.providers
+          .map(parseFleetAgent)
+          .filter((a): a is FleetAgent => a !== null);
+        agents.sort(
+          (a, b) =>
+            Number(b.ready) - Number(a.ready) ||
+            a.agentId.localeCompare(b.agentId)
+        );
+        return agents;
+      }
+      const res = await doFetch(`${base}/agent/providers`, { headers });
+      if (!res.ok) {
+        throw new Error(`GET /agent/providers returned ${res.status}`);
+      }
+      const parsed = parseJson(await res.text());
+      if (!Array.isArray(parsed)) {
+        throw new Error("Unexpected /agent/providers response");
+      }
+      return parsed
+        .map((p): FleetAgent | null =>
+          isJsonObject(p) && typeof p.agentId === "string"
+            ? { agentId: p.agentId, ready: true, missing: [] }
+            : null
+        )
+        .filter((a): a is FleetAgent => a !== null);
+    },
+
+    async dispatchBatch(items) {
+      const res = await doFetch(`${base}/agent/dispatch-batch`, {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ items }),
+      });
+      const text = await res.text();
+      if (!res.ok) {
+        throw new Error(`dispatch failed: ${errorBody(text, res.status)}`);
+      }
+      const parsed = parseDispatchBatchResult(parseJson(text));
+      if (parsed === null) {
+        throw new Error("Unexpected /agent/dispatch-batch response");
+      }
+      return parsed;
+    },
+
+    async cancelSession(sessionId) {
+      const res = await doFetch(`${sessionsBase}/${sessionId}/cancel`, {
+        method: "POST",
+        headers: jsonHeaders(),
+      });
+      if (!res.ok) {
+        throw new Error(
+          `cancel failed: ${errorBody(await res.text(), res.status)}`
+        );
+      }
+    },
+
+    async promptSession(sessionId, prompt) {
+      const res = await doFetch(`${sessionsBase}/${sessionId}/prompt`, {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ prompt }),
+      });
+      if (!res.ok) {
+        throw new Error(
+          `nudge failed: ${errorBody(await res.text(), res.status)}`
+        );
+      }
+    },
+
+    async retrySession(sessionId) {
+      const res = await doFetch(`${sessionsBase}/${sessionId}/retry`, {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify({}),
+      });
+      const text = await res.text();
+      if (!res.ok) {
+        throw new Error(`retry failed: ${errorBody(text, res.status)}`);
+      }
+      const parsed = parseJson(text);
+      return isJsonObject(parsed) ? parseFleetSession(parsed) : null;
     },
   };
 }
@@ -305,7 +466,19 @@ export type FleetRow = {
   readonly age: string;
   readonly prLabel: string;
   readonly prUrl: string | null;
+  readonly marked: boolean;
 };
+
+export type FleetPickerOption = {
+  readonly label: string;
+  readonly description: string;
+  readonly value: string | null;
+  // custom options open a free-text input for the value instead of dispatching
+  // straight away (e.g. an agent id outside the configured list).
+  readonly custom?: boolean;
+};
+
+export type FleetMode = "list" | "picker" | "input";
 
 export type FleetViewModel = {
   readonly rows: readonly FleetRow[];
@@ -317,6 +490,10 @@ export type FleetViewModel = {
   readonly statusLine: string;
   readonly liveCount: number;
   readonly totalCount: number;
+  readonly mode: FleetMode;
+  readonly pickerLines: readonly string[];
+  readonly pickerIndex: number;
+  readonly markCount: number;
 };
 
 function errorMessage(error: unknown): string {
@@ -344,6 +521,19 @@ function derivedStatusFor(
 
 export type FleetFeed = "realtime" | "polling";
 
+// Vortex errors answer `{code, message}` — surface the message when present.
+function errorBody(text: string, status: number): string {
+  try {
+    const parsed = parseJson(text);
+    if (isJsonObject(parsed) && typeof parsed.message === "string") {
+      return parsed.message;
+    }
+  } catch {
+    // non-JSON body — fall through to the status
+  }
+  return `HTTP ${status}`;
+}
+
 export class FleetModel {
   private sessions: FleetSession[] = [];
   private selectedId: string | null = null;
@@ -356,6 +546,11 @@ export class FleetModel {
   private lastPollAt: number | null = null;
   private lastError: string | null = null;
   private feed: FleetFeed = "polling";
+  private notice: string | null = null;
+  private mode: FleetMode = "list";
+  private pickerOptions: FleetPickerOption[] = [];
+  private pickerIndex = 0;
+  private readonly markedIssueIds = new Set<string>();
 
   get sessionList(): readonly FleetSession[] {
     return this.sessions;
@@ -363,6 +558,18 @@ export class FleetModel {
 
   get selected(): FleetSession | null {
     return this.sessions.find((s) => s.id === this.selectedId) ?? null;
+  }
+
+  get currentMode(): FleetMode {
+    return this.mode;
+  }
+
+  get pickerSelection(): FleetPickerOption | null {
+    return this.pickerOptions[this.pickerIndex] ?? null;
+  }
+
+  get markCount(): number {
+    return this.markedIssueIds.size;
   }
 
   setSessions(sessions: readonly FleetSession[]): void {
@@ -375,6 +582,12 @@ export class FleetModel {
     }
     if (this.selectedId === null && this.sessions.length > 0) {
       this.selectedId = this.sessions[0]?.id ?? null;
+    }
+    // Marks follow issueIds; drop ones whose lane scrolled out of the window
+    // so an invisible mark never sneaks into a dispatch batch.
+    const visible = new Set(this.sessions.map((s) => s.issueId));
+    for (const issueId of this.markedIssueIds) {
+      if (!visible.has(issueId)) this.markedIssueIds.delete(issueId);
     }
     const index = this.sessions.findIndex((s) => s.id === this.selectedId);
     this.topIndex = Math.min(this.topIndex, Math.max(0, index));
@@ -481,6 +694,76 @@ export class FleetModel {
     return true;
   }
 
+  toggleMark(): boolean {
+    const selected = this.selected;
+    if (selected === null) return false;
+    if (this.markedIssueIds.has(selected.issueId)) {
+      this.markedIssueIds.delete(selected.issueId);
+    } else {
+      this.markedIssueIds.add(selected.issueId);
+    }
+    return true;
+  }
+
+  isMarked(issueId: string): boolean {
+    return this.markedIssueIds.has(issueId);
+  }
+
+  clearMarks(): void {
+    this.markedIssueIds.clear();
+  }
+
+  unmarkIssues(issueIds: readonly string[]): void {
+    for (const issueId of issueIds) this.markedIssueIds.delete(issueId);
+  }
+
+  // Issues `d` will dispatch: every marked issue in row order, or just the
+  // selected row's issue when nothing is marked.
+  dispatchTargets(): string[] {
+    const marked: string[] = [];
+    for (const session of this.sessions) {
+      if (
+        this.markedIssueIds.has(session.issueId) &&
+        !marked.includes(session.issueId)
+      ) {
+        marked.push(session.issueId);
+      }
+    }
+    if (marked.length > 0) return marked;
+    return this.selected === null ? [] : [this.selected.issueId];
+  }
+
+  openPicker(options: readonly FleetPickerOption[]): void {
+    this.pickerOptions = [...options];
+    this.pickerIndex = 0;
+    this.mode = "picker";
+  }
+
+  movePicker(delta: number): boolean {
+    if (this.pickerOptions.length === 0) return false;
+    const next = Math.min(
+      this.pickerOptions.length - 1,
+      Math.max(0, this.pickerIndex + delta)
+    );
+    if (next === this.pickerIndex) return false;
+    this.pickerIndex = next;
+    return true;
+  }
+
+  closePicker(): void {
+    this.pickerOptions = [];
+    this.pickerIndex = 0;
+    this.mode = "list";
+  }
+
+  setMode(mode: FleetMode): void {
+    this.mode = mode;
+  }
+
+  setNotice(message: string | null): void {
+    this.notice = message;
+  }
+
   private healthSummary(): string {
     if (this.health === null) {
       return this.healthError === null
@@ -506,6 +789,7 @@ export class FleetModel {
       age: formatAge(session.startedAt ?? session.createdAt, now),
       prLabel: shortPrRef(session.prUrl) ?? "",
       prUrl: session.prUrl ?? null,
+      marked: this.markedIssueIds.has(session.issueId),
     }));
 
     const selectedIndex = Math.max(
@@ -527,14 +811,30 @@ export class FleetModel {
       this.lastPollAt === null
         ? "never"
         : new Date(this.lastPollAt).toTimeString().slice(0, 8);
+    const hint =
+      this.mode === "picker"
+        ? "j/k choose · enter select · esc cancel"
+        : this.mode === "input"
+          ? "enter submit · esc cancel"
+          : `j/k select · space mark${this.markedIssueIds.size > 0 ? ` (${this.markedIssueIds.size})` : ""} · d dispatch · x cancel · n nudge · R retry · r refresh · q quit`;
     const statusLine =
       (this.lastError === null ? "" : `error: ${this.lastError} | `) +
+      (this.notice === null ? "" : `${this.notice} | `) +
       `${liveCount} live · ${this.sessions.length} shown · updated ${polled} · ` +
-      `${this.feed} · ${this.healthSummary()} | j/k select · r refresh · q quit`;
+      `${this.feed} · ${this.healthSummary()} | ${hint}`;
+
+    const pickerLines = this.pickerOptions.map(
+      (option, index) =>
+        `${index === this.pickerIndex ? ">" : " "} ${option.label}` +
+        (option.description.length > 0 ? `  — ${option.description}` : "")
+    );
 
     let logTitle = "no session selected";
     let logText = "";
-    if (selected !== null) {
+    if (this.mode === "picker") {
+      logTitle = "dispatch — pick an agent";
+      logText = [...pickerLines, "", hint].join("\n");
+    } else if (selected !== null) {
       logTitle = `${selected.id.slice(0, 8)} · ${this.issueLabel(selected.issueId)} · ${statusLabel(selected)}`;
       if (this.tailForId === selected.id && this.tail !== null) {
         if (this.tail.logs !== null) {
@@ -559,6 +859,10 @@ export class FleetModel {
       statusLine,
       liveCount,
       totalCount: this.sessions.length,
+      mode: this.mode,
+      pickerLines,
+      pickerIndex: this.pickerIndex,
+      markCount: this.markedIssueIds.size,
     };
   }
 }
@@ -569,11 +873,22 @@ export type FleetKey = {
   readonly shift: boolean;
 };
 
+export type FleetPromptOptions = {
+  readonly title: string;
+  readonly placeholder?: string;
+  readonly initial?: string;
+  readonly onSubmit: (value: string) => void;
+  readonly onCancel: () => void;
+};
+
 export type FleetView = {
   start(): void;
   render(model: FleetViewModel): void;
   onKey(handler: (key: FleetKey) => void): void;
   tableViewportRows(): number;
+  // Modal single-line input (nudge prompt, branch override, custom agent id).
+  // Owns the keyboard until submit/cancel.
+  promptText(options: FleetPromptOptions): void;
   destroy(): void;
 };
 
@@ -588,6 +903,7 @@ const TONE_COLORS = {
 
 const SELECTED_BG = "#1e3a5f";
 const HEADER_FG = "#9ca3af";
+const FOCUSED_BORDER = "#60a5fa";
 // Rows outside the table viewport: status line (1) + box border (2) + header
 // row (1).
 const TABLE_CHROME_ROWS = 4;
@@ -667,6 +983,19 @@ async function createOpenTuiView(): Promise<FleetView> {
   const cell = (text: string, fg?: string): TextChunk =>
     ot.fg(fg ?? "#d1d5db")(text);
 
+  let modal: import("@opentui/core").BoxRenderable | null = null;
+  let modalKeyHandler: ((key: FleetKey) => void) | null = null;
+  const closeModal = () => {
+    if (modalKeyHandler !== null) {
+      renderer.keyInput.off("keypress", modalKeyHandler);
+      modalKeyHandler = null;
+    }
+    if (modal !== null) {
+      renderer.root.remove(modal);
+      modal = null;
+    }
+  };
+
   return {
     start() {
       renderer.start();
@@ -678,6 +1007,45 @@ async function createOpenTuiView(): Promise<FleetView> {
     },
     tableViewportRows() {
       return Math.max(1, renderer.height - TABLE_CHROME_ROWS);
+    },
+    promptText(options) {
+      closeModal();
+      const box = new ot.BoxRenderable(renderer, {
+        position: "absolute",
+        top: "30%",
+        left: "15%",
+        width: "70%",
+        border: true,
+        title: options.title,
+        borderColor: FOCUSED_BORDER,
+        backgroundColor: "#111827",
+        flexDirection: "column",
+        padding: 1,
+      });
+      const input = new ot.InputRenderable(renderer, {
+        placeholder: options.placeholder ?? "",
+        width: "100%",
+      });
+      if (options.initial !== undefined) {
+        input.value = options.initial;
+      }
+      box.add(input);
+      renderer.root.add(box);
+      modal = box;
+      input.on("enter", () => {
+        const value = input.value;
+        closeModal();
+        options.onSubmit(value);
+      });
+      modalKeyHandler = (key) => {
+        if (key.name === "escape") {
+          closeModal();
+          options.onCancel();
+        }
+      };
+      renderer.keyInput.on("keypress", modalKeyHandler);
+      input.focus();
+      renderer.requestRender();
     },
     render(model) {
       const paint = (text: string, fg?: string, selected = false) => {
@@ -692,7 +1060,11 @@ async function createOpenTuiView(): Promise<FleetView> {
       const body: TextChunk[][][] = model.rows.map((row, index) => {
         const selected = model.topIndex + index === model.selectedIndex;
         return [
-          paint(selected ? ">" : "", undefined, selected),
+          paint(
+            `${selected ? ">" : " "}${row.marked ? "*" : ""}`,
+            row.marked ? TONE_COLORS.warn : undefined,
+            selected
+          ),
           paint(row.status, TONE_COLORS[row.tone], selected),
           paint(row.issue, "#93c5fd", selected),
           paint(row.agent, undefined, selected),
@@ -720,6 +1092,7 @@ async function createOpenTuiView(): Promise<FleetView> {
       renderer.requestRender();
     },
     destroy() {
+      closeModal();
       renderer.destroy();
     },
   };
@@ -992,11 +1365,237 @@ export async function fleetCommand(
     }
   };
 
+  async function runAction(action: () => Promise<void>): Promise<void> {
+    try {
+      await action();
+    } catch (error) {
+      model.setNotice(`failed: ${errorMessage(error)}`);
+      render();
+    }
+  }
+
+  let inputOpen = false;
+  function openInput(options: FleetPromptOptions): void {
+    inputOpen = true;
+    model.setMode("input");
+    render();
+    try {
+      view.promptText(options);
+    } catch (error) {
+      inputOpen = false;
+      model.setMode("list");
+      model.setNotice(`prompt failed: ${errorMessage(error)}`);
+      render();
+    }
+  }
+
+  function submitDispatch(
+    issueIds: readonly string[],
+    agentId: string | undefined,
+    branch: string | undefined
+  ): void {
+    void runAction(async () => {
+      const items: DispatchBatchItem[] = issueIds.map((issueId) => ({
+        issueId,
+        ...(agentId === undefined ? {} : { agentId }),
+        ...(branch === undefined ? {} : { branch }),
+      }));
+      // One batch per dispatch action — marked issues fan out together.
+      const batch = await api.dispatchBatch(items);
+      if (stopped) return;
+      const ok = batch.results.filter((r) => r.error === null);
+      const failed = batch.results.filter((r) => r.error !== null);
+      model.unmarkIssues(ok.map((r) => r.issueId));
+      const summary = `batch ${batch.batchId.slice(0, 8)}: ${ok.length}/${batch.results.length} dispatched`;
+      model.setNotice(
+        failed.length === 0
+          ? summary
+          : `${summary} — ${failed[0]?.error ?? "unknown error"}`
+      );
+      void poll();
+      render();
+    });
+  }
+
+  function promptBranch(
+    issueIds: readonly string[],
+    agentId: string | undefined
+  ): void {
+    openInput({
+      title: `dispatch ${issueIds.length === 1 ? "1 issue" : `${issueIds.length} issues`} → ${agentId ?? "default agent"}`,
+      placeholder: "branch override — empty keeps the issue's branch",
+      onSubmit(value) {
+        inputOpen = false;
+        model.setMode("list");
+        const branch = value.trim();
+        submitDispatch(
+          issueIds,
+          agentId,
+          branch.length > 0 ? branch : undefined
+        );
+      },
+      onCancel() {
+        inputOpen = false;
+        model.setMode("list");
+        render();
+      },
+    });
+  }
+
+  function commitAgentPick(): void {
+    const option = model.pickerSelection;
+    const issueIds = model.dispatchTargets();
+    model.closePicker();
+    if (option === null || issueIds.length === 0) {
+      render();
+      return;
+    }
+    if (option.custom === true) {
+      openInput({
+        title: "agent id",
+        placeholder: "e.g. devin-cli — empty uses the repo default",
+        onSubmit(value) {
+          inputOpen = false;
+          model.setMode("list");
+          const agentId = value.trim();
+          promptBranch(issueIds, agentId.length > 0 ? agentId : undefined);
+        },
+        onCancel() {
+          inputOpen = false;
+          model.setMode("list");
+          render();
+        },
+      });
+      return;
+    }
+    promptBranch(issueIds, option.value ?? undefined);
+  }
+
+  function dispatchSelected(): void {
+    if (model.dispatchTargets().length === 0) {
+      model.setNotice("no lane selected to dispatch");
+      render();
+      return;
+    }
+    void runAction(async () => {
+      const agents = await api.listAgents().catch((): FleetAgent[] => []);
+      if (stopped || model.currentMode !== "list") return;
+      const options: FleetPickerOption[] = [
+        {
+          label: "(default)",
+          description: "repo default, else devin",
+          value: null,
+        },
+        ...agents.map((agent): FleetPickerOption => ({
+          label: agent.agentId,
+          description: agent.ready
+            ? "ready"
+            : `missing ${agent.missing.join(", ") || "setup"}`,
+          value: agent.agentId,
+        })),
+        {
+          label: "custom…",
+          description: "type an agent id",
+          value: null,
+          custom: true,
+        },
+      ];
+      model.openPicker(options);
+      render();
+    });
+  }
+
+  function cancelSelected(): void {
+    const selected = model.selected;
+    if (selected === null) return;
+    if (isTerminalStatus(selected.status)) {
+      model.setNotice(`lane already ${selected.status}`);
+      render();
+      return;
+    }
+    void runAction(async () => {
+      await api.cancelSession(selected.id);
+      model.setNotice(`cancel sent → ${selected.id.slice(0, 8)}`);
+      void poll();
+      render();
+    });
+  }
+
+  function retrySelected(): void {
+    const selected = model.selected;
+    if (selected === null) return;
+    if (!isTerminalStatus(selected.status)) {
+      model.setNotice(`lane still ${selected.status} — x cancels`);
+      render();
+      return;
+    }
+    void runAction(async () => {
+      const next = await api.retrySession(selected.id);
+      model.setNotice(
+        next === null
+          ? `retry dispatched for ${selected.id.slice(0, 8)}`
+          : `retry → ${next.id.slice(0, 8)} ${next.status}`
+      );
+      void poll();
+      render();
+    });
+  }
+
+  function nudgeSelected(): void {
+    const selected = model.selected;
+    if (selected === null) return;
+    openInput({
+      title: `nudge ${selected.id.slice(0, 8)}`,
+      placeholder: "follow-up prompt for the lane",
+      onSubmit(value) {
+        inputOpen = false;
+        model.setMode("list");
+        const prompt = value.trim();
+        if (prompt.length === 0) {
+          render();
+          return;
+        }
+        void runAction(async () => {
+          await api.promptSession(selected.id, prompt);
+          model.setNotice(`nudged ${selected.id.slice(0, 8)}`);
+          void poll();
+          render();
+        });
+      },
+      onCancel() {
+        inputOpen = false;
+        model.setMode("list");
+        render();
+      },
+    });
+  }
+
   view.onKey((key) => {
     if (stopped) return;
-    if (key.name === "q" || (key.ctrl && key.name === "c")) {
+    if (key.ctrl && key.name === "c") {
       stopped = true;
       resolveQuit();
+      return;
+    }
+    // The modal text input owns the keyboard until it submits or cancels.
+    if (inputOpen) return;
+    if (key.name === "q") {
+      stopped = true;
+      resolveQuit();
+      return;
+    }
+    if (model.currentMode === "picker") {
+      if (key.name === "escape") {
+        model.closePicker();
+      } else if (key.name === "j" || key.name === "down") {
+        model.movePicker(1);
+      } else if (key.name === "k" || key.name === "up") {
+        model.movePicker(-1);
+      } else if (key.name === "return" || key.name === "linefeed") {
+        commitAgentPick();
+        return;
+      }
+      render();
       return;
     }
     if (key.name === "j" || key.name === "down") {
@@ -1007,6 +1606,22 @@ export async function fleetCommand(
       if (key.shift ? model.selectLast() : model.selectFirst()) {
         refreshSelectedTail();
       }
+    } else if (key.name === "space") {
+      model.toggleMark();
+    } else if (key.name === "escape") {
+      model.clearMarks();
+    } else if (key.name === "d") {
+      dispatchSelected();
+      return;
+    } else if (key.name === "x") {
+      cancelSelected();
+      return;
+    } else if (key.name === "n") {
+      nudgeSelected();
+      return;
+    } else if (key.name === "R" || (key.name === "r" && key.shift)) {
+      retrySelected();
+      return;
     } else if (key.name === "r") {
       void poll();
     }
