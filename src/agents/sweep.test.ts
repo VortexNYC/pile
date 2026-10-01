@@ -1304,10 +1304,11 @@ describe("sweepAgentSessions", () => {
 
     expect(backedUp).toBe(session.providerSessionId ?? session.id);
     const after = await stub.getAgentSession(session.id);
-    expect(after?.sandboxBackupRef).toBe(`{"backupId":"bk-${session.providerSessionId ?? session.id}"}`);
+    expect(after?.sandboxBackupRef).toBe(
+      `{"backupId":"bk-${session.providerSessionId ?? session.id}"}`
+    );
     expect(after?.lastStateHash).toBe("reaped");
   });
-
 });
 
 describe("syncOpenPrSessions", () => {

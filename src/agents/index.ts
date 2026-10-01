@@ -570,13 +570,14 @@ export async function dispatchAgent(
     // reset, compute I/O timeout) is infra-class — it gets the retry path
     // and feeds the fleet breaker, not the task-failure trail.
     let infraFailure = false;
-    if (error instanceof VortexError && (error.status === 503 || error.status === 504)) {
+    if (
+      error instanceof VortexError &&
+      (error.status === 503 || error.status === 504)
+    ) {
       infraFailure = true;
     } else {
       try {
-        const sandboxSdk = (await import(
-          "@cloudflare/sandbox"
-        )) as {
+        const sandboxSdk = (await import("@cloudflare/sandbox")) as {
           isPlatformTransientError?: (e: unknown) => boolean;
           isDurableObjectCodeUpdateReset?: (e: unknown) => boolean;
         };
