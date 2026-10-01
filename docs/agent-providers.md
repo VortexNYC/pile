@@ -621,14 +621,17 @@ alongside the working lane and never counts as the issue's active lane.
   no lane; mixed diffs exclude the generated files from the inlined diff.
 - `pile-review` is excluded from Pile's CI state, so a request-changes verdict
   never fires the CI-failure nudge.
-  | field      | effect                                                                                                                                         |
-  | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-  | `agents`   | Allowlist — dispatch with any other agentId is rejected (400).                                                                                 |
-  | `model`    | Default model when the dispatch request doesn't name one.                                                                                      |
-  | `setup`    | Documented setup hook. `.pile/setup.sh` runs after clone either way.                                                                           |
-  | `env`      | Env-var allowlist — caller-supplied `extraEnv` keys not named here are dropped before they reach the lane. Infra env (lane DB etc.) is exempt. |
-  | `triggers` | Event→lane triggers — see below.                                                                                                               |
-  | `hooks`    | Lane lifecycle hooks — see below.                                                                                                              |
+
+### `.pile/config.json` fields
+
+| field      | effect                                                                                                                                         |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `agents`   | Allowlist — dispatch with any other agentId is rejected (400).                                                                                 |
+| `model`    | Default model when the dispatch request doesn't name one.                                                                                      |
+| `setup`    | Documented setup hook. `.pile/setup.sh` runs after clone either way.                                                                           |
+| `env`      | Env-var allowlist — caller-supplied `extraEnv` keys not named here are dropped before they reach the lane. Infra env (lane DB etc.) is exempt. |
+| `triggers` | Event→lane triggers — see below.                                                                                                               |
+| `hooks`    | Lane lifecycle hooks — see below.                                                                                                              |
 
 ### Event→lane triggers
 
