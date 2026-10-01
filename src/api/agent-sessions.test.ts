@@ -1965,4 +1965,61 @@ describe("agent sessions API", () => {
       expect(body.results[1].error).toContain("queuedAfter target failed");
     });
   });
+
+  describe("fleet-health", () => {
+    it("counts only unreaped in-window sessions on sandbox-keeping providers", async () => {
+      const keepId = `mock-kept-${crypto.randomUUID().slice(0, 8)}`;
+      const dropId = `mock-gone-${crypto.randomUUID().slice(0, 8)}`;
+      registerAgentProvider(
+        keepId,
+        () => new MockAgentProvider(keepId, { keepsTerminalSandbox: true })
+      );
+      registerAgentProvider(dropId, () => new MockAgentProvider(dropId));
+
+      const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+        env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+      );
+      await stub.setOrganizationId(organizationId);
+      const issue = await stub.createIssue({ title: "Fleet kept" });
+      const terminal = async (agentId: string, reaped = false) => {
+        const session = await stub.createAgentSession({
+          issueId: issue.id,
+          agentId,
+          provider: agentId,
+          actorId: "user-1",
+          actorType: "user",
+          status: "completed",
+        });
+        await stub.updateAgentSession(session.id, {
+          endedAt: new Date().toISOString(),
+          ...(reaped ? { lastStateHash: "reaped" } : {}),
+        });
+      };
+      await terminal(keepId);
+      await terminal(keepId);
+      // Destroyed by the reaper — must drop out of the count now, not when
+      // the row ages out of the resume window (PILE-253).
+      await terminal(keepId, true);
+      // This provider deletes its sandbox at terminal — never a kept
+      // sandbox regardless of the resume window.
+      await terminal(dropId);
+
+      const res = await app.fetch(
+        request(`/workspaces/${organizationId}/agent/fleet-health`, {
+          token,
+        }),
+        env
+      );
+      expect(res.status).toBe(200);
+      const body = await res.json<{
+        providers: { agentId: string; keptSandboxes: number }[];
+      }>();
+      expect(
+        body.providers.find((p) => p.agentId === keepId)?.keptSandboxes
+      ).toBe(2);
+      expect(
+        body.providers.find((p) => p.agentId === dropId)?.keptSandboxes ?? 0
+      ).toBe(0);
+    });
+  });
 });
