@@ -574,7 +574,10 @@ alongside the working lane and never counts as the issue's active lane.
   no lane; mixed diffs exclude the generated files from the inlined diff.
 - `pile-review` is excluded from Pile's CI state, so a request-changes verdict
   never fires the CI-failure nudge.
-  | field      | effect                                                                                                                                         |
+
+### `.pile/config.json` fields
+
+| field      | effect                                                                                                                                         |
   | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
   | `agents`   | Allowlist — dispatch with any other agentId is rejected (400).                                                                                 |
   | `model`    | Default model when the dispatch request doesn't name one.                                                                                      |
