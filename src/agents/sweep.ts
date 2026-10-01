@@ -428,7 +428,6 @@ async function retryDeadLane(
       },
       undefined,
       ctx,
-      ctx,
       {
         secondaryRepos: parseStoredSecondaryRepos(session.secondaryRepos),
         effort: session.effort ?? undefined,

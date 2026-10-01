@@ -804,7 +804,7 @@ def revoke_secondary_tokens():
         SECONDARY_TOKENS.pop(repo, None)
         dest = secondary_dir(repo)
         if os.path.isdir(os.path.join(dest, '.git')):
-            run(['git', '-C', dest, 'remote', 'set-url', 'origin', f'https://github.com/{repo}.git'], check=False)
+            run([GIT, '-C', dest] + _GIT_SAFE_FLAGS + ['remote', 'set-url', 'origin', f'https://github.com/{repo}.git'], env=_git_env(), check=False)
         _revoke_installation_token(token, f'github token for {repo}')
 
 
@@ -834,8 +834,8 @@ def _git_env():
     return env
 
 
-def _reset_git_config():
-    git_dir = os.path.join(REPO_DIR, '.git')
+def _reset_git_config(repo_dir=REPO_DIR, url=None):
+    git_dir = os.path.join(repo_dir, '.git')
     if os.path.islink(git_dir) or not os.path.isdir(git_dir):
         raise RuntimeError('refusing to push: .git is not a plain directory')
     config_path = os.path.join(git_dir, 'config')
@@ -847,7 +847,7 @@ def _reset_git_config():
     with open(config_path, 'w') as f:
         f.write(
             '[core]\n\trepositoryformatversion = 0\n\tfilemode = true\n\tbare = false\n\tlogallrefupdates = true\n'
-            f'[remote "origin"]\n\turl = {remote_url()}\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n'
+            f'[remote "origin"]\n\turl = {url or remote_url()}\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n'
             f'[user]\n\tname = {name}\n\temail = {email}\n'
         )
 
@@ -915,6 +915,10 @@ def secondary_dir(repo):
     return os.path.join(XREPO_DIR, *repo.split('/'))
 
 
+def secondary_remote_url(repo, token):
+    return f'https://x-access-token:{token}@github.com/{repo}.git'
+
+
 def secondary_token(repo, fallback=''):
     # Same lane-token re-mint as refresh_github_token, scoped by ?repo= to one
     # of this session's secondary repos. Falls back to the dispatch-time token.
@@ -947,7 +951,7 @@ def clone_secondary_repos():
         token = entry.get('token') or secondary_token(repo)
         if token:
             SECONDARY_TOKENS[repo] = token
-        remote = f'https://x-access-token:{token}@github.com/{repo}.git'
+        remote = secondary_remote_url(repo, token)
         run_transport(['timeout', '300', 'git', 'clone', '--quiet', '--depth', '1', remote, dest])
         if entry.get('access') == 'write':
             # Resume the lane branch when a prior run already pushed it.
@@ -976,21 +980,28 @@ def push_secondary_repos(agent_env):
         if not os.path.isdir(os.path.join(dest, '.git')):
             continue
         try:
+            validate_branch()
             token = secondary_token(repo, SECONDARY_TOKENS.get(repo) or entry.get('token', ''))
             if token:
                 SECONDARY_TOKENS[repo] = token
-                run(['git', '-C', dest, 'remote', 'set-url', 'origin', f'https://x-access-token:{token}@github.com/{repo}.git'], env=agent_env, check=False)
-            status = run(['git', '-C', dest, 'status', '--porcelain'], env=agent_env, capture_output=True, text=True, check=True)
+            # Same hardened push as commit_and_push: ~/xrepo was agent-writable.
+            base = default_branch(repo, token)
+            if BRANCH == base:
+                raise RuntimeError(f'refusing to push lane branch {BRANCH!r}: it is the default branch of {repo}')
+            _reset_git_config(dest, secondary_remote_url(repo, token))
+            git = [GIT, '-C', dest] + _GIT_SAFE_FLAGS
+            env = _git_env()
+            status = run(git + ['status', '--porcelain'], env=env, capture_output=True, text=True, check=True)
             if status.stdout.strip():
-                run(['git', '-C', dest, 'add', '-A'], env=agent_env, check=True)
-                run(['git', '-C', dest, 'commit', '-m', f'{AGENT_LABEL} changes for {BRANCH}'], env=agent_env, check=True)
-            remote_head = run(['git', '-C', dest, 'rev-parse', '--verify', '--quiet', f'refs/remotes/origin/{BRANCH}'], env=agent_env, capture_output=True, text=True, check=False)
-            base_ref = f'origin/{BRANCH}' if remote_head.returncode == 0 else 'origin/HEAD'
-            ahead = run(['git', '-C', dest, 'rev-list', '--count', f'{base_ref}..HEAD'], env=agent_env, capture_output=True, text=True, check=False)
+                run(git + ['add', '-A'], env=env, check=True)
+                run(git + ['commit', '-m', f'{AGENT_LABEL} changes for {BRANCH}'], env=env, check=True)
+            remote_head = run(git + ['rev-parse', '--verify', '--quiet', f'refs/remotes/origin/{BRANCH}'], env=env, capture_output=True, text=True, check=False)
+            base_ref = f'refs/remotes/origin/{BRANCH}' if remote_head.returncode == 0 else 'refs/remotes/origin/HEAD'
+            ahead = run(git + ['rev-list', '--count', f'{base_ref}..refs/heads/{BRANCH}'], env=env, capture_output=True, text=True, check=False)
             if (ahead.stdout or '0').strip() == '0':
                 print(f'no changes to push in secondary repo {repo}')
                 continue
-            run_transport(['git', '-C', dest, 'push', 'origin', f'HEAD:refs/heads/{BRANCH}'], env=agent_env)
+            run_transport(git + ['push', 'origin', f'refs/heads/{BRANCH}:refs/heads/{BRANCH}'], env=env)
             owner = repo.split('/')[0]
             pulls = github_api('GET', f'/pulls?state=open&head={owner}:{BRANCH}', repo=repo, token=token)
             if pulls:
@@ -1000,7 +1011,7 @@ def push_secondary_repos(agent_env):
                 pr = github_api('POST', '/pulls', {
                     'title': os.environ.get('ISSUE_TITLE', BRANCH),
                     'head': BRANCH,
-                    'base': default_branch(repo, token),
+                    'base': base,
                     'body': f'Part of {os.environ.get("ISSUE_IDENTIFIER", BRANCH)} — cross-repo change{primary}.\n\nGenerated with {AGENT_LABEL}',
                 }, repo=repo, token=token)
                 pr_url = pr['html_url']

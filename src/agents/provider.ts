@@ -57,6 +57,9 @@ export interface AgentDispatchContext {
   /** PILE-293 — model tier the lane was dispatched at. The model is already
    *  resolved from it; providers with a native effort knob may also use it. */
   effort?: DispatchEffort;
+  /** PILE-293 — model tier the lane was dispatched at. The model is already
+   *  resolved from it; providers with a native effort knob may also use it. */
+  effort?: DispatchEffort;
 }
 
 export interface AgentProviderHealth {

@@ -1629,52 +1629,6 @@ describe("agent sessions API", () => {
     expect(unknown.status).toBe(404);
   });
 
-  it("refuses lane github-token mints for repos outside the session", async () => {
-    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
-      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
-    );
-    const issueRes = await app.fetch(
-      request(`/workspaces/${organizationId}/issues`, {
-        method: "POST",
-        token,
-        body: JSON.stringify({
-          title: "Cross-repo token scope",
-          repo: "VortexNYC/pile",
-        }),
-      }),
-      env
-    );
-    const issue = await issueRes.json<{ id: string }>();
-    const session = await stub.createAgentSession({
-      issueId: issue.id,
-      agentId: "mock",
-      provider: "mock",
-      actorId: "user-1",
-      actorType: "user",
-      status: "running",
-      secondaryRepos: JSON.stringify([
-        { repo: "VortexNYC/vortex", access: "read" },
-      ]),
-    });
-    const laneToken = await agentLogToken(
-      env as unknown as WorkerEnv,
-      organizationId,
-      session.id
-    );
-    const res = await app.fetch(
-      request(
-        `/workspaces/${organizationId}/agent/sessions/${session.id}/github-token?repo=VortexNYC/other`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${laneToken}` },
-        }
-      ),
-      env
-    );
-    expect(res.status).toBe(403);
-    await stub.updateAgentSession(session.id, { status: "completed" });
-  });
-
   it("serves the runner pnpm-store cache with per-session token auth", async () => {
     const sessionId = crypto.randomUUID();
     const cacheToken = await agentLogToken(

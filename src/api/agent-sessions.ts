@@ -1976,22 +1976,26 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       if (!issue?.repo) {
         return c.json({ message: "Session issue has no repository" }, 422);
       }
-      // PILE-294 — `?repo=` mints for one of the session's secondary repos;
-      // anything outside that set is refused.
-      const requested = c.req.query("repo");
-      const secondary =
-        !!requested && requested.toLowerCase() !== issue.repo.toLowerCase();
-      const targetRepo = secondary
+      // PILE-294 — `?repo=` naming one of the session's secondary repos mints
+      // for that repo; anything outside the session's repo set is refused.
+      const requested = c.req.query("repo")?.toLowerCase();
+      const secondaryRepo = requested
         ? parseStoredSecondaryRepos(session.secondaryRepos).find(
-            (entry) => entry.repo.toLowerCase() === requested.toLowerCase()
+            (entry) => entry.repo.toLowerCase() === requested
           )?.repo
-        : issue.repo;
-      if (!targetRepo) {
+        : undefined;
+      if (
+        requested &&
+        requested !== issue.repo.toLowerCase() &&
+        !secondaryRepo
+      ) {
         return c.json(
           { message: "Repository is not part of this session" },
           403
         );
       }
+      const secondary = !!secondaryRepo;
+      const targetRepo = secondaryRepo ?? issue.repo;
       // Re-resolve the lane's push tier on every mint so the refreshed token
       // is never broader than the policy (push=disabled → contents:read).
       const { permissions } = await fetchLanePermissions(

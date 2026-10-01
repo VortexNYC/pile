@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 
 // PILE-294 — core.py clones secondary repos under ~/xrepo/<owner>/<name>
 // and, for `write` entries, pushes the lane branch and opens a PR there.
-// GitHub remotes are redirected to local bare repos via url.insteadOf.
+// GitHub remotes are redirected to local bare repos via secondary_remote_url.
 
 const CORE_PATH = join(import.meta.dirname, "core.py");
 const LANE_BRANCH = "issue-294-lane";
@@ -42,11 +42,19 @@ def fake_github_api(method, path, body=None, repo=None, token=None):
 
 revoked = []
 mod.__dict__["github_api"] = fake_github_api
+mod.__dict__["secondary_remote_url"] = lambda repo, token: "file://" + os.path.join(os.environ["TEST_REMOTES"], repo + ".git")
 mod.__dict__["_revoke_installation_token"] = lambda token, label: revoked.append(token == secondary_token)
 mod.__dict__["clone_secondary_repos"]()
 home = os.environ["HOME"]
-with open(os.path.join(home, "xrepo", "acme", "vortex", "CHANGED.md"), "w") as f:
+vortex_dir = os.path.join(home, "xrepo", "acme", "vortex")
+with open(os.path.join(vortex_dir, "CHANGED.md"), "w") as f:
     f.write("cross-repo patch\\n")
+# The agent owns ~/xrepo: hooks it plants must not run during the runner's push.
+for hook in ("pre-commit", "pre-push"):
+    hook_path = os.path.join(vortex_dir, ".git", "hooks", hook)
+    with open(hook_path, "w") as f:
+        f.write("#!/bin/sh\\ntouch " + os.environ["TEST_CANARY"] + "\\n")
+    os.chmod(hook_path, 0o755)
 mod.__dict__["push_secondary_repos"](dict(os.environ))
 digest = mod.__dict__["collect_digest"]()
 agent_env_keys = sorted(mod.__dict__["agent_env_base"]().keys())
@@ -90,6 +98,7 @@ describe("runner secondary repos (PILE-294)", () => {
     mkdirSync(home);
     const vortex = makeRemote(remotes, "acme/vortex");
     makeRemote(remotes, "acme/docs");
+    const canary = join(root, "hook-ran");
     const harness = join(root, "harness.py");
     writeFileSync(harness, HARNESS);
 
@@ -110,9 +119,8 @@ describe("runner secondary repos (PILE-294)", () => {
         { repo: "acme/vortex", access: "write", token: SECONDARY_TOKEN },
         { repo: "acme/docs", access: "read", token: SECONDARY_TOKEN },
       ]),
-      GIT_CONFIG_COUNT: "1",
-      GIT_CONFIG_KEY_0: `url.file://${remotes}/.insteadOf`,
-      GIT_CONFIG_VALUE_0: `https://x-access-token:${SECONDARY_TOKEN}@github.com/`,
+      TEST_REMOTES: remotes,
+      TEST_CANARY: canary,
     };
     for (const key of [
       "PILE_LOG_URL",
@@ -146,6 +154,7 @@ describe("runner secondary repos (PILE-294)", () => {
     };
 
     expect(res.errors).toEqual([]);
+    expect(existsSync(canary)).toBe(false);
     expect(existsSync(join(home, "xrepo", "acme", "docs", "README.md"))).toBe(
       true
     );
