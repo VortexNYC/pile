@@ -958,6 +958,29 @@ async function githubApiGet(
   return res.json();
 }
 
+async function githubApiPut(
+  ghFetch: typeof fetch,
+  token: string,
+  path: string,
+  body: Record<string, unknown>
+): Promise<unknown> {
+  const res = await ghFetch(`https://api.github.com${path}`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      "User-Agent": "pile-agent-sweep",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new Error(`github PUT ${path} -> ${res.status}`);
+  }
+  return res.json();
+}
+
 export function prStateFromPull(pr: Record<string, unknown>): string {
   if (typeof pr.merged_at === "string") return "merged";
   if (pr.draft === true) return "draft";
@@ -983,6 +1006,31 @@ export function summarizeCheckRuns(
   )
     return "pending";
   return "passing";
+}
+
+/** PILE-250 — merge treadmill: a lane PR that is BEHIND the base branch but
+ *  otherwise mergeable (no conflicts, checks passing or pending) gets a
+ *  GitHub update-branch call so auto-merge can fire without human janitor
+ *  work. Conflicting PRs are excluded — they stay on the pr.conflict path.
+ *  Only branches the lane manages qualify: `issue-<id>` lanes or the issue's
+ *  linked branch. `mergeable === null` (GitHub still computing) is allowed —
+ *  `expected_head_sha` makes the PUT atomic against our read. */
+export function shouldUpdatePrBranch(input: {
+  state: string;
+  mergeable: unknown;
+  mergeableState: unknown;
+  checkState: string | null;
+  headRef: string | null;
+  managedRefs: readonly (string | null | undefined)[];
+}): boolean {
+  return (
+    input.state === "open" &&
+    input.mergeableState === "behind" &&
+    input.mergeable !== false &&
+    input.checkState !== "failing" &&
+    input.headRef !== null &&
+    input.managedRefs.includes(input.headRef)
+  );
 }
 
 interface PrSyncDeps {
@@ -1153,6 +1201,62 @@ export async function syncOpenPrSessions(
           reason: "merge conflict",
           dedupeKey: `conflict-${headSha ?? "unknown"}`,
         });
+      }
+      // PILE-250 — merge treadmill: a lane PR that is BEHIND the base but
+      // otherwise mergeable gets a GitHub update-branch so auto-merge can
+      // fire without a human running `gh pr update-branch`. Conflicting PRs
+      // stay on the pr.conflict path above. Deduped per headSha via the
+      // pr.branch_update event — a slow GitHub merge otherwise re-fires on
+      // every sweep pass.
+      if (
+        issue &&
+        headSha &&
+        shouldUpdatePrBranch({
+          state,
+          mergeable: pr.mergeable,
+          mergeableState: pr.mergeable_state,
+          checkState,
+          headRef: typeof head?.ref === "string" ? head.ref : null,
+          managedRefs: [`issue-${issue.id}`, issue.branch],
+        })
+      ) {
+        const seen = await stub
+          .listAgentSessionEvents(session.id, { limit: 100, order: "desc" })
+          .catch(() => []);
+        const alreadyRequested = seen.some(
+          (e) =>
+            e.type === "pr.branch_update" &&
+            typeof e.payload === "string" &&
+            e.payload.includes(headSha)
+        );
+        if (!alreadyRequested) {
+          try {
+            await withTimeout(
+              githubApiPut(
+                ghFetch,
+                token,
+                `/repos/${owner}/${repo}/pulls/${num}/update-branch`,
+                { expected_head_sha: headSha }
+              ),
+              probeTimeoutMs,
+              "github-update-branch"
+            );
+            await stub
+              .addAgentSessionEvent({
+                sessionId: session.id,
+                type: "pr.branch_update",
+                message: `Updated ${prUrl} — branch was behind the base`,
+                payload: { prUrl, headSha },
+              })
+              .catch(() => {});
+          } catch (err) {
+            console.error("pr update-branch failed", {
+              session: session.id,
+              prUrl,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        }
       }
       // PILE-224 — the review→lane round trip: a submitted GitHub review is
       // agent-facing work, not just a status. Each new review emits one
