@@ -230,6 +230,91 @@ describe("CursorCliAgentProvider", () => {
     expect(prompt).toContain("/support/tickets/<ticketId>/artifacts");
   });
 
+  it("applies lane permission tiers to the sandbox env and prompt (PILE-276)", async () => {
+    const sandboxId = "sb-perm";
+    const toolboxBase = `https://proxy.app.daytona.io/toolbox/${sandboxId}`;
+    const fetchSpy = mockFetch([
+      {
+        url: "https://app.daytona.io/api/sandbox",
+        method: "GET",
+        response: () => ({ items: [] }),
+      },
+      {
+        url: "https://app.daytona.io/api/sandbox",
+        method: "POST",
+        response: () => ({
+          id: sandboxId,
+          name: "vortex-cursorcli-sess3",
+          state: "creating",
+          toolboxProxyUrl: "https://proxy.app.daytona.io/toolbox",
+        }),
+      },
+      {
+        url: `https://app.daytona.io/api/sandbox/${sandboxId}`,
+        method: "GET",
+        response: () => ({
+          id: sandboxId,
+          name: "vortex-cursorcli-sess3",
+          state: "started",
+          toolboxProxyUrl: "https://proxy.app.daytona.io/toolbox",
+        }),
+      },
+      {
+        url: `${toolboxBase}/process/session`,
+        method: "POST",
+        response: () => ({ sessionId: "sess-3" }),
+      },
+      {
+        url: `${toolboxBase}/process/session/sess-3/exec`,
+        method: "POST",
+        response: () => ({ cmdId: "cmd-1" }),
+      },
+    ]);
+
+    const provider = new CursorCliAgentProvider(
+      cliEnv({
+        PUBLIC_API_URL: "https://api.pile.nyc",
+        DISPATCH_SECRET: "dispatch-secret",
+      })
+    );
+    const githubToken = vi.fn().mockResolvedValue("gh-token");
+    (provider as unknown as { githubToken: typeof githubToken }).githubToken =
+      githubToken;
+
+    const waitUntilCalls: Promise<unknown>[] = [];
+    await provider.dispatch("org-1", issueFixture(), "auto", {
+      sessionId: "sess-3",
+      gitIdentity: gitIdentityFixture(),
+      waitUntil: (p) => waitUntilCalls.push(p),
+      pileApi: { url: "https://pile.nyc", key: "pil_readonly" },
+      extraEnv: { DATABASE_URL: "postgres://x" },
+      permissions: { push: "restricted", shell: "disabled" },
+    });
+    await Promise.all(waitUntilCalls);
+
+    expect(githubToken).toHaveBeenCalledWith("VortexNYC/pile", {
+      push: "restricted",
+      shell: "disabled",
+    });
+    const createCall = fetchSpy.mock.calls.find(
+      ([input, init]) =>
+        String(input) === "https://app.daytona.io/api/sandbox" &&
+        (init as RequestInit | undefined)?.method === "POST"
+    );
+    const body = JSON.parse((createCall![1] as RequestInit).body as string);
+    expect(body.env.PILE_PUSH_POLICY).toBe("restricted");
+    expect(body.env.PILE_SHELL_POLICY).toBe("disabled");
+    expect(body.env.PILE_AGENT_CREDENTIAL_ENV).toBe("CURSOR_API_KEY");
+    expect(body.env.PILE_EXTRA_ENV_KEYS).toBe("DATABASE_URL");
+    // Write token comes from the lane mint, never the sandbox env.
+    expect(body.env.GITHUB_TOKEN).toBe("");
+    expect(body.env.LANE_TOKEN).toBeTruthy();
+    expect(body.env.PILE_API_KEY).toBeUndefined();
+    const prompt = atob(body.env.PROMPT_B64);
+    expect(prompt).not.toContain("$PILE_API_KEY");
+    expect(prompt).toContain("push=restricted, shell=disabled");
+  });
+
   it("polls running while command is in progress", async () => {
     const sandboxId = "sb-1";
     const toolboxBase = `https://proxy.app.daytona.io/toolbox/${sandboxId}`;

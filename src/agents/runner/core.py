@@ -12,6 +12,7 @@
 # infraFailure?} — infraFailure marks substrate failures (git transport,
 # codeload, token mint) so the sweep retries instead of failing the task.
 import base64
+import ctypes
 import hashlib
 import json
 import os
@@ -47,6 +48,149 @@ RESULT_FILE = '/tmp/agent-result.json'
 AGENT_LABEL = os.environ.get('AGENT_LABEL', 'Agent')
 PR_ERRORS = []
 RUN_STARTED = time.time()
+
+# Lane permission tiers (PILE-276), resolved from the repo's .pile/config.json
+# at dispatch. Unknown values fail closed to 'disabled'.
+_TIERS = ('disabled', 'restricted', 'enabled')
+
+
+def _tier(name):
+    value = os.environ.get(name, 'enabled')
+    return value if value in _TIERS else 'disabled'
+
+
+PUSH_POLICY = _tier('PILE_PUSH_POLICY')
+SHELL_POLICY = _tier('PILE_SHELL_POLICY')
+# Runner-owned credentials and plumbing the agent never needs.
+RUNNER_SECRET_ENV = {
+    'GITHUB_TOKEN', 'GH_TOKEN', 'LANE_TOKEN', 'PILE_TOKEN_URL',
+    'PILE_LOG_TOKEN', 'PILE_LOG_URL', 'PILE_CACHE_URL', 'PILE_API_KEY',
+    'DEVIN_CREDENTIALS_B64', 'CODEX_AUTH_JSON_B64', 'RUNNER_PY_B64',
+    'PROMPT_B64',
+}
+# Credentials that can write to or mint for the repo — stripped from the
+# agent whenever push is below 'enabled', whatever the shell tier.
+PUSH_SECRET_ENV = {'GITHUB_TOKEN', 'GH_TOKEN', 'LANE_TOKEN', 'PILE_TOKEN_URL'}
+SECRET_NAME = re.compile(r'(TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|PRIVATE|API_?KEY|ACCESS_KEY|_KEY$|_PAT$|_DSN$|DATABASE_URL|AUTH(_|$))', re.I)
+# Git config injected (command scope, beats repo config) into every git call
+# the runner makes when shell=disabled: hooks and fsmonitor are how a
+# file-edit-only agent would get code executed by the runner's git.
+NO_HOOKS_GIT_CONFIG = [('core.hooksPath', '/dev/null'), ('core.fsmonitor', 'false')]
+GIT_CONFIG_SNAPSHOT = '/tmp/pile-git-config'
+
+
+def _env_list(name):
+    return {k for k in os.environ.get(name, '').split(',') if k}
+
+
+def scrub_env(env):
+    # Agent-facing env under the lane's tiers. shell<enabled strips every
+    # env-var secret except the agent CLI's own credential; push<enabled
+    # strips anything that can push or mint a push token.
+    env = dict(env)
+    if PUSH_POLICY != 'enabled':
+        for k in PUSH_SECRET_ENV:
+            env.pop(k, None)
+    if SHELL_POLICY != 'enabled':
+        keep = _env_list('PILE_AGENT_CREDENTIAL_ENV')
+        strip = RUNNER_SECRET_ENV | _env_list('PILE_EXTRA_ENV_KEYS')
+        for k in list(env):
+            if k in keep:
+                continue
+            if k in strip or SECRET_NAME.search(k):
+                del env[k]
+    return env
+
+
+def harden_process():
+    # With any tier below 'enabled', make the runner non-dumpable so a
+    # same-uid agent process can't read the runner's secrets out of
+    # /proc/<pid>/environ or /proc/<pid>/mem.
+    if PUSH_POLICY == 'enabled' and SHELL_POLICY == 'enabled':
+        return
+    try:
+        ctypes.CDLL(None).prctl(4, 0, 0, 0, 0)  # PR_SET_DUMPABLE = 4
+    except Exception as e:
+        print('prctl(PR_SET_DUMPABLE) unavailable:', e)
+
+
+harden_process()
+
+
+def _with_git_config(env, pairs):
+    env = dict(env if env is not None else os.environ)
+    start = int(env.get('GIT_CONFIG_COUNT', '0') or 0)
+    for i, (k, v) in enumerate(pairs):
+        env[f'GIT_CONFIG_KEY_{start + i}'] = k
+        env[f'GIT_CONFIG_VALUE_{start + i}'] = v
+    env['GIT_CONFIG_COUNT'] = str(start + len(pairs))
+    return env
+
+
+def git_env(env=None):
+    # Env for runner git calls that never touch the network.
+    if SHELL_POLICY == 'disabled':
+        return _with_git_config(env, NO_HOOKS_GIT_CONFIG)
+    return dict(env if env is not None else os.environ)
+
+
+def git_auth_env(env=None):
+    # Env for runner git calls that authenticate. Below push=enabled the
+    # token rides in a command-scope extraheader (never argv, never
+    # .git/config) and hooks are always off — a hook would inherit it.
+    if PUSH_POLICY == 'enabled':
+        return git_env(env)
+    basic = base64.b64encode(f'x-access-token:{GITHUB_TOKEN}'.encode()).decode()
+    return _with_git_config(env, NO_HOOKS_GIT_CONFIG + [
+        ('http.https://github.com/.extraheader', f'AUTHORIZATION: basic {basic}'),
+    ])
+
+
+def origin_url():
+    # push=enabled keeps today's token-in-remote (the agent may use git
+    # itself); otherwise the checkout's remote carries no credential.
+    if PUSH_POLICY == 'enabled':
+        return f'https://x-access-token:{GITHUB_TOKEN}@github.com/{REPO}.git'
+    return f'https://github.com/{REPO}.git'
+
+
+def deny_in_cli_config(path, rules, base=None):
+    # Merge `rules` into permissions.deny of an agent CLI's user-level JSON
+    # config, then make the file read-only so file-edit tools can't lift it.
+    config = dict(base or {})
+    if os.path.exists(path):
+        os.chmod(path, 0o600)
+        try:
+            with open(path) as f:
+                config = json.load(f)
+        except ValueError:
+            pass
+    perms = config.setdefault('permissions', {})
+    perms.setdefault('allow', [])
+    deny = perms.setdefault('deny', [])
+    for rule in rules:
+        if rule not in deny:
+            deny.append(rule)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'w') as f:
+        json.dump(config, f)
+    os.chmod(path, 0o444)
+    print(f'lane policy: denied {rules} via {path}')
+
+
+def snapshot_git_config():
+    if SHELL_POLICY != 'disabled':
+        return
+    shutil.copyfile(os.path.join(REPO_DIR, '.git', 'config'), GIT_CONFIG_SNAPSHOT)
+
+
+def restore_git_config():
+    # shell=disabled: the agent can still edit .git/config with file tools
+    # (filter drivers, aliases, fsmonitor). Put the runner's copy back before
+    # any runner git call that follows the agent.
+    if SHELL_POLICY != 'disabled' or not os.path.exists(GIT_CONFIG_SNAPSHOT):
+        return
+    shutil.copyfile(GIT_CONFIG_SNAPSHOT, os.path.join(REPO_DIR, '.git', 'config'))
 
 
 def _redact(s):
@@ -89,6 +233,8 @@ def run_transport(cmd, **kwargs):
 
 
 def github_api(method, path, body=None):
+    if not GITHUB_TOKEN:
+        refresh_github_token()
     owner, name = REPO.split('/')
     url = f'https://api.github.com/repos/{owner}/{name}{path}'
     headers = {
@@ -114,6 +260,9 @@ def default_branch():
 
 
 def create_branch():
+    if PUSH_POLICY == 'disabled':
+        print('push disabled by lane policy — not creating the remote branch')
+        return
     base = default_branch()
     try:
         ref = github_api('GET', f'/git/ref/heads/{base}')
@@ -133,6 +282,20 @@ def create_branch():
             raise
 
 
+def clone_ref():
+    # push=disabled never creates the lane branch, so clone it only when a
+    # prior run left one; otherwise start from the default branch.
+    if PUSH_POLICY != 'disabled':
+        return BRANCH
+    try:
+        github_api('GET', f'/git/ref/heads/{BRANCH}')
+        return BRANCH
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return default_branch()
+        raise
+
+
 def clone_repo():
     # Refresh before the first GitHub call — the dispatch-time token may
     # already be old if the lane queued, and this proves the lane-token
@@ -141,14 +304,23 @@ def clone_repo():
     if os.path.exists(REPO_DIR):
         shutil.rmtree(REPO_DIR)
     os.makedirs(REPO_DIR, exist_ok=True)
+    ref = clone_ref()
     t0 = time.time()
-    run_transport(['curl', '-fsSL', '--max-time', '120', '-H', f'Authorization: Bearer {GITHUB_TOKEN}', '-o', '/tmp/repo.tgz', f'https://codeload.github.com/{REPO}/tar.gz/{BRANCH}'])
+    # Header via a 0600 file, not argv — argv is world-readable in /proc.
+    header_file = '/tmp/pile-auth-header'
+    fd = os.open(header_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, 'w') as f:
+        f.write(f'Authorization: Bearer {GITHUB_TOKEN}\n')
+    try:
+        run_transport(['curl', '-fsSL', '--max-time', '120', '-H', f'@{header_file}', '-o', '/tmp/repo.tgz', f'https://codeload.github.com/{REPO}/tar.gz/{ref}'])
+    finally:
+        os.remove(header_file)
     run_transport(['tar', '-xzf', '/tmp/repo.tgz', '--strip-components=1', '-C', REPO_DIR])
     print(f'[timing] codeload tarball: {time.time() - t0:.0f}s')
     t1 = time.time()
     run(['git', '-C', REPO_DIR, 'init', '-b', BRANCH], check=True)
-    run(['git', '-C', REPO_DIR, 'remote', 'add', 'origin', f'https://x-access-token:{GITHUB_TOKEN}@github.com/{REPO}.git'], check=True)
-    run_transport(['timeout', '300', 'git', '-C', REPO_DIR, '-c', 'http.lowSpeedLimit=1000', '-c', 'http.lowSpeedTime=60', 'fetch', '--depth', '1', 'origin', BRANCH])
+    run(['git', '-C', REPO_DIR, 'remote', 'add', 'origin', origin_url()], check=True)
+    run_transport(['timeout', '300', 'git', '-C', REPO_DIR, '-c', 'http.lowSpeedLimit=1000', '-c', 'http.lowSpeedTime=60', 'fetch', '--depth', '1', 'origin', ref], env=git_auth_env())
     run(['git', '-C', REPO_DIR, 'update-ref', f'refs/heads/{BRANCH}', 'FETCH_HEAD'], check=True)
     base = run(['git', '-C', REPO_DIR, 'rev-parse', 'FETCH_HEAD'], capture_output=True, text=True, check=False)
     if base.returncode == 0:
@@ -159,14 +331,22 @@ def clone_repo():
     print(f'[timing] git fetch: {time.time() - t1:.0f}s')
     run(['git', '-C', REPO_DIR, 'config', 'user.name', os.environ.get('GIT_AUTHOR_NAME', AGENT_LABEL)], check=True)
     run(['git', '-C', REPO_DIR, 'config', 'user.email', os.environ.get('GIT_AUTHOR_EMAIL', 'agent@pile.nyc')], check=True)
+    if SHELL_POLICY == 'disabled':
+        for k, v in NO_HOOKS_GIT_CONFIG:
+            run(['git', '-C', REPO_DIR, 'config', k, v], check=True)
+    snapshot_git_config()
 
 
 def resume_repo():
     # Follow-up prompt on a kept sandbox: the checkout and branch survive
     # from the prior run — fetch and fast-forward so the agent resumes on
     # current remote state (its earlier push included).
-    run(['timeout', '120', 'git', '-C', REPO_DIR, 'fetch', '--depth', '50', 'origin', BRANCH], check=False)
-    run(['git', '-C', REPO_DIR, 'merge', '--ff-only', f'origin/{BRANCH}'], check=False)
+    if PUSH_POLICY == 'disabled':
+        return
+    refresh_github_token()
+    restore_git_config()
+    run(['timeout', '120', 'git', '-C', REPO_DIR, 'fetch', '--depth', '50', 'origin', BRANCH], env=git_auth_env(), check=False)
+    run(['git', '-C', REPO_DIR, 'merge', '--ff-only', f'origin/{BRANCH}'], env=git_env(), check=False)
 
 
 def run_setup_hook(agent_env):
@@ -174,6 +354,9 @@ def run_setup_hook(agent_env):
     # own toolchain instead of the image hardcoding per-repo steps.
     hook = os.path.join(REPO_DIR, '.pile', 'setup.sh')
     if not os.path.exists(hook):
+        return
+    if SHELL_POLICY == 'disabled':
+        print('shell disabled by lane policy — skipping .pile/setup.sh')
         return
     t0 = time.time()
     print('running .pile/setup.sh')
@@ -205,9 +388,9 @@ def collect_digest():
     except OSError:
         base = ''
     if REPO and base:
-        files = run(['git', '-C', REPO_DIR, 'diff', '--name-only', f'{base}...HEAD'], capture_output=True, text=True, check=False)
+        files = run(['git', '-C', REPO_DIR, 'diff', '--name-only', f'{base}...HEAD'], env=git_env(), capture_output=True, text=True, check=False)
         digest['filesChanged'] = [f for f in (files.stdout or '').splitlines() if f]
-        commits = run(['git', '-C', REPO_DIR, 'rev-list', '--count', f'{base}..HEAD'], capture_output=True, text=True, check=False)
+        commits = run(['git', '-C', REPO_DIR, 'rev-list', '--count', f'{base}..HEAD'], env=git_env(), capture_output=True, text=True, check=False)
         digest['commits'] = int((commits.stdout or '0').strip() or 0)
     return digest
 
@@ -255,21 +438,67 @@ def refresh_github_token():
         print('github token refresh failed:', e)
 
 
+def commit_local(agent_env):
+    restore_git_config()
+    env = git_env(agent_env)
+    status = run(['git', '-C', REPO_DIR, 'status', '--porcelain'], env=env, capture_output=True, text=True, check=True)
+    if not status.stdout.strip():
+        return False
+    run(['git', '-C', REPO_DIR, 'add', '-A'], env=env, check=True)
+    run(['git', '-C', REPO_DIR, 'commit', '-m', f'{AGENT_LABEL} changes for {BRANCH}'], env=env, check=True)
+    return True
+
+
+def assert_push_target():
+    # push=restricted: the lane's feature branch only — never the default
+    # branch, a tag, HEAD, or a ref-qualified/deleting refspec.
+    if PUSH_POLICY != 'restricted':
+        return
+    base = default_branch()
+    if (not BRANCH or BRANCH == base or BRANCH == 'HEAD'
+            or BRANCH.startswith(('refs/', '-', ':', '+'))
+            or ':' in BRANCH or BRANCH.endswith('.lock')):
+        raise RuntimeError(f'push restricted by lane policy: refusing to push {BRANCH!r} (default branch {base!r})')
+
+
+def push_command():
+    if PUSH_POLICY == 'enabled':
+        return ['git', '-C', REPO_DIR, 'push', 'origin', BRANCH]
+    # Explicit URL + fully qualified refspec: no remote config (mirror,
+    # push refspecs, rewritten URL) and no followed tags can widen it.
+    return ['git', '-C', REPO_DIR, 'push', '--no-follow-tags',
+            f'https://github.com/{REPO}.git', f'HEAD:refs/heads/{BRANCH}']
+
+
 def commit_and_push(agent_env):
+    if PUSH_POLICY == 'disabled':
+        committed = commit_local(agent_env)
+        print('push disabled by lane policy — leaving changes unpushed' if committed else 'no changes to commit')
+        return False
     refresh_github_token()
-    # Re-set the remote so the just-refreshed token (not the dispatch-time
-    # one, possibly >1h stale) is what push authenticates with.
-    run(['git', '-C', REPO_DIR, 'remote', 'set-url', 'origin', f'https://x-access-token:{GITHUB_TOKEN}@github.com/{REPO}.git'], env=agent_env, check=False)
-    status = run(['git', '-C', REPO_DIR, 'status', '--porcelain'], env=agent_env, capture_output=True, text=True, check=True)
-    ahead = run(['git', '-C', REPO_DIR, 'rev-list', '--count', f'origin/{BRANCH}..HEAD'], env=agent_env, capture_output=True, text=True, check=True)
-    if status.stdout.strip():
-        run(['git', '-C', REPO_DIR, 'add', '-A'], env=agent_env, check=True)
-        run(['git', '-C', REPO_DIR, 'commit', '-m', f'{AGENT_LABEL} changes for {BRANCH}'], env=agent_env, check=True)
-    elif ahead.stdout.strip() == '0':
+    if PUSH_POLICY == 'enabled':
+        # Re-set the remote so the just-refreshed token (not the dispatch-time
+        # one, possibly >1h stale) is what push authenticates with.
+        run(['git', '-C', REPO_DIR, 'remote', 'set-url', 'origin', origin_url()], env=agent_env, check=False)
+    committed = commit_local(agent_env)
+    ahead = run(['git', '-C', REPO_DIR, 'rev-list', '--count', f'origin/{BRANCH}..HEAD'], env=git_env(agent_env), capture_output=True, text=True, check=True)
+    if not committed and ahead.stdout.strip() == '0':
         print('no changes to commit')
         return False
-    run_transport(['git', '-C', REPO_DIR, 'push', 'origin', BRANCH], env=agent_env)
+    assert_push_target()
+    run_transport(push_command(), env=git_auth_env(agent_env))
     return True
+
+
+def local_patch():
+    # push=disabled deliverable: the lane's commits as a patch in the result.
+    try:
+        with open('/tmp/base_sha') as f:
+            base = f.read().strip()
+    except OSError:
+        return ''
+    diff = run(['git', '-C', REPO_DIR, 'diff', '--no-ext-diff', '--no-textconv', f'{base}..HEAD'], env=git_env(), capture_output=True, text=True, check=False)
+    return (diff.stdout or '')[:200000]
 
 
 def ensure_postgres():
@@ -436,10 +665,14 @@ def write_result(status, pr_url='', result='', report=None, infra=False):
 def finalize(output, pushed, report=None):
     # Terminal bookkeeping shared by every driver: digest → PR → result file.
     digest = collect_digest()
+    digest['permissions'] = {'push': PUSH_POLICY, 'shell': SHELL_POLICY}
     pr_url = ''
     if pushed:
         pr_url = find_pr() or create_pr(digest)
-    result_text = json.dumps({'output_tail': output, 'transcript': read_transcript(output), 'pr_errors': PR_ERRORS, 'digest': digest})
+    payload = {'output_tail': output, 'transcript': read_transcript(output), 'pr_errors': PR_ERRORS, 'digest': digest}
+    if PUSH_POLICY == 'disabled' and REPO:
+        payload['patch'] = local_patch()
+    result_text = json.dumps(payload)
     write_result('completed', pr_url, result_text, report=report)
     return 0
 

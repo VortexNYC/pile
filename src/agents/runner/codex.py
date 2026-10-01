@@ -11,7 +11,7 @@ def agent_env():
     env['CODEX_HOME'] = CODEX_HOME
     env['CODEX_INSTALL_DIR'] = INSTALL_DIR
     env['PATH'] = INSTALL_DIR + ':' + env.get('PATH', '')
-    return env
+    return scrub_env(env)
 
 
 def ensure():
@@ -96,6 +96,10 @@ def apply_and_push(codex_bin, task_url):
 
 
 def main():
+    # Cloud tasks run in OpenAI's environment with its own git credentials;
+    # Pile refuses the dispatch below enabled, this is the runner backstop.
+    if PUSH_POLICY != 'enabled' or SHELL_POLICY != 'enabled':
+        raise RuntimeError(f'codex cloud cannot enforce lane permissions push={PUSH_POLICY} shell={SHELL_POLICY}')
     auth_b64 = os.environ['CODEX_AUTH_JSON_B64']
     model = os.environ.get('MODEL', 'gpt-reserve')
     write_codex_home(auth_b64, model)

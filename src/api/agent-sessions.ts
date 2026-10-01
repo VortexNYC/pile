@@ -20,7 +20,11 @@ import { consumeUsage } from "../global/billing.js";
 import { timingSafeEqualHex } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
 import { getInstallationTokenForRepo } from "../global/github-auth.js";
-import { fetchPileRepoConfig } from "../global/pile-repo-config.js";
+import {
+  fetchLanePermissions,
+  fetchPileRepoConfig,
+  laneTokenPermissions,
+} from "../global/pile-repo-config.js";
 import { createRepoBranch } from "../global/repo-branches.js";
 import { githubInstallations } from "../global/schema.js";
 import { replyLaneResultToTicket } from "../global/support-escalation.js";
@@ -1843,7 +1847,17 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         return c.json({ message: "Session issue has no repository" }, 422);
       }
       const [owner, name] = issue.repo.split("/");
-      const token = await getInstallationTokenForRepo(c.env, owner, name);
+      // Re-resolve the lane's push tier on every mint so the refreshed token
+      // is never broader than the policy (push=disabled → contents:read).
+      const { permissions } = await fetchLanePermissions(
+        c.env,
+        issue.repo,
+        session.agentId
+      );
+      const token = await getInstallationTokenForRepo(c.env, owner, name, {
+        repositories: [name],
+        permissions: laneTokenPermissions(permissions.push),
+      });
       if (!token) {
         return c.json({ message: "No installation token for repository" }, 502);
       }

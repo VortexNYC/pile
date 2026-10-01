@@ -8,7 +8,17 @@ def agent_env():
     env = os.environ.copy()
     env['HOME'] = HOME
     env['PATH'] = INSTALL_DIR + ':' + env.get('PATH', '')
-    return env
+    return scrub_env(env)
+
+
+def apply_tool_policy():
+    # shell=disabled at the tool surface: cursor-agent's global config deny
+    # wins over any allow (and over a repo's .cursor/cli.json), even with
+    # --force.
+    if SHELL_POLICY != 'disabled':
+        return
+    deny_in_cli_config(os.path.join(HOME, '.cursor', 'cli-config.json'),
+                       ['Shell(*)'], base={'version': 1, 'editor': {'vimMode': False}})
 
 
 def ensure():
@@ -99,6 +109,7 @@ def main():
         create_branch()
         clone_repo()
         warm_pnpm_store()
+    apply_tool_policy()
     output, report = run_agent(agent_bin)
     pushed = commit_and_push(agent_env()) if REPO else False
     rc = finalize(output, pushed, report=report)
