@@ -13,6 +13,12 @@ import { resolveGeneratedConflict } from "./conflict-fix.js";
 import { loadProviderConfig } from "./credentials.js";
 import { resolveAgentEnv } from "./daytona.js";
 import {
+  buildHangReport,
+  formatHangReport,
+  type HangReason,
+  type HangReport,
+} from "./hang-report.js";
+import {
   dispatchAgent,
   getAgentProvider,
   providerKeepsTerminalSandbox,
@@ -144,14 +150,69 @@ function computeLastSeen(state: AgentProviderState | null): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+// PILE-291 — snapshot where a lane died before the sweep kills it. Every
+// probe is best-effort: missing evidence must never block the cancel.
+async function captureHangReport(
+  stub: DurableObjectStub<WorkspaceDO>,
+  session: AgentSession,
+  provider: AgentProvider | null,
+  reason: HangReason,
+  now: number,
+  probeTimeoutMs: number,
+  state?: AgentProviderState | null
+): Promise<HangReport> {
+  const [activities, events, probedState] = await Promise.all([
+    stub
+      .listAgentActivities(session.id, { limit: 1, order: "desc" })
+      .catch(() => []),
+    stub
+      .listAgentSessionEvents(session.id, { limit: 1, order: "desc" })
+      .catch(() => []),
+    state !== undefined || !provider?.getState
+      ? Promise.resolve(state ?? null)
+      : withTimeout(
+          provider.getState(
+            session.providerSessionId ?? session.id,
+            session.id
+          ),
+          probeTimeoutMs,
+          "getState"
+        ).catch(() => null),
+  ]);
+  return buildHangReport({
+    session,
+    reason,
+    now,
+    lastActivity: activities[0] ?? null,
+    lastEvent: events[0] ?? null,
+    state: probedState,
+  });
+}
+
 async function cancelSession(
   stub: DurableObjectStub<WorkspaceDO>,
   session: AgentSession,
   provider: AgentProvider | null,
   result: string,
-  probeTimeoutMs: number
+  probeTimeoutMs: number,
+  report?: HangReport
 ): Promise<void> {
   const remoteId = session.providerSessionId ?? session.id;
+  if (report) {
+    await stub
+      .addAgentSessionEvent({
+        sessionId: session.id,
+        type: "session.hang_report",
+        message: result,
+        payload: { report },
+      })
+      .catch((err: unknown) => {
+        console.error("hang report write failed", {
+          session: session.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+  }
   try {
     if (provider?.cancel)
       await withTimeout(provider.cancel(remoteId), probeTimeoutMs, "cancel");
@@ -166,7 +227,7 @@ async function cancelSession(
     session.id,
     {
       status: "canceled",
-      result,
+      result: report ? `${result}\n\n${formatHangReport(report)}` : result,
       url: session.url ?? null,
       prUrl: session.prUrl ?? null,
       prState: session.prState ?? null,
@@ -784,7 +845,15 @@ export async function sweepAgentSessions(
             session,
             provider,
             `session timed out after ${timeoutMinutes}m`,
-            probeTimeoutMs
+            probeTimeoutMs,
+            await captureHangReport(
+              stub,
+              session,
+              provider,
+              "timeout",
+              now,
+              probeTimeoutMs
+            )
           );
           if (provider)
             await retryDeadLane(env, stub, id, session, "Lane timed out", ctx);
@@ -807,13 +876,22 @@ export async function sweepAgentSessions(
               session,
               null,
               `external session silent for ${inactivityMinutes}m`,
-              probeTimeoutMs
+              probeTimeoutMs,
+              await captureHangReport(
+                stub,
+                session,
+                null,
+                "external_silent",
+                now,
+                probeTimeoutMs
+              )
             );
           }
           return;
         }
         const remoteId = session.providerSessionId ?? session.id;
         let stillAlive = false;
+        let probedState: AgentProviderState | null | undefined;
         try {
           const polled = await withTimeout(
             provider.poll(remoteId),
@@ -928,6 +1006,7 @@ export async function sweepAgentSessions(
               probeTimeoutMs,
               "getState"
             );
+            probedState = state;
             const lastSeen = computeLastSeen(state);
             if (
               lastSeen !== null &&
@@ -960,7 +1039,16 @@ export async function sweepAgentSessions(
           session,
           provider,
           `session inactive for ${inactivityMinutes}m`,
-          probeTimeoutMs
+          probeTimeoutMs,
+          await captureHangReport(
+            stub,
+            session,
+            provider,
+            "inactive",
+            now,
+            probeTimeoutMs,
+            probedState
+          )
         );
         // Dead air is infra-class — the runner froze, the task never got a
         // verdict. One redispatch; retryCount bounds the churn.

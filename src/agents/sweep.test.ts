@@ -670,6 +670,13 @@ describe("sweepAgentSessions", () => {
       // first stale probe counts as fresh progress and survival.
       getState: () => null,
     });
+    // Recording an activity bumps lastProgressAt, so seed it before
+    // backdating the progress clock.
+    await stub.addAgentActivity({
+      sessionId: session.id,
+      type: "thought",
+      message: "cloning repo",
+    });
     await stub.updateAgentSession(session.id, {
       lastProgressAt: stale,
       lastStateHash: "null",
@@ -688,6 +695,24 @@ describe("sweepAgentSessions", () => {
     expect(comments[0]?.body).toContain("inactive");
     expect(comments[0]?.body).toContain(session.id);
     expect(comments[0]?.body).toContain("https://provider.example/run/1");
+    // PILE-291 — the annotation carries where the lane died, not just
+    // "stalled": phase timings + the last activity before the dead air.
+    expect(comments[0]?.body).toContain("Hang report (inactive)");
+    expect(comments[0]?.body).toContain(
+      "last activity: [thought] cloning repo"
+    );
+    const hangEvents = (
+      await stub.listAgentSessionEvents(session.id, { limit: 100 })
+    ).filter((e) => e.type === "session.hang_report");
+    expect(hangEvents).toHaveLength(1);
+    const hangPayload: unknown = JSON.parse(hangEvents[0]?.payload ?? "null");
+    expect(hangPayload).toMatchObject({
+      report: {
+        reason: "inactive",
+        lastActivity: { type: "thought", message: "cloning repo" },
+        phases: { silentMs: expect.any(Number), runningMs: expect.any(Number) },
+      },
+    });
 
     // Stall-class deaths get exactly one redispatch.
     const siblings = await stub.listAgentSessions({ issueId: issue.id });
