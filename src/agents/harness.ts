@@ -31,15 +31,24 @@ export interface MockAgentProviderOptions {
   latestElicitation?: (
     providerSessionId: string
   ) => string | Promise<string | null> | null;
+  cancel?: (sessionId: string) => void | Promise<void>;
+  keepsTerminalSandbox?: boolean;
 }
 
 export class MockAgentProvider implements AgentProvider {
   readonly id: string;
+  readonly keepsTerminalSandbox: boolean;
+  cancel?: (sessionId: string) => Promise<void>;
   private options: MockAgentProviderOptions;
 
   constructor(id: string, options: MockAgentProviderOptions = {}) {
     this.id = id;
     this.options = options;
+    this.keepsTerminalSandbox = options.keepsTerminalSandbox === true;
+    const cancel = options.cancel;
+    if (cancel) {
+      this.cancel = async (sessionId) => cancel(sessionId);
+    }
   }
 
   async dispatch(

@@ -3,7 +3,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
-import { getWorkspaceStub } from "./stub.js";
+import { getWorkspaceStub, resolveIssueRef } from "./stub.js";
 
 const mcpServerScopeSchema = z.enum(["workspace", "repo", "issue"]);
 
@@ -120,7 +120,13 @@ export function registerMcpServerRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId } = c.req.valid("param");
     const body = c.req.valid("json");
     const stub = getWorkspaceStub(c.env, organizationId);
-    const row = await stub.createMcpServer(body);
+    const row = await stub.createMcpServer({
+      ...body,
+      issueId:
+        body.issueId === undefined
+          ? undefined
+          : await resolveIssueRef(stub, body.issueId),
+    });
     return c.json(row, 201);
   });
 
