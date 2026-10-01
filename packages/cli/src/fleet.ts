@@ -592,6 +592,12 @@ export class FleetModel {
     return this.markedIssueIds.size;
   }
 
+  selectSession(id: string): boolean {
+    if (!this.sessions.some((s) => s.id === id)) return false;
+    this.selectedId = id;
+    return true;
+  }
+
   setSessions(sessions: readonly FleetSession[]): void {
     this.sessions = sortFleetSessions(sessions);
     if (
@@ -1050,6 +1056,10 @@ export async function fleetCommand(
   });
   const now = deps.now ?? (() => Date.now());
   const model = new FleetModel();
+  // `pile fleet --session <id>` opens the board pre-selected on a lane —
+  // the attach entry point; id may be a prefix of the full session id.
+  const wantedSession = flagString(flags, "session");
+  let wantedSessionApplied = false;
   const view = await (deps.createView !== undefined
     ? deps.createView()
     : createOpenTuiView());
@@ -1109,6 +1119,13 @@ export async function fleetCommand(
       const sessions = await api.listSessions(limit);
       if (stopped) return;
       model.setSessions(sessions);
+      if (wantedSession && !wantedSessionApplied) {
+        const match = sessions.find((s) => s.id.startsWith(wantedSession));
+        if (match) {
+          wantedSessionApplied = model.selectSession(match.id);
+          if (wantedSessionApplied) void refreshTail(match.id);
+        }
+      }
       model.setError(null);
     } catch (error) {
       model.setError(errorMessage(error));

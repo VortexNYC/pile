@@ -201,6 +201,19 @@ describe("FleetModel", () => {
     expect(model.selected?.id).toBe("b");
   });
 
+  it("selectSession jumps selection to a known id (--session attach)", () => {
+    const model = new FleetModel();
+    model.setSessions([
+      session({ id: "a" }),
+      session({ id: "b" }),
+      session({ id: "c" }),
+    ]);
+    expect(model.selectSession("c")).toBe(true);
+    expect(model.selected?.id).toBe("c");
+    expect(model.selectSession("zzz")).toBe(false);
+    expect(model.selected?.id).toBe("c");
+  });
+
   it("drops selection to the first row when the session disappears", () => {
     const model = new FleetModel();
     model.setSessions([session({ id: "a" }), session({ id: "b" })]);
