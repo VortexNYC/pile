@@ -2643,6 +2643,31 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       }
     }
 
+    // PILE-268 — a lane that dies (sweep stall-cancel, provider cancel,
+    // failure) never produces the completed-run comment above, so the
+    // issue stays silent about the outcome. Surface the terminal event:
+    // outcome + reason + a pointer at the session stream.
+    if (
+      becameTerminal &&
+      (newStatus === "failed" || newStatus === "canceled")
+    ) {
+      const reason = updatedSession.result?.trim();
+      const commentBody =
+        `Agent ${oldSession.agentId} ${newStatus}${reason ? `: ${reason}` : ""}` +
+        `\n\nSession ${oldSession.id}` +
+        (updatedSession.url ? `\n${updatedSession.url}` : "");
+      const comment = await this.createComment({
+        issueId: issue.id,
+        body: commentBody,
+        externalAuthor: oldSession.agentId,
+        externalSource: "agent",
+        externalId: `${oldSession.id}:terminal`,
+      });
+      if (comment) {
+        await this.emitCommentCreated(comment, updatedIssue ?? issue, actorId);
+      }
+    }
+
     await Promise.all(
       sessionEventPayloads.map((event) => this.addAgentSessionEvent(event))
     );

@@ -24,8 +24,9 @@ export interface AgentSessionResult {
   prUrl?: string | null;
   prState?: string | null;
   branch?: string | null;
-  // True when the failure came from the compute substrate (sandbox error,
-  // runner died without a result) rather than the agent's task outcome.
+  // True when the lane died underneath the task — compute substrate error,
+  // runner died without a result, or a sweep stall-cancel — rather than the
+  // agent reporting a task outcome. Drives auto-retry + the unhealthy streak.
   infraFailure?: boolean;
 }
 

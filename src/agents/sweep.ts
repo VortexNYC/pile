@@ -170,6 +170,11 @@ async function cancelSession(
       url: session.url ?? null,
       prUrl: session.prUrl ?? null,
       prState: session.prState ?? null,
+      // A sweep kill is infra-class death: the lane produced no task
+      // outcome (timeout, dead air, silence), so it counts toward the
+      // provider-unhealthy streak and is retry-eligible. Operator cancels
+      // land through the API without this flag.
+      infraFailure: true,
     },
     undefined
   );
@@ -222,9 +227,9 @@ export async function ingestFailedAgentSession(
   }
 }
 
-const MAX_INFRA_RETRIES = 1;
-// PILE-240 — consecutive infra failures across a provider's lanes mean the
-// provider/substrate is unhealthy (devin's fleet repeatedly wedged with
+const MAX_AUTO_RETRIES = 1;
+// PILE-240 — consecutive infra-class deaths across a provider's lanes mean
+// the provider/substrate is unhealthy (devin's fleet repeatedly wedged with
 // "runner never started"). Past the streak, retries stop churning lanes
 // and the issue gets told plainly instead.
 const PROVIDER_UNHEALTHY_STREAK = 3;
@@ -237,30 +242,34 @@ async function providerInfraStreak(
   let streak = 0;
   for (const s of recent) {
     if (s.agentId !== agentId) continue;
-    if (s.status === "failed" && s.infraFailure === 1) streak += 1;
+    // Infra-class = provider-reported substrate failure OR a sweep
+    // stall-cancel (both carry infraFailure); task failures and operator
+    // cancels don't count.
+    if (s.infraFailure === 1 && TERMINAL_STATUSES.has(s.status)) streak += 1;
     else break;
   }
   return streak;
 }
 
-// Redispatch once when the compute substrate failed underneath the agent —
-// sandbox error, runner dying without a result — not when the agent itself
-// reported a task failure (infraFailure stays unset for those).
-async function retryInfraSession(
+// PILE-268 — redispatch once when the lane died underneath the task:
+// sandbox error, runner freeze surfaced as a stall-cancel, provision wedge.
+// Never for a provider-reported task failure (infraFailure stays unset).
+async function retryDeadLane(
   env: WorkerEnv,
   stub: DurableObjectStub<WorkspaceDO>,
   organizationId: string,
   session: AgentSession,
+  cause: string,
   ctx?: { waitUntil: (promise: Promise<unknown>) => void }
 ): Promise<void> {
-  if ((session.retryCount ?? 0) >= MAX_INFRA_RETRIES) return;
+  if ((session.retryCount ?? 0) >= MAX_AUTO_RETRIES) return;
   const streak = await providerInfraStreak(stub, session.agentId);
   if (streak >= PROVIDER_UNHEALTHY_STREAK) {
     await stub.addAgentActivity({
       sessionId: session.id,
       actorId: session.actorId,
       type: "error",
-      message: `${session.agentId} unhealthy — ${streak} consecutive infra failures, redispatch paused`,
+      message: `${session.agentId} unhealthy — ${streak} consecutive infra-class terminations, redispatch paused`,
     });
     return;
   }
@@ -291,14 +300,14 @@ async function retryInfraSession(
       sessionId: session.id,
       actorId: session.actorId,
       type: "thought",
-      message: `Infrastructure failure — redispatched as session ${retried.id}`,
+      message: `${cause} — redispatched as session ${retried.id}`,
     });
   } catch (err) {
     // CONFLICT means a live session already owns the issue — the retry is
     // redundant, not an error worth alarming on.
     const isConflict = err instanceof VortexError && err.code === "CONFLICT";
     const log = isConflict ? console.log : console.error;
-    log("agent session infra retry skipped/failed", {
+    log("agent session auto-retry skipped/failed", {
       session: session.id,
       agentId: session.agentId,
       conflict: isConflict,
@@ -751,7 +760,15 @@ export async function sweepAgentSessions(
           };
           await stub.applyAgentSessionResult(session.id, provisionFailure);
           await ingestFailedAgentSession(env, id, session, provisionFailure);
-          if (provider) await retryInfraSession(env, stub, id, session, ctx);
+          if (provider)
+            await retryDeadLane(
+              env,
+              stub,
+              id,
+              session,
+              "Infrastructure failure",
+              ctx
+            );
           return;
         }
         // The run clock starts at the first `running` transition (startedAt),
@@ -769,6 +786,8 @@ export async function sweepAgentSessions(
             `session timed out after ${timeoutMinutes}m`,
             probeTimeoutMs
           );
+          if (provider)
+            await retryDeadLane(env, stub, id, session, "Lane timed out", ctx);
           return;
         }
 
@@ -806,7 +825,15 @@ export async function sweepAgentSessions(
             polled.status === "failed" ||
             polled.status === "canceled"
           ) {
-            await stub.applyAgentSessionResult(session.id, polled);
+            await stub.applyAgentSessionResult(
+              session.id,
+              // A lane the provider killed while Pile still had it live
+              // died underneath the task — infra-class, same as a sweep
+              // stall-cancel, so the retry/streak logic counts it.
+              polled.status === "canceled"
+                ? { ...polled, infraFailure: true }
+                : polled
+            );
             await teardownLaneDbForSession(env, stub, session);
             // PILE-223 — escalated tickets get the lane's result posted
             // back to the customer thread.
@@ -823,8 +850,20 @@ export async function sweepAgentSessions(
             if (polled.status === "failed") {
               await ingestFailedAgentSession(env, id, session, polled);
               if (polled.infraFailure) {
-                await retryInfraSession(env, stub, id, session, ctx);
+                await retryDeadLane(
+                  env,
+                  stub,
+                  id,
+                  session,
+                  "Infrastructure failure",
+                  ctx
+                );
               }
+            }
+            // PILE-268 — a provider-side cancel is a stall-class death:
+            // the lane produced no outcome, so it gets one redispatch.
+            if (polled.status === "canceled") {
+              await retryDeadLane(env, stub, id, session, "Lane canceled", ctx);
             }
             return;
           }
@@ -923,6 +962,9 @@ export async function sweepAgentSessions(
           `session inactive for ${inactivityMinutes}m`,
           probeTimeoutMs
         );
+        // Dead air is infra-class — the runner froze, the task never got a
+        // verdict. One redispatch; retryCount bounds the churn.
+        await retryDeadLane(env, stub, id, session, "Lane stalled", ctx);
       };
       for (let i = 0; i < sessions.length; i += SWEEP_FANOUT) {
         await Promise.allSettled(
