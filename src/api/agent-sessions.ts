@@ -15,6 +15,7 @@ import {
   getAgentProvider,
   providerKeepsTerminalSandbox,
 } from "../agents/index.js";
+import { mintLaneGithubToken } from "../agents/lane-github-token.js";
 import {
   laneReportStepMessage,
   laneTodosSchema,
@@ -30,6 +31,7 @@ import { timingSafeEqualHex } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
 import { getInstallationTokenForRepo } from "../global/github-auth.js";
 import { fetchPileRepoConfig } from "../global/pile-repo-config.js";
+import { scrubLaneText } from "../global/redact.js";
 import { createRepoBranch } from "../global/repo-branches.js";
 import { githubInstallations } from "../global/schema.js";
 import { replyLaneResultToTicket } from "../global/support-escalation.js";
@@ -1718,7 +1720,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
           stub.addAgentSessionEvent({
             sessionId,
             type: "log",
-            message: line.slice(0, 2000),
+            message: scrubLaneText(line, [expected]).slice(0, 2000),
           })
         )
       );
@@ -1877,24 +1879,30 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       // PILE-294 — `?repo=` mints for one of the session's secondary repos;
       // anything outside that set is refused.
       const requested = c.req.query("repo");
-      const targetRepo =
-        requested && requested.toLowerCase() !== issue.repo.toLowerCase()
-          ? parseStoredSecondaryRepos(session.secondaryRepos).find(
-              (entry) => entry.repo.toLowerCase() === requested.toLowerCase()
-            )?.repo
-          : issue.repo;
+      const secondary =
+        !!requested && requested.toLowerCase() !== issue.repo.toLowerCase();
+      const targetRepo = secondary
+        ? parseStoredSecondaryRepos(session.secondaryRepos).find(
+            (entry) => entry.repo.toLowerCase() === requested.toLowerCase()
+          )?.repo
+        : issue.repo;
       if (!targetRepo) {
         return c.json(
           { message: "Repository is not part of this session" },
           403
         );
       }
-      const [owner, name] = targetRepo.split("/");
-      const token = await getInstallationTokenForRepo(c.env, owner, name);
-      if (!token) {
+      const minted = await mintLaneGithubToken(
+        c.env,
+        organizationId,
+        sessionId,
+        targetRepo,
+        { secondary }
+      );
+      if (!minted) {
         return c.json({ message: "No installation token for repository" }, 502);
       }
-      return c.json({ token });
+      return c.json({ token: minted.token, expiresAt: minted.expiresAt });
     }
   );
 

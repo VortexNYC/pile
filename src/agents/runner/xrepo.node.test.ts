@@ -11,7 +11,8 @@ import { describe, expect, it } from "vitest";
 
 const CORE_PATH = join(import.meta.dirname, "core.py");
 const LANE_BRANCH = "issue-294-lane";
-const TOKEN = "test-token";
+const TOKEN = "ghs_primarytoken00000000";
+const SECONDARY_TOKEN = "ghs_secondarytoken000000";
 
 const HARNESS = `
 import json
@@ -26,9 +27,11 @@ with open(core_path) as f:
     exec(compile(f.read(), core_path, "exec"), mod.__dict__)
 
 calls = []
+# stdout is credential-masked, so report token identity rather than values.
+secondary_token = json.loads(os.environ["SECONDARY_REPOS_JSON"])[0]["token"]
 
-def fake_github_api(method, path, body=None, repo=None):
-    calls.append({"method": method, "path": path, "repo": repo, "body": body})
+def fake_github_api(method, path, body=None, repo=None, token=None):
+    calls.append({"method": method, "path": path, "repo": repo, "secondaryToken": token == secondary_token, "body": body})
     if method == "GET" and path == "":
         return {"default_branch": "main"}
     if method == "GET" and path.startswith("/pulls"):
@@ -37,14 +40,20 @@ def fake_github_api(method, path, body=None, repo=None):
         return {"html_url": "https://github.com/%s/pull/7" % repo}
     raise AssertionError("unexpected github_api call: %s %s" % (method, path))
 
+revoked = []
 mod.__dict__["github_api"] = fake_github_api
+mod.__dict__["_revoke_installation_token"] = lambda token, label: revoked.append(token == secondary_token)
 mod.__dict__["clone_secondary_repos"]()
 home = os.environ["HOME"]
 with open(os.path.join(home, "xrepo", "acme", "vortex", "CHANGED.md"), "w") as f:
     f.write("cross-repo patch\\n")
 mod.__dict__["push_secondary_repos"](dict(os.environ))
 digest = mod.__dict__["collect_digest"]()
-print("RESULT:" + json.dumps({"calls": calls, "digest": digest, "errors": mod.__dict__["PR_ERRORS"]}), flush=True)
+agent_env_keys = sorted(mod.__dict__["agent_env_base"]().keys())
+mod.__dict__["revoke_secondary_tokens"]()
+import subprocess
+remote = subprocess.run(["git", "-C", os.path.join(home, "xrepo", "acme", "vortex"), "remote", "get-url", "origin"], capture_output=True, text=True).stdout.strip()
+print("RESULT:" + json.dumps({"calls": calls, "digest": digest, "errors": mod.__dict__["PR_ERRORS"], "agentEnvKeys": agent_env_keys, "revoked": revoked, "remote": remote}), flush=True)
 `;
 
 function git(cwd: string, ...args: string[]): string {
@@ -98,12 +107,12 @@ describe("runner secondary repos (PILE-294)", () => {
       GIT_COMMITTER_NAME: "Agent",
       GIT_COMMITTER_EMAIL: "agent@example.com",
       SECONDARY_REPOS_JSON: JSON.stringify([
-        { repo: "acme/vortex", access: "write", token: TOKEN },
-        { repo: "acme/docs", access: "read", token: TOKEN },
+        { repo: "acme/vortex", access: "write", token: SECONDARY_TOKEN },
+        { repo: "acme/docs", access: "read", token: SECONDARY_TOKEN },
       ]),
       GIT_CONFIG_COUNT: "1",
       GIT_CONFIG_KEY_0: `url.file://${remotes}/.insteadOf`,
-      GIT_CONFIG_VALUE_0: `https://x-access-token:${TOKEN}@github.com/`,
+      GIT_CONFIG_VALUE_0: `https://x-access-token:${SECONDARY_TOKEN}@github.com/`,
     };
     for (const key of [
       "PILE_LOG_URL",
@@ -123,9 +132,17 @@ describe("runner secondary repos (PILE-294)", () => {
     const line = out.split("\n").find((l) => l.startsWith("RESULT:"));
     if (!line) throw new Error(`harness emitted no RESULT line:\n${out}`);
     const res = JSON.parse(line.slice("RESULT:".length)) as {
-      calls: Array<{ method: string; path: string; repo: string | null }>;
+      calls: Array<{
+        method: string;
+        path: string;
+        repo: string | null;
+        secondaryToken: boolean;
+      }>;
       digest: { secondaryPrs?: Array<{ repo: string; prUrl: string }> };
       errors: string[];
+      agentEnvKeys: string[];
+      revoked: boolean[];
+      remote: string;
     };
 
     expect(res.errors).toEqual([]);
@@ -141,5 +158,10 @@ describe("runner secondary repos (PILE-294)", () => {
     expect(res.digest.secondaryPrs).toEqual([
       { repo: "acme/vortex", prUrl: "https://github.com/acme/vortex/pull/7" },
     ]);
+    // Secondary GitHub calls authenticate with that repo's own token.
+    expect(res.calls.every((c) => c.secondaryToken)).toBe(true);
+    expect(res.agentEnvKeys).not.toContain("SECONDARY_REPOS_JSON");
+    expect(res.revoked).toEqual([true, true]);
+    expect(res.remote).toBe("https://github.com/acme/vortex.git");
   });
 });
