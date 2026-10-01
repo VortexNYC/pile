@@ -19,6 +19,18 @@ export const pileRepoConfigSchema = z.object({
   // Env-var names a repo allows to be injected into its lanes. Caller-supplied
   // extraEnv keys outside this list are dropped at dispatch time.
   env: z.array(z.string()).optional(),
+  // Deterministic merge-conflict resolution (PILE-251). `generated` lists the
+  // paths the repo regenerates from source — its contract artifacts — and
+  // `regen` is the shell command that rebuilds them. When every file in a
+  // lane PR's conflict set is declared here, the sweep runs a scripted fixer
+  // (merge base branch → regen → commit → push) instead of nudging the lane.
+  // Both fields are required for the fixer to engage.
+  conflict: z
+    .object({
+      generated: z.array(z.string()).nonempty(),
+      regen: z.string().nonempty(),
+    })
+    .optional(),
 });
 
 export type PileRepoConfig = z.infer<typeof pileRepoConfigSchema>;
