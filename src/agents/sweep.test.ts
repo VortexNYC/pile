@@ -2445,6 +2445,113 @@ describe("syncOpenPrSessions", () => {
   });
 });
 
+describe("fleet breaker (provision-outage brake)", () => {
+  const fleetUserId = "user-fleet-breaker";
+  let fleetOrgId = "";
+  let fleetStub: ReturnType<typeof env.WORKSPACE_DURABLE_OBJECT.get>;
+
+  beforeAll(async () => {
+    const db = createD1(env.D1);
+    const now = new Date();
+    await db
+      .insert(userTable)
+      .values({
+        id: fleetUserId,
+        name: "Fleet Breaker",
+        email: `${fleetUserId}@example.com`,
+        emailVerified: false,
+        image: null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing({ target: [userTable.email] });
+    const headers = await createAdminHeaders(env, fleetUserId);
+    const workspace = await createWorkspace(db, env, headers, {
+      name: "Fleet breaker",
+      slug: `fleet-breaker-${crypto.randomUUID()}`,
+      key: `FL${crypto.randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase()}`,
+      ownerId: fleetUserId,
+    });
+    fleetOrgId = workspace!.id;
+    fleetStub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(fleetOrgId)
+    );
+    await fleetStub.setOrganizationId(fleetOrgId);
+  });
+
+  it("parks queued promotion and auto-retry while provision timeouts streak", async () => {
+    const agentId = `mock-fleet-${crypto.randomUUID().slice(0, 8)}`;
+    let dispatches = 0;
+    registerMock(agentId, {
+      dispatch: () => {
+        dispatches += 1;
+        return { id: `fleet-${dispatches}`, agentId, status: "created" };
+      },
+      poll: (id) => ({ id, agentId, status: "created" }),
+    });
+    await fleetStub.upsertAgentProviderConfig({
+      agentId,
+      config: { provisionTimeout: 0 },
+    });
+
+    // Seed the outage signature directly: FLEET_UNHEALTHY_STREAK consecutive
+    // provision-timeout deaths. (Seeding rather than driving four real
+    // promote→timeout cycles keeps the test off sweep timing.)
+    for (let i = 0; i < 4; i++) {
+      const issue = await fleetStub.createIssue({ title: `Drained ${i}` });
+      const dead = await fleetStub.createAgentSession({
+        issueId: issue.id,
+        agentId,
+        provider: agentId,
+        actorId: fleetUserId,
+        actorType: "user",
+        status: "created",
+      });
+      await fleetStub.applyAgentSessionResult(dead.id, {
+        status: "failed",
+        result: "provision timed out after 10m (runner never started)",
+        infraFailure: true,
+      });
+    }
+
+    // A queued lane stays parked — no promotion dispatch while open.
+    const queuedIssue = await fleetStub.createIssue({ title: "Queued" });
+    const queued = await fleetStub.createAgentSession({
+      issueId: queuedIssue.id,
+      agentId,
+      provider: agentId,
+      actorId: fleetUserId,
+      actorType: "user",
+      status: "waiting",
+    });
+    const before = dispatches;
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+    const queuedAfter = await fleetStub.getAgentSession(queued.id);
+    expect(queuedAfter?.status).toBe("waiting");
+
+    // A lane that dies now is marked infra-failed but never retried.
+    const issue = await fleetStub.createIssue({ title: "Dies into breaker" });
+    const session = await fleetStub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: fleetUserId,
+      actorType: "user",
+      status: "created",
+    });
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+    const after = await fleetStub.getAgentSession(session.id);
+    expect(after?.status).toBe("failed");
+    expect(after?.infraFailure).toBe(1);
+    expect(dispatches).toBe(before);
+    expect(
+      (await fleetStub.listAgentSessions({ issueId: issue.id })).some(
+        (s) => s.retryOf === session.id
+      )
+    ).toBe(false);
+  });
+});
+
 describe("cronMatchesNow", () => {
   const at = new Date("2026-09-28T14:30:00Z"); // Mon 14:30 UTC
 
