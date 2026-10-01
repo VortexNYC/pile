@@ -43,3 +43,13 @@ both are present.
 Send `{"type":"ping"}`; the DO replies `{"type":"pong"}`. Use it to keep the
 connection alive or detect a dead peer — hibernating Durable Objects do not
 emit WebSocket protocol pings on their own.
+
+## Consumers
+
+`pile fleet` subscribes to this stream by default: `agent_session.*` events
+update lane rows directly, `issue.*`/`pr.updated` events refresh issue labels
+and the PR column, and an event for the selected lane triggers a `/state`
+fetch for its log tail. The CLI reconnects with exponential backoff and falls
+back to REST polling while the socket is down (plus a slow periodic resync,
+since events are not replayed). `pile fleet --poll` forces the old
+poll-every-`--interval` path for debugging.

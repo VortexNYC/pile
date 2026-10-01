@@ -5,6 +5,12 @@ import {
   resolveConfig,
   type CliDeps,
 } from "./cli.js";
+import {
+  RealtimeClient,
+  defaultRealtimeSocketFactory,
+  realtimeSocketUrl,
+  type RealtimeSocketFactory,
+} from "./realtime.js";
 
 export type FleetSession = {
   readonly id: string;
@@ -21,6 +27,7 @@ export type FleetSession = {
   readonly startedAt?: string | null;
   readonly updatedAt: string;
   readonly endedAt?: string | null;
+  readonly lastProgressAt?: string | null;
   readonly derivedStatus?: string | null;
 };
 
@@ -105,6 +112,7 @@ function parseFleetSession(value: unknown): FleetSession | null {
     startedAt: optionalString(value.startedAt),
     updatedAt,
     endedAt: optionalString(value.endedAt),
+    lastProgressAt: optionalString(value.lastProgressAt),
     derivedStatus: optionalString(value.derivedStatus),
   };
 }
@@ -492,6 +500,27 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+const STALLED_PROGRESS_MS = 15 * 60 * 1000;
+
+// Mirrors the server's deriveSessionStatus for the part derivable from a
+// session row: `stalled`. `needs_input` depends on the activity log, which
+// realtime events do not carry — the periodic resync restores it.
+function derivedStatusFor(
+  session: Pick<FleetSession, "status" | "prUrl" | "lastProgressAt">,
+  now: number
+): string | null {
+  if (session.status !== "running" || session.prUrl) return null;
+  const progressed = session.lastProgressAt
+    ? Date.parse(session.lastProgressAt)
+    : NaN;
+  if (Number.isFinite(progressed) && now - progressed > STALLED_PROGRESS_MS) {
+    return "stalled";
+  }
+  return null;
+}
+
+export type FleetFeed = "realtime" | "polling";
+
 // Vortex errors answer `{code, message}` — surface the message when present.
 function errorBody(text: string, status: number): string {
   try {
@@ -516,6 +545,7 @@ export class FleetModel {
   private healthError: string | null = null;
   private lastPollAt: number | null = null;
   private lastError: string | null = null;
+  private feed: FleetFeed = "polling";
   private notice: string | null = null;
   private mode: FleetMode = "list";
   private pickerOptions: FleetPickerOption[] = [];
@@ -563,6 +593,37 @@ export class FleetModel {
     this.topIndex = Math.min(this.topIndex, Math.max(0, index));
   }
 
+  // Realtime upsert: an `agent_session.*` event carries the full row, so a
+  // single event replaces or appends the lane without a list refetch.
+  upsertSession(session: FleetSession, now: number): void {
+    const index = this.sessions.findIndex((s) => s.id === session.id);
+    const merged: FleetSession = {
+      ...this.sessions[index],
+      ...session,
+      derivedStatus: session.derivedStatus ?? derivedStatusFor(session, now),
+    };
+    this.setSessions(
+      index >= 0
+        ? this.sessions.map((s, i) => (i === index ? merged : s))
+        : [...this.sessions, merged]
+    );
+  }
+
+  // `issue.updated` / `pr.updated` events carry the issue row; its PR fields
+  // are the same ones the lane rows mirror.
+  patchSessionsForIssue(
+    issueId: string,
+    patch: {
+      readonly prUrl?: string | null;
+      readonly prState?: string | null;
+      readonly branch?: string | null;
+    }
+  ): void {
+    this.sessions = this.sessions.map((s) =>
+      s.issueId === issueId ? { ...s, ...patch } : s
+    );
+  }
+
   setIssueLabel(issueId: string, identifier: string | null): void {
     this.issueLabels.set(issueId, identifier);
   }
@@ -600,6 +661,10 @@ export class FleetModel {
 
   setError(message: string | null): void {
     this.lastError = message;
+  }
+
+  setFeed(feed: FleetFeed): void {
+    this.feed = feed;
   }
 
   moveSelection(delta: number): boolean {
@@ -756,7 +821,7 @@ export class FleetModel {
       (this.lastError === null ? "" : `error: ${this.lastError} | `) +
       (this.notice === null ? "" : `${this.notice} | `) +
       `${liveCount} live · ${this.sessions.length} shown · updated ${polled} · ` +
-      `${this.healthSummary()} | ${hint}`;
+      `${this.feed} · ${this.healthSummary()} | ${hint}`;
 
     const pickerLines = this.pickerOptions.map(
       (option, index) =>
@@ -1035,12 +1100,40 @@ async function createOpenTuiView(): Promise<FleetView> {
 
 export type FleetDeps = CliDeps & {
   readonly createView?: () => FleetView | Promise<FleetView>;
+  readonly createSocket?: RealtimeSocketFactory | null;
   readonly now?: () => number;
+  readonly reconnect?: {
+    readonly initialMs?: number;
+    readonly maxMs?: number;
+  };
+  readonly resyncMs?: number;
 };
+
+// How often realtime mode re-runs the full REST poll as a backstop while the
+// socket is healthy — the stream has no replay, so this heals missed events.
+const DEFAULT_RESYNC_MS = 60_000;
+
+function parseRealtimeIssue(value: unknown): {
+  id: string;
+  identifier: string | null;
+  prUrl: string | null;
+  prState: string | null;
+  branch: string | null;
+} | null {
+  if (!isJsonObject(value) || typeof value.id !== "string") return null;
+  return {
+    id: value.id,
+    identifier: optionalString(value.identifier),
+    prUrl: optionalString(value.prUrl),
+    prState: optionalString(value.prState),
+    branch: optionalString(value.branch),
+  };
+}
 
 // `pile fleet --workspace <org>` — live dashboard of every agent session in a
 // workspace: session table on the left, log tail of the selected lane on the
-// right, fleet health along the bottom.
+// right, fleet health along the bottom. Subscribes to /realtime for push
+// updates; --poll forces the pure REST-polling path for debugging.
 export async function fleetCommand(
   flags: Readonly<Record<string, string | boolean>>,
   deps: FleetDeps = {}
@@ -1066,6 +1159,7 @@ export async function fleetCommand(
   const limit = Number.isFinite(parsedLimit)
     ? Math.max(1, Math.floor(parsedLimit))
     : 50;
+  const resyncMs = Math.max(intervalMs, deps.resyncMs ?? DEFAULT_RESYNC_MS);
 
   const api = createFleetApi({
     doFetch: deps.fetch ?? fetch,
@@ -1087,6 +1181,42 @@ export async function fleetCommand(
 
   const render = () => {
     view.render(model.viewModel(now(), view.tableViewportRows()));
+  };
+
+  let lastFullSync = 0;
+
+  let tailInFlight: Promise<void> | null = null;
+  let tailRequestedFor: string | null = null;
+  // The selected lane's log tail only exists on /state — fetch it on demand
+  // (selection change, session event) instead of on every tick. Bursts
+  // collapse to the most recently requested session.
+  const refreshTail = (sessionId: string): Promise<void> => {
+    tailRequestedFor = sessionId;
+    if (tailInFlight !== null) return tailInFlight;
+    tailInFlight = (async () => {
+      try {
+        for (;;) {
+          const id = tailRequestedFor;
+          if (id === null || stopped) break;
+          tailRequestedFor = null;
+          const tail = await api
+            .getSessionTail(id)
+            .catch((error: unknown): SessionTail => ({
+              logs: null,
+              status: null,
+              result: null,
+              error: errorMessage(error),
+            }));
+          if (!stopped) {
+            model.setTail(id, tail);
+            render();
+          }
+        }
+      } finally {
+        tailInFlight = null;
+      }
+    })();
+    return tailInFlight;
   };
 
   async function pollOnce(): Promise<void> {
@@ -1130,7 +1260,8 @@ export async function fleetCommand(
     } catch (error) {
       model.setHealthError(errorMessage(error));
     }
-    model.setLastPoll(now());
+    lastFullSync = now();
+    model.setLastPoll(lastFullSync);
     render();
   }
 
@@ -1153,6 +1284,85 @@ export async function fleetCommand(
       }
     })();
     return pollInFlight;
+  };
+
+  // Realtime mode: subscribe to the workspace event stream. While the socket
+  // is open, rows update from `agent_session.*`/`pr.updated`/`issue.*` events
+  // and the interval only runs a slow resync; when the socket drops, the
+  // interval falls back to the old poll-every-tick path. `--poll` (or no
+  // WebSocket support) skips the socket entirely.
+  const socketFactory =
+    flags.poll === true || flags.poll === "true" || deps.createSocket === null
+      ? null
+      : (deps.createSocket ?? defaultRealtimeSocketFactory());
+
+  let realtime: RealtimeClient | null = null;
+  if (socketFactory !== null) {
+    realtime = new RealtimeClient({
+      url: realtimeSocketUrl(config.baseUrl, workspace, config.apiKey),
+      createSocket: socketFactory,
+      reconnect: deps.reconnect,
+      onStateChange: (state) => {
+        model.setFeed(state === "open" ? "realtime" : "polling");
+        if (state !== "connecting") {
+          // resync on (re)open — events are not replayed — and refresh
+          // immediately when the socket drops rather than waiting a tick.
+          void poll();
+        }
+        render();
+      },
+      onEvent: (event) => {
+        const type = typeof event.type === "string" ? event.type : "";
+        if (type.startsWith("agent_session.")) {
+          const issue = parseRealtimeIssue(event.issue);
+          if (issue !== null) model.setIssueLabel(issue.id, issue.identifier);
+          const session = parseFleetSession(event.session);
+          if (session !== null) {
+            model.upsertSession(session, now());
+            if (session.id === model.selected?.id) {
+              if (isTerminalStatus(session.status)) {
+                // /state 400s once the compute is destroyed — the event row
+                // already has the terminal status and result.
+                model.setTail(session.id, {
+                  logs: null,
+                  status: session.status,
+                  result: session.result ?? null,
+                  error: null,
+                });
+              } else {
+                void refreshTail(session.id);
+              }
+            }
+          }
+        } else if (
+          type === "pr.updated" ||
+          type === "issue.updated" ||
+          type === "issue.created"
+        ) {
+          const issue = parseRealtimeIssue(event.issue);
+          if (issue !== null) {
+            model.setIssueLabel(issue.id, issue.identifier);
+            model.patchSessionsForIssue(issue.id, {
+              prUrl: issue.prUrl,
+              prState: issue.prState,
+              branch: issue.branch,
+            });
+          }
+        }
+        if (!stopped) render();
+      },
+    });
+  }
+  if (realtime === null) model.setFeed("polling");
+
+  const refreshSelectedTail = (): void => {
+    const selected = model.selected;
+    if (selected === null) return;
+    if (realtime?.isOpen === true) {
+      void refreshTail(selected.id);
+    } else {
+      void poll();
+    }
   };
 
   async function runAction(action: () => Promise<void>): Promise<void> {
@@ -1389,11 +1599,13 @@ export async function fleetCommand(
       return;
     }
     if (key.name === "j" || key.name === "down") {
-      if (model.moveSelection(1)) void poll();
+      if (model.moveSelection(1)) refreshSelectedTail();
     } else if (key.name === "k" || key.name === "up") {
-      if (model.moveSelection(-1)) void poll();
+      if (model.moveSelection(-1)) refreshSelectedTail();
     } else if (key.name === "g") {
-      if (key.shift ? model.selectLast() : model.selectFirst()) void poll();
+      if (key.shift ? model.selectLast() : model.selectFirst()) {
+        refreshSelectedTail();
+      }
     } else if (key.name === "space") {
       model.toggleMark();
     } else if (key.name === "escape") {
@@ -1417,13 +1629,20 @@ export async function fleetCommand(
   });
 
   view.start();
+  realtime?.start();
   const timer = setInterval(() => {
-    void poll();
+    if (stopped) return;
+    // Socket down → poll every tick (the pre-realtime path). Socket up → a
+    // slow resync only, since events drive the view in between.
+    if (realtime?.isOpen !== true || now() - lastFullSync >= resyncMs) {
+      void poll();
+    }
   }, intervalMs);
   void poll();
   await quit;
   stopped = true;
   clearInterval(timer);
+  realtime?.close();
   view.destroy();
   return 0;
 }

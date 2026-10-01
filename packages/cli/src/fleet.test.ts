@@ -18,6 +18,7 @@ import {
   type FleetView,
   type FleetViewModel,
 } from "./fleet.js";
+import type { RealtimeSocket } from "./realtime.js";
 
 function session(overrides: Partial<FleetSession> = {}): FleetSession {
   return {
@@ -508,7 +509,12 @@ describe("pile fleet", () => {
 
     const done = runCli(
       ["fleet", "--workspace", "ws-1", "--interval", "60000"],
-      { fetch: mockFetch, createView: () => view, now: () => NOW }
+      {
+        fetch: mockFetch,
+        createView: () => view,
+        now: () => NOW,
+        createSocket: null,
+      }
     );
 
     const vm = await waitForRender(
@@ -532,7 +538,12 @@ describe("pile fleet", () => {
 
     const done = runCli(
       ["fleet", "--workspace", "ws-1", "--interval", "60000"],
-      { fetch: mockFetch, createView: () => view, now: () => NOW }
+      {
+        fetch: mockFetch,
+        createView: () => view,
+        now: () => NOW,
+        createSocket: null,
+      }
     );
 
     await waitForRender(rendered, (m) => m.logText.includes("lane-one"));
@@ -567,7 +578,12 @@ describe("pile fleet", () => {
 
     const done = runCli(
       ["fleet", "--workspace", "ws-1", "--interval", "60000"],
-      { fetch: mockFetch, createView: () => view, now: () => NOW }
+      {
+        fetch: mockFetch,
+        createView: () => view,
+        now: () => NOW,
+        createSocket: null,
+      }
     );
 
     const vm = await waitForRender(rendered, (m) =>
@@ -580,13 +596,45 @@ describe("pile fleet", () => {
     expect(view.destroy).toHaveBeenCalled();
   });
 
+  it("keeps polling when --poll is passed, never opening a socket", async () => {
+    const mockFetch = createFleetFetch();
+    const { view, rendered, press } = createFakeView();
+    const createSocket = vi.fn(() => {
+      throw new Error("socket should not be created in --poll mode");
+    });
+
+    const done = runCli(
+      ["fleet", "--workspace", "ws-1", "--interval", "60000", "--poll"],
+      {
+        fetch: mockFetch,
+        createView: () => view,
+        now: () => NOW,
+        createSocket,
+      }
+    );
+
+    const vm = await waitForRender(rendered, (m) =>
+      m.logText.includes("lane-one")
+    );
+    expect(createSocket).not.toHaveBeenCalled();
+    expect(vm.statusLine).toContain("polling");
+
+    press("q");
+    expect(await done).toBe(0);
+  });
+
   it("requests the sessions, state, health, and issue endpoints", async () => {
     const mockFetch = createFleetFetch();
     const { view, rendered, press } = createFakeView();
 
     const done = runCli(
       ["fleet", "--workspace", "ws-1", "--interval", "60000"],
-      { fetch: mockFetch, createView: () => view, now: () => NOW }
+      {
+        fetch: mockFetch,
+        createView: () => view,
+        now: () => NOW,
+        createSocket: null,
+      }
     );
 
     await waitForRender(rendered, (m) => m.logText.includes("lane-one"));
@@ -897,6 +945,403 @@ describe("pile fleet", () => {
         new URL(typeof url === "string" ? url : (url as URL).href).pathname
     );
     expect(calls.filter((p) => p.endsWith("/dispatch-batch"))).toEqual([]);
+
+    press("q");
+    expect(await done).toBe(0);
+  });
+});
+
+class FakeSocket implements RealtimeSocket {
+  readyState = 0;
+  readonly sent: string[] = [];
+  private readonly listeners = new Map<
+    string,
+    ((event: { readonly data: unknown }) => void)[]
+  >();
+
+  send(data: string): void {
+    this.sent.push(data);
+  }
+
+  addEventListener(
+    type: string,
+    listener: (event: { readonly data: unknown }) => void
+  ): void {
+    const list = this.listeners.get(type) ?? [];
+    list.push(listener);
+    this.listeners.set(type, list);
+  }
+
+  private dispatch(type: string, data?: unknown): void {
+    for (const listener of this.listeners.get(type) ?? []) {
+      listener({ data });
+    }
+  }
+
+  open(): void {
+    this.readyState = 1;
+    this.dispatch("open");
+  }
+
+  emit(value: unknown): void {
+    this.dispatch("message", JSON.stringify(value));
+  }
+
+  close(): void {
+    if (this.readyState === 3) return;
+    this.readyState = 3;
+    this.dispatch("close");
+  }
+}
+
+function sessionEvent(
+  row: Record<string, unknown>,
+  issue: Record<string, unknown>,
+  type = "agent_session.updated"
+): Record<string, unknown> {
+  return { type, organizationId: "ws-1", session: row, issue };
+}
+
+function countCalls(
+  mockFetch: ReturnType<typeof vi.fn>,
+  pathname: string
+): number {
+  return mockFetch.mock.calls.filter(
+    ([url]) =>
+      new URL(typeof url === "string" ? url : (url as URL).href).pathname ===
+      pathname
+  ).length;
+}
+
+describe("pile fleet realtime mode", () => {
+  let home: string;
+  let originalHome: string | undefined;
+  let originalApiKey: string | undefined;
+
+  beforeAll(() => {
+    home = mkdtempSync(join(tmpdir(), "pile-fleet-rt-"));
+    originalHome = process.env.HOME;
+    originalApiKey = process.env.PILE_API_KEY;
+    process.env.HOME = home;
+    process.env.PILE_API_KEY = "test-api-key";
+  });
+
+  afterAll(() => {
+    process.env.HOME = originalHome;
+    process.env.PILE_API_KEY = originalApiKey;
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  function createFleetFetch() {
+    const sessions: Record<string, unknown>[] = [
+      session({
+        id: "sess-live",
+        issueId: "issue-live",
+        status: "running",
+        createdAt: "2026-09-30T11:00:00.000Z",
+      }),
+      session({
+        id: "sess-done",
+        issueId: "issue-done",
+        status: "failed",
+        endedAt: "2026-09-30T11:30:00.000Z",
+      }),
+    ];
+    return vi.fn().mockImplementation((url: URL | string) => {
+      const pathname = new URL(typeof url === "string" ? url : url.href)
+        .pathname;
+      if (pathname === "/workspaces/ws-1/agent/sessions") {
+        return jsonResponse({ sessions });
+      }
+      if (pathname === "/workspaces/ws-1/agent/fleet-health") {
+        return jsonResponse({
+          live: 1,
+          missingEndedAt: 0,
+          providers: [],
+        });
+      }
+      if (pathname === "/workspaces/ws-1/agent/sessions/sess-live/state") {
+        return jsonResponse({
+          session: sessions[0],
+          provider: { state: "running", logs: "lane-one\nstill going" },
+        });
+      }
+      return jsonResponse({ id: "x", identifier: "ISS-1" });
+    });
+  }
+
+  it("connects with ?token= and updates rows from events without refetching", async () => {
+    const mockFetch = createFleetFetch();
+    const { view, rendered, press } = createFakeView();
+    const sockets: FakeSocket[] = [];
+    const urls: string[] = [];
+
+    const done = runCli(
+      ["fleet", "--workspace", "ws-1", "--interval", "60000"],
+      {
+        fetch: mockFetch,
+        createView: () => view,
+        now: () => NOW,
+        createSocket: (url) => {
+          urls.push(url);
+          const socket = new FakeSocket();
+          sockets.push(socket);
+          return socket;
+        },
+      }
+    );
+
+    await waitForRender(rendered, (m) => m.logText.includes("lane-one"));
+    const socket = sockets[0];
+    expect(socket).toBeDefined();
+    expect(urls[0]).toBe(
+      "ws://127.0.0.1:8787/workspaces/ws-1/realtime?token=test-api-key"
+    );
+    expect(countCalls(mockFetch, "/workspaces/ws-1/agent/sessions")).toBe(1);
+
+    socket!.open();
+    const vm = await waitForRender(rendered, (m) =>
+      m.statusLine.includes("realtime")
+    );
+    expect(vm.statusLine).toContain("1 live");
+
+    // open triggers a resync; wait for it to settle before counting calls.
+    await vi.waitFor(() =>
+      expect(countCalls(mockFetch, "/workspaces/ws-1/agent/sessions")).toBe(2)
+    );
+
+    socket!.emit(
+      sessionEvent(
+        {
+          id: "sess-new",
+          issueId: "issue-new",
+          agentId: "codex",
+          provider: "codex",
+          status: "running",
+          createdAt: "2026-09-30T11:40:00.000Z",
+          updatedAt: "2026-09-30T11:41:00.000Z",
+        },
+        { id: "issue-new", identifier: "ISS-12" }
+      )
+    );
+
+    const next = await waitForRender(
+      rendered,
+      (m) => m.rows.length === 3 && m.rows[0]?.id === "sess-live"
+    );
+    expect(next.rows.map((r) => r.id)).toContain("sess-new");
+    expect(next.rows.find((r) => r.id === "sess-new")?.issue).toBe("ISS-12");
+    expect(next.statusLine).toContain("2 live");
+    // The event upsert alone updated the table — no third list call.
+    expect(countCalls(mockFetch, "/workspaces/ws-1/agent/sessions")).toBe(2);
+
+    press("q");
+    expect(await done).toBe(0);
+    expect(view.destroy).toHaveBeenCalled();
+  });
+
+  it("refreshes the log tail when an event lands on the selected lane", async () => {
+    const mockFetch = createFleetFetch();
+    const { view, rendered, press } = createFakeView();
+    const sockets: FakeSocket[] = [];
+
+    const done = runCli(
+      ["fleet", "--workspace", "ws-1", "--interval", "60000"],
+      {
+        fetch: mockFetch,
+        createView: () => view,
+        now: () => NOW,
+        createSocket: () => {
+          const socket = new FakeSocket();
+          sockets.push(socket);
+          return socket;
+        },
+      }
+    );
+
+    await waitForRender(rendered, (m) => m.logText.includes("lane-one"));
+    const socket = sockets[0]!;
+    socket.open();
+    // The reconnect resync re-fetches the selected lane's tail too — wait for
+    // that second /state call to land before snapshotting.
+    await vi.waitFor(() =>
+      expect(
+        countCalls(mockFetch, "/workspaces/ws-1/agent/sessions/sess-live/state")
+      ).toBe(2)
+    );
+    const stateCallsBefore = 2;
+
+    socket.emit(
+      sessionEvent(
+        {
+          id: "sess-live",
+          issueId: "issue-live",
+          agentId: "devin-cli",
+          provider: "devin-cli",
+          status: "running",
+          createdAt: "2026-09-30T11:00:00.000Z",
+          updatedAt: "2026-09-30T11:45:00.000Z",
+          lastProgressAt: "2026-09-30T11:45:00.000Z",
+        },
+        { id: "issue-live", identifier: "ISS-10" }
+      )
+    );
+
+    await vi.waitFor(() =>
+      expect(
+        countCalls(mockFetch, "/workspaces/ws-1/agent/sessions/sess-live/state")
+      ).toBe(stateCallsBefore + 1)
+    );
+
+    press("q");
+    expect(await done).toBe(0);
+  });
+
+  it("updates the PR column on pr.updated events", async () => {
+    const mockFetch = createFleetFetch();
+    const { view, rendered, press } = createFakeView();
+    const sockets: FakeSocket[] = [];
+
+    const done = runCli(
+      ["fleet", "--workspace", "ws-1", "--interval", "60000"],
+      {
+        fetch: mockFetch,
+        createView: () => view,
+        now: () => NOW,
+        createSocket: () => {
+          const socket = new FakeSocket();
+          sockets.push(socket);
+          return socket;
+        },
+      }
+    );
+
+    await waitForRender(rendered, (m) => m.logText.includes("lane-one"));
+    const socket = sockets[0]!;
+    socket.open();
+    await vi.waitFor(() =>
+      expect(countCalls(mockFetch, "/workspaces/ws-1/agent/sessions")).toBe(2)
+    );
+
+    socket.emit({
+      type: "pr.updated",
+      organizationId: "ws-1",
+      issue: {
+        id: "issue-live",
+        identifier: "ISS-10",
+        prUrl: "https://github.com/VortexNYC/pile/pull/234",
+        prState: "open",
+        branch: "pile-264-realtime",
+      },
+    });
+
+    const vm = await waitForRender(
+      rendered,
+      (m) => m.rows[0]?.prLabel === "VortexNYC/pile#234"
+    );
+    expect(vm.rows[0]?.issue).toBe("ISS-10");
+
+    press("q");
+    expect(await done).toBe(0);
+  });
+
+  it("shows terminal status from the event without hitting /state", async () => {
+    const mockFetch = createFleetFetch();
+    const { view, rendered, press } = createFakeView();
+    const sockets: FakeSocket[] = [];
+
+    const done = runCli(
+      ["fleet", "--workspace", "ws-1", "--interval", "60000"],
+      {
+        fetch: mockFetch,
+        createView: () => view,
+        now: () => NOW,
+        createSocket: () => {
+          const socket = new FakeSocket();
+          sockets.push(socket);
+          return socket;
+        },
+      }
+    );
+
+    await waitForRender(rendered, (m) => m.logText.includes("lane-one"));
+    const socket = sockets[0]!;
+    socket.open();
+    // Initial poll + reconnect resync each fetch the tail once.
+    await vi.waitFor(() =>
+      expect(
+        countCalls(mockFetch, "/workspaces/ws-1/agent/sessions/sess-live/state")
+      ).toBe(2)
+    );
+
+    socket.emit(
+      sessionEvent(
+        {
+          id: "sess-live",
+          issueId: "issue-live",
+          agentId: "devin-cli",
+          provider: "devin-cli",
+          status: "completed",
+          result: "shipped it",
+          createdAt: "2026-09-30T11:00:00.000Z",
+          updatedAt: "2026-09-30T11:50:00.000Z",
+          endedAt: "2026-09-30T11:50:00.000Z",
+        },
+        { id: "issue-live", identifier: "ISS-10" },
+        "agent_session.completed"
+      )
+    );
+
+    const vm = await waitForRender(rendered, (m) =>
+      m.logText.includes("[completed] shipped it")
+    );
+    expect(vm.rows[0]?.status).toBe("completed");
+    expect(vm.statusLine).toContain("0 live");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(
+      countCalls(mockFetch, "/workspaces/ws-1/agent/sessions/sess-live/state")
+    ).toBe(2);
+
+    press("q");
+    expect(await done).toBe(0);
+  });
+
+  it("falls back to polling when the socket drops", async () => {
+    const mockFetch = createFleetFetch();
+    const { view, rendered, press } = createFakeView();
+    const sockets: FakeSocket[] = [];
+
+    const done = runCli(["fleet", "--workspace", "ws-1", "--interval", "50"], {
+      fetch: mockFetch,
+      createView: () => view,
+      now: () => NOW,
+      // Long backoff: the socket stays down for the whole test.
+      reconnect: { initialMs: 60_000, maxMs: 60_000 },
+      createSocket: () => {
+        const socket = new FakeSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+
+    await waitForRender(rendered, (m) => m.logText.includes("lane-one"));
+    const socket = sockets[0]!;
+    socket.open();
+    await waitForRender(rendered, (m) => m.statusLine.includes("realtime"));
+    const callsBefore = countCalls(
+      mockFetch,
+      "/workspaces/ws-1/agent/sessions"
+    );
+
+    socket.close();
+
+    const vm = await waitForRender(
+      rendered,
+      (m) =>
+        m.statusLine.includes("polling") &&
+        countCalls(mockFetch, "/workspaces/ws-1/agent/sessions") > callsBefore
+    );
+    expect(vm.statusLine).not.toContain("realtime ·");
 
     press("q");
     expect(await done).toBe(0);

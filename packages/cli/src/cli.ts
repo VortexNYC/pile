@@ -87,7 +87,7 @@ type ParsedArgs = {
   readonly multi: Readonly<Record<string, readonly string[]>>;
 };
 
-const BOOLEAN_FLAGS = new Set(["follow", "help"]);
+const BOOLEAN_FLAGS = new Set(["follow", "help", "poll"]);
 
 function parseArgs(args: readonly string[]): ParsedArgs {
   const positionals: string[] = [];
@@ -1080,7 +1080,7 @@ function printUsage(): void {
     "agent context pull --workspace <org> [--dir .]",
     "agent context push --workspace <org> [--dir .]",
     "agent sessions watch <sessionId> --workspace <org>",
-    "fleet --workspace <org>",
+    "fleet --workspace <org> [--poll]",
     "support --workspace <org>",
     "inbox --workspace <org>",
     "agent dispatch-batch --workspace <org> --file batch.json",
