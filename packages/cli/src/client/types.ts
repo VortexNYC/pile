@@ -835,7 +835,7 @@ export interface paths {
                         externalRef?: string | null;
                         teamId?: string;
                         teamKey?: string;
-                        description?: string;
+                        description?: string | null;
                         /** @enum {string} */
                         status?: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
                         /** @enum {string} */
@@ -849,11 +849,11 @@ export interface paths {
                         templateId?: string;
                         snoozedUntil?: string | null;
                         assigneeId?: string | null;
-                        projectId?: string;
-                        cycleId?: string;
-                        labelIds?: string[];
-                        repo?: string;
-                        branch?: string;
+                        projectId?: string | null;
+                        cycleId?: string | null;
+                        labelIds?: string[] | null;
+                        repo?: string | null;
+                        branch?: string | null;
                     };
                 };
             };
@@ -1221,7 +1221,7 @@ export interface paths {
                         externalRef?: string | null;
                         teamId?: string;
                         teamKey?: string;
-                        description?: string;
+                        description?: string | null;
                         /** @enum {string} */
                         status?: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
                         /** @enum {string} */
@@ -1235,11 +1235,11 @@ export interface paths {
                         templateId?: string;
                         snoozedUntil?: string | null;
                         assigneeId?: string | null;
-                        projectId?: string;
-                        cycleId?: string;
-                        labelIds?: string[];
-                        repo?: string;
-                        branch?: string;
+                        projectId?: string | null;
+                        cycleId?: string | null;
+                        labelIds?: string[] | null;
+                        repo?: string | null;
+                        branch?: string | null;
                     };
                 };
             };
@@ -1326,7 +1326,7 @@ export interface paths {
                             externalRef?: string | null;
                             teamId?: string;
                             teamKey?: string;
-                            description?: string;
+                            description?: string | null;
                             /** @enum {string} */
                             status?: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
                             /** @enum {string} */
@@ -1340,11 +1340,11 @@ export interface paths {
                             templateId?: string;
                             snoozedUntil?: string | null;
                             assigneeId?: string | null;
-                            projectId?: string;
-                            cycleId?: string;
-                            labelIds?: string[];
-                            repo?: string;
-                            branch?: string;
+                            projectId?: string | null;
+                            cycleId?: string | null;
+                            labelIds?: string[] | null;
+                            repo?: string | null;
+                            branch?: string | null;
                         };
                     };
                 };
@@ -1395,8 +1395,8 @@ export interface paths {
                         agentId?: string;
                         provider?: string;
                         model?: string;
-                        repo?: string;
-                        branch?: string;
+                        repo?: string | null;
+                        branch?: string | null;
                         instructions?: string;
                         preflight?: boolean;
                     };
@@ -1726,7 +1726,7 @@ export interface paths {
                         items: {
                             issueId: string;
                             agentId?: string;
-                            branch?: string;
+                            branch?: string | null;
                             instructions?: string;
                             queuedAfter?: string;
                         }[];
@@ -1773,6 +1773,7 @@ export interface paths {
                 query?: {
                     issueId?: string;
                     limit?: string;
+                    summary?: string;
                 };
                 header?: never;
                 path: {
@@ -1782,7 +1783,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Agent sessions list */
+                /** @description Agent sessions list. Pass `?summary=1` for lane-row scalars only (no result/activity blobs) — the shape `pile fleet` polls. */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -1827,6 +1828,24 @@ export interface paths {
                                     durationMs: number | null;
                                     createdAt: string;
                                 }[];
+                            }[];
+                        } | {
+                            sessions: {
+                                id: string;
+                                issueId: string;
+                                agentId: string;
+                                provider: string;
+                                /** @enum {string} */
+                                status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                                prUrl: string | null;
+                                prState: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                lastProgressAt?: string | null;
+                                /** @enum {string|null} */
+                                derivedStatus?: "stalled" | "needs_input" | null;
+                                startedAt: string | null;
+                                endedAt: string | null;
                             }[];
                         };
                     };
@@ -2045,7 +2064,9 @@ export interface paths {
         /** Get agent session */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    summary?: string;
+                };
                 header?: never;
                 path: {
                     organizationId: string;
@@ -2055,7 +2076,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Agent session with activities */
+                /** @description Agent session with activities. Pass `?summary=1` for lane-row scalars only. */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -2099,6 +2120,22 @@ export interface paths {
                                 durationMs: number | null;
                                 createdAt: string;
                             }[];
+                        } | {
+                            id: string;
+                            issueId: string;
+                            agentId: string;
+                            provider: string;
+                            /** @enum {string} */
+                            status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                            prUrl: string | null;
+                            prState: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                            lastProgressAt?: string | null;
+                            /** @enum {string|null} */
+                            derivedStatus?: "stalled" | "needs_input" | null;
+                            startedAt: string | null;
+                            endedAt: string | null;
                         };
                     };
                 };

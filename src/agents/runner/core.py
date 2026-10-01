@@ -184,7 +184,10 @@ def run_setup_hook(agent_env):
 def find_pr():
     owner, name = REPO.split('/')
     try:
-        pulls = github_api('GET', f'/pulls?state=all&head={owner}:{BRANCH}')
+        # state=open only: a merged/closed PR on this branch is history, not
+        # coverage — a later push on the same lane branch must open a fresh
+        # PR (PILE-257).
+        pulls = github_api('GET', f'/pulls?state=open&head={owner}:{BRANCH}')
         if pulls:
             return pulls[0]['html_url']
     except Exception as e:

@@ -10,7 +10,11 @@ import type { AgentSession, AgentSessionStatus } from "../types/workspace.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
 import { loadProviderConfig } from "./credentials.js";
 import { resolveAgentEnv } from "./daytona.js";
-import { dispatchAgent, getAgentProvider } from "./index.js";
+import {
+  dispatchAgent,
+  getAgentProvider,
+  providerKeepsTerminalSandbox,
+} from "./index.js";
 import { getLaneDbProvider, type LaneDbRef } from "./lane-db.js";
 import { nudgeLane } from "./nudge.js";
 import type {
@@ -42,6 +46,22 @@ const TERMINAL_STATUSES = new Set<AgentSessionStatus>([
   "failed",
   "canceled",
 ]);
+
+/** The kept-sandbox set one session occupies: terminal, inside the resume
+ *  window, and not yet reaped. The cap and fleet-health's keptSandboxes must
+ *  count exactly this set (plus the provider-keeps-sandbox check) — PILE-253. */
+export function sessionHoldsKeptSandbox(
+  session: Pick<
+    AgentSession,
+    "status" | "endedAt" | "updatedAt" | "lastStateHash"
+  >,
+  now: number
+): boolean {
+  if (!TERMINAL_STATUSES.has(session.status)) return false;
+  if (session.lastStateHash === "reaped") return false;
+  const anchor = Date.parse(session.endedAt ?? session.updatedAt);
+  return Number.isFinite(anchor) && now - anchor < SANDBOX_RESUME_WINDOW_MS;
+}
 
 export function parseAgentTimeouts(configJson: string | null | undefined): {
   timeoutMinutes: number;
@@ -375,20 +395,26 @@ async function reapTerminalArtifacts(
   now: number
 ): Promise<void> {
   const recent = await stub.listAgentSessions({ limit: 200 });
-  // PILE-239 — first pass: terminal sessions inside the resume window are
-  // the kept-sandbox population per provider. Beyond the cap the oldest are
-  // reaped even though their window hasn't closed.
+  // PILE-239/253 — first pass: terminal sessions inside the resume window on
+  // providers that park their sandbox are the kept-sandbox population per
+  // provider — the same set fleet-health counts. Beyond the cap the oldest
+  // are reaped even though their window hasn't closed.
   const inWindowByProvider = new Map<string, { id: string; at: number }[]>();
+  const keepsCache = new Map<string, boolean>();
+  const keepsSandbox = (agentId: string): boolean => {
+    const cached = keepsCache.get(agentId);
+    if (cached !== undefined) return cached;
+    const keeps = providerKeepsTerminalSandbox(agentId, env);
+    keepsCache.set(agentId, keeps);
+    return keeps;
+  };
   for (const session of recent) {
-    if (!TERMINAL_STATUSES.has(session.status)) continue;
-    if (session.lastStateHash === "reaped") continue;
+    if (!sessionHoldsKeptSandbox(session, now)) continue;
+    if (!keepsSandbox(session.agentId)) continue;
     const anchor = Date.parse(session.endedAt ?? session.updatedAt);
-    if (!Number.isFinite(anchor)) continue;
-    if (now - anchor < SANDBOX_RESUME_WINDOW_MS) {
-      const list = inWindowByProvider.get(session.agentId) ?? [];
-      list.push({ id: session.id, at: anchor });
-      inWindowByProvider.set(session.agentId, list);
-    }
+    const list = inWindowByProvider.get(session.agentId) ?? [];
+    list.push({ id: session.id, at: anchor });
+    inWindowByProvider.set(session.agentId, list);
   }
   const forceReap = new Set<string>();
   for (const list of inWindowByProvider.values()) {
@@ -401,21 +427,33 @@ async function reapTerminalArtifacts(
 
   for (const session of recent) {
     if (!TERMINAL_STATUSES.has(session.status)) continue;
-    if (session.lastStateHash === "reaped") continue;
     // PILE-238 — endedAt is the reaper anchor; a write path that skips it
     // (like the applyAgentSessionResult bypass did) silently leaks kept
     // sandboxes. Self-heal stale rows and log so regressions surface.
+    // PILE-254 — the heal must run before the "reaped" skip: rows marked
+    // reaped while endedAt was still null (reaped under the pre-anchor
+    // code) are invisible to a heal ordered after that check but still
+    // counted by fleet-health's missingEndedAt, pinning it forever.
     if (!session.endedAt) {
       console.error("terminal session missing endedAt", {
         session: session.id,
         organizationId,
         status: session.status,
       });
-      await stub.updateAgentSession(session.id, {
-        endedAt: session.updatedAt,
-      });
+      await stub
+        .updateAgentSession(session.id, {
+          endedAt: session.updatedAt,
+        })
+        .catch((err: unknown) => {
+          console.error("endedAt self-heal failed", {
+            session: session.id,
+            organizationId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
       continue;
     }
+    if (session.lastStateHash === "reaped") continue;
     await teardownLaneDbForSession(env, stub, session);
     // Anchor to the terminal transition — updatedAt churns on every write
     // (prState, laneDb teardown, this reaper's marker) and would otherwise
@@ -920,6 +958,29 @@ async function githubApiGet(
   return res.json();
 }
 
+async function githubApiPut(
+  ghFetch: typeof fetch,
+  token: string,
+  path: string,
+  body: Record<string, unknown>
+): Promise<unknown> {
+  const res = await ghFetch(`https://api.github.com${path}`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      "User-Agent": "pile-agent-sweep",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new Error(`github PUT ${path} -> ${res.status}`);
+  }
+  return res.json();
+}
+
 export function prStateFromPull(pr: Record<string, unknown>): string {
   if (typeof pr.merged_at === "string") return "merged";
   if (pr.draft === true) return "draft";
@@ -945,6 +1006,31 @@ export function summarizeCheckRuns(
   )
     return "pending";
   return "passing";
+}
+
+/** PILE-250 — merge treadmill: a lane PR that is BEHIND the base branch but
+ *  otherwise mergeable (no conflicts, checks passing or pending) gets a
+ *  GitHub update-branch call so auto-merge can fire without human janitor
+ *  work. Conflicting PRs are excluded — they stay on the pr.conflict path.
+ *  Only branches the lane manages qualify: `issue-<id>` lanes or the issue's
+ *  linked branch. `mergeable === null` (GitHub still computing) is allowed —
+ *  `expected_head_sha` makes the PUT atomic against our read. */
+export function shouldUpdatePrBranch(input: {
+  state: string;
+  mergeable: unknown;
+  mergeableState: unknown;
+  checkState: string | null;
+  headRef: string | null;
+  managedRefs: readonly (string | null | undefined)[];
+}): boolean {
+  return (
+    input.state === "open" &&
+    input.mergeableState === "behind" &&
+    input.mergeable !== false &&
+    input.checkState !== "failing" &&
+    input.headRef !== null &&
+    input.managedRefs.includes(input.headRef)
+  );
 }
 
 interface PrSyncDeps {
@@ -1115,6 +1201,62 @@ export async function syncOpenPrSessions(
           reason: "merge conflict",
           dedupeKey: `conflict-${headSha ?? "unknown"}`,
         });
+      }
+      // PILE-250 — merge treadmill: a lane PR that is BEHIND the base but
+      // otherwise mergeable gets a GitHub update-branch so auto-merge can
+      // fire without a human running `gh pr update-branch`. Conflicting PRs
+      // stay on the pr.conflict path above. Deduped per headSha via the
+      // pr.branch_update event — a slow GitHub merge otherwise re-fires on
+      // every sweep pass.
+      if (
+        issue &&
+        headSha &&
+        shouldUpdatePrBranch({
+          state,
+          mergeable: pr.mergeable,
+          mergeableState: pr.mergeable_state,
+          checkState,
+          headRef: typeof head?.ref === "string" ? head.ref : null,
+          managedRefs: [`issue-${issue.id}`, issue.branch],
+        })
+      ) {
+        const seen = await stub
+          .listAgentSessionEvents(session.id, { limit: 100, order: "desc" })
+          .catch(() => []);
+        const alreadyRequested = seen.some(
+          (e) =>
+            e.type === "pr.branch_update" &&
+            typeof e.payload === "string" &&
+            e.payload.includes(headSha)
+        );
+        if (!alreadyRequested) {
+          try {
+            await withTimeout(
+              githubApiPut(
+                ghFetch,
+                token,
+                `/repos/${owner}/${repo}/pulls/${num}/update-branch`,
+                { expected_head_sha: headSha }
+              ),
+              probeTimeoutMs,
+              "github-update-branch"
+            );
+            await stub
+              .addAgentSessionEvent({
+                sessionId: session.id,
+                type: "pr.branch_update",
+                message: `Updated ${prUrl} — branch was behind the base`,
+                payload: { prUrl, headSha },
+              })
+              .catch(() => {});
+          } catch (err) {
+            console.error("pr update-branch failed", {
+              session: session.id,
+              prUrl,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        }
       }
       // PILE-224 — the review→lane round trip: a submitted GitHub review is
       // agent-facing work, not just a status. Each new review emits one

@@ -172,7 +172,7 @@ export function registerReactionRoutes(app: OpenAPIHono<AppContext>) {
     const stub = await getStub(c.env, organizationId);
     const issue = await getIssue(stub, id);
     await assertIssueAccess(db, issue, identity);
-    const rows = await stub.listReactions("issue", id);
+    const rows = await stub.listReactions("issue", issue.id);
     return c.json({ reactions: rows });
   });
 
@@ -186,7 +186,7 @@ export function registerReactionRoutes(app: OpenAPIHono<AppContext>) {
     await assertIssueAccess(db, issue, identity);
     const reaction = await stub.createReaction({
       targetType: "issue",
-      targetId: id,
+      targetId: issue.id,
       actorId: identity.id,
       emoji,
     });

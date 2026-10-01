@@ -2,6 +2,8 @@ import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { MockAgentProvider } from "../agents/harness.js";
+import { registerAgentProvider } from "../agents/index.js";
 import { createD1 } from "../global/db.js";
 import { user as userTable } from "../global/schema.js";
 import { createWorkspace } from "../global/workspaces.js";
@@ -77,6 +79,7 @@ describe("issues API", () => {
     const seeded = await seedWorkspace();
     organizationId = seeded.organizationId;
     token = seeded.token;
+    registerAgentProvider("mock", () => new MockAgentProvider("mock"));
   });
 
   it("rejects listing issues without auth", async () => {
@@ -262,6 +265,381 @@ describe("issues API", () => {
       token
     );
     expect(res.status).toBe(404);
+  });
+
+  it("accepts KEY-N identifiers on every route that takes an issue id", async () => {
+    const issueSchema = z.object({
+      id: z.string(),
+      identifier: z.string().nullable(),
+    });
+    const create = async (body: Record<string, unknown>) => {
+      const res = await fetch(
+        `/workspaces/${organizationId}/issues`,
+        { method: "POST", body: JSON.stringify(body) },
+        token
+      );
+      expect(res.status).toBe(201);
+      return issueSchema.parse(await res.json());
+    };
+    const issue = await create({ title: "Identifier routing" });
+    const identifier = issue.identifier;
+    expect(identifier).toMatch(/^\S+-\d+$/);
+    const ref = identifier!;
+
+    const got = await fetch(
+      `/workspaces/${organizationId}/issues/${ref}`,
+      {},
+      token
+    );
+    expect(got.status).toBe(200);
+    expect(z.object({ id: z.string() }).parse(await got.json()).id).toBe(
+      issue.id
+    );
+
+    const patched = await fetch(
+      `/workspaces/${organizationId}/issues/${ref}`,
+      { method: "PATCH", body: JSON.stringify({ title: "Renamed by ref" }) },
+      token
+    );
+    expect(patched.status).toBe(200);
+    expect(
+      z.object({ title: z.string() }).parse(await patched.json()).title
+    ).toBe("Renamed by ref");
+
+    // parentId body field resolves identifiers too
+    const child = await create({ title: "Child by ref", parentId: ref });
+    const childRes = await fetch(
+      `/workspaces/${organizationId}/issues/${child.id}`,
+      {},
+      token
+    );
+    expect(
+      z.object({ parentId: z.string().nullable() }).parse(await childRes.json())
+        .parentId
+    ).toBe(issue.id);
+
+    const children = await fetch(
+      `/workspaces/${organizationId}/issues/${ref}/children`,
+      {},
+      token
+    );
+    expect(children.status).toBe(200);
+    const childrenBody = z
+      .object({ issues: z.array(z.object({ id: z.string() })) })
+      .parse(await children.json());
+    expect(childrenBody.issues.map((c) => c.id)).toEqual([child.id]);
+
+    // ?parentId=<identifier> filters the issue list
+    const byParent = await fetch(
+      `/workspaces/${organizationId}/issues?parentId=${encodeURIComponent(ref)}`,
+      {},
+      token
+    );
+    expect(byParent.status).toBe(200);
+    const byParentBody = z
+      .object({ issues: z.array(z.object({ id: z.string() })) })
+      .parse(await byParent.json());
+    expect(byParentBody.issues.map((c) => c.id)).toEqual([child.id]);
+
+    // comments addressed by identifier attach to the canonical UUID
+    const commentRes = await fetch(
+      `/workspaces/${organizationId}/issues/${ref}/comments`,
+      { method: "POST", body: JSON.stringify({ body: "via identifier" }) },
+      token
+    );
+    expect(commentRes.status).toBe(201);
+    const comment = z
+      .object({ id: z.string(), issueId: z.string() })
+      .parse(await commentRes.json());
+    expect(comment.issueId).toBe(issue.id);
+
+    const commentsRes = await fetch(
+      `/workspaces/${organizationId}/issues/${ref}/comments`,
+      {},
+      token
+    );
+    expect(commentsRes.status).toBe(200);
+    const comments = z
+      .object({ comments: z.array(z.object({ id: z.string() })) })
+      .parse(await commentsRes.json());
+    expect(comments.comments.map((c) => c.id)).toContain(comment.id);
+
+    const getCommentRes = await fetch(
+      `/workspaces/${organizationId}/issues/${ref}/comments/${comment.id}`,
+      {},
+      token
+    );
+    expect(getCommentRes.status).toBe(200);
+
+    const branchName = await fetch(
+      `/workspaces/${organizationId}/issues/${ref}/branch-name`,
+      {},
+      token
+    );
+    expect(branchName.status).toBe(200);
+    expect(
+      z.object({ branchName: z.string() }).parse(await branchName.json())
+        .branchName
+    ).toContain(ref);
+
+    const [historyRes, activityRes, attachmentsRes, liveRes, approvalsRes] =
+      await Promise.all([
+        fetch(`/workspaces/${organizationId}/issues/${ref}/history`, {}, token),
+        fetch(
+          `/workspaces/${organizationId}/issues/${ref}/activity`,
+          {},
+          token
+        ),
+        fetch(
+          `/workspaces/${organizationId}/issues/${ref}/attachments`,
+          {},
+          token
+        ),
+        fetch(`/workspaces/${organizationId}/issues/${ref}/live`, {}, token),
+        fetch(
+          `/workspaces/${organizationId}/issues/${ref}/approvals`,
+          {},
+          token
+        ),
+      ]);
+    expect(historyRes.status).toBe(200);
+    expect(activityRes.status).toBe(200);
+    expect(attachmentsRes.status).toBe(200);
+    expect(liveRes.status).toBe(200);
+    expect(approvalsRes.status).toBe(200);
+    const history = z
+      .object({ history: z.array(z.object({ issueId: z.string() })) })
+      .parse(await historyRes.json());
+    expect(history.history.every((row) => row.issueId === issue.id)).toBe(true);
+
+    const other = await create({ title: "Relation target" });
+    const relationRes = await fetch(
+      `/workspaces/${organizationId}/issues/${ref}/relations`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          toIssueId: other.identifier,
+          type: "related",
+        }),
+      },
+      token
+    );
+    expect(relationRes.status).toBe(201);
+    const relation = z
+      .object({ fromIssueId: z.string(), toIssueId: z.string() })
+      .parse(await relationRes.json());
+    expect(relation.fromIssueId).toBe(issue.id);
+    expect(relation.toIssueId).toBe(other.id);
+
+    const linkRes = await fetch(
+      `/workspaces/${organizationId}/issues/${ref}/external-links`,
+      {
+        method: "POST",
+        body: JSON.stringify({ url: "https://example.com/spec" }),
+      },
+      token
+    );
+    expect(linkRes.status).toBe(201);
+    expect(
+      z.object({ entityId: z.string() }).parse(await linkRes.json()).entityId
+    ).toBe(issue.id);
+
+    const reactionRes = await fetch(
+      `/workspaces/${organizationId}/issues/${ref}/reactions`,
+      { method: "POST", body: JSON.stringify({ emoji: "👍" }) },
+      token
+    );
+    expect(reactionRes.status).toBe(201);
+    expect(
+      z.object({ targetId: z.string() }).parse(await reactionRes.json())
+        .targetId
+    ).toBe(issue.id);
+
+    const subscriberRes = await fetch(
+      `/workspaces/${organizationId}/issues/${ref}/subscribers`,
+      {
+        method: "POST",
+        body: JSON.stringify({ linearUserId: "user-issues" }),
+      },
+      token
+    );
+    expect(subscriberRes.status).toBe(201);
+    expect(
+      z.object({ issueId: z.string() }).parse(await subscriberRes.json())
+        .issueId
+    ).toBe(issue.id);
+
+    const batchRes = await fetch(
+      `/workspaces/${organizationId}/issues/batch`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          ids: [ref, other.identifier],
+          patch: { status: "todo" },
+        }),
+      },
+      token
+    );
+    expect(batchRes.status).toBe(200);
+    const batchBody = z
+      .object({
+        issues: z.array(z.object({ id: z.string(), status: z.string() })),
+      })
+      .parse(await batchRes.json());
+    expect(batchBody.issues.map((row) => row.id).toSorted()).toEqual(
+      [issue.id, other.id].toSorted()
+    );
+    expect(batchBody.issues.every((row) => row.status === "todo")).toBe(true);
+
+    const dispatchRes = await fetch(
+      `/workspaces/${organizationId}/issues/${ref}/dispatch`,
+      { method: "POST", body: JSON.stringify({ agentId: "mock" }) },
+      token
+    );
+    expect(dispatchRes.status).toBe(201);
+    const session = z
+      .object({ issueId: z.string() })
+      .parse(await dispatchRes.json());
+    expect(session.issueId).toBe(issue.id);
+
+    const sessionsRes = await fetch(
+      `/workspaces/${organizationId}/agent/sessions?issueId=${encodeURIComponent(ref)}`,
+      {},
+      token
+    );
+    expect(sessionsRes.status).toBe(200);
+    const sessions = z
+      .object({ sessions: z.array(z.object({ issueId: z.string() })) })
+      .parse(await sessionsRes.json());
+    expect(sessions.sessions.map((row) => row.issueId)).toEqual([issue.id]);
+
+    const deleted = await fetch(
+      `/workspaces/${organizationId}/issues/${ref}`,
+      { method: "DELETE" },
+      token
+    );
+    expect(deleted.status).toBe(204);
+    const afterDelete = await fetch(
+      `/workspaces/${organizationId}/issues/${ref}`,
+      {},
+      token
+    );
+    expect(afterDelete.status).toBe(404);
+  });
+
+  it("clears nullable fields when PATCHed with null", async () => {
+    const createRes = await fetch(
+      `/workspaces/${organizationId}/issues`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          title: "Clearable fields",
+          description: "has a description",
+          repo: "VortexNYC/pile",
+          branch: "issue-255",
+          estimate: 3,
+          assigneeId: "user-issues",
+          projectId: "project-1",
+          labelIds: ["label-a"],
+        }),
+      },
+      token
+    );
+    expect(createRes.status).toBe(201);
+    const issue = z
+      .object({
+        id: z.string(),
+        repo: z.string().nullable(),
+        branch: z.string().nullable(),
+      })
+      .parse(await createRes.json());
+    expect(issue.repo).toBe("VortexNYC/pile");
+    expect(issue.branch).toBe("issue-255");
+
+    const patchRes = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          description: null,
+          repo: null,
+          branch: null,
+          estimate: null,
+          assigneeId: null,
+          projectId: null,
+          cycleId: null,
+          labelIds: null,
+          parentId: null,
+          snoozedUntil: null,
+          resolution: null,
+          externalRef: null,
+        }),
+      },
+      token
+    );
+    expect(patchRes.status).toBe(200);
+    const patched = z
+      .object({
+        description: z.string().nullable(),
+        repo: z.string().nullable(),
+        branch: z.string().nullable(),
+        estimate: z.number().nullable(),
+        assigneeId: z.string().nullable(),
+        projectId: z.string().nullable(),
+        cycleId: z.string().nullable(),
+        labelIds: z.string().nullable(),
+        parentId: z.string().nullable(),
+        snoozedUntil: z.string().nullable(),
+      })
+      .parse(await patchRes.json());
+    expect(patched).toEqual({
+      description: null,
+      repo: null,
+      branch: null,
+      estimate: null,
+      assigneeId: null,
+      projectId: null,
+      cycleId: null,
+      labelIds: null,
+      parentId: null,
+      snoozedUntil: null,
+    });
+
+    // labelIds can also be cleared with an empty list
+    const relabeled = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ labelIds: ["label-b"] }),
+      },
+      token
+    );
+    expect(relabeled.status).toBe(200);
+    const clearedLabels = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}`,
+      { method: "PATCH", body: JSON.stringify({ labelIds: [] }) },
+      token
+    );
+    expect(clearedLabels.status).toBe(200);
+    expect(
+      z
+        .object({ labelIds: z.string().nullable() })
+        .parse(await clearedLabels.json()).labelIds
+    ).toBeNull();
+
+    // non-nullable fields still reject null
+    const badTitle = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}`,
+      { method: "PATCH", body: JSON.stringify({ title: null }) },
+      token
+    );
+    expect(badTitle.status).toBe(400);
+    const badStatus = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}`,
+      { method: "PATCH", body: JSON.stringify({ status: null }) },
+      token
+    );
+    expect(badStatus.status).toBe(400);
   });
 
   it("rejects an invalid resolution status combination", async () => {

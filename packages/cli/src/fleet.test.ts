@@ -512,14 +512,18 @@ describe("pile fleet", () => {
     );
 
     await waitForRender(rendered, (m) => m.logText.includes("lane-one"));
-    const paths = mockFetch.mock.calls.map(
-      ([url]) =>
-        new URL(typeof url === "string" ? url : (url as URL).href).pathname
+    const urls = mockFetch.mock.calls.map(
+      ([url]) => new URL(typeof url === "string" ? url : (url as URL).href)
     );
+    const paths = urls.map((u) => u.pathname);
     expect(paths).toContain("/workspaces/ws-1/agent/sessions");
     expect(paths).toContain("/workspaces/ws-1/agent/fleet-health");
     expect(paths).toContain("/workspaces/ws-1/agent/sessions/sess-live/state");
     expect(paths).toContain("/workspaces/ws-1/issues/issue-live");
+    const sessionsReq = urls.find(
+      (u) => u.pathname === "/workspaces/ws-1/agent/sessions"
+    );
+    expect(sessionsReq?.searchParams.get("summary")).toBe("1");
 
     press("q");
     expect(await done).toBe(0);
