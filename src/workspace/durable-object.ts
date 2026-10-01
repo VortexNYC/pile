@@ -1173,12 +1173,21 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   // ---- documents ----
   async createDocument(input: Omit<data.DocumentInput, "organizationId">) {
-    const doc = data.createDocument(this.db, {
-      ...input,
-      organizationId: this.organizationId,
+    // Insert and extracted links commit atomically so a link-sync failure
+    // cannot leave an orphaned document that a retry would duplicate.
+    const doc = this.ctx.storage.transactionSync(() => {
+      const created = data.createDocument(this.db, {
+        ...input,
+        organizationId: this.organizationId,
+      });
+      this.syncDocumentLinks(
+        created.id,
+        created.content,
+        created.contentFormat
+      );
+      return created;
     });
     this.audit("document.created", "document", doc.id, input.createdById);
-    await this.syncDocumentLinks(doc.id, doc.content, doc.contentFormat);
     if (this.searchIndex) {
       await indexDocumentSearchDocument(this.searchIndex, doc);
     }
@@ -1203,13 +1212,19 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     update: data.DocumentUpdate,
     actorId: string
   ) {
-    const doc = data.updateDocument(
-      this.db,
-      this.organizationId,
-      id,
-      update,
-      actorId
-    );
+    const doc = this.ctx.storage.transactionSync(() => {
+      const updated = data.updateDocument(
+        this.db,
+        this.organizationId,
+        id,
+        update,
+        actorId
+      );
+      if (updated && update.content !== undefined) {
+        this.syncDocumentLinks(id, updated.content, updated.contentFormat);
+      }
+      return updated;
+    });
     if (doc) {
       const changes: Record<string, { from: unknown; to: unknown }> = {};
       for (const [key, value] of Object.entries(update)) {
@@ -1220,9 +1235,6 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         }
       }
       this.audit("document.updated", "document", id, actorId, changes);
-      if (update.content !== undefined) {
-        await this.syncDocumentLinks(id, doc.content, doc.contentFormat);
-      }
       if (this.searchIndex) {
         await indexDocumentSearchDocument(this.searchIndex, doc);
       }
@@ -1808,40 +1820,52 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   // Extract [[doc slug/id]] and ISSUE-KEY references from content.
-  private async syncDocumentLinks(
+  // Runs synchronously inside the caller's transactionSync block.
+  private syncDocumentLinks(
     documentId: string,
     content: string,
     contentFormat: string
   ) {
     const text =
       contentFormat === "markdown" ? content : blockNoteToPlainText(content);
-    const docRefs = [...text.matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => m[1]);
-    const issueKeys = [...text.matchAll(/\b([A-Z][A-Z0-9]+-\d+)\b/g)].map(
-      (m) => m[1]
-    );
-    const [docTargets, issueTargets] = await Promise.all([
-      Promise.all(
-        docRefs.map((ref) =>
-          this.db
+    // Dedupe before resolving: a repeated ref must produce a single link.
+    const docRefs = [
+      ...new Set([...text.matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => m[1])),
+    ];
+    const issueKeys = [
+      ...new Set(
+        [...text.matchAll(/\b([A-Z][A-Z0-9]+-\d+)\b/g)].map((m) => m[1])
+      ),
+    ];
+    // One bounded query per target type. Fanning out one lookup per key via
+    // Promise.all exceeds the DO SQLite in-flight limit at ~17+ references.
+    const docTargets =
+      docRefs.length === 0
+        ? []
+        : this.db
             .select({ id: workspaceDocuments.id })
             .from(workspaceDocuments)
             .where(
               or(
-                eq(workspaceDocuments.slug, ref),
-                eq(workspaceDocuments.id, ref)
+                inArray(workspaceDocuments.slug, docRefs),
+                inArray(workspaceDocuments.id, docRefs)
               )
             )
-            .get()
-        )
-      ),
-      Promise.all(issueKeys.map((key) => this.getIssueByIdentifier(key))),
-    ]);
+            .all();
+    const issueTargets =
+      issueKeys.length === 0
+        ? []
+        : this.db
+            .select({ id: workspaceIssues.id })
+            .from(workspaceIssues)
+            .where(inArray(workspaceIssues.identifier, issueKeys))
+            .all();
     const links: Array<{ targetType: string; targetId: string }> = [];
     for (const target of docTargets) {
-      if (target) links.push({ targetType: "document", targetId: target.id });
+      links.push({ targetType: "document", targetId: target.id });
     }
     for (const issue of issueTargets) {
-      if (issue) links.push({ targetType: "issue", targetId: issue.id });
+      links.push({ targetType: "issue", targetId: issue.id });
     }
     data.replaceDocumentLinks(this.db, this.organizationId, documentId, links);
   }
