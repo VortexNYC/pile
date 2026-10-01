@@ -36,6 +36,7 @@ import { consumeUsage } from "../global/billing.js";
 import { timingSafeEqualHex } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
 import { getInstallationTokenForRepo } from "../global/github-auth.js";
+import { prUrlOnRepo } from "../global/lane-guard.js";
 import { fetchPileRepoConfig } from "../global/pile-repo-config.js";
 import { scrubLaneText } from "../global/redact.js";
 import { createRepoBranch } from "../global/repo-branches.js";
@@ -1854,6 +1855,20 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         const value = input[key];
         if (typeof value === "string") update[key] = value;
       }
+      if (update.result !== undefined) {
+        update.result = scrubLaneText(update.result, [
+          c.req.header("authorization")?.replace(/^Bearer\s+/i, ""),
+        ]);
+      }
+      if (update.prUrl !== undefined) {
+        const issue = await stub.getIssue(session.issueId);
+        if (issue?.repo && !prUrlOnRepo(update.prUrl, issue.repo)) {
+          return c.json(
+            { message: "prUrl is not a pull request on the session repo" },
+            400
+          );
+        }
+      }
       if (typeof input.status === "string") {
         const allowed = new Set<string>([
           "created",
@@ -1957,22 +1972,16 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       if (!issue?.repo) {
         return c.json({ message: "Session issue has no repository" }, 422);
       }
-      // PILE-294 — `?repo=` mints for one of the session's secondary repos;
-      // anything outside that set is refused.
-      const requested = c.req.query("repo");
-      const secondary =
-        !!requested && requested.toLowerCase() !== issue.repo.toLowerCase();
-      const targetRepo = secondary
+      // PILE-294 — `?repo=` naming one of the session's secondary repos mints
+      // for that repo; any other value falls back to the session repo.
+      const requested = c.req.query("repo")?.toLowerCase();
+      const secondaryRepo = requested
         ? parseStoredSecondaryRepos(session.secondaryRepos).find(
-            (entry) => entry.repo.toLowerCase() === requested.toLowerCase()
+            (entry) => entry.repo.toLowerCase() === requested
           )?.repo
-        : issue.repo;
-      if (!targetRepo) {
-        return c.json(
-          { message: "Repository is not part of this session" },
-          403
-        );
-      }
+        : undefined;
+      const secondary = !!secondaryRepo;
+      const targetRepo = secondaryRepo ?? issue.repo;
       const minted = await mintLaneGithubToken(
         c.env,
         organizationId,
