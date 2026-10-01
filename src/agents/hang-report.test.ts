@@ -75,6 +75,7 @@ describe("buildHangReport", () => {
   });
 
   it("bounds and scrubs captured log output", () => {
+    const token = ["ghp", "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8"].join("_");
     const report = buildHangReport({
       session,
       reason: "timeout",
@@ -83,12 +84,12 @@ describe("buildHangReport", () => {
       lastEvent: null,
       state: {
         provider: {
-          logs: `${"x".repeat(5000)}\nGITHUB_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz0123456789`,
+          logs: `${"x".repeat(5000)}\nGITHUB_TOKEN=${token}`,
         },
       },
     });
     const tail = report.process?.logTail ?? "";
     expect(tail.length).toBeLessThanOrEqual(2001);
-    expect(tail).not.toContain("ghp_abcdefghijklmnopqrstuvwxyz0123456789");
+    expect(tail).not.toContain(token);
   });
 });
