@@ -8,6 +8,8 @@ import { VortexError } from "../platform/errors.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { AgentSession, AgentSessionStatus } from "../types/workspace.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
+import type { ComputeBackend } from "./compute.js";
+import { resolveGeneratedConflict } from "./conflict-fix.js";
 import { loadProviderConfig } from "./credentials.js";
 import { resolveAgentEnv } from "./daytona.js";
 import { dispatchAgent, getAgentProvider } from "./index.js";
@@ -955,6 +957,9 @@ interface PrSyncDeps {
   ) => Promise<string | undefined>;
   fetch?: typeof fetch;
   probeTimeoutMs?: number;
+  /** Compute backend factory for the deterministic conflict fixer
+   *  (PILE-251) — injected in tests. */
+  compute?: (env: WorkerEnv, agentId: string) => ComputeBackend;
 }
 
 // Reconcile terminal sessions' PR state + the issue's PR fields from GitHub.
@@ -1099,22 +1104,61 @@ export async function syncOpenPrSessions(
               payload: { prUrl, headSha },
             })
             .catch(() => {});
-          await fireEventAutomations(
-            env,
-            stub,
-            organizationId,
-            "pr.conflict",
-            session,
-            `PR ${prUrl} has merge conflicts. Rebase or merge the base branch and resolve.`
-          );
         }
-        await nudgeLane(env, stub, organizationId, session, issue, prUrl, {
-          prompt:
-            `PR ${prUrl} has merge conflicts with the base branch.\n` +
-            "Rebase (or merge the base branch), resolve the conflicts, and push.",
-          reason: "merge conflict",
-          dedupeKey: `conflict-${headSha ?? "unknown"}`,
-        });
+        // PILE-251 — conflicts confined to repo-declared generated artifacts
+        // resolve deterministically (scripted merge + regen + push in a fixer
+        // sandbox), no LLM lane. Only real source conflicts take the lane
+        // path below.
+        const conflictPath = await resolveGeneratedConflict(
+          env,
+          stub,
+          organizationId,
+          session,
+          {
+            repoFull: `${owner}/${repo}`,
+            prUrl,
+            headSha,
+            pr,
+            token,
+            ghGet: (path) => githubApiGet(ghFetch, token, path),
+            deps: { compute: deps.compute, probeTimeoutMs },
+          }
+        );
+        if (conflictPath === "lane") {
+          // Event automations fire once per conflicting headSha on the lane
+          // path — generated-only conflicts never reach them.
+          const laneNoted = seen.some(
+            (e) =>
+              e.type === "pr.conflict_lane" &&
+              typeof e.payload === "string" &&
+              e.payload.includes(headSha ?? "")
+          );
+          if (!laneNoted) {
+            await stub
+              .addAgentSessionEvent({
+                sessionId: session.id,
+                type: "pr.conflict_lane",
+                message: `PR ${prUrl} conflict needs the lane`,
+                payload: { prUrl, headSha },
+              })
+              .catch(() => {});
+            await fireEventAutomations(
+              env,
+              stub,
+              organizationId,
+              "pr.conflict",
+              session,
+              `PR ${prUrl} has merge conflicts. Rebase or merge the base branch and resolve.`
+            );
+          }
+          await nudgeLane(env, stub, organizationId, session, issue, prUrl, {
+            prompt:
+              `PR ${prUrl} has merge conflicts with the base branch.\n` +
+              "Rebase (or merge the base branch), resolve the conflicts, and push.",
+            reason: "merge conflict",
+            dedupeKey: `conflict-${headSha ?? "unknown"}`,
+          });
+        }
       }
       // PILE-224 — the review→lane round trip: a submitted GitHub review is
       // agent-facing work, not just a status. Each new review emits one
