@@ -35,6 +35,10 @@ vp run knip
 `packages/cli/src/client/types.ts`, and `packages/cli/src/commands.ts` — commit the
 regenerated files with your change.
 
+A PR that changes `src/` must also change a `*.test.ts` — or explain why with a
+`No tests: <reason>` line in the PR description. The `diff-coverage` check
+enforces this; run `vp run diff-coverage` to check locally against `origin/main`.
+
 ## Rules
 
 - **pnpm only.** No npm, yarn, bun, npx.
