@@ -2311,7 +2311,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.deleteAgentEnvironmentFile(this.db, this.organizationId, path);
   }
 
-  listAgentActivities(sessionId: string, options: { limit?: number } = {}) {
+  listAgentActivities(
+    sessionId: string,
+    options: { limit?: number; order?: "asc" | "desc" } = {}
+  ) {
     return data.listAgentActivities(this.db, sessionId, options);
   }
 
