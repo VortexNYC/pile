@@ -45,7 +45,7 @@ def setup_repo():
     subprocess.run(["git", "init", "-q", "-b", g["BRANCH"], repo], check=True)
     git("config", "user.name", "t")
     git("config", "user.email", "t@example.com")
-    git("remote", "add", "origin", g["origin_url"]())
+    git("remote", "add", "origin", g["remote_url"]())
     with open(os.path.join(repo, "a.txt"), "w") as f:
         f.write("base\\n")
     git("add", "-A")
@@ -206,11 +206,13 @@ describe("runner lane permission tiers (PILE-276)", () => {
   it("push=enabled, shell=enabled keeps today's behavior", () => {
     const res = runPolicy("push", { push: "enabled", shell: "enabled" });
     expect(res.pushed).toBe(true);
-    expect(res.hookRan).toBe(true);
+    // The runner rebuilds .git/config before pushing — a lane-planted
+    // hooksPath cannot reach the push, whatever the tier.
+    expect(res.hookRan).toBe(false);
     expect(res.transport?.[0]?.cmd.slice(-3)).toEqual([
       "push",
       "origin",
-      LANE_BRANCH,
+      `refs/heads/${LANE_BRANCH}:refs/heads/${LANE_BRANCH}`,
     ]);
   });
 

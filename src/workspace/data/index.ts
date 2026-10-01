@@ -944,6 +944,8 @@ export interface AgentSessionInput {
   spawnDepth?: number;
   laneDbRef?: string | null;
   purpose?: string | null;
+  maxDurationMinutes?: number | null;
+  effort?: "low" | "medium" | "high" | "max" | null;
   label?: string | null;
   resultSchema?: string | null;
 }
@@ -975,6 +977,8 @@ export async function createAgentSession(
     spawnDepth: input.spawnDepth ?? 0,
     laneDbRef: input.laneDbRef ?? null,
     purpose: input.purpose ?? null,
+    maxDurationMinutes: input.maxDurationMinutes ?? null,
+    effort: input.effort ?? null,
     label: input.label ?? null,
     resultSchema: input.resultSchema ?? null,
     updatedAt: ts,
@@ -1515,8 +1519,12 @@ export async function getActiveAgentSessionForIssue(
     issueId,
     limit: 20,
   });
+  // Triage lanes (PILE-282) only report on the issue — they never own it, so
+  // they must not block a real lane from dispatching.
   const active = sessions.find(
-    (s) => !["completed", "failed", "canceled"].includes(s.status)
+    (s) =>
+      !["completed", "failed", "canceled"].includes(s.status) &&
+      s.purpose !== "triage"
   );
   if (!active) return null;
   const activities = await listAgentActivities(db, active.id, { limit: 50 });

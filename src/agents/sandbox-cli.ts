@@ -9,6 +9,7 @@ import {
   getRepoScopedInstallationToken,
   type RepoScopedToken,
 } from "../global/github-auth.js";
+import { isSafeLaneBranch } from "../global/lane-guard.js";
 import {
   DEFAULT_LANE_PERMISSIONS,
   fetchLanePermissions,
@@ -601,6 +602,13 @@ export class SandboxCliAgentProvider implements AgentProvider {
         code: "BAD_REQUEST",
         status: 400,
         message: "Issue must have a repository",
+      });
+    }
+    if (issue.repo && !isSafeLaneBranch(issue.branch ?? `issue-${issue.id}`)) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: "Issue branch is not a safe lane branch name",
       });
     }
     const gitIdentity = sessionContext?.gitIdentity;

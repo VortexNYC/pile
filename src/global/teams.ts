@@ -16,6 +16,8 @@ export interface TeamRecord {
   parentAutoClose: boolean;
   subIssueAutoClose: boolean;
   triageAssigneeId: string | null;
+  /** Agent provider that runs the triage lane on every new issue (PILE-282). */
+  triageAgentId: string | null;
   defaultTemplateId: string | null;
   defaultRepo: string | null;
   createdAt: string;
@@ -31,6 +33,7 @@ function teamRecordFromRow(row: typeof team.$inferSelect): TeamRecord {
     parentAutoClose: false,
     subIssueAutoClose: false,
     triageAssigneeId: null,
+    triageAgentId: null,
     defaultTemplateId: null,
     defaultRepo: null,
   };
@@ -45,6 +48,7 @@ function teamRecordFromRow(row: typeof team.$inferSelect): TeamRecord {
     parentAutoClose: metadata.parentAutoClose,
     subIssueAutoClose: metadata.subIssueAutoClose,
     triageAssigneeId: metadata.triageAssigneeId ?? null,
+    triageAgentId: metadata.triageAgentId ?? null,
     defaultTemplateId: metadata.defaultTemplateId ?? null,
     defaultRepo: metadata.defaultRepo ?? null,
     createdAt: row.createdAt.toISOString(),
@@ -110,6 +114,7 @@ interface CreateTeamInput {
   parentAutoClose?: boolean;
   subIssueAutoClose?: boolean;
   triageAssigneeId?: string | null;
+  triageAgentId?: string | null;
   defaultTemplateId?: string | null;
   defaultRepo?: string | null;
 }
@@ -128,6 +133,7 @@ export async function createTeam(
     parentAutoClose: values.parentAutoClose ?? false,
     subIssueAutoClose: values.subIssueAutoClose ?? false,
     triageAssigneeId: values.triageAssigneeId,
+    triageAgentId: values.triageAgentId,
     defaultTemplateId: values.defaultTemplateId,
     defaultRepo: values.defaultRepo,
   });
@@ -179,6 +185,7 @@ export async function createDefaultTeam(
 
 interface UpdateTeamInput {
   triageAssigneeId?: string | null;
+  triageAgentId?: string | null;
   defaultTemplateId?: string | null;
   defaultRepo?: string | null;
   key?: string;
@@ -210,6 +217,10 @@ export async function updateTeam(
       input.triageAssigneeId === undefined
         ? existing.triageAssigneeId
         : input.triageAssigneeId,
+    triageAgentId:
+      input.triageAgentId === undefined
+        ? existing.triageAgentId
+        : input.triageAgentId,
     defaultTemplateId:
       input.defaultTemplateId === undefined
         ? existing.defaultTemplateId
