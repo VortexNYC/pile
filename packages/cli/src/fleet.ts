@@ -139,7 +139,11 @@ export function createFleetApi(options: {
 
   return {
     async listSessions(limit) {
-      const res = await doFetch(`${sessionsBase}?limit=${limit}`, { headers });
+      // summary=1 keeps the poll light: lane-row scalars only, no
+      // result/transcript blobs (PILE-256).
+      const res = await doFetch(`${sessionsBase}?limit=${limit}&summary=1`, {
+        headers,
+      });
       if (!res.ok) {
         throw new Error(`GET /agent/sessions returned ${res.status}`);
       }

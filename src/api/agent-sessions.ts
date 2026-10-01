@@ -33,6 +33,7 @@ import {
   type AgentSessionStatus,
   type Issue,
 } from "../types/workspace.js";
+import type { AgentSessionSummary } from "../workspace/data/index.js";
 import type {
   workspaceAgentActivities,
   workspaceAgentSessions,
@@ -106,6 +107,29 @@ export const agentSessionSchema = z.object({
     .optional(),
 });
 
+// PILE-256 — `?summary=1` list/get shape: lane-row scalars only. `result`,
+// `activities`, `lastStateHash`, actor ids, and retry/lane bookkeeping stay
+// on the full shape so polling dashboards and the fleet TUI stop shipping
+// multi-KB blobs per row.
+const agentSessionSummarySchema = agentSessionSchema
+  .pick({
+    id: true,
+    issueId: true,
+    agentId: true,
+    provider: true,
+    status: true,
+    prUrl: true,
+    prState: true,
+    createdAt: true,
+    updatedAt: true,
+    lastProgressAt: true,
+    derivedStatus: true,
+  })
+  .extend({
+    startedAt: z.string().nullable(),
+    endedAt: z.string().nullable(),
+  });
+
 const agentActivitySchema = z.object({
   id: z.string(),
   sessionId: z.string(),
@@ -132,7 +156,7 @@ const STALLED_PROGRESS_MS = 15 * 60 * 1000;
 /** Durable fields only are stored; display status is derived at read —
  *  same rule as AO: never mark dead, just surface ambiguity. */
 function deriveSessionStatus(
-  row: AgentSession,
+  row: Pick<AgentSession, "status" | "prUrl" | "lastProgressAt">,
   activities?: AgentActivity[]
 ): "stalled" | "needs_input" | null {
   if (row.status !== "running") return null;
@@ -157,6 +181,30 @@ function toSessionResponse(row: AgentSession, activities?: AgentActivity[]) {
   };
 }
 
+// Whitelist, not spread: callers may pass a full row (detail route) or the
+// projected summary row (list route) — either way only scalars leave.
+function toSessionSummary(row: AgentSessionSummary) {
+  return {
+    id: row.id,
+    issueId: row.issueId,
+    agentId: row.agentId,
+    provider: row.provider,
+    status: row.status,
+    prUrl: row.prUrl,
+    prState: row.prState,
+    createdAt: row.createdAt,
+    startedAt: row.startedAt,
+    updatedAt: row.updatedAt,
+    endedAt: row.endedAt,
+    lastProgressAt: row.lastProgressAt,
+    derivedStatus: deriveSessionStatus(row),
+  };
+}
+
+function isSummaryQuery(value: string | undefined): boolean {
+  return value === "1" || value === "true";
+}
+
 const listSessionsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/agent/sessions",
@@ -167,14 +215,19 @@ const listSessionsRoute = createRoute({
     query: z.object({
       issueId: z.string().optional(),
       limit: z.string().optional(),
+      summary: z.string().optional(),
     }),
   },
   responses: {
     200: {
-      description: "Agent sessions list",
+      description:
+        "Agent sessions list. Pass `?summary=1` for lane-row scalars only (no result/activity blobs) — the shape `pile fleet` polls.",
       content: {
         "application/json": {
-          schema: z.object({ sessions: z.array(agentSessionSchema) }),
+          schema: z.union([
+            z.object({ sessions: z.array(agentSessionSchema) }),
+            z.object({ sessions: z.array(agentSessionSummarySchema) }),
+          ]),
         },
       },
     },
@@ -290,12 +343,16 @@ const getSessionRoute = createRoute({
   middleware: [rls("read", "agent:read")],
   request: {
     params: z.object({ organizationId: z.string(), sessionId: z.string() }),
+    query: z.object({ summary: z.string().optional() }),
   },
   responses: {
     200: {
-      description: "Agent session with activities",
+      description:
+        "Agent session with activities. Pass `?summary=1` for lane-row scalars only.",
       content: {
-        "application/json": { schema: agentSessionSchema },
+        "application/json": {
+          schema: z.union([agentSessionSchema, agentSessionSummarySchema]),
+        },
       },
     },
     404: { description: "Session not found" },
@@ -1262,6 +1319,13 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId } = c.req.valid("param");
     const query = c.req.valid("query");
     const stub = getWorkspaceStub(c.env, organizationId);
+    if (isSummaryQuery(query.summary)) {
+      const rows = await stub.listAgentSessionSummaries({
+        issueId: query.issueId,
+        limit: query.limit ? Number(query.limit) : undefined,
+      });
+      return c.json({ sessions: rows.map(toSessionSummary) }, 200);
+    }
     const rows = await stub.listAgentSessions({
       issueId:
         query.issueId === undefined
@@ -1269,9 +1333,12 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
           : await resolveIssueRef(stub, query.issueId),
       limit: query.limit ? Number(query.limit) : undefined,
     });
-    return c.json({
-      sessions: rows.map((row) => toSessionResponse(row, undefined)),
-    });
+    return c.json(
+      {
+        sessions: rows.map((row) => toSessionResponse(row, undefined)),
+      },
+      200
+    );
   });
 
   app.openapi(agentStatsRoute, async (c) => {
@@ -1414,12 +1481,20 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(getSessionRoute, async (c) => {
     const { organizationId, sessionId } = c.req.valid("param");
+    const { summary } = c.req.valid("query");
     const stub = getWorkspaceStub(c.env, organizationId);
+    if (isSummaryQuery(summary)) {
+      const row = await stub.getAgentSession(sessionId);
+      if (!row) {
+        return c.json({ message: "Session not found" }, 404);
+      }
+      return c.json(toSessionSummary(row), 200);
+    }
     const session = await stub.getAgentSessionWithActivities(sessionId);
     if (!session) {
       return c.json({ message: "Session not found" }, 404);
     }
-    return c.json(toSessionResponse(session, session.activities));
+    return c.json(toSessionResponse(session, session.activities), 200);
   });
 
   app.openapi(getSessionEventsRoute, async (c) => {

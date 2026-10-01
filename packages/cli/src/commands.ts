@@ -988,6 +988,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "limit",
         flag: "limit",
       },
+      {
+        name: "summary",
+        flag: "summary",
+      },
     ],
     body: [],
   },
@@ -1044,7 +1048,12 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "session",
       },
     ],
-    query: [],
+    query: [
+      {
+        name: "summary",
+        flag: "summary",
+      },
+    ],
     body: [],
   },
   "agent sessions update": {
