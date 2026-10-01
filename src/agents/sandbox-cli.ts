@@ -36,6 +36,7 @@ import type {
   AgentProviderSession,
   AgentProviderState,
 } from "./provider.js";
+import { DOMAIN_REVIEW_PROMPT } from "./review-prompt.js";
 import { runnerBundle } from "./runner/bundle.js";
 import {
   parseCredentialPool,
@@ -205,6 +206,7 @@ function buildPrompt(
     ...(instructions ? ["", "## Dispatch instructions", "", instructions] : []),
     "",
     pushInstruction,
+    ...(issue.repo ? ["", DOMAIN_REVIEW_PROMPT, ""] : []),
     "Do not attempt to update Pile yourself — an external system will poll your session and write the status back automatically.",
     ...(pileApi
       ? [

@@ -257,6 +257,42 @@ cancel`, Devin `DELETE /sessions/{id}`), then the local session is marked
 and, when a new `prUrl` appears, records it as a session **artifact** (same
 path as `POST …/artifacts`).
 
+### Issue progress comment (PILE-290)
+
+Every non-preflight lane keeps **one** comment on its issue
+(`externalSource: "agent"`, `externalId: "{sessionId}:progress"`) that is
+edited in place rather than re-posted — observability for anyone not running
+`pile fleet`. It is posted when the lane first reports `running` and shows:
+
+- the session link (provider URL, else the Pile session route) and the
+  `pile agent sessions watch` command;
+- the current step — the newest `action`/`thought`/`response`/`error`/
+  `elicitation` activity;
+- elapsed time plus an ETA from the median duration of the agent's last
+  20 completed lanes in the workspace (flagged once overdue);
+- branch / PR and the latest task list, when reported.
+
+Activity edits refresh it immediately except `thought`/`response`, which are
+throttled to one edit per 30s; no-op polls refresh elapsed/ETA at most every
+5 minutes. On a terminal status it freezes with the final duration; the
+separate completion/failure result comment still posts.
+
+External lanes feed it through `POST …/agent/sessions/{id}/report` with two
+optional fields alongside `status`/`result`/`prUrl`/`branch`:
+
+```json
+{
+  "step": "Running tests",
+  "todos": [
+    { "content": "Read issue", "status": "completed" },
+    { "content": "Run tests", "status": "in_progress" }
+  ]
+}
+```
+
+`todos` (≤50 items, `pending | in_progress | completed`) replaces the
+displayed list wholesale; invalid lists return 400.
+
 ## Lane events
 
 Every lane (agent session) has an append-only event stream in the workspace
