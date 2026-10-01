@@ -812,6 +812,14 @@ export const workspaceAgentSessions = sqliteTable(
     // cloned under ~/xrepo — persisted so queue promotion, retries, and the
     // lane token-refresh route see the same set as the original dispatch.
     secondaryRepos: text("secondary_repos" as string),
+    // PILE-289 — run name for logs/`pile fleet`, and the dispatch-time
+    // JSON Schema (draft-07) the lane's final output is validated against.
+    // structuredResult holds the validated JSON; resultSchemaErrors the
+    // JSON array of validation failures. At most one of the two is set.
+    label: text("label" as string),
+    resultSchema: text("result_schema" as string),
+    structuredResult: text("structured_result" as string),
+    resultSchemaErrors: text("result_schema_errors" as string),
   },
   (table) => [
     index("agent_sessions_organization_idx" as string).on(

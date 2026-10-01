@@ -5,6 +5,7 @@ import { eq, and } from "drizzle-orm";
 import { loadProviderConfig } from "../agents/credentials.js";
 import { resolveAgentEnv } from "../agents/daytona.js";
 import { dispatchAgent, getAgentProvider } from "../agents/index.js";
+import { resolveResultSchema } from "../agents/lane-result.js";
 import {
   buildPreflightCritiqueInstructions,
   evaluateDispatchReadiness,
@@ -46,7 +47,11 @@ import {
   type IssueStatus,
 } from "../types/workspace.js";
 import { filterConditionSchema } from "../workspace/filter.js";
-import { agentSessionSchema } from "./agent-sessions.js";
+import {
+  agentSessionSchema,
+  resultSchemaInputSchema,
+  toSessionResponse,
+} from "./agent-sessions.js";
 import { getExecutionCtx } from "./execution-ctx.js";
 import {
   encodeCursor,
@@ -678,6 +683,9 @@ const dispatchRoute = createRoute({
               // next to the primary checkout. `write` entries get the lane
               // branch pushed and a PR opened in that repo.
               secondaryRepos: secondaryReposSchema.optional(),
+              // PILE-289 — validate the lane's final output; automations
+              // read session.structuredResult instead of scraping prose.
+              resultSchema: resultSchemaInputSchema.optional(),
             })
             .strict(),
         },
@@ -1437,6 +1445,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       branch,
       instructions,
       preflight,
+      resultSchema: resultSchemaInput,
       secondaryRepos,
     } = c.req.valid("json");
     const { organizationId, id } = c.req.valid("param");
@@ -1515,6 +1524,9 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
     const resolvedModel = model ?? pileConfig?.model;
+    const resultSchema = resultSchemaInput
+      ? resolveResultSchema(resultSchemaInput)
+      : undefined;
 
     // VTX-209 — deterministic readiness gate. Advisory only: the report rides
     // the response and gaps are annotated on the thread once, so callers see
@@ -1566,6 +1578,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
             envAllowlist: pileConfig?.env,
             purpose: "preflight",
             skipQueue: true,
+            resultSchema,
           }
         )
       : await dispatchAgent(
@@ -1576,7 +1589,12 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
           identity,
           resolvedModel,
           getExecutionCtx(c),
-          { instructions, envAllowlist: pileConfig?.env, secondaryRepos }
+          {
+            instructions,
+            envAllowlist: pileConfig?.env,
+            resultSchema,
+            secondaryRepos,
+          }
         );
 
     if (target.repo && target.branch && !preflight) {
@@ -1589,7 +1607,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       );
     }
 
-    return c.json({ ...session, preflight: readiness }, 201);
+    return c.json({ ...toSessionResponse(session), preflight: readiness }, 201);
   });
 
   app.openapi(assignIssueRoute, async (c) => {
@@ -1685,6 +1703,9 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       }
     }
 
-    return c.json({ issue, session }, 200);
+    return c.json(
+      { issue, session: session ? toSessionResponse(session) : undefined },
+      200
+    );
   });
 }

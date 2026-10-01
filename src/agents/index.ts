@@ -28,6 +28,7 @@ import {
   laneDbConfigForRepo,
   type LaneDbConfig,
 } from "./lane-db.js";
+import { buildResultSchemaInstructions, sessionLabel } from "./lane-result.js";
 import type { AgentProvider } from "./provider.js";
 import {
   validateSecondaryRepos,
@@ -167,8 +168,13 @@ export async function dispatchAgent(
      *  Persisted on the session row; promote/retry callers pass the stored
      *  set back in. */
     secondaryRepos?: SecondaryRepo[];
+    /** Serialized draft-07 JSON Schema (see `resolveResultSchema`) the
+     *  lane's final output is validated against (PILE-289). */
+    resultSchema?: string;
   }
 ): Promise<AgentSession> {
+  const label = sessionLabel(issue, agentId, options?.purpose);
+  const resultSchema = options?.resultSchema ?? null;
   const stub = env.WORKSPACE_DURABLE_OBJECT.get(
     env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
   );
@@ -254,6 +260,8 @@ export async function dispatchAgent(
         spawnDepth: options?.spawnDepth ?? 0,
         purpose: options?.purpose ?? null,
         secondaryRepos: storedSecondaryRepos,
+        label,
+        resultSchema,
       });
       await stub
         .addAgentSessionEvent({
@@ -322,6 +330,8 @@ export async function dispatchAgent(
       spawnDepth: options?.spawnDepth ?? 0,
       purpose: options?.purpose ?? null,
       secondaryRepos: storedSecondaryRepos,
+      label,
+      resultSchema,
     });
   }
 
@@ -467,7 +477,15 @@ export async function dispatchAgent(
           : undefined,
         comments,
         pileApi,
-        instructions: options?.instructions,
+        instructions:
+          [
+            options?.instructions ?? null,
+            session.resultSchema
+              ? buildResultSchemaInstructions(session.resultSchema)
+              : null,
+          ]
+            .filter((part): part is string => part !== null && part !== "")
+            .join("\n\n") || undefined,
         extraEnv,
         secondaryRepos,
       }

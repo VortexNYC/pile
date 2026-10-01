@@ -945,6 +945,8 @@ export interface AgentSessionInput {
   laneDbRef?: string | null;
   purpose?: string | null;
   secondaryRepos?: string | null;
+  label?: string | null;
+  resultSchema?: string | null;
 }
 
 export async function createAgentSession(
@@ -975,6 +977,8 @@ export async function createAgentSession(
     laneDbRef: input.laneDbRef ?? null,
     purpose: input.purpose ?? null,
     secondaryRepos: input.secondaryRepos ?? null,
+    label: input.label ?? null,
+    resultSchema: input.resultSchema ?? null,
     updatedAt: ts,
   });
   const row = await db
@@ -1120,6 +1124,7 @@ const agentSessionSummaryColumns = {
   updatedAt: workspaceAgentSessions.updatedAt,
   endedAt: workspaceAgentSessions.endedAt,
   lastProgressAt: workspaceAgentSessions.lastProgressAt,
+  label: workspaceAgentSessions.label,
 };
 
 export type AgentSessionSummary = Pick<
