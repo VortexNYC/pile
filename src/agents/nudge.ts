@@ -9,6 +9,13 @@ import { dispatchAgent, getAgentProvider } from "./index.js";
 
 const DELIVERED_TYPES = new Set(["prompt.followup", "prompt.redispatch"]);
 
+export interface NudgeOptions {
+  /** A thunk defers expensive prompt context until delivery is attempted. */
+  prompt: string | (() => Promise<string>);
+  reason: string;
+  dedupeKey?: string;
+}
+
 // THE lane nudge path — one implementation shared by the sweep (poll
 // backstop) and the GitHub webhook (fast path). sendPrompt through the
 // workspace-configured throttle, with an audit event either way.
@@ -23,7 +30,7 @@ export async function nudgeLane(
   session: AgentSession,
   issue: Issue | undefined,
   prUrl: string,
-  opts: { prompt: string; reason: string; dedupeKey?: string }
+  opts: NudgeOptions
 ): Promise<void> {
   const dedupeKey = opts.dedupeKey;
   const seen = dedupeKey
@@ -112,6 +119,13 @@ export async function nudgeLane(
         .catch(() => {});
       return;
     }
+    // Resolved only once delivery is actually attempted — lazy prompts
+    // (review range diffs) cost a GitHub call per build.
+    const resolved = {
+      ...opts,
+      prompt:
+        typeof opts.prompt === "string" ? opts.prompt : await opts.prompt(),
+    };
     // A reaped kept sandbox can't take a follow-up — go straight to the
     // cold dispatch instead of probing a sandbox we know is gone.
     if (session.status === "completed" && session.lastStateHash === "reaped") {
@@ -122,7 +136,7 @@ export async function nudgeLane(
         session,
         issue,
         prUrl,
-        opts,
+        resolved,
         "kept sandbox reaped",
         skipNoted
       );
@@ -133,7 +147,7 @@ export async function nudgeLane(
       : null;
     const delivered = await provider.sendPrompt(
       session.providerSessionId ?? session.id,
-      opts.prompt,
+      resolved.prompt,
       issue,
       gitIdentity
     );
@@ -173,7 +187,7 @@ export async function nudgeLane(
         session,
         issue,
         prUrl,
-        opts,
+        resolved,
         "kept sandbox unavailable",
         skipNoted
       );

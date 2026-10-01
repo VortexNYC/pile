@@ -808,6 +808,10 @@ export const workspaceAgentSessions = sqliteTable(
     // First transition into a terminal status — the kept-sandbox reaper
     // anchors its resume window here; updatedAt churns on every write.
     endedAt: text("ended_at" as string),
+    // Incremental review (PILE-286): head sha of the most recent recorded
+    // review + a rolling JSON snapshot of verdicts (see agents/review-context).
+    lastReviewedSha: text("last_reviewed_sha" as string),
+    reviewSummary: text("review_summary" as string),
   },
   (table) => [
     index("agent_sessions_organization_idx" as string).on(
