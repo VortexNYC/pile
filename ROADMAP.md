@@ -34,6 +34,7 @@ This is the durable tracker for the open-source Linear alternative. Operational 
   - PR status automation (`draft`/`open`/`merged`/`closed`)
   - GitHub issue `opened`/`edited`/`closed`/`reopened` sync
   - Inbound `issue_comment` and `pull_request_review_comment` sync
+  - `@pile <request>` in an issue/PR comment resumes (or dispatches) the issue's lane with the thread as context
 - Workspace `key` and issue `identifier` (`KEY-123`)
 - Blume docs site: `packages/docs` with OpenAPI reference, `llms.txt`, search, and the Pile intro.
 - Issue estimates, drafts, and Linear two-level sub-issue depth enforcement.
