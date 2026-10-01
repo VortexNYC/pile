@@ -7,13 +7,27 @@ FOLLOWUP_DIR = '/tmp/followups'
 
 
 def agent_env():
-    return agent_env_base()
+    # Credentials live in DEVIN_HOME on disk; DEVIN_CREDENTIALS_B64 stays runner-only.
+    return scrubbed_env()
+
+
+def apply_tool_policy():
+    # shell=disabled at the tool surface: deny the exec tool in the user
+    # config and drop out of bypass mode so the deny can't be auto-approved.
+    if SHELL_POLICY != 'disabled':
+        return
+    deny_in_cli_config(os.path.join(HOME, '.config', 'devin', 'config.json'), ['exec'])
+
+
+def permission_mode():
+    return 'accept-edits' if SHELL_POLICY == 'disabled' else 'dangerous'
+
 
 
 def ensure():
     devin_bin = shutil.which('devin') or os.path.join(INSTALL_DIR, 'devin')
     if not os.path.exists(devin_bin):
-        subprocess.run(['bash', '-c', 'curl -fsSL https://cli.devin.ai/install.sh | bash'], check=False)
+        subprocess.run(['bash', '-c', 'curl -fsSL https://cli.devin.ai/install.sh | bash'], env=scrubbed_env(shims=False), check=False)
     # installer exits non-zero when its interactive wizard bails without a TTY; verify the binary directly
     result = subprocess.run([devin_bin, '--version'], capture_output=True, text=True)
     if result.returncode != 0:
@@ -60,7 +74,7 @@ def run_agent(devin_bin, prompt=None):
     prompt = prompt or base64.b64decode(os.environ['PROMPT_B64']).decode('utf-8')
     model = os.environ.get('MODEL', 'swe-2')
     proc = subprocess.Popen(
-        [devin_bin, '-p', prompt, '--model', model, '--permission-mode', 'dangerous', '--respect-workspace-trust', 'false'],
+        [devin_bin, '-p', prompt, '--model', model, '--permission-mode', permission_mode(), '--respect-workspace-trust', 'false'],
         cwd=REPO_DIR, env=agent_env(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.PIPE, text=True
     )
     threading.Thread(target=inject_followups, args=(proc,), daemon=True).start()
@@ -115,6 +129,7 @@ def main():
     creds_b64 = os.environ['DEVIN_CREDENTIALS_B64']
     write_devin_home(creds_b64)
     devin_bin = ensure()
+    apply_tool_policy()
     if os.environ.get('FOLLOWUP') == '1':
         # Resume path: sandbox was kept after the prior run. Drop the stale
         # result file so a mid-run poll can't serve the previous outcome.
