@@ -40,6 +40,7 @@ import {
   TRIAGE_PURPOSE,
 } from "../agents/triage.js";
 import { createD1 } from "../global/db.js";
+import { sanitizeLaneResult } from "../global/lane-guard.js";
 import {
   attachments as globalAttachments,
   agentActivities as globalAgentActivities,
@@ -88,6 +89,7 @@ import {
 import * as data from "./data/index.js";
 import { filterToSql } from "./filter.js";
 import { workspaceMigrations } from "./migrations.js";
+import { type ReviewVerdict, rollReviewSummary } from "./review-summary.js";
 import { workspaceSchema } from "./schema-map.js";
 import {
   workspaceAgentActivities,
@@ -2189,6 +2191,23 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.updateAgentSession(this.db, this.organizationId, id, input);
   }
 
+  /** Read-merge-write inside the DO so the webhook and the sweep can both
+   *  record the same review without clobbering each other's verdicts. */
+  async recordLaneReview(sessionId: string, verdict: ReviewVerdict) {
+    const session = await data.getAgentSession(
+      this.db,
+      this.organizationId,
+      sessionId
+    );
+    if (!session) return null;
+    return data.updateAgentSession(
+      this.db,
+      this.organizationId,
+      sessionId,
+      rollReviewSummary(session.reviewSummary, verdict)
+    );
+  }
+
   async addAgentActivity(input: data.AgentActivityInput) {
     const activity = await data.addAgentActivity(this.db, input);
     await data.addAgentSessionEvent(this.db, {
@@ -2495,7 +2514,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   async applyAgentSessionResult(
     sessionId: string,
-    result: AgentSessionResult,
+    rawResult: AgentSessionResult,
     actorId?: string
   ): Promise<AgentSession | undefined> {
     await this.ready;
@@ -2503,6 +2522,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (!oldSession) return undefined;
 
     const issue = await this.getIssue(oldSession.issueId);
+    const result = sanitizeLaneResult(rawResult, issue?.repo ?? null);
 
     const terminal = new Set<AgentSessionStatus>([
       "completed",

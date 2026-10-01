@@ -2,6 +2,10 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { createD1 } from "../global/db.js";
+import {
+  DEFAULT_LANE_PERMISSIONS,
+  fetchLanePermissions,
+} from "../global/pile-repo-config.js";
 import { organization } from "../global/schema.js";
 import { createAuth } from "../platform/auth.js";
 import { VortexError } from "../platform/errors.js";
@@ -464,6 +468,22 @@ export async function dispatchAgent(
         .catch(() => {});
     }
 
+    // PILE-276 — lane permission tiers from the repo's default-branch
+    // `.pile/config.json`, applied at sandbox provision and in the runner.
+    const lanePermissions = issue.repo
+      ? await fetchLanePermissions(env, issue.repo, agentId)
+      : { permissions: DEFAULT_LANE_PERMISSIONS };
+    if (lanePermissions.lockedReason) {
+      await stub
+        .addAgentActivity({
+          sessionId: session.id,
+          actorId: actor.id,
+          type: "error",
+          message: `Lane permissions locked to push=disabled shell=disabled: ${lanePermissions.lockedReason}`,
+        })
+        .catch(() => {});
+    }
+
     const providerSession = await provider.dispatch(
       organizationId,
       issue,
@@ -490,6 +510,7 @@ export async function dispatchAgent(
             .filter((part): part is string => part !== null && part !== "")
             .join("\n\n") || undefined,
         extraEnv,
+        permissions: lanePermissions.permissions,
         effort,
       }
     );
