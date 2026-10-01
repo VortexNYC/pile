@@ -821,6 +821,10 @@ export const workspaceAgentSessions = sqliteTable(
     resultSchema: text("result_schema" as string),
     structuredResult: text("structured_result" as string),
     resultSchemaErrors: text("result_schema_errors" as string),
+    // Incremental review (PILE-286): head sha of the most recent recorded
+    // review + a rolling JSON snapshot of verdicts (see agents/review-context).
+    lastReviewedSha: text("last_reviewed_sha" as string),
+    reviewSummary: text("review_summary" as string),
   },
   (table) => [
     index("agent_sessions_organization_idx" as string).on(

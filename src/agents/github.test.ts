@@ -435,6 +435,68 @@ describe("github pr review → lane nudge (PILE-224)", () => {
 
     expect(dispatched).toEqual([issue.id]);
   });
+
+  it("carries prior verdicts + the range since the last-reviewed sha (PILE-286)", async () => {
+    const s = stub();
+    const branch = `${BRANCH}-incremental`;
+    const issue = await s.createIssue({
+      title: "Incremental review",
+      repo: REPO,
+      branch,
+    });
+    const session = await s.createAgentSession({
+      issueId: issue.id,
+      agentId: "nudge-mock",
+      provider: "nudge-mock",
+      actorId: "review-user",
+      actorType: "user",
+      status: "running",
+      providerSessionId: "remote-nudge-incremental",
+    });
+    await s.recordLaneReview(session.id, {
+      reviewId: 8001,
+      reviewer: "reviewer-gh",
+      state: "CHANGES_REQUESTED",
+      sha: "aaa1111aaaa",
+      excerpt: "needs a regression test",
+    });
+
+    await processGithubWebhookPayload(
+      createD1(env.D1),
+      env as unknown as WorkerEnv,
+      queuePayload(
+        "pull_request_review",
+        reviewPayload({
+          review: {
+            id: 8002,
+            state: "changes_requested",
+            body: "test still misses the null branch",
+            user: { login: "reviewer-gh" },
+            html_url: `https://github.com/${REPO}/pull/46#pullrequestreview-8002`,
+            commit_id: "bbb2222bbbb",
+          },
+          pull_request: {
+            number: 46,
+            html_url: `https://github.com/${REPO}/pull/46`,
+            head: {
+              ref: branch,
+              sha: "bbb2222bbbb",
+              repo: { full_name: REPO },
+            },
+          },
+        })
+      )
+    );
+
+    const prompt = prompts.at(-1) ?? "";
+    expect(prompt).toContain("test still misses the null branch");
+    expect(prompt).toContain(
+      "- reviewer-gh changes_requested @aaa1111: needs a regression test"
+    );
+    expect(prompt).toContain("git log aaa1111aaaa..bbb2222bbbb");
+    const after = await s.getAgentSession(session.id);
+    expect(after?.lastReviewedSha).toBe("bbb2222bbbb");
+  });
 });
 
 function prCommentPayload(over: {

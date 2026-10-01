@@ -32,7 +32,12 @@ import { consumeUsage } from "../global/billing.js";
 import { timingSafeEqualHex } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
 import { getInstallationTokenForRepo } from "../global/github-auth.js";
-import { fetchPileRepoConfig } from "../global/pile-repo-config.js";
+import { prUrlOnRepo } from "../global/lane-guard.js";
+import {
+  fetchLanePermissions,
+  fetchPileRepoConfig,
+  laneTokenPermissions,
+} from "../global/pile-repo-config.js";
 import { scrubLaneText } from "../global/redact.js";
 import { createRepoBranch } from "../global/repo-branches.js";
 import { githubInstallations } from "../global/schema.js";
@@ -1846,6 +1851,20 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         const value = input[key];
         if (typeof value === "string") update[key] = value;
       }
+      if (update.result !== undefined) {
+        update.result = scrubLaneText(update.result, [
+          c.req.header("authorization")?.replace(/^Bearer\s+/i, ""),
+        ]);
+      }
+      if (update.prUrl !== undefined) {
+        const issue = await stub.getIssue(session.issueId);
+        if (issue?.repo && !prUrlOnRepo(update.prUrl, issue.repo)) {
+          return c.json(
+            { message: "prUrl is not a pull request on the session repo" },
+            400
+          );
+        }
+      }
       if (typeof input.status === "string") {
         const allowed = new Set<string>([
           "created",
@@ -1949,11 +1968,19 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       if (!issue?.repo) {
         return c.json({ message: "Session issue has no repository" }, 422);
       }
+      // Re-resolve the lane's push tier on every mint so the refreshed token
+      // is never broader than the policy (push=disabled → contents:read).
+      const { permissions } = await fetchLanePermissions(
+        c.env,
+        issue.repo,
+        session.agentId
+      );
       const minted = await mintLaneGithubToken(
         c.env,
         organizationId,
         sessionId,
-        issue.repo
+        issue.repo,
+        laneTokenPermissions(permissions.push)
       );
       if (!minted) {
         return c.json({ message: "No installation token for repository" }, 502);

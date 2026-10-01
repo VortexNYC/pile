@@ -156,6 +156,8 @@ describe("ingestFailedAgentSession", () => {
       resultSchema: null,
       structuredResult: null,
       resultSchemaErrors: null,
+      lastReviewedSha: null,
+      reviewSummary: null,
     };
     const polled = {
       id: "prov-1",
@@ -2266,6 +2268,122 @@ describe("syncOpenPrSessions", () => {
     });
 
     expect((await stub.getAgentSession(session.id))?.prState).toBe("open");
+  });
+
+  it("range-diffs a follow-up review from the last-reviewed sha (PILE-286)", async () => {
+    const agentId = `mock-review-${crypto.randomUUID().slice(0, 8)}`;
+    const prompts: string[] = [];
+    registerMock(agentId, {
+      sendPrompt: async (_id, prompt) => {
+        prompts.push(prompt);
+        return true;
+      },
+    });
+    const issue = await stub.createIssue({ title: "Incremental review" });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+      prUrl: "https://github.com/vortexnyc/pile/pull/901",
+      prState: "open",
+    });
+    await stub.recordLaneReview(session.id, {
+      reviewId: 1,
+      reviewer: "alice",
+      state: "CHANGES_REQUESTED",
+      sha: "rev1111",
+      excerpt: "needs a regression test",
+    });
+    const compares: string[] = [];
+    const fetchReview = async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/pulls/901")) {
+        return Response.json({
+          state: "open",
+          merged_at: null,
+          head: { sha: "rev2222" },
+        });
+      }
+      if (url.includes("/commits/rev2222/check-runs")) {
+        return Response.json({
+          check_runs: [{ status: "completed", conclusion: "success" }],
+        });
+      }
+      if (url.includes("/pulls/901/reviews")) {
+        return Response.json([
+          {
+            id: 2,
+            state: "CHANGES_REQUESTED",
+            body: "test misses the null branch",
+            commit_id: "rev2222",
+            user: { login: "alice" },
+          },
+        ]);
+      }
+      if (url.includes("/compare/")) {
+        compares.push(url);
+        return Response.json({
+          status: "ahead",
+          total_commits: 1,
+          commits: [
+            { sha: "c0ffee1234", commit: { message: "add regression test" } },
+          ],
+          files: [
+            {
+              filename: "src/a.test.ts",
+              status: "added",
+              additions: 12,
+              deletions: 0,
+            },
+          ],
+        });
+      }
+      return new Response("not found", { status: 404 });
+    };
+
+    await syncOpenPrSessions(env, stub, organizationId, {
+      tokenForRepo: async () => "gh-test-token",
+      fetch: fetchReview as typeof fetch,
+    });
+
+    expect(compares).toEqual([
+      "https://api.github.com/repos/vortexnyc/pile/compare/rev1111...rev2222",
+    ]);
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toContain("test misses the null branch");
+    expect(prompts[0]).toContain(
+      "- alice changes_requested @rev1111: needs a regression test"
+    );
+    expect(prompts[0]).toContain("- c0ffee1 add regression test");
+    expect(prompts[0]).toContain("- src/a.test.ts (added, +12/-0)");
+    const after = await stub.getAgentSession(session.id);
+    expect(after?.lastReviewedSha).toBe("rev2222");
+
+    // Delivered once: a second sweep neither re-nudges nor re-compares.
+    await syncOpenPrSessions(env, stub, organizationId, {
+      tokenForRepo: async () => "gh-test-token",
+      fetch: fetchReview as typeof fetch,
+    });
+    expect(prompts).toHaveLength(1);
+    expect(compares).toHaveLength(1);
+
+    // A retry lane inherits the review history it replaces.
+    const retry = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+    });
+    const inherited = await stub.updateAgentSession(retry.id, {
+      retryOf: session.id,
+    });
+    expect(inherited?.lastReviewedSha).toBe("rev2222");
+    expect(inherited?.reviewSummary).toBe(after?.reviewSummary);
   });
 });
 
