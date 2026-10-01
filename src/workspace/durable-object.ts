@@ -31,6 +31,7 @@ import {
   renderLaneProgressComment,
   typicalLaneDurationMs,
 } from "../agents/lane-progress.js";
+import { evaluateLaneResult } from "../agents/lane-result.js";
 import { createD1 } from "../global/db.js";
 import {
   attachments as globalAttachments,
@@ -183,6 +184,8 @@ function validateIssueResolution(
   }
   return resolution;
 }
+
+const LANE_GITHUB_TOKEN_PREFIX = "laneGithubToken:";
 
 export class WorkspaceDO extends DurableObject<AppEnv> {
   private organizationId: string;
@@ -1973,6 +1976,36 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.getAgentSession(this.db, this.organizationId, id);
   }
 
+  // Encrypted GitHub installation token currently held by each lane, keyed by
+  // session. Swapping returns the previous one so callers can revoke it; the
+  // reaper takes and revokes whatever is left once a session is terminal.
+  async swapLaneGithubToken(
+    sessionId: string,
+    encrypted: string
+  ): Promise<string | null> {
+    const key = `${LANE_GITHUB_TOKEN_PREFIX}${sessionId}`;
+    const previous = await this.ctx.storage.get<string>(key);
+    await this.ctx.storage.put(key, encrypted);
+    return previous ?? null;
+  }
+
+  async takeLaneGithubToken(sessionId: string): Promise<string | null> {
+    const key = `${LANE_GITHUB_TOKEN_PREFIX}${sessionId}`;
+    const encrypted = await this.ctx.storage.get<string>(key);
+    if (encrypted === undefined) return null;
+    await this.ctx.storage.delete(key);
+    return encrypted;
+  }
+
+  async listLaneGithubTokenSessions(): Promise<string[]> {
+    const entries = await this.ctx.storage.list({
+      prefix: LANE_GITHUB_TOKEN_PREFIX,
+    });
+    return [...entries.keys()].map((key) =>
+      key.slice(LANE_GITHUB_TOKEN_PREFIX.length)
+    );
+  }
+
   getAgentSessionByProviderSessionId(providerSessionId: string) {
     return data.getAgentSessionByProviderSessionId(
       this.db,
@@ -2459,6 +2492,27 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const newStatus = result.status;
     const becameTerminal = !terminal.has(oldStatus) && terminal.has(newStatus);
 
+    // PILE-289 — validate the lane's final output against the dispatch-time
+    // result schema. Only finished runs are judged; mid-run polls carry
+    // partial text that would always fail.
+    const structuredSet: Record<string, string | null> = {};
+    if (
+      oldSession.resultSchema &&
+      typeof result.result === "string" &&
+      (newStatus === "completed" || newStatus === "failed")
+    ) {
+      const evaluation = evaluateLaneResult(
+        oldSession.resultSchema,
+        result.result
+      );
+      structuredSet.structuredResult = evaluation.valid
+        ? JSON.stringify(evaluation.value)
+        : null;
+      structuredSet.resultSchemaErrors = evaluation.valid
+        ? null
+        : JSON.stringify(evaluation.errors);
+    }
+
     const buildSessionEventPayloads = (
       updatedSession: AgentSession
     ): data.AgentSessionEventInput[] => {
@@ -2483,6 +2537,28 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           });
         }
       }
+      if (
+        updatedSession.structuredResult !== oldSession.structuredResult ||
+        updatedSession.resultSchemaErrors !== oldSession.resultSchemaErrors
+      ) {
+        const valid = updatedSession.structuredResult !== null;
+        payloads.push({
+          sessionId,
+          type: "session.structured_result",
+          message: valid
+            ? "Lane result matched the result schema"
+            : "Lane result failed result-schema validation",
+          payload: valid
+            ? {
+                valid,
+                value: JSON.parse(updatedSession.structuredResult ?? "null"),
+              }
+            : {
+                valid,
+                errors: JSON.parse(updatedSession.resultSchemaErrors ?? "[]"),
+              },
+        });
+      }
       if (becameTerminal) {
         payloads.push({
           sessionId,
@@ -2501,7 +2577,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           prUrl: updatedSession.prUrl ?? null,
           branch: updatedSession.branch ?? null,
           agentId: updatedSession.agentId,
+          label: updatedSession.label ?? null,
         };
+        if (updatedSession.structuredResult !== null) {
+          summary.structuredResult = JSON.parse(
+            updatedSession.structuredResult
+          );
+        }
         try {
           const parsed = JSON.parse(updatedSession.result ?? "") as {
             digest?: Record<string, unknown>;
@@ -2546,6 +2628,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       if (result.prUrl) set.prUrl = result.prUrl;
       if (result.prState) set.prState = result.prState;
       if (result.branch) set.branch = result.branch;
+      Object.assign(set, structuredSet);
       const rows = await this.db
         .update(workspaceAgentSessions)
         .set(set)
@@ -2586,6 +2669,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (result.prUrl) set.prUrl = result.prUrl;
     if (result.prState) set.prState = result.prState;
     if (result.branch) set.branch = result.branch;
+    Object.assign(set, structuredSet);
 
     const updatedSession = await this.db
       .update(workspaceAgentSessions)
@@ -3645,6 +3729,15 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       .where(
         and(eq(workspaceIssues.repo, repo), eq(workspaceIssues.branch, branch))
       )
+      .get();
+  }
+
+  async getIssueByPrUrl(prUrl: string): Promise<Issue | undefined> {
+    await this.ready;
+    return this.db
+      .select()
+      .from(workspaceIssues)
+      .where(eq(workspaceIssues.prUrl, prUrl))
       .get();
   }
 

@@ -150,6 +150,10 @@ describe("ingestFailedAgentSession", () => {
       laneDbRef: null,
       purpose: null,
       endedAt: null,
+      label: null,
+      resultSchema: null,
+      structuredResult: null,
+      resultSchemaErrors: null,
       lastReviewedSha: null,
       reviewSummary: null,
     };
