@@ -94,6 +94,94 @@ function fakeSandbox(
   };
 }
 
+describe("CloudflareBackend shared admission (PILE-302)", () => {
+  const admitEnv = () =>
+    ({
+      ...baseEnv(),
+      CF_ADMISSION_URL: "https://ci.example.dev",
+      CF_ADMISSION_TOKEN: "tok",
+    }) as unknown as AppEnv;
+
+  it("denies the spawn when the admission ledger is at capacity", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() =>
+        Promise.resolve(
+          new Response(JSON.stringify({ ok: false, reason: "full" }), {
+            status: 429,
+          })
+        )
+      )
+    );
+    const { handle } = fakeSandbox({});
+    const backend = new CloudflareBackend(
+      () => Promise.resolve(handle),
+      admitEnv()
+    );
+    await expect(
+      backend.createSandbox({
+        name: "vortex-x-1",
+        sessionId: "s1",
+        organizationId: "o1",
+        agentLabel: "x",
+        env: {},
+      })
+    ).rejects.toThrow(/admission denied/);
+    vi.unstubAllGlobals();
+  });
+
+  it("admits on create and releases on destroy", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: RequestInfo | URL, init?: RequestInit) => {
+        calls.push(`${init?.method} ${String(url)}`);
+        return Promise.resolve(
+          new Response(JSON.stringify({ ok: true }), { status: 200 })
+        );
+      })
+    );
+    const { handle, destroy } = fakeSandbox({});
+    const backend = new CloudflareBackend(
+      () => Promise.resolve(handle),
+      admitEnv()
+    );
+    await backend.createSandbox({
+      name: "vortex-x-2",
+      sessionId: "s2",
+      organizationId: "o1",
+      agentLabel: "x",
+      env: {},
+    });
+    await backend.deleteSandbox(sandboxRecord);
+    expect(calls.some((c) => c.includes("/admin/sandbox/admit"))).toBe(true);
+    expect(calls.some((c) => c.includes("/admin/sandbox/release"))).toBe(true);
+    expect(destroy).toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("fails open when the admission endpoint is unreachable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.reject(new Error("connection refused")))
+    );
+    const { handle } = fakeSandbox({});
+    const backend = new CloudflareBackend(
+      () => Promise.resolve(handle),
+      admitEnv()
+    );
+    const created = await backend.createSandbox({
+      name: "vortex-x-3",
+      sessionId: "s3",
+      organizationId: "o1",
+      agentLabel: "x",
+      env: {},
+    });
+    expect(created.state).toBe("started");
+    vi.unstubAllGlobals();
+  });
+});
+
 const sandboxRecord: ComputeSandbox = {
   id: "vortex-codex-abc123",
   name: "vortex-codex-abc123",
