@@ -64,9 +64,6 @@ import {
 } from "./subscription-pool.js";
 
 const RESULT_PATH = "/tmp/agent-result.json";
-// Preview comment is once-per-session — poll re-enters while the terminal
-// result is in flight and a second tunnel+comment would double-post.
-const previewPostedSessions = new Set<string>();
 // Sandbox compute calls (findSandbox/createSandbox/startRunner) hang
 // indefinitely when a container wedges — leaving the session `created`
 // forever and holding the `waitUntil` thread. Bound the whole provision
@@ -934,7 +931,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
     branch: string | null | undefined
   ): Promise<void> {
     const repo = sandbox.runnerEnv?.REPO;
-    if (!repo || !prUrl || previewPostedSessions.has(sessionId)) return;
+    if (!repo || !prUrl) return;
     const compute = this.requireCompute();
     if (!compute.previewUrl) return;
     try {
@@ -947,7 +944,6 @@ export class SandboxCliAgentProvider implements AgentProvider {
       if (!port) return;
       const url = await compute.previewUrl(sandbox, port);
       if (!url) return;
-      previewPostedSessions.add(sessionId);
       const pullNumber = /\/pull\/(\d+)/.exec(prUrl)?.[1];
       if (!pullNumber) return;
       const token = await this.githubToken(repo, DEFAULT_LANE_PERMISSIONS, {
