@@ -1276,7 +1276,7 @@ async function sessionWatchCommand(
       // no live state) — the session record itself still exists, so fall
       // back to it.
       const sessionRes = await doFetch(
-        `${baseUrl}/workspaces/${workspace}/agent/sessions/${sessionId}`,
+        `${baseUrl}/workspaces/${workspace}/agent/sessions/${sessionId}?summary=1`,
         { headers }
       );
       if (!sessionRes.ok) {
