@@ -6,6 +6,11 @@ on:
       # Merge-queue temp refs are throwaway — pushing them to Artifacts
       # would burn cloudflare-ci runs on group refs GitHub deletes.
       - "gh-readonly-queue/**"
+      # Agent-lane branches churn constantly and never get preview deploys —
+      # syncing them spends a pipeline run (container + build minutes) per
+      # push on branches that exist only to hold a lane's PR diff. Lanes open
+      # PRs off these branches; GitHub-side PR checks still run normally.
+      - "issue-*"
   workflow_dispatch:
 
 concurrency:
