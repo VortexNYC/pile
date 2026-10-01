@@ -5,12 +5,11 @@ CODEX_HOME = os.path.join(HOME, '.codex')
 ENV_ID = os.environ['CODEX_CLI_ENV_ID']
 
 
-def agent_env():
-    env = os.environ.copy()
-    env['HOME'] = HOME
+def agent_env(shims=True):
+    # Auth lives in CODEX_HOME on disk; CODEX_AUTH_JSON_B64 stays runner-only.
+    env = scrubbed_env(shims=shims)
     env['CODEX_HOME'] = CODEX_HOME
     env['CODEX_INSTALL_DIR'] = INSTALL_DIR
-    env['PATH'] = INSTALL_DIR + ':' + env.get('PATH', '')
     return env
 
 
@@ -21,10 +20,8 @@ def ensure():
     os.makedirs(INSTALL_DIR, exist_ok=True)
     install_url = 'https://raw.githubusercontent.com/openai/codex/main/scripts/install/install.sh'
     install_script = subprocess.run(['curl', '-fsSL', install_url], check=True, capture_output=True, text=True).stdout
-    env = os.environ.copy()
+    env = agent_env(shims=False)
     env['CODEX_NON_INTERACTIVE'] = '1'
-    env['CODEX_INSTALL_DIR'] = INSTALL_DIR
-    env['CODEX_HOME'] = CODEX_HOME
     subprocess.run(['sh'], input=install_script, env=env, check=True, text=True)
     return codex_bin
 
@@ -80,18 +77,22 @@ def poll_task(codex_bin, task_url):
 
 
 def apply_and_push(codex_bin, task_url):
-    env = agent_env()
-    result = run([codex_bin, 'cloud', 'apply', task_url], cwd=REPO_DIR, env=env, check=False)
+    result = run([codex_bin, 'cloud', 'apply', task_url], cwd=REPO_DIR, env=agent_env(), check=False)
     if result.returncode != 0:
         print('codex cloud apply failed:', result.returncode, result.stdout, result.stderr)
         return False
+    env = runner_env()
     status = run(['git', '-C', REPO_DIR, 'status', '--porcelain'], env=env, capture_output=True, text=True, check=True)
     if not status.stdout.strip():
         print('no changes to commit')
         return False
     run(['git', '-C', REPO_DIR, 'add', '-A'], env=env, check=True)
     run(['git', '-C', REPO_DIR, 'commit', '-m', f'{AGENT_LABEL} changes for {BRANCH}'], env=env, check=True)
-    run_transport(['git', '-C', REPO_DIR, 'push', 'origin', BRANCH], env=env)
+    set_remote(True)
+    try:
+        run_transport(['git', '-C', REPO_DIR, 'push', 'origin', BRANCH], env=env)
+    finally:
+        lock_remote()
     return True
 
 

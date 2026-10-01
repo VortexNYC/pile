@@ -5,10 +5,7 @@ CURSOR_HOME = os.path.join(HOME, '.local', 'share', 'cursor-agent')
 
 
 def agent_env():
-    env = os.environ.copy()
-    env['HOME'] = HOME
-    env['PATH'] = INSTALL_DIR + ':' + env.get('PATH', '')
-    return env
+    return scrubbed_env(keep=('CURSOR_API_KEY',))
 
 
 def ensure():
@@ -19,7 +16,7 @@ def ensure():
         candidate = os.path.join(INSTALL_DIR, name)
         if os.path.exists(candidate):
             return candidate
-    subprocess.run(['bash', '-c', 'curl https://cursor.com/install -fsS | bash'], check=False)
+    subprocess.run(['bash', '-c', 'curl https://cursor.com/install -fsS | bash'], env=scrubbed_env(shims=False), check=False)
     for name in ('cursor-agent', 'agent'):
         candidate = os.path.join(INSTALL_DIR, name)
         if os.path.exists(candidate):
@@ -100,7 +97,7 @@ def main():
         clone_repo()
         warm_pnpm_store()
     output, report = run_agent(agent_bin)
-    pushed = commit_and_push(agent_env()) if REPO else False
+    pushed = commit_and_push() if REPO else False
     rc = finalize(output, pushed, report=report)
     save_pnpm_store()
     stop_log_ship()

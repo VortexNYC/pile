@@ -7,16 +7,14 @@ FOLLOWUP_DIR = '/tmp/followups'
 
 
 def agent_env():
-    env = os.environ.copy()
-    env['HOME'] = HOME
-    env['PATH'] = INSTALL_DIR + ':' + env.get('PATH', '')
-    return env
+    # Credentials live in DEVIN_HOME on disk; DEVIN_CREDENTIALS_B64 stays runner-only.
+    return scrubbed_env()
 
 
 def ensure():
     devin_bin = shutil.which('devin') or os.path.join(INSTALL_DIR, 'devin')
     if not os.path.exists(devin_bin):
-        subprocess.run(['bash', '-c', 'curl -fsSL https://cli.devin.ai/install.sh | bash'], check=False)
+        subprocess.run(['bash', '-c', 'curl -fsSL https://cli.devin.ai/install.sh | bash'], env=scrubbed_env(shims=False), check=False)
     # installer exits non-zero when its interactive wizard bails without a TTY; verify the binary directly
     result = subprocess.run([devin_bin, '--version'], capture_output=True, text=True)
     if result.returncode != 0:
@@ -98,7 +96,7 @@ def drain_followups(devin_bin):
         os.rename(path, path[:-7] + '.drained')
         print('running queued follow-up prompt:', name)
         output = run_agent(devin_bin, prompt=text)
-        commit_and_push(agent_env())
+        commit_and_push()
     return output
 
 
@@ -121,7 +119,7 @@ def main():
             os.makedirs(REPO_DIR, exist_ok=True)
         output = run_agent(devin_bin)
         output = drain_followups(devin_bin) or output
-        pushed = commit_and_push(agent_env()) if REPO else False
+        pushed = commit_and_push() if REPO else False
         return finalize(output, pushed)
     if not REPO:
         # Repo-less lane — research/docs/design work. The agent runs in an
@@ -137,7 +135,7 @@ def main():
     ensure_postgres()
     output = run_agent(devin_bin)
     output = drain_followups(devin_bin) or output
-    pushed = commit_and_push(agent_env())
+    pushed = commit_and_push()
     return finalize(output, pushed)
 
 

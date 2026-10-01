@@ -159,7 +159,70 @@ describe("DevinCliAgentProvider", () => {
     expect(body.env.MODEL).toBe("swe-2");
     expect(body.env.REPO).toBe("VortexNYC/pile");
     expect(body.env.DEVIN_CREDENTIALS_B64).toBeDefined();
+    expect(body.env.PILE_LANE_RESTRICTED).toBeUndefined();
     expect(body.labels["vortex.agent"]).toBe("devin-cli");
+  });
+
+  it("forwards restricted lane mode and the net allowlist", async () => {
+    const sandboxId = "sb-2";
+    const toolboxBase = `https://proxy.app.daytona.io/toolbox/${sandboxId}`;
+    const sandbox = {
+      id: sandboxId,
+      name: "vortex-devin-sess2",
+      toolboxProxyUrl: "https://proxy.app.daytona.io/toolbox",
+    };
+    const fetchSpy = mockFetch([
+      {
+        url: "https://app.daytona.io/api/sandbox",
+        method: "GET",
+        response: () => ({ items: [] }),
+      },
+      {
+        url: "https://app.daytona.io/api/sandbox",
+        method: "POST",
+        response: () => ({ ...sandbox, state: "creating" }),
+      },
+      {
+        url: `https://app.daytona.io/api/sandbox/${sandboxId}`,
+        method: "GET",
+        response: () => ({ ...sandbox, state: "started" }),
+      },
+      {
+        url: `${toolboxBase}/process/session`,
+        method: "POST",
+        response: () => ({ sessionId: "sess-2" }),
+      },
+      {
+        url: `${toolboxBase}/process/session/sess-2/exec`,
+        method: "POST",
+        response: () => ({ cmdId: "cmd-2" }),
+      },
+    ]);
+
+    const provider = new DevinCliAgentProvider(
+      cliEnv({ LANE_RESTRICTED: "true", LANE_NET_ALLOWLIST: "pkg.example.com" })
+    );
+    (
+      provider as unknown as { githubToken: (repo: string) => Promise<string> }
+    ).githubToken = vi.fn().mockResolvedValue("gh-token");
+
+    const waitUntilCalls: Promise<unknown>[] = [];
+    await provider.dispatch("org-1", issueFixture(), "swe-2", {
+      sessionId: "sess-2",
+      gitIdentity: gitIdentityFixture(),
+      waitUntil: (p) => waitUntilCalls.push(p),
+    });
+    await Promise.all(waitUntilCalls);
+
+    const createCall = fetchSpy.mock.calls.find(
+      ([input, init]) =>
+        String(input) === "https://app.daytona.io/api/sandbox" &&
+        (init as RequestInit | undefined)?.method === "POST"
+    );
+    expect(createCall).toBeDefined();
+    const body = JSON.parse((createCall![1] as RequestInit).body as string);
+    expect(body.env.PILE_LANE_RESTRICTED).toBe("1");
+    expect(body.env.PILE_NET_ALLOWLIST).toBe("pkg.example.com");
   });
 
   it("appends dispatch instructions to the prompt context", async () => {
