@@ -835,7 +835,7 @@ export interface paths {
                         externalRef?: string | null;
                         teamId?: string;
                         teamKey?: string;
-                        description?: string;
+                        description?: string | null;
                         /** @enum {string} */
                         status?: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
                         /** @enum {string} */
@@ -849,11 +849,11 @@ export interface paths {
                         templateId?: string;
                         snoozedUntil?: string | null;
                         assigneeId?: string | null;
-                        projectId?: string;
-                        cycleId?: string;
-                        labelIds?: string[];
-                        repo?: string;
-                        branch?: string;
+                        projectId?: string | null;
+                        cycleId?: string | null;
+                        labelIds?: string[] | null;
+                        repo?: string | null;
+                        branch?: string | null;
                     };
                 };
             };
@@ -1221,7 +1221,7 @@ export interface paths {
                         externalRef?: string | null;
                         teamId?: string;
                         teamKey?: string;
-                        description?: string;
+                        description?: string | null;
                         /** @enum {string} */
                         status?: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
                         /** @enum {string} */
@@ -1235,11 +1235,11 @@ export interface paths {
                         templateId?: string;
                         snoozedUntil?: string | null;
                         assigneeId?: string | null;
-                        projectId?: string;
-                        cycleId?: string;
-                        labelIds?: string[];
-                        repo?: string;
-                        branch?: string;
+                        projectId?: string | null;
+                        cycleId?: string | null;
+                        labelIds?: string[] | null;
+                        repo?: string | null;
+                        branch?: string | null;
                     };
                 };
             };
@@ -1326,7 +1326,7 @@ export interface paths {
                             externalRef?: string | null;
                             teamId?: string;
                             teamKey?: string;
-                            description?: string;
+                            description?: string | null;
                             /** @enum {string} */
                             status?: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
                             /** @enum {string} */
@@ -1340,11 +1340,11 @@ export interface paths {
                             templateId?: string;
                             snoozedUntil?: string | null;
                             assigneeId?: string | null;
-                            projectId?: string;
-                            cycleId?: string;
-                            labelIds?: string[];
-                            repo?: string;
-                            branch?: string;
+                            projectId?: string | null;
+                            cycleId?: string | null;
+                            labelIds?: string[] | null;
+                            repo?: string | null;
+                            branch?: string | null;
                         };
                     };
                 };
@@ -1395,8 +1395,8 @@ export interface paths {
                         agentId?: string;
                         provider?: string;
                         model?: string;
-                        repo?: string;
-                        branch?: string;
+                        repo?: string | null;
+                        branch?: string | null;
                         instructions?: string;
                         preflight?: boolean;
                     };
@@ -1726,7 +1726,7 @@ export interface paths {
                         items: {
                             issueId: string;
                             agentId?: string;
-                            branch?: string;
+                            branch?: string | null;
                             instructions?: string;
                             queuedAfter?: string;
                         }[];

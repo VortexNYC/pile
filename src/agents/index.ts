@@ -88,6 +88,21 @@ export function registerAgentProvider(
   providers[agentId] = factory;
 }
 
+/** Whether a provider parks its sandbox after a terminal result for
+ *  follow-up resumes — the population the kept-sandbox cap reaps and
+ *  fleet-health counts (PILE-253). Capability is descriptor-level, so the
+ *  raw env is enough; unknown/external providers report false. */
+export function providerKeepsTerminalSandbox(
+  agentId: string,
+  env: WorkerEnv
+): boolean {
+  try {
+    return getAgentProvider(agentId, env).keepsTerminalSandbox === true;
+  } catch {
+    return false;
+  }
+}
+
 /** Org metadata → laneDb config for a repo (organization.metadata.laneDb
  *  keyed by "owner/name"). */
 async function laneDbConfigForOrgRepo(

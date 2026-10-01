@@ -10,7 +10,11 @@ import type { AgentSession, AgentSessionStatus } from "../types/workspace.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
 import { loadProviderConfig } from "./credentials.js";
 import { resolveAgentEnv } from "./daytona.js";
-import { dispatchAgent, getAgentProvider } from "./index.js";
+import {
+  dispatchAgent,
+  getAgentProvider,
+  providerKeepsTerminalSandbox,
+} from "./index.js";
 import { getLaneDbProvider, type LaneDbRef } from "./lane-db.js";
 import { nudgeLane } from "./nudge.js";
 import type {
@@ -42,6 +46,22 @@ const TERMINAL_STATUSES = new Set<AgentSessionStatus>([
   "failed",
   "canceled",
 ]);
+
+/** The kept-sandbox set one session occupies: terminal, inside the resume
+ *  window, and not yet reaped. The cap and fleet-health's keptSandboxes must
+ *  count exactly this set (plus the provider-keeps-sandbox check) — PILE-253. */
+export function sessionHoldsKeptSandbox(
+  session: Pick<
+    AgentSession,
+    "status" | "endedAt" | "updatedAt" | "lastStateHash"
+  >,
+  now: number
+): boolean {
+  if (!TERMINAL_STATUSES.has(session.status)) return false;
+  if (session.lastStateHash === "reaped") return false;
+  const anchor = Date.parse(session.endedAt ?? session.updatedAt);
+  return Number.isFinite(anchor) && now - anchor < SANDBOX_RESUME_WINDOW_MS;
+}
 
 export function parseAgentTimeouts(configJson: string | null | undefined): {
   timeoutMinutes: number;
@@ -375,20 +395,26 @@ async function reapTerminalArtifacts(
   now: number
 ): Promise<void> {
   const recent = await stub.listAgentSessions({ limit: 200 });
-  // PILE-239 — first pass: terminal sessions inside the resume window are
-  // the kept-sandbox population per provider. Beyond the cap the oldest are
-  // reaped even though their window hasn't closed.
+  // PILE-239/253 — first pass: terminal sessions inside the resume window on
+  // providers that park their sandbox are the kept-sandbox population per
+  // provider — the same set fleet-health counts. Beyond the cap the oldest
+  // are reaped even though their window hasn't closed.
   const inWindowByProvider = new Map<string, { id: string; at: number }[]>();
+  const keepsCache = new Map<string, boolean>();
+  const keepsSandbox = (agentId: string): boolean => {
+    const cached = keepsCache.get(agentId);
+    if (cached !== undefined) return cached;
+    const keeps = providerKeepsTerminalSandbox(agentId, env);
+    keepsCache.set(agentId, keeps);
+    return keeps;
+  };
   for (const session of recent) {
-    if (!TERMINAL_STATUSES.has(session.status)) continue;
-    if (session.lastStateHash === "reaped") continue;
+    if (!sessionHoldsKeptSandbox(session, now)) continue;
+    if (!keepsSandbox(session.agentId)) continue;
     const anchor = Date.parse(session.endedAt ?? session.updatedAt);
-    if (!Number.isFinite(anchor)) continue;
-    if (now - anchor < SANDBOX_RESUME_WINDOW_MS) {
-      const list = inWindowByProvider.get(session.agentId) ?? [];
-      list.push({ id: session.id, at: anchor });
-      inWindowByProvider.set(session.agentId, list);
-    }
+    const list = inWindowByProvider.get(session.agentId) ?? [];
+    list.push({ id: session.id, at: anchor });
+    inWindowByProvider.set(session.agentId, list);
   }
   const forceReap = new Set<string>();
   for (const list of inWindowByProvider.values()) {

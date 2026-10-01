@@ -76,7 +76,7 @@ export interface IssueInput {
   /** Human-friendly alternative to teamId — resolved by team key (e.g. "ISS"). */
   teamKey?: string;
   title: string;
-  description?: string;
+  description?: string | null;
   status?: IssueStatus;
   priority?: IssuePriority;
   resolution?: IssueResolution | null;
@@ -90,8 +90,8 @@ export interface IssueInput {
   projectId?: string | null;
   cycleId?: string | null;
   labelIds?: string | null;
-  repo?: string;
-  branch?: string;
+  repo?: string | null;
+  branch?: string | null;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }
