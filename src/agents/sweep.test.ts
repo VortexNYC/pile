@@ -150,6 +150,8 @@ describe("ingestFailedAgentSession", () => {
       laneDbRef: null,
       purpose: null,
       endedAt: null,
+      maxDurationMinutes: null,
+      effort: null,
       label: null,
       resultSchema: null,
       structuredResult: null,
@@ -1111,6 +1113,85 @@ describe("sweepAgentSessions", () => {
     const rows = await stub.listAgentSessions({ issueId: issue.id });
     expect(canceled).toHaveLength(0);
     expect(rows.every((r) => r.lastStateHash !== "reaped")).toBe(true);
+  });
+
+  it("cancels and escalates a lane past its maxDuration without retrying", async () => {
+    const agentId = `mock-budget-${crypto.randomUUID().slice(0, 8)}`;
+    registerMock(agentId, {
+      dispatch: () => ({ id: "retried", agentId, status: "created" }),
+      poll: (id) => ({ id, agentId, status: "running" }),
+    });
+    const issue = await stub.createIssue({ title: "Budgeted lane" });
+    const thirtyMinutesAgo = new Date(
+      Date.now() - 30 * 60 * 1000
+    ).toISOString();
+    // Under the 60m provider default, but over its own 10m budget.
+    const overBudget = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+      createdAt: thirtyMinutesAgo,
+      startedAt: thirtyMinutesAgo,
+      maxDurationMinutes: 10,
+      effort: "low",
+    });
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    const after = await stub.getAgentSession(overBudget.id);
+    expect(after?.status).toBe("canceled");
+    expect(after?.result).toContain("run budget exhausted after 10m");
+    expect(after?.infraFailure).toBe(0);
+
+    const siblings = await stub.listAgentSessions({ issueId: issue.id });
+    expect(siblings.some((s) => s.retryOf === overBudget.id)).toBe(false);
+
+    const comments = await stub.listComments(issue.id);
+    expect(
+      comments.some(
+        (c) =>
+          c.externalSource === "budget" && c.body.includes("10m run budget")
+      )
+    ).toBe(true);
+    const events = await stub.listAgentSessionEvents(overBudget.id, {
+      limit: 50,
+      order: "desc",
+    });
+    expect(
+      events.some(
+        (e) =>
+          e.type === "issue.escalated" &&
+          String(e.payload).includes("max_duration")
+      )
+    ).toBe(true);
+    expect((await stub.getIssue(issue.id))?.status).toBe("triage");
+  });
+
+  it("lets a lane with a larger maxDuration outlive the provider timeout", async () => {
+    const agentId = `mock-budget-long-${crypto.randomUUID().slice(0, 8)}`;
+    registerMock(agentId, {
+      poll: (id) => ({ id, agentId, status: "running", result: "working" }),
+    });
+    const issue = await stub.createIssue({ title: "Long budget" });
+    const twoHoursAgo = new Date(Date.now() - 2 * 3600 * 1000).toISOString();
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+      createdAt: twoHoursAgo,
+      startedAt: twoHoursAgo,
+      maxDurationMinutes: 240,
+    });
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    expect((await stub.getAgentSession(session.id))?.status).toBe("running");
   });
 });
 
