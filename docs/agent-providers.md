@@ -459,15 +459,12 @@ optional:
 
 ### Lane exec isolation
 
-The sandbox runner keeps the substrate secrets (GitHub installation token,
-lane/log tokens, provider credentials) to itself. The agent, `.pile/setup.sh`,
-and every shell they spawn run with a scrubbed env: runner keys and any
-secret-shaped name (`*_TOKEN`, `*_SECRET`, `*_API_KEY`, `*_PASSWORD`, …) are
-removed, except the scoped `PILE_API_*` credential and the keys the repo's
-`env` allowlist forwarded. The checkout's `origin` remote is token-free; the
-runner authenticates its own fetch/push with a per-process extraheader. An
-agent CLI that needs its own credential (cursor-agent's `CURSOR_API_KEY`) gets
-it, but non-interactive shells it spawns unset it via `BASH_ENV`.
+The agent, `.pile/setup.sh`, and every shell they spawn run with the
+allowlisted agent env (see "Minimal agent env" below). The checkout's `origin`
+remote is token-free; the runner authenticates its own fetch/push with a
+per-process extraheader. An agent CLI that needs its own credential
+(cursor-agent's `CURSOR_API_KEY`) gets it, but non-interactive bash shells it
+spawns unset it via `BASH_ENV`.
 
 With `"restricted": true` the runner also puts a policy shim ahead of `git`,
 `curl`, `wget`, `gh`, `ssh`/`scp`/`sftp`, and `nc`/`socat`/`telnet`/`ftp`:
@@ -481,7 +478,34 @@ With `"restricted": true` the runner also puts a policy shim ahead of `git`,
 - `gh`, `ssh`-family, and raw-socket tools are refused outright.
 
 The shim is a guard against the common CLIs, not a kernel sandbox — the
-scrubbed env is what keeps credentials out of the lane.
+allowlisted env is what keeps credentials out of the lane.
+
+## Lane credential posture
+
+Sandbox lanes are treated as compromised by default:
+
+- **Per-session GitHub token.** Each lane gets an installation token
+  restricted to the issue's repository. Every mint (dispatch, follow-up,
+  `POST …/sessions/{id}/github-token` refresh) is registered against the
+  session and revokes the token it replaces, so a lane holds at most one
+  live token.
+- **Bound to session lifetime.** The runner revokes its token
+  (`DELETE /installation/token`) and strips it from the git remote at run
+  end; the sweep revokes any token still registered once the session is
+  terminal, including kept follow-up sandboxes. The refresh endpoint refuses
+  terminal sessions.
+- **Refresh before expiry.** The runner gets `GITHUB_TOKEN_EXPIRES_AT` and
+  re-mints through the lane-token endpoint 5 minutes before expiry, plus
+  before clone and push.
+- **Masked output.** The runner masks secret env values, decoded credential
+  blobs, and known token shapes in everything it prints, the result file,
+  and the event stream; the log-ingest endpoint and the provider poll scrub
+  again server-side.
+- **Minimal agent env.** The agent subprocess (and `.pile/setup.sh`) get an
+  allowlisted env: basic process vars, git identity, issue/repo metadata,
+  the Pile API key, the agent's own credential, and the `extraEnv` keys the
+  repo's `env` allowlist admitted. `GITHUB_TOKEN`, the lane token and its
+  URLs, credential blobs, and the runner bundle never reach it.
 
 Repositories that also install the Pile GitHub App get a per-repo default
 agent: `PATCH /workspaces/{org}/github/installations/{id}` with

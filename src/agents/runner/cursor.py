@@ -64,7 +64,7 @@ def run_agent(agent_bin):
     events = open('/tmp/agent-events.ndjson', 'a', buffering=1)
     try:
         for line in proc.stdout:
-            events.write(line)
+            events.write(_redact(line))
             tail.append(line)
             try:
                 evt = json.loads(line)
@@ -101,6 +101,7 @@ def main():
     output, report = run_agent(agent_bin)
     pushed = commit_and_push(agent_env()) if REPO else False
     rc = finalize(output, pushed, report=report)
+    revoke_github_token()
     save_pnpm_store()
     stop_log_ship()
     return rc
@@ -111,6 +112,7 @@ if __name__ == '__main__':
         sys.exit(main())
     except Exception as e:
         fail_result(e)
+        revoke_github_token()
         save_pnpm_store()
         stop_log_ship()
         sys.exit(1)

@@ -133,8 +133,14 @@ describe("CursorCliAgentProvider", () => {
 
     const provider = new CursorCliAgentProvider(cliEnv());
     (
-      provider as unknown as { githubToken: (repo: string) => Promise<string> }
-    ).githubToken = vi.fn().mockResolvedValue("gh-token");
+      provider as unknown as {
+        githubToken: (
+          repo: string
+        ) => Promise<{ token: string; expiresAt: string | null }>;
+      }
+    ).githubToken = vi
+      .fn()
+      .mockResolvedValue({ token: "gh-token", expiresAt: null });
 
     const waitUntilCalls: Promise<unknown>[] = [];
     const result = await provider.dispatch("org-1", issueFixture(), "auto", {
@@ -205,8 +211,14 @@ describe("CursorCliAgentProvider", () => {
 
     const provider = new CursorCliAgentProvider(cliEnv());
     (
-      provider as unknown as { githubToken: (repo: string) => Promise<string> }
-    ).githubToken = vi.fn().mockResolvedValue("gh-token");
+      provider as unknown as {
+        githubToken: (
+          repo: string
+        ) => Promise<{ token: string; expiresAt: string | null }>;
+      }
+    ).githubToken = vi
+      .fn()
+      .mockResolvedValue({ token: "gh-token", expiresAt: null });
 
     const waitUntilCalls: Promise<unknown>[] = [];
     await provider.dispatch("org-1", issueFixture(), "auto", {
@@ -227,9 +239,7 @@ describe("CursorCliAgentProvider", () => {
     const body = JSON.parse((createCall![1] as RequestInit).body as string);
     expect(body.env.PILE_API_URL).toBe("https://pile.nyc");
     expect(body.env.PILE_API_KEY).toBe("pil_readonly");
-    expect(body.env.PILE_AGENT_ENV_PASSTHROUGH).toBe(
-      "PILE_API_URL,PILE_API_KEY,NPM_TOKEN"
-    );
+    expect(body.env.PILE_AGENT_ENV_KEYS).toBe("NPM_TOKEN");
     expect(body.env.PILE_LANE_RESTRICTED).toBe("1");
     const prompt = atob(body.env.PROMPT_B64);
     expect(prompt).toContain("$PILE_API_KEY");

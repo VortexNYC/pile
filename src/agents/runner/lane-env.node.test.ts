@@ -70,7 +70,7 @@ function harnessEnv(
     GIT_AUTHOR_NAME: "Lane Bot",
     PILE_API_URL: "https://pile.test",
     PILE_API_KEY: "pil_readonly",
-    PILE_AGENT_ENV_PASSTHROUGH: "PILE_API_URL,PILE_API_KEY,NPM_TOKEN",
+    PILE_AGENT_ENV_KEYS: "NPM_TOKEN",
     ...SECRETS,
     ...extra,
   };
@@ -131,7 +131,7 @@ describe("lane_env secret scrubbing (PILE-281)", () => {
       "CODEX_AUTH_JSON_B64",
       "AWS_SECRET_ACCESS_KEY",
       "DAYTONA_API_KEY",
-      "PILE_AGENT_ENV_PASSTHROUGH",
+      "PILE_AGENT_ENV_KEYS",
     ]) {
       expect(env, key).not.toHaveProperty(key);
     }

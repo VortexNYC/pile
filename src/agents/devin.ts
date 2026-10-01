@@ -16,6 +16,7 @@ import type {
   DispatchComment,
 } from "./provider.js";
 import { probeUrl } from "./provider.js";
+import { DOMAIN_REVIEW_PROMPT } from "./review-prompt.js";
 
 const devinCreateResponseSchema = z.object({
   session_id: z.string().optional(),
@@ -111,6 +112,7 @@ function buildPrompt(
     ...(instructions ? ["", "## Dispatch instructions", "", instructions] : []),
     "",
     "Verify proportionate to the diff: run the project's lint/typecheck and any tests covering code you change (the repository's AGENTS.md lists its proof commands); docs/config-only diffs can skip tests. Note honestly in the PR body what you could not run.",
+    ...(issue.repo ? ["", DOMAIN_REVIEW_PROMPT, ""] : []),
     "Do not attempt to update Pile yourself — an external system will poll your session and write the PR URL and final status back automatically.",
   ].join("\n");
 }
