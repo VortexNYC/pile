@@ -37,6 +37,7 @@ import type {
   AgentProviderState,
 } from "./provider.js";
 import { runnerBundle } from "./runner/bundle.js";
+import { RUNNER_LAUNCH_COMMAND } from "./runner/launch.js";
 
 const RESULT_PATH = "/tmp/agent-result.json";
 // Sandbox compute calls (findSandbox/createSandbox/startRunner) hang
@@ -428,11 +429,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
             },
             { parentId: spanId }
           );
-          await compute.startRunner(
-            sandbox,
-            sessionId,
-            "printf '%s' \"$RUNNER_PY_B64\" | base64 -d > /tmp/run.py && python3 /tmp/run.py"
-          );
+          await compute.startRunner(sandbox, sessionId, RUNNER_LAUNCH_COMMAND);
           await this.note(
             organizationId,
             sessionId,
@@ -708,7 +705,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
     await compute.startRunner(
       sandbox,
       followupId,
-      "printf '%s' \"$RUNNER_PY_B64\" | base64 -d > /tmp/run.py && python3 /tmp/run.py",
+      RUNNER_LAUNCH_COMMAND,
       followupEnv
     );
     await this.note(

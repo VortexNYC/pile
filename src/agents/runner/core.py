@@ -24,12 +24,48 @@ import time
 import urllib.error
 import urllib.request
 
+# Runner-only credentials. The lane agent is untrusted code on a real repo:
+# these live in runner memory (secret()) and never reach an agent subprocess,
+# .pile/setup.sh, or the checkout's git config.
+RUNNER_SECRETS = ('GITHUB_TOKEN', 'LANE_TOKEN', 'PILE_TOKEN_URL', 'PILE_LOG_TOKEN', 'PILE_LOG_URL', 'PILE_CACHE_URL', 'DEVIN_CREDENTIALS_B64', 'CODEX_AUTH_JSON_B64')
+_SEAL_FD = 'PILE_RUNNER_SEAL_FD'
+
+
+def _seal_secrets():
+    # /proc/<pid>/environ is the exec-time env block and readable by any
+    # same-uid process — unsetenv never clears it. As the entrypoint, re-exec
+    # once with the secrets moved to an inherited memfd, so an agent reading
+    # /proc/$PPID/environ (or every /proc/*/environ) finds none of them.
+    fd = os.environ.pop(_SEAL_FD, None)
+    if fd is not None:
+        with os.fdopen(int(fd), 'rb') as f:
+            return json.loads(f.read())
+    secrets = {k: os.environ.pop(k) for k in RUNNER_SECRETS if k in os.environ}
+    if __name__ != '__main__' or not secrets:
+        return secrets
+    memfd = os.memfd_create('pile-runner-secrets', 0)
+    os.write(memfd, json.dumps(secrets).encode())
+    os.lseek(memfd, 0, os.SEEK_SET)
+    os.set_inheritable(memfd, True)
+    env = dict(os.environ)
+    env[_SEAL_FD] = str(memfd)
+    os.execve(sys.executable, [sys.executable] + sys.argv, env)
+
+
+_SECRETS = _seal_secrets()
+
+
+def secret(name, default=''):
+    return _SECRETS.get(name) or default
+
+
 # Tee everything this runner prints (including the agent subprocess, whose
 # output flows through sys.stdout) to a transcript file Pile can read live.
 class _Tee:
     def __init__(self, *streams):
         self.streams = streams
     def write(self, s):
+        s = _scrub_secrets(s)
         for st in self.streams:
             st.write(s)
     def flush(self):
@@ -41,7 +77,7 @@ HOME = os.environ.get('HOME', '/tmp')
 INSTALL_DIR = os.path.join(HOME, '.local', 'bin')
 REPO = os.environ.get('REPO', '')
 BRANCH = os.environ.get('BRANCH', '')
-GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN', '')
+GITHUB_TOKEN = secret('GITHUB_TOKEN')
 REPO_DIR = os.path.join(HOME, 'repo')
 RESULT_FILE = '/tmp/agent-result.json'
 AGENT_LABEL = os.environ.get('AGENT_LABEL', 'Agent')
@@ -49,10 +85,17 @@ PR_ERRORS = []
 RUN_STARTED = time.time()
 
 
+def _scrub_secrets(s):
+    for value in (GITHUB_TOKEN, *_SECRETS.values()):
+        if value and len(value) >= 8:
+            s = s.replace(value, '***')
+    return re.sub(r'gh[opsu]_[A-Za-z0-9_.-]+|github_pat_[A-Za-z0-9_]+', 'gh*_***', s)
+
+
 def _redact(s):
+    s = _scrub_secrets(s)
     s = re.sub(r'(Bearer|x-access-token:)\s*\S+', r'\1 ***', s)
-    s = re.sub(r'ghs_[A-Za-z0-9_.-]+', 'ghs_***', s)
-    return s
+    return re.sub(r'Basic [A-Za-z0-9+/=]{16,}', 'Basic ***', s)
 
 
 def run(cmd, cwd=None, env=None, check=False, **kwargs):
@@ -88,6 +131,122 @@ def run_transport(cmd, **kwargs):
         raise TransportError(detail) from e
 
 
+# Runner-owned git. The agent had root on the checkout — .git/config, hooks,
+# attributes, a `git` shim on PATH — so every git call the runner makes runs
+# a binary pinned before the agent started, with system/global config off,
+# hooks and fsmonitor disabled, and the local config rebuilt from an
+# allowlist. Auth rides an env-scoped extraheader for github.com only; the
+# token is never written to the remote URL the agent can read.
+SAFE_PATH = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+_GIT_LOCKDOWN = ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false']
+_KEEP_GIT_CONFIG = re.compile(r'core\.(repositoryformatversion|filemode|bare|logallrefupdates|ignorecase|precomposeunicode|symlinks|autocrlf|eol|safecrlf)')
+GITHUB_GIT_URL = f'https://github.com/{REPO}.git'
+
+
+def _sha256(path):
+    with open(path, 'rb') as f:
+        return hashlib.sha256(f.read()).hexdigest()
+
+
+def _pin_git():
+    git = shutil.which('git', path=SAFE_PATH)
+    if not git:
+        return 'git', {}
+    git = os.path.realpath(git)
+    exec_path = subprocess.run([git, '--exec-path'], capture_output=True, text=True).stdout.strip()
+    files = [git] + [os.path.join(exec_path, n) for n in ('git-remote-https', 'git-remote-http')]
+    return git, {f: _sha256(f) for f in files if os.path.exists(f)}
+
+
+GIT_BIN, _GIT_PINS = _pin_git()
+
+
+def verify_git():
+    for path, digest in _GIT_PINS.items():
+        try:
+            current = _sha256(path)
+        except OSError:
+            current = None
+        if current != digest:
+            raise RuntimeError(f'git binary {path} changed since the runner started — refusing to run git')
+
+
+def runner_git_env(auth=False):
+    env = os.environ.copy()
+    env.update({'PATH': SAFE_PATH, 'GIT_CONFIG_NOSYSTEM': '1', 'GIT_CONFIG_GLOBAL': '/dev/null', 'GIT_TERMINAL_PROMPT': '0'})
+    for k in [k for k in env if k.startswith('GIT_CONFIG_KEY_') or k.startswith('GIT_CONFIG_VALUE_')]:
+        del env[k]
+    env['GIT_CONFIG_COUNT'] = '0'
+    if auth and GITHUB_TOKEN:
+        basic = base64.b64encode(f'x-access-token:{GITHUB_TOKEN}'.encode()).decode()
+        env.update({'GIT_CONFIG_COUNT': '1', 'GIT_CONFIG_KEY_0': 'http.https://github.com/.extraheader', 'GIT_CONFIG_VALUE_0': f'Authorization: Basic {basic}'})
+    return env
+
+
+def git_cmd(*args, prefix=()):
+    verify_git()
+    return [*prefix, GIT_BIN, *_GIT_LOCKDOWN, '-C', REPO_DIR, *args]
+
+
+def git(*args, auth=False, prefix=(), **kwargs):
+    return run(git_cmd(*args, prefix=prefix), env=runner_git_env(auth), **kwargs)
+
+
+def git_transport(*args, prefix=()):
+    return run_transport(git_cmd(*args, prefix=prefix), env=runner_git_env(True))
+
+
+def sanitize_git_config():
+    git_dir = os.path.join(REPO_DIR, '.git')
+    if os.path.islink(git_dir) or not os.path.isdir(git_dir) or os.path.exists(os.path.join(git_dir, 'commondir')):
+        raise RuntimeError('lane checkout .git was replaced — refusing to run git')
+    path = os.path.join(git_dir, 'config')
+    verify_git()
+    listed = subprocess.run([GIT_BIN, 'config', '--file', path, '--null', '--list'], env=runner_git_env(), capture_output=True, text=True)
+    keep = []
+    for entry in (listed.stdout or '').split('\0'):
+        key, _, value = entry.partition('\n')
+        if _KEEP_GIT_CONFIG.fullmatch(key):
+            keep.append((key, value))
+    for stale in (path, os.path.join(git_dir, 'config.worktree')):
+        if os.path.lexists(stale):
+            os.remove(stale)
+    keep += [
+        ('remote.origin.url', GITHUB_GIT_URL),
+        ('remote.origin.fetch', '+refs/heads/*:refs/remotes/origin/*'),
+        ('user.name', os.environ.get('GIT_AUTHOR_NAME', AGENT_LABEL)),
+        ('user.email', os.environ.get('GIT_AUTHOR_EMAIL', 'agent@pile.nyc')),
+    ]
+    for key, value in keep:
+        subprocess.run([GIT_BIN, 'config', '--file', path, '--add', key, value], env=runner_git_env(), check=True)
+
+
+# Push restriction: a lane writes exactly refs/heads/<BRANCH>, never the
+# default branch, and BRANCH can't smuggle a refspec, a flag, or a ref
+# outside refs/heads/ into the runner's git argv.
+_PROTECTED_BRANCHES = ('main', 'master', 'head')
+
+
+def lane_branch_error(branch, default=''):
+    if not branch:
+        return 'lane branch is empty'
+    if branch.lower() in _PROTECTED_BRANCHES or (default and branch.lower() == default.lower()):
+        return f'lane branch "{branch}" is the repo default branch'
+    if branch.startswith(('-', '/', 'refs/')) or re.search(r'[\s:+^~?*\[\\]|\.\.|@\{|^@$', branch):
+        return f'lane branch "{branch}" is not a plain branch name'
+    verify_git()
+    check = subprocess.run([GIT_BIN, 'check-ref-format', f'refs/heads/{branch}'], env=runner_git_env(), capture_output=True)
+    if check.returncode != 0:
+        return f'lane branch "{branch}" is not a valid ref name'
+    return ''
+
+
+def assert_lane_branch(default=''):
+    error = lane_branch_error(BRANCH, default)
+    if error:
+        raise RuntimeError(error)
+
+
 def github_api(method, path, body=None):
     owner, name = REPO.split('/')
     url = f'https://api.github.com/repos/{owner}/{name}{path}'
@@ -108,13 +267,19 @@ def github_api(method, path, body=None):
         raise
 
 
+_DEFAULT_BRANCH = []
+
+
 def default_branch():
-    repo = github_api('GET', '')
-    return repo.get('default_branch', 'main')
+    if not _DEFAULT_BRANCH:
+        repo = github_api('GET', '')
+        _DEFAULT_BRANCH.append(repo.get('default_branch', 'main'))
+    return _DEFAULT_BRANCH[0]
 
 
 def create_branch():
     base = default_branch()
+    assert_lane_branch(base)
     try:
         ref = github_api('GET', f'/git/ref/heads/{base}')
     except urllib.error.HTTPError as e:
@@ -146,27 +311,28 @@ def clone_repo():
     run_transport(['tar', '-xzf', '/tmp/repo.tgz', '--strip-components=1', '-C', REPO_DIR])
     print(f'[timing] codeload tarball: {time.time() - t0:.0f}s')
     t1 = time.time()
-    run(['git', '-C', REPO_DIR, 'init', '-b', BRANCH], check=True)
-    run(['git', '-C', REPO_DIR, 'remote', 'add', 'origin', f'https://x-access-token:{GITHUB_TOKEN}@github.com/{REPO}.git'], check=True)
-    run_transport(['timeout', '300', 'git', '-C', REPO_DIR, '-c', 'http.lowSpeedLimit=1000', '-c', 'http.lowSpeedTime=60', 'fetch', '--depth', '1', 'origin', BRANCH])
-    run(['git', '-C', REPO_DIR, 'update-ref', f'refs/heads/{BRANCH}', 'FETCH_HEAD'], check=True)
-    base = run(['git', '-C', REPO_DIR, 'rev-parse', 'FETCH_HEAD'], capture_output=True, text=True, check=False)
+    git('init', '-b', BRANCH, check=True)
+    sanitize_git_config()
+    git_transport('-c', 'http.lowSpeedLimit=1000', '-c', 'http.lowSpeedTime=60', 'fetch', '--depth', '1', 'origin', f'refs/heads/{BRANCH}', prefix=('timeout', '300'))
+    git('update-ref', f'refs/heads/{BRANCH}', 'FETCH_HEAD', check=True)
+    base = git('rev-parse', 'FETCH_HEAD', capture_output=True, text=True, check=False)
     if base.returncode == 0:
         with open('/tmp/base_sha', 'w') as f:
             f.write(base.stdout.strip())
-    run(['git', '-C', REPO_DIR, 'symbolic-ref', 'HEAD', f'refs/heads/{BRANCH}'], check=True)
-    run(['git', '-C', REPO_DIR, 'reset'], check=True)
+    git('symbolic-ref', 'HEAD', f'refs/heads/{BRANCH}', check=True)
+    git('reset', check=True)
     print(f'[timing] git fetch: {time.time() - t1:.0f}s')
-    run(['git', '-C', REPO_DIR, 'config', 'user.name', os.environ.get('GIT_AUTHOR_NAME', AGENT_LABEL)], check=True)
-    run(['git', '-C', REPO_DIR, 'config', 'user.email', os.environ.get('GIT_AUTHOR_EMAIL', 'agent@pile.nyc')], check=True)
 
 
 def resume_repo():
     # Follow-up prompt on a kept sandbox: the checkout and branch survive
     # from the prior run — fetch and fast-forward so the agent resumes on
     # current remote state (its earlier push included).
-    run(['timeout', '120', 'git', '-C', REPO_DIR, 'fetch', '--depth', '50', 'origin', BRANCH], check=False)
-    run(['git', '-C', REPO_DIR, 'merge', '--ff-only', f'origin/{BRANCH}'], check=False)
+    assert_lane_branch()
+    refresh_github_token()
+    sanitize_git_config()
+    git('fetch', '--depth', '50', 'origin', f'refs/heads/{BRANCH}:refs/remotes/origin/{BRANCH}', auth=True, prefix=('timeout', '120'), check=False)
+    git('merge', '--ff-only', f'refs/remotes/origin/{BRANCH}', check=False)
 
 
 def run_setup_hook(agent_env):
@@ -205,9 +371,9 @@ def collect_digest():
     except OSError:
         base = ''
     if REPO and base:
-        files = run(['git', '-C', REPO_DIR, 'diff', '--name-only', f'{base}...HEAD'], capture_output=True, text=True, check=False)
+        files = git('diff', '--name-only', f'{base}...HEAD', capture_output=True, text=True, check=False)
         digest['filesChanged'] = [f for f in (files.stdout or '').splitlines() if f]
-        commits = run(['git', '-C', REPO_DIR, 'rev-list', '--count', f'{base}..HEAD'], capture_output=True, text=True, check=False)
+        commits = git('rev-list', '--count', f'{base}..HEAD', capture_output=True, text=True, check=False)
         digest['commits'] = int((commits.stdout or '0').strip() or 0)
     return digest
 
@@ -234,8 +400,8 @@ def create_pr(digest=None):
 def refresh_github_token():
     # The installation token baked at dispatch expires ~1h in — long lanes
     # re-mint through Pile (per-session lane token auth) right before push.
-    url = os.environ.get('PILE_TOKEN_URL')
-    token = os.environ.get('LANE_TOKEN')
+    url = secret('PILE_TOKEN_URL')
+    token = secret('LANE_TOKEN')
     if not (url and token):
         return
     try:
@@ -255,20 +421,21 @@ def refresh_github_token():
         print('github token refresh failed:', e)
 
 
-def commit_and_push(agent_env):
+def commit_and_push():
+    # Refresh first so the push authenticates with a fresh token, not the
+    # dispatch-time one (possibly >1h stale).
     refresh_github_token()
-    # Re-set the remote so the just-refreshed token (not the dispatch-time
-    # one, possibly >1h stale) is what push authenticates with.
-    run(['git', '-C', REPO_DIR, 'remote', 'set-url', 'origin', f'https://x-access-token:{GITHUB_TOKEN}@github.com/{REPO}.git'], env=agent_env, check=False)
-    status = run(['git', '-C', REPO_DIR, 'status', '--porcelain'], env=agent_env, capture_output=True, text=True, check=True)
-    ahead = run(['git', '-C', REPO_DIR, 'rev-list', '--count', f'origin/{BRANCH}..HEAD'], env=agent_env, capture_output=True, text=True, check=True)
+    assert_lane_branch(default_branch())
+    sanitize_git_config()
+    status = git('status', '--porcelain', capture_output=True, text=True, check=True)
+    ahead = git('rev-list', '--count', f'refs/remotes/origin/{BRANCH}..HEAD', capture_output=True, text=True, check=False)
     if status.stdout.strip():
-        run(['git', '-C', REPO_DIR, 'add', '-A'], env=agent_env, check=True)
-        run(['git', '-C', REPO_DIR, 'commit', '-m', f'{AGENT_LABEL} changes for {BRANCH}'], env=agent_env, check=True)
-    elif ahead.stdout.strip() == '0':
+        git('add', '-A', check=True)
+        git('commit', '-m', f'{AGENT_LABEL} changes for {BRANCH}', check=True)
+    elif ahead.returncode == 0 and ahead.stdout.strip() == '0':
         print('no changes to commit')
         return False
-    run_transport(['git', '-C', REPO_DIR, 'push', 'origin', BRANCH], env=agent_env)
+    git_transport('push', 'origin', f'refs/heads/{BRANCH}:refs/heads/{BRANCH}')
     return True
 
 
@@ -305,8 +472,8 @@ def ensure_postgres():
 
 # Push appended transcript lines back to Pile so they land in the session
 # event log and stream out over SSE — no polling of this sandbox's fs.
-PILE_LOG_URL = os.environ.get('PILE_LOG_URL')
-PILE_LOG_TOKEN = os.environ.get('PILE_LOG_TOKEN')
+PILE_LOG_URL = secret('PILE_LOG_URL')
+PILE_LOG_TOKEN = secret('PILE_LOG_TOKEN')
 _ship_stop = threading.Event()
 _ship_pos = 0
 
@@ -350,7 +517,7 @@ def stop_log_ship():
 # pnpm store cache: the runner downloads a tarball of the pnpm store keyed
 # by the repo's lockfile hash before the agent starts, and uploads it back
 # after — turns cold monorepo installs into a single R2 fetch.
-PILE_CACHE_URL = os.environ.get('PILE_CACHE_URL')
+PILE_CACHE_URL = secret('PILE_CACHE_URL')
 STORE_DIR = os.environ.get('npm_config_store_dir')
 
 
@@ -424,9 +591,9 @@ def read_transcript(fallback=''):
 
 
 def write_result(status, pr_url='', result='', report=None, infra=False):
-    payload = {'status': status, 'prUrl': pr_url, 'branch': BRANCH, 'result': result}
+    payload = {'status': status, 'prUrl': pr_url, 'branch': BRANCH, 'result': _scrub_secrets(result)}
     if report:
-        payload['report'] = report
+        payload['report'] = _scrub_secrets(report) if isinstance(report, str) else report
     if infra:
         payload['infraFailure'] = True
     with open(RESULT_FILE, 'w') as f:

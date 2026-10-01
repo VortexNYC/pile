@@ -1504,6 +1504,130 @@ describe("agent sessions API", () => {
     expect(unknown.status).toBe(404);
   });
 
+  // PILE-277 — the lane token is the only Pile credential inside a sandbox.
+  // It must be bound to exactly one live session in one workspace: a lane
+  // that reads a sibling's session id (or guesses another workspace's)
+  // can't mint that lane's installation token, rewrite its result, or
+  // inject into its log.
+  it("binds the lane token to one live session in one workspace (PILE-277)", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const issue = await stub.createIssue({ title: "Lane boundary" });
+    const newSession = (providerSessionId: string) =>
+      stub.createAgentSession({
+        issueId: issue.id,
+        agentId: "mock",
+        provider: "mock",
+        actorId: "user-1",
+        actorType: "user",
+        status: "running",
+        providerSessionId,
+      });
+    const own = await newSession("lane-boundary-own");
+    const sibling = await newSession("lane-boundary-sibling");
+    const workerEnv = env as unknown as WorkerEnv;
+    const ownToken = z
+      .string()
+      .parse(await agentLogToken(workerEnv, organizationId, own.id));
+    const otherWorkspaceToken = z
+      .string()
+      .parse(await agentLogToken(workerEnv, crypto.randomUUID(), own.id));
+    const lanePost = (sessionId: string, route: string, bearer: string) =>
+      app.fetch(
+        request(
+          `/workspaces/${organizationId}/agent/sessions/${sessionId}/${route}`,
+          {
+            method: "POST",
+            headers: { Authorization: `Bearer ${bearer}` },
+            body:
+              route === "logs"
+                ? JSON.stringify({ lines: ["injected"] })
+                : route === "report"
+                  ? JSON.stringify({ status: "completed", result: "hijacked" })
+                  : undefined,
+          }
+        ),
+        env
+      );
+
+    for (const route of ["github-token", "report", "logs"]) {
+      const cross = await lanePost(sibling.id, route, ownToken);
+      expect(cross.status, `${route} with a sibling's token`).toBe(401);
+      const foreign = await lanePost(own.id, route, otherWorkspaceToken);
+      expect(foreign.status, `${route} with another workspace's token`).toBe(
+        401
+      );
+    }
+    const siblingAfter = await stub.getAgentSession(sibling.id);
+    expect(siblingAfter?.status).toBe("running");
+
+    const cacheCross = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${sibling.id}/cache/pnpm-store/${"a".repeat(64)}`,
+        { headers: { Authorization: `Bearer ${ownToken}` } }
+      ),
+      env
+    );
+    expect(cacheCross.status).toBe(401);
+
+    // Own token gets past auth (repo-less issue → 422, no GitHub call)…
+    const mint = await lanePost(own.id, "github-token", ownToken);
+    expect(mint.status).toBe(422);
+    // …until the session is terminal: a leaked lane token can't mint after
+    // the lane finished, and can't reopen the session either.
+    await stub.updateAgentSession(own.id, { status: "completed" });
+    const afterEnd = await lanePost(own.id, "github-token", ownToken);
+    expect(afterEnd.status).toBe(409);
+    const reopen = await lanePost(own.id, "report", ownToken);
+    expect(reopen.status).toBe(409);
+    const lateLog = await lanePost(own.id, "logs", ownToken);
+    expect(lateLog.status).toBe(409);
+  });
+
+  it("rejects lane branches that smuggle refspecs, flags, or the default branch (PILE-277)", async () => {
+    const issueRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ title: "Push restriction" }),
+      }),
+      env
+    );
+    const issue = await issueRes.json<{ id: string }>();
+    const hostile = [
+      "main",
+      "Main",
+      "MASTER",
+      "HEAD",
+      "refs/heads/main",
+      "lane:main",
+      "lane:refs/heads/main",
+      "+main",
+      "--force",
+      "--receive-pack=touch /tmp/pwned",
+      "-cfoo=bar",
+      "lane/../main",
+      "@{-1}",
+      "lane main",
+      "lane\nmain",
+      "lane.lock",
+      "lane/",
+    ];
+    for (const branch of hostile) {
+      const res = await app.fetch(
+        request(`/workspaces/${organizationId}/issues/${issue.id}/dispatch`, {
+          method: "POST",
+          token,
+          body: JSON.stringify({ agentId: "mock", branch }),
+        }),
+        env
+      );
+      expect(res.status, JSON.stringify(branch)).toBe(400);
+    }
+  });
+
   it("serves the runner pnpm-store cache with per-session token auth", async () => {
     const sessionId = crypto.randomUUID();
     const cacheToken = await agentLogToken(

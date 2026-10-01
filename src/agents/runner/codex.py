@@ -85,18 +85,11 @@ def apply_and_push(codex_bin, task_url):
     if result.returncode != 0:
         print('codex cloud apply failed:', result.returncode, result.stdout, result.stderr)
         return False
-    status = run(['git', '-C', REPO_DIR, 'status', '--porcelain'], env=env, capture_output=True, text=True, check=True)
-    if not status.stdout.strip():
-        print('no changes to commit')
-        return False
-    run(['git', '-C', REPO_DIR, 'add', '-A'], env=env, check=True)
-    run(['git', '-C', REPO_DIR, 'commit', '-m', f'{AGENT_LABEL} changes for {BRANCH}'], env=env, check=True)
-    run_transport(['git', '-C', REPO_DIR, 'push', 'origin', BRANCH], env=env)
-    return True
+    return commit_and_push()
 
 
 def main():
-    auth_b64 = os.environ['CODEX_AUTH_JSON_B64']
+    auth_b64 = secret('CODEX_AUTH_JSON_B64')
     model = os.environ.get('MODEL', 'gpt-reserve')
     write_codex_home(auth_b64, model)
     codex_bin = ensure()

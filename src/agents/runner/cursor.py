@@ -100,7 +100,7 @@ def main():
         clone_repo()
         warm_pnpm_store()
     output, report = run_agent(agent_bin)
-    pushed = commit_and_push(agent_env()) if REPO else False
+    pushed = commit_and_push() if REPO else False
     rc = finalize(output, pushed, report=report)
     save_pnpm_store()
     stop_log_ship()

@@ -15,6 +15,7 @@ import { deleteIssueReferences } from "../global/issue-data.js";
 import { fetchPileRepoConfig } from "../global/pile-repo-config.js";
 import {
   createRepoBranch,
+  laneBranchError,
   suggestBranchName,
 } from "../global/repo-branches.js";
 import { githubInstallations, repoBranches } from "../global/schema.js";
@@ -1450,21 +1451,21 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     }
     await assertIssueAccess(db, issue, identity);
 
-    // PILE-241 — branch names the lane's working branch: the runner creates
-    // it off the repo default and pushes it. Passing "main"/"master" makes
-    // the lane try to create the default branch and fail at push time.
-    if (branch && (branch === "main" || branch === "master")) {
-      throw new VortexError({
-        code: "BAD_REQUEST",
-        status: 400,
-        message: `"${branch}" is a repo default branch — branch sets the lane's working branch (leave empty for issue-<id>)`,
-      });
-    }
     const target: Issue = {
       ...issue,
       repo: repo === undefined ? issue.repo : repo,
       branch: branch === undefined ? issue.branch : branch,
     };
+    // PILE-241/277 — branch names the lane's working branch: the runner
+    // creates it off the repo default and pushes exactly that ref.
+    const branchError = target.branch ? laneBranchError(target.branch) : null;
+    if (branchError) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: branchError,
+      });
+    }
 
     // Explicit agentId wins; otherwise a repo's configured default agent
     // (github installation row) beats the global "devin" fallback.

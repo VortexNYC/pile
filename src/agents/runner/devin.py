@@ -98,13 +98,13 @@ def drain_followups(devin_bin):
         os.rename(path, path[:-7] + '.drained')
         print('running queued follow-up prompt:', name)
         output = run_agent(devin_bin, prompt=text)
-        commit_and_push(agent_env())
+        commit_and_push()
     return output
 
 
 def main():
     os.makedirs(FOLLOWUP_DIR, exist_ok=True)
-    creds_b64 = os.environ['DEVIN_CREDENTIALS_B64']
+    creds_b64 = secret('DEVIN_CREDENTIALS_B64')
     write_devin_home(creds_b64)
     devin_bin = ensure()
     if os.environ.get('FOLLOWUP') == '1':
@@ -121,7 +121,7 @@ def main():
             os.makedirs(REPO_DIR, exist_ok=True)
         output = run_agent(devin_bin)
         output = drain_followups(devin_bin) or output
-        pushed = commit_and_push(agent_env()) if REPO else False
+        pushed = commit_and_push() if REPO else False
         return finalize(output, pushed)
     if not REPO:
         # Repo-less lane — research/docs/design work. The agent runs in an
@@ -137,7 +137,7 @@ def main():
     ensure_postgres()
     output = run_agent(devin_bin)
     output = drain_followups(devin_bin) or output
-    pushed = commit_and_push(agent_env())
+    pushed = commit_and_push()
     return finalize(output, pushed)
 
 

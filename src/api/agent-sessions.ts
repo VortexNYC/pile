@@ -21,7 +21,7 @@ import { timingSafeEqualHex } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
 import { getInstallationTokenForRepo } from "../global/github-auth.js";
 import { fetchPileRepoConfig } from "../global/pile-repo-config.js";
-import { createRepoBranch } from "../global/repo-branches.js";
+import { createRepoBranch, laneBranchError } from "../global/repo-branches.js";
 import { githubInstallations } from "../global/schema.js";
 import { replyLaneResultToTicket } from "../global/support-escalation.js";
 import { canAccessTeam } from "../global/teams.js";
@@ -1190,18 +1190,17 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         if (!(await canAccessTeam(db, issue.teamId, identity))) {
           return dispatchBatchItemError(issueId, "Issue not found");
         }
-        // Same guard as single dispatch: branch is the lane's working branch,
-        // so "main"/"master" would fail at push time.
-        if (item.branch === "main" || item.branch === "master") {
-          return dispatchBatchItemError(
-            issueId,
-            `"${item.branch}" is a repo default branch — branch sets the lane's working branch (leave empty for issue-<id>)`
-          );
-        }
         const target: Issue = {
           ...issue,
           branch: item.branch === undefined ? issue.branch : item.branch,
         };
+        // Same guard as single dispatch: branch is the lane's working branch.
+        const branchError = target.branch
+          ? laneBranchError(target.branch)
+          : null;
+        if (branchError) {
+          return dispatchBatchItemError(issueId, branchError);
+        }
 
         // Explicit agentId wins; otherwise the repo's configured default
         // beats the global "devin" fallback — same as single dispatch.
