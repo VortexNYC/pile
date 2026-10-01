@@ -1,0 +1,15 @@
+{
+  "conflict": {
+    "generated": [
+      "src/mcp/openapi.json",
+      "src/mcp/mcp-tools.ts",
+      "packages/cli/src/client/types.ts",
+      "packages/cli/src/commands.ts",
+      "src/assets/capture.iife.ts",
+      "src/assets/chat.iife.ts",
+      "src/assets/docs-bundle.ts",
+      "src/agents/runner/bundle.ts"
+    ],
+    "regen": "pnpm install --frozen-lockfile && pnpm run mcp:generate && pnpm run client:generate && pnpm run cli:generate && pnpm run capture:bundle && pnpm run chat:bundle && pnpm run docs:bundle && pnpm run runner:bundle"
+  }
+}
