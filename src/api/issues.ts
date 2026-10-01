@@ -21,6 +21,7 @@ import {
   buildPreflightCritiqueInstructions,
   evaluateDispatchReadiness,
 } from "../agents/preflight.js";
+import { secondaryReposSchema } from "../agents/secondary-repos.js";
 import { consumeUsage } from "../global/billing.js";
 import { createD1 } from "../global/db.js";
 import { deleteIssueReferences } from "../global/issue-data.js";
@@ -716,6 +717,10 @@ const dispatchRoute = createRoute({
               // session on the target provider instead of the task lane. It
               // reports missing/ambiguous context back onto the issue thread.
               preflight: z.boolean().optional(),
+              // PILE-294 — sibling repos cloned under ~/xrepo/<owner>/<name>
+              // next to the primary checkout. `write` entries get the lane
+              // branch pushed and a PR opened in that repo.
+              secondaryRepos: secondaryReposSchema.optional(),
               // PILE-283 — plan mode. "plan" dispatches a lane that posts an
               // implementation plan on the issue instead of code (re-running
               // it revises the latest plan, with `instructions` as feedback);
@@ -1547,6 +1552,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       effort,
       maxDuration,
       resultSchema: resultSchemaInput,
+      secondaryRepos,
     } = c.req.valid("json");
     const { organizationId, id } = c.req.valid("param");
     const identity = c.get("workspaceIdentity");
@@ -1671,11 +1677,13 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
               (planMode === "implement_plan" || !planOptions.plan)
                 ? `${planOptions.instructions}\n\n${instructions}`
                 : planOptions.instructions,
+            envAllowlist: pileConfig?.env,
             // Infra env (not caller-supplied), so the repo env allowlist
             // doesn't filter it.
             extraEnv: planOptions.extraEnv,
             purpose: planOptions.purpose ?? undefined,
             skipQueue: planOptions.skipQueue,
+            secondaryRepos,
             effort: resolvedEffort,
             maxDurationMinutes: maxDuration,
             resultSchema,
@@ -1716,6 +1724,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
             {
               instructions,
               envAllowlist: pileConfig?.env,
+              secondaryRepos,
               effort: resolvedEffort,
               maxDurationMinutes: maxDuration,
               resultSchema,

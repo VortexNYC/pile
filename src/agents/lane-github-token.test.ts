@@ -117,6 +117,49 @@ describe("lane GitHub tokens", () => {
     expect(await stub.listLaneGithubTokenSessions()).toContain(s.id);
   });
 
+  it("keeps secondary-repo slots alongside the primary and reaps them together", async () => {
+    const s = await session("completed");
+    const slot = `${s.id}|acme/vortex`;
+    await stub.swapLaneGithubToken(
+      s.id,
+      await encryptSecret(env, "ghs_primaryslot000000000")
+    );
+    expect(
+      await stub.swapLaneGithubToken(
+        slot,
+        await encryptSecret(env, "ghs_secondaryslot0000000")
+      )
+    ).toBeNull();
+    const spy = revokeSpy();
+
+    await reapLaneGithubTokens(env, stub);
+
+    expect(revokedTokens(spy)).toEqual(
+      expect.arrayContaining([
+        "Bearer ghs_primaryslot000000000",
+        "Bearer ghs_secondaryslot0000000",
+      ])
+    );
+    const remaining = await stub.listLaneGithubTokenSessions();
+    expect(remaining).not.toContain(s.id);
+    expect(remaining).not.toContain(slot);
+  });
+
+  it("leaves a live session's secondary-repo slot alone", async () => {
+    const s = await session("running");
+    const slot = `${s.id}|acme/vortex`;
+    await stub.swapLaneGithubToken(
+      slot,
+      await encryptSecret(env, "ghs_livesecondary0000000")
+    );
+    const spy = revokeSpy();
+
+    await reapLaneGithubTokens(env, stub);
+
+    expect(revokedTokens(spy)).not.toContain("Bearer ghs_livesecondary0000000");
+    expect(await stub.listLaneGithubTokenSessions()).toContain(slot);
+  });
+
   it("revokes tokens whose session no longer exists", async () => {
     await stub.swapLaneGithubToken(
       "missing-session",

@@ -668,6 +668,81 @@ describe("agent providers", () => {
     expect(captured?.extraEnv).toEqual({ DATABASE_URL: "postgres://x" });
   });
 
+  it("persists secondaryRepos and passes them to a supporting provider", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)
+    );
+    await stub.setOrganizationId(actor.organizationId);
+    const issue = await stub.createIssue({
+      title: "Cross-repo dispatch test",
+      repo: "VortexNYC/pile",
+    });
+
+    let captured: AgentDispatchContext | undefined;
+    class CrossRepoProvider extends MockAgentProvider {
+      readonly supportsSecondaryRepos = true;
+    }
+    const provider = new CrossRepoProvider("mock", {
+      dispatch: (_1, _2, _3, ctx) => {
+        captured = ctx;
+        return { id: "xrepo-1", agentId: "mock", status: "created" };
+      },
+    });
+    registerAgentProvider("mock-xrepo", () => provider);
+
+    const secondaryRepos = [
+      { repo: "VortexNYC/vortex", access: "read" as const },
+      { repo: "VortexNYC/cloudflare-ci", access: "write" as const },
+    ];
+    const session = await dispatchAgent(
+      env,
+      "mock-xrepo",
+      actor.organizationId,
+      issue,
+      actor,
+      undefined,
+      undefined,
+      { secondaryRepos }
+    );
+
+    expect(captured?.secondaryRepos).toEqual(secondaryRepos);
+    const stored = await stub.getAgentSession(session.id);
+    expect(JSON.parse(stored?.secondaryRepos ?? "null")).toEqual(
+      secondaryRepos
+    );
+  });
+
+  it("rejects secondaryRepos for providers without support", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)
+    );
+    await stub.setOrganizationId(actor.organizationId);
+    const issue = await stub.createIssue({
+      title: "Cross-repo unsupported test",
+      repo: "VortexNYC/pile",
+    });
+    registerAgentProvider(
+      "mock-no-xrepo",
+      () =>
+        new MockAgentProvider("mock", {
+          dispatch: () => ({ id: "x", agentId: "mock", status: "created" }),
+        })
+    );
+
+    await expect(
+      dispatchAgent(
+        env,
+        "mock-no-xrepo",
+        actor.organizationId,
+        issue,
+        actor,
+        undefined,
+        undefined,
+        { secondaryRepos: [{ repo: "VortexNYC/vortex", access: "read" }] }
+      )
+    ).rejects.toThrow("does not support secondaryRepos");
+  });
+
   it("picks the effort-tier model from issue priority and persists the budget", async () => {
     const stub = env.WORKSPACE_DURABLE_OBJECT.get(
       env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)

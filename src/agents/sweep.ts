@@ -44,6 +44,7 @@ import {
   REVIEW_PURPOSE,
   requestPrReview,
 } from "./review.js";
+import { parseStoredSecondaryRepos } from "./secondary-repos.js";
 
 export const DEFAULT_TIMEOUT_MINUTES = 60;
 export const DEFAULT_INACTIVITY_MINUTES = 20;
@@ -437,6 +438,7 @@ async function retryDeadLane(
       undefined,
       ctx,
       {
+        secondaryRepos: parseStoredSecondaryRepos(session.secondaryRepos),
         effort: session.effort ?? undefined,
         maxDurationMinutes: session.maxDurationMinutes ?? undefined,
       }
@@ -511,7 +513,10 @@ async function promoteQueuedSessions(
         },
         undefined,
         ctx,
-        { promoteSessionId: session.id }
+        {
+          promoteSessionId: session.id,
+          secondaryRepos: parseStoredSecondaryRepos(session.secondaryRepos),
+        }
       );
     } catch (err) {
       console.error("queued session promotion failed", {

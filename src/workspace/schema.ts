@@ -808,6 +808,10 @@ export const workspaceAgentSessions = sqliteTable(
     // First transition into a terminal status — the kept-sandbox reaper
     // anchors its resume window here; updatedAt churns on every write.
     endedAt: text("ended_at" as string),
+    // Cross-repo lane (PILE-294): JSON [{repo, access}] of sibling repos
+    // cloned under ~/xrepo — persisted so queue promotion, retries, and the
+    // lane token-refresh route see the same set as the original dispatch.
+    secondaryRepos: text("secondary_repos" as string),
     // PILE-293 — dispatch-time run budget (minutes) and model tier.
     maxDurationMinutes: integer("max_duration_minutes" as string),
     effort: text("effort" as string, {
