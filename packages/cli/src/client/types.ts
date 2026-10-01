@@ -1298,6 +1298,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/issues/{id}/similar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List issue similar */
+        get: {
+            parameters: {
+                query?: {
+                    limit?: number;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Issues whose title/description best match this issue (BM25 over the workspace search index), best first */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            similar: {
+                                issue: components["schemas"]["Issue"];
+                                score: number;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/issues/batch": {
         parameters: {
             query?: never;
@@ -23300,6 +23346,7 @@ export interface paths {
                                 isPublic: boolean;
                                 parentAutoClose: boolean;
                                 triageAssigneeId: string | null;
+                                triageAgentId: string | null;
                                 defaultTemplateId: string | null;
                                 defaultRepo: string | null;
                                 subIssueAutoClose: boolean;
@@ -23330,6 +23377,7 @@ export interface paths {
                         isPublic?: boolean;
                         parentAutoClose?: boolean;
                         triageAssigneeId?: string | null;
+                        triageAgentId?: string | null;
                         defaultTemplateId?: string | null;
                         defaultRepo?: string | null;
                         subIssueAutoClose?: boolean;
@@ -23353,6 +23401,7 @@ export interface paths {
                             isPublic: boolean;
                             parentAutoClose: boolean;
                             triageAssigneeId: string | null;
+                            triageAgentId: string | null;
                             defaultTemplateId: string | null;
                             defaultRepo: string | null;
                             subIssueAutoClose: boolean;
@@ -23405,6 +23454,7 @@ export interface paths {
                             isPublic: boolean;
                             parentAutoClose: boolean;
                             triageAssigneeId: string | null;
+                            triageAgentId: string | null;
                             defaultTemplateId: string | null;
                             defaultRepo: string | null;
                             subIssueAutoClose: boolean;
@@ -23467,6 +23517,7 @@ export interface paths {
                         isPublic?: boolean;
                         parentAutoClose?: boolean;
                         triageAssigneeId?: string | null;
+                        triageAgentId?: string | null;
                         defaultTemplateId?: string | null;
                         defaultRepo?: string | null;
                         subIssueAutoClose?: boolean;
@@ -23490,6 +23541,7 @@ export interface paths {
                             isPublic: boolean;
                             parentAutoClose: boolean;
                             triageAssigneeId: string | null;
+                            triageAgentId: string | null;
                             defaultTemplateId: string | null;
                             defaultRepo: string | null;
                             subIssueAutoClose: boolean;
@@ -23694,6 +23746,7 @@ export interface paths {
                                 isPublic: boolean;
                                 parentAutoClose: boolean;
                                 triageAssigneeId: string | null;
+                                triageAgentId: string | null;
                                 defaultTemplateId: string | null;
                                 defaultRepo: string | null;
                                 subIssueAutoClose: boolean;

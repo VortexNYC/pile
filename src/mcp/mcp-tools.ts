@@ -3176,6 +3176,32 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdIssuesIdSimilar",
+    "description": "List issue similar (GET /workspaces/{organizationId}/issues/{id}/similar) Path params (top-level, required): organizationId, id. Query params (top-level, optional): limit.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/issues/{id}/similar",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdIssuesIssueIdActivity",
     "description": "List issue activity (GET /workspaces/{organizationId}/issues/{issueId}/activity) Path params (top-level, required): organizationId, issueId.",
     "method": "GET",
@@ -7419,7 +7445,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdTeamsId",
-    "description": "Update team (PATCH /workspaces/{organizationId}/teams/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: key, name, isPublic, parentAutoClose, triageAssigneeId, defaultTemplateId, defaultRepo, subIssueAutoClose.",
+    "description": "Update team (PATCH /workspaces/{organizationId}/teams/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: key, name, isPublic, parentAutoClose, triageAssigneeId, triageAgentId, defaultTemplateId, defaultRepo, subIssueAutoClose.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/teams/{id}",
     "inputSchema": {
@@ -7449,6 +7475,10 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "boolean"
             },
             "triageAssigneeId": {
+              "type": "string",
+              "nullable": true
+            },
+            "triageAgentId": {
               "type": "string",
               "nullable": true
             },
@@ -14711,7 +14741,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdTeams",
-    "description": "Create team (POST /workspaces/{organizationId}/teams) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: key*, name*, isPublic, parentAutoClose, triageAssigneeId, defaultTemplateId, defaultRepo, subIssueAutoClose (* = required).",
+    "description": "Create team (POST /workspaces/{organizationId}/teams) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: key*, name*, isPublic, parentAutoClose, triageAssigneeId, triageAgentId, defaultTemplateId, defaultRepo, subIssueAutoClose (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/teams",
     "inputSchema": {
@@ -14738,6 +14768,10 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "boolean"
             },
             "triageAssigneeId": {
+              "type": "string",
+              "nullable": true
+            },
+            "triageAgentId": {
               "type": "string",
               "nullable": true
             },
