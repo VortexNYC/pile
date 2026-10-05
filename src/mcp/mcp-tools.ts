@@ -11006,7 +11006,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdIssues",
-    "description": "Create issue (POST /workspaces/{organizationId}/issues) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: title*, externalRef, teamId, teamKey, description, status, priority, resolution, parentId, subIssueSortOrder, estimate, isDraft, templateId, snoozedUntil, assigneeId, projectId, cycleId, labelIds, repo, branch (* = required).",
+    "description": "Create issue — The 201 response includes possibleDuplicates: open issues (in teams you can see) whose titles closely match, best first. Non-blocking — if one is the same work, comment on or update it instead of keeping the new issue. Pass dedupe=block to get 409 with the matches in details.possibleDuplicates instead of creating. (POST /workspaces/{organizationId}/issues) Path params (top-level, required): organizationId. Query params (top-level, optional): dedupe. Request body goes in the \"body\" object; fields: title*, externalRef, teamId, teamKey, description, status, priority, resolution, parentId, subIssueSortOrder, estimate, isDraft, templateId, snoozedUntil, assigneeId, projectId, cycleId, labelIds, repo, branch (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/issues",
     "inputSchema": {
@@ -11014,6 +11014,14 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "properties": {
         "organizationId": {
           "type": "string"
+        },
+        "dedupe": {
+          "type": "string",
+          "enum": [
+            "warn",
+            "block"
+          ],
+          "description": "warn (default): create and return possibleDuplicates; block: 409 when any possible duplicate exists"
         },
         "body": {
           "type": "object",

@@ -127,10 +127,13 @@ import {
   indexIssueDocument,
   indexDocumentSearchDocument,
   documentToSearchDocument,
+  DUPLICATE_MIN_SCORE,
+  findDuplicateCandidates,
   findSimilarIssues,
   insertMultiple as insertSearchDocs,
   issueToSearchDocument,
   removeIssueDocuments,
+  titleOverlapScore,
   searchDocuments,
   searchIssues,
   type CommentForSearch,
@@ -1871,6 +1874,35 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     });
   }
 
+  // PILE-163 — open issues in `teamIds` whose titles closely match a title
+  // about to be created. Index rows are re-read so stale status/title never
+  // surface.
+  async findPossibleDuplicates(
+    title: string,
+    teamIds: string[],
+    limit = 5
+  ): Promise<Array<{ issue: Issue; score: number }>> {
+    await this.ready;
+    const index = await this.ensureSearchIndex();
+    const hits = await findDuplicateCandidates(index, title, teamIds, limit);
+    const matches = await Promise.all(
+      hits.map((hit) => this.getIssue(hit.issueId))
+    );
+    return matches
+      .flatMap((issue) => {
+        if (
+          !issue ||
+          !teamIds.includes(issue.teamId) ||
+          issue.status === "done" ||
+          issue.status === "canceled"
+        )
+          return [];
+        const score = titleOverlapScore(title, issue.title);
+        return score >= DUPLICATE_MIN_SCORE ? [{ issue, score }] : [];
+      })
+      .toSorted((a, b) => b.score - a.score);
+  }
+
   // Extract [[doc slug/id]] and ISSUE-KEY references from content.
   // Runs synchronously inside the caller's transactionSync block.
   private syncDocumentLinks(
@@ -3311,15 +3343,40 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   async createIssue(input: IssueInput, actorId?: string): Promise<Issue> {
+    const { issue } = await this.createIssueRecord(input, actorId);
+    if (!issue) throw new Error("Failed to create issue");
+    return issue;
+  }
+
+  // PILE-163 — create and report possible duplicates. The lookup runs in the
+  // same storage-only critical section as the insert, so with block=true two
+  // concurrent creates of the same title cannot both succeed. `issue` is null
+  // when blocked.
+  createIssueWithDuplicates(
+    input: IssueInput,
+    actorId: string | undefined,
+    dedupe: { teamIds: string[]; block: boolean }
+  ) {
+    return this.createIssueRecord(input, actorId, dedupe);
+  }
+
+  private async createIssueRecord(
+    input: IssueInput,
+    actorId?: string,
+    dedupe?: { teamIds: string[]; block: boolean }
+  ): Promise<{
+    issue: Issue | null;
+    possibleDuplicates: Array<{ issue: Issue; score: number }>;
+  }> {
     await this.ready;
     const now = new Date().toISOString();
     const id = input.id ?? crypto.randomUUID();
 
     const existing = await this.getIssue(id);
-    if (existing) return existing;
+    if (existing) return { issue: existing, possibleDuplicates: [] };
     if (input.externalRef) {
       const byRef = await this.getIssueByExternalRef(input.externalRef);
-      if (byRef) return byRef;
+      if (byRef) return { issue: byRef, possibleDuplicates: [] };
     }
 
     const status = input.status ?? "backlog";
@@ -3393,6 +3450,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       }
     }
 
+    const possibleDuplicates = dedupe
+      ? await this.findPossibleDuplicates(input.title, dedupe.teamIds)
+      : [];
+    if (dedupe?.block && possibleDuplicates.length > 0) {
+      return { issue: null, possibleDuplicates };
+    }
+
     const issue = await this.db
       .insert(workspaceIssues)
       .values({
@@ -3430,7 +3494,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
     if (!issue) {
       const recovered = await this.getIssue(id);
-      if (recovered) return recovered;
+      if (recovered) return { issue: recovered, possibleDuplicates: [] };
       throw new Error("Failed to create issue");
     }
 
@@ -3457,7 +3521,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     );
     this.audit("issue.created", "issue", issue.id, actorId);
     this.startTriageLane(issue, actorId);
-    return issue;
+    return { issue, possibleDuplicates };
   }
 
   // PILE-282 — fire-and-forget: a triage-lane failure (provider down, team

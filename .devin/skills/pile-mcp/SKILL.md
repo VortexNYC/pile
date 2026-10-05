@@ -183,6 +183,7 @@ Before calling `create_issue`, search for the distinctive phrase from the title 
 
 - If a strong match exists, use `create_issue_comment` or `update_issue` on it instead of creating a new issue.
 - Create only when the search is empty or matches are clearly different work.
+- `create_issue` results include `possibleDuplicates` (`id`, `identifier`, `title`, `status`, `score` 0–1) — open issues with closely matching titles. Treat a non-empty list as a warning: if one is the same work, comment on or update it and delete the new issue. Pass top-level `dedupe: "block"` to get a 409 with the matches in `details.possibleDuplicates` instead of creating.
 - Scripted imports must set `externalRef` in the body — `create_issue` is idempotent on it, so re-runs return the existing issue rather than duplicating.
 
 ## Common mistakes

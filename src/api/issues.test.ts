@@ -975,3 +975,115 @@ describe("similar issues API", () => {
     expect(missing.status).toBe(404);
   });
 });
+
+describe("possible duplicates on create (PILE-163)", () => {
+  const duplicateSchema = z.object({
+    id: z.string(),
+    identifier: z.string().nullable(),
+    title: z.string(),
+    status: z.string(),
+    score: z.number(),
+  });
+  const createdSchema = z.object({
+    id: z.string(),
+    possibleDuplicates: z.array(duplicateSchema),
+  });
+
+  it("returns similar open issues without blocking, and 409s with dedupe=block", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const create = async (body: Record<string, unknown>, query = "") =>
+      fetch(
+        `/workspaces/${organizationId}/issues${query}`,
+        { method: "POST", body: JSON.stringify(body) },
+        token
+      );
+
+    const firstRes = await create({
+      title: "Webhook retries flood the delivery queue",
+    });
+    expect(firstRes.status).toBe(201);
+    const first = createdSchema.parse(await firstRes.json());
+    expect(first.possibleDuplicates).toEqual([]);
+
+    const unrelated = createdSchema.parse(
+      await (await create({ title: "Dark mode toggle in settings" })).json()
+    );
+    const closed = createdSchema.parse(
+      await (
+        await create({
+          title: "Webhook retries flood the delivery queue",
+          status: "canceled",
+        })
+      ).json()
+    );
+
+    const dupRes = await create({
+      title: "Webhook retries flooding the delivery queue",
+    });
+    expect(dupRes.status).toBe(201);
+    const dup = createdSchema.parse(await dupRes.json());
+    const ids = dup.possibleDuplicates.map((hit) => hit.id);
+    expect(ids[0]).toBe(first.id);
+    expect(ids).not.toContain(unrelated.id);
+    expect(ids).not.toContain(closed.id);
+    expect(ids).not.toContain(dup.id);
+    expect(dup.possibleDuplicates[0].score).toBeGreaterThanOrEqual(0.6);
+    expect(dup.possibleDuplicates[0].score).toBeLessThanOrEqual(1);
+
+    const blocked = await create(
+      { title: "Webhook retries flood the delivery queue" },
+      "?dedupe=block"
+    );
+    expect(blocked.status).toBe(409);
+    const blockedBody = z
+      .object({
+        code: z.literal("CONFLICT"),
+        details: z.object({ possibleDuplicates: z.array(duplicateSchema) }),
+      })
+      .parse(await blocked.json());
+    const blockedIds = blockedBody.details.possibleDuplicates.map(
+      (hit) => hit.id
+    );
+    expect(blockedIds).toContain(first.id);
+    expect(blockedIds).toContain(dup.id);
+    expect(blockedBody.details.possibleDuplicates[0].score).toBe(1);
+
+    const list = z
+      .object({ issues: z.array(z.object({ id: z.string() })) })
+      .parse(
+        await (
+          await fetch(`/workspaces/${organizationId}/issues`, {}, token)
+        ).json()
+      );
+    expect(list.issues).toHaveLength(4);
+
+    const fresh = await create(
+      { title: "Billing export ignores timezone offsets" },
+      "?dedupe=block"
+    );
+    expect(fresh.status).toBe(201);
+    expect(createdSchema.parse(await fresh.json()).possibleDuplicates).toEqual(
+      []
+    );
+  });
+
+  it("lets only one of two concurrent dedupe=block creates through", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const statuses = await Promise.all(
+      [0, 1].map(async () => {
+        const res = await fetch(
+          `/workspaces/${organizationId}/issues?dedupe=block`,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              title: "Search index drops archived documents",
+            }),
+          },
+          token
+        );
+        return res.status;
+      })
+    );
+    expect(statuses.toSorted()).toEqual([201, 409]);
+  });
+});

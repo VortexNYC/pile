@@ -497,13 +497,38 @@ const listTriageRoute = createRoute({
   },
 });
 
+const possibleDuplicateSchema = z
+  .object({
+    id: z.string(),
+    identifier: z.string().nullable(),
+    title: z.string(),
+    status: z.enum(ISSUE_STATUSES),
+    score: z.number().openapi({
+      description:
+        "Share of significant title terms in common with the new title (0-1)",
+    }),
+  })
+  .openapi("PossibleDuplicate");
+
+const createdIssueApiSchema = issueApiSchema
+  .extend({ possibleDuplicates: z.array(possibleDuplicateSchema) })
+  .openapi("CreatedIssue");
+
 const createIssueRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/issues",
   tags: ["issues"],
   middleware: [rls("write")],
+  description:
+    "The 201 response includes possibleDuplicates: open issues (in teams you can see) whose titles closely match, best first. Non-blocking — if one is the same work, comment on or update it instead of keeping the new issue. Pass dedupe=block to get 409 with the matches in details.possibleDuplicates instead of creating.",
   request: {
     params: z.object({ organizationId: z.string() }),
+    query: z.object({
+      dedupe: z.enum(["warn", "block"]).optional().openapi({
+        description:
+          "warn (default): create and return possibleDuplicates; block: 409 when any possible duplicate exists",
+      }),
+    }),
     body: {
       content: {
         "application/json": { schema: createIssueSchema },
@@ -512,10 +537,14 @@ const createIssueRoute = createRoute({
   },
   responses: {
     201: {
-      description: "Issue created",
+      description: "Issue created, with possible duplicates to review",
       content: {
-        "application/json": { schema: issueApiSchema },
+        "application/json": { schema: createdIssueApiSchema },
       },
+    },
+    409: {
+      description:
+        "dedupe=block and possible duplicates exist (details.possibleDuplicates)",
     },
     200: {
       description:
@@ -971,6 +1000,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(createIssueRoute, async (c) => {
     const input = c.req.valid("json");
     const { organizationId } = c.req.valid("param");
+    const { dedupe } = c.req.valid("query");
     const identity = c.get("workspaceIdentity");
     const db = createD1(c.env.D1);
     await consumeUsage(
@@ -1032,6 +1062,11 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       teamId,
       identity
     );
+    const visibleTeamIds = await loadVisibleTeamIds(
+      db,
+      organizationId,
+      identity
+    );
     const teamRecord = await getTeamById(db, resolvedTeamId, organizationId);
     const templateDefaults = await resolveTemplateDefaults(
       db,
@@ -1044,7 +1079,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       input.resolution
     );
     const { templateId: _templateId, teamKey: _teamKey, ...rest } = input;
-    const issue = await stub.createIssue(
+    const created = await stub.createIssueWithDuplicates(
       {
         ...rest,
         description:
@@ -1082,8 +1117,29 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
             : input.repo,
         branch: input.branch,
       },
-      identity.id
+      identity.id,
+      { teamIds: visibleTeamIds, block: dedupe === "block" }
     );
+    const possibleDuplicates = created.possibleDuplicates.map(
+      ({ issue: match, score }) => ({
+        id: match.id,
+        identifier: match.identifier,
+        title: match.title,
+        status: match.status,
+        score: Math.round(score * 1000) / 1000,
+      })
+    );
+    const { issue } = created;
+    if (!issue) {
+      const [top] = possibleDuplicates;
+      throw new VortexError({
+        code: "CONFLICT",
+        status: 409,
+        message: "Possible duplicate issues exist",
+        hint: `Comment on or update ${top?.identifier ?? top?.id} instead, or retry without dedupe=block`,
+        details: { possibleDuplicates },
+      });
+    }
     if (issue.repo && issue.branch) {
       await createRepoBranch(
         db,
@@ -1103,7 +1159,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       identity,
       getExecutionCtx(c)
     );
-    return c.json(issue, 201);
+    return c.json({ ...issue, possibleDuplicates }, 201);
   });
 
   app.openapi(captureIssueRoute, async (c) => {

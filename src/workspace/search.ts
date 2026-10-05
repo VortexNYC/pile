@@ -341,3 +341,58 @@ export async function findSimilarIssues(
   }
   return hits;
 }
+
+export interface DuplicateCandidateHit {
+  issueId: string;
+  score: number;
+}
+
+/** Minimum title overlap (see `titleOverlapScore`) for a possible duplicate. */
+export const DUPLICATE_MIN_SCORE = 0.6;
+
+const DUPLICATE_CANDIDATE_POOL = 50;
+
+const CLOSED_STATUSES = new Set(["done", "canceled"]);
+
+/** Share of significant title terms two titles have in common, in [0, 1]:
+ *  shared terms over the larger term set, so 1 means the same terms. */
+export function titleOverlapScore(a: string, b: string): number {
+  const left = new Set(similarityTerms(a));
+  const right = new Set(similarityTerms(b));
+  const size = Math.max(left.size, right.size);
+  if (size === 0) return 0;
+  let shared = 0;
+  for (const term of left) if (right.has(term)) shared += 1;
+  return shared / size;
+}
+
+/** Open issues whose titles closely match `title`, best first. BM25 gathers
+ *  candidates; `titleOverlapScore` ranks them and drops weak matches. */
+export async function findDuplicateCandidates(
+  index: WorkspaceSearchIndex,
+  title: string,
+  teamIds: string[],
+  limit = 5
+): Promise<DuplicateCandidateHit[]> {
+  const terms = similarityTerms(title);
+  if (terms.length === 0) return [];
+  const result = await search(index, {
+    term: terms.join(" "),
+    properties: ["title"],
+    tolerance: 0,
+    where:
+      teamIds.length > 0
+        ? { kind: "issue", teamId: teamIds }
+        : { kind: "issue" },
+    limit: DUPLICATE_CANDIDATE_POOL,
+  });
+  const hits: DuplicateCandidateHit[] = [];
+  for (const hit of result.hits) {
+    const doc = hit.document as SearchDocument;
+    if (CLOSED_STATUSES.has(doc.status)) continue;
+    const score = titleOverlapScore(title, doc.title);
+    if (score < DUPLICATE_MIN_SCORE) continue;
+    hits.push({ issueId: doc.issueId || doc.id, score });
+  }
+  return hits.toSorted((a, b) => b.score - a.score).slice(0, limit);
+}
