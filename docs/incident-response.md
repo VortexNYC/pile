@@ -37,6 +37,9 @@ prove which it is. Downgrading later is free; upgrading late is not.
 
 ## Comms
 
+Customer-visible incidents also go on the public status page
+(https://status.pile.nyc) — when and how is in `docs/status-page.md`.
+
 S1 template — send to every affected workspace owner, plain text:
 
 ```text
