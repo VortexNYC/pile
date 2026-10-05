@@ -64,6 +64,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "ssoEnforced",
         flag: "sso-enforced",
       },
+      {
+        name: "defaultTeamId",
+        flag: "default-team-id",
+      },
     ],
   },
   "workspaces delete": {

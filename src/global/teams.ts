@@ -1,8 +1,14 @@
-import { and, count, eq } from "drizzle-orm";
+import { and, count, eq, sql } from "drizzle-orm";
 
 import type { AppEnv } from "../platform/env.js";
 import type { D1Client } from "./db.js";
-import { apikey, team, teamMember, user as userTable } from "./schema.js";
+import {
+  apikey,
+  organization,
+  team,
+  teamMember,
+  user as userTable,
+} from "./schema.js";
 import { parseTeamMetadata, teamMetadataString } from "./team-metadata.js";
 
 export interface TeamRecord {
@@ -90,6 +96,40 @@ export async function getDefaultTeam(
     }
   }
   return undefined;
+}
+
+// Flips `isDefault` across every team in the workspace and mirrors the
+// choice into the organization's `defaultTeamId` metadata. Both writes run as
+// one D1 batch and patch the JSON in place, so concurrent team edits to other
+// metadata fields are not clobbered.
+export async function setDefaultTeam(
+  db: D1Client,
+  organizationId: string,
+  teamId: string
+): Promise<TeamRecord | undefined> {
+  const target = await getTeamById(db, teamId, organizationId);
+  if (!target) return undefined;
+  await db.batch([
+    db
+      .update(team)
+      .set({
+        metadata: sql`json_set(${team.metadata}, '$.isDefault', json(CASE WHEN ${team.id} = ${teamId} THEN 'true' ELSE 'false' END))`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(team.organizationId, organizationId),
+          sql`json_valid(${team.metadata})`
+        )
+      ),
+    db
+      .update(organization)
+      .set({
+        metadata: sql`json_set(CASE WHEN json_valid(${organization.metadata}) THEN ${organization.metadata} ELSE '{}' END, '$.defaultTeamId', ${teamId})`,
+      })
+      .where(eq(organization.id, organizationId)),
+  ]);
+  return getTeamById(db, teamId, organizationId);
 }
 
 export async function listTeams(

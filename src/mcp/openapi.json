@@ -222,6 +222,10 @@
                     "ownerId": {
                       "type": "string"
                     },
+                    "defaultTeamId": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -235,6 +239,7 @@
                     "slug",
                     "key",
                     "ownerId",
+                    "defaultTeamId",
                     "createdAt",
                     "updatedAt"
                   ]
@@ -278,6 +283,10 @@
                           "ownerId": {
                             "type": "string"
                           },
+                          "defaultTeamId": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "createdAt": {
                             "type": "string"
                           },
@@ -291,6 +300,7 @@
                           "slug",
                           "key",
                           "ownerId",
+                          "defaultTeamId",
                           "createdAt",
                           "updatedAt"
                         ]
@@ -347,6 +357,10 @@
                     "ownerId": {
                       "type": "string"
                     },
+                    "defaultTeamId": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -360,6 +374,7 @@
                     "slug",
                     "key",
                     "ownerId",
+                    "defaultTeamId",
                     "createdAt",
                     "updatedAt"
                   ]
@@ -392,6 +407,11 @@
                 "properties": {
                   "ssoEnforced": {
                     "type": "boolean"
+                  },
+                  "defaultTeamId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Team that receives issues created without a teamId. The previous default team becomes deletable."
                   }
                 }
               }
@@ -422,6 +442,10 @@
                     "ownerId": {
                       "type": "string"
                     },
+                    "defaultTeamId": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -435,6 +459,7 @@
                     "slug",
                     "key",
                     "ownerId",
+                    "defaultTeamId",
                     "createdAt",
                     "updatedAt"
                   ]
@@ -446,7 +471,7 @@
             "description": "Requires owner or admin role in the workspace"
           },
           "404": {
-            "description": "Workspace not found"
+            "description": "Workspace or default team not found"
           }
         },
         "summary": "Update workspace"
@@ -537,6 +562,10 @@
                     "ownerId": {
                       "type": "string"
                     },
+                    "defaultTeamId": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -550,6 +579,7 @@
                     "slug",
                     "key",
                     "ownerId",
+                    "defaultTeamId",
                     "createdAt",
                     "updatedAt"
                   ]
@@ -619,6 +649,10 @@
                         "ownerId": {
                           "type": "string"
                         },
+                        "defaultTeamId": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -632,6 +666,7 @@
                         "slug",
                         "key",
                         "ownerId",
+                        "defaultTeamId",
                         "createdAt",
                         "updatedAt"
                       ]
@@ -48196,6 +48231,15 @@
         "responses": {
           "204": {
             "description": "Team deleted"
+          },
+          "400": {
+            "description": "Team is the workspace default"
+          },
+          "403": {
+            "description": "Cannot delete this team"
+          },
+          "409": {
+            "description": "Team still has issues"
           }
         },
         "summary": "Delete team"

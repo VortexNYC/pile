@@ -42,6 +42,7 @@ export interface WorkspaceRecord {
   slug: string;
   key: string | null;
   ownerId: string;
+  defaultTeamId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -62,6 +63,7 @@ async function buildWorkspace(
     slug: row.slug,
     key: meta.key,
     ownerId: owner?.userId ?? "",
+    defaultTeamId: meta.defaultTeamId,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

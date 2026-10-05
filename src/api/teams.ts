@@ -20,6 +20,7 @@ import {
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
+import { getWorkspaceStub } from "./stub.js";
 
 const teamSchema = z.object({
   id: z.string(),
@@ -185,6 +186,9 @@ const deleteTeamRoute = createRoute({
   },
   responses: {
     204: { description: "Team deleted" },
+    400: { description: "Team is the workspace default" },
+    403: { description: "Cannot delete this team" },
+    409: { description: "Team still has issues" },
   },
 });
 
@@ -418,18 +422,32 @@ export function registerTeamRoutes(app: OpenAPIHono<AppContext>) {
     if (!existing) {
       return c.body(null, 204);
     }
-    if (existing.isDefault) {
-      throw new VortexError({
-        code: "BAD_REQUEST",
-        status: 400,
-        message: "Cannot delete the default team",
-      });
-    }
     if (!canManageTeam(existing, identity)) {
       throw new VortexError({
         code: "FORBIDDEN",
         status: 403,
         message: "Cannot delete this team",
+      });
+    }
+    if (existing.isDefault) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: "Cannot delete the default team",
+        hint: "Reassign the default with PATCH /workspaces/{id} { defaultTeamId } first.",
+      });
+    }
+    const stats = await getWorkspaceStub(c.env, organizationId).issueStats(
+      "teamId",
+      [id]
+    );
+    const issueCount = stats.reduce((sum, row) => sum + row.count, 0);
+    if (issueCount > 0) {
+      throw new VortexError({
+        code: "CONFLICT",
+        status: 409,
+        message: `Team still has ${issueCount} issue(s)`,
+        hint: "Move or delete the team's issues before deleting it.",
       });
     }
     await deleteTeam(db, c.env, c.req.raw.headers, id, organizationId);
