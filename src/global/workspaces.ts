@@ -13,6 +13,7 @@ import {
   workspaceAgentContext,
 } from "./schema.js";
 import { safeJSON } from "./team-metadata.js";
+import { getDefaultTeam } from "./teams.js";
 import { createState } from "./workspace-entities.js";
 
 const workspaceMetadataSchema = z
@@ -63,7 +64,9 @@ async function buildWorkspace(
     slug: row.slug,
     key: meta.key,
     ownerId: owner?.userId ?? "",
-    defaultTeamId: meta.defaultTeamId,
+    // The team's isDefault flag is authoritative; org metadata only mirrors
+    // it and is missing on workspaces that predate setDefaultTeam.
+    defaultTeamId: (await getDefaultTeam(db, row.id))?.id ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

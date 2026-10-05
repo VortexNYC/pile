@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { createAdminHeaders } from "../platform/test-auth.js";
 import { createD1 } from "./db.js";
-import { organization, user as userTable } from "./schema.js";
+import { organization, team, user as userTable } from "./schema.js";
 import {
   createTeam,
   getDefaultTeam,
@@ -97,5 +97,26 @@ describe("setDefaultTeam", () => {
     expect(
       (await getTeamById(b.db, foreign.id, b.organizationId))?.isDefault
     ).toBe(false);
+  });
+
+  it("flags a target whose stored metadata is invalid", async () => {
+    const { db, organizationId } = await seedWorkspace("user-default-bad");
+    const legacy = await createTeam(db, env, new Headers(), {
+      organizationId,
+      key: "legacy",
+      name: "Legacy",
+      ownerId: "user-default-bad",
+    });
+    await db
+      .update(team)
+      .set({ metadata: "not json" })
+      .where(eq(team.id, legacy.id));
+
+    const result = await setDefaultTeam(db, organizationId, legacy.id);
+    expect(result?.isDefault).toBe(true);
+    expect((await getDefaultTeam(db, organizationId))?.id).toBe(legacy.id);
+    expect(
+      (await listTeams(db, organizationId)).filter((t) => t.isDefault)
+    ).toHaveLength(1);
   });
 });

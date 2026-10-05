@@ -1,10 +1,10 @@
 import { env } from "cloudflare:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
 import { createAdminHeaders } from "../platform/test-auth.js";
 import { createD1 } from "./db.js";
-import { organization, user as userTable } from "./schema.js";
+import { organization, team, user as userTable } from "./schema.js";
 import { createTeam, setDefaultTeam } from "./teams.js";
 import { createWorkspace, getWorkspaceById } from "./workspaces.js";
 
@@ -56,12 +56,32 @@ describe("workspace defaultTeamId", () => {
     expect(workspace?.key).toBe("WS");
   });
 
-  it("is null when the org metadata has no default team", async () => {
-    const { db, organizationId } = await seedWorkspace("user-ws-nodefault");
+  it("follows the team flag even when org metadata lacks defaultTeamId", async () => {
+    const { db, organizationId } = await seedWorkspace("user-ws-legacy");
+    const ops = await createTeam(db, env, new Headers(), {
+      organizationId,
+      key: "ops",
+      name: "Ops",
+      ownerId: "user-ws-legacy",
+    });
+    await setDefaultTeam(db, organizationId, ops.id);
     await db
       .update(organization)
       .set({ metadata: JSON.stringify({ key: "WS" }) })
       .where(eq(organization.id, organizationId));
+    expect((await getWorkspaceById(db, organizationId))?.defaultTeamId).toBe(
+      ops.id
+    );
+  });
+
+  it("is null when no team is flagged default", async () => {
+    const { db, organizationId } = await seedWorkspace("user-ws-nodefault");
+    await db
+      .update(team)
+      .set({
+        metadata: sql`json_set(${team.metadata}, '$.isDefault', json('false'))`,
+      })
+      .where(eq(team.organizationId, organizationId));
     expect((await getWorkspaceById(db, organizationId))?.defaultTeamId).toBe(
       null
     );

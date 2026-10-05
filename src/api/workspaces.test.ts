@@ -391,6 +391,37 @@ describe("workspaces API", () => {
     });
     expect(blocked.status).toBe(400);
 
+    // Plain members cannot reassign the default.
+    const memberCookie = await getSessionCookie();
+    const memberUserId = (
+      await (
+        await createAuth(env)
+      ).api.getSession({
+        headers: new Headers({ Cookie: memberCookie }),
+      })
+    )?.user?.id;
+    if (!memberUserId) throw new Error("member session not established");
+    await createD1(env.D1).insert(member).values({
+      id: crypto.randomUUID(),
+      organizationId: orgId,
+      userId: memberUserId,
+      role: "member",
+      createdAt: new Date(),
+    });
+    const forbidden = await app.fetch(
+      new Request(new URL(`/workspaces/${orgId}`, origin).toString(), {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: memberCookie,
+          Origin: origin,
+        },
+        body: JSON.stringify({ defaultTeamId: eng }),
+      }),
+      env
+    );
+    expect(forbidden.status).toBe(403);
+
     const missing = await patchWorkspace({ defaultTeamId: "no-such-team" });
     expect(missing.status).toBe(404);
 

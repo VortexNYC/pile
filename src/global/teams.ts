@@ -1,4 +1,4 @@
-import { and, count, eq, sql } from "drizzle-orm";
+import { and, count, eq, ne, sql } from "drizzle-orm";
 
 import type { AppEnv } from "../platform/env.js";
 import type { D1Client } from "./db.js";
@@ -107,25 +107,42 @@ export async function setDefaultTeam(
   organizationId: string,
   teamId: string
 ): Promise<TeamRecord | undefined> {
-  const target = await getTeamById(db, teamId, organizationId);
-  if (!target) return undefined;
+  const row = await db
+    .select()
+    .from(team)
+    .where(and(eq(team.id, teamId), eq(team.organizationId, organizationId)))
+    .get();
+  if (!row) return undefined;
+  const now = new Date();
+  // A target with missing/invalid metadata would be skipped by the json_set
+  // pass, so rewrite it whole from its parsed (defaulted) record instead.
+  const targetMetadata = parseTeamMetadata(row.metadata)
+    ? sql`json_set(${team.metadata}, '$.isDefault', json('true'))`
+    : teamMetadataString({ ...teamRecordFromRow(row), isDefault: true });
   await db.batch([
     db
       .update(team)
+      .set({ metadata: targetMetadata, updatedAt: now })
+      .where(and(eq(team.id, teamId), eq(team.organizationId, organizationId))),
+    db
+      .update(team)
       .set({
-        metadata: sql`json_set(${team.metadata}, '$.isDefault', json(CASE WHEN ${team.id} = ${teamId} THEN 'true' ELSE 'false' END))`,
-        updatedAt: new Date(),
+        metadata: sql`json_set(${team.metadata}, '$.isDefault', json('false'))`,
+        updatedAt: now,
       })
       .where(
         and(
           eq(team.organizationId, organizationId),
-          sql`json_valid(${team.metadata})`
+          ne(team.id, teamId),
+          sql`json_valid(${team.metadata})`,
+          sql`json_extract(${team.metadata}, '$.isDefault') = 1`
         )
       ),
     db
       .update(organization)
       .set({
         metadata: sql`json_set(CASE WHEN json_valid(${organization.metadata}) THEN ${organization.metadata} ELSE '{}' END, '$.defaultTeamId', ${teamId})`,
+        updatedAt: now,
       })
       .where(eq(organization.id, organizationId)),
   ]);
