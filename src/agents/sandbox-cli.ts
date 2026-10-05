@@ -64,6 +64,15 @@ import {
 } from "./subscription-pool.js";
 
 const RESULT_PATH = "/tmp/agent-result.json";
+// Preview comment is once-per-session — poll re-enters while the terminal
+// result is in flight and a second tunnel+comment would double-post.
+const previewPostedSessions = new Set<string>();
+// Truncation continuation: a lane whose model run was cut off mid-response
+// resumes in its kept sandbox instead of dying. The counter file lives on
+// the sandbox so it survives across polls; the cap bounds continuations.
+const CONTINUATION_COUNT_PATH = "/tmp/pile-continuations";
+const MAX_TRUNCATION_CONTINUATIONS = 2;
+const TRUNCATION_CONTINUATION_PROMPT = `Your previous response was cut off at the model's output token limit before the task finished. Continue from where you stopped. To avoid another truncation losing work: write your plan and intermediate analysis to files under /tmp/ as you go (e.g. /tmp/plan.md), keep each reply bounded, and do the work in small commits rather than one long reasoning pass.`;
 // Sandbox compute calls (findSandbox/createSandbox/startRunner) hang
 // indefinitely when a container wedges — leaving the session `created`
 // forever and holding the `waitUntil` thread. Bound the whole provision
@@ -126,6 +135,8 @@ export interface SandboxCliDescriptor {
   /** Keep the sandbox after terminal result so follow-up prompts can resume
    *  it (devin), and check runnerBusy in poll before reading the result. */
   followup?: boolean;
+  /** Test seam — replace the env-derived compute backend. */
+  compute?: ComputeBackend;
   /** Prompt tail override — default tells the agent not to push (the runner
    *  does); codex cloud tasks need different wording. */
   pushInstruction?: string;
@@ -359,7 +370,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
   }
 
   private requireCompute(): ComputeBackend {
-    return computeBackend(this.env, this.d.id);
+    return this.d.compute ?? computeBackend(this.env, this.d.id);
   }
 
   // Repo-scoped installation token for one lane, downscoped to the lane's
@@ -878,6 +889,67 @@ export class SandboxCliAgentProvider implements AgentProvider {
       };
     }
 
+    // Truncated agent output (model hit its output token limit) is a
+    // recoverable death — the worktree state is intact and the follow-up
+    // path can continue the lane in the same sandbox. Continue at most
+    // MAX_CONTINUATIONS times; a task that still can't finish in chunks
+    // fails for real.
+    const truncated =
+      result.status !== "completed" &&
+      /truncat|max (output )?token|output limit exceeded/i.test(
+        result.result ?? ""
+      );
+    if (
+      truncated &&
+      this.d.followup &&
+      (await compute.runnerBusy?.(sandbox, sessionId)) !== true
+    ) {
+      const continued =
+        Number(await compute.readFile(sandbox, CONTINUATION_COUNT_PATH)) || 0;
+      if (continued < MAX_TRUNCATION_CONTINUATIONS) {
+        const env = sandbox.runnerEnv ?? {};
+        const resumed = await this.sendPrompt(
+          sessionId,
+          TRUNCATION_CONTINUATION_PROMPT,
+          {
+            id: env.ISSUE_IDENTIFIER ?? sessionId,
+            identifier: env.ISSUE_IDENTIFIER,
+            organizationId: sandbox.organizationId ?? "",
+            repo: env.REPO || null,
+            branch: env.BRANCH || null,
+            title: env.ISSUE_TITLE ?? "continued lane",
+            description: "",
+            status: "in_progress",
+            priority: "medium",
+          } as Issue,
+          null,
+          { organizationId: sandbox.organizationId ?? undefined }
+        );
+        if (resumed) {
+          await compute.writeFile(
+            sandbox,
+            CONTINUATION_COUNT_PATH,
+            String(continued + 1)
+          );
+          await this.note(
+            sandbox.organizationId,
+            sessionId,
+            "action",
+            `agent output truncated — continuing lane in the same sandbox (${
+              continued + 1
+            }/${MAX_TRUNCATION_CONTINUATIONS})`,
+            { sandbox: sandbox.id }
+          );
+          return {
+            id: sessionId,
+            agentId: this.id,
+            status: "running",
+            result: result.result,
+          };
+        }
+      }
+    }
+
     const status: AgentSessionStatus =
       result.status === "completed" ? "completed" : "failed";
     const prUrl = result.prUrl?.trim() || null;
@@ -931,7 +1003,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
     branch: string | null | undefined
   ): Promise<void> {
     const repo = sandbox.runnerEnv?.REPO;
-    if (!repo || !prUrl) return;
+    if (!repo || !prUrl || previewPostedSessions.has(sessionId)) return;
     const compute = this.requireCompute();
     if (!compute.previewUrl) return;
     try {
@@ -944,6 +1016,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
       if (!port) return;
       const url = await compute.previewUrl(sandbox, port);
       if (!url) return;
+      previewPostedSessions.add(sessionId);
       const pullNumber = /\/pull\/(\d+)/.exec(prUrl)?.[1];
       if (!pullNumber) return;
       const token = await this.githubToken(repo, DEFAULT_LANE_PERMISSIONS, {
