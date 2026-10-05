@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { createD1 } from "../global/db.js";
 import { user as userTable } from "../global/schema.js";
+import { createTeam, getDefaultTeam, setDefaultTeam } from "../global/teams.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
@@ -183,5 +184,60 @@ describe("teams API", () => {
       `/workspaces/${organizationId}/users/00000000-0000-0000-0000-000000000000/teams`
     );
     expect(res.status).toBe(401);
+  });
+  it("guards deleting the default team and teams that still have issues", async () => {
+    const db = createD1(env.D1);
+    const headers = new Headers();
+    const makeTeam = (key: string) =>
+      createTeam(db, env, headers, {
+        organizationId,
+        key,
+        name: key,
+        ownerId: "user-teams",
+      });
+    const fallback = await makeTeam(`DEF${crypto.randomUUID().slice(0, 4)}`);
+    const defaultTeam =
+      (await getDefaultTeam(db, organizationId)) ??
+      (await setDefaultTeam(db, organizationId, fallback.id));
+    if (!defaultTeam) throw new Error("no default team");
+
+    const blocked = await fetch(
+      `/workspaces/${organizationId}/teams/${defaultTeam.id}`,
+      { method: "DELETE" },
+      token
+    );
+    expect(blocked.status).toBe(400);
+
+    const busy = await makeTeam(`BSY${crypto.randomUUID().slice(0, 4)}`);
+    const issue = await fetch(
+      `/workspaces/${organizationId}/issues`,
+      {
+        method: "POST",
+        body: JSON.stringify({ title: "keeps team busy", teamId: busy.id }),
+      },
+      token
+    );
+    expect(issue.status).toBe(201);
+    const conflict = await fetch(
+      `/workspaces/${organizationId}/teams/${busy.id}`,
+      { method: "DELETE" },
+      token
+    );
+    expect(conflict.status).toBe(409);
+    expect(((await conflict.json()) as { code: string }).code).toBe("CONFLICT");
+
+    const empty = await makeTeam(`EMP${crypto.randomUUID().slice(0, 4)}`);
+    const deleted = await fetch(
+      `/workspaces/${organizationId}/teams/${empty.id}`,
+      { method: "DELETE" },
+      token
+    );
+    expect(deleted.status).toBe(204);
+    const gone = await fetch(
+      `/workspaces/${organizationId}/teams/${empty.id}`,
+      {},
+      token
+    );
+    expect(gone.status).toBe(404);
   });
 });
