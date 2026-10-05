@@ -5,7 +5,9 @@ Public status for `pile.nyc` lives at **https://status.pile.nyc**
 It is hosted on OpenStatus in a separate Pile workspace (page id `5671`).
 
 Owner: **Pile**. This is a Pile-internal service with no Vortex dependency.
-The incident lead from `docs/incident-response.md` publishes updates here.
+Whoever declares the incident is the incident lead (see
+`docs/incident-response.md`) and posts updates here until they hand off
+explicitly.
 
 ## Decision: OpenStatus, not a Pile-owned worker
 
