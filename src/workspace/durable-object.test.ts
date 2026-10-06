@@ -3,7 +3,12 @@ import { eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { createD1 } from "../global/db.js";
-import { member, organization, user as userTable } from "../global/schema.js";
+import {
+  githubUsers,
+  member,
+  organization,
+  user as userTable,
+} from "../global/schema.js";
 import { createDefaultTeam, updateTeam } from "../global/teams.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import { createAdminHeaders } from "../platform/test-auth.js";
@@ -91,6 +96,79 @@ describe("WorkspaceDO", () => {
     );
     expect(issues.length).toBeGreaterThan(0);
     expect(issues[0].id).toBe(issue.id);
+  });
+
+  it("notifies a human assignee on create/update and resolves non-user assignee ids", async () => {
+    const stub = getStub();
+    // A GitHub-login assignee resolves to the mapped workspace user.
+    const db = createD1(env.D1);
+    await db.insert(githubUsers).values({
+      id: crypto.randomUUID(),
+      organizationId: WORKSPACE_ID,
+      githubLogin: "gh-user-1",
+      userId: "user-1",
+    });
+
+    const issue = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Login-assigned", assigneeId: "gh-user-1" })
+    );
+
+    const notes = await withWorkspace(stub, (instance) =>
+      instance.listNotificationsForRecipient("user-1", "user")
+    );
+    const assigned = notes.filter(
+      (n) => n.type === "issue_assigned" && n.issueId === issue.id
+    );
+    // The lane's actor is not a member (no actorId) — machine actors are
+    // suppressed, so no issue_assigned on create here.
+    expect(assigned).toHaveLength(0);
+
+    // A member actor assigning emits it.
+    const reassigned = await withWorkspace(stub, (instance) =>
+      instance.updateIssue(issue.id, { assigneeId: "gh-user-1" }, "user-1")
+    );
+    expect(reassigned?.assigneeId).toBe("gh-user-1");
+    const after = await withWorkspace(stub, (instance) =>
+      instance.listNotificationsForRecipient("user-1", "user")
+    );
+    // Self-assignment by user-1 stays silent.
+    expect(
+      after.filter((n) => n.type === "issue_assigned" && n.issueId === issue.id)
+    ).toHaveLength(0);
+
+    // A different member assigning user-1 fires it.
+    await db
+      .insert(userTable)
+      .values({
+        id: "user-2",
+        name: "Other",
+        email: "user-2@test.local",
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .onConflictDoNothing();
+    await db.insert(member).values({
+      id: crypto.randomUUID(),
+      organizationId: WORKSPACE_ID,
+      userId: "user-2",
+      role: "member",
+      createdAt: new Date(),
+    });
+    await withWorkspace(stub, (instance) =>
+      instance.updateIssue(issue.id, { assigneeId: null }, "user-2")
+    );
+    await withWorkspace(stub, (instance) =>
+      instance.updateIssue(issue.id, { assigneeId: "gh-user-1" }, "user-2")
+    );
+    const finalNotes = await withWorkspace(stub, (instance) =>
+      instance.listNotificationsForRecipient("user-1", "user")
+    );
+    expect(
+      finalNotes.filter(
+        (n) => n.type === "issue_assigned" && n.issueId === issue.id
+      )
+    ).toHaveLength(1);
   });
 
   it("supports triage status and resolution semantics", async () => {

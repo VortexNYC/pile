@@ -753,50 +753,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const d1 = createD1(this.env.D1);
     const org = this.organizationId;
 
-    if (issue.assigneeId) {
-      const membership = await getWorkspaceMembership(
-        d1,
-        org,
-        issue.assigneeId
-      );
-      if (membership) {
-        recipients.add(issue.assigneeId);
-      } else {
-        const github = await d1
-          .select({ userId: githubUsers.userId })
-          .from(githubUsers)
-          .where(
-            and(
-              eq(githubUsers.organizationId, org),
-              eq(githubUsers.githubLogin, issue.assigneeId)
-            )
-          )
-          .get();
-        if (github) {
-          recipients.add(github.userId);
-        } else {
-          const linear = await this.db
-            .select({ email: workspaceLinearUsers.email })
-            .from(workspaceLinearUsers)
-            .where(
-              and(
-                eq(workspaceLinearUsers.organizationId, org),
-                eq(workspaceLinearUsers.linearId, issue.assigneeId)
-              )
-            )
-            .get();
-          if (linear?.email) {
-            const matchedUser = await d1
-              .select({ id: globalUser.id })
-              .from(globalUser)
-              .where(eq(globalUser.email, linear.email))
-              .get();
-            if (matchedUser) {
-              recipients.add(matchedUser.id);
-            }
-          }
-        }
-      }
+    const assigneeUserId = await this.resolveAssigneeUserId(issue.assigneeId);
+    if (assigneeUserId) {
+      recipients.add(assigneeUserId);
     }
 
     const subscribers = await this.db
@@ -837,6 +796,61 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       recipients.delete(extraExcludeRecipientId);
     }
     return [...recipients];
+  }
+
+  // Bulk importers and webhook syncs write with machine actors
+  // ("gitlab"/"github"/undefined) — those can't mass-email real users on
+  // assign. Only a workspace-member actor triggers the directed notify.
+  private async isMemberActor(actorId?: string): Promise<boolean> {
+    if (!actorId) return false;
+    const d1 = createD1(this.env.D1);
+    const membership = await getWorkspaceMembership(
+      d1,
+      this.organizationId,
+      actorId
+    );
+    return Boolean(membership);
+  }
+
+  // assigneeId may be a user id, a GitHub login, or a Linear id — resolve
+  // to the workspace user id so directed notifications and exclusions use
+  // the same identity as the recipients fan-out.
+  private async resolveAssigneeUserId(
+    assigneeId: string | null
+  ): Promise<string | null> {
+    if (!assigneeId) return null;
+    const d1 = createD1(this.env.D1);
+    const org = this.organizationId;
+    const membership = await getWorkspaceMembership(d1, org, assigneeId);
+    if (membership) return assigneeId;
+    const github = await d1
+      .select({ userId: githubUsers.userId })
+      .from(githubUsers)
+      .where(
+        and(
+          eq(githubUsers.organizationId, org),
+          eq(githubUsers.githubLogin, assigneeId)
+        )
+      )
+      .get();
+    if (github) return github.userId;
+    const linear = await this.db
+      .select({ email: workspaceLinearUsers.email })
+      .from(workspaceLinearUsers)
+      .where(
+        and(
+          eq(workspaceLinearUsers.organizationId, org),
+          eq(workspaceLinearUsers.linearId, assigneeId)
+        )
+      )
+      .get();
+    if (!linear?.email) return null;
+    const matchedUser = await d1
+      .select({ id: globalUser.id })
+      .from(globalUser)
+      .where(eq(globalUser.email, linear.email))
+      .get();
+    return matchedUser?.id ?? null;
   }
 
   // Types a member should hear about even before they touch notification
@@ -3575,7 +3589,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     // An assignee on create hears it as issue_assigned, not issue_created.
     const humanAssignee =
       issue.assigneeId && !issue.assigneeId.startsWith("lane:")
-        ? issue.assigneeId
+        ? await this.resolveAssigneeUserId(issue.assigneeId)
         : null;
     await this.notifyIssueEvent(
       issue,
@@ -3589,9 +3603,14 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       actorId
     );
     this.audit("issue.created", "issue", issue.id, actorId);
-    if (issue.assigneeId && !issue.assigneeId.startsWith("lane:")) {
+    const createdByMember = await this.isMemberActor(actorId);
+    const createdAssignee =
+      issue.assigneeId && !issue.assigneeId.startsWith("lane:")
+        ? await this.resolveAssigneeUserId(issue.assigneeId)
+        : null;
+    if (createdAssignee && createdAssignee !== actorId && createdByMember) {
       await this.deliverNotification({
-        recipientId: issue.assigneeId,
+        recipientId: createdAssignee,
         recipientType: "user",
         issueId: issue.id,
         type: "issue_assigned",
@@ -4403,15 +4422,16 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       assigneeChanged &&
       issue.assigneeId &&
       !issue.assigneeId.startsWith("lane:")
-        ? issue.assigneeId
+        ? await this.resolveAssigneeUserId(issue.assigneeId)
         : null;
+    const selfAssigned = newAssignee !== null && newAssignee === actorId;
     await this.notifyIssueEvent(
       issue,
       "issue_updated",
       actorId,
       newAssignee ?? undefined
     );
-    if (newAssignee) {
+    if (newAssignee && !selfAssigned && (await this.isMemberActor(actorId))) {
       await this.deliverNotification({
         recipientId: newAssignee,
         recipientType: "user",
