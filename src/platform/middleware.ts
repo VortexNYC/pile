@@ -97,6 +97,18 @@ export const workspaceAuthMiddleware = createMiddleware<{
         message: "Token does not belong to this workspace",
       });
     }
+    // A key stays live only while its backing user still belongs to the
+    // workspace — otherwise self-minted member keys would outlive the
+    // membership that authorized them.
+    if (
+      !(await getWorkspaceMembership(db, identity.organizationId, identity.id))
+    ) {
+      throw new VortexError({
+        code: "FORBIDDEN",
+        status: 403,
+        message: "Token owner is no longer a member of this workspace",
+      });
+    }
     c.set("workspaceIdentity", identity);
     await next();
     return;

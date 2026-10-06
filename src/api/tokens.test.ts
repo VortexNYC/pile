@@ -1,14 +1,28 @@
 import { env } from "cloudflare:test";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { createD1 } from "../global/db.js";
-import { apikey, user as userTable } from "../global/schema.js";
+import {
+  apikey,
+  member as memberTable,
+  user as userTable,
+} from "../global/schema.js";
+import { createMembership } from "../global/workspace-entities.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
 import { createAdminHeaders } from "../platform/test-auth.js";
+
+const origin = (
+  env.ALLOWED_ORIGINS ??
+  env.BETTER_AUTH_URL ??
+  "https://pile.example.workers.dev"
+)
+  .toString()
+  .split(",")[0]
+  .trim();
 
 async function seedWorkspace() {
   const db = createD1(env.D1);
@@ -54,11 +68,46 @@ async function seedWorkspace() {
   });
   const readParsed = z.object({ key: z.string() }).parse(readResult);
 
+  const writeResult = await auth.api.createApiKey({
+    body: {
+      userId,
+      name: "test-write",
+      metadata: {
+        organizationId: workspace!.id,
+        permissions: "read,write",
+      },
+    },
+  });
+  const writeParsed = z.object({ key: z.string() }).parse(writeResult);
+
   return {
     organizationId: workspace!.id,
     adminToken: adminParsed.key,
     readToken: readParsed.key,
+    writeToken: writeParsed.key,
   };
+}
+
+async function seedMemberSession(organizationId: string) {
+  const db = createD1(env.D1);
+  const auth = await createAuth(env);
+  const email = `member-${crypto.randomUUID()}@example.com`;
+  const password = "password123";
+  const signUp = await auth.api.signUpEmail({
+    body: { email, password, name: "Member User" },
+  });
+  const userId = z.object({ user: z.object({ id: z.string() }) }).parse(signUp)
+    .user.id;
+  await createMembership(db, env, organizationId, userId, "member");
+  const signInRes = await auth.api.signInEmail({
+    body: { email, password },
+    asResponse: true,
+  });
+  const cookie = signInRes.headers
+    .getSetCookie()
+    .find((c) => c.includes("better-auth.session_token="));
+  if (!cookie) throw new Error("No session cookie");
+  return { cookie, userId };
 }
 
 async function fetch(
@@ -82,12 +131,14 @@ describe("tokens API", () => {
   let organizationId: string;
   let adminToken: string;
   let readToken: string;
+  let writeToken: string;
 
   beforeAll(async () => {
     const seeded = await seedWorkspace();
     organizationId = seeded.organizationId;
     adminToken = seeded.adminToken;
     readToken = seeded.readToken;
+    writeToken = seeded.writeToken;
   });
 
   it("rejects listing tokens without auth", async () => {
@@ -172,6 +223,170 @@ describe("tokens API", () => {
       readToken
     );
     expect(res.status).toBe(403);
+  });
+
+  it("lets a session member mint a token clamped to member permissions", async () => {
+    const member = await seedMemberSession(organizationId);
+    const res = await fetch(`/workspaces/${organizationId}/tokens`, {
+      method: "POST",
+      headers: { Cookie: member.cookie, Origin: origin },
+      body: JSON.stringify({
+        name: "member-cli",
+        permissions: ["read", "write", "admin"],
+      }),
+    });
+    expect(res.status).toBe(201);
+    const body = await res.json<{
+      id: string;
+      token: string;
+      permissions: string;
+    }>();
+    expect(body.permissions).toBe("read,write");
+
+    const db = createD1(env.D1);
+    const row = await db
+      .select()
+      .from(apikey)
+      .where(eq(apikey.id, body.id))
+      .get();
+    expect(row?.referenceId).toBe(member.userId);
+    const metadata = z
+      .object({ actorType: z.string(), permissions: z.string() })
+      .parse(JSON.parse(row?.metadata ?? "{}"));
+    expect(metadata).toEqual({ actorType: "user", permissions: "read,write" });
+
+    const issuesRes = await fetch(
+      `/workspaces/${organizationId}/issues`,
+      {},
+      body.token
+    );
+    expect(issuesRes.status).toBe(200);
+  });
+
+  it("defaults a session member token to read", async () => {
+    const member = await seedMemberSession(organizationId);
+    const res = await fetch(`/workspaces/${organizationId}/tokens`, {
+      method: "POST",
+      headers: { Cookie: member.cookie, Origin: origin },
+      body: JSON.stringify({ name: "member-default" }),
+    });
+    expect(res.status).toBe(201);
+    const body = await res.json<{ permissions: string }>();
+    expect(body.permissions).toBe("read");
+  });
+
+  it("rejects a member token request for permissions they do not hold", async () => {
+    const member = await seedMemberSession(organizationId);
+    const res = await fetch(`/workspaces/${organizationId}/tokens`, {
+      method: "POST",
+      headers: { Cookie: member.cookie, Origin: origin },
+      body: JSON.stringify({ name: "escalate", permissions: ["admin"] }),
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it("rejects agent token creation for a session member", async () => {
+    const member = await seedMemberSession(organizationId);
+    const res = await fetch(`/workspaces/${organizationId}/tokens`, {
+      method: "POST",
+      headers: { Cookie: member.cookie, Origin: origin },
+      body: JSON.stringify({ name: "agent", actorType: "agent" }),
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it("clamps a token minted by a write-scoped key to its own permissions", async () => {
+    const res = await fetch(
+      `/workspaces/${organizationId}/tokens`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "child",
+          permissions: ["write", "admin"],
+        }),
+      },
+      writeToken
+    );
+    expect(res.status).toBe(201);
+    const body = await res.json<{ permissions: string }>();
+    expect(body.permissions).toBe("write");
+  });
+
+  it("revokes a member's key when their membership is removed", async () => {
+    const memberSession = await seedMemberSession(organizationId);
+    const res = await fetch(`/workspaces/${organizationId}/tokens`, {
+      method: "POST",
+      headers: { Cookie: memberSession.cookie, Origin: origin },
+      body: JSON.stringify({ name: "doomed", permissions: ["read"] }),
+    });
+    expect(res.status).toBe(201);
+    const { token } = await res.json<{ token: string }>();
+
+    const working = await fetch(
+      `/workspaces/${organizationId}/issues`,
+      {},
+      token
+    );
+    expect(working.status).toBe(200);
+
+    const db = createD1(env.D1);
+    await db
+      .delete(memberTable)
+      .where(
+        and(
+          eq(memberTable.organizationId, organizationId),
+          eq(memberTable.userId, memberSession.userId)
+        )
+      );
+
+    const check = await fetch(
+      `/workspaces/${organizationId}/issues`,
+      {},
+      token
+    );
+    expect(check.status).toBe(403);
+  });
+
+  it("binds a non-admin agent key's minted token to the agent, not the owner", async () => {
+    const agentRes = await fetch(
+      `/workspaces/${organizationId}/tokens`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "lane-key",
+          permissions: ["read", "write"],
+          actorType: "agent",
+        }),
+      },
+      adminToken
+    );
+    expect(agentRes.status).toBe(201);
+    const agentKey = await agentRes.json<{ id: string; token: string }>();
+
+    const db = createD1(env.D1);
+    const agentRow = await db
+      .select()
+      .from(apikey)
+      .where(eq(apikey.id, agentKey.id))
+      .get();
+    const agentUserId = agentRow?.referenceId;
+
+    const res = await fetch(
+      `/workspaces/${organizationId}/tokens`,
+      {
+        method: "POST",
+        body: JSON.stringify({ name: "agent-child", permissions: ["read"] }),
+      },
+      agentKey.token
+    );
+    expect(res.status).toBe(201);
+    const body = await res.json<{ id: string }>();
+    const row = await db
+      .select()
+      .from(apikey)
+      .where(eq(apikey.id, body.id))
+      .get();
+    expect(row?.referenceId).toBe(agentUserId);
   });
 
   it("deletes a token", async () => {
