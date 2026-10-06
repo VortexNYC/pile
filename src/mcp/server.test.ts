@@ -123,6 +123,8 @@ describe("MCP integration", () => {
     );
     expect(createIssue?.description).toContain('"body" object');
     expect(createIssue?.description).toContain("title*");
+    expect(createIssue?.description).toContain("possibleDuplicates");
+    expect(createIssue?.description).toContain("dedupe");
     const generated = tools.find(
       (tool) => tool.name === "postWorkspacesOrganizationIdIssues"
     );

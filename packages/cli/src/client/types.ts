@@ -818,10 +818,16 @@ export interface paths {
             };
         };
         put?: never;
-        /** Create issue */
+        /**
+         * Create issue
+         * @description The 201 response includes possibleDuplicates: open issues (in teams you can see) whose titles closely match, best first. Non-blocking — if one is the same work, comment on or update it instead of keeping the new issue. Pass dedupe=block to get 409 with the matches in details.possibleDuplicates instead of creating.
+         */
         post: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description warn (default): create and return possibleDuplicates; block: 409 when any possible duplicate exists */
+                    dedupe?: "warn" | "block";
+                };
                 header?: never;
                 path: {
                     organizationId: string;
@@ -867,13 +873,22 @@ export interface paths {
                         "application/json": components["schemas"]["Issue"];
                     };
                 };
-                /** @description Issue created */
+                /** @description Issue created, with possible duplicates to review */
                 201: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["Issue"];
+                        "application/json": components["schemas"]["CreatedIssue"];
+                    };
+                };
+                /** @description dedupe=block and possible duplicates exist (details.possibleDuplicates) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DuplicateConflictError"];
                     };
                 };
             };
@@ -25392,6 +25407,27 @@ export interface components {
             prCheckState: string | null;
             createdAt: string;
             updatedAt: string;
+        };
+        CreatedIssue: components["schemas"]["Issue"] & {
+            possibleDuplicates: components["schemas"]["PossibleDuplicate"][];
+        };
+        PossibleDuplicate: {
+            id: string;
+            identifier: string | null;
+            title: string;
+            /** @enum {string} */
+            status: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
+            /** @description Share of significant title terms in common with the new title (0-1) */
+            score: number;
+        };
+        DuplicateConflictError: {
+            /** @enum {string} */
+            code: "CONFLICT";
+            message: string;
+            hint: string;
+            details: {
+                possibleDuplicates: components["schemas"]["PossibleDuplicate"][];
+            };
         };
     };
     responses: never;

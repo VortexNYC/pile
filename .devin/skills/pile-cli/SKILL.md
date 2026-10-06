@@ -41,6 +41,7 @@ pile request GET "/workspaces/<org>/issues?search=<key phrase from the title>"
 
 - If a strong match exists, comment or update that issue instead of creating a new one.
 - Create only when the search comes back empty or the matches are clearly different work.
+- The create response carries `possibleDuplicates` (`id`, `identifier`, `title`, `status`, `score` 0–1) — open issues with closely matching titles. If one is the same work, comment on or update it instead and delete the new issue. Automation that needs a hard guarantee can create with `?dedupe=block`, which returns 409 with the matches in `details.possibleDuplicates` instead of creating.
 - For scripted imports, always set `externalRef` — create is idempotent on it, so re-runs return the existing issue instead of duplicating.
 
 ## Verification

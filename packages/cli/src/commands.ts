@@ -400,7 +400,12 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "workspace",
       },
     ],
-    query: [],
+    query: [
+      {
+        name: "dedupe",
+        flag: "dedupe",
+      },
+    ],
     body: [
       {
         name: "title",

@@ -688,4 +688,46 @@ describe("WorkspaceDO", () => {
     );
     expect(links).toHaveLength(0);
   });
+
+  it("reports and optionally blocks possible duplicates on create", async () => {
+    const stub = getStub();
+    const title = `Dedupe probe ${crypto.randomUUID().slice(0, 8)} flaky checkout totals`;
+    const first = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title })
+    );
+
+    const hidden = await withWorkspace(stub, (instance) =>
+      instance.createIssueWithDuplicates(
+        { title: `${title} again` },
+        undefined,
+        {
+          teamIds: ["some-other-team"],
+          block: true,
+        }
+      )
+    );
+    expect(hidden.possibleDuplicates).toEqual([]);
+    expect(hidden.issue).not.toBeNull();
+
+    const blocked = await withWorkspace(stub, (instance) =>
+      instance.createIssueWithDuplicates({ title }, undefined, {
+        teamIds: [first.teamId],
+        block: true,
+      })
+    );
+    expect(blocked.issue).toBeNull();
+    expect(blocked.possibleDuplicates[0]?.issue.id).toBe(first.id);
+    expect(blocked.possibleDuplicates[0]?.score).toBe(1);
+
+    const warned = await withWorkspace(stub, (instance) =>
+      instance.createIssueWithDuplicates({ title }, undefined, {
+        teamIds: [first.teamId],
+        block: false,
+      })
+    );
+    expect(warned.issue?.title).toBe(title);
+    expect(warned.possibleDuplicates.map((hit) => hit.issue.id)).toContain(
+      first.id
+    );
+  });
 });

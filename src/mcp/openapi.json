@@ -162,6 +162,101 @@
           "createdAt",
           "updatedAt"
         ]
+      },
+      "CreatedIssue": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Issue"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "possibleDuplicates": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/PossibleDuplicate"
+                }
+              }
+            },
+            "required": [
+              "possibleDuplicates"
+            ]
+          }
+        ]
+      },
+      "PossibleDuplicate": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "identifier": {
+            "type": "string",
+            "nullable": true
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "triage",
+              "backlog",
+              "todo",
+              "in_progress",
+              "done",
+              "canceled"
+            ]
+          },
+          "score": {
+            "type": "number",
+            "description": "Share of significant title terms in common with the new title (0-1)"
+          }
+        },
+        "required": [
+          "id",
+          "identifier",
+          "title",
+          "status",
+          "score"
+        ]
+      },
+      "DuplicateConflictError": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "CONFLICT"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "hint": {
+            "type": "string"
+          },
+          "details": {
+            "type": "object",
+            "properties": {
+              "possibleDuplicates": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/PossibleDuplicate"
+                }
+              }
+            },
+            "required": [
+              "possibleDuplicates"
+            ]
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "hint",
+          "details"
+        ]
       }
     },
     "parameters": {}
@@ -1678,6 +1773,7 @@
         "tags": [
           "issues"
         ],
+        "description": "The 201 response includes possibleDuplicates: open issues (in teams you can see) whose titles closely match, best first. Non-blocking — if one is the same work, comment on or update it instead of keeping the new issue. Pass dedupe=block to get 409 with the matches in details.possibleDuplicates instead of creating.",
         "parameters": [
           {
             "schema": {
@@ -1686,6 +1782,20 @@
             "required": true,
             "name": "organizationId",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "warn",
+                "block"
+              ],
+              "description": "warn (default): create and return possibleDuplicates; block: 409 when any possible duplicate exists"
+            },
+            "required": false,
+            "description": "warn (default): create and return possibleDuplicates; block: 409 when any possible duplicate exists",
+            "name": "dedupe",
+            "in": "query"
           }
         ],
         "requestBody": {
@@ -1817,11 +1927,21 @@
             }
           },
           "201": {
-            "description": "Issue created",
+            "description": "Issue created, with possible duplicates to review",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Issue"
+                  "$ref": "#/components/schemas/CreatedIssue"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "dedupe=block and possible duplicates exist (details.possibleDuplicates)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DuplicateConflictError"
                 }
               }
             }
