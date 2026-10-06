@@ -68,6 +68,10 @@ GET    /workspaces/{organizationId}/linear-users
 GET    /workspaces/{organizationId}/linear-users/{linearId}
 POST   /workspaces/{organizationId}/memberships
 GET    /workspaces/{organizationId}/memberships
+POST   /workspaces/{organizationId}/invitations
+GET    /workspaces/{organizationId}/invitations
+DELETE /workspaces/{organizationId}/invitations/{id}
+POST   /workspaces/{organizationId}/invitations/{id}/resend
 POST   /workspaces/{organizationId}/migrate/linear
 POST   /workspaces/{organizationId}/projects
 GET    /workspaces/{organizationId}/projects

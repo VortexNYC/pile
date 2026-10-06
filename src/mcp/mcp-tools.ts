@@ -649,6 +649,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdInvitationsId",
+    "description": "Delete invitation (DELETE /workspaces/{organizationId}/invitations/{id}) Path params (top-level, required): organizationId, id.",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/invitations/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdIssuesId",
     "description": "Delete issue (DELETE /workspaces/{organizationId}/issues/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
@@ -2912,6 +2933,34 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdInvitations",
+    "description": "List invitations (GET /workspaces/{organizationId}/invitations) Path params (top-level, required): organizationId. Query params (top-level, optional): status.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/invitations",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "accepted",
+            "canceled",
+            "rejected",
+            "all"
+          ],
+          "description": "Invitation status filter; defaults to pending"
+        }
+      },
+      "required": [
         "organizationId"
       ]
     }
@@ -10980,6 +11029,47 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           },
           "required": [
             "name"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdInvitations",
+    "description": "Create invitation (POST /workspaces/{organizationId}/invitations) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: email*, role*, teamId (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/invitations",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "email": {
+              "type": "string",
+              "format": "email"
+            },
+            "role": {
+              "type": "string",
+              "enum": [
+                "owner",
+                "admin",
+                "member"
+              ]
+            },
+            "teamId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "email",
+            "role"
           ]
         }
       },

@@ -4199,6 +4199,64 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "invitations list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/invitations",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "status",
+        flag: "status",
+      },
+    ],
+    body: [],
+  },
+  "invitations create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/invitations",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "email",
+        flag: "email",
+      },
+      {
+        name: "role",
+        flag: "role",
+      },
+      {
+        name: "teamId",
+        flag: "team",
+      },
+    ],
+  },
+  "invitations delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/invitations/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "invitations resend create": {
     method: "POST",
     path: "/workspaces/{organizationId}/invitations/{id}/resend",

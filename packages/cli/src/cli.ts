@@ -1089,6 +1089,7 @@ function printUsage(): void {
     "support --workspace <org>",
     "inbox --workspace <org>",
     "agent dispatch-batch --workspace <org> --file batch.json",
+    "memberships invite --workspace <org> --email <e> [--role member|admin|owner] [--team <id>]",
     "issues dispatch <id> --workspace <org> --follow [--timeout <min>]",
     "tui-check — verify OpenTUI (module + native library) loads",
   ]) {
@@ -1489,6 +1490,18 @@ export async function runCli(
       flags.follow === true
     ) {
       return await dispatchFollowCommand(positionals, flags, deps);
+    }
+
+    // `pile memberships invite` is the membership-facing spelling of the
+    // generated `invitations create` command; role defaults to member.
+    if (scope === "memberships" && positionals[1] === "invite") {
+      const inviteFlags =
+        flags.role === undefined ? { ...flags, role: "member" } : flags;
+      return await commandCommand(
+        ["invitations", "create", ...positionals.slice(2)],
+        inviteFlags,
+        deps
+      );
     }
 
     return await commandCommand(positionals, flags, deps);
