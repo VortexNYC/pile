@@ -78,8 +78,11 @@ export function tuiUnavailableError(command: string, error: unknown): Error {
 // shipping a binary whose TUI commands break at runtime.
 export async function checkTuiSupport(): Promise<void> {
   const ot: OtModule = await import("@opentui/core");
-  const renderer = await ot.createCliRenderer({ exitOnCtrlC: false });
-  renderer.destroy();
+  // resolveRenderLib() dlopens the native library — the failure a real TUI
+  // command hits on a broken build — without createCliRenderer()'s terminal
+  // setup (stdin raw mode, signal handlers, render thread), which throws or
+  // hangs on headless CI.
+  ot.resolveRenderLib();
 }
 
 // Dynamic import keeps the plain (non-TTY) commands loadable where

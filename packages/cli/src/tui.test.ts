@@ -1,6 +1,36 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { tuiUnavailableError } from "./tui.js";
+import { checkTuiSupport, tuiUnavailableError } from "./tui.js";
+
+const createCliRenderer = vi.fn(() => {
+  throw new Error("tui-check must not set up a terminal");
+});
+const resolveRenderLib = vi.fn(() => ({}));
+
+vi.mock("@opentui/core", () => ({
+  createCliRenderer,
+  resolveRenderLib,
+}));
+
+describe("checkTuiSupport", () => {
+  it("probes the native library without terminal setup", async () => {
+    await expect(checkTuiSupport()).resolves.toBeUndefined();
+
+    expect(resolveRenderLib).toHaveBeenCalledOnce();
+    expect(createCliRenderer).not.toHaveBeenCalled();
+  });
+
+  it("rejects when the native library cannot initialize", async () => {
+    resolveRenderLib.mockImplementationOnce(() => {
+      throw new Error(
+        "Failed to initialize OpenTUI render library: missing libopentui.so"
+      );
+    });
+
+    await expect(checkTuiSupport()).rejects.toThrow("missing libopentui.so");
+    expect(createCliRenderer).not.toHaveBeenCalled();
+  });
+});
 
 describe("tuiUnavailableError", () => {
   it("names the unbundled-module failure a broken compiled binary produces", () => {
