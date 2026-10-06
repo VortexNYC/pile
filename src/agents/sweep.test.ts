@@ -9,6 +9,7 @@ import { createAdminHeaders } from "../platform/test-auth.js";
 import { MockAgentProvider } from "./harness.js";
 import { registerAgentProvider } from "./index.js";
 import { MAX_NUDGES_PER_HEAD_SHA, MAX_NUDGES_PER_LANE } from "./nudge.js";
+import { REVIEW_PURPOSE } from "./review.js";
 import {
   DEFAULT_INACTIVITY_MINUTES,
   DEFAULT_PROVISION_TIMEOUT_MINUTES,
@@ -1889,6 +1890,156 @@ describe("syncOpenPrSessions", () => {
     expect(issueAfter?.prCheckState).toBe("passing");
     const events = await stub.listAgentSessionEvents(session.id);
     expect(events.some((e) => e.type === "pr.ci_failed")).toBe(false);
+  });
+
+  // PILE-315 — the sweep's publish pass hands a terminal review lane's
+  // verdict to the work lane: the review goes up as a real
+  // pull_request_review and the lane gets a prompt.followup under the same
+  // review-<id> key the webhook/sweep review detection dedupes on.
+  it("publishes a terminal review verdict and nudges the work lane", async () => {
+    const agentId = `mock-verdict-${crypto.randomUUID().slice(0, 8)}`;
+    const prompts: string[] = [];
+    registerMock(agentId, {
+      sendPrompt: async (_id, prompt) => {
+        prompts.push(prompt);
+        return true;
+      },
+    });
+    const issue = await stub.createIssue({ title: "Verdict handoff" });
+    const workLane = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+      prUrl: "https://github.com/vortexnyc/pile/pull/991",
+      prState: "open",
+    });
+    const reviewLane = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+      purpose: REVIEW_PURPOSE,
+    });
+    await stub.addAgentSessionEvent({
+      sessionId: reviewLane.id,
+      type: "review.requested",
+      message:
+        "Review requested for https://github.com/vortexnyc/pile/pull/991",
+      payload: {
+        prUrl: "https://github.com/vortexnyc/pile/pull/991",
+        repo: "vortexnyc/pile",
+        pullNumber: 991,
+        headSha: "verdictsha991",
+        checkRunId: 9001,
+      },
+    });
+    await stub.applyAgentSessionResult(reviewLane.id, {
+      status: "completed",
+      result:
+        "```json\n" +
+        JSON.stringify({
+          verdict: "request-changes",
+          summary: "Breaks the build.",
+          findings: [{ severity: "must", title: "Fix the type error" }],
+        }) +
+        "\n```",
+    });
+
+    const writes: Array<{ url: string; body: Record<string, unknown> }> = [];
+    const ghFetchVerdict = async (
+      input: RequestInfo | URL,
+      init?: RequestInit
+    ) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      if (method !== "GET" && typeof init?.body === "string") {
+        writes.push({
+          url,
+          body: JSON.parse(init.body) as Record<string, unknown>,
+        });
+      }
+      if (method === "GET" && url.endsWith("/pulls/991")) {
+        return new Response(
+          JSON.stringify({
+            state: "open",
+            merged_at: null,
+            head: { sha: "verdictsha991" },
+          }),
+          { status: 200 }
+        );
+      }
+      if (url.includes("/commits/verdictsha991/check-runs")) {
+        return new Response(
+          JSON.stringify({
+            check_runs: [{ status: "completed", conclusion: "success" }],
+          }),
+          { status: 200 }
+        );
+      }
+      if (method === "GET" && url.includes("/pulls/991/reviews")) {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+      if (method === "PATCH" && url.endsWith("/check-runs/9001")) {
+        return new Response(JSON.stringify({ id: 9001 }), { status: 200 });
+      }
+      if (method === "POST" && url.endsWith("/pulls/991/reviews")) {
+        return new Response(
+          JSON.stringify({
+            id: 4242,
+            html_url:
+              "https://github.com/vortexnyc/pile/pull/991#pullrequestreview-4242",
+          }),
+          { status: 200 }
+        );
+      }
+      if (method === "POST" && url.endsWith("/issues/991/comments")) {
+        return new Response(
+          JSON.stringify({
+            html_url:
+              "https://github.com/vortexnyc/pile/pull/991#issuecomment-1",
+          }),
+          { status: 200 }
+        );
+      }
+      return new Response("not found", { status: 404 });
+    };
+
+    await syncOpenPrSessions(env, stub, organizationId, {
+      tokenForRepo: async () => "gh-test-token",
+      fetch: ghFetchVerdict as typeof fetch,
+    });
+
+    // The verdict went up as a real pull_request_review and closed out the
+    // check run — no plain issue comment.
+    const prReview = writes.find((w) => w.url.endsWith("/pulls/991/reviews"));
+    expect(prReview?.body).toMatchObject({
+      commit_id: "verdictsha991",
+      event: "REQUEST_CHANGES",
+    });
+    expect(writes.some((w) => w.url.endsWith("/issues/991/comments"))).toBe(
+      false
+    );
+    const checkPatch = writes.find((w) => w.url.endsWith("/check-runs/9001"));
+    expect(checkPatch?.body).toMatchObject({
+      status: "completed",
+      conclusion: "failure",
+    });
+
+    // The work lane heard the verdict as a follow-up prompt, deduped under
+    // the posted review's review-<id> key.
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toContain("requested changes");
+    expect(prompts[0]).toContain("Fix the type error");
+    const workEvents = await stub.listAgentSessionEvents(workLane.id);
+    const followup = workEvents.find((e) => e.type === "prompt.followup");
+    expect(followup?.payload).toContain("review-4242");
+    const reviewEvents = await stub.listAgentSessionEvents(reviewLane.id);
+    expect(reviewEvents.some((e) => e.type === "review.published")).toBe(true);
   });
 
   it("does not reopen a terminal issue when its PR merges", async () => {
