@@ -3585,16 +3585,23 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         issue,
       });
     }
-    // An assignee on create hears it as issue_assigned, not issue_created.
-    const humanAssignee =
+    // An assignee on create hears issue_assigned when a member did the
+    // assigning; machine actors (importers, webhook syncs) never trigger
+    // the directed emit — a bulk import must not mass-email — and the
+    // assignee stays in the issue_created fan-out instead.
+    const createdAssignee =
       issue.assigneeId && !issue.assigneeId.startsWith("lane:")
         ? await this.resolveAssigneeUserId(issue.assigneeId)
         : null;
+    const deliveredCreateAssign =
+      createdAssignee !== null &&
+      createdAssignee !== actorId &&
+      (await this.isMemberActor(actorId));
     await this.notifyIssueEvent(
       issue,
       "issue_created",
       actorId,
-      humanAssignee ?? undefined
+      deliveredCreateAssign ? (createdAssignee ?? undefined) : undefined
     );
     await this.recordIssueHistory(
       issue.id,
@@ -3602,12 +3609,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       actorId
     );
     this.audit("issue.created", "issue", issue.id, actorId);
-    const createdByMember = await this.isMemberActor(actorId);
-    const createdAssignee =
-      issue.assigneeId && !issue.assigneeId.startsWith("lane:")
-        ? await this.resolveAssigneeUserId(issue.assigneeId)
-        : null;
-    if (createdAssignee && createdAssignee !== actorId && createdByMember) {
+    if (deliveredCreateAssign && createdAssignee) {
       await this.deliverNotification({
         recipientId: createdAssignee,
         recipientType: "user",
