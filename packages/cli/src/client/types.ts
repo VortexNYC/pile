@@ -1263,6 +1263,8 @@ export interface paths {
                         labelIds?: string[] | null;
                         repo?: string | null;
                         branch?: string | null;
+                        prUrl?: string | null;
+                        prState?: string | null;
                     };
                 };
             };
@@ -1414,6 +1416,8 @@ export interface paths {
                             labelIds?: string[] | null;
                             repo?: string | null;
                             branch?: string | null;
+                            prUrl?: string | null;
+                            prState?: string | null;
                         };
                     };
                 };

@@ -93,6 +93,8 @@ export interface IssueInput {
   labelIds?: string | null;
   repo?: string | null;
   branch?: string | null;
+  prUrl?: string | null;
+  prState?: string | null;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }

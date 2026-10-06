@@ -2669,6 +2669,14 @@
                   "branch": {
                     "type": "string",
                     "nullable": true
+                  },
+                  "prUrl": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "prState": {
+                    "type": "string",
+                    "nullable": true
                   }
                 }
               }
@@ -2972,6 +2980,14 @@
                         "nullable": true
                       },
                       "branch": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "prUrl": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "prState": {
                         "type": "string",
                         "nullable": true
                       }

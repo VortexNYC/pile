@@ -254,7 +254,13 @@ const createIssueSchema = z.object({
   branch: z.string().nullable().optional(),
 }) satisfies z.ZodType<IssueInput>;
 
-const updateIssueSchema = createIssueSchema.partial();
+// prUrl/prState are PATCH-only: create seeds them to null and the GitHub
+// webhook / lane-completion paths are the usual writers. PATCH exists so a
+// human or agent can link (or unlink) a PR without a session.
+const updateIssueSchema = createIssueSchema.partial().extend({
+  prUrl: z.string().nullable().optional(),
+  prState: z.string().nullable().optional(),
+});
 
 const CAPTURE_SCREENSHOT_MAX_BYTES = 8 * 1024 * 1024;
 

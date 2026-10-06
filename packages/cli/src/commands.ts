@@ -800,6 +800,14 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "branch",
         flag: "branch",
       },
+      {
+        name: "prUrl",
+        flag: "pr-url",
+      },
+      {
+        name: "prState",
+        flag: "pr-state",
+      },
     ],
   },
   "issues delete": {

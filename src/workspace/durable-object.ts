@@ -4259,6 +4259,8 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       { key: "labelIds", field: "label_ids" },
       { key: "repo", field: "repo" },
       { key: "branch", field: "branch" },
+      { key: "prUrl", field: "pr_url" },
+      { key: "prState", field: "pr_state" },
     ];
 
     let newParentId: string | null | undefined = undefined;
@@ -4362,6 +4364,8 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (patch.labelIds !== undefined) set.labelIds = patch.labelIds;
     if (patch.repo !== undefined) set.repo = patch.repo;
     if (patch.branch !== undefined) set.branch = patch.branch;
+    if (patch.prUrl !== undefined) set.prUrl = patch.prUrl;
+    if (patch.prState !== undefined) set.prState = patch.prState;
 
     if (Object.keys(set).length === 1 && "updatedAt" in set) {
       return old;
@@ -4408,6 +4412,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       organizationId: this.organizationId,
       issue,
     });
+    if (issue.prUrl !== old.prUrl || issue.prState !== old.prState) {
+      await this.emit({
+        type: "pr.updated",
+        organizationId: this.organizationId,
+        issue,
+      });
+    }
     if (issue.isDraft || old.isDraft) {
       await this.emit({
         type: "draft.updated",

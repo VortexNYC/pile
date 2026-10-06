@@ -733,6 +733,67 @@ describe("issues API", () => {
     expect(conflict.status).toBe(409);
   });
 
+  it("sets and clears prUrl and prState via PATCH", async () => {
+    const createRes = await fetch(
+      `/workspaces/${organizationId}/issues`,
+      {
+        method: "POST",
+        body: JSON.stringify({ title: "Link a pull request" }),
+      },
+      token
+    );
+    expect(createRes.status).toBe(201);
+    const issue = z
+      .object({
+        id: z.string(),
+        prUrl: z.string().nullable(),
+        prState: z.string().nullable(),
+      })
+      .parse(await createRes.json());
+    expect(issue.prUrl).toBeNull();
+    expect(issue.prState).toBeNull();
+
+    const patchRes = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          prUrl: "https://github.com/VortexNYC/pile/pull/316",
+          prState: "open",
+        }),
+      },
+      token
+    );
+    expect(patchRes.status).toBe(200);
+    const patched = z
+      .object({
+        prUrl: z.string().nullable(),
+        prState: z.string().nullable(),
+      })
+      .parse(await patchRes.json());
+    expect(patched).toEqual({
+      prUrl: "https://github.com/VortexNYC/pile/pull/316",
+      prState: "open",
+    });
+
+    const clearedRes = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ prUrl: null, prState: null }),
+      },
+      token
+    );
+    expect(clearedRes.status).toBe(200);
+    const cleared = z
+      .object({
+        prUrl: z.string().nullable(),
+        prState: z.string().nullable(),
+      })
+      .parse(await clearedRes.json());
+    expect(cleared).toEqual({ prUrl: null, prState: null });
+  });
+
   it("rejects an invalid resolution status combination", async () => {
     const res = await fetch(
       `/workspaces/${organizationId}/issues`,
