@@ -5,6 +5,8 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { resolvePython } from "./python";
+
 // PILE-294 — core.py clones secondary repos under ~/xrepo/<owner>/<name>
 // and, for `write` entries, pushes the lane branch and opens a PR there.
 // GitHub remotes are redirected to local bare repos via secondary_remote_url.
@@ -13,6 +15,10 @@ const CORE_PATH = join(import.meta.dirname, "core.py");
 const LANE_BRANCH = "issue-294-lane";
 const TOKEN = "ghs_primarytoken00000000";
 const SECONDARY_TOKEN = "ghs_secondarytoken000000";
+
+// Real CPython resolved past any PATH shim; the suite skips when absent.
+const PYTHON = resolvePython();
+const describePy = describe.skipIf(PYTHON === null);
 
 const HARNESS = `
 import json
@@ -132,7 +138,8 @@ function runLane(extra: Record<string, string> = {}) {
     delete env[key];
   }
 
-  const out = execFileSync("python3", [harness, CORE_PATH], {
+  if (!PYTHON) throw new Error("unreachable: suite skipped without CPython");
+  const out = execFileSync(PYTHON, [harness, CORE_PATH], {
     encoding: "utf8",
     env,
     timeout: 60_000,
@@ -156,7 +163,7 @@ function runLane(extra: Record<string, string> = {}) {
   return { res, home, vortex, canary };
 }
 
-describe("runner secondary repos (PILE-294)", () => {
+describePy("runner secondary repos (PILE-294)", () => {
   it("clones under ~/xrepo and pushes + opens a PR for write entries", () => {
     const { res, home, vortex, canary } = runLane();
     expect(res.errors).toEqual([]);

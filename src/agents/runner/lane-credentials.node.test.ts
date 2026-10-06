@@ -3,7 +3,9 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
+
+import { resolvePython } from "./python";
 
 // Lane credential posture in the real runner core: the agent subprocess
 // gets an allowlisted env, secrets are masked in everything printed, and
@@ -90,8 +92,13 @@ function isolatedEnv(vars: Record<string, string>): NodeJS.ProcessEnv {
   return Object.assign(env, vars);
 }
 
+// Real CPython resolved past any PATH shim; the suite skips when absent.
+const PYTHON = resolvePython();
+const describePy = describe.skipIf(PYTHON === null);
+
 function runHarness(): HarnessResult {
-  const out = execFileSync("python3", [HARNESS_PATH, CORE_PATH], {
+  if (!PYTHON) throw new Error("unreachable: suite skipped without CPython");
+  const out = execFileSync(PYTHON, [HARNESS_PATH, CORE_PATH], {
     encoding: "utf8",
     env: isolatedEnv({
       PATH: process.env.PATH ?? "",
@@ -116,8 +123,11 @@ function runHarness(): HarnessResult {
   return JSON.parse(line.slice("RESULT:".length)) as HarnessResult;
 }
 
-describe("runner lane credentials (PILE-280)", () => {
-  const res = runHarness();
+describePy("runner lane credentials (PILE-280)", () => {
+  let res: HarnessResult;
+  beforeAll(() => {
+    res = runHarness();
+  });
 
   it("masks tokens in everything the runner prints", () => {
     expect(res.captured).not.toContain(GITHUB_TOKEN);

@@ -37,6 +37,7 @@ vp run knip
 - Durable Object SQLite requires `new_sqlite_classes` in the `[[migrations]]` section of `wrangler.toml`. `new_classes` is not enough and will fail at runtime.
 - Keep `compatibility_date` pinned to a date the installed `workerd` binary supports. It is currently aligned to `2026-07-30` for `workerd 1.20260730.1`; do not use a later date.
 - The `wrangler.toml` file is the canonical, committed config and is not git-ignored. Do not move it to `wrangler.toml.example`.
+- The runner `*.node.test.ts` files exec `core.py` through CPython. Never spawn bare `python3` — use `resolvePython()` from `src/agents/runner/python.ts`, which resolves `sys.executable` past PATH shims and skips the suite when no real interpreter exists (a non-CPython `python3` fails with a V8 `SyntaxError`, not a Python one — PILE-317).
 
 ## Git workflow
 

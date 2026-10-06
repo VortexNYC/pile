@@ -5,6 +5,8 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { resolvePython } from "./python";
+
 // PILE-281: agent subprocesses get a scrubbed env (no provider tokens), and
 // restricted lanes run behind PATH shims that refuse credential/remote git
 // ops and off-allowlist network tools. Exercises the real core.py.
@@ -51,6 +53,10 @@ const harnessDir = mkdtempSync(join(tmpdir(), "pile-runner-isolation-"));
 const HARNESS_PATH = join(harnessDir, "harness.py");
 writeFileSync(HARNESS_PATH, HARNESS);
 
+// Real CPython resolved past any PATH shim; the suite skips when absent.
+const PYTHON = resolvePython();
+const describePy = describe.skipIf(PYTHON === null);
+
 const SECRETS = {
   GITHUB_TOKEN: "ghs_secret",
   LANE_TOKEN: "lane-secret",
@@ -79,8 +85,9 @@ function runHarness(
   };
   delete env.PILE_LOG_URL;
   const shimDir = mkdtempSync(join(harnessDir, "shims-"));
+  if (!PYTHON) throw new Error("unreachable: suite skipped without CPython");
   const out = execFileSync(
-    "python3",
+    PYTHON,
     [HARNESS_PATH, CORE_PATH, shimDir, mode, JSON.stringify(payload)],
     { encoding: "utf8", env, timeout: 30_000 }
   );
@@ -94,7 +101,7 @@ function runHarness(
 
 const RESTRICTED = { PILE_LANE_RESTRICTED: "1" };
 
-describe("scrubbed agent env (PILE-281)", () => {
+describePy("scrubbed agent env (PILE-281)", () => {
   it("drops runner-only and secret-named vars", () => {
     const { env } = runHarness("env", {}) as { env: Record<string, string> };
     for (const key of Object.keys(SECRETS)) {
@@ -128,7 +135,7 @@ describe("scrubbed agent env (PILE-281)", () => {
   });
 });
 
-describe("restricted lane command policy (PILE-281)", () => {
+describePy("restricted lane command policy (PILE-281)", () => {
   const cases: Array<[string[], boolean]> = [
     [["git", "status"], true],
     [["git", "commit", "-m", "x"], true],
