@@ -349,11 +349,19 @@ export async function dispatchAgent(
         message: "Queued session not found or no longer waiting",
       });
     }
-    session =
-      (await stub.updateAgentSession(promoted.id, {
-        status: "created",
-        queuedAfter: null,
-      })) ?? promoted;
+    // PILE-260 — promotion rewinds createdAt: the provision timeout and
+    // the inactivity fallback anchor here, and queue dwell is not lane
+    // runtime. queuedAfter stays on the row as the edge an infra-retry
+    // re-anchors to — clearing it parallelizes the chain on redispatch.
+    const promotedAt = new Date().toISOString();
+    session = (await stub.updateAgentSession(promoted.id, {
+      status: "created",
+      createdAt: promotedAt,
+    })) ??
+      // A null return means the row didn't take the write — the fallback
+      // must still reflect the promotion or the stale queue timestamp
+      // trips the provision timeout on the next sweep.
+      { ...promoted, status: "created", createdAt: promotedAt };
   } else {
     session = await stub.createAgentSession({
       issueId: issue.id,

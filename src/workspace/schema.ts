@@ -789,8 +789,10 @@ export const workspaceAgentSessions = sqliteTable(
     infraFailure: integer("infra_failure" as string)
       .notNull()
       .default(0),
-    // Sequenced dispatch: when set the session sits in `waiting` until the
-    // blocker session reaches a terminal state (PILE-214 collision queue).
+    // Sequenced dispatch: while the session sits in `waiting`, this is the
+    // blocker session whose terminal state releases it (PILE-214 collision
+    // queue). The edge is kept after promotion so an infra-retry can
+    // re-anchor to it (PILE-260).
     queuedAfter: text("queued_after" as string),
     // Agent-spawned lanes: which session created this one + how deep the
     // spawn chain is, so the children route can enforce MAX_SPAWN_DEPTH.

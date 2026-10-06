@@ -1172,6 +1172,9 @@ export async function updateAgentSession(
     lastStateHash: string | null;
     retryOf: string | null;
     retryCount: number;
+    /** Queue promotion rewinds createdAt — the provision/run clocks anchor
+     *  here, and queue dwell must not count against them (PILE-260). */
+    createdAt: string;
     startedAt: string | null;
     prUrl: string | null;
     prState: string | null;
@@ -1212,6 +1215,7 @@ export async function updateAgentSession(
     set.lastStateHash = input.lastStateHash;
   if (input.retryOf !== undefined) set.retryOf = input.retryOf;
   if (input.retryCount !== undefined) set.retryCount = input.retryCount;
+  if (input.createdAt !== undefined) set.createdAt = input.createdAt;
   if (input.startedAt !== undefined) set.startedAt = input.startedAt;
   if (input.prUrl !== undefined) set.prUrl = input.prUrl;
   if (input.prState !== undefined) set.prState = input.prState;
@@ -1266,6 +1270,30 @@ export function listQueuedAgentSessions(
     )
     .orderBy(workspaceAgentSessions.createdAt, workspaceAgentSessions.id)
     .all();
+}
+
+/** Re-point still-waiting dependents of a dead session onto its retry —
+ *  called wherever a replacement lane is created so a queuedAfter chain
+ *  survives redispatch instead of promoting off the corpse (PILE-260). */
+export async function reanchorQueuedDependents(
+  db: WorkspaceDb,
+  organizationId: string,
+  fromSessionId: string,
+  toSessionId: string
+) {
+  await db
+    .update(workspaceAgentSessions)
+    .set({
+      queuedAfter: toSessionId,
+      updatedAt: new Date().toISOString(),
+    })
+    .where(
+      and(
+        eq(workspaceAgentSessions.organizationId, organizationId),
+        eq(workspaceAgentSessions.status, "waiting"),
+        eq(workspaceAgentSessions.queuedAfter, fromSessionId)
+      )
+    );
 }
 
 /** Direct children of a session (agent-spawned lanes). */

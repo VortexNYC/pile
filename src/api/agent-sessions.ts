@@ -2628,6 +2628,9 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       getExecutionCtx(c),
       {
         instructions: instructions || undefined,
+        // A lane that was queued behind a blocker re-enters the queue on
+        // retry — the edge survives promotion on the session row (PILE-260).
+        queueAfter: session.queuedAfter ?? undefined,
         secondaryRepos: parseStoredSecondaryRepos(session.secondaryRepos),
         effort: body.effort ?? session.effort ?? undefined,
         maxDurationMinutes:
@@ -2638,6 +2641,16 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       retryOf: session.id,
       retryCount: (session.retryCount ?? 0) + 1,
     });
+    // Lanes parked behind the dead one re-anchor on its retry so they can't
+    // promote off the corpse and race the redispatch (PILE-260).
+    await stub
+      .reanchorQueuedDependents(session.id, retried.id)
+      .catch((err: unknown) =>
+        console.error("queued session re-anchor failed", {
+          session: session.id,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      );
     const activities = await stub.listAgentActivities(retried.id);
     return c.json(toSessionResponse(retried, activities), 201);
   });

@@ -802,4 +802,74 @@ describe("agent providers", () => {
     expect(pinned.effort).toBe("max");
     expect(pinned.maxDurationMinutes).toBeNull();
   });
+
+  it("promotes a queued session with a fresh provision clock and keeps its queuedAfter edge", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)
+    );
+    await stub.setOrganizationId(actor.organizationId);
+    const agentId = `mock-promote-${crypto.randomUUID().slice(0, 8)}`;
+    let dispatched = 0;
+    registerAgentProvider(
+      agentId,
+      () =>
+        new MockAgentProvider(agentId, {
+          dispatch: (_org, dispatchedIssue) => {
+            dispatched += 1;
+            return {
+              id: `promote-${dispatched}`,
+              agentId,
+              issueId: dispatchedIssue.id,
+              status: "created" as const,
+            };
+          },
+        })
+    );
+
+    const blockerIssue = await stub.createIssue({ title: "Promote blocker" });
+    const blocker = await stub.createAgentSession({
+      issueId: blockerIssue.id,
+      agentId,
+      provider: agentId,
+      actorId: actor.id,
+      actorType: actor.type,
+      status: "completed",
+    });
+    const issue = await stub.createIssue({ title: "Promote queued lane" });
+    const stale = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+    const queued = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: actor.id,
+      actorType: actor.type,
+      status: "waiting",
+      queuedAfter: blocker.id,
+      createdAt: stale,
+    });
+
+    const promoted = await dispatchAgent(
+      env,
+      agentId,
+      actor.organizationId,
+      issue,
+      actor,
+      undefined,
+      undefined,
+      { promoteSessionId: queued.id }
+    );
+
+    expect(promoted.id).toBe(queued.id);
+    expect(promoted.status).toBe("created");
+    expect(dispatched).toBe(1);
+    // Promotion restarts the provision clock — queue dwell is not lane
+    // runtime — and keeps the queuedAfter edge so an infra-retry can
+    // re-anchor to it (PILE-260).
+    const stored = await stub.getAgentSession(queued.id);
+    expect(stored?.status).toBe("created");
+    expect(stored?.queuedAfter).toBe(blocker.id);
+    expect(Date.parse(stored?.createdAt ?? "")).toBeGreaterThan(
+      Date.parse(stale)
+    );
+  });
 });

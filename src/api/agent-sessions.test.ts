@@ -1017,6 +1017,92 @@ describe("agent sessions API", () => {
     expect(stored?.retryCount).toBe(1);
   });
 
+  it("re-queues a retry behind the session's queuedAfter blocker and re-anchors dependents", async () => {
+    const agentId = `mock-requeue-${crypto.randomUUID().slice(0, 8)}`;
+    let dispatches = 0;
+    registerAgentProvider(
+      agentId,
+      () =>
+        new MockAgentProvider(agentId, {
+          dispatch: (_org, dispatchedIssue) => {
+            dispatches += 1;
+            return {
+              id: `rq-${dispatches}`,
+              agentId,
+              issueId: dispatchedIssue.id,
+              status: "created" as const,
+            };
+          },
+        })
+    );
+
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    const blockerIssue = await stub.createIssue({
+      title: "Retry chain blocker",
+    });
+    const blocker = await stub.createAgentSession({
+      issueId: blockerIssue.id,
+      agentId,
+      provider: agentId,
+      actorId: "user-1",
+      actorType: "user",
+      status: "running",
+    });
+    const laneIssue = await stub.createIssue({ title: "Retry chain lane" });
+    // A promoted-then-failed lane still carries its queuedAfter edge.
+    const lane = await stub.createAgentSession({
+      issueId: laneIssue.id,
+      agentId,
+      provider: agentId,
+      actorId: "user-1",
+      actorType: "user",
+      status: "failed",
+      result: "sandbox died",
+      queuedAfter: blocker.id,
+    });
+    const depIssue = await stub.createIssue({ title: "Retry chain dependent" });
+    const dependent = await stub.createAgentSession({
+      issueId: depIssue.id,
+      agentId,
+      provider: agentId,
+      actorId: "user-1",
+      actorType: "user",
+      status: "waiting",
+      queuedAfter: lane.id,
+    });
+
+    const retryRes = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/sessions/${lane.id}/retry`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({}),
+      }),
+      env
+    );
+    expect(retryRes.status).toBe(201);
+    const retried = await retryRes.json<{ id: string; status: string }>();
+    // The retry re-enters the queue behind the original blocker instead of
+    // dispatching in parallel with the chain (PILE-260).
+    expect(retried.status).toBe("waiting");
+    expect(dispatches).toBe(0);
+    const storedRetry = await stub.getAgentSession(retried.id);
+    expect(storedRetry?.queuedAfter).toBe(blocker.id);
+    expect(storedRetry?.retryOf).toBe(lane.id);
+    expect(storedRetry?.retryCount).toBe(1);
+    // The lane parked behind the dead one re-anchors on its replacement so
+    // it can't promote off the corpse.
+    const dependentAfter = await stub.getAgentSession(dependent.id);
+    expect(dependentAfter?.queuedAfter).toBe(retried.id);
+
+    // Release the lanes this test parked — the suite shares one workspace
+    // and non-terminal sessions count against the live-lane cap.
+    for (const id of [blocker.id, retried.id, dependent.id]) {
+      await stub.updateAgentSession(id, { status: "canceled" });
+    }
+  });
+
   it("appends an activity and updates session state", async () => {
     const stub = env.WORKSPACE_DURABLE_OBJECT.get(
       env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
