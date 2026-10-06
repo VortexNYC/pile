@@ -199,6 +199,7 @@ export function registerOAuthClientRoutes(app: OpenAPIHono<AppContext>) {
       body: {
         userId: identity.id,
         name: input.name,
+        rateLimitEnabled: false,
         metadata: {
           organizationId,
           permissions: input.permissions,

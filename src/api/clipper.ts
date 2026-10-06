@@ -105,6 +105,7 @@ export function registerClipperRoutes(app: OpenAPIHono<AppContext>) {
       body: {
         userId,
         name: CLIPPER_TOKEN_NAME,
+        rateLimitEnabled: false,
         metadata: {
           organizationId: workspace.id,
           permissions: "write",
