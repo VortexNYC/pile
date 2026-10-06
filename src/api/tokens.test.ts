@@ -1,9 +1,10 @@
 import { env } from "cloudflare:test";
+import { eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { createD1 } from "../global/db.js";
-import { user as userTable } from "../global/schema.js";
+import { apikey, user as userTable } from "../global/schema.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
@@ -136,6 +137,29 @@ describe("tokens API", () => {
     }>();
     expect(body.token).toBeDefined();
     expect(body.permissions).toBe("read");
+  });
+
+  it("mints workspace keys exempt from the per-key rate limiter", async () => {
+    const res = await fetch(
+      `/workspaces/${organizationId}/tokens`,
+      {
+        method: "POST",
+        body: JSON.stringify({ name: "no-limit", permissions: "read" }),
+      },
+      adminToken
+    );
+    expect(res.status).toBe(201);
+    const body = await res.json<{ id: string }>();
+
+    const db = createD1(env.D1);
+    const row = await db
+      .select({ rateLimitEnabled: apikey.rateLimitEnabled })
+      .from(apikey)
+      .where(eq(apikey.id, body.id))
+      .get();
+    // Shared machine keys (agent-dispatch, CLI) previously kept the default
+    // limiter on and 429'd mid-session once request_count crossed the cap.
+    expect(row?.rateLimitEnabled).toBe(false);
   });
 
   it("rejects creating a token for a read-only token", async () => {

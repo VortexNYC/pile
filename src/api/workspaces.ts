@@ -530,6 +530,7 @@ export function registerWorkspaceRoutes(app: OpenAPIHono<AppContext>) {
       body: {
         userId: ownerId,
         name: "default-admin",
+        rateLimitEnabled: false,
         metadata: {
           organizationId: workspace.id,
           permissions: "admin",

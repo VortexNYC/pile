@@ -701,6 +701,13 @@
       "when": 1790699244125,
       "tag": "0100_installation_default_agent",
       "breakpoints": true
+    },
+    {
+      "idx": 101,
+      "version": "6",
+      "when": 1791306045591,
+      "tag": "0101_apikey_workspace_rate_limit",
+      "breakpoints": true
     }
   ]
 }

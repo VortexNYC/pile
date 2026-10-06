@@ -188,6 +188,7 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
       body: {
         userId,
         name: input.name,
+        rateLimitEnabled: false,
         metadata: { organizationId, permissions, actorType },
       },
     });
