@@ -54,6 +54,34 @@ export type TuiPromptOptions = {
   readonly onCancel: () => void;
 };
 
+export function tuiUnavailableError(command: string, error: unknown): Error {
+  const message = errorMessage(error);
+  // `bun build --compile` leaves an unresolvable dynamic import in the bundle
+  // instead of failing the build, so a binary produced without @opentui
+  // resolvable (e.g. pruned optional deps) only blows up here. Name that
+  // build failure instead of blaming the terminal.
+  if (/cannot find (?:module|package)[^\n]*@opentui\//iu.test(message)) {
+    return new Error(
+      `${command}: this pile build does not include OpenTUI — @opentui/core was not resolvable at build/install time. Rebuild with dependencies installed or use a released binary.`,
+      { cause: error }
+    );
+  }
+  return new Error(
+    `${command} needs an interactive terminal with OpenTUI support (Bun, or Node.js >= 26.1 with node:ffi): ${message}`,
+    { cause: error }
+  );
+}
+
+// `pile tui-check` — proves the OpenTUI module and its native library load in
+// this runtime. `build:bin` runs this against the freshly compiled binary so
+// a build that silently left @opentui/core unresolved fails there instead of
+// shipping a binary whose TUI commands break at runtime.
+export async function checkTuiSupport(): Promise<void> {
+  const ot: OtModule = await import("@opentui/core");
+  const renderer = await ot.createCliRenderer({ exitOnCtrlC: false });
+  renderer.destroy();
+}
+
 // Dynamic import keeps the plain (non-TTY) commands loadable where
 // OpenTUI's native bits can't start.
 export async function createTui(command: string): Promise<{
@@ -66,10 +94,7 @@ export async function createTui(command: string): Promise<{
     ot = await import("@opentui/core");
     renderer = await ot.createCliRenderer({ exitOnCtrlC: false });
   } catch (error) {
-    throw new Error(
-      `${command} needs an interactive terminal with OpenTUI support (Bun, or Node.js >= 26.1 with node:ffi): ${errorMessage(error)}`,
-      { cause: error }
-    );
+    throw tuiUnavailableError(command, error);
   }
   return { ot, renderer };
 }
