@@ -746,7 +746,8 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   // mappings) and partly in workspace tables (subscribers, linear_users).
   private async resolveIssueRecipients(
     issue: { id: string; assigneeId: string | null },
-    excludeRecipientId?: string
+    excludeRecipientId?: string,
+    extraExcludeRecipientId?: string
   ): Promise<string[]> {
     const recipients = new Set<string>();
     const d1 = createD1(this.env.D1);
@@ -832,8 +833,19 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (excludeRecipientId) {
       recipients.delete(excludeRecipientId);
     }
+    if (extraExcludeRecipientId) {
+      recipients.delete(extraExcludeRecipientId);
+    }
     return [...recipients];
   }
+
+  // Types a member should hear about even before they touch notification
+  // prefs — each one means "a human needs you", not background chatter.
+  private static EMAIL_BY_DEFAULT_TYPES = new Set<data.NotificationType>([
+    "issue_assigned",
+    "mention",
+    "lane_needs_input",
+  ]);
 
   // Single notification path: preference-gated in-app row + email fanout.
   private async deliverNotification(
@@ -852,7 +864,14 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         organizationId: this.organizationId,
       });
     }
-    if (prefs?.email && this.env.EMAIL && this.env.EMAIL_FROM) {
+    // No prefs row: email defaults on for high-signal types (assigned an
+    // issue, @mentioned, a lane needs you) — a member who never visits the
+    // prefs page still hears about the things that need them. Explicit
+    // prefs always win.
+    const wantsEmail = prefs
+      ? Boolean(prefs.email)
+      : WorkspaceDO.EMAIL_BY_DEFAULT_TYPES.has(input.type);
+    if (wantsEmail && this.env.EMAIL && this.env.EMAIL_FROM) {
       try {
         const d1 = createD1(this.env.D1);
         const recipient = await d1
@@ -869,6 +888,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         const raw = [
           `From: ${this.env.EMAIL_FROM}`,
           `To: ${recipient.email}`,
+          `Message-ID: <${crypto.randomUUID()}@pile>`,
           `Subject: ${subject}`,
           "MIME-Version: 1.0",
           'Content-Type: text/plain; charset="utf-8"',
@@ -890,9 +910,14 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   private async notifyIssueEvent(
     issue: { id: string; assigneeId: string | null },
     type: data.NotificationType,
-    actorId?: string
+    actorId?: string,
+    extraExcludeRecipientId?: string
   ): Promise<void> {
-    const recipients = await this.resolveIssueRecipients(issue, actorId);
+    const recipients = await this.resolveIssueRecipients(
+      issue,
+      actorId,
+      extraExcludeRecipientId
+    );
     await Promise.all(
       recipients.map(async (recipientId) => {
         await this.deliverNotification({
@@ -3547,13 +3572,31 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         issue,
       });
     }
-    await this.notifyIssueEvent(issue, "issue_created", actorId);
+    // An assignee on create hears it as issue_assigned, not issue_created.
+    const humanAssignee =
+      issue.assigneeId && !issue.assigneeId.startsWith("lane:")
+        ? issue.assigneeId
+        : null;
+    await this.notifyIssueEvent(
+      issue,
+      "issue_created",
+      actorId,
+      humanAssignee ?? undefined
+    );
     await this.recordIssueHistory(
       issue.id,
       [{ field: "created", fromValue: null, toValue: issue.title }],
       actorId
     );
     this.audit("issue.created", "issue", issue.id, actorId);
+    if (issue.assigneeId && !issue.assigneeId.startsWith("lane:")) {
+      await this.deliverNotification({
+        recipientId: issue.assigneeId,
+        recipientType: "user",
+        issueId: issue.id,
+        type: "issue_assigned",
+      });
+    }
     this.startTriageLane(issue, actorId);
     return { issue, possibleDuplicates };
   }
@@ -4352,7 +4395,30 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         issue,
       });
     }
-    await this.notifyIssueEvent(issue, "issue_updated", actorId);
+    // A human assignee change is its own notification (issue_assigned),
+    // and the assignee is excluded from the issue_updated fan-out so they
+    // don't get two rows for one edit. lane:* assignees are agents.
+    const assigneeChanged = issue.assigneeId !== old.assigneeId;
+    const newAssignee =
+      assigneeChanged &&
+      issue.assigneeId &&
+      !issue.assigneeId.startsWith("lane:")
+        ? issue.assigneeId
+        : null;
+    await this.notifyIssueEvent(
+      issue,
+      "issue_updated",
+      actorId,
+      newAssignee ?? undefined
+    );
+    if (newAssignee) {
+      await this.deliverNotification({
+        recipientId: newAssignee,
+        recipientType: "user",
+        issueId: issue.id,
+        type: "issue_assigned",
+      });
+    }
 
     if (issue.status !== old.status) {
       await this.applyStatusAutomation(issue, old, actorId);

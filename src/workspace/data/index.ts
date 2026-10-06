@@ -703,6 +703,7 @@ export async function createLinearUser(
 
 export type NotificationType =
   | "issue_created"
+  | "issue_assigned"
   | "issue_updated"
   | "issue_deleted"
   | "comment_created"

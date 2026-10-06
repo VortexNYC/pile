@@ -995,7 +995,9 @@ describe("API integration", () => {
       "user"
     );
     expect(userNotes.length).toBeGreaterThanOrEqual(1);
-    expect(userNotes[0].type).toBe("issue_created");
+    // Assignee-on-create hears it as issue_assigned (PILE-320), not the
+    // generic issue_created fan-out.
+    expect(userNotes[0].type).toBe("issue_assigned");
     expect(userNotes[0].issueId).toBe(issueData.id);
 
     await doStub.createNotification({
@@ -1064,6 +1066,94 @@ describe("API integration", () => {
     );
     expect(commentNotes.length).toBe(1);
     expect(commentNotes[0].issueId).toBe(issueData.id);
+  });
+
+  it("notifies a human assignee with issue_assigned, not a duplicate issue_updated", async () => {
+    const db = createD1(env.D1);
+    const organizationId = await seedWorkspace();
+    const tokenRecord = await createAdminTokenRecord(organizationId);
+    const token = tokenRecord.token;
+
+    const addMember = async (name: string) => {
+      const userId = crypto.randomUUID();
+      const now = new Date();
+      await db.insert(userTable).values({
+        id: userId,
+        name,
+        email: `${name}@example.com`,
+        emailVerified: false,
+        image: null,
+        createdAt: now,
+        updatedAt: now,
+      });
+      await db.insert(memberTable).values({
+        id: crypto.randomUUID(),
+        organizationId,
+        userId,
+        role: "member",
+        createdAt: now,
+      });
+      return userId;
+    };
+    const alice = await addMember("alice-notify");
+    const bob = await addMember("bob-notify");
+
+    const createRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          title: "Assigned at create",
+          assigneeId: alice,
+        }),
+      }),
+      env
+    );
+    expect(createRes.status).toBe(201);
+    const issue = await createRes.json<{ id: string }>();
+
+    const doStub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    const aliceNotes = await doStub.listNotificationsForRecipient(
+      alice,
+      "user"
+    );
+    const aliceTypes = aliceNotes.map((n: { type: string }) => n.type);
+    expect(aliceTypes).toContain("issue_assigned");
+    expect(aliceTypes).not.toContain("issue_created");
+    expect(aliceTypes).not.toContain("issue_updated");
+
+    const reassign = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${issue.id}`, {
+        method: "PATCH",
+        token,
+        body: JSON.stringify({ assigneeId: bob }),
+      }),
+      env
+    );
+    expect(reassign.status).toBe(200);
+
+    const bobNotes = await doStub.listNotificationsForRecipient(bob, "user");
+    expect(
+      bobNotes.filter((n: { type: string }) => n.type === "issue_assigned")
+    ).toHaveLength(1);
+    expect(
+      bobNotes.filter((n: { type: string }) => n.type === "issue_updated")
+    ).toHaveLength(0);
+
+    // Alice keeps her create-time assign — the reassign adds no
+    // issue_updated to her feed.
+    const aliceAfter = await doStub.listNotificationsForRecipient(
+      alice,
+      "user"
+    );
+    expect(
+      aliceAfter.filter((n: { type: string }) => n.type === "issue_assigned")
+    ).toHaveLength(1);
+    expect(
+      aliceAfter.filter((n: { type: string }) => n.type === "issue_updated")
+    ).toHaveLength(0);
   });
 
   it("scopes issues to teams with per-team numbering and visibility", async () => {
