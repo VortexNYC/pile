@@ -95,4 +95,69 @@ describe("workspaceAuthMiddleware", () => {
     const res = await authedRequest(member.organizationId, foreign.token);
     expect(res.status).toBe(403);
   });
+
+  it("clamps an API key's permissions when its owner is demoted", async () => {
+    const db = createD1(env.D1);
+    const now = new Date();
+    const userId = `demoted-${crypto.randomUUID()}`;
+    await db.insert(userTable).values({
+      id: userId,
+      name: "Soon demoted",
+      email: `${userId}@example.com`,
+      emailVerified: false,
+      image: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+    const setupHeaders = await createAdminHeaders(env, userId);
+    const workspace = await createWorkspace(db, env, setupHeaders, {
+      name: "Demotion test",
+      slug: `demotion-${crypto.randomUUID()}`,
+      key: `D${crypto.randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase()}`,
+      ownerId: userId,
+    });
+    const organizationId = workspace!.id;
+
+    const auth = await createAuth(env);
+    const keyResult = await auth.api.createApiKey({
+      body: {
+        userId,
+        name: "admin-key",
+        rateLimitEnabled: false,
+        metadata: { organizationId, permissions: "read,write,admin" },
+      },
+    });
+    const { key } = z.object({ key: z.string() }).parse(keyResult);
+
+    // Owner role carries admin: the key reaches an admin-gated route.
+    const adminProbe = () =>
+      app.fetch(
+        new Request(
+          `https://example.com/workspaces/${organizationId}/memberships`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${key}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ userId: "nobody" }),
+          }
+        ),
+        env
+      );
+    expect((await adminProbe()).status).not.toBe(403);
+
+    // Demote owner -> member; the minted admin scope stops working without
+    // any key change.
+    await db
+      .update(memberTable)
+      .set({ role: "member" })
+      .where(
+        and(
+          eq(memberTable.organizationId, organizationId),
+          eq(memberTable.userId, userId)
+        )
+      );
+    expect((await adminProbe()).status).toBe(403);
+  });
 });
