@@ -500,7 +500,9 @@ async function retryDeadLane(
       actorId: session.actorId,
       type: "thought",
       message:
-        retried.status === "waiting"
+        // A provider-parked retry (waiting with no queue edge) reports as
+        // redispatched — only a queue edge means it re-entered the chain.
+        retried.status === "waiting" && retried.queuedAfter
           ? `${cause} — re-queued behind ${retried.queuedAfter} as session ${retried.id}`
           : `${cause} — redispatched as session ${retried.id}`,
     });
@@ -547,19 +549,22 @@ async function promoteQueuedSessions(
     });
     return;
   }
-  // Dead session id -> its live (non-terminal) retry. A parked lane whose
+  // Dead session id -> its retries (newest first, terminal ones included —
+  // a retry can die too, so the successor check below walks the retry graph
+  // to a live tail rather than resolving a single hop). A parked lane whose
   // blocker died re-anchors onto the replacement instead of promoting off
   // the corpse — checked here so the chain holds even when the retry row
   // landed after the dependent parked, or the retry's own re-anchor write
   // was lost mid-flight (PILE-260).
-  const liveRetryByDeadSession = new Map<string, string>();
+  const retriesByDeadSession = new Map<string, string[]>();
+  const sessionById = new Map<string, AgentSession>();
   if (queued.some((s) => s.queuedAfter)) {
     for (const s of await stub.listAgentSessions({ limit: 200 })) {
-      if (!s.retryOf || TERMINAL_STATUSES.has(s.status)) continue;
-      // Recency order — the newest retry wins when several are live.
-      if (!liveRetryByDeadSession.has(s.retryOf)) {
-        liveRetryByDeadSession.set(s.retryOf, s.id);
-      }
+      sessionById.set(s.id, s);
+      if (!s.retryOf) continue;
+      const retries = retriesByDeadSession.get(s.retryOf);
+      if (retries) retries.push(s.id);
+      else retriesByDeadSession.set(s.retryOf, [s.id]);
     }
   }
   for (const session of queued) {
@@ -585,7 +590,40 @@ async function promoteQueuedSessions(
       .catch(() => null);
     if (blocker && !TERMINAL_STATUSES.has(blocker.status)) continue;
     if (blocker) {
-      const successor = liveRetryByDeadSession.get(blocker.id);
+      // The blocker's retry graph, walked breadth-first to a live tail.
+      // Retries die too (correlated infra failures), so a dependent parked
+      // on the corpse must re-anchor on the newest live link — a one-hop
+      // lookup misses retry-of-retry, and the dependent would promote while
+      // the replacement still runs, breaking the chain parallel a hop
+      // deeper (PILE-260).
+      let successor: string | undefined;
+      // The newest infra-class death in the graph anchors the grace window:
+      // a fresh corpse may still be inside its terminal-write → retry-row
+      // gap even when the blocker itself died long ago.
+      let lastInfraDeath = Number.NEGATIVE_INFINITY;
+      const noteInfraDeath = (dead: AgentSession) => {
+        if (dead.infraFailure !== 1) return;
+        const diedAt = Date.parse(dead.endedAt ?? dead.updatedAt);
+        if (Number.isFinite(diedAt)) {
+          lastInfraDeath = Math.max(lastInfraDeath, diedAt);
+        }
+      };
+      noteInfraDeath(blocker);
+      // session.id joins the guard so a dependent can never re-anchor onto
+      // itself if its own row ever sits inside the blocker's retry graph.
+      const visited = new Set<string>([blocker.id, session.id]);
+      const chain = [...(retriesByDeadSession.get(blocker.id) ?? [])];
+      for (let i = 0; i < chain.length; i += 1) {
+        const next = sessionById.get(chain[i]);
+        if (!next || visited.has(next.id)) continue;
+        visited.add(next.id);
+        if (!TERMINAL_STATUSES.has(next.status)) {
+          successor = next.id;
+          break;
+        }
+        noteInfraDeath(next);
+        chain.push(...(retriesByDeadSession.get(next.id) ?? []));
+      }
       if (successor) {
         await stub
           .updateAgentSession(session.id, { queuedAfter: successor })
@@ -597,12 +635,7 @@ async function promoteQueuedSessions(
           });
         continue;
       }
-      const diedAt = Date.parse(blocker.endedAt ?? blocker.updatedAt);
-      if (
-        blocker.infraFailure === 1 &&
-        Number.isFinite(diedAt) &&
-        now - diedAt < RETRY_ANCHOR_GRACE_MS
-      ) {
+      if (now - lastInfraDeath < RETRY_ANCHOR_GRACE_MS) {
         continue;
       }
     }

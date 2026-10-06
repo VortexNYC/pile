@@ -806,6 +806,200 @@ describe("sweepAgentSessions", () => {
     expect(after?.queuedAfter).toBe(retry.id);
   });
 
+  it("re-anchors a dependent onto the live tail of a dead→dead-retry→live-retry chain", async () => {
+    const agentId = `mock-tail-${crypto.randomUUID().slice(0, 8)}`;
+    let dispatches = 0;
+    registerMock(agentId, {
+      dispatch: () => {
+        dispatches += 1;
+        return { id: `tail-${dispatches}`, agentId, status: "created" };
+      },
+      poll: (id) => ({ id, agentId, status: "running" }),
+    });
+    const headIssue = await stub.createIssue({ title: "Twice-dead head" });
+    const head = await stub.createAgentSession({
+      issueId: headIssue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "created",
+    });
+    // Task failures (not infra) keep the shared workspace's fleet-breaker
+    // streak closed — only terminal status matters to the chain walk.
+    await stub.applyAgentSessionResult(head.id, {
+      status: "failed",
+      result: "sandbox died",
+    });
+    // The first retry died too; its own retry is the live tail. A one-hop
+    // map keyed on retryOf resolves nothing here — retry1 was terminal so
+    // it was never a candidate, and retry2 hangs off retry1. The promote
+    // pass must walk the chain or the dependent promotes while retry2
+    // still runs.
+    const retry1 = await stub.createAgentSession({
+      issueId: headIssue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "created",
+    });
+    await stub.updateAgentSession(retry1.id, { retryOf: head.id });
+    await stub.applyAgentSessionResult(retry1.id, {
+      status: "failed",
+      result: "sandbox died again",
+    });
+    const retry2 = await stub.createAgentSession({
+      issueId: headIssue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+    });
+    await stub.updateAgentSession(retry2.id, { retryOf: retry1.id });
+    const depIssue = await stub.createIssue({ title: "Dependent" });
+    const dependent = await stub.createAgentSession({
+      issueId: depIssue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "waiting",
+      queuedAfter: head.id,
+    });
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    const after = await stub.getAgentSession(dependent.id);
+    expect(after?.status).toBe("waiting");
+    expect(after?.queuedAfter).toBe(retry2.id);
+    expect(dispatches).toBe(0);
+  });
+
+  it("holds a dependent when the retry chain's newest corpse is still in the write→retry gap", async () => {
+    const agentId = `mock-gap-${crypto.randomUUID().slice(0, 8)}`;
+    let dispatches = 0;
+    registerMock(agentId, {
+      dispatch: () => {
+        dispatches += 1;
+        return { id: `gap-${dispatches}`, agentId, status: "created" };
+      },
+      poll: (id) => ({ id, agentId, status: "running" }),
+    });
+    const headIssue = await stub.createIssue({ title: "Gap head" });
+    const head = await stub.createAgentSession({
+      issueId: headIssue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "created",
+    });
+    // A non-infra blocker: terminal so the chain is walkable, but it adds
+    // nothing to the shared workspace's fleet-breaker streak.
+    await stub.applyAgentSessionResult(head.id, {
+      status: "failed",
+      result: "task reported failure",
+    });
+    const retry1 = await stub.createAgentSession({
+      issueId: headIssue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "created",
+    });
+    await stub.updateAgentSession(retry1.id, { retryOf: head.id });
+    await stub.applyAgentSessionResult(retry1.id, {
+      status: "failed",
+      result: "sandbox died again",
+      infraFailure: true,
+    });
+    const depIssue = await stub.createIssue({ title: "Dependent" });
+    const dependent = await stub.createAgentSession({
+      issueId: depIssue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "waiting",
+      queuedAfter: head.id,
+    });
+    // The blocker is long past its own grace window, but its retry JUST
+    // died — a redispatch may still be inside its write→create gap, so the
+    // grace window anchors on the newest corpse in the chain, not the
+    // original blocker.
+    await stub.updateAgentSession(head.id, {
+      endedAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+    });
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    const after = await stub.getAgentSession(dependent.id);
+    expect(after?.status).toBe("waiting");
+    expect(after?.queuedAfter).toBe(head.id);
+    expect(dispatches).toBe(0);
+    // Cap this test's infra corpse in the shared workspace's recency order
+    // so later tests can't stack it into an open fleet breaker.
+    await stub.createAgentSession({
+      issueId: headIssue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "completed",
+    });
+  });
+
+  it("reports a provider-parked infra-retry as redispatched, not re-queued", async () => {
+    const agentId = `mock-park-${crypto.randomUUID().slice(0, 8)}`;
+    registerMock(agentId, {
+      // The redispatch lands provider-parked (blocked on input) — no queue
+      // edge exists, so the activity must not claim it re-queued.
+      dispatch: () => ({ id: "park-1", agentId, status: "waiting" }),
+      poll: (id) => ({
+        id,
+        agentId,
+        status: "failed" as const,
+        result: "sandbox died",
+        infraFailure: true,
+      }),
+    });
+    const issue = await stub.createIssue({ title: "Provider-parked retry" });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+    });
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    const retried = (await stub.listAgentSessions({ issueId: issue.id })).find(
+      (s) => s.retryOf === session.id
+    );
+    expect(retried?.status).toBe("waiting");
+    expect(retried?.queuedAfter).toBeNull();
+    const messages = (await stub.listAgentActivities(session.id, { limit: 50 }))
+      .map((a) => a.message)
+      .join("\n");
+    expect(messages).toContain("redispatched as session");
+    expect(messages).not.toContain("re-queued behind");
+    // Cap this test's infra corpse in the shared workspace's recency order
+    // so later tests can't stack it into an open fleet breaker.
+    await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "completed",
+    });
+  });
+
   it("holds dependents behind a fresh infra-dead blocker until a retry can land", async () => {
     const agentId = `mock-grace-${crypto.randomUUID().slice(0, 8)}`;
     let dispatches = 0;
