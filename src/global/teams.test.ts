@@ -119,4 +119,24 @@ describe("setDefaultTeam", () => {
       (await listTeams(db, organizationId)).filter((t) => t.isDefault)
     ).toHaveLength(1);
   });
+
+  it("flags a target whose stored metadata is valid JSON but not an object", async () => {
+    const { db, organizationId } = await seedWorkspace("user-default-array");
+    const legacy = await createTeam(db, env, new Headers(), {
+      organizationId,
+      key: "legacy",
+      name: "Legacy",
+      ownerId: "user-default-array",
+    });
+    // parseTeamMetadata schema-validates, so non-object JSON falls into the
+    // whole-metadata rewrite path — not a mid-batch json_set error.
+    await db
+      .update(team)
+      .set({ metadata: '["not","an","object"]' })
+      .where(eq(team.id, legacy.id));
+
+    const result = await setDefaultTeam(db, organizationId, legacy.id);
+    expect(result?.isDefault).toBe(true);
+    expect((await getDefaultTeam(db, organizationId))?.id).toBe(legacy.id);
+  });
 });

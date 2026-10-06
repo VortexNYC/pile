@@ -415,15 +415,17 @@ export function registerWorkspaceRoutes(app: OpenAPIHono<AppContext>) {
     }
     if (input.defaultTeamId !== undefined) {
       const previous = await getDefaultTeam(db, id);
-      const next = await setDefaultTeam(db, id, input.defaultTeamId);
-      if (!next) {
-        throw new VortexError({
-          code: "NOT_FOUND",
-          status: 404,
-          message: "Team not found",
-        });
-      }
-      if (previous?.id !== next.id) {
+      // A no-op reassignment skips the batch entirely — no updatedAt churn,
+      // no audit event.
+      if (previous?.id !== input.defaultTeamId) {
+        const next = await setDefaultTeam(db, id, input.defaultTeamId);
+        if (!next) {
+          throw new VortexError({
+            code: "NOT_FOUND",
+            status: 404,
+            message: "Team not found",
+          });
+        }
         await emitWorkspaceAudit(c, id, "workspace.updated", "workspace", id, {
           defaultTeamId: { from: previous?.id ?? null, to: next.id },
         });
@@ -510,16 +512,19 @@ export function registerWorkspaceRoutes(app: OpenAPIHono<AppContext>) {
       ownerId,
     });
     // createWorkspace already provisions the default team through Better
-    // Auth's organization hook; only fall back when it did not run.
-    const team =
-      (await getDefaultTeam(db, workspace.id)) ??
-      (await createTeam(db, c.env, c.req.raw.headers, {
+    // Auth's organization hook; only fall back when it did not run. The
+    // fallback goes through setDefaultTeam so the org metadata mirror is
+    // written the same way as a reassignment.
+    let team = await getDefaultTeam(db, workspace.id);
+    if (!team) {
+      const created = await createTeam(db, c.env, c.req.raw.headers, {
         organizationId: workspace.id,
         key: "general",
         name: "General",
         ownerId,
-        isDefault: true,
-      }));
+      });
+      team = (await setDefaultTeam(db, workspace.id, created.id)) ?? created;
+    }
     const auth = await createAuth(c.env);
     const keyResult = await auth.api.createApiKey({
       body: {

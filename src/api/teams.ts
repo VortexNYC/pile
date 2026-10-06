@@ -450,7 +450,24 @@ export function registerTeamRoutes(app: OpenAPIHono<AppContext>) {
         hint: "Move or delete the team's issues before deleting it.",
       });
     }
-    await deleteTeam(db, c.env, c.req.raw.headers, id, organizationId);
+    try {
+      await deleteTeam(db, c.env, c.req.raw.headers, id, organizationId);
+    } catch (error) {
+      // Other tables (e.g. releases.team_id) reference the team; an
+      // issue-free team can still fail the FK on delete.
+      if (
+        error instanceof Error &&
+        error.message.includes("FOREIGN KEY constraint failed")
+      ) {
+        throw new VortexError({
+          code: "CONFLICT",
+          status: 409,
+          message: "Team is still referenced by other records",
+          hint: "Move or delete dependent records (e.g. releases) first.",
+        });
+      }
+      throw error;
+    }
     return c.body(null, 204);
   });
 

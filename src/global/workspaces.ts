@@ -10,9 +10,10 @@ import {
   member,
   organization,
   ssoProvider,
+  team,
   workspaceAgentContext,
 } from "./schema.js";
-import { safeJSON } from "./team-metadata.js";
+import { parseTeamMetadata, safeJSON } from "./team-metadata.js";
 import { getDefaultTeam } from "./teams.js";
 import { createState } from "./workspace-entities.js";
 
@@ -48,6 +49,26 @@ export interface WorkspaceRecord {
   updatedAt: string;
 }
 
+// The team's isDefault flag is authoritative; org metadata only mirrors it
+// and is missing on workspaces that predate setDefaultTeam.
+function buildWorkspaceRecord(
+  row: typeof organization.$inferSelect,
+  ownerId: string | undefined,
+  defaultTeamId: string | undefined
+): WorkspaceRecord {
+  const meta = parseWorkspaceMetadata(row.metadata);
+  return {
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    key: meta.key,
+    ownerId: ownerId ?? "",
+    defaultTeamId: defaultTeamId ?? null,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
 async function buildWorkspace(
   db: D1Client,
   row: typeof organization.$inferSelect
@@ -57,19 +78,8 @@ async function buildWorkspace(
     .from(member)
     .where(and(eq(member.organizationId, row.id), eq(member.role, "owner")))
     .get();
-  const meta = parseWorkspaceMetadata(row.metadata);
-  return {
-    id: row.id,
-    name: row.name,
-    slug: row.slug,
-    key: meta.key,
-    ownerId: owner?.userId ?? "",
-    // The team's isDefault flag is authoritative; org metadata only mirrors
-    // it and is missing on workspaces that predate setDefaultTeam.
-    defaultTeamId: (await getDefaultTeam(db, row.id))?.id ?? null,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-  };
+  const defaultTeam = await getDefaultTeam(db, row.id);
+  return buildWorkspaceRecord(row, owner?.userId, defaultTeam?.id);
 }
 
 export async function listWorkspacesForUser(db: D1Client, userId: string) {
@@ -78,11 +88,43 @@ export async function listWorkspacesForUser(db: D1Client, userId: string) {
     .from(member)
     .where(eq(member.userId, userId))
     .all();
-  const workspaces = await Promise.all(
-    memberships.map((row) => getWorkspaceById(db, row.organizationId))
+  const orgIds = memberships.map((row) => row.organizationId);
+  if (orgIds.length === 0) return [];
+  // One query per side table — not one per workspace (buildWorkspace's
+  // per-org owner/default lookups would be N+1 here).
+  const [orgs, owners, teams] = await Promise.all([
+    db
+      .select()
+      .from(organization)
+      .where(inArray(organization.id, orgIds))
+      .all(),
+    db
+      .select()
+      .from(member)
+      .where(
+        and(inArray(member.organizationId, orgIds), eq(member.role, "owner"))
+      )
+      .all(),
+    db.select().from(team).where(inArray(team.organizationId, orgIds)).all(),
+  ]);
+  const ownerByOrg = new Map(
+    owners.map((row) => [row.organizationId, row.userId])
   );
-  return workspaces.filter(
-    (workspace): workspace is WorkspaceRecord => workspace !== undefined
+  const defaultTeamByOrg = new Map<string, string>();
+  for (const row of teams) {
+    if (
+      !defaultTeamByOrg.has(row.organizationId) &&
+      parseTeamMetadata(row.metadata)?.isDefault
+    ) {
+      defaultTeamByOrg.set(row.organizationId, row.id);
+    }
+  }
+  return orgs.map((row) =>
+    buildWorkspaceRecord(
+      row,
+      ownerByOrg.get(row.id),
+      defaultTeamByOrg.get(row.id)
+    )
   );
 }
 

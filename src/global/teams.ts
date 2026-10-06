@@ -141,7 +141,10 @@ export async function setDefaultTeam(
     db
       .update(organization)
       .set({
-        metadata: sql`json_set(CASE WHEN json_valid(${organization.metadata}) THEN ${organization.metadata} ELSE '{}' END, '$.defaultTeamId', ${teamId})`,
+        // The subquery keeps the mirror honest if the target is deleted in
+        // the check-then-batch window: org metadata gets NULL, not a
+        // dangling team id. getDefaultTeam remains the source of truth.
+        metadata: sql`json_set(CASE WHEN json_valid(${organization.metadata}) THEN ${organization.metadata} ELSE '{}' END, '$.defaultTeamId', (SELECT id FROM team WHERE id = ${teamId} AND organization_id = ${organizationId}))`,
         updatedAt: now,
       })
       .where(eq(organization.id, organizationId)),
