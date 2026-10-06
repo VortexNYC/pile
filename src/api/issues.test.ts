@@ -642,6 +642,97 @@ describe("issues API", () => {
     expect(badStatus.status).toBe(400);
   });
 
+  it("sets repo and branch via PATCH", async () => {
+    const createRes = await fetch(
+      `/workspaces/${organizationId}/issues`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          title: "Link a working branch",
+          repo: "VortexNYC/pile",
+          branch: "issue-placeholder",
+        }),
+      },
+      token
+    );
+    expect(createRes.status).toBe(201);
+    const issue = z.object({ id: z.string() }).parse(await createRes.json());
+
+    const branchPatch = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ branch: "vor-631-dispute-money-leg" }),
+      },
+      token
+    );
+    expect(branchPatch.status).toBe(200);
+    const branched = z
+      .object({
+        repo: z.string().nullable(),
+        branch: z.string().nullable(),
+      })
+      .parse(await branchPatch.json());
+    expect(branched).toEqual({
+      repo: "VortexNYC/pile",
+      branch: "vor-631-dispute-money-leg",
+    });
+
+    const repoPatch = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          repo: "VortexNYC/vortex",
+          branch: "vor-631-second",
+        }),
+      },
+      token
+    );
+    expect(repoPatch.status).toBe(200);
+    const repoPatched = z
+      .object({
+        repo: z.string().nullable(),
+        branch: z.string().nullable(),
+      })
+      .parse(await repoPatch.json());
+    expect(repoPatched).toEqual({
+      repo: "VortexNYC/vortex",
+      branch: "vor-631-second",
+    });
+  });
+
+  it("returns 409 when a PATCHed repo+branch is claimed by another issue", async () => {
+    const create = async (title: string, branch: string) => {
+      const res = await fetch(
+        `/workspaces/${organizationId}/issues`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            title,
+            repo: "VortexNYC/pile",
+            branch,
+          }),
+        },
+        token
+      );
+      expect(res.status).toBe(201);
+      return z.object({ id: z.string() }).parse(await res.json());
+    };
+    await create("Claims the branch", "shared-branch");
+    const other = await create("Wants the branch", "other-branch");
+
+    const conflict = await fetch(
+      `/workspaces/${organizationId}/issues/${other.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ branch: "shared-branch" }),
+      },
+      token
+    );
+    expect(conflict.status).toBe(409);
+  });
+
   it("rejects an invalid resolution status combination", async () => {
     const res = await fetch(
       `/workspaces/${organizationId}/issues`,

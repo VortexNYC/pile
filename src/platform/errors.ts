@@ -105,6 +105,27 @@ export function errorCodeFromStatus(status: number): ErrorCode {
   }
 }
 
+function isDetailsRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+// A VortexError thrown inside a Durable Object loses its prototype across
+// the RPC boundary, so `instanceof` misses it. workerd still serializes the
+// own properties (code, status, hint, details) — recognize that shape and
+// rebuild the error instead of collapsing every DO-side validation failure
+// to a 500.
+function isSerializedVortexError(
+  error: unknown
+): error is Error & VortexErrorCode {
+  if (!(error instanceof Error)) return false;
+  const { code, status } = error as { code?: unknown; status?: unknown };
+  return (
+    typeof code === "string" &&
+    code in ERROR_CATALOG &&
+    typeof status === "number"
+  );
+}
+
 export function toErrorResponse(error: unknown): Response {
   let vortex: VortexError;
   if (error instanceof VortexError) {
@@ -132,6 +153,30 @@ export function toErrorResponse(error: unknown): Response {
       message: "Invalid request",
       hint: error.message,
     });
+  } else if (isSerializedVortexError(error)) {
+    const catalog = ERROR_CATALOG[error.code];
+    const status =
+      Number.isInteger(error.status) &&
+      error.status >= 400 &&
+      error.status < 600
+        ? error.status
+        : catalog.status;
+    vortex = new VortexError({
+      code: error.code,
+      status,
+      // Keep 5xx internals off the wire; 4xx can surface the DO's message.
+      message:
+        status < 500 ? error.message || catalog.message : catalog.message,
+      hint: typeof error.hint === "string" ? error.hint : undefined,
+      details: isDetailsRecord(error.details) ? error.details : undefined,
+    });
+    if (status >= 500) {
+      console.error("unhandled serialized error", {
+        code: error.code,
+        status,
+        message: error.message,
+      });
+    }
   } else {
     console.error("unhandled error", {
       message: error instanceof Error ? error.message : String(error),
