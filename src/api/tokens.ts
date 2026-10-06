@@ -9,6 +9,7 @@ import { getWorkspaceById } from "../global/workspaces.js";
 import { createAuth } from "../platform/auth.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
+import { canAccess, parsePermissionSet } from "../platform/permissions.js";
 import { rls } from "../platform/rls.js";
 import { emitWorkspaceAudit } from "./audit-emit.js";
 
@@ -71,7 +72,10 @@ const createTokenRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/tokens",
   tags: ["tokens"],
-  middleware: [rls("admin")],
+  // Members self-serve keys (e.g. `pile auth login`); the handler clamps the
+  // requested permissions to the caller's own set so nobody mints past their
+  // role. Listing and deleting stay admin-only.
+  middleware: [rls("write")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: {
@@ -151,8 +155,33 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
     const db = createD1(c.env.D1);
 
     const auth = await createAuth(c.env);
-    const permissions = input.permissions ?? "read";
+    const isAdmin = canAccess(identity.permissions, "admin");
     const actorType = input.actorType ?? "user";
+
+    // Agent tokens spawn a new workspace actor — that stays admin-only.
+    if (actorType === "agent" && !isAdmin) {
+      throw new VortexError({
+        code: "FORBIDDEN",
+        status: 403,
+        message: "Only admins can create agent tokens",
+      });
+    }
+
+    const requested = parsePermissionSet(input.permissions ?? "read");
+    if (!isAdmin) {
+      const caller = parsePermissionSet(identity.permissions);
+      for (const p of requested) {
+        if (!caller.has(p)) requested.delete(p);
+      }
+    }
+    if (requested.size === 0) {
+      throw new VortexError({
+        code: "FORBIDDEN",
+        status: 403,
+        message: "Requested permissions exceed your workspace role",
+      });
+    }
+    const permissions = [...requested].join(",");
     let userId = identity.id;
 
     if (actorType === "agent") {
@@ -172,7 +201,10 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
       });
       await createMembership(db, c.env, organizationId, agentId, "member");
       userId = agentId;
-    } else if (identity.type === "agent") {
+    } else if (identity.type === "agent" && isAdmin) {
+      // Admin-level agent lanes attribute minted keys to the workspace owner;
+      // non-admin callers always reference the caller (identity.id) so a
+      // member-scoped agent key cannot impersonate the owner.
       const workspace = await getWorkspaceById(db, organizationId);
       if (!workspace) {
         throw new VortexError({

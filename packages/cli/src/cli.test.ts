@@ -662,6 +662,85 @@ describe("CLI integration", () => {
     expect(written.baseUrl).toBe("http://127.0.0.1:8787");
   });
 
+  it("login requests the caller's full permission set with a CSRF origin", async () => {
+    const mockFetch = vi.fn().mockImplementation((url, init) => {
+      const requestUrl = new URL(
+        typeof url === "string" ? url : (url as URL).href
+      );
+      const pathname = requestUrl.pathname;
+      const method =
+        init && typeof init === "object" && "method" in init
+          ? String(init.method)
+          : "GET";
+
+      if (pathname === "/api/auth/sign-in/email" && method === "POST") {
+        return Promise.resolve(
+          new Response(JSON.stringify({ user: { id: "u-1" } }), {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+              "Set-Cookie": "session_token=abc123; Path=/; HttpOnly",
+            },
+          })
+        );
+      }
+      if (pathname === "/workspaces/ws-1/tokens" && method === "POST") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              id: "t-1",
+              organizationId: "ws-1",
+              name: "cli",
+              token: "api-token-1",
+              permissions: "read,write",
+              createdAt: "2026-01-01T00:00:00Z",
+            }),
+            {
+              status: 201,
+              headers: { "Content-Type": "application/json" },
+            }
+          )
+        );
+      }
+      return Promise.resolve(new Response("not found", { status: 404 }));
+    });
+
+    const tmpDir = mkdtempSync(join(tmpdir(), "pile-auth-"));
+    process.env.HOME = tmpDir;
+    process.env.PILE_EMAIL = "user@example.com";
+    process.env.PILE_PASSWORD = "secret";
+
+    const exitCode = await runCli(["auth", "login", "--workspace", "ws-1"], {
+      fetch: mockFetch,
+    });
+
+    expect(exitCode).toBe(0);
+    const tokenCall = mockFetch.mock.calls.find(
+      ([url]) =>
+        new URL(typeof url === "string" ? url : (url as URL).href).pathname ===
+        "/workspaces/ws-1/tokens"
+    );
+    expect(tokenCall).toBeDefined();
+    const [, tokenInit] = tokenCall as [
+      string,
+      {
+        method: string;
+        headers: Record<string, string>;
+        body: string;
+      },
+    ];
+    // Cookie-authed POSTs must assert the target origin or the server's CSRF
+    // check rejects the token request.
+    expect(tokenInit.headers.Origin).toBe("http://127.0.0.1:8787");
+    expect(tokenInit.headers.Cookie).toBe("session_token=abc123");
+    // Ask for the full set — the server clamps to the caller's workspace
+    // role, so members land on read,write instead of getting a 403.
+    expect(JSON.parse(tokenInit.body)).toEqual({
+      name: "cli",
+      permissions: ["read", "write", "admin"],
+    });
+  });
+
   it("returns the current session", async () => {
     process.env.PILE_SESSION = "session_token=abc123";
     const mockFetch = vi.fn().mockResolvedValue(

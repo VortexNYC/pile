@@ -63,6 +63,14 @@ const rolePermissionsMap = {
   member: ["read", "write"],
 } as const;
 
+// Unknown/future roles degrade to the narrowest set, never wider.
+export function rolePermissionsFor(role: string): readonly string[] {
+  return (
+    rolePermissionsMap[role as keyof typeof rolePermissionsMap] ??
+    rolePermissionsMap.member
+  );
+}
+
 export const workspaceRoleSchema = z.enum(["owner", "admin", "member"]);
 
 export function toUserWorkspaceIdentity(

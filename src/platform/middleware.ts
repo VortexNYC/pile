@@ -11,6 +11,7 @@ import { createAuth } from "./auth.js";
 import type { AppEnv } from "./env.js";
 import { VortexError } from "./errors.js";
 import {
+  rolePermissionsFor,
   toApiKeyWorkspaceIdentity,
   toUserWorkspaceIdentity,
   type WorkspaceIdentity,
@@ -89,13 +90,37 @@ export const workspaceAuthMiddleware = createMiddleware<{
       });
     }
 
-    const identity = toApiKeyWorkspaceIdentity(result.key);
+    let identity = toApiKeyWorkspaceIdentity(result.key);
     if (organizationId && identity.organizationId !== organizationId) {
       throw new VortexError({
         code: "FORBIDDEN",
         status: 403,
         message: "Token does not belong to this workspace",
       });
+    }
+    // User-attributed keys live and die with the membership, and their
+    // permissions clamp to the member's CURRENT role on every request — a
+    // demotion takes effect without re-minting. Agent/lane keys reference
+    // the dispatching owner rather than a member row, so they bypass the
+    // gate: requiring one would 403 every pre-existing shared key.
+    if (identity.type === "user") {
+      const membership = await getWorkspaceMembership(
+        db,
+        identity.organizationId,
+        identity.id
+      );
+      if (!membership) {
+        throw new VortexError({
+          code: "FORBIDDEN",
+          status: 403,
+          message: "Token owner is no longer a member of this workspace",
+        });
+      }
+      const rolePerms = rolePermissionsFor(membership.role);
+      identity = {
+        ...identity,
+        permissions: identity.permissions.filter((p) => rolePerms.includes(p)),
+      };
     }
     c.set("workspaceIdentity", identity);
     await next();

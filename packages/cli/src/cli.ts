@@ -550,8 +550,16 @@ async function authLoginCommand(
     headers: {
       "Content-Type": "application/json",
       Cookie: cookie,
+      // Cookie-authed POSTs must pass the CSRF origin check; the CLI is a
+      // first-party client, so assert the target origin explicitly.
+      Origin: new URL(baseUrl).origin,
     },
-    body: JSON.stringify({ name: "cli", permissions: ["admin"] }),
+    // The server clamps to the caller's workspace role, so a member gets
+    // read,write while an admin keeps the full set.
+    body: JSON.stringify({
+      name: "cli",
+      permissions: ["read", "write", "admin"],
+    }),
   });
   const tokenText = await tokenRes.text();
   if (!tokenRes.ok) {
@@ -603,7 +611,7 @@ async function initCommand(
     defaultBaseUrl
   ).replace(/\/$/u, "");
   const doFetch = deps.fetch ?? fetch;
-  const origin = baseUrl;
+  const origin = new URL(baseUrl).origin;
   const jsonHeaders = { "Content-Type": "application/json", Origin: origin };
 
   // Sign in; if the account does not exist yet, create it and retry.
