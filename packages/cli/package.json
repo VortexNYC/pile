@@ -32,7 +32,7 @@
     "build": "rm -rf dist && tsc -p tsconfig.build.json && pnpm -C ../capture run build && pnpm -C ../widget run build && mkdir -p dist/capture dist/widget && cp -R ../capture/dist/ dist/capture/ && cp ../widget/dist/chat.iife.js dist/widget/chat.iife.js",
     "prepack": "pnpm run build",
     "cli": "tsx src/index.ts",
-    "build:bin": "bun build --compile --minify src/index.ts --outfile dist/pile"
+    "build:bin": "bun build --compile --minify src/index.ts --outfile dist/pile && tmpdir=$(mktemp -d) && cp dist/pile \"$tmpdir/pile\" && (cd \"$tmpdir\" && ./pile tui-check >/dev/null) && rm -rf \"$tmpdir\" && echo \"build:bin ok — OpenTUI embedded\""
   },
   "dependencies": {
     "@opentui/core": "0.5.14",

@@ -13,6 +13,7 @@ import { fleetCommand, type FleetDeps } from "./fleet.js";
 import { homeCommand } from "./home.js";
 import { inboxCommand, type InboxDeps } from "./inbox.js";
 import { supportCommand, type InboxDeps as SupportDeps } from "./support.js";
+import { checkTuiSupport, errorMessage } from "./tui.js";
 
 type Json =
   | null
@@ -51,6 +52,8 @@ export type CliDeps = {
     stderr: { on: (event: "data", cb: (data: Buffer) => void) => void };
     on: (event: "close", cb: (code: number | null) => void) => void;
   };
+  // Test seam for `pile tui-check` — the real probe loads @opentui/core.
+  readonly probeTui?: () => Promise<unknown>;
 };
 
 export function isJsonValue(value: unknown): value is Json {
@@ -1087,6 +1090,7 @@ function printUsage(): void {
     "inbox --workspace <org>",
     "agent dispatch-batch --workspace <org> --file batch.json",
     "issues dispatch <id> --workspace <org> --follow [--timeout <min>]",
+    "tui-check — verify OpenTUI (module + native library) loads",
   ]) {
     console.log(`  ${cmd}`);
   }
@@ -1218,6 +1222,23 @@ async function agentContextCommand(
     console.log(text);
   }
   return response.ok ? 0 : 1;
+}
+
+// `pile tui-check` — verifies OpenTUI (module + native library) actually
+// loads in this runtime. `build:bin` runs it against the freshly compiled
+// binary: `bun build --compile` silently keeps an unresolvable
+// `import("@opentui/core")` dynamic, which otherwise ships a binary whose TUI
+// commands only fail at runtime.
+async function tuiCheckCommand(deps: CliDeps = {}): Promise<number> {
+  const probe = deps.probeTui ?? checkTuiSupport;
+  try {
+    await probe();
+  } catch (error) {
+    console.error(`tui-check: OpenTUI failed to load: ${errorMessage(error)}`);
+    return 1;
+  }
+  console.log(JSON.stringify({ ok: true, tui: "opentui" }, null, 2));
+  return 0;
 }
 
 const TERMINAL_SESSION_STATUSES = new Set(["completed", "failed", "canceled"]);
@@ -1437,6 +1458,10 @@ export async function runCli(
       positionals[2] === "watch"
     ) {
       return await sessionWatchCommand(positionals[3], flags, deps);
+    }
+
+    if (scope === "tui-check") {
+      return await tuiCheckCommand(deps);
     }
 
     if (scope === "fleet") {

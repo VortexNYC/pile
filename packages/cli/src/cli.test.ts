@@ -994,6 +994,37 @@ describe("CLI integration", () => {
     spy.mockRestore();
   });
 
+  it("tui-check exits 0 when the OpenTUI probe succeeds", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    const exitCode = await runCli(["tui-check"], {
+      probeTui: () => Promise.resolve(),
+    });
+
+    expect(exitCode).toBe(0);
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('"ok": true'));
+    logSpy.mockRestore();
+  });
+
+  it("tui-check exits 1 when OpenTUI cannot load", async () => {
+    const errorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+
+    const exitCode = await runCli(["tui-check"], {
+      probeTui: () =>
+        Promise.reject(
+          new Error(
+            "Cannot find module '@opentui/core' from '/$bunfs/root/pile'"
+          )
+        ),
+    });
+
+    expect(exitCode).toBe(1);
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("tui-check"));
+    errorSpy.mockRestore();
+  });
+
   it("rejects an unknown command", async () => {
     const mockFetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ issues: [] }), {
