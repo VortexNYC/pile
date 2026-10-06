@@ -1986,6 +1986,8 @@ export async function syncOpenPrSessions(
 
   await publishReviewVerdicts(stub, {
     fetch: ghFetch,
+    env,
+    organizationId,
     tokenForRepo: (owner, name) => {
       const repoKey = `${owner}/${name}`;
       let tokenP = tokens.get(repoKey);
