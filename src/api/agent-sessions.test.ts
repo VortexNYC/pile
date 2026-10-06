@@ -12,6 +12,7 @@ import {
   organization,
   user as userTable,
 } from "../global/schema.js";
+import { createTeam } from "../global/teams.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
@@ -2611,6 +2612,162 @@ describe("agent sessions API", () => {
       expect(body.results[0].error).toBe("Issue not found");
       expect(body.results[1].sessionId).toBeNull();
       expect(body.results[1].error).toContain("queuedAfter target failed");
+    });
+  });
+
+  // PILE-321 — a repo-less issue inherits its team's defaultRepo at dispatch
+  // so the lane produces a PR instead of a spec-only package. Separate
+  // workspace: the shared org accumulates live sessions and trips the
+  // per-workspace active-lane ceiling.
+  describe("team defaultRepo dispatch", () => {
+    let repoOrg: string;
+    let repoToken: string;
+    const teamRepo = "VortexNYC/team-default";
+    let teamId: string;
+
+    beforeAll(async () => {
+      const db = createD1(env.D1);
+      const headers = await createAdminHeaders(env, "user-1");
+      const workspace = await createWorkspace(db, env, headers, {
+        name: "DefaultRepo dispatch tests",
+        slug: `default-repo-${crypto.randomUUID()}`,
+        ownerId: "user-1",
+      });
+      repoOrg = workspace!.id;
+      const team = await createTeam(db, env, new Headers(), {
+        organizationId: repoOrg,
+        key: "TD",
+        name: "Defaulted",
+        ownerId: "user-1",
+        defaultRepo: teamRepo,
+      });
+      teamId = team.id;
+      const auth = await createAuth(env);
+      const result = await auth.api.createApiKey({
+        body: {
+          userId: "user-1",
+          name: "default-repo",
+          metadata: { organizationId: repoOrg, permissions: "admin" },
+        },
+      });
+      repoToken = z.object({ key: z.string() }).parse(result).key;
+    });
+
+    // Explicit repo:null keeps the issue repo-less even on a defaulted team,
+    // so the dispatch-time fallback is what's under test.
+    const createRepolessIssue = async (title: string) => {
+      const res = await app.fetch(
+        request(`/workspaces/${repoOrg}/issues`, {
+          method: "POST",
+          token: repoToken,
+          body: JSON.stringify({ title, teamId, repo: null }),
+        }),
+        env
+      );
+      expect(res.status).toBe(201);
+      const issue = await res.json<{ id: string; repo: string | null }>();
+      expect(issue.repo).toBeNull();
+      return issue;
+    };
+
+    const issueRepo = async (issueId: string) => {
+      const res = await app.fetch(
+        request(`/workspaces/${repoOrg}/issues/${issueId}`, {
+          token: repoToken,
+        }),
+        env
+      );
+      return (await res.json<{ repo: string | null }>()).repo;
+    };
+
+    it("inherits the team's defaultRepo when dispatching a repo-less issue", async () => {
+      const agentId = `mock-inherit-${crypto.randomUUID().slice(0, 8)}`;
+      let seenRepo: string | null | undefined;
+      registerAgentProvider(
+        agentId,
+        () =>
+          new MockAgentProvider(agentId, {
+            dispatch: (_org, dispatchedIssue) => {
+              seenRepo = dispatchedIssue.repo;
+              return {
+                id: `inherit-${crypto.randomUUID()}`,
+                agentId,
+                issueId: dispatchedIssue.id,
+                status: "created" as const,
+              };
+            },
+          })
+      );
+      const issue = await createRepolessIssue("Repo-less on a defaulted team");
+
+      const dispatchRes = await app.fetch(
+        request(`/workspaces/${repoOrg}/issues/${issue.id}/dispatch`, {
+          method: "POST",
+          token: repoToken,
+          body: JSON.stringify({ agentId }),
+        }),
+        env
+      );
+      expect(dispatchRes.status).toBe(201);
+      expect(seenRepo).toBe(teamRepo);
+
+      // The inherited repo is persisted — lane-token minting and
+      // redispatches read issue.repo, not the dispatch-time target.
+      expect(await issueRepo(issue.id)).toBe(teamRepo);
+    });
+
+    it("stays repo-less when dispatch passes repo: null explicitly", async () => {
+      const agentId = `mock-norepo-${crypto.randomUUID().slice(0, 8)}`;
+      let seenRepo: string | null | undefined;
+      registerAgentProvider(
+        agentId,
+        () =>
+          new MockAgentProvider(agentId, {
+            dispatch: (_org, dispatchedIssue) => {
+              seenRepo = dispatchedIssue.repo;
+              return {
+                id: `norepo-${crypto.randomUUID()}`,
+                agentId,
+                issueId: dispatchedIssue.id,
+                status: "created" as const,
+              };
+            },
+          })
+      );
+      const issue = await createRepolessIssue("Explicit repo-less lane");
+
+      const dispatchRes = await app.fetch(
+        request(`/workspaces/${repoOrg}/issues/${issue.id}/dispatch`, {
+          method: "POST",
+          token: repoToken,
+          body: JSON.stringify({ agentId, repo: null }),
+        }),
+        env
+      );
+      expect(dispatchRes.status).toBe(201);
+      expect(seenRepo).toBeNull();
+      expect(await issueRepo(issue.id)).toBeNull();
+    });
+
+    it("inherits the team's defaultRepo in dispatch-batch", async () => {
+      const issue = await createRepolessIssue("Repo-less batch item");
+      const res = await app.fetch(
+        request(`/workspaces/${repoOrg}/agent/dispatch-batch`, {
+          method: "POST",
+          token: repoToken,
+          body: JSON.stringify({
+            items: [{ issueId: issue.id, agentId: "mock" }],
+          }),
+        }),
+        env
+      );
+      expect(res.status).toBe(200);
+      const body = await res.json<{
+        results: { sessionId: string | null; error: string | null }[];
+      }>();
+      expect(body.results[0].sessionId).toBeTruthy();
+      expect(body.results[0].error).toBeNull();
+      expect(await issueRepo(issue.id)).toBe(teamRepo);
     });
   });
 
