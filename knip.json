@@ -14,6 +14,6 @@
     "cloudflare",
     "@secretlint/secretlint-rule-preset-recommend"
   ],
-  "ignoreBinaries": ["entire"],
+  "ignoreBinaries": ["entire", "mktemp"],
   "ignoreExportsUsedInFile": true
 }
