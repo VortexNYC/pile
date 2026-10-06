@@ -34,8 +34,15 @@ prove which it is. Downgrading later is free; upgrading late is not.
    the window, relevant `webhook_deliveries`/`audit` rows.
 3. **Decide the sev** from the ladder. S1 means comms drafting starts
    now, not after root cause.
+   Whoever declares the sev is the **incident lead** — they own
+   containment, comms, and status page updates until they hand off
+   explicitly.
 
 ## Comms
+
+Customer-visible incidents also go on the public status page
+(https://status.pile.nyc — use https://pile.openstatus.dev until the
+custom domain's TLS is live) — when and how is in `docs/status-page.md`.
 
 S1 template — send to every affected workspace owner, plain text:
 
