@@ -751,7 +751,6 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   ): Promise<string[]> {
     const recipients = new Set<string>();
     const d1 = createD1(this.env.D1);
-    const org = this.organizationId;
 
     const assigneeUserId = await this.resolveAssigneeUserId(issue.assigneeId);
     if (assigneeUserId) {
