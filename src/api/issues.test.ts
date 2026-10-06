@@ -6,6 +6,7 @@ import { MockAgentProvider } from "../agents/harness.js";
 import { registerAgentProvider } from "../agents/index.js";
 import { createD1 } from "../global/db.js";
 import { user as userTable } from "../global/schema.js";
+import { createTeam } from "../global/teams.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
@@ -1214,5 +1215,92 @@ describe("possible duplicates on create (PILE-163)", () => {
       expect(body.id).toBe(first.id);
       expect(body.possibleDuplicates).toBeUndefined();
     }
+  });
+
+  // PILE-321 — assigning an agent to a repo-less issue dispatches a lane
+  // that inherits the team's defaultRepo and persists it on the issue.
+  it("inherits the team's defaultRepo when an agent assignee dispatches", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const db = createD1(env.D1);
+    const teamRepo = "VortexNYC/assign-default";
+    const team = await createTeam(db, env, new Headers(), {
+      organizationId,
+      key: `A${crypto.randomUUID().replace(/-/g, "").slice(0, 5).toUpperCase()}`,
+      name: "Assign default",
+      ownerId: "user-issues",
+      defaultRepo: teamRepo,
+    });
+    const auth = await createAuth(env);
+    const keyResult = await auth.api.createApiKey({
+      body: {
+        userId: "user-issues",
+        name: "assign-agent",
+        metadata: {
+          organizationId,
+          permissions: "admin,agent:write",
+          actorType: "agent",
+        },
+      },
+    });
+    const agentToken = z.object({ key: z.string() }).parse(keyResult).key;
+
+    const agentId = `mock-assign-${crypto.randomUUID().slice(0, 8)}`;
+    let seenRepo: string | null | undefined;
+    registerAgentProvider(
+      agentId,
+      () =>
+        new MockAgentProvider(agentId, {
+          dispatch: (_org, dispatchedIssue) => {
+            seenRepo = dispatchedIssue.repo;
+            return {
+              id: `assign-${crypto.randomUUID()}`,
+              agentId,
+              issueId: dispatchedIssue.id,
+              status: "created" as const,
+            };
+          },
+        })
+    );
+
+    const createRes = await fetch(
+      `/workspaces/${organizationId}/issues`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          title: "Assign dispatches onto the default repo",
+          teamId: team.id,
+          repo: null,
+        }),
+      },
+      token
+    );
+    expect(createRes.status).toBe(201);
+    const issue = z
+      .object({ id: z.string(), repo: z.string().nullable() })
+      .parse(await createRes.json());
+    expect(issue.repo).toBeNull();
+
+    const assignRes = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}/assign`,
+      { method: "POST", body: JSON.stringify({ assigneeId: agentId }) },
+      agentToken
+    );
+    expect(assignRes.status).toBe(200);
+    const assigned = z
+      .object({ session: z.object({ id: z.string() }).optional() })
+      .parse(await assignRes.json());
+    expect(assigned.session?.id).toBeTruthy();
+    expect(seenRepo).toBe(teamRepo);
+
+    const getRes = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}`,
+      {},
+      token
+    );
+    expect(getRes.status).toBe(200);
+    const fetched = z
+      .object({ repo: z.string().nullable() })
+      .parse(await getRes.json());
+    expect(fetched.repo).toBe(teamRepo);
   });
 });
