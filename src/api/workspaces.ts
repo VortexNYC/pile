@@ -7,7 +7,7 @@ import { createD1 } from "../global/db.js";
 import { deleteWorkspaceData } from "../global/deletion.js";
 import { member, organization } from "../global/schema.js";
 import { safeJSON } from "../global/team-metadata.js";
-import { createTeam } from "../global/teams.js";
+import { createTeam, getDefaultTeam, setDefaultTeam } from "../global/teams.js";
 import {
   createWorkspace,
   getWorkspaceById,
@@ -31,6 +31,7 @@ const workspaceSchema = z.object({
   slug: z.string(),
   key: z.string().nullable(),
   ownerId: z.string(),
+  defaultTeamId: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -231,6 +232,10 @@ const updateWorkspaceRoute = createRoute({
         "application/json": {
           schema: z.object({
             ssoEnforced: z.boolean().optional(),
+            defaultTeamId: z.string().min(1).optional().openapi({
+              description:
+                "Team that receives issues created without a teamId. The previous default team becomes deletable.",
+            }),
           }),
         },
       },
@@ -244,7 +249,7 @@ const updateWorkspaceRoute = createRoute({
       },
     },
     403: { description: "Requires owner or admin role in the workspace" },
-    404: { description: "Workspace not found" },
+    404: { description: "Workspace or default team not found" },
   },
 });
 
@@ -408,6 +413,24 @@ export function registerWorkspaceRoutes(app: OpenAPIHono<AppContext>) {
         ssoEnforced: { from: !input.ssoEnforced, to: input.ssoEnforced },
       });
     }
+    if (input.defaultTeamId !== undefined) {
+      const previous = await getDefaultTeam(db, id);
+      // A no-op reassignment skips the batch entirely — no updatedAt churn,
+      // no audit event.
+      if (previous?.id !== input.defaultTeamId) {
+        const next = await setDefaultTeam(db, id, input.defaultTeamId);
+        if (!next) {
+          throw new VortexError({
+            code: "NOT_FOUND",
+            status: 404,
+            message: "Team not found",
+          });
+        }
+        await emitWorkspaceAudit(c, id, "workspace.updated", "workspace", id, {
+          defaultTeamId: { from: previous?.id ?? null, to: next.id },
+        });
+      }
+    }
     const updated = await getWorkspaceById(db, id);
     if (!updated) {
       throw new VortexError({
@@ -488,13 +511,20 @@ export function registerWorkspaceRoutes(app: OpenAPIHono<AppContext>) {
       key: input.key,
       ownerId,
     });
-    const team = await createTeam(db, c.env, c.req.raw.headers, {
-      organizationId: workspace.id,
-      key: "general",
-      name: "General",
-      ownerId,
-      isDefault: true,
-    });
+    // createWorkspace already provisions the default team through Better
+    // Auth's organization hook; only fall back when it did not run. The
+    // fallback goes through setDefaultTeam so the org metadata mirror is
+    // written the same way as a reassignment.
+    let team = await getDefaultTeam(db, workspace.id);
+    if (!team) {
+      const created = await createTeam(db, c.env, c.req.raw.headers, {
+        organizationId: workspace.id,
+        key: "general",
+        name: "General",
+        ownerId,
+      });
+      team = (await setDefaultTeam(db, workspace.id, created.id)) ?? created;
+    }
     const auth = await createAuth(c.env);
     const keyResult = await auth.api.createApiKey({
       body: {

@@ -1,8 +1,14 @@
-import { and, count, eq } from "drizzle-orm";
+import { and, count, eq, ne, sql } from "drizzle-orm";
 
 import type { AppEnv } from "../platform/env.js";
 import type { D1Client } from "./db.js";
-import { apikey, team, teamMember, user as userTable } from "./schema.js";
+import {
+  apikey,
+  organization,
+  team,
+  teamMember,
+  user as userTable,
+} from "./schema.js";
 import { parseTeamMetadata, teamMetadataString } from "./team-metadata.js";
 
 export interface TeamRecord {
@@ -90,6 +96,60 @@ export async function getDefaultTeam(
     }
   }
   return undefined;
+}
+
+// Flips `isDefault` across every team in the workspace and mirrors the
+// choice into the organization's `defaultTeamId` metadata. Both writes run as
+// one D1 batch and patch the JSON in place, so concurrent team edits to other
+// metadata fields are not clobbered.
+export async function setDefaultTeam(
+  db: D1Client,
+  organizationId: string,
+  teamId: string
+): Promise<TeamRecord | undefined> {
+  const row = await db
+    .select()
+    .from(team)
+    .where(and(eq(team.id, teamId), eq(team.organizationId, organizationId)))
+    .get();
+  if (!row) return undefined;
+  const now = new Date();
+  // A target with missing/invalid metadata would be skipped by the json_set
+  // pass, so rewrite it whole from its parsed (defaulted) record instead.
+  const targetMetadata = parseTeamMetadata(row.metadata)
+    ? sql`json_set(${team.metadata}, '$.isDefault', json('true'))`
+    : teamMetadataString({ ...teamRecordFromRow(row), isDefault: true });
+  await db.batch([
+    db
+      .update(team)
+      .set({ metadata: targetMetadata, updatedAt: now })
+      .where(and(eq(team.id, teamId), eq(team.organizationId, organizationId))),
+    db
+      .update(team)
+      .set({
+        metadata: sql`json_set(${team.metadata}, '$.isDefault', json('false'))`,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(team.organizationId, organizationId),
+          ne(team.id, teamId),
+          sql`json_valid(${team.metadata})`,
+          sql`json_extract(${team.metadata}, '$.isDefault') = 1`
+        )
+      ),
+    db
+      .update(organization)
+      .set({
+        // The subquery keeps the mirror honest if the target is deleted in
+        // the check-then-batch window: org metadata gets NULL, not a
+        // dangling team id. getDefaultTeam remains the source of truth.
+        metadata: sql`json_set(CASE WHEN json_valid(${organization.metadata}) THEN ${organization.metadata} ELSE '{}' END, '$.defaultTeamId', (SELECT id FROM team WHERE id = ${teamId} AND organization_id = ${organizationId}))`,
+        updatedAt: now,
+      })
+      .where(eq(organization.id, organizationId)),
+  ]);
+  return getTeamById(db, teamId, organizationId);
 }
 
 export async function listTeams(

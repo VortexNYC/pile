@@ -5585,7 +5585,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesId",
-    "description": "Update workspace (PATCH /workspaces/{id}) Path params (top-level, required): id. Request body goes in the \"body\" object; fields: ssoEnforced.",
+    "description": "Update workspace (PATCH /workspaces/{id}) Path params (top-level, required): id. Request body goes in the \"body\" object; fields: ssoEnforced, defaultTeamId.",
     "method": "PATCH",
     "path": "/workspaces/{id}",
     "inputSchema": {
@@ -5599,6 +5599,11 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "properties": {
             "ssoEnforced": {
               "type": "boolean"
+            },
+            "defaultTeamId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Team that receives issues created without a teamId. The previous default team becomes deletable."
             }
           }
         }

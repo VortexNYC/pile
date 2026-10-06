@@ -34,6 +34,7 @@ export interface paths {
                                 slug: string;
                                 key: string | null;
                                 ownerId: string;
+                                defaultTeamId: string | null;
                                 createdAt: string;
                                 updatedAt: string;
                             }[];
@@ -73,6 +74,7 @@ export interface paths {
                             slug: string;
                             key: string | null;
                             ownerId: string;
+                            defaultTeamId: string | null;
                             createdAt: string;
                             updatedAt: string;
                         };
@@ -117,6 +119,7 @@ export interface paths {
                             slug: string;
                             key: string | null;
                             ownerId: string;
+                            defaultTeamId: string | null;
                             createdAt: string;
                             updatedAt: string;
                         };
@@ -182,6 +185,8 @@ export interface paths {
                 content: {
                     "application/json": {
                         ssoEnforced?: boolean;
+                        /** @description Team that receives issues created without a teamId. The previous default team becomes deletable. */
+                        defaultTeamId?: string;
                     };
                 };
             };
@@ -198,6 +203,7 @@ export interface paths {
                             slug: string;
                             key: string | null;
                             ownerId: string;
+                            defaultTeamId: string | null;
                             createdAt: string;
                             updatedAt: string;
                         };
@@ -210,7 +216,7 @@ export interface paths {
                     };
                     content?: never;
                 };
-                /** @description Workspace not found */
+                /** @description Workspace or default team not found */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -252,6 +258,7 @@ export interface paths {
                             slug: string;
                             key: string | null;
                             ownerId: string;
+                            defaultTeamId: string | null;
                             createdAt: string;
                             updatedAt: string;
                         };
@@ -307,6 +314,7 @@ export interface paths {
                                 slug: string;
                                 key: string | null;
                                 ownerId: string;
+                                defaultTeamId: string | null;
                                 createdAt: string;
                                 updatedAt: string;
                             };
@@ -23538,6 +23546,27 @@ export interface paths {
             responses: {
                 /** @description Team deleted */
                 204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Team is the workspace default */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Cannot delete this team */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Team still has issues */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };

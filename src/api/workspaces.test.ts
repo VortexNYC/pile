@@ -309,4 +309,162 @@ describe("workspaces API", () => {
     );
     expect(restored.status).toBe(200);
   });
+  it("reassigns the default team and deletes the old one once empty", async () => {
+    const cookie = await getSessionCookie();
+    const res = await app.fetch(
+      new Request(onboardUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: cookie,
+          Origin: origin,
+        },
+        body: JSON.stringify({
+          name: "Default team org",
+          slug: `default-team-${crypto.randomUUID()}`,
+        }),
+      }),
+      env
+    );
+    expect(res.status).toBe(201);
+    const onboarded = (await res.json()) as {
+      workspace: { id: string; defaultTeamId: string | null };
+      team: { id: string };
+      token: string;
+    };
+    const orgId = onboarded.workspace.id;
+    const general = onboarded.team.id;
+    expect(onboarded.workspace.defaultTeamId).toBe(general);
+
+    const api = (path: string, init: RequestInit = {}) =>
+      app.fetch(
+        new Request(new URL(path, origin).toString(), {
+          ...init,
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${onboarded.token}`,
+          },
+        }),
+        env
+      );
+    const patchWorkspace = (body: unknown) =>
+      app.fetch(
+        new Request(new URL(`/workspaces/${orgId}`, origin).toString(), {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Cookie: cookie,
+            Origin: origin,
+          },
+          body: JSON.stringify(body),
+        }),
+        env
+      );
+    const listTeams = async () => {
+      const list = await api(`/workspaces/${orgId}/teams`);
+      expect(list.status).toBe(200);
+      return (
+        (await list.json()) as {
+          teams: { id: string; isDefault: boolean }[];
+        }
+      ).teams;
+    };
+    const createTeam = async (key: string) => {
+      const created = await api(`/workspaces/${orgId}/teams`, {
+        method: "POST",
+        body: JSON.stringify({ key, name: key }),
+      });
+      expect(created.status).toBe(201);
+      return ((await created.json()) as { id: string }).id;
+    };
+
+    // Onboarding provisions exactly one default team.
+    expect(
+      (await listTeams()).map((t) => ({ id: t.id, isDefault: t.isDefault }))
+    ).toEqual([{ id: general, isDefault: true }]);
+
+    const eng = await createTeam("eng");
+    const ops = await createTeam("ops");
+
+    const blocked = await api(`/workspaces/${orgId}/teams/${general}`, {
+      method: "DELETE",
+    });
+    expect(blocked.status).toBe(400);
+
+    // Plain members cannot reassign the default.
+    const memberCookie = await getSessionCookie();
+    const memberUserId = (
+      await (
+        await createAuth(env)
+      ).api.getSession({
+        headers: new Headers({ Cookie: memberCookie }),
+      })
+    )?.user?.id;
+    if (!memberUserId) throw new Error("member session not established");
+    await createD1(env.D1).insert(member).values({
+      id: crypto.randomUUID(),
+      organizationId: orgId,
+      userId: memberUserId,
+      role: "member",
+      createdAt: new Date(),
+    });
+    const forbidden = await app.fetch(
+      new Request(new URL(`/workspaces/${orgId}`, origin).toString(), {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: memberCookie,
+          Origin: origin,
+        },
+        body: JSON.stringify({ defaultTeamId: eng }),
+      }),
+      env
+    );
+    expect(forbidden.status).toBe(403);
+
+    const missing = await patchWorkspace({ defaultTeamId: "no-such-team" });
+    expect(missing.status).toBe(404);
+
+    const patched = await patchWorkspace({ defaultTeamId: eng });
+    expect(patched.status).toBe(200);
+    expect(
+      ((await patched.json()) as { defaultTeamId: string | null }).defaultTeamId
+    ).toBe(eng);
+    const teams = await listTeams();
+    expect(teams.filter((t) => t.isDefault).map((t) => t.id)).toEqual([eng]);
+
+    // Issues created without a teamId now land on the new default.
+    const defaulted = await api(`/workspaces/${orgId}/issues`, {
+      method: "POST",
+      body: JSON.stringify({ title: "lands on default" }),
+    });
+    expect(defaulted.status).toBe(201);
+    expect(((await defaulted.json()) as { teamId: string }).teamId).toBe(eng);
+
+    // A non-default team that still owns issues cannot be deleted.
+    const pinned = await api(`/workspaces/${orgId}/issues`, {
+      method: "POST",
+      body: JSON.stringify({ title: "pins general", teamId: general }),
+    });
+    expect(pinned.status).toBe(201);
+    const pinnedId = ((await pinned.json()) as { id: string }).id;
+    const nonEmpty = await api(`/workspaces/${orgId}/teams/${general}`, {
+      method: "DELETE",
+    });
+    expect(nonEmpty.status).toBe(409);
+
+    const moved = await api(`/workspaces/${orgId}/issues/${pinnedId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ teamId: ops }),
+    });
+    expect(moved.status).toBe(200);
+
+    const deleted = await api(`/workspaces/${orgId}/teams/${general}`, {
+      method: "DELETE",
+    });
+    expect(deleted.status).toBe(204);
+    expect(new Set((await listTeams()).map((t) => t.id))).toEqual(
+      new Set([eng, ops])
+    );
+  });
 });
