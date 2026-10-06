@@ -184,6 +184,21 @@ describe("WorkspaceDO", () => {
     expect(updated?.status).toBe("in_progress");
   });
 
+  it("rejects updateIssue with a teamId that does not exist", async () => {
+    const stub = getStub();
+    const created = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Bad team move" })
+    );
+    const err: unknown = await withWorkspace(stub, (instance) =>
+      instance.updateIssue(created.id, { teamId: "nonexistent-team" })
+    ).then(
+      () => undefined,
+      (e: unknown) => e
+    );
+    expect(err).toBeInstanceOf(Error);
+    expect((err as { code?: unknown }).code).toBe("NOT_FOUND");
+  });
+
   it("updates PR state", async () => {
     const stub = getStub();
     await withWorkspace(stub, (instance) =>
