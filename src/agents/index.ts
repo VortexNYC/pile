@@ -352,7 +352,11 @@ export async function dispatchAgent(
     session =
       (await stub.updateAgentSession(promoted.id, {
         status: "created",
-        queuedAfter: null,
+        // PILE-260 — promotion rewinds createdAt: the provision timeout and
+        // the inactivity fallback anchor here, and queue dwell is not lane
+        // runtime. queuedAfter stays on the row as the edge an infra-retry
+        // re-anchors to — clearing it parallelizes the chain on redispatch.
+        createdAt: new Date().toISOString(),
       })) ?? promoted;
   } else {
     session = await stub.createAgentSession({

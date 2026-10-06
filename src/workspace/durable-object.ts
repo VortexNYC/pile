@@ -2156,6 +2156,15 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.listQueuedAgentSessions(this.db, this.organizationId);
   }
 
+  reanchorQueuedDependents(fromSessionId: string, toSessionId: string) {
+    return data.reanchorQueuedDependents(
+      this.db,
+      this.organizationId,
+      fromSessionId,
+      toSessionId
+    );
+  }
+
   listChildAgentSessions(parentSessionId: string) {
     return data.listChildAgentSessions(
       this.db,

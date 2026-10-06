@@ -399,6 +399,11 @@ async function providerInfraStreak(
   let streak = 0;
   for (const s of recent) {
     if (s.agentId !== agentId) continue;
+    // `created`/`waiting` are undetermined — provision hasn't concluded, so
+    // a just-promoted lane proves nothing either way. Without this skip a
+    // rewound promotion lands at the head of the recency order and masks a
+    // live infra streak underneath it (PILE-260).
+    if (s.status === "created" || s.status === "waiting") continue;
     // Infra-class = provider-reported substrate failure OR a sweep
     // stall-cancel (both carry infraFailure); task failures and operator
     // cancels don't count.
@@ -464,6 +469,10 @@ async function retryDeadLane(
       undefined,
       ctx,
       {
+        // PILE-260 — a lane that was queued behind a blocker re-enters the
+        // queue on retry (the edge survives promotion on the session row)
+        // instead of dispatching immediately and racing the chain.
+        queueAfter: session.queuedAfter ?? undefined,
         secondaryRepos: parseStoredSecondaryRepos(session.secondaryRepos),
         effort: session.effort ?? undefined,
         maxDurationMinutes: session.maxDurationMinutes ?? undefined,
@@ -473,11 +482,27 @@ async function retryDeadLane(
       retryOf: session.id,
       retryCount: (session.retryCount ?? 0) + 1,
     });
+    // Lanes parked behind the dead one re-anchor on its retry — otherwise
+    // they promote off the terminal corpse and run ahead of the redispatch,
+    // silently turning the queuedAfter chain into parallel lanes. If this
+    // write is lost the promote-pass successor check re-anchors them anyway.
+    await stub
+      .reanchorQueuedDependents(session.id, retried.id)
+      .catch((err: unknown) =>
+        console.error("queued session re-anchor failed", {
+          session: session.id,
+          retried: retried.id,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      );
     await stub.addAgentActivity({
       sessionId: session.id,
       actorId: session.actorId,
       type: "thought",
-      message: `${cause} — redispatched as session ${retried.id}`,
+      message:
+        retried.status === "waiting"
+          ? `${cause} — re-queued behind ${retried.queuedAfter} as session ${retried.id}`
+          : `${cause} — redispatched as session ${retried.id}`,
     });
   } catch (err) {
     // CONFLICT means a live session already owns the issue — the retry is
@@ -497,12 +522,18 @@ async function retryDeadLane(
 // PILE-214/211/212/210 — sweep-time maintenance
 // ---------------------------------------------------------------------------
 
+// PILE-260 — a fresh infra-dead corpse may still be inside its
+// terminal-write → retry-row gap: dependents held this long can't leak past
+// an in-flight redispatch when sweep passes overlap.
+const RETRY_ANCHOR_GRACE_MS = 3 * 60 * 1000;
+
 /** A `waiting` session parked behind a blocker lane (queuedAfter) gets
  *  promoted to a real dispatch once the blocker goes terminal or vanishes. */
 async function promoteQueuedSessions(
   env: WorkerEnv,
   stub: DurableObjectStub<WorkspaceDO>,
   organizationId: string,
+  now: number,
   ctx?: { waitUntil: (promise: Promise<unknown>) => void }
 ): Promise<void> {
   const queued = await stub.listQueuedAgentSessions();
@@ -516,10 +547,36 @@ async function promoteQueuedSessions(
     });
     return;
   }
+  // Dead session id -> its live (non-terminal) retry. A parked lane whose
+  // blocker died re-anchors onto the replacement instead of promoting off
+  // the corpse — checked here so the chain holds even when the retry row
+  // landed after the dependent parked, or the retry's own re-anchor write
+  // was lost mid-flight (PILE-260).
+  const liveRetryByDeadSession = new Map<string, string>();
+  if (queued.some((s) => s.queuedAfter)) {
+    for (const s of await stub.listAgentSessions({ limit: 200 })) {
+      if (!s.retryOf || TERMINAL_STATUSES.has(s.status)) continue;
+      // Recency order — the newest retry wins when several are live.
+      if (!liveRetryByDeadSession.has(s.retryOf)) {
+        liveRetryByDeadSession.set(s.retryOf, s.id);
+      }
+    }
+  }
   for (const session of queued) {
+    // A `waiting` row with a live remote is provider-parked (blocked on
+    // input), not queue-parked — flipping it to `created` would both burn
+    // the provision clock on a lane that never needed provisioning and
+    // double-dispatch a lane that already owns a sandbox (PILE-260).
+    if (session.providerSessionId) continue;
     if (!session.queuedAfter) {
+      // Queue orphan (no edge recorded): rewinding createdAt on the flip
+      // keeps its stale queue timestamp from tripping the provision
+      // timeout on the next pass.
       await stub
-        .updateAgentSession(session.id, { status: "created" })
+        .updateAgentSession(session.id, {
+          status: "created",
+          createdAt: new Date().toISOString(),
+        })
         .catch(() => null);
       continue;
     }
@@ -527,6 +584,28 @@ async function promoteQueuedSessions(
       .getAgentSession(session.queuedAfter)
       .catch(() => null);
     if (blocker && !TERMINAL_STATUSES.has(blocker.status)) continue;
+    if (blocker) {
+      const successor = liveRetryByDeadSession.get(blocker.id);
+      if (successor) {
+        await stub
+          .updateAgentSession(session.id, { queuedAfter: successor })
+          .catch((err: unknown) => {
+            console.error("queued session re-anchor failed", {
+              session: session.id,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          });
+        continue;
+      }
+      const diedAt = Date.parse(blocker.endedAt ?? blocker.updatedAt);
+      if (
+        blocker.infraFailure === 1 &&
+        Number.isFinite(diedAt) &&
+        now - diedAt < RETRY_ANCHOR_GRACE_MS
+      ) {
+        continue;
+      }
+    }
     try {
       const issue = await stub.getIssue(session.issueId);
       if (!issue) continue;
@@ -928,7 +1007,7 @@ export async function sweepAgentSessions(
       // reconcile session.prState and the issue's PR fields from GitHub so a
       // merged PR doesn't sit displayed as "open" forever.
       await syncOpenPrSessions(env, stub, id, { probeTimeoutMs });
-      await promoteQueuedSessions(env, stub, id, ctx);
+      await promoteQueuedSessions(env, stub, id, now, ctx);
       await fireDueAutomations(env, stub, id, new Date(now), ctx);
       await reapTerminalArtifacts(env, stub, id, now);
       if (sessions.length === 0) continue;
@@ -1151,13 +1230,11 @@ export async function sweepAgentSessions(
           // PILE-229: a provider that parks the lane "blocked"/waiting is the
           // lane asking a human — surface it as an elicitation so the
           // needs_input event + notification fire. Deduped by the status
-          // transition itself (only fires on entry into waiting). Queued lanes
-          // parked behind a blocker (queuedAfter) are not elicitations.
-          if (
-            polled.status === "waiting" &&
-            session.status !== "waiting" &&
-            !session.queuedAfter
-          ) {
+          // transition itself (only fires on entry into waiting). Queue-parked
+          // lanes aren't polled (the sweep only lists created/running), and
+          // post-PILE-260 promoted lanes keep their queuedAfter edge — so the
+          // parked-vs-blocked distinction lives on providerSessionId, not here.
+          if (polled.status === "waiting" && session.status !== "waiting") {
             // VTX-209: carry the actual question when the provider exposes a
             // message API — a bare "waiting_for_user" forces humans to open
             // the provider's dashboard, which is the thing Pile replaces.

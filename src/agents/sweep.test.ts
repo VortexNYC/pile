@@ -620,6 +620,308 @@ describe("sweepAgentSessions", () => {
     expect(retried?.retryCount).toBe(1);
   });
 
+  // PILE-260 — queue dwell is not lane runtime: a promoted lane gets a fresh
+  // provision clock, and an infra-retry re-enters the queue instead of
+  // racing ahead of the chain's tail.
+  it("restarts the provision clock when a queued lane is promoted", async () => {
+    const agentId = `mock-promote-${crypto.randomUUID().slice(0, 8)}`;
+    registerMock(agentId, {
+      dispatch: (_org, _issue, _model, sessionCtx) => ({
+        id: `prov-${sessionCtx?.sessionId?.slice(0, 8)}`,
+        agentId,
+        status: "created",
+      }),
+      poll: (id) => ({ id, agentId, status: "running" }),
+    });
+    await stub.upsertAgentProviderConfig({
+      agentId,
+      config: { provisionTimeout: 1 },
+    });
+    const blockerIssue = await stub.createIssue({ title: "Blocker lane" });
+    const blocker = await stub.createAgentSession({
+      issueId: blockerIssue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "completed",
+    });
+    const queuedIssue = await stub.createIssue({ title: "Queued lane" });
+    // Parked 30m — far past the 1m provision cap. Promotion must restart
+    // the clock rather than instantly failing the lane.
+    const queued = await stub.createAgentSession({
+      issueId: queuedIssue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "waiting",
+      queuedAfter: blocker.id,
+      createdAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+    });
+
+    // Pass 1 promotes + dispatches the lane; pass 2 sweeps it while created.
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    const after = await stub.getAgentSession(queued.id);
+    expect(after?.status).toBe("running");
+    expect(after?.result ?? "").not.toContain("provision timed out");
+  });
+
+  it("re-queues a promoted lane's infra-retry and re-anchors dependents", async () => {
+    const agentId = `mock-chain-${crypto.randomUUID().slice(0, 8)}`;
+    let dispatches = 0;
+    registerMock(agentId, {
+      dispatch: () => {
+        dispatches += 1;
+        return { id: `chain-${dispatches}`, agentId, status: "created" };
+      },
+      poll: (id) =>
+        id === "chain-1"
+          ? {
+              id,
+              agentId,
+              status: "failed" as const,
+              result: "sandbox died before the runner started",
+              infraFailure: true,
+            }
+          : { id, agentId, status: "running" },
+    });
+    const headIssue = await stub.createIssue({ title: "Chain head" });
+    const head = await stub.createAgentSession({
+      issueId: headIssue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "completed",
+    });
+    const midIssue = await stub.createIssue({ title: "Chain middle" });
+    const middle = await stub.createAgentSession({
+      issueId: midIssue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "waiting",
+      queuedAfter: head.id,
+    });
+    const tailIssue = await stub.createIssue({ title: "Chain tail" });
+    const tail = await stub.createAgentSession({
+      issueId: tailIssue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "waiting",
+      queuedAfter: middle.id,
+    });
+
+    // Pass 1: head is terminal — middle promotes (dispatch #1); tail stays.
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+    expect(dispatches).toBe(1);
+    expect((await stub.getAgentSession(middle.id))?.status).toBe("created");
+    expect((await stub.getAgentSession(tail.id))?.status).toBe("waiting");
+
+    // Pass 2: middle's remote reports an infra failure. The retry must park
+    // behind the ORIGINAL blocker — not dispatch immediately — and the tail
+    // must re-anchor on the retry rather than promote off the dead link.
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+    expect((await stub.getAgentSession(middle.id))?.status).toBe("failed");
+    const middleRetry = (
+      await stub.listAgentSessions({ issueId: midIssue.id })
+    ).find((s) => s.retryOf === middle.id);
+    expect(middleRetry?.status).toBe("waiting");
+    expect(middleRetry?.queuedAfter).toBe(head.id);
+    expect(middleRetry?.retryCount).toBe(1);
+    expect(dispatches).toBe(1);
+    const tailAfter = await stub.getAgentSession(tail.id);
+    expect(tailAfter?.status).toBe("waiting");
+    expect(tailAfter?.queuedAfter).toBe(middleRetry?.id);
+
+    // Pass 3: the retry promotes off the (terminal) blocker; the tail must
+    // not promote in parallel off the dead middle session.
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+    expect((await stub.getAgentSession(middleRetry!.id))?.status).toBe(
+      "created"
+    );
+    expect(dispatches).toBe(2);
+    expect((await stub.getAgentSession(tail.id))?.status).toBe("waiting");
+
+    // Pass 4: the retry actually runs; the tail stays serialized behind it.
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+    expect((await stub.getAgentSession(middleRetry!.id))?.status).toBe(
+      "running"
+    );
+    expect((await stub.getAgentSession(tail.id))?.status).toBe("waiting");
+  });
+
+  it("re-anchors a parked dependent onto a dead blocker's live retry at promote time", async () => {
+    const agentId = `mock-heal-${crypto.randomUUID().slice(0, 8)}`;
+    registerMock(agentId, {
+      poll: (id) => ({ id, agentId, status: "running" }),
+    });
+    const headIssue = await stub.createIssue({ title: "Dead head" });
+    const head = await stub.createAgentSession({
+      issueId: headIssue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "created",
+    });
+    await stub.applyAgentSessionResult(head.id, {
+      status: "failed",
+      result: "sandbox died",
+      infraFailure: true,
+    });
+    // The retry row exists, but the dependent's edge still points at the
+    // corpse — the overlap/partial-failure window where the retry's own
+    // re-anchor never ran. Promotion must find the live replacement itself.
+    const retry = await stub.createAgentSession({
+      issueId: headIssue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+    });
+    await stub.updateAgentSession(retry.id, { retryOf: head.id });
+    const depIssue = await stub.createIssue({ title: "Dependent" });
+    const dependent = await stub.createAgentSession({
+      issueId: depIssue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "waiting",
+      queuedAfter: head.id,
+    });
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    const after = await stub.getAgentSession(dependent.id);
+    expect(after?.status).toBe("waiting");
+    expect(after?.queuedAfter).toBe(retry.id);
+  });
+
+  it("holds dependents behind a fresh infra-dead blocker until a retry can land", async () => {
+    const agentId = `mock-grace-${crypto.randomUUID().slice(0, 8)}`;
+    let dispatches = 0;
+    registerMock(agentId, {
+      dispatch: () => {
+        dispatches += 1;
+        return { id: `grace-${dispatches}`, agentId, status: "created" };
+      },
+      poll: (id) => ({ id, agentId, status: "running" }),
+    });
+    const headIssue = await stub.createIssue({ title: "Infra-dead head" });
+    const head = await stub.createAgentSession({
+      issueId: headIssue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "created",
+    });
+    await stub.applyAgentSessionResult(head.id, {
+      status: "failed",
+      result: "sandbox died",
+      infraFailure: true,
+    });
+    const depIssue = await stub.createIssue({ title: "Dependent" });
+    const dependent = await stub.createAgentSession({
+      issueId: depIssue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "waiting",
+      queuedAfter: head.id,
+    });
+
+    // The corpse just went terminal — an overlapping sweep's redispatch may
+    // still be inside its write→create gap, so the dependent must not
+    // promote off it yet.
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+    expect((await stub.getAgentSession(dependent.id))?.status).toBe("waiting");
+    expect(dispatches).toBe(0);
+
+    // Past the grace window with no retry landing, the dead link is walked
+    // past — the dependent promotes off the corpse.
+    await stub.updateAgentSession(head.id, {
+      endedAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+    });
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+    const after = await stub.getAgentSession(dependent.id);
+    expect(after?.status).toBe("created");
+    expect(dispatches).toBe(1);
+  });
+
+  it("leaves provider-parked waiting lanes alone (no promote, no provision clock)", async () => {
+    const agentId = `mock-held-${crypto.randomUUID().slice(0, 8)}`;
+    let dispatches = 0;
+    registerMock(agentId, {
+      dispatch: () => {
+        dispatches += 1;
+        return { id: "held-1", agentId, status: "created" };
+      },
+      poll: (id) => ({ id, agentId, status: "running" }),
+    });
+    const issue = await stub.createIssue({ title: "Blocked on input" });
+    // A lane the provider parked in `waiting` (elicitation) already owns a
+    // remote — it is not queue-parked, and flipping it to `created` would
+    // burn the provision clock on a lane that never needed provisioning.
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "waiting",
+      providerSessionId: "held-remote",
+      createdAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+    });
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    const after = await stub.getAgentSession(session.id);
+    expect(after?.status).toBe("waiting");
+    expect(dispatches).toBe(0);
+  });
+
+  it("rescues an orphaned waiting row with a fresh provision clock", async () => {
+    const agentId = `mock-orphan-${crypto.randomUUID().slice(0, 8)}`;
+    registerMock(agentId, {
+      poll: (id) => ({ id, agentId, status: "running" }),
+    });
+    await stub.upsertAgentProviderConfig({
+      agentId,
+      config: { provisionTimeout: 1 },
+    });
+    const issue = await stub.createIssue({ title: "Queue orphan" });
+    // A waiting row with no edge and no remote — the orphan rescue flips it
+    // to `created`; the flip must rewind createdAt or the lane dies on the
+    // stale queue timestamp at the very next sweep.
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "waiting",
+      createdAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+    });
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+    expect((await stub.getAgentSession(session.id))?.status).toBe("created");
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+    const after = await stub.getAgentSession(session.id);
+    expect(after?.status).toBe("running");
+  });
+
   it("redispatches once when the runner reports an infra (transport) failure", async () => {
     const agentId = `mock-infra-${crypto.randomUUID().slice(0, 8)}`;
     let dispatches = 0;
