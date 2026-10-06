@@ -33,8 +33,11 @@ Object, and reports email/compute config presence. It returns `200` for
 `healthy` **and** `degraded`, and `503` only when every check fails. So
 the public page shows **hard-down only** — that is intentional for v1:
 missing email or compute config is an operator problem, not an outage
-customers need to read about. Degraded states are handled on the normal
-S3 track.
+customers need to read about. Note that `degraded` also covers failed D1
+or workspace-DO probes, so partial infrastructure outages that _are_
+customer-visible can still show green — post those manually per the
+publishing rules below. Degraded states are otherwise handled on the
+normal S3 track.
 
 `/status` on the API is a 308 to `/health` for scripts; humans go to
 `status.pile.nyc`.
