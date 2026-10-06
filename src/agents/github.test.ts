@@ -531,6 +531,41 @@ function prCommentPayload(over: {
   };
 }
 
+async function laneWithPr(number: number, status: "running" | "failed") {
+  const s = stub();
+  const branch = `lane/mention-${number}`;
+  const issue = await s.createIssue({
+    title: `Mention lane ${number}`,
+    repo: REPO,
+    branch,
+  });
+  await s.updatePrState(
+    REPO,
+    branch,
+    `https://github.com/${REPO}/pull/${number}`,
+    "open",
+    "github"
+  );
+  const session = await s.createAgentSession({
+    issueId: issue.id,
+    agentId: "mention-mock",
+    provider: "mention-mock",
+    actorId: "review-user",
+    actorType: "user",
+    status,
+    providerSessionId: `remote-mention-${number}`,
+  });
+  return { issue, session };
+}
+
+function deliver(body: unknown) {
+  return processGithubWebhookPayload(
+    createD1(env.D1),
+    env as unknown as WorkerEnv,
+    queuePayload("issue_comment", body)
+  );
+}
+
 describe("github @pile mention → lane (PILE-278)", () => {
   const prompts: string[] = [];
   const dispatched: Array<{ issueId: string; instructions?: string }> = [];
@@ -560,41 +595,6 @@ describe("github @pile mention → lane (PILE-278)", () => {
         })
     );
   });
-
-  async function laneWithPr(number: number, status: "running" | "failed") {
-    const s = stub();
-    const branch = `lane/mention-${number}`;
-    const issue = await s.createIssue({
-      title: `Mention lane ${number}`,
-      repo: REPO,
-      branch,
-    });
-    await s.updatePrState(
-      REPO,
-      branch,
-      `https://github.com/${REPO}/pull/${number}`,
-      "open",
-      "github"
-    );
-    const session = await s.createAgentSession({
-      issueId: issue.id,
-      agentId: "mention-mock",
-      provider: "mention-mock",
-      actorId: "review-user",
-      actorType: "user",
-      status,
-      providerSessionId: `remote-mention-${number}`,
-    });
-    return { issue, session };
-  }
-
-  function deliver(body: unknown) {
-    return processGithubWebhookPayload(
-      createD1(env.D1),
-      env as unknown as WorkerEnv,
-      queuePayload("issue_comment", body)
-    );
-  }
 
   it("resumes the PR's lane with the mention and mirrors it to the thread", async () => {
     const { issue } = await laneWithPr(50, "running");

@@ -355,6 +355,57 @@ async function waitForRender(
   );
 }
 
+function createSupportFetch() {
+  const posted: { url: string; method: string; body: unknown }[] = [];
+  const tickets: Record<string, ReturnType<typeof ticketJson>> = {
+    "t-open": ticketJson({ id: "t-open", number: 7, status: "todo" }),
+    "t-park": ticketJson({
+      id: "t-park",
+      number: 3,
+      title: "Old thread",
+      status: "snoozed",
+      snoozedUntil: "2026-10-02T00:00:00.000Z",
+    }),
+  };
+  const mockFetch = vi
+    .fn()
+    .mockImplementation((url: URL | string, init?: RequestInit) => {
+      const parsed = new URL(typeof url === "string" ? url : url.href);
+      const pathname = parsed.pathname;
+      if (pathname === "/workspaces/ws-1/support/tickets") {
+        const status = parsed.searchParams.get("status");
+        return jsonResponse({
+          tickets: Object.values(tickets).filter(
+            (t) => status === null || t.status === status
+          ),
+          nextCursor: null,
+        });
+      }
+      if (pathname === "/workspaces/ws-1/support/inbox/counts") {
+        return jsonResponse({
+          counts: { todo: 1, done: 8, snoozed: 1, mine: 0, unassigned: 1 },
+        });
+      }
+      const transition =
+        /^\/workspaces\/ws-1\/support\/tickets\/(t-[a-z]+)\/(done|todo|snoozed)$/u.exec(
+          pathname
+        );
+      if (transition !== null) {
+        posted.push({
+          url: pathname,
+          method: init?.method ?? "GET",
+          body:
+            typeof init?.body === "string" ? JSON.parse(init.body) : undefined,
+        });
+        const [, id, status] = transition;
+        tickets[id] = { ...tickets[id], status };
+        return jsonResponse({ ticket: tickets[id] });
+      }
+      return Promise.resolve(new Response("not found", { status: 404 }));
+    });
+  return { mockFetch, posted };
+}
+
 describe("pile support", () => {
   let home: string;
   let originalHome: string | undefined;
@@ -373,59 +424,6 @@ describe("pile support", () => {
     process.env.PILE_API_KEY = originalApiKey;
     rmSync(home, { recursive: true, force: true });
   });
-
-  function createSupportFetch() {
-    const posted: { url: string; method: string; body: unknown }[] = [];
-    const tickets: Record<string, ReturnType<typeof ticketJson>> = {
-      "t-open": ticketJson({ id: "t-open", number: 7, status: "todo" }),
-      "t-park": ticketJson({
-        id: "t-park",
-        number: 3,
-        title: "Old thread",
-        status: "snoozed",
-        snoozedUntil: "2026-10-02T00:00:00.000Z",
-      }),
-    };
-    const mockFetch = vi
-      .fn()
-      .mockImplementation((url: URL | string, init?: RequestInit) => {
-        const parsed = new URL(typeof url === "string" ? url : url.href);
-        const pathname = parsed.pathname;
-        if (pathname === "/workspaces/ws-1/support/tickets") {
-          const status = parsed.searchParams.get("status");
-          return jsonResponse({
-            tickets: Object.values(tickets).filter(
-              (t) => status === null || t.status === status
-            ),
-            nextCursor: null,
-          });
-        }
-        if (pathname === "/workspaces/ws-1/support/inbox/counts") {
-          return jsonResponse({
-            counts: { todo: 1, done: 8, snoozed: 1, mine: 0, unassigned: 1 },
-          });
-        }
-        const transition =
-          /^\/workspaces\/ws-1\/support\/tickets\/(t-[a-z]+)\/(done|todo|snoozed)$/u.exec(
-            pathname
-          );
-        if (transition !== null) {
-          posted.push({
-            url: pathname,
-            method: init?.method ?? "GET",
-            body:
-              typeof init?.body === "string"
-                ? JSON.parse(init.body)
-                : undefined,
-          });
-          const [, id, status] = transition;
-          tickets[id] = { ...tickets[id], status };
-          return jsonResponse({ ticket: tickets[id] });
-        }
-        return Promise.resolve(new Response("not found", { status: 404 }));
-      });
-    return { mockFetch, posted };
-  }
 
   it("exits 1 without --workspace", async () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);

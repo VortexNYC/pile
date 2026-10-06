@@ -917,6 +917,25 @@ function installNetwork(
 
 const MAX_WS_PREVIEW = 500;
 
+const describeData = (data: unknown): Record<string, unknown> => {
+  if (typeof data === "string") {
+    return {
+      payloadLength: data.length,
+      preview: truncate(data, MAX_WS_PREVIEW),
+    };
+  }
+  if (data instanceof ArrayBuffer) {
+    return { payloadLength: data.byteLength, binary: true };
+  }
+  if (ArrayBuffer.isView(data)) {
+    return { payloadLength: data.byteLength, binary: true };
+  }
+  if (typeof Blob !== "undefined" && data instanceof Blob) {
+    return { payloadLength: data.size, binary: true };
+  }
+  return {};
+};
+
 /**
  * WebSocket capture (Jam parity): open/close/send/message as action events.
  * Text frames get a truncated sanitized preview; binary frames record
@@ -945,25 +964,6 @@ function installWebSocket(
       target: url,
       metadata: { event, ...extra },
     });
-  };
-
-  const describeData = (data: unknown): Record<string, unknown> => {
-    if (typeof data === "string") {
-      return {
-        payloadLength: data.length,
-        preview: truncate(data, MAX_WS_PREVIEW),
-      };
-    }
-    if (data instanceof ArrayBuffer) {
-      return { payloadLength: data.byteLength, binary: true };
-    }
-    if (ArrayBuffer.isView(data)) {
-      return { payloadLength: data.byteLength, binary: true };
-    }
-    if (typeof Blob !== "undefined" && data instanceof Blob) {
-      return { payloadLength: data.size, binary: true };
-    }
-    return {};
   };
 
   class PatchedWebSocket extends NativeWebSocket {
@@ -996,7 +996,7 @@ function installWebSocket(
       });
     }
 
-    override send(data: string | ArrayBufferLike | Blob | ArrayBufferView) {
+    override send(data: string | Blob | BufferSource) {
       const normalizedUrl = (() => {
         try {
           return redactSensitiveQueryParams(this.url);

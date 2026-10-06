@@ -94,14 +94,14 @@ function fakeSandbox(
   };
 }
 
-describe("CloudflareBackend shared admission (PILE-302)", () => {
-  const admitEnv = () =>
-    ({
-      ...baseEnv(),
-      CF_ADMISSION_URL: "https://ci.example.dev",
-      CF_ADMISSION_TOKEN: "tok",
-    }) as unknown as AppEnv;
+const admitEnv = () =>
+  ({
+    ...baseEnv(),
+    CF_ADMISSION_URL: "https://ci.example.dev",
+    CF_ADMISSION_TOKEN: "tok",
+  }) as unknown as AppEnv;
 
+describe("CloudflareBackend shared admission (PILE-302)", () => {
   it("denies the spawn when the admission ledger is at capacity", async () => {
     vi.stubGlobal(
       "fetch",

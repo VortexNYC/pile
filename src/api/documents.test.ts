@@ -241,19 +241,19 @@ describe("documents API", () => {
   });
 });
 
-describe("issue-linked documents", () => {
-  async function createIssue(organizationId: string, token: string) {
-    const res = await fetch(
-      `/workspaces/${organizationId}/issues`,
-      { method: "POST", body: JSON.stringify({ title: "Notes target" }) },
-      token
-    );
-    expect(res.status).toBe(201);
-    return z
-      .object({ id: z.string(), identifier: z.string() })
-      .parse(await res.json());
-  }
+async function createIssue(organizationId: string, token: string) {
+  const res = await fetch(
+    `/workspaces/${organizationId}/issues`,
+    { method: "POST", body: JSON.stringify({ title: "Notes target" }) },
+    token
+  );
+  expect(res.status).toBe(201);
+  return z
+    .object({ id: z.string(), identifier: z.string() })
+    .parse(await res.json());
+}
 
+describe("issue-linked documents", () => {
   it("creates and retrieves a markdown note by issue id or identifier", async () => {
     const seeded = await seedWorkspace();
     const issue = await createIssue(seeded.organizationId, seeded.token);

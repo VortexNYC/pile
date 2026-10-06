@@ -1713,12 +1713,10 @@ describe("syncOpenPrSessions", () => {
       ["src/mcp/openapi.json", "packages/cli/src/cli.ts"],
       ["src/mcp/openapi.json", "packages/cli/src/cli.ts"]
     );
-    const compute = () => fakeComputeBackend({ state: "running" });
-
     await syncOpenPrSessions(env, stub, organizationId, {
       tokenForRepo: async () => "gh-test-token",
       fetch: fetchSrc as typeof fetch,
-      compute,
+      compute: () => fakeComputeBackend({ state: "running" }),
     });
 
     expect(prompts).toHaveLength(1);
@@ -2215,48 +2213,48 @@ describe("syncOpenPrSessions", () => {
     expect(updates).toHaveLength(0);
   });
 
+  async function budgetLane(num: number, title: string) {
+    const agentId = `mock-budget-${crypto.randomUUID().slice(0, 8)}`;
+    const prompts: string[] = [];
+    registerMock(agentId, {
+      sendPrompt: async (_id, prompt) => {
+        prompts.push(prompt);
+        return true;
+      },
+    });
+    const issue = await stub.createIssue({ title });
+    await stub.updateIssue(issue.id, { status: "in_progress" });
+    const prUrl = `https://github.com/vortexnyc/pile/pull/${num}`;
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+      prUrl,
+      prState: "open",
+    });
+    return { agentId, prompts, issue, prUrl, session };
+  }
+
+  async function seedRounds(
+    sessionId: string,
+    issueId: string,
+    prUrl: string,
+    shas: string[]
+  ) {
+    for (const [i, sha] of shas.entries()) {
+      await stub.addAgentSessionEvent({
+        sessionId,
+        type: "prompt.followup",
+        message: `CI failure delivered as follow-up prompt (${i})`,
+        payload: { issueId, prUrl, headSha: sha, key: `seed-${sha}-${i}` },
+      });
+    }
+  }
+
   describe("nudge budget (PILE-270)", () => {
-    async function budgetLane(num: number, title: string) {
-      const agentId = `mock-budget-${crypto.randomUUID().slice(0, 8)}`;
-      const prompts: string[] = [];
-      registerMock(agentId, {
-        sendPrompt: async (_id, prompt) => {
-          prompts.push(prompt);
-          return true;
-        },
-      });
-      const issue = await stub.createIssue({ title });
-      await stub.updateIssue(issue.id, { status: "in_progress" });
-      const prUrl = `https://github.com/vortexnyc/pile/pull/${num}`;
-      const session = await stub.createAgentSession({
-        issueId: issue.id,
-        agentId,
-        provider: agentId,
-        actorId: userId,
-        actorType: "user",
-        status: "running",
-        prUrl,
-        prState: "open",
-      });
-      return { agentId, prompts, issue, prUrl, session };
-    }
-
-    async function seedRounds(
-      sessionId: string,
-      issueId: string,
-      prUrl: string,
-      shas: string[]
-    ) {
-      for (const [i, sha] of shas.entries()) {
-        await stub.addAgentSessionEvent({
-          sessionId,
-          type: "prompt.followup",
-          message: `CI failure delivered as follow-up prompt (${i})`,
-          payload: { issueId, prUrl, headSha: sha, key: `seed-${sha}-${i}` },
-        });
-      }
-    }
-
     it("escalates once when the per-lane cap is exhausted", async () => {
       const { prompts, issue, prUrl, session } = await budgetLane(
         2701,
